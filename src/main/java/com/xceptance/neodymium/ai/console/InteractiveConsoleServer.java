@@ -406,7 +406,8 @@ public final class InteractiveConsoleServer
                         exchange.sendResponseHeaders(403, -1);
                         return;
                     }
-                    final Path file = Paths.get("target/ai-console-screenshots", fileName);
+                    final String screenshotsDir = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+                    final Path file = Paths.get(screenshotsDir, fileName);
                     if (Files.exists(file))
                     {
                         exchange.getResponseHeaders().set("Content-Type", "image/png");

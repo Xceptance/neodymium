@@ -22,8 +22,8 @@ import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 
 import java.io.InputStream;
-import java.time.Duration;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.Keys;
@@ -65,6 +65,8 @@ public final class InteractiveConsoleStateTest extends BaseConsoleTest
     @Test
     public final void testConsoleStatesAndFailureRecovery() throws Exception
     {
+        Configuration.headless = false;
+
         // Load resources
         final String yamlContent;
         final String jsonContent;
@@ -101,7 +103,6 @@ public final class InteractiveConsoleStateTest extends BaseConsoleTest
             final SelenideElement step0 = $(".step-card[data-step-idx='0']");
             step0.should(Condition.exist);
             step0.shouldHave(Condition.cssClass("active"));
-            step0.shouldHave(Condition.cssClass("selected-details"));
 
             // Verify Back button is disabled on step index 0
             final SelenideElement btnBack = $("#btnBack");

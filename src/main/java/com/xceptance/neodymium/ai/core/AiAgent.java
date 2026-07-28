@@ -104,14 +104,14 @@ public class AiAgent
 
     private final java.util.Map<String, java.util.List<String>> blockInstructions = new java.util.LinkedHashMap<>();
     private final java.util.Set<String> modifiedBlocks = new java.util.HashSet<>();
-    private boolean finalBlock = false;
+    private boolean finalBlock = true;
 
     public void setFinalBlock(boolean finalBlock) {
         this.finalBlock = finalBlock;
     }
 
-    public boolean isHudSaveExit() {
-        return this.hudSaveExit;
+    public boolean isInteractiveSaveExit() {
+        return this.interactiveSaveExit;
     }
 
     private static final ThreadLocal<AiAgent> activeAgent = new ThreadLocal<>();
@@ -158,11 +158,11 @@ public class AiAgent
 
     private boolean autoSkip;
 
-    private boolean hudPromptChanged = false;
+    private boolean interactivePromptChanged = false;
 
-    private boolean hudSaveExit = false;
+    private boolean interactiveSaveExit = false;
 
-    private boolean hudAborted = false;
+    private boolean interactiveAborted = false;
 
     private int currentStepIdx = -1;
 
@@ -268,7 +268,7 @@ public class AiAgent
      * line/sentence), and each step is processed through the LLM → action → execution loop.
      * <p>
      * This method manages a stateful loop that can be interrupted by an interactive HUD. The loop index ({@code i}) is
-     * mutated directly within the catch blocks of {@link HudActionException} to support features like rewinding,
+     * mutated directly within the catch blocks of {@link InteractiveActionException} to support features like rewinding,
      * editing, or adding steps dynamically during execution.
      *
      * @param instructions
@@ -314,11 +314,11 @@ public class AiAgent
             LOG.debug("SUT Context:\n{}", sutContext);
         }
 
-        if (!this.hudPromptChanged)
+        if (!this.interactivePromptChanged)
         {
-            this.hudPromptChanged = false;
+            this.interactivePromptChanged = false;
         }
-        this.hudSaveExit = false;
+        this.interactiveSaveExit = false;
 
         this.currentRunId = "true".equals(System.getProperty("neodymium.managerActive")) 
                 ? System.getProperty("neodymium.managerRunId") 
@@ -719,7 +719,7 @@ public class AiAgent
                             evaluatedConditions.put(cacheKey, lastCond);
                         }
                     }
-                    catch (final HudActionException e)
+                    catch (final InteractiveActionException e)
                     {
                         throw e;
                     }
@@ -734,9 +734,9 @@ public class AiAgent
                     }
                     performedInstructions.add(stepsList.get(i));
                 }
-                catch (final HudActionException e)
+                catch (final InteractiveActionException e)
                 {
-                    i = processHudActionException(e, i, stepsList, performedInstructions, stepLines, result);
+                    i = processInteractiveActionException(e, i, stepsList, performedInstructions, stepLines, result);
                     if (i < -1)
                     {
                         break;
@@ -797,17 +797,17 @@ public class AiAgent
             final Playbook playbook = Neodymium.getAiPlaybook();
             if (playbook != null)
             {
-                if (hudSaveExit)
+                if (interactiveSaveExit)
                 {
-                    // Already saved in processHudActionException during execution loop
+                    // Already saved in processInteractiveActionException during execution loop
                 }
-                else if (Neodymium.aiConfiguration().aiInteractive() && !hudAborted && this.finalBlock)
+                else if (Neodymium.aiConfiguration().aiInteractive() && !interactiveAborted && this.finalBlock)
                 {
                     LOG.info("Waiting for final user action to save or discard in Interactive Console...");
                     try
                     {
                         this.currentPauseId = "pause-final-" + System.currentTimeMillis();
-                        final String promptMessage = this.hudPromptChanged
+                        final String promptMessage = this.interactivePromptChanged
                                 ? "Test execution finished! Do you want to save your modifications?"
                                 : "Test execution finished successfully!";
                         updateConsoleState(result, promptMessage);
@@ -832,7 +832,7 @@ public class AiAgent
                         playbook.setChanged(false);
                     }
                 }
-                else if (hudPromptChanged)
+                else if (interactivePromptChanged)
                 {
                     playbook.setChanged(false);
                     LOG.info("Playbook saving prevented because interactive modifications were not saved to YAML.");
@@ -939,7 +939,7 @@ public class AiAgent
      *            the line number in the source file
      * @param sourceFile
      *            the path to the source file
-     * @throws HudActionException
+     * @throws InteractiveActionException
      *             if the user triggers a control-flow change via the HUD
      */
     private void executeStep(final int stepIndex, final String instruction, final boolean expectedFailure,
@@ -954,7 +954,7 @@ public class AiAgent
                              final AiExecutionResult result,
                              final List<String> stepsList,
                              final List<String> stepLines)
-        throws HudActionException
+        throws InteractiveActionException
     {
         int errorCount = 0;
         int playbookReplayAttempts = 0;
@@ -1091,7 +1091,7 @@ public class AiAgent
                         updateConsoleState(result, reasoning);
 
                         // Block and wait for the user to approve the actions
-                        waitForHudAction(true);
+                        waitForInteractiveAction(true);
                         hasApprovedCurrentStep = true;
                     }
 
@@ -1389,7 +1389,7 @@ public class AiAgent
                         this.autoSkip = false;
                         stepDetails.setFailureReason("Max retries reached: " + e.getMessage());
                         updateConsoleState(result, "Max retries reached: " + e.getMessage());
-                        waitForHudAction(false); // Never auto-skip errors
+                        waitForInteractiveAction(false); // Never auto-skip errors
                         errorCount = 0;
                     }
                     else
@@ -1421,7 +1421,7 @@ public class AiAgent
                         this.autoSkip = false;
                         stepDetails.setFailureReason("Action Failed: " + e.getMessage());
                         updateConsoleState(result, "Action Failed: " + e.getMessage());
-                        waitForHudAction(false); // Never auto-skip errors
+                        waitForInteractiveAction(false); // Never auto-skip errors
                     }
                     else
                     {
@@ -1429,7 +1429,7 @@ public class AiAgent
                     }
                 }
             }
-            catch (final HudActionException e)
+            catch (final InteractiveActionException e)
             {
                 throw e; // Rethrow to be caught by the outer loop
             }
@@ -1468,7 +1468,7 @@ public class AiAgent
                         this.autoSkip = false;
                         stepDetails.setFailureReason(e.getMessage());
                         updateConsoleState(result, "Assertion Failed: " + e.getMessage());
-                        waitForHudAction(false); // Never auto-skip errors
+                        waitForInteractiveAction(false); // Never auto-skip errors
                     }
                     else
                     {
@@ -1570,7 +1570,7 @@ public class AiAgent
                             this.autoSkip = false;
                             stepDetails.setFailureReason(e.getMessage());
                             updateConsoleState(result, "Assertion Failed: " + e.getMessage());
-                            waitForHudAction(false); // Never auto-skip errors
+                            waitForInteractiveAction(false); // Never auto-skip errors
                         }
                         else
                         {
@@ -1602,7 +1602,7 @@ public class AiAgent
                     this.autoSkip = false;
                     stepDetails.setFailureReason(e.getMessage());
                     updateConsoleState(result, "Assertion Failed: " + e.getMessage());
-                    waitForHudAction(false); // Never auto-skip errors
+                    waitForInteractiveAction(false); // Never auto-skip errors
                 }
                 else
                 {
@@ -1659,7 +1659,7 @@ public class AiAgent
                     this.autoSkip = false;
                     stepDetails.setFailureReason("Unexpected Error: " + e.getMessage());
                     updateConsoleState(result, "Unexpected Error: " + e.getMessage());
-                    waitForHudAction(false); // Never auto-skip errors
+                    waitForInteractiveAction(false); // Never auto-skip errors
                 }
                 else
                 {
@@ -1840,15 +1840,15 @@ public class AiAgent
      * Blocks the current execution thread and polls the interactive HUD for user action.
      * <p>
      * Implements a polling loop that checks for user input every second, up to a maximum of 1 hour (3600 seconds).
-     * Depending on the user's input, it parses the JSON response and throws a specific {@link HudActionException} to
+     * Depending on the user's input, it parses the JSON response and throws a specific {@link InteractiveActionException} to
      * signal the outer execution loop to modify its state (e.g., skip, rewind, add, edit).
      *
      * @param allowAutoSkip
      *            whether to immediately return if the user has enabled auto-skip
-     * @throws HudActionException
+     * @throws InteractiveActionException
      *             thrown to control the flow of the main execution loop
      */
-    private void waitForHudAction(final boolean allowAutoSkip) throws HudActionException
+    private void waitForInteractiveAction(final boolean allowAutoSkip) throws InteractiveActionException
     {
         if (this.consoleEngine == null)
             return;
@@ -1869,35 +1869,35 @@ public class AiAgent
             final String actionType = actionObj.has("action") ? actionObj.get("action").getAsString() : "";
             this.currentPauseId = null;
 
-            HudActionType typeEnum = null;
+            InteractiveActionType typeEnum = null;
             try
             {
-                typeEnum = HudActionType.valueOf(actionType);
+                typeEnum = InteractiveActionType.valueOf(actionType);
             }
             catch (IllegalArgumentException e)
             {
                 // Ignore unknown actions
             }
 
-            if (typeEnum == HudActionType.APPROVE)
+            if (typeEnum == InteractiveActionType.APPROVE)
             {
                 return;
             }
-            else if (typeEnum == HudActionType.SKIP)
+            else if (typeEnum == InteractiveActionType.SKIP)
             {
-                throw new HudActionException(HudActionType.SKIP, null, 0);
+                throw new InteractiveActionException(InteractiveActionType.SKIP, null, 0);
             }
-            else if (typeEnum == HudActionType.REWIND)
+            else if (typeEnum == InteractiveActionType.REWIND)
             {
                 final int rIdx = actionObj.get("index").getAsInt();
-                throw new HudActionException(HudActionType.REWIND, null, rIdx);
+                throw new InteractiveActionException(InteractiveActionType.REWIND, null, rIdx);
             }
-            else if (typeEnum == HudActionType.ADD)
+            else if (typeEnum == InteractiveActionType.ADD)
             {
                 final String instructionAdd = actionObj.get("instruction").getAsString();
-                throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
+                throw new InteractiveActionException(InteractiveActionType.ADD, instructionAdd, 0);
             }
-            else if (typeEnum == HudActionType.EDIT)
+            else if (typeEnum == InteractiveActionType.EDIT)
             {
                 final String instructionEdit = actionObj.get("instruction").getAsString();
                 final int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
@@ -1910,43 +1910,43 @@ public class AiAgent
                         bindingsMap.put(key, bObj.get(key).getAsString());
                     }
                 }
-                throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
+                throw new InteractiveActionException(InteractiveActionType.EDIT, instructionEdit, eIdx, bindingsMap);
             }
-            else if (typeEnum == HudActionType.APPEND)
+            else if (typeEnum == InteractiveActionType.APPEND)
             {
                 final String instructionAppend = actionObj.get("instruction").getAsString();
-                throw new HudActionException(HudActionType.APPEND, instructionAppend, 0);
+                throw new InteractiveActionException(InteractiveActionType.APPEND, instructionAppend, 0);
             }
-            else if (typeEnum == HudActionType.REORDER)
+            else if (typeEnum == InteractiveActionType.REORDER)
             {
                 final int fromIdx = actionObj.get("from").getAsInt();
                 final int toIdx = actionObj.get("to").getAsInt();
-                throw new HudActionException(HudActionType.REORDER, null, fromIdx, toIdx, null, null);
+                throw new InteractiveActionException(InteractiveActionType.REORDER, null, fromIdx, toIdx, null, null);
             }
-            else if (typeEnum == HudActionType.SAVE_EXIT)
+            else if (typeEnum == InteractiveActionType.SAVE_EXIT)
             {
-                this.hudSaveExit = true;
+                this.interactiveSaveExit = true;
                 final String saveScope = actionObj.has("saveScope") ? actionObj.get("saveScope").getAsString() : null;
-                throw new HudActionException(HudActionType.SAVE_EXIT, null, 0, 0, saveScope, null);
+                throw new InteractiveActionException(InteractiveActionType.SAVE_EXIT, null, 0, 0, saveScope, null);
             }
-            else if (typeEnum == HudActionType.ABORT)
+            else if (typeEnum == InteractiveActionType.ABORT)
             {
-                throw new HudActionException(HudActionType.ABORT, null, 0);
-            }   else if (typeEnum == HudActionType.SKIP)
+                throw new InteractiveActionException(InteractiveActionType.ABORT, null, 0);
+            }   else if (typeEnum == InteractiveActionType.SKIP)
             {
-                throw new HudActionException(HudActionType.SKIP, null, 0);
+                throw new InteractiveActionException(InteractiveActionType.SKIP, null, 0);
             }
-            else if (typeEnum == HudActionType.REWIND)
+            else if (typeEnum == InteractiveActionType.REWIND)
             {
                 final int rIdx = actionObj.get("index").getAsInt();
-                throw new HudActionException(HudActionType.REWIND, null, rIdx);
+                throw new InteractiveActionException(InteractiveActionType.REWIND, null, rIdx);
             }
-            else if (typeEnum == HudActionType.ADD)
+            else if (typeEnum == InteractiveActionType.ADD)
             {
                 final String instructionAdd = actionObj.get("instruction").getAsString();
-                throw new HudActionException(HudActionType.ADD, instructionAdd, 0);
+                throw new InteractiveActionException(InteractiveActionType.ADD, instructionAdd, 0);
             }
-            else if (typeEnum == HudActionType.EDIT)
+            else if (typeEnum == InteractiveActionType.EDIT)
             {
                 final String instructionEdit = actionObj.get("instruction").getAsString();
                 final int eIdx = actionObj.has("index") ? actionObj.get("index").getAsInt() : 0;
@@ -1959,30 +1959,30 @@ public class AiAgent
                         bindingsMap.put(key, bObj.get(key).getAsString());
                     }
                 }
-                throw new HudActionException(HudActionType.EDIT, instructionEdit, eIdx, bindingsMap);
+                throw new InteractiveActionException(InteractiveActionType.EDIT, instructionEdit, eIdx, bindingsMap);
             }
-            else if (typeEnum == HudActionType.APPEND)
+            else if (typeEnum == InteractiveActionType.APPEND)
             {
                 final String instructionAppend = actionObj.get("instruction").getAsString();
-                throw new HudActionException(HudActionType.APPEND, instructionAppend, 0);
+                throw new InteractiveActionException(InteractiveActionType.APPEND, instructionAppend, 0);
             }
-            else if (typeEnum == HudActionType.REORDER)
+            else if (typeEnum == InteractiveActionType.REORDER)
             {
                 final int fromIdx = actionObj.get("from").getAsInt();
                 final int toIdx = actionObj.get("to").getAsInt();
-                throw new HudActionException(HudActionType.REORDER, null, fromIdx, toIdx, null, null);
+                throw new InteractiveActionException(InteractiveActionType.REORDER, null, fromIdx, toIdx, null, null);
             }
-            else if (typeEnum == HudActionType.SAVE_EXIT)
+            else if (typeEnum == InteractiveActionType.SAVE_EXIT)
             {
-                this.hudSaveExit = true;
+                this.interactiveSaveExit = true;
                 final String saveScope = actionObj.has("saveScope") ? actionObj.get("saveScope").getAsString() : null;
-                throw new HudActionException(HudActionType.SAVE_EXIT, null, 0, 0, saveScope, null);
+                throw new InteractiveActionException(InteractiveActionType.SAVE_EXIT, null, 0, 0, saveScope, null);
             }
-            else if (typeEnum == HudActionType.ABORT)
+            else if (typeEnum == InteractiveActionType.ABORT)
             {
-                throw new HudActionException(HudActionType.ABORT, null, 0);
+                throw new InteractiveActionException(InteractiveActionType.ABORT, null, 0);
             }
-            else if (typeEnum == HudActionType.HUD_PROMPT_CHANGED)
+            else if (typeEnum == InteractiveActionType.INTERACTIVE_PROMPT_CHANGED)
             {
                 final Map<String, String> bindingsMap = new HashMap<>();
                 if (actionObj.has("state"))
@@ -1997,24 +1997,24 @@ public class AiAgent
                         }
                     }
                 }
-                throw new HudActionException(HudActionType.HUD_PROMPT_CHANGED, null, 0, bindingsMap);
+                throw new InteractiveActionException(InteractiveActionType.INTERACTIVE_PROMPT_CHANGED, null, 0, bindingsMap);
             }
-            else if (typeEnum == HudActionType.SETTINGS)
+            else if (typeEnum == InteractiveActionType.SETTINGS)
             {
                 if (actionObj.has("autoSkip"))
                 {
                     this.autoSkip = actionObj.get("autoSkip").getAsBoolean();
                 }
-                waitForHudAction(allowAutoSkip); // Wait again after settings change
+                waitForInteractiveAction(allowAutoSkip); // Wait again after settings change
             }
-            else if (typeEnum == HudActionType.DUMP)
+            else if (typeEnum == InteractiveActionType.DUMP)
             {
                 // Perform a debug dump of the current AI context without consuming the pause:
                 // the method recursively re-pauses so the user can still click Run or Skip.
                 performDebugDump();
-                waitForHudAction(allowAutoSkip);
+                waitForInteractiveAction(allowAutoSkip);
             }
-            else if (typeEnum == HudActionType.HUD_PROMPT_CHANGED)
+            else if (typeEnum == InteractiveActionType.INTERACTIVE_PROMPT_CHANGED)
             {
                 final Map<String, String> bindingsMap = new HashMap<>();
                 if (actionObj.has("state"))
@@ -2029,22 +2029,22 @@ public class AiAgent
                         }
                     }
                 }
-                throw new HudActionException(HudActionType.HUD_PROMPT_CHANGED, null, 0, bindingsMap);
+                throw new InteractiveActionException(InteractiveActionType.INTERACTIVE_PROMPT_CHANGED, null, 0, bindingsMap);
             }
-            else if (typeEnum == HudActionType.SETTINGS)
+            else if (typeEnum == InteractiveActionType.SETTINGS)
             {
                 if (actionObj.has("autoSkip"))
                 {
                     this.autoSkip = actionObj.get("autoSkip").getAsBoolean();
                 }
-                waitForHudAction(allowAutoSkip); // Wait again after settings change
+                waitForInteractiveAction(allowAutoSkip); // Wait again after settings change
             }
-            else if (typeEnum == HudActionType.DUMP)
+            else if (typeEnum == InteractiveActionType.DUMP)
             {
                 // Perform a debug dump of the current AI context without consuming the pause:
                 // the method recursively re-pauses so the user can still click Run or Skip.
                 performDebugDump();
-                waitForHudAction(allowAutoSkip);
+                waitForInteractiveAction(allowAutoSkip);
             }
         }
         catch (InterruptedException e)
@@ -2174,7 +2174,7 @@ public class AiAgent
             return;
 
         final JsonObject state = new JsonObject();
-        state.addProperty("status", this.hudAborted ? "aborted" : "running");
+        state.addProperty("status", this.interactiveAborted ? "aborted" : "running");
         state.addProperty("runId", this.currentRunId);
         state.addProperty("pauseId", this.currentPauseId);
         state.addProperty("testName", Neodymium.getTestName());
@@ -2197,7 +2197,8 @@ public class AiAgent
         }
         state.addProperty("testId", testId);
         state.addProperty("browser", Neodymium.getBrowserProfileName());
-        state.addProperty("hudPromptChanged", this.hudPromptChanged);
+        state.addProperty("interactivePromptChanged", this.interactivePromptChanged);
+        state.addProperty("hudPromptChanged", this.interactivePromptChanged);
         state.addProperty("yamlScope", detectYamlScope());
 
         Class<?> testClass = Neodymium.getTestClass();
@@ -2397,11 +2398,12 @@ public class AiAgent
         return screenshotUrlCache.computeIfAbsent(base64, b64 -> {
             try
             {
-                final java.io.File dir = new java.io.File("target/ai-console-screenshots");
+                final String screenshotsDir = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+                final File dir = new File(screenshotsDir);
                 if (!dir.exists())
                     dir.mkdirs();
                 final String fileName = java.util.UUID.randomUUID().toString() + ".png";
-                final java.io.File file = new java.io.File(dir, fileName);
+                final File file = new File(dir, fileName);
 
                 // Remove prefix if present
                 String cleanB64 = b64;
@@ -3499,7 +3501,7 @@ public class AiAgent
 
     private void promptUserOnExpectedFailure(final String instruction, final String unresolvedInstruction,
                                              final List<String> futureInstructions, final List<String> performedInstructions, final Throwable t)
-        throws HudActionException
+        throws InteractiveActionException
     {
         if (this.autoSkip)
         {
@@ -3512,7 +3514,7 @@ public class AiAgent
             plannedStrs.addAll(futureInstructions);
         }
         updateConsoleState(activeResult.get(), "Expected failure/defect detected: " + t.getMessage());
-        waitForHudAction(false);
+        waitForInteractiveAction(false);
     }
 
     /**
@@ -3958,11 +3960,11 @@ public class AiAgent
      * 
      * @return the new loop index (i), or -1 to break the execution loop.
      */
-    private int processHudActionException(final HudActionException e, final int i,
+    private int processInteractiveActionException(final InteractiveActionException e, final int i,
                                           final List<String> stepsList, final List<String> performedInstructions,
                                           final List<String> stepLines, final AiExecutionResult result)
     {
-        if (HudActionType.REWIND == e.actionType)
+        if (InteractiveActionType.REWIND == e.actionType)
         {
             final int rIdx = e.index;
             final Playbook playbook = Neodymium.getAiPlaybook();
@@ -3977,12 +3979,12 @@ public class AiAgent
             LOG.info("Rewound execution back to step index {}", rIdx);
             return rIdx - 1;
         }
-        else if (HudActionType.SAVE_EXIT == e.actionType)
+        else if (InteractiveActionType.SAVE_EXIT == e.actionType)
         {
-            this.hudSaveExit = saveYamlAndExit(i, performedInstructions, e.payload);
+            this.interactiveSaveExit = saveYamlAndExit(i, performedInstructions, e.payload);
             return -2; // signal break
         }
-        else if (HudActionType.ADD == e.actionType)
+        else if (InteractiveActionType.ADD == e.actionType)
         {
             if (this.currentBlock != null) { this.modifiedBlocks.add(this.currentBlock); }
             final String newInstr = e.instruction;
@@ -4004,11 +4006,11 @@ public class AiAgent
                 playbook.setChanged(true);
             }
 
-            this.hudPromptChanged = true;
+            this.interactivePromptChanged = true;
             LOG.info("Inserted new action: {}", newInstr);
             return i - 1;
         }
-        else if (HudActionType.EDIT == e.actionType)
+        else if (InteractiveActionType.EDIT == e.actionType)
         {
             if (this.currentBlock != null) { this.modifiedBlocks.add(this.currentBlock); }
             final String editInstr = e.instruction;
@@ -4053,11 +4055,11 @@ public class AiAgent
                 playbook.setChanged(true);
             }
 
-            this.hudPromptChanged = true;
+            this.interactivePromptChanged = true;
             LOG.info("Edited action at index {} to: {}", editIdx, editInstr);
             return i - 1;
         }
-        else if (HudActionType.APPEND == e.actionType)
+        else if (InteractiveActionType.APPEND == e.actionType)
         {
             if (this.currentBlock != null)
             {
@@ -4083,11 +4085,11 @@ public class AiAgent
                 playbook.setChanged(true);
             }
 
-            this.hudPromptChanged = true;
+            this.interactivePromptChanged = true;
             LOG.info("Appended new action to end: {}", newInstr);
             return i - 1;
         }
-        else if (HudActionType.REORDER == e.actionType)
+        else if (InteractiveActionType.REORDER == e.actionType)
         {
             if (this.currentBlock != null)
             {
@@ -4143,12 +4145,12 @@ public class AiAgent
                     playbook.setChanged(true);
                 }
 
-                this.hudPromptChanged = true;
+                this.interactivePromptChanged = true;
                 LOG.info("Reordered step from {} to {}", fromIdx, toIdx);
             }
             return i - 1;
         }
-        else if (HudActionType.SKIP == e.actionType)
+        else if (InteractiveActionType.SKIP == e.actionType)
         {
             if (this.currentBlock != null)
             {
@@ -4161,7 +4163,7 @@ public class AiAgent
             {
                 playbook.nextStep();
             }
-            this.hudPromptChanged = true;
+            this.interactivePromptChanged = true;
             if (result != null && result.getSteps().size() > i)
             {
                 result.getSteps().get(i).setExpandedInstruction(step + " (Skipped)");
@@ -4182,7 +4184,7 @@ public class AiAgent
             }
             return i;
         }
-        else if (HudActionType.HUD_PROMPT_CHANGED == e.actionType)
+        else if (InteractiveActionType.INTERACTIVE_PROMPT_CHANGED == e.actionType)
         {
             if (this.currentBlock != null)
             {
@@ -4195,13 +4197,13 @@ public class AiAgent
                 Neodymium.getData().putAll(updatedBindings);
                 updateConsoleState(activeResult.get(), null);
             }
-            this.hudPromptChanged = true;
+            this.interactivePromptChanged = true;
             LOG.info("Updated data bindings: {}", updatedBindings);
             return i - 1;
         }
-        else if (HudActionType.ABORT == e.actionType)
+        else if (InteractiveActionType.ABORT == e.actionType)
         {
-            this.hudAborted = true;
+            this.interactiveAborted = true;
             if (result != null && result.getSteps().size() > i)
             {
                 result.getSteps().get(i).setFailureReason("Aborted");
@@ -4453,7 +4455,7 @@ public class AiAgent
         return instruction;
     }
 
-    public final void executeIncludeSteps(final List<YamlFileReader.Step> steps) throws HudActionException
+    public final void executeIncludeSteps(final List<YamlFileReader.Step> steps) throws InteractiveActionException
     {
         final AiExecutionResult result = getActiveResult();
         if (result == null)
@@ -4563,7 +4565,7 @@ public class AiAgent
                                 performedInstructions, step.text, futureInstructions,
                                 traceLine, traceFile, stepDetails, result, includeStepsList, includeStepLines);
                 }
-                catch (final HudActionException e)
+                catch (final InteractiveActionException e)
                 {
                     throw e;
                 }

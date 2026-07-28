@@ -308,7 +308,12 @@ public final class AuraReportingService
             command.add("mvn");
         }
         command.add("io.qameta.allure:allure-maven:report");
-        command.add("-Dallure.results.directory=" + new File("target/allure-results").getAbsolutePath());
+        final File auraAllureResults = new File("target/aura-sandbox/allure-results").getAbsoluteFile();
+        final File auraReportSite = new File("target/aura-sandbox/site/allure-maven-plugin").getAbsoluteFile();
+        command.add("-Dallure.results.directory=" + auraAllureResults.getAbsolutePath());
+        command.add("-DresultsDirectory=" + auraAllureResults.getAbsolutePath());
+        command.add("-Dallure.report.directory=" + auraReportSite.getAbsolutePath());
+        command.add("-DreportDirectory=" + auraReportSite.getAbsolutePath());
 
         final ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
@@ -357,7 +362,11 @@ public final class AuraReportingService
             final int testsRun, final int passed, final int failed, final int skipped, final boolean manuallyStoppedVal,
             final List<String> runLogs, final List<Map<String, Object>> runEvents)
     {
-        final File srcDir = new File("target/site/allure-maven-plugin");
+        File srcDir = new File("target/aura-sandbox/site/allure-maven-plugin");
+        if (!srcDir.exists() || !srcDir.isDirectory())
+        {
+            srcDir = new File("target/site/allure-maven-plugin");
+        }
         if (!srcDir.exists() || !srcDir.isDirectory())
         {
             LOGGER.error("[Aura Server] Report source directory not found: {}", srcDir.getAbsolutePath());
@@ -409,7 +418,11 @@ public final class AuraReportingService
             // Write per-test logs
             writePerTestLogs(destDir, logSnapshot);
 
-            final File targetDir = new File("target/allure-results");
+            File targetDir = new File("target/aura-sandbox/allure-results");
+            if (!targetDir.exists() || !targetDir.isDirectory())
+            {
+                targetDir = new File("target/allure-results");
+            }
             final File[] consoleFiles = targetDir
                     .listFiles((dir, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
             if (consoleFiles != null && consoleFiles.length > 0)
@@ -470,7 +483,12 @@ public final class AuraReportingService
                 }
             }
 
-            final File screenshotsDir = new File("target/ai-console-screenshots");
+            final String screenshotsDirPath = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+            File screenshotsDir = new File(screenshotsDirPath);
+            if (!screenshotsDir.exists() || !screenshotsDir.isDirectory())
+            {
+                screenshotsDir = new File("target/ai-console-screenshots");
+            }
             if (screenshotsDir.exists() && screenshotsDir.isDirectory())
             {
                 final File destScreenshots = new File(destDir, "screenshots");

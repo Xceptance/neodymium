@@ -33,6 +33,9 @@ embeddedLocalProxySelfSignedRootCertificate.p12
 /.allure/
 /allure-report/
 /aura-allure-results-temp/
+/target/aura-sandbox/
+/src/test/java/com/xceptance/neodymium/aura/sandbox/
+
 
 
 

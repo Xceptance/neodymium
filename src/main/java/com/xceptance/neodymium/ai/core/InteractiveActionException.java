@@ -18,20 +18,34 @@
  */
 package com.xceptance.neodymium.ai.core;
 
-public class HudActionException extends Exception {
+import java.util.Map;
+
+/**
+ * Control-flow exception thrown when a user action is received from the interactive console view.
+ *
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
+ */
+public class InteractiveActionException extends Exception
+{
     private static final long serialVersionUID = 1L;
-    
-    public final HudActionType actionType;
+
+    public final InteractiveActionType actionType;
+
     public final String instruction;
+
     public final int index;
 
     public final int indexTo;
+
     public final String payload;
 
-    public final java.util.Map<String, String> bindings;
+    public final Map<String, String> bindings;
 
-    public HudActionException(HudActionType actionType, String instruction, int index, int indexTo, String payload, java.util.Map<String, String> bindings) {
-        super("HUD_" + actionType.name());
+    public InteractiveActionException(final InteractiveActionType actionType, final String instruction, final int index, final int indexTo,
+                                       final String payload, final Map<String, String> bindings)
+    {
+        super("INTERACTIVE_" + actionType.name());
         this.actionType = actionType;
         this.instruction = instruction;
         this.index = index;
@@ -39,12 +53,15 @@ public class HudActionException extends Exception {
         this.payload = payload;
         this.bindings = bindings;
     }
-    
-    public HudActionException(HudActionType actionType, String instruction, int index, java.util.Map<String, String> bindings) {
+
+    public InteractiveActionException(final InteractiveActionType actionType, final String instruction, final int index,
+                                       final Map<String, String> bindings)
+    {
         this(actionType, instruction, index, 0, null, bindings);
     }
-    
-    public HudActionException(HudActionType actionType, String instruction, int index) {
+
+    public InteractiveActionException(final InteractiveActionType actionType, final String instruction, final int index)
+    {
         this(actionType, instruction, index, 0, null, null);
     }
 }

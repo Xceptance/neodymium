@@ -133,7 +133,8 @@ public final class AuraManagerInteractiveController
         }
         if (targetFile == null || !targetFile.exists())
         {
-            final File activeDir = new File("target/ai-console-screenshots").getCanonicalFile();
+            final String screenshotsDirPath = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+            final File activeDir = new File(screenshotsDirPath).getCanonicalFile();
             targetFile = new File(activeDir, file).getCanonicalFile();
             if (!targetFile.getPath().startsWith(activeDir.getPath()))
             {

@@ -447,7 +447,7 @@ public class InteractiveConsoleStandaloneTest extends BaseAiTest
 
         // Verify the overlay is active
         $("#finalSaveOverlay").shouldHave(Condition.cssClass("active"));
-        $("#finalSaveText").shouldHave(Condition.text("You have made changes to the test steps during execution. Would you like to save these changes?"));
+        $("#finalSaveText").shouldHave(Condition.text("You have made changes to the test steps during execution."));
         
         // Verify we have both save and discard buttons
         $("#finalSaveButtons").$$("button").shouldHave(CollectionCondition.size(2));

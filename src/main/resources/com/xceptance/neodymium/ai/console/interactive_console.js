@@ -42,7 +42,7 @@ function connectSSE() {
                 const finalSaveText = document.getElementById('finalSaveText');
                 const finalSaveButtons = document.getElementById('finalSaveButtons');
                 if (finalSaveOverlay) {
-                    const editsMade = currentState && currentState.hudPromptChanged === true;
+                    const editsMade = currentState && (currentState.interactivePromptChanged === true || currentState.hudPromptChanged === true);
                     const saveScopeContainer = document.getElementById('saveScopeContainer');
                     if (saveScopeContainer) {
                         saveScopeContainer.style.display = editsMade ? 'block' : 'none';
@@ -61,7 +61,7 @@ function connectSSE() {
                                 files.push(currentState.playbookFile);
                             }
                             let filesHtml = files.length > 0 ? "<div style='margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;'><ul style='margin: 0; padding-left: 20px; text-align: left;'>" + files.map(f => "<li style='word-break: break-all;'><code>" + f + "</code></li>").join("") + "</ul></div>" : "";
-                            finalSaveText.innerHTML = "You have made changes to the test steps during execution. The following files will be updated:" + filesHtml + "Would you like to save these changes?";
+                            finalSaveText.innerHTML = "You have made changes to the test steps during execution. " + (filesHtml ? "The following files will be updated: " + filesHtml + " " : "") + "Would you like to save these changes?";
                         } else {
                             finalSaveText.innerHTML = "Test execution finished successfully!";
                         }

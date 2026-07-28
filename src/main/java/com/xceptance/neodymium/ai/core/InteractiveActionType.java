@@ -18,6 +18,28 @@
  */
 package com.xceptance.neodymium.ai.core;
 
-public enum HudActionType {
-    APPROVE, SKIP, REWIND, ADD, EDIT, SAVE_EXIT, DUMP, REORDER, APPEND, SETTINGS, OPEN_FULL_PROMPT, CLOSE_FULL_PROMPT, TOGGLE_HELP, TOGGLE_BINDINGS, ABORT, HUD_PROMPT_CHANGED;
+/**
+ * Enumeration of action types triggered from the interactive console view during test execution.
+ *
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
+ */
+public enum InteractiveActionType
+{
+    APPROVE,
+    SKIP,
+    REWIND,
+    ADD,
+    EDIT,
+    SAVE_EXIT,
+    DUMP,
+    REORDER,
+    APPEND,
+    SETTINGS,
+    OPEN_FULL_PROMPT,
+    CLOSE_FULL_PROMPT,
+    TOGGLE_HELP,
+    TOGGLE_BINDINGS,
+    ABORT,
+    INTERACTIVE_PROMPT_CHANGED;
 }

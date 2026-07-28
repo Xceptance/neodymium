@@ -226,11 +226,11 @@ public final class AuraQueueService
         }
 
         final Thread thread = new Thread(() -> {
-            final File tempRunnerDir = new File("src/test/java/com/xceptance/neodymium/aura").getAbsoluteFile();
+            final File tempRunnerDir = new File("src/test/java/com/xceptance/neodymium/aura/sandbox").getAbsoluteFile();
 
             try
             {
-                final File allureResultsDir = new File("target/allure-results");
+                final File allureResultsDir = new File("target/aura-sandbox/allure-results");
                 if (allureResultsDir.exists())
                 {
                     reportingService.deleteDirRecursively(allureResultsDir);
@@ -286,7 +286,7 @@ public final class AuraQueueService
                     if (!tempRunnerFile.exists())
                     {
                         tempRunnerDir.mkdirs();
-                        final String runnerSource = "package com.xceptance.neodymium.aura;\n\n" +
+                        final String runnerSource = "package com.xceptance.neodymium.aura.sandbox;\n\n" +
                                 "import com.xceptance.neodymium.common.browser.Browser;\n" +
                                 "import com.xceptance.neodymium.common.testdata.DataFolder;\n" +
                                 "import com.xceptance.neodymium.junit5.NeodymiumTest;\n" +
@@ -357,9 +357,10 @@ public final class AuraQueueService
                         command.add("mvn");
                     }
                     command.add("test");
-                    command.add("-Dtest=com.xceptance.neodymium.aura." + className);
+                    command.add("-Dtest=com.xceptance.neodymium.aura.sandbox." + className);
                     command.add("-Dneodymium.testFileFilter=" + file.replace(".", "\\."));
-                    command.add("-Dallure.results.directory=" + new File("target/allure-results").getAbsolutePath());
+                    command.add("-Dallure.results.directory=" + new File("target/aura-sandbox/allure-results").getAbsolutePath());
+                    command.add("-Dneodymium.ai.console.screenshotsDir=" + new File("target/aura-sandbox/ai-console-screenshots").getAbsolutePath());
                     if (hasIds)
                     {
                         command.add("-Dneodymium.testIdFilter=" + idFilterBuilder.toString());
@@ -529,7 +530,7 @@ public final class AuraQueueService
                     createdTempFiles.clear();
                 }
                 File parent = tempRunnerDir;
-                while (parent != null && parent.getPath().startsWith("src/test/java"))
+                while (parent != null && parent.getPath().contains("src/test/java/com/xceptance/neodymium/aura/sandbox"))
                 {
                     final File[] children = parent.listFiles();
                     if (children == null || children.length == 0)
