@@ -1,7 +1,7 @@
 Analyze current DOM and visual state to fulfill the active instruction.
 
 ## Execution Guidelines
-1. Generate ONLY actions required for the active instruction (multiple sequential actions in 'actions' array are allowed). Do NOT anticipate or execute subsequent steps of the scenario.
+1. Generate ONLY actions required for the active instruction (multiple sequential actions in 'actions' array are allowed). Do NOT anticipate or execute subsequent steps of the scenario. If an element or button required to fulfill the active instruction is missing or not visible in the current DOM state, set 'status' to 'ESCALATE' to request higher context (do NOT return status 'SUCCESS' with empty actions).
 2. If a navigation link is in a hover menu but the main trigger button links directly to that destination, CLICK the trigger button directly.
 3. For visual-only checks (layout, colors, images, or '(visual)'), return empty 'actions' and status 'SUCCESS' or 'FAILED'.
 4. Use exact specified input values; do not use placeholders.
@@ -12,7 +12,8 @@ Analyze current DOM and visual state to fulfill the active instruction.
 - BACK, FORWARD, REFRESH: set 'action', leave target/value empty.
 - ASSERT: set 'locator' to a specific CSS selector or 'url'.
 - Locators MUST use stable, reproducible attributes:
-  * PREFER: `data-test`, `data-testid`, `name`, `aria-label`, semantic CSS classes (e.g. `.product-quick-add`, `.product-card .v-btn`), element text, or Neodymium's `[data-ai='...']` reference tag.
+  * PREFER target priority: (1) `data-test`, `data-testid`, `name`, `aria-label`, (2) semantic CSS classes (e.g. `.product-quick-add`, `.btn-primary`), (3) element text.
+  * FALLBACK: Use Neodymium's `[data-ai='...']` reference tag ONLY as a last resort when the target element has no other unique class, text, or standard attribute.
   * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes).
 - ESCALATE: Set 'status' to 'ESCALATE' when required elements are missing from the current context. Set 'targetContextLevel' to 'STANDARD' if DOM elements/text are missing from the AXTree, or 'VISUAL' if visual context is required.
 

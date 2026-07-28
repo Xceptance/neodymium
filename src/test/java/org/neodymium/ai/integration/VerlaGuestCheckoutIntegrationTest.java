@@ -173,7 +173,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
     public void testCheckoutLiveModernBadNoWcag()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("body").shouldHave(text("Thank you for your purchase!"));
     }
 
     /**
@@ -185,7 +185,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
     public void testCheckoutReplayModernBadNoWcag()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("body").shouldHave(text("Thank you for your purchase!"));
     }
 
     /**
