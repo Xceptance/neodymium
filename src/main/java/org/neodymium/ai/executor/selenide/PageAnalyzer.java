@@ -1721,7 +1721,7 @@ public class PageAnalyzer
 
         dom.append("  ".repeat(depth));
         dom.append("<").append(tag);
-        if (!domTagName.isEmpty() && !role.equals(domTagName)) {
+        if (!domTagName.isEmpty() && !role.equals(domTagName) && !isImplicitRole(domTagName, role)) {
             dom.append(" role=\"").append(escapeAttributeValue(role)).append("\"");
         }
         if (!refId.isEmpty()) {
@@ -1831,5 +1831,26 @@ public class PageAnalyzer
         {
             throw new RuntimeException("Failed to load resource: " + resourceName, e);
         }
+    }
+
+    private static boolean isImplicitRole(final String tag, final String role)
+    {
+        if (tag == null || role == null)
+        {
+            return false;
+        }
+        final String t = tag.toLowerCase();
+        final String r = role.toLowerCase();
+        return (t.equals("a") && r.equals("link"))
+            || (t.equals("button") && r.equals("button"))
+            || (t.equals("header") && r.equals("banner"))
+            || (t.equals("nav") && r.equals("navigation"))
+            || (t.equals("main") && r.equals("main"))
+            || (t.equals("footer") && r.equals("contentinfo"))
+            || (t.matches("^h[1-6]$") && r.equals("heading"))
+            || (t.equals("textarea") && r.equals("textbox"))
+            || (t.equals("form") && r.equals("form"))
+            || (t.equals("select") && (r.equals("combobox") || r.equals("select")))
+            || (t.equals("option") && r.equals("option"));
     }
 }
