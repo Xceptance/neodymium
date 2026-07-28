@@ -79,4 +79,14 @@ public final class AiAgentPrompts
     {
         return getPrompt("pesap-pre-step-prompt.md");
     }
+
+    /**
+     * Loads the action extraction system prompt template.
+     *
+     * @return the action extraction system prompt
+     */
+    public static String getActionExtractionPrompt()
+    {
+        return getPrompt("action-extraction-prompt.md");
+    }
 }
