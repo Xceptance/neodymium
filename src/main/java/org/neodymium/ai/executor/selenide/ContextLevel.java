@@ -92,7 +92,7 @@ public enum ContextLevel
         return switch (this)
         {
             case HINT -> AXTREE;
-            case AXTREE -> LEAN;
+            case AXTREE -> STANDARD;
             case LEAN -> STANDARD;
             case STANDARD -> VISUAL;
             case VISUAL_LEAN -> VISUAL;
