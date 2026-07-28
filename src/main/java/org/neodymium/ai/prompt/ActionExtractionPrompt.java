@@ -77,19 +77,18 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                
                For an ASSERT action:
                - Set 'action' to 'ASSERT'.
-               - Set 'locator' to a valid, robust CSS selector targeting the DOM element (e.g., unique IDs, semantic attributes, or structural class selectors), or 'url' to verify the current page URL. CRITICAL: Never use synthetic text index pseudotags (such as 'text:nth-of-type(N)'); always resolve a standard, robust CSS selector targeting real elements in the DOM tree.
-               - Set 'value' to the expected state, text content, substring, or regular expression pattern required by the instruction. CRITICAL: When an instruction asserts specific content (such as text, numbers, codes, symbols, or patterns), 'value' MUST contain the target text string or regular expression to match. Use generic state values ('visible', 'hidden', 'enabled', 'disabled', 'focused') ONLY when the instruction explicitly asks to verify element presence or state without specific content criteria. For regular expression patterns, output the raw regex pattern directly without surrounding delimiters or slashes.
+               - Set 'locator' to a specific, robust CSS selector targeting the precise element containing the target text or state. CRITICAL: Never use broad outer layout containers (such as 'div.container', '.wrapper', 'body', 'html', '.main-content') or synthetic text index pseudotags (such as 'text:nth-of-type(N)'); always resolve a specific CSS selector targeting the actual element or its immediate container. If a specific CSS selector is not available in the current context, set 'status' to 'ESCALATE' to request visual context.
+               - Set 'value' to the expected state, text content, substring, or regular expression pattern required by the instruction. CRITICAL: When an instruction asserts dynamic formats or currency values (e.g. verifying a total is in USD or matches a format), 'value' SHOULD use a matching regular expression pattern (e.g., '\\$[0-9]+(\\.[0-9]{2})?' or 'Total Paid:') rather than hardcoding static numbers that vary across datasets. Use generic state values ('visible', 'hidden', 'enabled', 'disabled', 'focused') ONLY when the instruction explicitly asks to verify element presence or state without specific content criteria. For regular expression patterns, output the raw regex pattern directly without surrounding delimiters or slashes.
                
                Always identify the most robust CSS selector for the target element.
-               
-               Return your response as a JSON object containing the following fields:
-               1. 'status': String. Must be one of:
-                  - 'SUCCESS': If the instruction is successfully completed (or a visual check passes).
-                  - 'FAILED': If a visual check or assertion fails.
-                  - 'ESCALATE': If you cannot fulfill the instruction with the current context level and need a screenshot.
-               2. 'targetContextLevel': String (optional). If status is 'ESCALATE', set to 'VISUAL_LEAN' or 'VISUAL' to request screenshot context.
-               3. 'reasoning': String. Explanation for the actions chosen, why the visual check passed/failed, or why escalation is required.
-               4. 'actions': Array of action objects. Each action must include 'action' (the type), 'locator' (the CSS selector), 'value' (string to type or select, optional), and 'reasoning'. Empty if status is 'ESCALATE' or it is a pure visual check.
+                              Return your response as a JSON object containing the following fields:
+                1. 'status': String. Must be one of:
+                   - 'SUCCESS': If the instruction is successfully completed (or a visual check passes).
+                   - 'FAILED': If a visual check or assertion fails.
+                   - 'ESCALATE': If you are uncertain, if the current DOM text/tree lacks a robust CSS selector, or if visual inspection is needed. CRITICAL: Never guess or invent unconfident/synthetic locators; escalate early to request screenshot context ('VISUAL_LEAN' or 'VISUAL').
+                2. 'targetContextLevel': String (optional). If status is 'ESCALATE', set to 'VISUAL_LEAN' or 'VISUAL' to request screenshot context.
+                3. 'reasoning': String. Explanation for the actions chosen, why the visual check passed/failed, or why escalation is required.
+                4. 'actions': Array of action objects. Each action must include 'action' (the type), 'locator' (the CSS selector), 'value' (string to type or select, optional), and 'reasoning'. Empty if status is 'ESCALATE' or it is a pure visual check.
                """;
         return SystemPromptAddonHelper.appendAddon(basePrompt, "general", context);
     }
