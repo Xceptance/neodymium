@@ -377,6 +377,8 @@ public class PageAnalyzer
 
                             results.push({
                                 label: label,
+                                tagName: el.tagName ? el.tagName.toLowerCase() : label,
+                                className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
                                 text: text.length <= MAX_TEXT ? text : '',
                                 id: el.id || null,
                                 name: el.getAttribute('name'),
@@ -434,6 +436,8 @@ public class PageAnalyzer
 
                             results.push({
                                 label: label,
+                                tagName: el.tagName ? el.tagName.toLowerCase() : label,
+                                className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
                                 text: text.length <= MAX_TEXT ? text : '',
                                 id: el.id || null,
                                 name: el.getAttribute('name'),
@@ -1107,10 +1111,12 @@ public class PageAnalyzer
      * per-element approach.
      */
     private void formatElement(final StringBuilder dom, final Map<String, Object> el) {
-        final String label = el.get("label") != null ? el.get("label").toString() : "element";
+        final Object tagObj = el.get("tagName");
+        final String label = (tagObj != null && !tagObj.toString().isEmpty()) ? tagObj.toString() : (el.get("label") != null ? el.get("label").toString() : "element");
         dom.append("<").append(label);
 
         appendAttribute(dom, "id", el.get("id"));
+        appendAttribute(dom, "class", el.get("className"));
         appendAttribute(dom, "name", el.get("name"));
         appendAttribute(dom, "type", el.get("type"));
         appendAttribute(dom, "role", el.get("role"));
