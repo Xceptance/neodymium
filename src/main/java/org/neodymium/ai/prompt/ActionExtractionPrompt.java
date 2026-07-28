@@ -75,7 +75,10 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                For a FORWARD action, set 'action' to 'FORWARD'. Target and value can be empty.
                For a REFRESH action, set 'action' to 'REFRESH'. Target and value can be empty.
                
-               For an ASSERT action, set 'action' to 'ASSERT', set 'locator' to the element identifier (or 'url' to verify current URL), and set 'value' to the expected state, text, or a regular expression pattern to match (e.g., 'visible', 'hidden', 'focused', or 'V-[0-9]+-US'). CRITICAL: For regular expressions, output the regex pattern directly; do NOT wrap it in forward slashes (e.g. use 'V-[0-9]+-US' instead of '/V-[0-9]+-US/').
+               For an ASSERT action:
+               - Set 'action' to 'ASSERT'.
+               - Set 'locator' to a valid, robust CSS selector on the target element (e.g. '#total-paid', '.order-total', 'span.amount'), or 'url' to verify current URL. CRITICAL: Never use synthetic 'text:nth-of-type(N)' or pseudotag index selectors; always resolve a robust CSS selector targeting real elements in the DOM.
+               - Set 'value' to the exact text, substring, or regex pattern to verify (e.g., '\\$[0-9]+(\\.[0-9]{2})?', 'Total Paid:', or 'V-[0-9]+-US'). CRITICAL: When verifying text, values, currency, or numbers (e.g. 'total is in USD'), 'value' MUST contain the expected text string or matching regex pattern, NOT merely 'visible'. Use 'visible', 'hidden', or 'focused' ONLY for structural visibility checks without specific content requirements. For regular expressions, output the regex pattern directly without wrapping in forward slashes.
                
                Always identify the most robust CSS selector for the target element.
                
