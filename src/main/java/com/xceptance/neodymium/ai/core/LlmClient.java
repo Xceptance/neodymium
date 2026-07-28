@@ -27,7 +27,9 @@ import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import javax.imageio.ImageIO;
 
 import org.apache.commons.lang3.StringUtils;
@@ -61,7 +63,7 @@ public class LlmClient
 {
     private static final Logger LOG = LoggerFactory.getLogger(LlmClient.class);
 
-    private ChatModel model;
+    private final Map<LlmMode, ChatModel> models = new EnumMap<>(LlmMode.class);
     private final AiConfiguration config;
     private final AiStats aiStats;
     private final LlmMode mode;
@@ -144,21 +146,25 @@ public class LlmClient
     }
 
     /**
-     * Lazy-initializes and returns the LangChain4j ChatModel.
-     * Selects configuration properties dynamically based on the execution mode (Agent vs Generator).
+     * Lazy-initializes and returns the LangChain4j ChatModel for the specified active mode.
+     * Selects configuration properties dynamically based on the execution mode (Agent vs Assert vs Generator).
      *
+     * @param activeMode the active LlmMode for the current call
      * @return the initialized {@link ChatModel}
      */
-    private ChatModel getChatModel()
+    private synchronized ChatModel getChatModel(final LlmMode activeMode)
     {
-        if (model != null)
+        final LlmMode targetMode = activeMode != null ? activeMode : (this.mode != null ? this.mode : LlmMode.AGENT);
+
+        final ChatModel existingModel = models.get(targetMode);
+        if (existingModel != null)
         {
-            return model;
+            return existingModel;
         }
 
-        final String apiKey = (mode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionApiKey()))
+        final String apiKey = (targetMode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionApiKey()))
                 ? config.aiAssertionApiKey() : config.aiApiKey();
-        final String modelName = (mode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionModel()))
+        final String modelName = (targetMode == LlmMode.ASSERT && StringUtils.isNotBlank(config.aiAssertionModel()))
                 ? config.aiAssertionModel() : config.aiModel();
 
         if (StringUtils.isBlank(apiKey))
@@ -167,14 +173,15 @@ public class LlmClient
                     "AI API key not configured. Set in your ai.properties, neodymium.properties or as an environment variable.");
         }
 
-        LOG.debug("   🤖 Initializing Gemini model: {} using API key: {}", modelName, maskKey(apiKey));
+        LOG.debug("   🤖 Initializing Gemini model ({}) for mode {}: {} using API key: {}",
+                targetMode, modelName, maskKey(apiKey));
 
         final double temperature;
-        if (mode == LlmMode.GENERATOR)
+        if (targetMode == LlmMode.GENERATOR)
         {
             temperature = config.aiGenerateTemperature();
         }
-        else if (mode == LlmMode.ASSERT)
+        else if (targetMode == LlmMode.ASSERT)
         {
             final Double assertTemp = config.aiAssertionTemperature();
             temperature = assertTemp != null ? assertTemp : 0.0;
@@ -183,12 +190,12 @@ public class LlmClient
         {
             temperature = config.aiTemperature();
         }
-        LOG.debug("   🌡️ Using temperature: {} (mode={})", temperature, mode);
+        LOG.debug("   🌡️ Using temperature: {} (mode={})", temperature, targetMode);
 
-        final int timeoutSeconds = (mode == LlmMode.ASSERT && config.aiAssertionTimeoutSeconds() != null)
+        final int timeoutSeconds = (targetMode == LlmMode.ASSERT && config.aiAssertionTimeoutSeconds() != null)
                 ? config.aiAssertionTimeoutSeconds() : config.geminiTimeoutSeconds();
 
-        model = GoogleAiGeminiChatModel.builder()
+        final ChatModel createdModel = GoogleAiGeminiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .temperature(temperature)
@@ -196,7 +203,9 @@ public class LlmClient
                 .responseFormat(ResponseFormat.JSON)
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
-        return model;
+
+        models.put(targetMode, createdModel);
+        return createdModel;
     }
 
     /**
@@ -385,7 +394,8 @@ public class LlmClient
             LOG.trace("=== LLM REQUEST MESSAGES END ===");
         }
 
-        final ChatResponse response = getChatModel().chat(messages);
+        final LlmMode activeMode = currentCallMode.get() != null ? currentCallMode.get() : (this.mode != null ? this.mode : LlmMode.AGENT);
+        final ChatResponse response = getChatModel(activeMode).chat(messages);
         recordTokenUsage(response);
 
         final String text = response.aiMessage().text();
