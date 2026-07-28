@@ -137,29 +137,46 @@ public class WaitAction implements AiActionPlugin
     {
         final String target = action.getTarget();
         
-        // If target element selector is present, wait for element visibility
+        // If target element selector is present, wait for element visibility or text condition
         if (target != null && !target.isBlank())
         {
-            // Default timeout is 10 seconds
+            final String val = action.getValue();
+            boolean isCustomTimeout = false;
             long timeoutMs = 10000;
-            
-            // Check if a custom timeout was provided in the value field
-            if (action.getValue() != null && !action.getValue().isBlank())
+
+            if (val != null && !val.isBlank())
             {
                 try
                 {
-                    timeoutMs = Long.parseLong(action.getValue());
+                    timeoutMs = Long.parseLong(val.trim());
+                    isCustomTimeout = true;
                 }
-                catch (final NumberFormatException e)
+                catch (final NumberFormatException ignored)
                 {
-                    LOG.warn("Invalid timeout value for WAIT action: {}", action.getValue());
                 }
             }
-            
-            LOG.debug("Waiting up to {} ms for element: {}", timeoutMs, target);
-            
-            // Wait until the element is visible in the page DOM
-            executor.findElement(action).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
+
+            if (!isCustomTimeout && val != null && !val.isBlank())
+            {
+                final String cleanVal = val.toLowerCase().trim();
+                if (cleanVal.contains("exist") || cleanVal.contains("present"))
+                {
+                    executor.findElement(action).shouldBe(Condition.exist, Duration.ofSeconds(10));
+                }
+                else if (cleanVal.contains("hidden") || cleanVal.contains("invisible") || cleanVal.contains("absent"))
+                {
+                    executor.findElement(action).shouldBe(Condition.hidden, Duration.ofSeconds(10));
+                }
+                else
+                {
+                    executor.findElement(action).shouldHave(Condition.text(val), Duration.ofSeconds(10));
+                }
+            }
+            else
+            {
+                LOG.debug("Waiting up to {} ms for element: {}", timeoutMs, target);
+                executor.findElement(action).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
+            }
         }
         else
         {

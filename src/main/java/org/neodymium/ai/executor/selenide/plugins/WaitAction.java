@@ -95,20 +95,40 @@ public final class WaitAction implements BrowserActionPlugin
             }
             else
             {
-                WebElementCondition condition = Condition.visible;
-                if (value != null)
+                boolean isCustomTimeout = false;
+                long timeoutMs = 10000;
+                if (value != null && !value.isBlank())
+                {
+                    try
+                    {
+                        timeoutMs = Long.parseLong(value.trim());
+                        isCustomTimeout = true;
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+
+                if (!isCustomTimeout && value != null && !value.isBlank())
                 {
                     final String val = value.toLowerCase().trim();
                     if (val.contains("exist") || val.contains("present"))
                     {
-                        condition = Condition.exist;
+                        SelenideElementFinder.findElement(target).shouldBe(Condition.exist, Duration.ofSeconds(10));
                     }
-                    else if (val.contains("hidden") || val.contains("invisible"))
+                    else if (val.contains("hidden") || val.contains("invisible") || val.contains("absent"))
                     {
-                        condition = Condition.hidden;
+                        SelenideElementFinder.findElement(target).shouldBe(Condition.hidden, Duration.ofSeconds(10));
+                    }
+                    else
+                    {
+                        SelenideElementFinder.findElement(target).shouldHave(Condition.text(value), Duration.ofSeconds(10));
                     }
                 }
-                SelenideElementFinder.findElement(target).shouldBe(condition, Duration.ofSeconds(10));
+                else
+                {
+                    SelenideElementFinder.findElement(target).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
+                }
             }
         }
     }
