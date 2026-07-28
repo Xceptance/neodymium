@@ -963,44 +963,7 @@ public class PageAnalyzer
                 }
             }
 
-            // Render forms
-            final List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("forms");
-            if (forms != null && !forms.isEmpty()) {
-                if (showFrameId) {
-                    dom.append("\n=== Forms === (Frame: ").append(frameId).append(")\n");
-                } else {
-                    dom.append("\n=== Forms ===\n");
-                }
-                for (final Map<String, Object> form : forms) {
-                    if (showFrameId) {
-                        dom.append(String.format("  [form] id='%s' action='%s' data-ai='%s' frameId='%s'\n",
-                                form.get("id"), form.get("action"), form.get("automationId"), frameId));
-                    } else {
-                        dom.append(String.format("  [form] id='%s' action='%s' data-ai='%s'\n",
-                                form.get("id"), form.get("action"), form.get("automationId")));
-                    }
-                    final List<Map<String, Object>> fields = (List<Map<String, Object>>) form.get("fields");
-                    if (fields != null) {
-                        for (final Map<String, Object> field : fields) {
-                            if (showFrameId) {
-                                dom.append(String.format(
-                                        "    [form-field] type='%s' name='%s' id='%s' data-ai='%s' frameId='%s'",
-                                        field.get("type"), field.get("name"), field.get("id"),
-                                        field.get("automationId"), frameId));
-                            } else {
-                                dom.append(String.format(
-                                        "    [form-field] type='%s' name='%s' id='%s' data-ai='%s'",
-                                        field.get("type"), field.get("name"), field.get("id"),
-                                        field.get("automationId")));
-                            }
-                            if (field.containsKey("options")) {
-                                dom.append(String.format(" options='[%s]'", field.get("options")));
-                            }
-                            dom.append("\n");
-                        }
-                    }
-                }
-            }
+
 
             // Now recursively process iframes in this frame
             final List<WebElement> frames = driver.findElements(By.cssSelector("iframe, frame"));
