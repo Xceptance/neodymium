@@ -12,7 +12,7 @@ Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 {
   "c": "HINT|AXTREE|STANDARD|VISUAL_LEAN|VISUAL",
   "jm": true|false,
-  "sp": ["step 1", "step 2"] // Omit or [] if unsplit
+  "sp": ["step 1", "step 2"] // Omit if unsplit
 }
 
 ## Rules
@@ -25,7 +25,7 @@ Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 2. Escalation Carryover: If [PREVIOUS] step escalated/failed, upgrade [CURRENT] step context level accordingly.
 3. Java Method ('jm'): Set true ONLY if an explicit custom Java method name (e.g. assertCalculation) is specified; false for natural language descriptions.
 4. Step Splitting ('sp'):
-   - Omit or set [] if single action.
+   - Omit if single action.
    - DO NOT split prerequisite flows (e.g. wait before store, hover before click, focus before type).
    - DO split independent sequential actions (e.g. "Type user, type pass, click Login" -> ["Type user", "type pass", "click Login"]).
    - Preserve Conditional Branches: Keep conditional blocks ("If/When ... else ...") as a single unsplit step. Split only independent actions before or after the conditional block.
