@@ -170,7 +170,7 @@ public final class AuraManagerEditorUiTest
         // Open the editor again by clicking on the edit pencil next to our created file
         final var fileListItem = $$("#yamlFileList .file-container")
                 .find(Condition.text("new-interactive-aura-test.yaml"));
-        fileListItem.$(".edit-icon-btn").shouldBe(Condition.visible).click();
+        fileListItem.hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
 
         // Verify the edits were loaded successfully
         $("#editorPanel").shouldBe(Condition.visible);

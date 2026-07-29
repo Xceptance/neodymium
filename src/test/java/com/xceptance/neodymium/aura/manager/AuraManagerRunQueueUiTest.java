@@ -28,9 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
-import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.SelenideElement;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import com.xceptance.neodymium.common.browser.Browser;
@@ -152,13 +150,15 @@ public final class AuraManagerRunQueueUiTest
         queueItems.shouldHave(CollectionCondition.size(2));
 
         final String firstItemTextBefore = queueItems.get(0).text();
-        final String suffix = firstItemTextBefore.substring(firstItemTextBefore.indexOf(' ') + 1);
+        final String text = firstItemTextBefore.replaceAll("[0-9\\s]+", "");
 
         // 4. Click "Move Down" on the first queue item
         queueItems.get(0).$("button[title='Move Down']").click();
 
         // 5. Verify the order has swapped (original first item is now the second item)
-        $$("#queueListContainer .queue-item").get(1).shouldHave(Condition.text(suffix));
+        final String newLastItemText = $$("#queueListContainer .queue-item").get(1).text().replaceAll("[0-9\\s]+", "");
+        org.junit.Assert.assertEquals("Queue was not reordered as expected.", text, newLastItemText);
+
     }
 
     @NeodymiumTest

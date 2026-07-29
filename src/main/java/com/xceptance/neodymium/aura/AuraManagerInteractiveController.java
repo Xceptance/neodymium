@@ -173,8 +173,7 @@ public final class AuraManagerInteractiveController
                 if (incomingRunId != null && !incomingRunId.equals(lastId))
                 {
                     LOGGER.info("[Aura Server] New runId detected: {}. Resetting manuallyStopped flag.", incomingRunId);
-                    // Reset manually stopped flag via reflection or internal queue reference if needed,
-                    // but we can also manage manually stopped locally inside queueService.
+                    queueService.setManuallyStopped(false);
                 }
                 engine.setRunId(incomingRunId);
             }

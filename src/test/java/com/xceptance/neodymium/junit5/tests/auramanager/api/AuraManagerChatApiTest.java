@@ -1,19 +1,21 @@
 package com.xceptance.neodymium.junit5.tests.auramanager.api;
 
-import com.google.gson.Gson;
-import com.sun.net.httpserver.HttpServer;
-import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import com.google.gson.Gson;
+import com.sun.net.httpserver.HttpServer;
+import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 
 /**
  * Tests the Aura Assistant chat/LLM endpoints.
@@ -34,7 +36,7 @@ public final class AuraManagerChatApiTest
     @BeforeEach
     public void setUp() throws IOException
     {
-        server = NeodymiumAuraManager.startServer(18108, true);
+        server = NeodymiumAuraManager.startServer(18108, false);
         port = server.getAddress().getPort();
         client = HttpClient.newHttpClient();
     }
@@ -105,12 +107,8 @@ public final class AuraManagerChatApiTest
                 .header("Content-Type", "application/json")
                 .build();
             final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            
-            Assertions.assertTrue(response.statusCode() == 200 || response.statusCode() == 500);
-            if (response.statusCode() == 500)
-            {
-                Assertions.assertTrue(response.body().contains("LLM Client Error") || response.body().contains("API key"));
-            }
+            Assertions.assertEquals(500, response.statusCode());
+            Assertions.assertTrue(response.body().contains("LLM Client Error") || response.body().contains("API key"));
         }
         finally
         {

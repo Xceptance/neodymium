@@ -57,7 +57,7 @@ public final class AuraManagerReportingApiTest
     public void testGetHistoryEmpty() throws IOException, InterruptedException
     {
         final HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/history"))
+            .uri(URI.create("http://127.0.0.1:" + port + "/api/reporting/history-json"))
             .GET()
             .build();
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());

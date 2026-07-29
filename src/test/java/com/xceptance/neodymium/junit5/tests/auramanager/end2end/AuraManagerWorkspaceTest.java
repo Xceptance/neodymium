@@ -18,13 +18,14 @@
  */
 package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.TestMethodOrder;
+
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.TestMethodOrder;
 
 /**
  * End-to-end tests for the Aura Manager workspace management.

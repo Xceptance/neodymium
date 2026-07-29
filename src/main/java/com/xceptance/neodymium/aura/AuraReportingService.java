@@ -231,7 +231,7 @@ public final class AuraReportingService
         return assetFile;
     }
 
-    public void deleteReport(final String id) throws IOException
+    public boolean deleteReport(final String id) throws IOException
     {
         final File historyDir = getReportHistoryDir().getCanonicalFile();
         final File reportDir = new File(historyDir, id).getCanonicalFile();
@@ -242,7 +242,9 @@ public final class AuraReportingService
         if (reportDir.exists() && reportDir.isDirectory())
         {
             deleteDirRecursively(reportDir);
+            return true;
         }
+        return false;
     }
 
     public void deleteDirRecursively(final File file)

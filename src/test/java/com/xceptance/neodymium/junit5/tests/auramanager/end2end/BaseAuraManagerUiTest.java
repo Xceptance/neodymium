@@ -1,11 +1,12 @@
 package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 
-import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.ai.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.parallel.ResourceLock;
+
+import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.ai.BaseAiTest;
+import com.xceptance.neodymium.common.browser.Browser;
 
 @Browser("Chrome_headless")
 @ResourceLock("NeodymiumAuraManager")

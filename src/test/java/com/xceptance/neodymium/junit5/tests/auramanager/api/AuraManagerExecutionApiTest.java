@@ -2,6 +2,8 @@ package com.xceptance.neodymium.junit5.tests.auramanager.api;
 
 import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpServer;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
+import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -42,7 +45,7 @@ public final class AuraManagerExecutionApiTest
     @BeforeEach
     public void setUp() throws IOException
     {
-        server = NeodymiumAuraManager.startServer(18104, true);
+        server = NeodymiumAuraManager.startServer(18104, false);
         port = server.getAddress().getPort();
         client = HttpClient.newHttpClient();
         resetManagerFields();
@@ -60,25 +63,37 @@ public final class AuraManagerExecutionApiTest
     {
         try
         {
-            final Field field = NeodymiumAuraManager.class.getDeclaredField("runningQueue");
-            field.setAccessible(true);
-            final AtomicBoolean runningQueue = (AtomicBoolean) field.get(null);
-            runningQueue.set(false);
+            final NeodymiumAuraManager manager = NeodymiumAuraManager.getActiveManager(server);
+            if (manager != null && manager.getMainHandler() != null)
+            {
+                final AuraQueueService queueService = manager.getMainHandler().getQueueService();
+                if (queueService != null)
+                {
+                    final Field runningField = AuraQueueService.class.getDeclaredField("runningQueue");
+                    runningField.setAccessible(true);
+                    final AtomicBoolean runningQueue = (AtomicBoolean) runningField.get(queueService);
+                    runningQueue.set(false);
 
-            final Field stopField = NeodymiumAuraManager.class.getDeclaredField("manuallyStopped");
-            stopField.setAccessible(true);
-            final AtomicBoolean manuallyStopped = (AtomicBoolean) stopField.get(null);
-            manuallyStopped.set(false);
+                    final Field stopField = AuraQueueService.class.getDeclaredField("manuallyStopped");
+                    stopField.setAccessible(true);
+                    final AtomicBoolean manuallyStopped = (AtomicBoolean) stopField.get(queueService);
+                    manuallyStopped.set(false);
+                }
 
-            final Field runIdField = NeodymiumAuraManager.class.getDeclaredField("lastProcessedRunId");
-            runIdField.setAccessible(true);
-            final java.util.concurrent.atomic.AtomicReference<String> lastProcessedRunId = (java.util.concurrent.atomic.AtomicReference<String>) runIdField.get(null);
-            lastProcessedRunId.set(null);
+                final AuraInteractiveService interactiveService = manager.getMainHandler().getInteractiveService();
+                if (interactiveService != null)
+                {
+                    final Field runIdField = AuraInteractiveService.class.getDeclaredField("lastProcessedRunId");
+                    runIdField.setAccessible(true);
+                    final AtomicReference<String> lastProcessedRunId = (AtomicReference<String>) runIdField.get(interactiveService);
+                    lastProcessedRunId.set(null);
 
-            final Field engineField = NeodymiumAuraManager.class.getDeclaredField("currentConsoleEngine");
-            engineField.setAccessible(true);
-            final java.util.concurrent.atomic.AtomicReference<com.xceptance.neodymium.ai.console.InteractiveConsoleEngine> currentConsoleEngine = (java.util.concurrent.atomic.AtomicReference<com.xceptance.neodymium.ai.console.InteractiveConsoleEngine>) engineField.get(null);
-            currentConsoleEngine.set(null);
+                    final Field engineField = AuraInteractiveService.class.getDeclaredField("currentConsoleEngine");
+                    engineField.setAccessible(true);
+                    final AtomicReference<com.xceptance.neodymium.ai.console.InteractiveConsoleEngine> currentConsoleEngine = (AtomicReference<com.xceptance.neodymium.ai.console.InteractiveConsoleEngine>) engineField.get(interactiveService);
+                    currentConsoleEngine.set(null);
+                }
+            }
         }
         catch (final Exception e)
         {
@@ -108,8 +123,8 @@ public final class AuraManagerExecutionApiTest
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
         Assertions.assertEquals(200, response.statusCode());
-        final Map<?, ?> result = gson.fromJson(response.body(), Map.class);
-        Assertions.assertEquals(true, result.get("success"));
+        Assertions.assertTrue(response.headers().firstValue("Content-Type").orElse("").contains("text/html"));
+        Assertions.assertTrue(response.body().contains("runControls") || response.body().contains("statsPanel"));
     }
 
     @Test
@@ -132,10 +147,15 @@ public final class AuraManagerExecutionApiTest
     @Test
     public void testRunQueueWhenAlreadyRunning() throws Exception
     {
-        // 1. Simulate active execution by setting runningQueue to true via reflection
-        final Field field = NeodymiumAuraManager.class.getDeclaredField("runningQueue");
+        // 1. Simulate active execution by setting runningQueue to true via queueService
+        final NeodymiumAuraManager manager = NeodymiumAuraManager.getActiveManager(server);
+        Assertions.assertNotNull(manager);
+        final AuraQueueService queueService = manager.getMainHandler().getQueueService();
+        Assertions.assertNotNull(queueService);
+
+        final Field field = AuraQueueService.class.getDeclaredField("runningQueue");
         field.setAccessible(true);
-        final AtomicBoolean runningQueue = (AtomicBoolean) field.get(null);
+        final AtomicBoolean runningQueue = (AtomicBoolean) field.get(queueService);
         runningQueue.set(true);
 
         // 2. Post a run request, which should be rejected with 409 Conflict
@@ -162,8 +182,8 @@ public final class AuraManagerExecutionApiTest
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         
         Assertions.assertEquals(200, response.statusCode());
-        final Map<?, ?> result = gson.fromJson(response.body(), Map.class);
-        Assertions.assertEquals(true, result.get("success"));
+        Assertions.assertTrue(response.headers().firstValue("Content-Type").orElse("").contains("text/html"));
+        Assertions.assertTrue(response.body().contains("runControls") || response.body().contains("statsPanel"));
     }
 
     @Test

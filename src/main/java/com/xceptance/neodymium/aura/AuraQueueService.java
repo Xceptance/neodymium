@@ -142,6 +142,11 @@ public final class AuraQueueService
         return manuallyStopped.get();
     }
 
+    public void setManuallyStopped(final boolean stopped)
+    {
+        manuallyStopped.set(stopped);
+    }
+
     public String getActiveFile()
     {
         return activeFile.get();

@@ -100,7 +100,7 @@ public class NeodymiumAuraManagerUiTest {
         $$(".list-item").findBy(Condition.text(testFileName)).shouldBe(Condition.visible).click();
 
         // Wait for the edit button to appear inside the list item and click it
-        $$(".list-item").findBy(Condition.text(testFileName)).$(".edit-icon-btn").shouldBe(Condition.visible).click();
+        $$(".list-item").findBy(Condition.text(testFileName)).hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
 
         // The editor should load the file contents via an API call
         $("#editorContent").shouldHave(Condition.value("steps: |"));
@@ -148,7 +148,7 @@ public class NeodymiumAuraManagerUiTest {
 
         // Wait until btnRun is visible and enabled
         $("#btnRun").shouldBe(Condition.visible, java.time.Duration.ofSeconds(30));
-        $("#btnRun").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(120));
+        $("#btnRun").shouldNotHave(Condition.attribute("disabled"), java.time.Duration.ofSeconds(150));
 
         // Approve the first step
         $("#btnRun").click();

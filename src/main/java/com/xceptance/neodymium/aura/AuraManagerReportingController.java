@@ -179,7 +179,13 @@ public final class AuraManagerReportingController
 
         try
         {
-            reportingService.deleteReport(id);
+            final boolean deleted = reportingService.deleteReport(id);
+            if (!deleted)
+            {
+                LOGGER.error("[Aura Server] Delete report request failed: Report not found for ID: {}", id);
+                AuraHttpUtils.sendError(exchange, 404, "Report not found: " + id);
+                return;
+            }
             LOGGER.info("[Aura Server] Deleted report history directory: {}", id);
 
             // Rebuild history list and return the updated history fragment for HTMX OOB / in-place swap

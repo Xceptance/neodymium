@@ -71,6 +71,7 @@ public final class NeodymiumAuraManager
     private final int port;
     private final TemplateEngine templateEngine;
     private final HttpServer httpServer;
+    private AuraManagerMainHandler mainHandler;
 
     private NeodymiumAuraManager(final int port, final HttpServer server)
     {
@@ -86,6 +87,16 @@ public final class NeodymiumAuraManager
 
         this.templateEngine = new TemplateEngine();
         this.templateEngine.setTemplateResolver(resolver);
+    }
+
+    public static NeodymiumAuraManager getActiveManager(final HttpServer server)
+    {
+        return activeManagers.get(server);
+    }
+
+    public AuraManagerMainHandler getMainHandler()
+    {
+        return mainHandler;
     }
 
     public static void main(final String[] args)
@@ -165,9 +176,9 @@ public final class NeodymiumAuraManager
 
     private void start(final boolean enforcePort)
     {
-        final AuraManagerMainHandler handler = new AuraManagerMainHandler(this);
+        mainHandler = new AuraManagerMainHandler(this);
 
-        httpServer.createContext("/", handler);
+        httpServer.createContext("/", mainHandler);
         httpServer.setExecutor(Executors.newCachedThreadPool((final Runnable runnable) -> {
             final Thread t = new Thread(runnable);
             t.setDaemon(true);
@@ -223,7 +234,7 @@ public final class NeodymiumAuraManager
                     if (httpsServer != null)
                     {
                         httpsServer.setHttpsConfigurator(new HttpsConfigurator(sslContext));
-                        httpsServer.createContext("/", handler);
+                        httpsServer.createContext("/", mainHandler);
                         httpsServer.setExecutor(httpServer.getExecutor());
                         httpsServer.start();
                         LOGGER.info("[Aura Server] HTTPS secure server started on https://localhost:{}", httpsPort);

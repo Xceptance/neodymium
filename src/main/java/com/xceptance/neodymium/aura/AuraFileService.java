@@ -296,7 +296,7 @@ public final class AuraFileService
         {
             return Files.readString(yamlFile.toPath(), StandardCharsets.UTF_8);
         }
-        return "";
+        return null;
     }
 
     public void saveYamlFileContent(final String file, final String content) throws IOException
@@ -315,12 +315,14 @@ public final class AuraFileService
         }
     }
 
-    public void deleteYamlFile(final String file) throws IOException
+    public boolean deleteYamlFile(final String file) throws IOException
     {
         final File yamlFile = resolveCanonicalFile(file);
         if (yamlFile.exists() && yamlFile.isFile())
         {
             Files.delete(yamlFile.toPath());
+            return true;
         }
+        return false;
     }
 }

@@ -31,6 +31,8 @@ import java.io.IOException;
 public final class AuraManagerMainHandler implements HttpHandler
 {
     private final AuraManagerRouter router;
+    private final AuraQueueService queueService;
+    private final AuraInteractiveService interactiveService;
 
     public AuraManagerMainHandler(final NeodymiumAuraManager manager)
     {
@@ -41,8 +43,8 @@ public final class AuraManagerMainHandler implements HttpHandler
         final AuraChatService chatService = new AuraChatService(fileService);
         final AuraChatSessionService sessionService = new AuraChatSessionService();
         final AuraReportingService reportingService = new AuraReportingService();
-        final AuraInteractiveService interactiveService = new AuraInteractiveService();
-        final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
+        this.interactiveService = new AuraInteractiveService();
+        this.queueService = new AuraQueueService(reportingService, interactiveService);
 
         // Instantiate standalone public controller classes injecting stateless/stateful singletons and manager
         final AuraManagerQueueController queueController = new AuraManagerQueueController(queueService, fileService, interactiveService, manager);
@@ -110,6 +112,16 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.POST("/api/console/internal/pushState", interactiveController::handlePushState);
         router.POST("/api/console/internal/broadcast", interactiveController::handleBroadcast);
         router.GET("/api/console/internal/waitForAction", interactiveController::handleWaitForAction);
+    }
+
+    public AuraQueueService getQueueService()
+    {
+        return queueService;
+    }
+
+    public AuraInteractiveService getInteractiveService()
+    {
+        return interactiveService;
     }
 
     @Override

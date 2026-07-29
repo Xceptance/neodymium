@@ -125,6 +125,12 @@ public final class AuraManagerEditorController
         try
         {
             final String content = fileService.readYamlFileContent(filename);
+            if (content == null)
+            {
+                LOGGER.error("[Aura Server] Read file request failed: File not found: {}", filename);
+                AuraHttpUtils.sendError(exchange, 404, "File not found: " + filename);
+                return;
+            }
             final Map<String, String> response = new HashMap<>();
             response.put("content", content);
             AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(response));
@@ -209,7 +215,13 @@ public final class AuraManagerEditorController
 
         try
         {
-            fileService.deleteYamlFile(file);
+            final boolean deleted = fileService.deleteYamlFile(file);
+            if (!deleted)
+            {
+                LOGGER.error("[Aura Server] Delete file request failed: File not found: {}", file);
+                AuraHttpUtils.sendError(exchange, 404, "File not found: " + file);
+                return;
+            }
             LOGGER.info("[Aura Server] Deleting file: {}", file);
             if (file.equals(fileService.getActiveEditingFile()))
             {

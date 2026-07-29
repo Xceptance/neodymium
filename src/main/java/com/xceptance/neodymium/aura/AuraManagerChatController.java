@@ -155,11 +155,8 @@ public final class AuraManagerChatController
 
         if (prompt == null || prompt.trim().isEmpty())
         {
-            final Context context = new Context();
-            context.setVariable("chatMessages", session.messages);
-            context.setVariable("currentSessionId", session.id);
-            final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatMessages"), context);
-            AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+            LOGGER.error("[Aura Server] Chat request failed: Missing prompt");
+            AuraHttpUtils.sendError(exchange, 400, "Missing 'prompt' parameter");
             return;
         }
 
@@ -181,49 +178,45 @@ public final class AuraManagerChatController
             final String apiKey = Neodymium.aiConfiguration().aiApiKey();
             if (apiKey == null || apiKey.trim().isEmpty())
             {
-                final ChatMessageDto errorMsg = new ChatMessageDto("ai",
+                LOGGER.error("[Aura Server] Chat request failed: API Key is missing or invalid");
+                AuraHttpUtils.sendError(exchange, 400,
                         "API Key is missing or invalid. Please configure 'neodymium.ai.apiKey' in properties or system environment.");
-                session.messages.add(errorMsg);
-                sessionService.addMessage(session.id, errorMsg);
+                return;
             }
-            else
+
+            // Clone the history list up to but excluding the newly appended user prompt for the request body
+            final int historyEnd = Math.max(0, session.messages.size() - 1);
+            final List<ChatMessageDto> history = session.messages.subList(0, historyEnd);
+            final ChatRequest req = new ChatRequest(prompt, null, history);
+
+            // Run visual/logical workflow classification via Gemini
+            final ChatResponse response = chatService.runChatWorkflow(req);
+
+            // Save assistant answer and deep thinking log to session
+            final ChatMessageDto assistantMsg = new ChatMessageDto("ai", response.message, response.thinking);
+            session.messages.add(assistantMsg);
+            sessionService.addMessage(session.id, assistantMsg);
+
+            // Set HX-Trigger header if an action needs to execute client-side
+            if (response.action != null && !response.action.trim().isEmpty())
             {
-                // Clone the history list up to but excluding the newly appended user prompt for the request body
-                final int historyEnd = Math.max(0, session.messages.size() - 1);
-                final List<ChatMessageDto> history = session.messages.subList(0, historyEnd);
-                final ChatRequest req = new ChatRequest(prompt, null, history);
+                final Map<String, Object> triggerPayload = new HashMap<>();
+                triggerPayload.put("action", response.action);
+                triggerPayload.put("selectedDatasets", response.selectedDatasets);
+                triggerPayload.put("files", response.files);
+                triggerPayload.put("filename", response.filename);
+                triggerPayload.put("content", response.content);
 
-                // Run visual/logical workflow classification via Gemini
-                final ChatResponse response = chatService.runChatWorkflow(req);
-
-                // Save assistant answer and deep thinking log to session
-                final ChatMessageDto assistantMsg = new ChatMessageDto("ai", response.message, response.thinking);
-                session.messages.add(assistantMsg);
-                sessionService.addMessage(session.id, assistantMsg);
-
-                // Set HX-Trigger header if an action needs to execute client-side
-                if (response.action != null && !response.action.trim().isEmpty())
-                {
-                    final Map<String, Object> triggerPayload = new HashMap<>();
-                    triggerPayload.put("action", response.action);
-                    triggerPayload.put("selectedDatasets", response.selectedDatasets);
-                    triggerPayload.put("files", response.files);
-                    triggerPayload.put("filename", response.filename);
-                    triggerPayload.put("content", response.content);
-
-                    final String triggerJson = AuraHttpUtils.gson.toJson(Map.of("aiAction", triggerPayload));
-                    exchange.getResponseHeaders().set("HX-Trigger", triggerJson);
-                }
+                final String triggerJson = AuraHttpUtils.gson.toJson(Map.of("aiAction", triggerPayload));
+                exchange.getResponseHeaders().set("HX-Trigger", triggerJson);
             }
         }
         catch (final AssertionError | Exception e)
         {
             LOGGER.error("[Aura Server] Chat execution failed", e);
-            final ChatMessageDto errorMsg = new ChatMessageDto("ai",
-                    "LLM Client Error: " + e.getMessage()
-                            + ". Please verify that your Gemini API key is configured and valid.");
-            session.messages.add(errorMsg);
-            sessionService.addMessage(session.id, errorMsg);
+            AuraHttpUtils.sendError(exchange, 500, "LLM Client Error: " + e.getMessage()
+                    + ". Please verify that your Gemini API key is configured and valid.");
+            return;
         }
 
         // Return updated message logs fragment
