@@ -109,7 +109,7 @@ public class PageAnalyzer
      * fallback.
      */
     private static final String CAPTURE_SCRIPT = """
-            return (function(level, includesText) {
+            return (function(level, includesText, volatilePatterns) {
                 // Configuration constants to prevent payload bloat
                 var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
                 var MAX_TEXT = 200;         // Max characters captured for element text labels
@@ -940,7 +940,8 @@ public class PageAnalyzer
         }
         try {
             final Map<String, Object> data = (Map<String, Object>) js
-                    .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent());
+                    .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(),
+                            this.volatileIdDetector.getPatterns().stream().map(java.util.regex.Pattern::pattern).toList());
             // Render element sections
             final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
             if (sections != null) {

@@ -10,11 +10,12 @@ Analyze current DOM and visual state to fulfill the active instruction.
 ## Action Rules
 - Valid actions: CLICK, TYPE, NAVIGATE, CLEAR, HOVER, SCROLL, WAIT, SELECT, KEY_PRESS, ASSERT, BACK, FORWARD, REFRESH.
 - BACK, FORWARD, REFRESH: set 'action', leave target/value empty.
-- ASSERT: set 'locator' to a specific CSS selector or 'url'. For text assertions, prefer stable containers like 'body', semantic tags (h1, p), or class names instead of dynamic data-ai reference tags.
+- ASSERT: set 'locator' to a specific CSS selector or 'url'. For page-level text assertions (e.g. totals, order confirmation text), use 'body' or the exact target element. NEVER target header, navbar, or announcement bar elements for body text assertions.
 - Locators MUST use stable, reproducible attributes:
   * PREFER target priority: (1) `data-test`, `data-testid`, `name`, `aria-label`, (2) semantic CSS classes (e.g. `.product-quick-add`, `.btn-primary`), (3) element text.
-  * FALLBACK: Use Neodymium's `[data-ai='...']` reference tag ONLY as a last resort when the target element has no other unique class, text, or standard attribute. Do NOT use `[data-ai='...']` for ASSERT actions.
+  * FALLBACK: Use Neodymium's `[data-ai='...']` reference tag as a fallback when the target element has no other unique ID, class, text, or standard attribute.
   * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes).
+- Regex Values: When an instruction specifies pattern formats (e.g. 'V-[0-9]+-US'), keep the exact regex pattern in action 'value' (e.g. 'V-[0-9]+-US').
 - ESCALATE: Set 'status' to 'ESCALATE' when required elements are missing from the current context. Set 'targetContextLevel' to 'STANDARD' if DOM elements/text are missing from the AXTree, or 'VISUAL' if visual context is required.
 
 ## Response Format

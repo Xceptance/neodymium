@@ -93,9 +93,21 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Live mode execution with dynamic LLM query for dataset 'normal'.
+     * Replay with healing mode execution using recorded playbook for dataset 'perfect'.
      */
     @Order(3)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiDataSet("perfect")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLivePerfect")
+    public void testCheckoutHealPerfect()
+    {
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
+     * Live mode execution with dynamic LLM query for dataset 'normal'.
+     */
+    @Order(4)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
@@ -107,7 +119,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Strict replay mode execution using recorded playbook for dataset 'normal'.
      */
-    @Order(4)
+    @Order(5)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveNormal")
@@ -117,9 +129,21 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     }
 
     /**
+     * Replay with healing mode execution using recorded playbook for dataset 'normal'.
+     */
+    @Order(6)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiDataSet("normal")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveNormal")
+    public void testCheckoutHealNormal()
+    {
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
      * Live mode execution with dynamic LLM query for dataset 'bad'.
      */
-    @Order(5)
+    @Order(7)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
@@ -131,7 +155,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Strict replay mode execution using recorded playbook for dataset 'bad'.
      */
-    @Order(6)
+    @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveBad")
@@ -141,9 +165,21 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     }
 
     /**
+     * Replay with healing mode execution using recorded playbook for dataset 'bad'.
+     */
+    @Order(9)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiDataSet("bad")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveBad")
+    public void testCheckoutHealBad()
+    {
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
      * Live mode execution with dynamic LLM query for dataset 'modern-bad'.
      */
-    @Order(7)
+    @Order(10)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("modern-bad")
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
@@ -155,7 +191,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Strict replay mode execution using recorded playbook for dataset 'modern-bad'.
      */
-    @Order(8)
+    @Order(11)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("modern-bad")
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBad")
@@ -165,9 +201,21 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     }
 
     /**
+     * Replay with healing mode execution using recorded playbook for dataset 'modern-bad'.
+     */
+    @Order(12)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiDataSet("modern-bad")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBad")
+    public void testCheckoutHealModernBad()
+    {
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
      * Live mode execution with dynamic LLM query for dataset 'modern-bad-nowcag'.
      */
-    @Order(9)
+    @Order(13)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("modern-bad-nowcag")
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
@@ -179,7 +227,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Strict replay mode execution using recorded playbook for dataset 'modern-bad-nowcag'.
      */
-    @Order(10)
+    @Order(14)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("modern-bad-nowcag")
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
@@ -189,10 +237,22 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     }
 
     /**
+     * Replay with healing mode execution using recorded playbook for dataset 'modern-bad-nowcag'.
+     */
+    @Order(15)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiDataSet("modern-bad-nowcag")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
+    public void testCheckoutHealModernBadNoWcag()
+    {
+        $("body").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
      * Live mode execution running with all datasets defined in the playbook.
      */
     @Ignore
-    @Order(11)
+    @Order(16)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
     public void testCheckoutLiveAllDataSets()
@@ -204,7 +264,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
      * Strict replay mode execution running with all datasets defined in the playbook.
      */
     @Ignore
-    @Order(12)
+    @Order(17)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
     public void testCheckoutReplayAllDataSets()

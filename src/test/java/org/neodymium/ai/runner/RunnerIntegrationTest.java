@@ -50,6 +50,8 @@ import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -752,5 +754,77 @@ public final class RunnerIntegrationTest
         final boolean hasRcaEvent = events.stream()
             .anyMatch(e -> e instanceof org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent);
         assertTrue(hasRcaEvent, "A DiagnosticErrorEvent with Visual RCA should have been dispatched");
+    }
+
+    /**
+     * Verifies that when a replay action fails and triggers healing, CaptureStateStep is
+     * executed so that SUT state is captured into KEY_LAST_STATE before the healing LLM call.
+     */
+    @Test
+    public void testReplayHealingCapturesSutState() throws Exception
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final MockTargetExecutor delegate = new MockTargetExecutor();
+        final TargetExecutor executor = new TargetExecutor()
+        {
+            private boolean failed = false;
+
+            @Override
+            public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException
+            {
+                return delegate.captureState(level);
+            }
+
+            @Override
+            public void execute(final Action action) throws IOException
+            {
+                if (!failed)
+                {
+                    failed = true;
+                    throw new IOException("Element not found: " + action.getTarget());
+                }
+                delegate.execute(action);
+            }
+
+            @Override
+            public Set<org.neodymium.ai.executor.ActionDefinition> getSupportedActions()
+            {
+                return delegate.getSupportedActions();
+            }
+        };
+        final TestLlmProvider provider = new TestLlmProvider();
+        provider.setResponseContent("{\"status\":\"SUCCESS\",\"actions\":[]}");
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        // Enqueue state for state capture during healing
+        final MockSutState state = new MockSutState("<html><body>Healed Page</body></html>", "healed-hash");
+        delegate.enqueueState(state);
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final PlaybookStep pbStep = new PlaybookStep("Click checkout");
+        pbStep.setActions(List.of(new Action("CLICK", "#invalid-btn", "click")));
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, pbStep);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new MockActionsPrompt());
+
+        // mapPlaybookStepToPipelineStep builds the TryCatch execution tree containing the HealingRequiredException handler
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(pbStep, session, context);
+        context.pushStep(pipelineStep);
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        runner.run();
+
+        final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+        assertNotNull(lastState, "KEY_LAST_STATE must be populated by CaptureStateStep during replay healing");
+        assertEquals("healed-hash", lastState.getContentHash());
     }
 }

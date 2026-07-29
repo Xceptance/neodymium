@@ -773,7 +773,7 @@ public final class ExecuteActionsStep implements PipelineStep
             }
             else if (mode.supportsHealing() && isReplay && !step.isOptional() && !step.isNoHealing())
             {
-                // Replay Healing: PrepareRetryStep -> SemanticDivergenceAnalysisStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
+                // Replay Healing: PrepareRetryStep -> CaptureStateStep -> SemanticDivergenceAnalysisStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {
                     final PrepareRetryStep prepareStep = new PrepareRetryStep();
                     final SemanticDivergenceAnalysisStep diffStep = new SemanticDivergenceAnalysisStep();
@@ -783,6 +783,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     c.pushStep(executeStep);
                     c.pushStep(healLlmStep);
                     c.pushStep(diffStep);
+                    c.pushStep(new CaptureStateStep());
                     c.pushStep(prepareStep);
                 });
             }

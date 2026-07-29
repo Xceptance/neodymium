@@ -161,7 +161,7 @@ public final class AssertAction implements BrowserActionPlugin
                     }
                 }
 
-                element.should(cond);
+                element.should(cond, java.time.Duration.ofMillis(Math.max(com.codeborne.selenide.Configuration.timeout, 6000)));
             }
             LOG.debug("   ✅ Assertion passed for: '{}'", expected);
         }
@@ -290,7 +290,7 @@ public final class AssertAction implements BrowserActionPlugin
                 // Ignore JS execution errors
             }
 
-            return new CheckResult(false, text);
+            return new CheckResult(false, null);
         }
     }
 
@@ -309,7 +309,7 @@ public final class AssertAction implements BrowserActionPlugin
         {
             final String attribute = element.getAttribute("textContent");
             final boolean found = attribute != null && attribute.contains(value);
-            return new CheckResult(found, attribute);
+            return new CheckResult(found, found ? attribute : null);
         }
     }
 

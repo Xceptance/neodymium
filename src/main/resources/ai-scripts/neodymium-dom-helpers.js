@@ -52,34 +52,96 @@ function getFrameworkComponent(el) {
 }
 
 /**
- * Generates a stable, collision-resistant fingerprint string for an element.
+ * Checks whether an element ID is auto-generated or volatile.
+ */
+function isVolatileId(id) {
+    if (!id) return false;
+    if (/^(v-btn|v-node|react-div|react|ember|aria)-\d+$/i.test(id)) return true;
+    if (/[_-]\d{4,}$/.test(id)) return true;
+    if (typeof volatilePatterns !== 'undefined' && Array.isArray(volatilePatterns)) {
+        for (var i = 0; i < volatilePatterns.length; i++) {
+            try {
+                if (new RegExp(volatilePatterns[i]).test(id)) return true;
+            } catch (e) {}
+        }
+    }
+    return false;
+}
+
+/**
+ * Returns the 0-based same-tag index of an element relative to its parent's relevant element children.
+ * Ignores scripts, styles, links, and HUD overlays to ensure index stability across runs.
+ */
+function getElementIndex(el) {
+    if (!el || !el.parentElement) return 0;
+    var targetTag = el.tagName ? el.tagName.toLowerCase() : '';
+    if (targetTag === 'script' || targetTag === 'style' || targetTag === 'link') return 0;
+    var count = 0;
+    var child = el.parentElement.firstElementChild;
+    while (child) {
+        if (child === el) return count;
+        if (child.tagName && child.tagName.toLowerCase() === targetTag) {
+            if (!child.classList || !child.classList.contains('neodymium-ai-hud')) {
+                count++;
+            }
+        }
+        child = child.nextElementSibling;
+    }
+    return count;
+}
+
+/**
+ * Constructs a concise ancestor path for an element up to 3 levels, stripping transient state classes.
+ */
+function getAncestorPath(el) {
+    var parts = [];
+    var curr = el.parentElement;
+    var depth = 0;
+    while (curr && curr.tagName && depth < 3) {
+        var tag = curr.tagName.toLowerCase();
+        if (tag === 'body' || tag === 'html') break;
+        var cls = (typeof curr.className === 'string' ? curr.className : '').trim().replace(/\s+/g, ' ');
+        if (cls) {
+            cls = cls.replace(/__[a-zA-Z0-9_-]{5,8}\b/g, '');
+            cls = cls.replace(/\b(is-active|active|is-open|open|hovered|focused|loading|disabled|collapsed|show|expanded|checked|hydrated)\b/g, '').trim().split(/\s+/)[0] || '';
+        }
+        parts.push(tag + (cls ? '.' + cls : ''));
+        curr = curr.parentElement;
+        depth++;
+    }
+    return parts.join('>');
+}
+
+/**
+ * Generates a stable, collision-resistant, deterministic fingerprint string for an element.
  */
 function fingerprint(el) {
-    var tag   = el.tagName ? el.tagName.toLowerCase() : '';
-    var id    = el.id || '';
-    
+    var tag = el.tagName ? el.tagName.toLowerCase() : '';
+    var id = el.id || '';
+    if (isVolatileId(id)) {
+        id = '';
+    }
+
     // Prioritize stable E2E testing and automation selectors over presentation attributes
     var testId = el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa') || el.getAttribute('data-cy') || '';
-    
+
     // Normalize CSS classes to remove transient and dynamic segments
-    var cls   = (typeof el.className === 'string' ? el.className : '').trim().replace(/\s+/g, ' ');
+    var cls = (typeof el.className === 'string' ? el.className : '').trim().replace(/\s+/g, ' ');
     if (cls) {
         // Strip build-specific CSS Module hashes (e.g., '__1a2b3c') to keep classes stable across builds
         cls = cls.replace(/__[a-zA-Z0-9_-]{5,8}\b/g, '');
         // Strip transient interaction/state-dependent classes to keep hashes stable across active element states
         cls = cls.replace(/\b(is-active|active|is-open|open|hovered|focused|loading|disabled|collapsed|show|expanded|checked)\b/g, '').trim().replace(/\s+/g, ' ');
     }
-    var ptag  = el.parentElement && el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '';
-    var type  = el.getAttribute('type') || '';
-    var name  = el.getAttribute('name') || el.getAttribute('alt') || el.getAttribute('for') || el.getAttribute('aria-label') || '';
-    
-    // Normalize text: extract a prefix and mask all numbers to prevent counter/price changes from breaking the hash
-    var text  = (el.innerText || '').trim().substring(0, 15).toLowerCase().replace(/\d+/g, '#');
-    
+    var path = getAncestorPath(el);
+    var idx = getElementIndex(el);
+    var type = el.getAttribute('type') || '';
+    var name = el.getAttribute('name') || el.getAttribute('alt') || el.getAttribute('for') || el.getAttribute('aria-label') || '';
+
     // Gather framework component context if applicable
     var fwComp = getFrameworkComponent(el);
-    
+
     // Combine all stable features into a single fingerprint string
-    var raw   = [tag, id, testId, cls, ptag, type, name, text, fwComp].join('|');
+    var raw = [tag, id, testId, cls, path, idx, type, name, fwComp].join('|');
     return 'xc' + djb2(raw);
 }

@@ -1,177 +1,78 @@
-# Neo AI: Intent-Driven Test Automation with Zero-Cost Replay and Multi-Dimensional Governance
+# Intent-Driven Test Automation with Zero-Cost Replay
 
-**Format:** Technical Presentation / Call for Papers (CFP) Summary  
-**Duration:** 45 Minutes  
-**Authors:** Neodymium Core Team / Xceptance GmbH  
-**Date:** July 2026  
-**Target Length:** ~3 DIN A4 Pages (Condensed Technical Overview)
+**Speaker:** René Schwietzke (Managing Director & Co-Founder, Xceptance)  
+**Format:** Keynote Address or Main Track Technical Session  
+**Track / Topics:** Quality Engineering, Test Automation, AI in Software Engineering, Open-Source Testing  
 
 ---
 
-> [!NOTE]
-> **Open Source Research Commitment**: This session is strictly focused on open engineering research, architectural discoveries, and advancing quality engineering standards. Neo AI is developed as a free, community-accessible open-source framework (`GNU AGPLv3 / MIT`). Our goal is sharing empirical learnings to help the software testing ecosystem evaluate and understand AI-driven test automation effectively.
+## Short Abstract
 
-Historically, software test automation relied on code-based frameworks (Selenium, Playwright, Cypress, Selenide) or BDD tools (Cucumber). While fast in execution, traditional approaches share a primary operational bottleneck: **reliance on handwritten DOM locators** (CSS, XPath, IDs) and **explicit framework syntax**. In modern Single-Page Applications (React, Next.js, Vue, Angular), component hydration, generated utility classes, and layout shifts across deployments regularly alter locators, requiring engineers to update brittle step definitions or request custom `data-testid` attributes.
+Software projects with fast release cycles constantly break UI test automation through changing locators and script maintenance. Generating test code doesn't solve this—it just leaves engineers with generated code they still have to maintain. This talk demonstrates a pragmatic alternative: **Intent Compilation with Zero-Cost Replay**. Instead of generating code or querying LLMs live on every test step, your human-language test case remains the **single source of truth**. On initial execution, an LLM parses the human test definition to build an internal machine replay playbook—a cached execution artifact not meant for human consumption. In CI/CD, test suites replay this playbook 100% offline at native browser speed with zero API costs, while automated LLM healing updates the machine playbook when UI layouts change—without ever cluttering your human test specs with code or selectors.
 
-Recent AI approaches—such as live-LLM browser drivers—address locator flexibility by querying an LLM live on every test step. However, querying LLMs at runtime introduces recurring API token costs, increased execution latency (often 10x slower than native drivers), external API dependencies, and potential non-determinism during exact arithmetic or business logic checks.
+---
 
-**Neo AI** (Neodymium Aura AI) addresses these operational trade-offs through **Intent Compilation into File-Based Playbooks with Zero-Cost Offline Replay**:
+## Extended Abstract / Proposal Description
+
+For decades, software test automation forced teams to write and maintain complex code wrappers. Modern AI tools often attempt to solve this by generating test code—but generated code is still code, creating a secondary artifact that engineers must compile, debug, and maintain. On the other hand, querying live LLMs on every single test step creates slow, expensive, and unpredictable test runs.
+
+We believe test automation shouldn't generate code or rely on live AI guesswork. **Your human-language test case should remain the single source of truth.**
+
+This session presents an open-source approach demonstrating **Intent Compilation**:
+1. **Single Source of Truth:** You write and maintain regular human-language test definitions.
+2. **No Code Generation:** No code, Page Objects, or glue scripts are generated or maintained.
+3. **Machine Replay Playbooks:** An LLM processes the human test definition once to compile an internal machine playbook (a cached execution payload, not intended for human consumption).
+4. **Zero-Cost Offline Replay:** CI/CD runners execute the machine playbook 100% offline at native browser speed with zero LLM token costs.
+5. **Transparent Self-Healing:** When UI layouts drift, the LLM re-evaluates the page and updates the machine playbook automatically under the hood.
+
+Key topics covered with practical demonstrations:
+1. **Human-Language Test Specs:** Authoring test scenarios in plain human language as the sole source of truth.
+2. **Playbook Compilation vs. Replay:** How initial LLM compilation creates machine playbooks for 100% offline CI/CD execution at zero API cost.
+3. **Automated Machine Healing:** Updating machine playbooks automatically during UI changes without touching human test definitions.
+4. **Smart Context Optimization:** Slicing prompt payloads during compilation using accessibility trees and DOM analysis.
+5. **Programmatic Extensions & Guardrails:** Pairing natural steps with custom hooks for precise math, data formatting, and visual baselines.
+6. **Outcome Verification & Summary Reporting:** Double-checking action outcomes through explicit verification steps and comprehensive summary reports to guarantee intent fulfillment.
+
+Attendees will gain a practical blueprint for automating tests directly from human-language specs—without writing code, incurring recurring API costs, or maintaining brittle scripts.
+
+---
+
+## Target Audience & Prerequisites
+
+- **Audience:** QA Engineers, Test Automation Architects, Software Developers, Engineering Managers, and DevOps Engineers.
+- **Prerequisites:** Familiarity with basic web testing concepts (WebDriver, Selenium, Playwright) and CI/CD automation pipelines.
+
+---
+
+## Key Takeaways
+
+1. **Single Source of Truth:** Authoring and maintaining test scenarios in natural human language without generating or maintaining code.
+2. **Zero-Cost Offline Replay:** Compiling human test intent into machine playbooks that run 100% offline in CI/CD at native speed with zero API token costs.
+3. **Transparent Machine Healing:** Keeping test maintenance hands-free by updating internal machine playbooks automatically during UI changes.
+4. **Outcome Verification & Summary Reporting:** Double-checking AI action results via explicit verification steps, programmatic guardrails, visual baselines, and actionable summary reporting.
+
+---
+
+## Talk Outline
 
 ```
-+-----------------------------------------------------------------------------------------------------------------------------+
-|                                              THE TEST AUTOMATION SPECTRUM                                                   |
-+-----------------------------------------------------------------------------------------------------------------------------+
-|                                                                                                                             |
-|  CODE-BASED FRAMEWORKS            BDD SPECIFICATIONS              LIVE-AI DRIVERS                 VISION & AUTONOMOUS AGENTS|
-|  (Native Language Automation)     (Human-Readable Specs)          (Per-Step LLM Querying)         (Visual Pixel Navigation) |
-|                                                                                                                             |
-|  [+] Fast CI/CD execution         [+] Business-readable text      [+] Plain-language authoring     [+] No DOM dependency     |
-|  [+] Zero runtime token cost      [+] Structured specifications   [+] Dynamic locator resolution   [+] Autonomous discovery  |
-|  [-] High POM code overhead       [-] Dual-layer maintenance      [-] High monthly token costs     [-] Uncapped VLM costs    |
-|  [-] Brittle CSS/XPath selectors  [-] Glue-code & locator binding [-] 10x slower CI/CD latency    [-] Non-deterministic     |
-|  [-] Significant developer toil   [-] Selector fragility remains  [-] Hallucinations in math/rules [-] High compute overhead |
-|                                                                                                                             |
-+-----------------------------------------------------------------------------------------------------------------------------+
-                                                              |
-                                                              v
-+-----------------------------------------------------------------------------------------------------------------------------+
-|                                                    THE NEO AI SOLUTION                                                      |
-+-----------------------------------------------------------------------------------------------------------------------------+
-|  [+] Multi-Lingual Natural Authoring (e.g., English, German, French, Spanish, or mixed steps in YAML format)                |
-|  [+] On-The-Fly Dynamic UI Translation (LLM dynamically maps natural steps across localized UI variants)                    |
-|  [+] Zero-Cost Offline Replay (100% Offline in CI/CD via file-based JSON Playbooks)                                         |
-|  [+] Local Self-Healing (LLM heals locators in local playbook files when UI breaks)                                         |
-|  [+] Programmatic Extensions (JAVA_METHOD for custom logic, formatting, and precision)                                      |
-|  [+] Soft Warning Gates (Non-blocking (soft) and (optional) step tags)                                                      |
-+-----------------------------------------------------------------------------------------------------------------------------+
+00:00 - 08:00 | 1. The Dilemma: Maintenance Fatigue & Generated Code Overhead
+08:00 - 18:00 | 2. Concept: Single Source of Truth, Machine Playbooks, & Zero-Cost Offline Replay
+18:00 - 32:00 | 3. Live Demos: Human Specs, Playbook Compilation, Self-Healing, & Verification Hooks
+32:00 - 40:00 | 4. Deep Dive: Context Optimization, Outcome Verification, & Summary Reporting
+40:00 - 45:00 | 5. Conclusion & Q&A
 ```
 
-Neo AI occupies the **"Sweet Spot" of Quality Engineering**: positioned strictly between rigid legacy scripts (which break on minor DOM locator updates) and unpredictable autonomous agent guesswork (which infer unconstrained intent). Neo AI maintains explicit natural-language step definitions while executing them with relaxed locator flexibility and deterministic replay.
+---
+
+## Speaker Biography
+
+**René Schwietzke** is the Managing Director of Xceptance, based in Germany and the US. As co-founder, he has played a major role in shaping the company's profile, including the continuous evaluation and development of their test tools and services.
+
+René Schwietzke is a seasoned IT professional with over two decades of experience in performance tuning and performance measurements. His academic background includes a Master's degree in Computer Science, and he actively shares his knowledge by giving lectures at universities and presenting at international software development conferences. He is also a sought-after speaker for training sessions on Java, performance testing, quality assurance, and testing.
 
 ---
 
-## 2. Core Architecture & Components
+## Speaker Pitch
 
-The 45-minute technical presentation walks through the core components powering Neo AI:
-
-```
-+-----------------------------------------------------------------------------------+
-|                                 NEO AI PLATFORM                                   |
-+-----------------------------------------------------------------------------------+
-|                                                                                   |
-|  1. TEST AUTHORING & LINTING                                                      |
-|     Multi-Lingual Natural Language (YAML) --> [ PESAP Static Analysis & Predictor ]|
-|                                                                                   |
-|  2. PLAYBOOK COMPILATION                                                          |
-|     Creation Mode (LLM) --> Compiles to [ Local File-Based JSON Playbook ]        |
-|                                                                                   |
-|  3. CI/CD OFFLINE REPLAY & SELF-HEALING                                           |
-|     CI Execution --> Replays JSON Playbook via Native WebDriver (0 Tokens, Fast)  |
-|                         |                                                         |
-|                         +--> [ Locator Fails? ]                                   |
-|                                    |                                              |
-|                                    v (Self-Healing Loop)                          |
-|                             [ Escalating Context System ]                         |
-|                             [ LLM Heals Element Locator ]                         |
-|                             [ Updates Local Playbook File ]                       |
-|                                                                                   |
-|  4. GUARDRAILS & OBSERVABILITY                                                    |
-|     - Programmatic Extensions: JAVA_METHOD / Formatting / BigDecimal / JShell     |
-|     - Perceptual Verification: Microsecond Local dHash & Hamming Distance          |
-|     - Soft Warning Gates: Non-Blocking (soft) / (optional) Step Tags              |
-|     - Decoupled State Machine: Thread-Isolated Web Browser Engine                 |
-|     - Reporting & Diagnostics: Aura Server & Interactive Trace Viewer             |
-+-----------------------------------------------------------------------------------+
-```
-
-### 2.1 Multi-Lingual Natural Language Authoring & AST Synchronization
-Engineers and domain experts author test scenarios in plain human language formatted in YAML—without writing Gherkin step bindings or code abstractions. Instruction steps can range from direct action commands to conversational free-text descriptions:
-
-```yaml
-# Imperative & Free-Text Natural Language Authoring (YAML)
-- step: "Click the checkout button and proceed to payment"                # Imperative Command
-- step: "Add the first product to cart and verify the total is under $50" # Free-Text High-Level Step
-- step: "Lege das Poster in den Warenkorb und gehe direkt zur Kasse"     # German Free-Text Step
-```
-
-YAML acts as an intermediate serialization format representing an underlying **Test Step Abstract Syntax Tree (AST)**, establishing 1-to-1 bidirectional synchronization between human definitions and compiled machine playbooks.
-
-### 2.2 Creation Mode vs. Zero-Cost Offline Replay
-* **Creation Mode**: On first execution, Neo AI queries the LLM to inspect the DOM, determine locator strategies, and compile them into a local file-based **JSON Playbook** (`src/test/resources/ai-playbooks`).
-* **Replay Mode**: In CI/CD pipelines, Neo AI replays native WebDriver/Selenide actions directly from the local JSON Playbook file **100% offline at native speed with zero LLM token costs**.
-
-### 2.3 Localized Self-Healing & Git-Driven Governance
-When a front-end deployment changes DOM elements (e.g. changing `#btn-submit-v1` to `#btn-submit-v2`), offline replay fails. Neo AI activates localized self-healing:
-1. Queries the LLM to re-analyze the live DOM.
-2. Heals the broken locator strategy and executes the step.
-3. Updates the local JSON Playbook file on disk.
-
-Because Playbooks reside in project directories, locator self-healing updates are tracked in Git, allowing engineers to review selector diffs during normal Pull Requests before merging into production pipelines.
-
-### 2.4 Token Economics: Escalating Context & PESAP
-To avoid transmitting full HTML DOMs to LLMs on every query, Neo AI employs a **6-Tier Escalating Context System**:
-1. `HINT`: Zero DOM elements (inline hints).
-2. `AXTREE`: Browser Accessibility Tree outline (~90% smaller than HTML).
-3. `LEAN`: Interactive DOM elements only (buttons, inputs, links).
-4. `STANDARD`: Full interactive DOM + body text nodes.
-5. `VISUAL_LEAN`: Interactive DOM + compressed screenshot.
-6. `VISUAL`: Full DOM + viewport screenshot (Canvas/Shadow DOM).
-
-Combined with the **Pre-Execution Static Analysis Phase (PESAP)**—which predicts initial context tiers, lints ambiguous instructions, and splits compound actions—Neo AI reduces prompt token payloads by 85–95%.
-
-### 2.5 Programmatic Java Extensions (`JAVA_METHOD`)
-To prevent LLM calculation or formatting errors during assertions, complex data transformations, or specialized evaluations, Neo AI delegates execution to native Java code via `@AiMethod` annotations. `JAVA_METHOD` provides reflection security, exact `BigDecimal` financial precision, localized price normalization (`14,96 €` $\rightarrow$ `14.96`), and custom evaluation hooks.
-
-### 2.6 Perceptual Hash Verification & Soft Warning Gates
-* **dHash Fingerprinting**: Caches 64-bit perceptual image hashes in Playbooks. Replays evaluate Hamming distances in microseconds to confirm visual stability without remote VLM calls.
-* **Soft Warning Gates (`(soft)` / `(optional)`)**: Steps or assertions tagged `(soft)` (e.g., `Observe promo banner (soft)`) issue warnings when secondary UI elements differ across environments without failing the test run.
-
----
-
-## 3. Engineering Retrospective: Meta-AI & Architectural Iterations
-
-Developing Neo AI yielded four major empirical takeaways regarding LLM integration and framework design:
-
-1. **Building AI with AI (Meta-Development)**: Neo AI was developed using AI pair-programming tools for rapid component prototyping. However, unconstrained feature additions can cause codebase accretion, requiring active human architectural governance.
-2. **The 5-Iteration Architectural Evolution**: Neo AI underwent **five major internal refactorings**. Iteration 5 rebuilt the framework into a clean, decoupled modular engine (with abstract interfaces like `TargetExecutor`, `SutState`, `StateMachineRunner`, and `ActionSanitizer`) to allow new context tiers and interaction modes to be plugged in cleanly.
-3. **Elimination of Hallucinations**: Early prototypes encountered LLM hallucinations (inventing invalid element attributes or unparseable XPath selectors). Strict JSON schemas, PESAP analysis, and multi-stage defensive parsing (`ModelResponseParser`) achieved near 100% output determinism with zero hallucinations during playbook compilation.
-4. **Task-Specific Model Routing & Behavioral Dynamics**: Iteration 5 routes tasks to specialized models (heavy screenshot analysis to external VLMs, fast text reasoning to local/lightweight LLMs). Empirical testing demonstrates that **changing models changes behavior**, requiring model-family prompt tuning to normalize locator selection choices across LLM providers.
-
----
-
-## 4. Key Paradigm Comparison
-
-| Dimension | **Neo AI (Intent Playbooks)** | **Live-LLM Drivers** | **AI Code Generators** | **Vision / Coordinate Agents** | **Selector Proxies (e.g., Healenium)** |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Core Paradigm** | **Native Language + Playbook Caching** | Live Per-Step LLM Prompting | Static Code Generation | Screenshot $(x,y)$ Visual Clicks | Proxy Selector Distance Heuristic |
-| **CI/CD Replay** | **100% Offline (0 Tokens, Native Speed)** | Requires Cloud API per step | Fast (once compiled) | High VLM Compute per step | DB lookup latency |
-| **Self-Healing** | **Local File-Based Playbook Updates** | SaaS Cloud Updates | Manual Code Review | Vision Replanning | Postgres DB Selector Cache |
-| **Math & Logic** | **`JAVA_METHOD` / JShell / BigDecimal** | LLM Prompt Inference | Generated Code Assertions | VLM Prompt Evaluation | Traditional Code Assertions |
-| **Token Optimization**| **Escalating Context + Smart Jumps** | Full Page Sent to Cloud | N/A (Build-Time Only) | Full Viewport Screenshot | N/A (ML Selector Model) |
-| **Visual & Soft** | **Perceptual dHash + Soft Tags (`(soft)`)** | Cloud Vision API | Visual Baseline Extensions | Cloud VLM | Pixel-by-pixel comparisons |
-| **License** | **Open Source (GNU AGPLv3 / MIT)** | Proprietary SaaS / API | IDE / Model API dependent | Proprietary / Model API | Open Source (Apache-2.0) |
-
----
-
-## 5. Long-Term Roadmap & "Implicit Evaluation" Vision
-
-Long-term development directions for Neo AI focus on three major frontiers:
-
-1. **Next-Generation Aura Server & Second-Opinion Verification**:
-   * **Real-Time Streaming Trace Viewer**: Streaming live execution timelines, DOM snapshots, network headers, and LLM reasoning steps to `localhost:8080`.
-   * **AI Verification Verdicts ("Second Opinion")**: A post-execution secondary AI auditor evaluates recorded action traces against initial test intent, issuing formal verdicts (`SUCCESS`, `ACCEPTABLE_DEVIATION`, `UNCERTAIN_GOAL`, `UNEXPECTED_SIDE_EFFECT`).
-   * **Multi-Model Consensus**: Querying multiple distinct model families (Gemini + Claude + local LLMs) in parallel to establish consensus verdicts.
-2. **Multi-Tier Agentic Execution Modes ("Spend More to Get More")**:
-   * *Default Deterministic Mode*: Maximum token efficiency, 0-token offline CI/CD replay, deterministic intent execution.
-   * *Exploratory / Aggressive Agentic Mode*: An interactive problem-solving tier where the agent engages in multi-turn reasoning and autonomous exploratory recovery for complex unscripted UI failures.
-3. **Human Co-Worker Ergonomics & "Implicit Multi-Dimensional Evaluation"**:
-   * **Co-Worker Ergonomics**: Authoring test scenarios feels like delegating tasks to a human co-worker in natural language without writing explicit verification code for every UI property.
-   * **Implicit Verification "For Free"**: By leveraging general-purpose LLMs/VLMs directly within the framework, multi-dimensional quality checks (**visual layout, accessibility WCAG compliance, color palette consistency, and runtime health**) come **implicitly for free** as a native capability of model inference without purchasing single-purpose SaaS suites.
-
----
-
-### Presentation Resources & Links
-
-* **Framework Repository**: [Neodymium Library on GitHub](https://github.com/Xceptance/neodymium-library)
-* **Full Technical Paper**: [Neo AI Architecture Paper Version 2.0](https://github.com/Xceptance/neodymium-library/blob/master/doc/neo-ai-technical-paper.md)
-* **Sample Scenarios**: Natural-language Playbooks under `src/test/resources/playbooks/`
+> *"Generating test code doesn't solve maintenance—it just leaves you with generated code to maintain. And querying live LLMs on every test step is too slow and expensive for CI/CD. In this session, we demonstrate how your human-language test case stays the single source of truth. By using an LLM to compile human intent into an internal machine playbook—a cached artifact for offline execution, not human consumption—teams get 100% offline CI/CD replay with zero API costs and automated self-healing, without ever writing or maintaining automation code. Everyone can automate."*
