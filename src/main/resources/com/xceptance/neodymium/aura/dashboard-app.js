@@ -258,6 +258,27 @@
                 }
             });
 
+            document.addEventListener('htmx:responseError', function(evt) {
+                const xhr = evt.detail.xhr;
+                let errorMsg = 'Server returned HTTP ' + xhr.status;
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data && data.error) {
+                        errorMsg = data.error;
+                    }
+                } catch(e) {}
+                
+                const banner = document.getElementById('warningBanner');
+                const bannerText = document.getElementById('warningBannerText');
+                if (banner && bannerText) {
+                    bannerText.innerHTML = errorMsg;
+                    banner.style.display = 'block';
+                    setTimeout(() => {
+                        banner.style.display = 'none';
+                    }, 6000);
+                }
+            });
+
             syncStateFromQueueContainer();
 
             // Listen for AI Action triggers sent from server-side htmx responses

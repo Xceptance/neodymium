@@ -5,15 +5,16 @@
 -->
 <th:block th:fragment="queueListContainerContent">
     <!-- If queue is empty -->
-    <div th:if="${queue == null or queue.isEmpty()}" style="font-size: 13px; color: var(--text-secondary); font-style: italic; padding: 15px; border: 1px dashed var(--border-hover); border-radius: 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-        <i class="fa-solid fa-arrow-left" style="font-size: 16px; color: var(--accent-primary);"></i>
-        <span>No tests selected. Please check one or more YAML test cases in the sidebar explorer.</span>
+    <div th:if="${queue == null or queue.isEmpty()}" class="empty-state-card">
+        <i class="fa-solid fa-list-check"></i>
+        <div class="empty-title">Queue is Empty</div>
+        <div class="empty-desc">Check one or more test cases on the left to add them to the run queue.</div>
     </div>
     
     <!-- Clear Queue Button -->
     <div th:if="${queue != null and !queue.isEmpty()}" style="margin-bottom: 8px; display: flex; justify-content: flex-end;">
         <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
-                class="editor-btn" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.05); cursor: pointer;">
+                class="btn-edit" style="padding: 4px 8px; font-size: 11px; cursor: pointer;">
             <i class="fa-solid fa-trash-can"></i> Clear Queue
         </button>
     </div>
@@ -21,16 +22,18 @@
     <!-- Queue Items -->
     <div th:if="${queue != null and !queue.isEmpty()}" th:each="ds, iter : ${queue}" 
          class="queue-item" th:data-file="${ds.file}" th:data-id="${ds.id}"
-         style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; margin-bottom: 4px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: 6px;">
-        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; padding-right: 5px; font-size: 12.5px;">
-            <span th:text="${iter.count} + '. '">1. </span><strong th:text="${ds.file}">file.yaml</strong> (Dataset: <span th:text="${ds.id}">id</span>)
-        </span>
+         style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; margin-bottom: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--border-radius);">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
+            <span style="font-weight: 600; font-size: 12px; color: var(--text-secondary);" th:text="${iter.count} + '.'">1.</span>
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500;" th:text="${ds.file}">file.yaml</span>
+            <span class="badge-dataset"><i class="fa-solid fa-database" style="font-size: 10px;"></i> <span th:text="${ds.id}">id</span></span>
+        </div>
         <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
-            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:-1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="editor-btn" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Move Up" th:disabled="${iter.first}">
-                <i class="fa-solid fa-arrow-up"></i>
+            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:-1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
+                <i class="fa-solid fa-chevron-up"></i>
             </button>
-            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="editor-btn" style="padding: 2px 6px; font-size: 10px; border-radius: 4px;" title="Move Down" th:disabled="${iter.last}">
-                <i class="fa-solid fa-arrow-down"></i>
+            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
+                <i class="fa-solid fa-chevron-down"></i>
             </button>
         </div>
     </div>

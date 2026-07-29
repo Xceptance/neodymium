@@ -88,7 +88,7 @@
     },
     {
       "promptLine": "Verify the root element has the \"force-dark\" class",
-      "reasoning": "The instruction is to verify a class on the \u0027root element\u0027. In web development, the `body` tag is often considered the root for applying global styles like themes. Since the previous attempt failed with a visual mismatch, it\u0027s crucial to verify the class directly on the element that should reflect the dark mode. I am using \u0027body\u0027 as the target for the ASSERT action to check for the \u0027force-dark\u0027 class.",
+      "reasoning": "The instruction asks to verify the \u0027force-dark\u0027 class on the root element. In web contexts, the \u0027body\u0027 tag is commonly used for applying global theme classes. I will assert that the \u0027body\u0027 element contains the \u0027force-dark\u0027 class.",
       "actions": [
         {
           "type": "ASSERT",
@@ -96,15 +96,15 @@
           "value": [
             "force-dark"
           ],
-          "description": "Verify the body element has the \u0027force-dark\u0027 class",
-          "elementDetails": "body element",
+          "description": "Verify the body element has the \u0027force-dark\u0027 class.",
+          "elementDetails": "The body element of the page",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "6001820080008048800668088008800880088000480080028000540080008000",
+      "screenshotHash": "6001800882081a02820882083a088204820842084208820482082a0882088008",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

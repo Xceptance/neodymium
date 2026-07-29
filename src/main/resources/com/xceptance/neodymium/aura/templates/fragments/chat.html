@@ -5,7 +5,7 @@
 -->
 <th:block th:fragment="chatContainerContent">
     <div class="panel-header neo-u-23">
-        <div><i class="fa-solid fa-sparkles neo-u-15"></i> Aura Assistant</div>
+        <div><i class="fa-solid fa-brain" style="color: var(--accent-purple);"></i> Aura Assistant</div>
         <div class="neo-u-24">
             <select class="neo-u-25" id="chatSessionSelect" name="sessionId"
                     hx-get="/api/chat/messages" 
@@ -71,7 +71,7 @@
         <div class="sender" th:text="${msg.role == 'user' ? 'You' : 'Aura Assistant'}">Sender</div>
         <div th:if="${msg.thinking != null and msg.thinking != ''}" class="thinking-block">
             <details>
-                <summary>Thinking Process</summary>
+                <summary><i class="fa-solid fa-brain" style="color: var(--accent-purple); font-size: 11px;"></i> Thinking Process</summary>
                 <pre class="thinking-text" th:text="${msg.thinking}"></pre>
             </details>
         </div>

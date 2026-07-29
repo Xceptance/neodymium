@@ -1467,16 +1467,19 @@
                     })
                 });
 
-                const data = await response.json();
+                const data = await response.json().catch(() => ({ error: 'HTTP ' + response.status + ': ' + response.statusText }));
                 thinkingBubble.remove();
 
-                if (data.error) {
-                    if (data.error.includes("API Key") || data.error.includes("LLM Client Error")) {
+                if (!response.ok || data.error) {
+                    const errorMsg = data.error || ('Server returned HTTP status ' + response.status);
+                    if (errorMsg.includes("API Key") || errorMsg.includes("LLM Client Error")) {
                         const apiKeyBannerText = document.getElementById('apiKeyBannerText');
-                        apiKeyBannerText.innerHTML = data.error;
-                        apiKeyBanner.style.display = 'flex';
+                        if (apiKeyBannerText && apiKeyBanner) {
+                            apiKeyBannerText.innerHTML = errorMsg;
+                            apiKeyBanner.style.display = 'flex';
+                        }
                     }
-                    appendChatMessage('ai', "Error: " + data.error);
+                    appendChatMessage('ai', "Error: " + errorMsg);
                     return;
                 }
 

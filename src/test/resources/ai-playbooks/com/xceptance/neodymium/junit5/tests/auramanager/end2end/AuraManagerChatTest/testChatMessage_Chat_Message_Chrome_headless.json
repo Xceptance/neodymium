@@ -83,7 +83,7 @@
             "type": "text"
           },
           "durationMs": 0,
-          "replay": "",
+          "replay": "(Replay)",
           "frameId": "win_0:main",
           "adjust": false
         }
@@ -139,19 +139,29 @@
       "actions": [
         {
           "type": "WAIT",
-          "target": "div:not(.panel-header):contains(\"Aura Assistant\")",
+          "target": "div[data-neo-ref\u003d\"xc_b4g137\"] \u003e div.ai-message:last-child",
           "value": [
             "20000"
           ],
-          "description": "Wait until a new chat message from the AI appears, identified by \u0027Aura Assistant\u0027 text and not being the header.",
-          "elementDetails": "AI chat message",
+          "description": "Wait for the last chat message from the AI to appear in the chat container",
+          "elementDetails": "Last AI chat message",
+          "elementContext": {},
+          "durationMs": 0,
+          "replay": "",
+          "frameId": "win_0:main",
+          "adjust": false
+        },
+        {
+          "type": "ASSERT",
+          "target": "div[data-neo-ref",
+          "description": "",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "800180108010a41004100410941004120410041904110410041ad81004100010",
+      "screenshotHash": "800180100410e61006100410c410041804108410841104190411d01004100010",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },
