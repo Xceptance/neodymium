@@ -21,8 +21,8 @@ package org.neodymium.ai.integration;
 import static com.codeborne.selenide.Condition.text;
 import static com.codeborne.selenide.Selenide.$;
 
-import org.junit.Ignore;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
@@ -251,7 +251,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Live mode execution running with all datasets defined in the playbook.
      */
-    @Ignore
+    @Disabled
     @Order(16)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
@@ -263,7 +263,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Strict replay mode execution running with all datasets defined in the playbook.
      */
-    @Ignore
+    @Disabled
     @Order(17)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
