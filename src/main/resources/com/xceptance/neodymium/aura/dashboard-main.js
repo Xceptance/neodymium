@@ -21,26 +21,67 @@
         }
 
         // Theme Logic
+        function syncThemeToIframes(theme) {
+            const iframes = document.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                try {
+                    if (iframe.contentWindow) {
+                        iframe.contentWindow.postMessage({ type: 'aura-theme-change', theme: theme }, '*');
+                        if (typeof iframe.contentWindow.applyTheme === 'function') {
+                            iframe.contentWindow.applyTheme(theme);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore potential cross-origin restrictions
+                }
+            });
+        }
+
         function initTheme() {
             const savedTheme = localStorage.getItem('aura_theme') || 'system';
             applyTheme(savedTheme);
 
+            window.addEventListener('load', function () {
+                syncThemeToIframes(savedTheme);
+            });
+
+            document.addEventListener('DOMContentLoaded', function () {
+                document.querySelectorAll('iframe').forEach(iframe => {
+                    iframe.addEventListener('load', function () {
+                        const currentTheme = localStorage.getItem('aura_theme') || 'system';
+                        syncThemeToIframes(currentTheme);
+                    });
+                });
+            });
         }
 
 
         function applyTheme(theme) {
             const root = document.documentElement;
+            const body = document.body;
             if (theme === 'dark') {
                 root.classList.add('force-dark');
                 root.classList.remove('force-light');
+                if (body) {
+                    body.classList.add('force-dark');
+                    body.classList.remove('force-light');
+                }
             } else if (theme === 'light') {
                 root.classList.add('force-light');
                 root.classList.remove('force-dark');
+                if (body) {
+                    body.classList.add('force-light');
+                    body.classList.remove('force-dark');
+                }
             } else {
                 root.classList.remove('force-dark', 'force-light');
+                if (body) {
+                    body.classList.remove('force-dark', 'force-light');
+                }
             }
 
             localStorage.setItem('aura_theme', theme);
+            syncThemeToIframes(theme);
         }
 
         // Layout Resizers
@@ -101,6 +142,7 @@
         function changeTheme(theme) {
             localStorage.setItem('aura_theme', theme);
             applyTheme(theme);
+            fetch('/api/theme?theme=' + encodeURIComponent(theme), { method: 'POST' }).catch(() => {});
         }
 
         function switchState(stateName) {

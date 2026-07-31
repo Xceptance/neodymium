@@ -190,7 +190,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // Load settings from localStorage
-    const savedTheme = localStorage.getItem('neodymium.hud.theme') || 'system';
+    const savedTheme = localStorage.getItem('aura_theme') || localStorage.getItem('neodymium.hud.theme') || 'system';
     const savedZoom = localStorage.getItem('neodymium.hud.zoom') || '100';
 
     const themeSelect = document.getElementById('themeSelect');
@@ -211,6 +211,27 @@ window.addEventListener('DOMContentLoaded', () => {
         const themeSelect = document.getElementById('themeSelect');
         if (themeSelect && themeSelect.value === 'system') {
             applyTheme('system');
+        }
+    });
+
+    // Listen for theme sync messages from parent window
+    window.addEventListener('message', (event) => {
+        if (event.data && (event.data.type === 'aura-theme-change' || event.data.type === 'theme-change')) {
+            const theme = event.data.theme;
+            const themeSelect = document.getElementById('themeSelect');
+            if (themeSelect) themeSelect.value = theme;
+            applyTheme(theme);
+        }
+    });
+
+    // Listen for storage changes from parent window or other tabs
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'aura_theme' || event.key === 'neodymium.hud.theme') {
+            if (event.newValue) {
+                const themeSelect = document.getElementById('themeSelect');
+                if (themeSelect) themeSelect.value = event.newValue;
+                applyTheme(event.newValue);
+            }
         }
     });
 
@@ -1792,16 +1813,25 @@ function toggleTheme() {
 }
 
 function applyTheme(theme) {
-    if (theme === 'light') {
-        document.documentElement.classList.add('force-light');
-    } else if (theme === 'dark') {
-        document.documentElement.classList.remove('force-light');
-    } else if (theme === 'system') {
-        const systemIsLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-        if (systemIsLight) {
-            document.documentElement.classList.add('force-light');
-        } else {
-            document.documentElement.classList.remove('force-light');
+    const root = document.documentElement;
+    const body = document.body;
+    let effectiveTheme = theme;
+    if (effectiveTheme === 'system') {
+        effectiveTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    if (effectiveTheme === 'light') {
+        root.classList.add('force-light');
+        root.classList.remove('force-dark');
+        if (body) {
+            body.classList.add('force-light');
+            body.classList.remove('force-dark');
+        }
+    } else {
+        root.classList.add('force-dark');
+        root.classList.remove('force-light');
+        if (body) {
+            body.classList.add('force-dark');
+            body.classList.remove('force-light');
         }
     }
 }
@@ -1908,6 +1938,7 @@ function saveSettings() {
     const theme = document.getElementById('themeSelect').value;
     const zoom = parseInt(document.getElementById('zoomInput').value, 10);
     localStorage.setItem('neodymium.hud.theme', theme);
+    localStorage.setItem('aura_theme', theme);
     localStorage.setItem('neodymium.hud.zoom', zoom);
     applyTheme(theme);
     if (!isNaN(zoom)) {
