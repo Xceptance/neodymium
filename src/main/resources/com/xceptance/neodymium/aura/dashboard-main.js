@@ -413,16 +413,16 @@
                 case 1:
                     // ── State 1: full-width runs list only ──────────────────────
                     colRuns.style.display = 'flex';
-                    colRuns.style.flex = '1 1 0';
+                    colRuns.style.flex = '1 1 0%';
                     // colTests and colReport remain display:none
                     break;
 
                 case 2:
                     // ── State 2: Runs | Tests — equal 50/50 split ───────────────
                     colRuns.style.display = 'flex';
-                    colRuns.style.flex = '1 1 0';
+                    colRuns.style.flex = '1 1 0%';
                     colTests.style.display = 'flex';
-                    colTests.style.flex = '1 1 0';
+                    colTests.style.flex = '1 1 0%';
                     // colReport remains display:none
                     if (r1) r1.style.display = 'block';
                     break;
@@ -430,11 +430,11 @@
                 case 3:
                     // ── State 3: Runs | Tests | Details — equal three-way split ─
                     colRuns.style.display = 'flex';
-                    colRuns.style.flex = '1 1 0';
+                    colRuns.style.flex = '1 1 0%';
                     colTests.style.display = 'flex';
-                    colTests.style.flex = '1 1 0';
+                    colTests.style.flex = '1 1 0%';
                     colReport.style.display = 'flex';
-                    colReport.style.flex = '1 1 0';
+                    colReport.style.flex = '1 1 0%';
                     if (r1) r1.style.display = 'block';
                     if (r2) r2.style.display = 'block';
                     break;
@@ -444,9 +444,9 @@
                     // colRuns full panel is hidden; colRunsMini strip takes its place.
                     // Tests keeps its normal proportional size; details gets more room.
                     colTests.style.display = 'flex';
-                    colTests.style.flex = '1 1 0';
+                    colTests.style.flex = '1 1 0%';
                     colReport.style.display = 'flex';
-                    colReport.style.flex = '2 1 0';
+                    colReport.style.flex = '2 1 0%';
                     if (colRunsMini) colRunsMini.style.display = 'flex';
                     if (r2) r2.style.display = 'block';
                     refreshMiniRunsBar();
@@ -539,7 +539,7 @@
          */
         function onMiniRunChipClick(runId) {
             if (runId === currentReportId) {
-                applyHistoryState(2);
+                applyHistoryState(3);
             } else {
                 selectHistoryRun(runId);
             }
@@ -968,7 +968,7 @@
             iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
 
             // Transition to State 4: mini-runs bar, tests list, and wide details
-            applyHistoryState(4);
+            applyHistoryState(3);
 
             // Populate the mini history strip with bubbles for this test across all runs
             renderMiniHistoryStrip(testName, reportId);

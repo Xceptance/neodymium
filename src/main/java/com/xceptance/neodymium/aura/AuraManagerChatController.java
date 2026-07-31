@@ -65,7 +65,7 @@ public final class AuraManagerChatController
         context.setVariable("chatMessages", session.messages);
         context.setVariable("currentSessionId", session.id);
 
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatMessagesContent"), context);
+        final String html = manager.getTemplateEngine().process("fragments/chat", Set.of("chatMessagesContent"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -83,7 +83,7 @@ public final class AuraManagerChatController
         context.setVariable("currentSessionId", newSession.id);
         context.setVariable("chatMessages", newSession.messages);
 
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatContainer"), context);
+        final String html = manager.getTemplateEngine().process("fragments/chat", Set.of("chatContainerContent"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -106,7 +106,7 @@ public final class AuraManagerChatController
         context.setVariable("currentSessionId", fallbackSession.id);
         context.setVariable("chatMessages", fallbackSession.messages);
 
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatContainer"), context);
+        final String html = manager.getTemplateEngine().process("fragments/chat", Set.of("chatContainerContent"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -136,7 +136,7 @@ public final class AuraManagerChatController
         context.setVariable("currentSessionId", renamed.id);
         context.setVariable("chatMessages", renamed.messages);
 
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatContainer"), context);
+        final String html = manager.getTemplateEngine().process("fragments/chat", Set.of("chatContainerContent"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -162,7 +162,6 @@ public final class AuraManagerChatController
 
         // 1. Save user prompt
         final ChatMessageDto userMsg = new ChatMessageDto("user", prompt);
-        session.messages.add(userMsg);
         sessionService.addMessage(session.id, userMsg);
 
         // 2. Auto-rename session if it's currently generic
@@ -194,7 +193,6 @@ public final class AuraManagerChatController
 
             // Save assistant answer and deep thinking log to session
             final ChatMessageDto assistantMsg = new ChatMessageDto("ai", response.message, response.thinking);
-            session.messages.add(assistantMsg);
             sessionService.addMessage(session.id, assistantMsg);
 
             // Set HX-Trigger header if an action needs to execute client-side
@@ -224,7 +222,7 @@ public final class AuraManagerChatController
         context.setVariable("chatMessages", session.messages);
         context.setVariable("currentSessionId", session.id);
 
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("chatMessagesContent"), context);
+        final String html = manager.getTemplateEngine().process("fragments/chat", Set.of("chatMessagesContent"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 }

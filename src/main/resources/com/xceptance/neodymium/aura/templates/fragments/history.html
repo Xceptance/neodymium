@@ -92,44 +92,55 @@
 
         <!-- Iterate over tests -->
         <div th:each="t : ${tests}"
-             class="test-card history-row"
+             th:class="'test-card history-row ' + ${t.status == 'Passed' ? 'passed' : (t.status == 'Aborted' ? 'aborted' : 'failed')}"
              th:data-test-name="${t.name}"
              th:data-report-id="${reportId}"
              th:data-file="${t.file}"
              onclick="loadInteractiveTest(this.getAttribute('data-report-id'), this.getAttribute('data-file'), this.getAttribute('data-test-name'), this)">
+            
             <div class="test-card-title-row">
-                <span class="test-card-title" th:text="${t.displayName != null ? t.displayName : t.name}">Login Test</span>
+                <span class="test-card-title" th:text="${t.yamlLabel != null ? t.yamlLabel : (t.displayName != null ? t.displayName : t.name)}">file.yaml</span>
                 <span th:if="${t.status == 'Passed'}" class="badge-success">Passed</span>
-                <span th:if="${t.status != 'Passed'}" class="badge-failed" th:text="${t.status}">Failed</span>
+                <span th:if="${t.status == 'Aborted'}" class="badge-aborted">Aborted</span>
+                <span th:if="${t.status != 'Passed' and t.status != 'Aborted'}" class="badge-failed" th:text="${t.status}">Failed</span>
             </div>
             
-            <div style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 6px;" th:text="${t.file}">file.yaml</div>
-            
-            <div class="test-card-meta-row">
-                <span th:if="${t.durationLabel != ''}"><i class="fa-regular fa-clock"></i> <span th:text="${t.durationLabel}">45s</span></span>
-                
-                <!-- Playbook Badge -->
-                <span th:class="'pb-badge ' + ${t.playbookMode != null ? t.playbookMode : 'llm'}">
-                    <i th:class="${t.playbookMode == 'playbook' ? 'fa-solid fa-rotate' : (t.playbookMode == 'healing' ? 'fa-solid fa-wrench' : 'fa-solid fa-wand-magic-sparkles')}"></i>
-                    <span th:text="${t.playbookMode == 'playbook' ? 'Playbook' : (t.playbookMode == 'healing' ? 'Healing' : 'AI')}">AI</span>
+            <div class="test-card-subtitle">
+                <span th:if="${t.testId != null and !t.testId.isEmpty()}" class="badge-dataset">
+                    <i class="fa-solid fa-database"></i> <span th:text="${t.testId}">dataset_id</span>
                 </span>
+                <span th:if="${t.testId == null or t.testId.isEmpty()}" th:text="${t.name}" style="opacity: 0.7;">test_name</span>
             </div>
             
-            <!-- Actions (Log / Rerun) -->
-            <div th:if="${t.hasLog == 'true' or (t.rerunPayload != null and !running)}" class="test-card-actions">
-                <button th:if="${t.hasLog == 'true'}" class="run-action-btn" style="font-size:10px; padding:2px 7px;"
-                        th:data-report-id="${reportId}"
-                        th:data-test-name="${t.name}"
-                        onclick="event.stopPropagation(); openTestLog(this.getAttribute('data-report-id'), this.getAttribute('data-test-name'))"
-                        title="View test log">
-                    <i class="fa-solid fa-file-lines"></i> Log
-                </button>
-                <button th:if="${t.rerunPayload != null and !running}" class="run-action-btn" style="font-size:10px; padding:2px 7px;"
-                        th:data-payload="${t.rerunPayload}"
-                        onclick="event.stopPropagation(); rerunSingleTest(this.getAttribute('data-payload'))"
-                        title="Re-run this test case with the same configuration">
-                    <i class="fa-solid fa-rotate-right"></i> Rerun
-                </button>
+            <div class="test-card-footer">
+                <div class="test-card-meta-chips">
+                    <span th:if="${t.durationLabel != null and t.durationLabel != ''}" class="duration-chip">
+                        <i class="fa-regular fa-clock"></i> <span th:text="${t.durationLabel}">29.0s</span>
+                    </span>
+                    
+                    <!-- Playbook Badge -->
+                    <span th:class="'pb-badge ' + ${t.playbookMode != null ? t.playbookMode : 'llm'}">
+                        <i th:class="${t.playbookMode == 'playbook' ? 'fa-solid fa-rotate' : (t.playbookMode == 'healing' ? 'fa-solid fa-wrench' : 'fa-solid fa-wand-magic-sparkles')}"></i>
+                        <span th:text="${t.playbookMode == 'playbook' ? 'Playbook' : (t.playbookMode == 'healing' ? 'Healing' : 'AI')}">AI</span>
+                    </span>
+                </div>
+                
+                <!-- Actions (Log / Rerun) -->
+                <div th:if="${t.hasLog == 'true' or (t.rerunPayload != null and !running)}" class="test-card-actions">
+                    <button th:if="${t.hasLog == 'true'}" class="btn-edit" style="font-size:10px; padding:2px 7px;"
+                            th:data-report-id="${reportId}"
+                            th:data-test-name="${t.name}"
+                            onclick="event.stopPropagation(); openTestLog(this.getAttribute('data-report-id'), this.getAttribute('data-test-name'))"
+                            title="View test log">
+                        <i class="fa-solid fa-file-lines"></i> Log
+                    </button>
+                    <button th:if="${t.rerunPayload != null and !running}" class="btn-edit" style="font-size:10px; padding:2px 7px;"
+                            th:data-payload="${t.rerunPayload}"
+                            onclick="event.stopPropagation(); rerunSingleTest(this.getAttribute('data-payload'))"
+                            title="Re-run this test case with the same configuration">
+                        <i class="fa-solid fa-rotate-right"></i> Rerun
+                    </button>
+                </div>
             </div>
         </div>
     </div>

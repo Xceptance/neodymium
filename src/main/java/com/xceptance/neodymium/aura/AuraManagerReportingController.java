@@ -432,8 +432,7 @@ public final class AuraManagerReportingController
                                     {
                                         final String src = String.valueOf(map.get("yamlSource"));
                                         final String base = new File(src).getName();
-                                        testMap.put("yamlLabel", base.endsWith(".yaml")
-                                                ? base.substring(0, base.length() - 5) : base);
+                                        testMap.put("yamlLabel", base);
                                     }
                                     if (map.containsKey("playbookMode") && map.get("playbookMode") != null)
                                     {

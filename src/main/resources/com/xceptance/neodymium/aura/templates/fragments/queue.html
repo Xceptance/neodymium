@@ -11,10 +11,11 @@
         <div class="empty-desc">Check one or more test cases on the left to add them to the run queue.</div>
     </div>
     
-    <!-- Clear Queue Button -->
-    <div th:if="${queue != null and !queue.isEmpty()}" style="margin-bottom: 8px; display: flex; justify-content: flex-end;">
+    <!-- Clear Queue Action Bar -->
+    <div th:if="${queue != null and !queue.isEmpty()}" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 8px 12px; border-radius: var(--border-radius); border: 1px solid var(--border);">
+        <span style="font-size: var(--text-xs); color: var(--text-secondary); font-weight: 500;"><span th:text="${queue.size()}">0</span> test(s) queued</span>
         <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
-                class="btn-edit" style="padding: 4px 8px; font-size: 11px; cursor: pointer;">
+                class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
             <i class="fa-solid fa-trash-can"></i> Clear Queue
         </button>
     </div>
@@ -135,7 +136,7 @@
             onclick="prepareClientForExecution()"
             th:disabled="${queue == null or queue.isEmpty()}"
             th:style="${activeEditingFile != null or (queue == null or queue.isEmpty()) ? 'filter: saturate(50%) opacity(0.7); display: flex;' : 'display: flex;'}">
-        <i class="fa-solid fa-play"></i> Run Queue (<span th:text="${queue != null ? queue.size() : 0}">0</span>)
+        <i class="fa-solid fa-play"></i> <span>Run Queue</span> <span class="badge-count" th:text="${queue != null ? queue.size() : 0}">0</span>
     </button>
     
     <!-- Run Open Test Button -->

@@ -327,6 +327,12 @@
                 }
             });
 
+            // Clean up temporary thinking bubble if request fails
+            document.body.addEventListener('htmx:responseError', function(evt) {
+                const thinkingBubbles = document.querySelectorAll('.thinking-bubble');
+                thinkingBubbles.forEach(el => el.remove());
+            });
+
             // Enforce mutual exclusivity: Headless Mode vs Interactive HUD
             const optHeadless = document.getElementById('optHeadless');
             const optInteractive = document.getElementById('optInteractive');
@@ -537,16 +543,16 @@
                 case 1:
                     // ── State 1: full-width runs list only ──────────────────────
                     colRuns.style.display = 'flex';
-                    colRuns.style.flex = '1 1 0';
+                    colRuns.style.flex = '1 1 0%';
                     // colTests and colReport remain display:none
                     break;
 
                 case 2:
                     // ── State 2: Runs | Tests — equal 50/50 split ───────────────
                     colRuns.style.display = 'flex';
-                    colRuns.style.flex = '1 1 0';
+                    colRuns.style.flex = '1 1 0%';
                     colTests.style.display = 'flex';
-                    colTests.style.flex = '1 1 0';
+                    colTests.style.flex = '1 1 0%';
                     // colReport remains display:none
                     if (r1) r1.style.display = 'block';
                     break;
@@ -554,11 +560,11 @@
                 case 3:
                     // ── State 3: Runs | Tests | Details — equal three-way split ─
                     colRuns.style.display = 'flex';
-                    colRuns.style.flex = '1 1 0';
+                    colRuns.style.flex = '1 1 0%';
                     colTests.style.display = 'flex';
-                    colTests.style.flex = '1 1 0';
+                    colTests.style.flex = '1 1 0%';
                     colReport.style.display = 'flex';
-                    colReport.style.flex = '1 1 0';
+                    colReport.style.flex = '1 1 0%';
                     if (r1) r1.style.display = 'block';
                     if (r2) r2.style.display = 'block';
                     break;
@@ -568,9 +574,9 @@
                     // colRuns full panel is hidden; colRunsMini strip takes its place.
                     // Tests keeps its normal proportional size; details gets more room.
                     colTests.style.display = 'flex';
-                    colTests.style.flex = '1 1 0';
+                    colTests.style.flex = '1 1 0%';
                     colReport.style.display = 'flex';
-                    colReport.style.flex = '2 1 0';
+                    colReport.style.flex = '2 1 0%';
                     if (colRunsMini) colRunsMini.style.display = 'flex';
                     if (r2) r2.style.display = 'block';
                     refreshMiniRunsBar();
@@ -674,7 +680,7 @@
 
         function onMiniRunChipClick(runId) {
             if (runId === currentReportId) {
-                applyHistoryState(2);
+                applyHistoryState(3);
             } else {
                 selectHistoryRun(runId);
             }
@@ -850,7 +856,7 @@
                 iframe.src = '/interactive_console.html?dataUrl=' + encodeURIComponent(dataUrl);
             }
 
-            applyHistoryState(4);
+            applyHistoryState(3);
 
             // Populate the mini history strip with bubbles for this test across all runs
             renderMiniHistoryStrip(testName, reportId);
@@ -1032,7 +1038,7 @@
 
             const runQueueBtn = document.getElementById('runQueueBtn');
             if (runQueueBtn) {
-                const countSpan = runQueueBtn.querySelector('span');
+                const countSpan = runQueueBtn.querySelector('.badge-count');
                 if (countSpan) {
                     countSpan.textContent = selectedDatasets.length;
                 }
@@ -1069,6 +1075,21 @@
             }
         }
 
+        function setChatPrompt(promptText) {
+            const input = document.getElementById('chatInput');
+            if (input) {
+                input.value = promptText;
+                const form = input.closest('form');
+                if (form) {
+                    if (typeof htmx !== 'undefined') {
+                        htmx.trigger(form, 'submit');
+                    } else {
+                        form.submit();
+                    }
+                }
+            }
+        }
+
         function clearChatInput() {
             const input = document.getElementById('chatInput');
             const prompt = input.value.trim();
@@ -1077,14 +1098,14 @@
             const chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 const userBubble = document.createElement('div');
-                userBubble.className = 'chat-message user';
-                userBubble.innerHTML = `<div class="sender">You</div><div class="text">${escapeHtml(prompt)}</div>`;
+                userBubble.className = 'chat-message user message-user';
+                userBubble.innerHTML = `<div class="chat-message-header"><div class="avatar user-avatar"><i class="fa-solid fa-user"></i></div><span class="sender">You</span></div><div class="text">${escapeHtml(prompt)}</div>`;
                 chatMessages.appendChild(userBubble);
 
                 const thinkingBubble = document.createElement('div');
-                thinkingBubble.className = 'chat-message ai thinking-bubble';
+                thinkingBubble.className = 'chat-message ai message-ai thinking-bubble';
                 thinkingBubble.innerHTML = `
-                    <div class="sender">Aura Assistant</div>
+                    <div class="chat-message-header"><div class="avatar ai-avatar"><i class="fa-solid fa-robot"></i></div><span class="sender">Aura Assistant</span></div>
                     <div class="typing-indicator"><span></span><span></span><span></span></div>
                 `;
                 chatMessages.appendChild(thinkingBubble);

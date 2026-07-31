@@ -55,7 +55,9 @@
                     
                     <!-- Insert Run Queue Panel Fragment -->
                     <div class="panel">
-                        <div class="panel-header">Run Queue</div>
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fa-solid fa-list-ol" style="color: var(--accent);"></i> <span>Run Queue</span></div>
+                        </div>
                         <div class="content-scroll">
                             <div class="queue-list" id="queueListContainer" th:fragment="queueListContainer">
                                 <div th:replace="~{fragments/queue :: queueListContainerContent}"></div>
@@ -109,7 +111,9 @@
             
             <!-- Insert Configuration Panel Fragment -->
             <div class="panel config-container">
-                <div class="panel-header">Run Configuration</div>
+                <div class="panel-header">
+                    <div class="panel-title"><i class="fa-solid fa-sliders" style="color: var(--accent);"></i> <span>Run Configuration</span></div>
+                </div>
                 <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel">
                     <div th:replace="~{fragments/queue :: configPanelContent}"></div>
                 </div>

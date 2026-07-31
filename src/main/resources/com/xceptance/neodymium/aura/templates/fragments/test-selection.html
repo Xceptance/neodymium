@@ -5,11 +5,11 @@
 -->
 <div class="panel" th:fragment="testSelectionContent">
     <div class="panel-header">
-        <span>Test Selection</span>
+        <div class="panel-title"><i class="fa-solid fa-list-check" style="color: var(--accent);"></i> <span>Test Selection</span></div>
         <button class="btn-edit neo-u-8" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="outerHTML" title="Refresh Files"><i class="fa-solid fa-rotate-right"></i></button>
     </div>
-    <div class="search-container" style="padding: 10px 12px 0 12px; margin-bottom: 0;">
-        <i class="fa-solid fa-magnifying-glass"></i>
+    <div class="search-container">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
         <input type="text" id="testSearchInput" name="q" placeholder="Search test cases..."
                class="search-input"
                hx-get="/api/files/search" hx-trigger="keyup changed delay:200ms, search"
@@ -18,8 +18,8 @@
     <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList">
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
     </div>
-    <div class="neo-u-9">
-        <button class="btn-edit neo-u-10" id="openModalBtn" hx-get="/api/modals/create" hx-target="#modalContainer" hx-swap="innerHTML">
+    <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border);">
+        <button class="btn-edit" id="openModalBtn" hx-get="/api/modals/create" hx-target="#modalContainer" hx-swap="innerHTML" style="width: 100%; justify-content: center; padding: 8px; font-weight: 500;">
             <i class="fa-solid fa-plus"></i> Create New Test
         </button>
     </div>

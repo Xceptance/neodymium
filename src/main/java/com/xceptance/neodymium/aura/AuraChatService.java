@@ -88,7 +88,7 @@ public final class AuraChatService
                 {
                     stage1Messages.add(UserMessage.from(msg.content));
                 }
-                else if ("assistant".equalsIgnoreCase(msg.role))
+                else if ("assistant".equalsIgnoreCase(msg.role) || "ai".equalsIgnoreCase(msg.role))
                 {
                     stage1Messages.add(AiMessage.from(msg.content));
                 }
@@ -102,7 +102,7 @@ public final class AuraChatService
         String intent = "neither";
         try
         {
-            final Map<?, ?> result = AuraHttpUtils.gson.fromJson(stage1Response, Map.class);
+            final Map<?, ?> result = AuraHttpUtils.gson.fromJson(cleanJsonResponse(stage1Response), Map.class);
             if (result != null && result.containsKey("intent"))
             {
                 intent = String.valueOf(result.get("intent"));
@@ -194,7 +194,7 @@ public final class AuraChatService
                     {
                         editMessages.add(UserMessage.from(msg.content));
                     }
-                    else if ("assistant".equalsIgnoreCase(msg.role))
+                    else if ("assistant".equalsIgnoreCase(msg.role) || "ai".equalsIgnoreCase(msg.role))
                     {
                         editMessages.add(AiMessage.from(msg.content));
                     }
@@ -207,7 +207,7 @@ public final class AuraChatService
 
             try
             {
-                final Map<?, ?> editResult = AuraHttpUtils.gson.fromJson(editorResponse, Map.class);
+                final Map<?, ?> editResult = AuraHttpUtils.gson.fromJson(cleanJsonResponse(editorResponse), Map.class);
                 final String status = String.valueOf(editResult.get("status"));
                 final String message = String.valueOf(editResult.get("message"));
 
@@ -295,7 +295,7 @@ public final class AuraChatService
                     {
                         conversation.add(UserMessage.from(msg.content));
                     }
-                    else if ("assistant".equalsIgnoreCase(msg.role))
+                    else if ("assistant".equalsIgnoreCase(msg.role) || "ai".equalsIgnoreCase(msg.role))
                     {
                         conversation.add(AiMessage.from(msg.content));
                     }
@@ -314,7 +314,7 @@ public final class AuraChatService
 
                 try
                 {
-                    final Map<?, ?> selResult = AuraHttpUtils.gson.fromJson(responseText, Map.class);
+                    final Map<?, ?> selResult = AuraHttpUtils.gson.fromJson(cleanJsonResponse(responseText), Map.class);
                     final String status = String.valueOf(selResult.get("status"));
                     final String message = String.valueOf(selResult.get("message"));
 
@@ -414,7 +414,7 @@ public final class AuraChatService
                     {
                         fallbackMessages.add(UserMessage.from(msg.content));
                     }
-                    else if ("assistant".equalsIgnoreCase(msg.role))
+                    else if ("assistant".equalsIgnoreCase(msg.role) || "ai".equalsIgnoreCase(msg.role))
                     {
                         fallbackMessages.add(AiMessage.from(msg.content));
                     }
@@ -426,7 +426,7 @@ public final class AuraChatService
             String message = fallbackResponse;
             try
             {
-                final Map<?, ?> fallbackResult = AuraHttpUtils.gson.fromJson(fallbackResponse, Map.class);
+                final Map<?, ?> fallbackResult = AuraHttpUtils.gson.fromJson(cleanJsonResponse(fallbackResponse), Map.class);
                 if (fallbackResult != null && fallbackResult.containsKey("message"))
                 {
                     message = String.valueOf(fallbackResult.get("message"));
@@ -438,5 +438,27 @@ public final class AuraChatService
             }
             return new ChatResponse(message, thinkingLog.toString(), null, null, null, null, null);
         }
+    }
+
+    private static String cleanJsonResponse(final String response)
+    {
+        if (response == null)
+        {
+            return "";
+        }
+        String cleaned = response.trim();
+        if (cleaned.startsWith("```json"))
+        {
+            cleaned = cleaned.substring(7);
+        }
+        else if (cleaned.startsWith("```"))
+        {
+            cleaned = cleaned.substring(3);
+        }
+        if (cleaned.endsWith("```"))
+        {
+            cleaned = cleaned.substring(0, cleaned.length() - 3);
+        }
+        return cleaned.trim();
     }
 }

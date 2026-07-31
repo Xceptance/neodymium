@@ -78,7 +78,7 @@
             "classes": "chat-input",
             "name": "prompt",
             "id": "chatInput",
-            "placeholder": "Ask Aura...",
+            "placeholder": "Ask Aura anything about your tests...",
             "tagName": "input",
             "type": "text"
           },
@@ -139,29 +139,31 @@
       "actions": [
         {
           "type": "WAIT",
-          "target": "div[data-neo-ref\u003d\"xc_b4g137\"] \u003e div.ai-message:last-child",
+          "target": "#chatContainer",
           "value": [
             "20000"
           ],
-          "description": "Wait for the last chat message from the AI to appear in the chat container",
-          "elementDetails": "Last AI chat message",
+          "description": "Wait for the chat container to update with the AI\u0027s response",
+          "elementDetails": "chatContainer",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
-          "frameId": "win_0:main",
           "adjust": false
         },
         {
           "type": "ASSERT",
-          "target": "div[data-neo-ref",
-          "description": "",
+          "target": "#chatContainer",
+          "value": [
+            "Aura Assistant"
+          ],
+          "description": "Assert that the last chat message is from the AI by checking for \u0027Aura Assistant\u0027 in the chat container, assuming the AI\u0027s response will",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "800180100410e61006100410c410041804108410841104190411d01004100010",
+      "screenshotHash": "8001001004100610c610061004100811841004100411d4190411041054100010",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

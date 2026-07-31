@@ -24,7 +24,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,11 +49,13 @@ public final class AuraChatSessionService
 
     private final File chatHistoryDir;
     private final Gson gson;
+    private final Map<String, ChatSessionDto> sessionCache;
 
     public AuraChatSessionService()
     {
         this.chatHistoryDir = new File(System.getProperty("user.dir"), "chat-history");
         this.gson = new GsonBuilder().setPrettyPrinting().create();
+        this.sessionCache = new ConcurrentHashMap<>();
         ensureDirectoryExists();
     }
 
@@ -83,7 +87,16 @@ public final class AuraChatSessionService
                     final ChatSessionDto session = this.gson.fromJson(content, ChatSessionDto.class);
                     if (session != null && session.id != null)
                     {
-                        sessions.add(session);
+                        final ChatSessionDto cached = this.sessionCache.get(session.id);
+                        if (cached != null)
+                        {
+                            sessions.add(cached);
+                        }
+                        else
+                        {
+                            this.sessionCache.put(session.id, session);
+                            sessions.add(session);
+                        }
                     }
                 }
                 catch (final Exception e)
@@ -115,6 +128,11 @@ public final class AuraChatSessionService
             return getSessions().get(0);
         }
 
+        if (this.sessionCache.containsKey(id))
+        {
+            return this.sessionCache.get(id);
+        }
+
         final File file = new File(this.chatHistoryDir, id + ".json");
         if (file.exists())
         {
@@ -124,6 +142,7 @@ public final class AuraChatSessionService
                 final ChatSessionDto session = this.gson.fromJson(content, ChatSessionDto.class);
                 if (session != null)
                 {
+                    this.sessionCache.put(session.id, session);
                     return session;
                 }
             }
@@ -147,6 +166,7 @@ public final class AuraChatSessionService
         final String id = "s-" + UUID.randomUUID().toString().substring(0, 8) + "-" + System.currentTimeMillis();
         
         final ChatSessionDto session = new ChatSessionDto(id, cleanName, new ArrayList<>());
+        this.sessionCache.put(session.id, session);
         persistSession(session);
         return session;
     }
@@ -177,6 +197,7 @@ public final class AuraChatSessionService
             return;
         }
 
+        this.sessionCache.remove(id);
         final File file = new File(this.chatHistoryDir, id + ".json");
         if (file.exists())
         {
