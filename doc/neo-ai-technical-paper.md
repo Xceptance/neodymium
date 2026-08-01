@@ -102,9 +102,9 @@ To prevent LLM validation hallucinations during exact arithmetic or complex data
 * **Data Formatting & Normalization:** Standardizes localized currency strings (e.g., `14,96 €` -> `14.96`) and custom string transformations before/after step execution.
 * **Explicit Guardrails:** Ensures only explicitly exposed helper methods can be invoked by the test execution pipeline.
 
-### 2.4 Automated Visual Assertions & Soft Warning Gates
+### 2.4 Automated Visual Assertions & Secret Sanitization
 
-* **Perceptual dHash Verification:** During compilation, a dHash fingerprint of the target element or viewport screenshot is generated and saved. Replays evaluate the Hamming distance locally without LLM calls, delivering also visual regression testing at zero cost.
+* **Perceptual dHash Verification:** During compilation, a dHash fingerprint of the target element or viewport screenshot is generated and saved. Replays evaluate the Hamming distance locally without LLM calls, delivering visual regression testing at zero cost.
 * **Secret Sanitization:** Automatically masks passwords, tokens, and PII before transmitting DOM data to LLMs or saving playbooks to disk.
 
 ---
