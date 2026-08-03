@@ -103,4 +103,27 @@ public final class PesapPromptTest
         assertFalse(result.requiresJavaMethods());
         assertTrue(result.splitSteps().isEmpty());
     }
+
+    /**
+     * Verifies that context window bounds next steps to max 3 and truncates excessively long instructions.
+     */
+    @Test
+    public void testCompileUserMessage_boundedContextAndLength()
+    {
+        final String longInstruction = "A".repeat(1000);
+        final PesapPrompt prompt = new PesapPrompt(
+            longInstruction,
+            "Previous step",
+            List.of("Next 1", "Next 2", "Next 3", "Next 4 overflow")
+        );
+
+        final String userMessage = prompt.compileUserMessage(new ExecutionContext(null));
+
+        assertNotNull(userMessage);
+        assertTrue(userMessage.contains("Next 1"));
+        assertTrue(userMessage.contains("Next 2"));
+        assertTrue(userMessage.contains("Next 3"));
+        assertFalse(userMessage.contains("Next 4 overflow"), "Next step list should be bounded to 3 next steps.");
+        assertFalse(userMessage.contains("A".repeat(600)), "Instruction should be truncated to prevent context bloat.");
+    }
 }

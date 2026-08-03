@@ -83,23 +83,43 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
         final StringBuilder sb = new StringBuilder();
         if (this.previousInstruction != null && !this.previousInstruction.isBlank())
         {
-            sb.append("[PREVIOUS] Step: ").append(this.previousInstruction).append("\n");
+            sb.append("[PREVIOUS] Step: ").append(truncateInstruction(this.previousInstruction)).append("\n");
         }
-        sb.append("[CURRENT]  Step: ").append(this.currentInstruction).append("\n");
-        int index = 1;
+        if (this.currentInstruction != null && !this.currentInstruction.isBlank())
+        {
+            sb.append("[CURRENT]  Step: ").append(truncateInstruction(this.currentInstruction)).append("\n");
+        }
+
+        int count = 0;
         for (final String next : this.nextInstructions)
         {
             if (next != null && !next.isBlank())
             {
-                sb.append("[NEXT]     Step: ").append(next).append("\n");
-                if (++index > 2)
+                count++;
+                sb.append("[NEXT]     Step: ").append(truncateInstruction(next)).append("\n");
+                if (count >= 3)
                 {
-                    break; // Max 2 next steps as context
+                    break; // Max 3 next steps as context
                 }
             }
         }
         return "## Flow Context\n" + sb.toString();
     }
+
+    private static String truncateInstruction(final String instruction)
+    {
+        if (instruction == null)
+        {
+            return "";
+        }
+        final String trimmed = instruction.trim();
+        if (trimmed.length() > 500)
+        {
+            return trimmed.substring(0, 500) + "... [TRUNCATED]";
+        }
+        return trimmed;
+    }
+
 
     @Override
     public PesapResult parseResponse(final String rawContent, final ExecutionContext context) throws Exception
