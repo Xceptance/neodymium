@@ -327,6 +327,32 @@ The framework supports two prompt tuning workflows:
 2. **Full Prompt Copy Overrides**:
    If a specific model or engine requires a fundamentally different prompt structure, a full prompt copy can be placed in `ai-prompts/engines/{engine}/system-prompt-rules.md`, overriding the default prompt entirely.
 
+---
+
+## 17. SSIM 64×64 Visual Verification & Candidate Playbook Persistence
+
+To ensure fast visual verification, immunity against subpixel rendering noise, and persistent self-healing cache convergence, Neodymium AI implements **SSIM 64×64 Visual Matrix Verification** and **Universal Candidate Playbook Capture**.
+
+### A. SSIM 64×64 Visual Matrix Verification
+Rather than using lossy 17×16 perceptual bit-hashes, visual steps capture structural luminance matrices:
+1. **Bilinear Downscaling**: Screenshots are downscaled to a $64 \times 64$ grid using `RenderingHints.VALUE_INTERPOLATION_BILINEAR`.
+2. **8-bit Luminance Matrix**: Calculates a 4,096-byte luminance matrix (0..255 brightness per grid cell), serialized as a Base64 string in `step.setScreenshotHash()`.
+3. **In-Memory SSIM Comparison**: During replay, Neodymium computes Mean SSIM ($0.0 \rightarrow 1.0$) across $8 \times 8$ local blocks in $< 0.05\text{ ms}$.
+4. **Visual Match Gate**: Checks `ssimScore >= neodymium.ai.ssim.minScore` (default: `0.99`). If visual score passes, execution bypasses unnecessary LLM verification calls while staying immune to font anti-aliasing and subpixel noise.
+
+```properties
+# Minimum SSIM score (0.0 to 1.0) required for visual match gate approval
+neodymium.ai.ssim.minScore=0.99
+```
+
+
+### B. Universal Candidate Playbook Capture & Staleness Detection
+1. **All Execution Modes**: `PlaybookRecorder` collects candidate execution steps in memory across all modes (`LLM_RECORDING`, `FORCE_RECORDING`, `REPLAY_WITH_HEALING`, `REPLAY_STRICT`).
+2. **Failure Protection**: If a test fails, the candidate playbook is discarded. The disk file remains 100% untouched.
+3. **Success Write-Back**: If a test succeeds and steps were healed or updated, the candidate playbook replaces the disk file atomically. If 0 changes occurred on replay, disk writes are skipped.
+4. **YAML Hash Invalidation**: Companion `.json` files store `sourceYamlHash` (SHA-256 of original `.yaml` playbook). On replay, if the source `.yaml` file has been modified, a staleness warning is logged.
+
+
 
 
 

@@ -649,53 +649,78 @@ public final class ExecuteActionsStep implements PipelineStep
                         contextState.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
 
                         String currentHash = null;
+                        String currentSsimMatrix = null;
                         if (currentState != null && currentState.getAttachments() != null)
                         {
                             for (final SutAttachment attachment : currentState.getAttachments())
                             {
                                 if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                                 {
+                                    currentSsimMatrix = org.neodymium.ai.util.ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
                                     currentHash = org.neodymium.ai.util.ScreenshotHasher.computeHash(attachment.base64Data());
                                     break;
                                 }
                             }
                         }
 
-                        if (currentHash != null)
+                        if (step.getScreenshotHash() != null)
                         {
-                            final int distance = org.neodymium.ai.util.ScreenshotHasher.getHammingDistance(step.getScreenshotHash(), currentHash);
+                            boolean isVisualMatch = false;
+                            final String recordedHash = step.getScreenshotHash();
+                            if (recordedHash.length() > 64 && currentSsimMatrix != null)
+                            {
+                                final double ssimScore = org.neodymium.ai.util.ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
+                                final double minScore = new org.neodymium.ai.config.AiConfiguration().getDouble("neodymium.ai.ssim.minScore", 0.99);
+                                if (ssimScore >= minScore)
+
+                                {
+                                    isVisualMatch = true;
+                                    org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).info(
+                                        "   ✅ Visual SSIM match (score: {} >= {}) for instruction: \"{}\". Bypassing LLM call/actions.",
+                                        String.format("%.4f", ssimScore), minScore, resolvedInstruction);
+                                }
+                            }
+                            else if (currentHash != null)
+                            {
+                                final int distance = org.neodymium.ai.util.ScreenshotHasher.getHammingDistance(recordedHash, currentHash);
+                                if (distance <= 10)
+                                {
+                                    isVisualMatch = true;
+                                    org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).info(
+                                        "   ✅ Visual dHash match (distance: {} <= 10) for instruction: \"{}\". Bypassing LLM call/actions.",
+                                        distance, resolvedInstruction);
+                                }
+                            }
+
                             final boolean hasActualActions = step.getActions() != null && !step.getActions().isEmpty()
                                 && step.getActions().stream().anyMatch(a -> !"NONE".equalsIgnoreCase(a.getType()));
 
-                            if (distance <= 10 && !hasActualActions)
+                            if (isVisualMatch && !hasActualActions)
                             {
-                                org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).info(
-                                    "   ✅ Visual dHash match (distance: {} <= 10) for instruction: \"{}\". Bypassing LLM call/actions.",
-                                    distance, resolvedInstruction);
-                                // Visual states match perfectly! We can return directly and bypass LLM call and actions!
                                 return;
                             }
                             else
                             {
                                 if (hasActualActions)
                                 {
-                                    if (distance <= 10)
+                                    if (isVisualMatch)
                                     {
                                         org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).info(
-                                            "   Visual dHash match (distance: {} <= 10) for interactive instruction: \"{}\". Executing actions anyway to guarantee state.",
-                                            distance, resolvedInstruction);
+                                            "   Visual match for interactive instruction: \"{}\". Executing actions anyway to guarantee state.",
+                                            resolvedInstruction);
                                     }
                                     else
                                     {
                                         org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).debug(
-                                            "   Visual dHash mismatch (distance: {} > 10) for interactive instruction: \"{}\". Proceeding to execute actions.",
-                                            distance, resolvedInstruction);
+                                            "   Visual mismatch for interactive instruction: \"{}\". Proceeding to execute actions.",
+                                            resolvedInstruction);
                                     }
                                 }
                                 else
                                 {
-                                    final String msg = String.format("Visual dHash mismatch (distance: %d > 10) for instruction: \"%s\".", distance, resolvedInstruction);
+                                    final String msg = String.format("Visual mismatch for instruction: \"%s\".", resolvedInstruction);
                                     org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("   ❌ " + msg);
+
                                     if (mode.supportsHealing())
                                     {
                                         throw new HealingRequiredException(msg);

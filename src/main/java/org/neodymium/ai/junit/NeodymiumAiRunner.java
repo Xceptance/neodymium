@@ -734,13 +734,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 executionContext.getTransientData().put("playbook.programmatic", true);
             }
 
-            if (this.mode.isRecording())
+            final String recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName);
+            if (recordingPath != null)
             {
-                final String recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName);
-
-                final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, recordingPath, playbookSteps);
+                final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, recordingPath, playbookSteps, this.mode);
                 eventBus.registerListener(recorder);
             }
+
 
 
             executionContext.getTransientData().put("playbook.mainSteps", playbookSteps);
