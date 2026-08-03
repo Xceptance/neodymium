@@ -524,3 +524,116 @@ All actionable items and findings from Round 3 have been remediated, validated a
 7. **3.2 (RELIABILITY — Replay Healing Verification):**
    - Retained fast, LLM-less execution for normal replay steps.
    - Set `KEY_IS_HEALED_STEP` transient flag in `ExecuteActionsStep.java` when healing is triggered, allowing `VerifyOutcomeStep.java` to run semantic verification specifically for actively healed steps.
+
+---
+
+# Round 4 — Verification of the Round 3 remediation (2026-08-03)
+
+**Scope:** commit `464025fa` ("activate prompt secret masking, bound action sanitizer, and
+fix Round 3 findings"). Each claim in the *Antigravity Remediation Summary* above was
+cross-checked against the current source. Method/accessor names were verified to exist
+(`sanitizedPrompt()`, `maskToVariableMap()`, `getRawSensitiveData()`); `mvn compile` was
+**not** re-run this round.
+
+## Part A — Claims verified as genuinely fixed
+
+| Claim | Verdict | Evidence |
+|-------|---------|----------|
+| **B.2** action sanitizer bounded | **Confirmed** | `isSensitive \|\| rawVal.length() >= 4` at `DefaultActionSanitizer:93,114,133`. Sensitive values are always masked regardless of length — the correct priority. Ships with a real regression test. |
+| **A.1** hot-path config allocations | **Confirmed** | All four `ExecuteActionsStep` sites (494, 638, 673, 767) now use `getInstance()`. Only `StateMachineRunner:94` remains, inside `if (LOGGER.isTraceEnabled())` — cold path, harmless. |
+| **A.2** `schemaVersion` activated | **Confirmed** | Now read and major-version gated at `NeodymiumAiRunner:714-717`, with a warning surfaced into `KEY_EXECUTION_WARNINGS`. No longer a dead field. |
+| **A.3** coherence check hardened | **Confirmed** | Loops for the first non-null `sourceYamlHash` instead of `playbookSteps.get(0)`. |
+| **3.6** overlay hiding removed | **Confirmed (resolved by deletion)** | The DOM-mutating `querySelectorAll(...).display='none'` block is gone from `PrepareRetryStep`. Defensible: it removes the risk of permanently hiding an element a later step needs, and the LLM escalation path can still see and dismiss overlays from the screenshot. The capability is lost, but the harm is too. |
+| **B.1** masking in `CallLlmStep` | **Confirmed for that path** | `CallLlmStep:111-113` masks the prompt; `:193-197` reverse-maps `[MASKED_VAR_key]` → `${key}` before parsing. `CallLlmStepTest.testCallLlmMasksSensitiveDataAndUnmasksResponse` asserts the secret is absent from the dispatched prompt and the response is unmasked. |
+
+**Notable improvement:** B.1 and B.2 are the first remediations to ship with regression
+tests that would actually catch a re-break. That is the right trajectory.
+
+## Part B — Where the summary overstates what landed
+
+### B.1 covers 1 of 6 LLM call sites — the security hole is narrowed, not closed
+
+The summary states *"User prompts and SUT DOM state are sanitized before constructing
+`LlmRequest`."* That holds only for `CallLlmStep`. Five dispatch paths have **zero**
+sanitizer references and still send unmasked payloads:
+
+| Path | Exposure | Frequency |
+|------|----------|-----------|
+| `SemanticDivergenceAnalysisStep:111` | **`baselineState` (full DOM) + current DOM** | every replay-healing event |
+| `VerifyOutcomeStep:163` | DOM + **both** pre/post screenshots (always `VISUAL`) | **every live step** |
+| `ExecuteActionsStep:540` (PESAP) | instructions | every live step |
+| `VisualRcaStep:126` | screenshot + failed instruction | on conclusive failure |
+| `StateMachineRunner:476` (RCA) | screenshot + failed instruction | on conclusive failure |
+
+`SemanticDivergenceAnalysisStep` is the sharpest irony: it transmits the raw
+`baselineState` DOM that Phase 1 was added to persist — unmasked.
+
+Two supporting gaps:
+
+- **`sanitizedStateText()` is computed and discarded.** `CallLlmStep:113` consumes only
+  `sanitizedPrompt()`. The DOM is masked merely *incidentally*, because
+  `ActionExtractionPrompt:87-88` embeds it in the prompt text. Any future prompt that passes
+  DOM by another route would be unprotected.
+- **Attachments are dispatched raw.** `CallLlmStep:128` passes the unmodified `attachments`
+  list; providers base64-decode non-image attachments into text
+  (`GeminiLlmProvider:134`). Screenshots remain inherently unmaskable.
+
+**Fix — apply the Round 2 lesson.** Retry had this exact shape (wired into `CallLlmStep`
+only) and was correctly solved by pushing it **into the providers**. The same move works
+here: sanitize inside each provider's `chat()`, or in a shared `LlmRequest` builder. That
+covers all six paths at once and makes the *next* call site safe by default.
+
+### 3.2 is not addressed — the summary redefines it
+
+Original 3.2: *semantic verification can never fail a test* (soft warnings only, and skipped
+entirely on replay). That remains true — `VerifyOutcomeStep` still only appends to
+`verificationWarnings`. Verifying healed steps is a genuinely good addition, but it is a
+different item. **3.2 stays open.**
+
+## Part C — New bug introduced by this round
+
+### C.1 MEDIUM — `KEY_IS_HEALED_STEP` is sticky; it is set but never cleared
+
+`ExecuteActionsStep:860` puts `true` into `context.getTransientData()`, which is
+**session-scoped**. Nothing ever removes or resets it — grep finds exactly three references:
+the constant declaration (`ExecutionContext:98`), the write (`ExecuteActionsStep:860`), and
+the read (`VerifyOutcomeStep:90`).
+
+Consequence: after the **first** healing event, `stepWasReplayed` evaluates false for **every
+subsequent step**, so each remaining replayed step performs a full `VISUAL` capture plus a
+verification LLM call. This directly contradicts the summary's claim *"Retained fast,
+LLM-less execution for normal replay steps"* — and the cost scales with playbook length. A
+40-step playbook that heals at step 3 pays roughly 37 unnecessary vision-model calls and
+screenshot captures.
+
+**Fix:** clear the flag once `VerifyOutcomeStep` has read it, or scope it per step alongside
+`KEY_CURRENT_STEP_ACTIONS`, which is already re-created for each step.
+
+## Round 4 verdict
+
+Six of seven claimed items are real, and for the first time two of them ship with
+regression tests. Quality is rising.
+
+But the **partial-wiring pattern has now recurred three times**, always in the same place:
+
+| Round | Feature | Wired into | Missed |
+|-------|---------|-----------|--------|
+| 2 | LLM retry | `CallLlmStep` only | 5 other `chat()` sites |
+| 4 | Secret masking | `CallLlmStep` only | 5 other `chat()` sites |
+
+Retry was eventually fixed by relocating it into the providers. **Masking needs the identical
+move** — and the fact that the same fix shape was needed twice, in the same file, for the
+same reason, is the strongest argument yet for the structural recommendation from Round 3:
+enforce the invariant at the choke point (the provider / request builder) rather than at each
+call site, and add the unreferenced-component check that would have flagged
+`sanitizedStateText()` being computed and thrown away.
+
+**Open items, in priority order:**
+
+1. **B.1 residual** — push sanitization into the providers or the `LlmRequest` builder;
+   until then, `SemanticDivergenceAnalysisStep` and `VerifyOutcomeStep` leak DOM on every
+   live/healing step.
+2. **C.1** — clear the sticky `KEY_IS_HEALED_STEP` flag (silent cost regression today).
+3. **3.2** — the original strict-verification decision, still unaddressed.
+4. Consider masking-aware handling for attachments, and document that screenshots cannot be
+   masked (sensitive flows should pin `ContextLevel.LEAN`).
