@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.prompt;
 
+import java.util.List;
 import java.util.Map;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
@@ -77,10 +78,41 @@ public final class LlmSanitizerHelper
             return original;
         }
 
+        List<org.neodymium.ai.client.SutAttachment> sanitizedAttachments = original.attachments();
+        if (sanitizedAttachments != null && !sanitizedAttachments.isEmpty() && payload.maskToVariableMap() != null && !payload.maskToVariableMap().isEmpty())
+        {
+            final List<org.neodymium.ai.client.SutAttachment> updated = new java.util.ArrayList<>();
+            for (final org.neodymium.ai.client.SutAttachment att : sanitizedAttachments)
+            {
+                if (att.base64Data() != null && att.mediaType() != null && !att.mediaType().startsWith("image/"))
+                {
+                    try
+                    {
+                        String decoded = new String(java.util.Base64.getDecoder().decode(att.base64Data()), java.nio.charset.StandardCharsets.UTF_8);
+                        for (final Map.Entry<String, String> entry : payload.maskToVariableMap().entrySet())
+                        {
+                            decoded = decoded.replace(entry.getValue(), entry.getKey());
+                        }
+                        final String encoded = java.util.Base64.getEncoder().encodeToString(decoded.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        updated.add(new org.neodymium.ai.client.SutAttachment(att.filePath(), encoded, att.mediaType()));
+                    }
+                    catch (final Exception e)
+                    {
+                        updated.add(att);
+                    }
+                }
+                else
+                {
+                    updated.add(att);
+                }
+            }
+            sanitizedAttachments = updated;
+        }
+
         return new LlmRequest(
             original.systemMessage(),
             payload.sanitizedPrompt(),
-            original.attachments(),
+            sanitizedAttachments,
             original.responseSchema(),
             original.temperature(),
             original.timeoutSeconds()
