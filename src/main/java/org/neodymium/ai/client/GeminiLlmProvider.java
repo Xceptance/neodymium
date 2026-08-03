@@ -145,30 +145,32 @@ public final class GeminiLlmProvider implements LlmProvider
 
         messages.add(UserMessage.from(contents));
 
-        try
-        {
-            final ChatModel activeModel = getChatModel(request.temperature(), request.timeoutSeconds());
-            final ChatResponse response = activeModel.chat(messages);
-
-            final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
-            
-            TokenUsage mappedUsage = null;
-            if (usage != null)
+        return LlmRetryHelper.executeWithRetry(() -> {
+            try
             {
-                mappedUsage = new TokenUsage(
-                    usage.inputTokenCount(),
-                    usage.outputTokenCount(),
-                    usage.totalTokenCount(),
-                    extractCachedTokens(usage)
-                );
-            }
+                final ChatModel activeModel = getChatModel(request.temperature(), request.timeoutSeconds());
+                final ChatResponse response = activeModel.chat(messages);
 
-            return new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
-        }
-        catch (final Exception e)
-        {
-            throw new IOException("Failed to execute Gemini chat request: " + e.getMessage(), e);
-        }
+                final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
+
+                TokenUsage mappedUsage = null;
+                if (usage != null)
+                {
+                    mappedUsage = new TokenUsage(
+                        usage.inputTokenCount(),
+                        usage.outputTokenCount(),
+                        usage.totalTokenCount(),
+                        extractCachedTokens(usage)
+                    );
+                }
+
+                return new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
+            }
+            catch (final Exception e)
+            {
+                throw new IOException("Failed to execute Gemini chat request: " + e.getMessage(), e);
+            }
+        });
     }
 
     private int extractCachedTokens(final dev.langchain4j.model.output.TokenUsage usage)
