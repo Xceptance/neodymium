@@ -66,12 +66,6 @@ public class BugIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Click expected bug button #non-existent-button (fails)
         mock.addResponse(new LlmResponse("""
@@ -123,12 +117,6 @@ public class BugIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Click expected bug button #non-existent-button (fails)
         mock.addResponse(new LlmResponse("""
@@ -157,19 +145,13 @@ public class BugIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "clicked"
-            }
-            """, null, "mock"));
 
         runPlaybook(session, """
             data:
               - testId: bugData
             steps: |
               Open ${bug.test.url} in the browser
-              Click the expected bug button #non-existent-button (bug: continue_test) (continue-on-error)
+              Click the expected bug button #non-existent-button (bug: continue_test) (continue-on-error) (no-healing)
               Click the button #btn-click (no-replay)
             """);
 
@@ -198,12 +180,6 @@ public class BugIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Verify that page title is 'All Actions Integration Test Page' (succeeds)
         mock.addResponse(new LlmResponse("""
@@ -216,12 +192,6 @@ public class BugIntegrationTest extends BaseAiTest
                   "reasoning": "Assert title"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "title correct"
             }
             """, null, "mock"));
 
@@ -261,12 +231,6 @@ public class BugIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Verify that page title is 'All Actions Integration Test Page' (succeeds)
         mock.addResponse(new LlmResponse("""
@@ -281,12 +245,6 @@ public class BugIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "title correct"
-            }
-            """, null, "mock"));
 
         // Step 3: Click another button (should run!)
         mock.addResponse(new LlmResponse("""
@@ -299,12 +257,6 @@ public class BugIntegrationTest extends BaseAiTest
                   "reasoning": "Click Me"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "clicked"
             }
             """, null, "mock"));
 
@@ -345,12 +297,6 @@ public class BugIntegrationTest extends BaseAiTest
                   ]
                 }
                 """.formatted(pageUrl), null, "mock"));
-            mock.addResponse(new LlmResponse("""
-                {
-                  "passed": true,
-                  "reasoning": "navigated"
-                }
-                """, null, "mock"));
 
             // Step 2: Split expected bug compound step (PESAP split request)
             mock.addResponse(new LlmResponse("""

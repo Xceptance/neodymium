@@ -370,4 +370,24 @@ public final class AiConfiguration
 
         return patterns;
     }
+
+    /**
+     * Convenience getter for API key.
+     *
+     * @return the configured API key
+     */
+    public String aiApiKey()
+    {
+        return getApiKey("execution");
+    }
+
+    /**
+     * Convenience getter for Aura Manager shutdown delay in seconds.
+     *
+     * @return the shutdown delay in seconds
+     */
+    public int auraManagerShutdownDelay()
+    {
+        return getInt("neodymium.ai.auraManagerShutdownDelay", 5);
+    }
 }

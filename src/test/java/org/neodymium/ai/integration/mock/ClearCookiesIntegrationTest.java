@@ -78,12 +78,6 @@ public class ClearCookiesIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Clear Cookies
         mock.addResponse(new LlmResponse("""
@@ -96,12 +90,6 @@ public class ClearCookiesIntegrationTest extends BaseAiTest
                   "reasoning": "Clear browser cookies"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "cookies cleared"
             }
             """, null, "mock"));
     }
@@ -126,7 +114,8 @@ public class ClearCookiesIntegrationTest extends BaseAiTest
         $("h1").shouldHave(text("Assert Action Test"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_clear_cookies_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_clear_cookies_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

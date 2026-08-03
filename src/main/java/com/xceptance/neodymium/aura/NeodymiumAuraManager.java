@@ -61,17 +61,22 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.xceptance.neodymium.ai.core.LlmClient;
-import com.xceptance.neodymium.ai.core.AiStats;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmProviderFactory;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.TypeAction;
+import org.neodymium.ai.executor.selenide.plugins.NavigateAction;
 import com.xceptance.neodymium.util.Neodymium;
+import org.yaml.snakeyaml.Yaml;
+import java.io.FileInputStream;
+import java.lang.reflect.Method;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.AiMessage;
-import org.yaml.snakeyaml.Yaml;
-import java.io.FileInputStream;
-import java.lang.reflect.Method;
-import com.xceptance.neodymium.ai.action.ActionRegistry;
 
 /**
  * Neodymium Aura Manager: A lightweight standalone web server to browse,
@@ -1718,9 +1723,6 @@ public final class NeodymiumAuraManager
         final StringBuilder thinkingLog = new StringBuilder();
         thinkingLog.append("[AI Intent Classification] Running Stage 1...\n");
 
-        final LlmClient client = new LlmClient(Neodymium.aiConfiguration(), new AiStats());
-
-        // Stage 1: Intent Classifier
         final String stage1SystemPrompt = 
             "You are an AI router for a test automation manager called Neodymium Aura.\n" +
             "Your job is to classify the user's intent into one of the following categories:\n" +
@@ -1734,25 +1736,17 @@ public final class NeodymiumAuraManager
             "  \"reason\": \"Brief reason for classification\"\n" +
             "}";
 
-        final List<ChatMessage> stage1Messages = new ArrayList<>();
-        stage1Messages.add(SystemMessage.from(stage1SystemPrompt));
-        if (req.history != null)
+        final LlmProvider client = LlmProviderFactory.createProvider("execution", new AiConfiguration());
+        LlmResponse response = null;
+        try
         {
-            for (final ChatMessageDto msg : req.history)
-            {
-                if ("user".equalsIgnoreCase(msg.role))
-                {
-                    stage1Messages.add(UserMessage.from(msg.content));
-                }
-                else if ("assistant".equalsIgnoreCase(msg.role))
-                {
-                    stage1Messages.add(AiMessage.from(msg.content));
-                }
-            }
+            response = client.chat(new LlmRequest(stage1SystemPrompt, req.prompt != null ? req.prompt : "", null, null, 0.2, 60));
         }
-        stage1Messages.add(UserMessage.from(req.prompt));
-
-        final String stage1Response = client.chat(stage1Messages);
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to execute LLM request", e);
+        }
+        final String stage1Response = response != null ? response.content() : "{}";
         thinkingLog.append("Stage 1 Response: ").append(stage1Response).append("\n");
 
         String intent = "neither";
@@ -1781,7 +1775,8 @@ public final class NeodymiumAuraManager
             final StringBuilder actionInstructions = new StringBuilder();
             try
             {
-                for (final Object plugin : ActionRegistry.getAllPlugins())
+                final List<Object> plugins = List.of(new ClickAction(), new TypeAction(), new NavigateAction());
+                for (final Object plugin : plugins)
                 {
                     final Method getInstructionsMethod = plugin.getClass().getMethod("getPromptInstructions");
                     final Object instructions = getInstructionsMethod.invoke(plugin);
@@ -1864,7 +1859,16 @@ public final class NeodymiumAuraManager
             }
             editMessages.add(UserMessage.from(req.prompt));
 
-            final String editorResponse = client.chat(editMessages);
+            LlmResponse resp = null;
+            try
+            {
+                resp = client.chat(new LlmRequest(editorSystemPrompt, req.prompt != null ? req.prompt : "", null, null, 0.2, 60));
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to execute LLM request", e);
+            }
+            final String editorResponse = resp != null ? resp.content() : "{}";
             thinkingLog.append("Editor Response: ").append(editorResponse).append("\n");
 
             try
@@ -1976,7 +1980,16 @@ public final class NeodymiumAuraManager
                 iterations++;
                 thinkingLog.append("Escalation Loop Iteration ").append(iterations).append("...\n");
 
-                final String responseText = client.chat(conversation);
+                LlmResponse resp = null;
+                try
+                {
+                    resp = client.chat(new LlmRequest(selectionSystemPrompt, req.prompt != null ? req.prompt : "", null, null, 0.2, 60));
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.error("Failed to execute LLM request", e);
+                }
+                final String responseText = resp != null ? resp.content() : "{}";
                 thinkingLog.append("Response: ").append(responseText).append("\n");
 
                 try
@@ -2083,7 +2096,16 @@ public final class NeodymiumAuraManager
             }
             fallbackMessages.add(UserMessage.from(req.prompt));
 
-            final String fallbackResponse = client.chat(fallbackMessages);
+            LlmResponse resp = null;
+            try
+            {
+                resp = client.chat(new LlmRequest(fallbackSystemPrompt, req.prompt != null ? req.prompt : "", null, null, 0.2, 60));
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to execute LLM request", e);
+            }
+            final String fallbackResponse = resp != null ? resp.content() : "{}";
             String message = fallbackResponse;
             try
             {

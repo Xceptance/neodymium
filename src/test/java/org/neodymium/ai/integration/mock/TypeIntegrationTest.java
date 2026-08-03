@@ -48,7 +48,7 @@ import org.neodymium.ai.session.AiSession;
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", name = "custom_type_playbook")
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_type_playbook")
 public class TypeIntegrationTest extends BaseAiTest
 {
 
@@ -79,12 +79,6 @@ public class TypeIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Type
         mock.addResponse(new LlmResponse("""
@@ -99,16 +93,10 @@ public class TypeIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "text entered"
-            }
-            """, null, "mock"));
     }
 
     /**
-     * Tests Type action.
+     * Tests TYPE action plugin execution.
      *
      * @param session the thread-isolated AiSession
      */
@@ -127,8 +115,9 @@ public class TypeIntegrationTest extends BaseAiTest
         $("#first-name").shouldHave(value("John"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_type_playbook.json");
-        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_type_playbook_" + browserProfile + ".json");
+        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk: " + recordingFile.getPath());
         try
         {
             final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);

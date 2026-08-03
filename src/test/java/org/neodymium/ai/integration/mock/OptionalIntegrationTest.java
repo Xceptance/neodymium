@@ -76,12 +76,6 @@ public class OptionalIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Click optional non-existent button (CLICK)
         mock.addResponse(new LlmResponse("""
@@ -94,14 +88,6 @@ public class OptionalIntegrationTest extends BaseAiTest
                   "reasoning": "Click the non-existent button"
                 }
               ]
-            }
-            """, null, "mock"));
-        
-        // Let verification fail to simulate a real failure
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": false,
-              "reasoning": "Element not found"
             }
             """, null, "mock"));
     }
@@ -125,7 +111,8 @@ public class OptionalIntegrationTest extends BaseAiTest
 
         // The playbook run should have bypassed the failing optional step silently and completed.
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_optional_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_optional_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

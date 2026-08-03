@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
 import com.google.common.collect.ImmutableMap;
-import com.xceptance.neodymium.ai.core.AiBrowser;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.WorkInProgress;
 import com.xceptance.neodymium.common.browser.BrowserData;
@@ -177,8 +176,6 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                 // Set the exact unified test name before any setup
                 Neodymium.setTestName(getTestClass().getJavaClass().getCanonicalName() + " :: " + method.getName());
 
-                // Initialize AiBrowser
-                Neodymium.setAiBrowser(new AiBrowser(finalTestClassInstance));
                 boolean success = true;
                 try
                 {
@@ -191,17 +188,6 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
                 }
                 finally
                 {
-                    AiBrowser aiBrowser = Neodymium.ai();
-                    if (aiBrowser != null)
-                    {
-                        aiBrowser.close();
-                    }
-                    
-                    // Save Playbook on success
-                    com.xceptance.neodymium.ai.playbook.Playbook playbook = Neodymium.getAiPlaybook();
-                    if (playbook != null && playbook.isChanged() && success) {
-                        com.xceptance.neodymium.ai.playbook.PlaybookManager.savePlaybook(playbook);
-                    }
                 }
             }
         };

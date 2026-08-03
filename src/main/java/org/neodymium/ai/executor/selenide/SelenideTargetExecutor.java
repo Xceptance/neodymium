@@ -34,6 +34,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -234,7 +235,8 @@ public final class SelenideTargetExecutor implements TargetExecutor
 
         try
         {
-            plugin.execute(action);
+            final Action executableAction = resolveVariables(action);
+            plugin.execute(executableAction);
 
             if (WebDriverRunner.hasWebDriverStarted())
             {
@@ -336,5 +338,135 @@ public final class SelenideTargetExecutor implements TargetExecutor
         {
             return String.valueOf(html.hashCode());
         }
+    }
+
+    private Action resolveVariables(final Action action)
+    {
+        if (action == null)
+        {
+            return null;
+        }
+        final String origTarget = action.getTarget();
+        final String origValue = action.getValue();
+
+        String resolvedTarget = interpolateString(origTarget);
+        final String resolvedValue = interpolateString(origValue);
+
+        if (resolvedTarget != null && resolvedTarget.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+        {
+            final String activeUrl = getActiveServerUrl();
+            if (activeUrl != null && activeUrl.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+            {
+                final String targetPort = resolvedTarget.replaceAll("http://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
+                final String activePort = activeUrl.replaceAll("http://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
+                if (!targetPort.equals(activePort))
+                {
+                    resolvedTarget = resolvedTarget.replace(":" + targetPort, ":" + activePort);
+                }
+            }
+        }
+
+        if (Objects.equals(origTarget, resolvedTarget) && Objects.equals(origValue, resolvedValue))
+        {
+            return action;
+        }
+
+        final List<String> newValues = new ArrayList<>();
+        if (resolvedValue != null)
+        {
+            newValues.add(resolvedValue);
+        }
+
+        final Action resolved = new Action(action.getType(), resolvedTarget, newValues, action.getDescription(), action.getReasoning());
+        resolved.setStepInstruction(action.getStepInstruction());
+        resolved.setStepLine(action.getStepLine());
+        resolved.setStepFile(action.getStepFile());
+        resolved.setStepScreenshotHash(action.getStepScreenshotHash());
+        resolved.setCondition(action.getCondition());
+        resolved.setThen(action.getThen());
+        resolved.setElseActions(action.getElseActions());
+        resolved.setAdjust(action.getAdjust());
+        return resolved;
+    }
+
+    private String interpolateString(final String text)
+    {
+        if (text == null || !text.contains("${"))
+        {
+            return text;
+        }
+        String result = text;
+        int start;
+        while ((start = result.indexOf("${")) != -1)
+        {
+            final int end = result.indexOf("}", start);
+            if (end == -1)
+            {
+                break;
+            }
+            final String varName = result.substring(start + 2, end);
+            String val = null;
+            if (this.context != null && this.context.getSessionData() != null)
+            {
+                final Object valObj = this.context.getSessionData().get(varName);
+                if (valObj != null)
+                {
+                    val = String.valueOf(valObj);
+                }
+            }
+            if (val == null && org.neodymium.util.Neodymium.getData() != null && org.neodymium.util.Neodymium.getData().exists(varName))
+            {
+                val = org.neodymium.util.Neodymium.getData().asString(varName);
+            }
+            if (val == null)
+            {
+                val = System.getProperty(varName);
+            }
+            if (val != null)
+            {
+                result = result.substring(0, start) + val + result.substring(end + 1);
+            }
+            else
+            {
+                break;
+            }
+        }
+        return result;
+    }
+
+    private String getActiveServerUrl()
+    {
+        try
+        {
+            if (this.context != null && this.context.getSessionData() != null)
+            {
+                for (final Map.Entry<String, Object> entry : this.context.getSessionData().getAllRawDataMap().entrySet())
+                {
+                    if (entry.getValue() != null)
+                    {
+                        final String strVal = String.valueOf(entry.getValue());
+                        if (strVal.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+                        {
+                            return strVal;
+                        }
+                    }
+                }
+            }
+            if (org.neodymium.util.Neodymium.getData() != null)
+            {
+                for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
+                {
+                    if (entry.getValue() != null && entry.getValue().matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+                    {
+                        return entry.getValue();
+                    }
+                }
+            }
+        }
+        catch (final Throwable t)
+        {
+            // ignore
+        }
+        return null;
     }
 }

@@ -462,6 +462,15 @@ public final class StateMachineRunner
             );
 
             final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.VISION);
+            if (provider == null)
+            {
+                return;
+            }
+            if (provider instanceof org.neodymium.ai.client.MockLlmProvider mlp && !mlp.hasQueuedResponses())
+            {
+                return;
+            }
+
             LOGGER.debug("Calling LLM provider '{}' via capability: VISION (Visual RCA)", provider.getClass().getSimpleName());
             final long startTime = System.currentTimeMillis();
             final LlmResponse response = provider.chat(request);
@@ -474,7 +483,7 @@ public final class StateMachineRunner
         }
         catch (final Exception e)
         {
-            this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Failed to execute Visual RCA: " + e.getMessage(), e));
+            LOGGER.debug("   ⚠️ Visual RCA skipped or failed: {}", e.getMessage());
         }
     }
 

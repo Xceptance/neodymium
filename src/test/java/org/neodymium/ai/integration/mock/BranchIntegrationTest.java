@@ -80,12 +80,6 @@ public class BranchIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Branch
         mock.addResponse(new LlmResponse("""
@@ -116,12 +110,6 @@ public class BranchIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "branch evaluated"
-            }
-            """, null, "mock"));
     }
 
     /**
@@ -144,7 +132,8 @@ public class BranchIntegrationTest extends BaseAiTest
         $("#result").shouldHave(text("Cookies Accepted!"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_branch_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_branch_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {
@@ -196,12 +185,6 @@ public class BranchIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         mock.addResponse(new LlmResponse("""
             {
@@ -229,12 +212,6 @@ public class BranchIntegrationTest extends BaseAiTest
                   ]
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "branch evaluated"
             }
             """, null, "mock"));
 
@@ -300,12 +277,6 @@ public class BranchIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         mock.addResponse(new LlmResponse("""
             {
@@ -333,12 +304,6 @@ public class BranchIntegrationTest extends BaseAiTest
                   ]
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "branch evaluated"
             }
             """, null, "mock"));
 
@@ -417,12 +382,6 @@ public class BranchIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         mock.addResponse(new LlmResponse("""
             {
@@ -458,12 +417,6 @@ public class BranchIntegrationTest extends BaseAiTest
                   ]
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "branch evaluated"
             }
             """, null, "mock"));
 
@@ -515,12 +468,6 @@ public class BranchIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         mock.addResponse(new LlmResponse("""
             {
@@ -556,12 +503,6 @@ public class BranchIntegrationTest extends BaseAiTest
                   ]
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "branch evaluated"
             }
             """, null, "mock"));
 

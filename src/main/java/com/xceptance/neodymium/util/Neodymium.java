@@ -20,13 +20,7 @@ import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.ai.config.AiConfiguration;
-import com.xceptance.neodymium.ai.core.AiBrowser;
-import com.xceptance.neodymium.ai.core.AiExecutionResult;
-import com.xceptance.neodymium.ai.core.AiTestRunResult;
-import com.xceptance.neodymium.ai.generator.InteractiveHud;
-import com.xceptance.neodymium.ai.playbook.Playbook;
-import com.xceptance.neodymium.ai.playbook.PlaybookManager;
+import org.neodymium.ai.config.AiConfiguration;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 import com.xceptance.neodymium.common.testdata.TestData;
@@ -44,14 +38,6 @@ public class Neodymium
     // keep our current WebDriver state
     private WebDriverStateContainer webDriverStateContainer;
 
-    // keep our current AiBrowser instance
-    private AiBrowser aiBrowser;
-
-    // keep our active AI Playbook instance
-    private Playbook activeAiPlaybook;
-
-    // keep our interactive HUD instance
-    private InteractiveHud interactiveHud;
 
     // keep our current browser profile name
     private String browserProfileName;
@@ -99,7 +85,7 @@ public class Neodymium
             ConfigFactory.setProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:this/path/should/never/exist/noOneShouldCreateMe.properties");
         }
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
-        aiConfiguration = ConfigFactory.create(AiConfiguration.class, System.getProperties(), System.getenv());
+        aiConfiguration = new AiConfiguration();
         localization = NeodymiumLocalization.build(configuration.localizationFile());
     }
 
@@ -382,94 +368,6 @@ public class Neodymium
         getContext().testdataSourceFile = testdataSourceFile;
     }
 
-    /**
-     * Get the current AiBrowser instance
-     * 
-     * @return aiBrowser
-     */
-    public static AiBrowser ai()
-    {
-        return getContext().aiBrowser;
-    }
-
-    /**
-     * Set the current AiBrowser instance.<br>
-     * <b>Attention:</b> This function is mainly used to set information within the context internally.
-     * 
-     * @param aiBrowser
-     *            the AiBrowser to set
-     */
-    public static void setAiBrowser(AiBrowser aiBrowser)
-    {
-        getContext().aiBrowser = aiBrowser;
-    }
-
-    public static AiExecutionResult getLastAiExecutionResult()
-    {
-        final AiBrowser ai = ai();
-        return ai == null ? null : ai.getLastExecutionResult();
-    }
-
-    public static AiTestRunResult getLastAiTestRunResult()
-    {
-        final AiBrowser ai = ai();
-        return ai == null ? null : ai.getLastTestRunResult();
-    }
-
-    /**
-     * Get the current active AI Playbook instance
-     * 
-     * @return playbook
-     */
-    public static Playbook getAiPlaybook()
-    {
-        return getContext().activeAiPlaybook;
-    }
-
-    /**
-     * Set the current active AI Playbook instance
-     * 
-     * @param playbook
-     *            the Playbook to set
-     */
-    public static void setAiPlaybook(Playbook playbook)
-    {
-        getContext().activeAiPlaybook = playbook;
-    }
-
-    /**
-     * Get the current InteractiveHud instance
-     * 
-     * @return interactiveHud
-     */
-    public static InteractiveHud getInteractiveHud()
-    {
-        return getContext().interactiveHud;
-    }
-
-    /**
-     * Get or create the InteractiveHud instance
-     * 
-     * @return interactiveHud
-     */
-    public static InteractiveHud getOrCreateInteractiveHud()
-    {
-        if (getContext().interactiveHud == null) {
-            getContext().interactiveHud = new InteractiveHud();
-        }
-        return getContext().interactiveHud;
-    }
-
-    /**
-     * Set the current InteractiveHud instance
-     * 
-     * @param interactiveHud
-     *            the InteractiveHud to set
-     */
-    public static void setInteractiveHud(InteractiveHud interactiveHud)
-    {
-        getContext().interactiveHud = interactiveHud;
-    }
 
     /**
      * Name of the current browser
@@ -875,32 +773,6 @@ public class Neodymium
         }
     }
 
-    public static void initializePlaybook()
-    {
-        Playbook playbook = Neodymium.getAiPlaybook();
-        if (playbook == null)
-        {
-            final String playbookId = getTestName();
-
-            final boolean skipReplay = Neodymium.getData().exists("skipReplay") && Neodymium.getData().asBoolean("skipReplay", false);
-
-            if (!skipReplay)
-            {
-                playbook = PlaybookManager.loadPlaybook(playbookId);
-            }
-
-            if (playbook != null)
-            {
-                playbook.setRecording(false);
-                Neodymium.setAiPlaybook(playbook);
-            }
-            else
-            {
-                playbook = new Playbook(playbookId);
-                Neodymium.setAiPlaybook(playbook);
-            }
-        }
-    }
 
     public static void expectFailure(final String bugId, final Runnable runnable)
     {
@@ -984,7 +856,7 @@ public class Neodymium
      */
     public static void reloadAiConfiguration()
     {
-        getContext().aiConfiguration = ConfigFactory.create(AiConfiguration.class, System.getProperties(), System.getenv());
+        getContext().aiConfiguration = new AiConfiguration();
     }
 
     /**

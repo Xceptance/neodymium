@@ -125,16 +125,34 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     private Action parseActionNode(final JsonNode node)
     {
         final String actionType = node.path("action").asText();
-        String locator = node.path("locator").asText();
-        final String valueStr = node.hasNonNull("value") ? node.path("value").asText() : "";
+        String locator = node.hasNonNull("target") ? node.path("target").asText() : node.path("locator").asText();
+        final List<String> valueList = new ArrayList<>();
+        if (node.hasNonNull("values") && node.path("values").isArray())
+        {
+            for (final JsonNode valNode : node.path("values"))
+            {
+                if (valNode != null && !valNode.isNull())
+                {
+                    valueList.add(valNode.asText());
+                }
+            }
+        }
+        else if (node.hasNonNull("value") && !node.path("value").asText().isEmpty())
+        {
+            valueList.add(node.path("value").asText());
+        }
+        else if (node.hasNonNull("values") && !node.path("values").asText().isEmpty())
+        {
+            valueList.add(node.path("values").asText());
+        }
+
+        final String valueStr = valueList.isEmpty() ? "" : valueList.get(0);
         final String reasoning = node.path("reasoning").asText();
         
         if (actionType.equalsIgnoreCase("NAVIGATE") && locator.isEmpty() && !valueStr.isEmpty())
         {
             locator = valueStr;
         }
-        
-        final List<String> valueList = valueStr.isEmpty() ? Collections.emptyList() : Collections.singletonList(valueStr);
         
         final Action action = new Action(actionType, locator, valueList, "Extracted " + actionType + " action", reasoning);
         

@@ -19,7 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit5.NeodymiumTest;

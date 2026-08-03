@@ -32,7 +32,7 @@ import org.openqa.selenium.By;
  * Evaluates target strings using the following prioritized strategy order:
  * </p>
  * <ol>
- *   <li><b>Neodymium Automation ID (data-neo-ref / xc_...):</b> Direct lookup, followed by dynamic DOM attribute stamping via {@link PageAnalyzer} if absent (essential for offline replay healing).</li>
+ *   <li><b>Neodymium Automation ID (data-ai / xc_...):</b> Direct lookup, followed by dynamic DOM attribute stamping via {@link PageAnalyzer} if absent (essential for offline replay healing).</li>
  *   <li><b>CSS Selector with Smart Button Healing:</b> Standard CSS resolution, falling back to parent-candidate searching if button elements have shifted tag names (e.g., div/span button replacements).</li>
  *   <li><b>XPath Expression:</b> Direct evaluation for explicitly forced or path-structured locators.</li>
  *   <li><b>Link Text Matching:</b> Exact match via {@link By#linkText(String)}.</li>
@@ -406,6 +406,6 @@ public final class SelenideElementFinder
 
     public static By resolveLocator(final String target)
     {
-        return com.xceptance.neodymium.ai.action.LocatorResolver.resolveLocator(target);
+        return LocatorResolver.resolveLocator(target);
     }
 }

@@ -484,12 +484,23 @@ public abstract class AiSession implements AutoCloseable
      * @return a mock execution session
      */
     public static AiSession mock(
+        final ExecutionMode mode,
         final SessionData data,
         final LlmRegistry registry,
         final ExecutionEventBus bus,
         final TargetExecutor executor
     )
     {
-        return new MockSession(data, registry, bus, executor, ExecutionMode.LLM_ONLY);
+        return new MockSession(data, registry, bus, executor, mode != null ? mode : ExecutionMode.LLM_ONLY);
+    }
+
+    public static AiSession mock(
+        final SessionData data,
+        final LlmRegistry registry,
+        final ExecutionEventBus bus,
+        final TargetExecutor executor
+    )
+    {
+        return mock(ExecutionMode.LLM_ONLY, data, registry, bus, executor);
     }
 }

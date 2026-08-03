@@ -185,9 +185,13 @@ public final class ExecuteActionsStep implements PipelineStep
                      sanitized.setStepInstruction(step.getInstruction());
                      sanitized.setStepLine(step.getLineNumber());
                      sanitized.setStepFile(step.getSourceFile());
-                      final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
-                      final boolean isNoReplay = step.isNoReplay();
-                      if (mode != null && (!mode.isReplay() || isNoReplay))
+                     org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+                     if (mode == null && session != null)
+                     {
+                         mode = session.getExecutionMode();
+                     }
+                     final boolean isNoReplay = step.isNoReplay();
+                     if (mode == null || !mode.isReplay() || isNoReplay)
                       {
                           if (isNoReplay && Boolean.TRUE.equals(context.getTransientData().get("KEY_CURRENT_STEP_FIRST_ACTION")))
                           {
@@ -207,13 +211,37 @@ public final class ExecuteActionsStep implements PipelineStep
                     stepActions.add(sanitized);
                 }
 
+                final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
+                Long customTimeoutMs = null;
+                if (rawInstruction != null)
+                {
+                    final java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)").matcher(rawInstruction);
+                    if (m.find())
+                    {
+                        final long parsedVal = Long.parseLong(m.group(1));
+                        final String unit = m.group(2);
+                        customTimeoutMs = "s".equalsIgnoreCase(unit) ? parsedVal * 1000L : parsedVal;
+                    }
+                }
+
+                final long origTimeout = com.codeborne.selenide.Configuration.timeout;
+                if (customTimeoutMs != null)
+                {
+                    com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
+                }
+
                 try
                 {
+                    if (executor instanceof org.neodymium.ai.executor.selenide.SelenideTargetExecutor ste)
+                    {
+                        ste.setExecutionContext(context);
+                    }
                     context.getTransientData().put("currentAction", resolvedAction);
                     executor.execute(resolvedAction);
                 }
                 finally
                 {
+                    com.codeborne.selenide.Configuration.timeout = origTimeout;
                     context.getTransientData().remove("currentAction");
                 }
                 
@@ -235,6 +263,25 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     throw pe;
                 }
+
+                boolean isAssertionFailure = t instanceof AssertionError;
+                Throwable cause = t.getCause();
+                while (!isAssertionFailure && cause != null && cause != t)
+                {
+                    if (cause instanceof AssertionError)
+                    {
+                        isAssertionFailure = true;
+                        break;
+                    }
+                    cause = cause.getCause();
+                }
+
+                if ("ASSERT".equalsIgnoreCase(action.getType()))
+                {
+                    final Throwable finalCause = isAssertionFailure ? t : new AssertionError(failureMsg, t);
+                    throw new ConclusiveFailureException("Assertion failed: " + failureMsg, finalCause);
+                }
+
                 throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription() + " (" + failureMsg + ")", t);
             }
         }
@@ -359,6 +406,7 @@ public final class ExecuteActionsStep implements PipelineStep
             final String rawInstruction = step.getInstruction();
             final String resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
             final String preparedInstruction = prepareInstruction(resolvedInstruction);
+            contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_STEP_ACTIONS, new CopyOnWriteArrayList<Action>());
 
@@ -677,7 +725,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-            final boolean isReplay = mode.isReplay() && !stepNoReplay;
+            final boolean isReplay = mode.isReplay() && !stepNoReplay && step.getActions() != null && !step.getActions().isEmpty();
 
             if (isReplay)
             {

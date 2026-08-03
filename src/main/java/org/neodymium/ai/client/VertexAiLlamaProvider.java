@@ -109,7 +109,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
             final String llamaSystemMessage = request.systemMessage() + "\n\n" +
                 "CRITICAL: You MUST output ONLY the raw JSON block. Do NOT include any conversational preamble, introduction, explanation, markdown fences, or postfix text. Your output must start with '{' and end with '}'.\n" +
                 "CRITICAL SELECTOR RULE:\n" +
-                "1. Never use dynamic 'data-neo-ref' attributes (e.g., [data-neo-ref='...']) in your CSS selectors. They are temporary and volatile.\n" +
+                "1. Never use dynamic 'data-ai' attributes (e.g., [data-ai='...']) in your CSS selectors. They are temporary and volatile.\n" +
                 "2. Always prefer targeting elements directly by their ID (e.g., '#zip-code-value') or unique standard attributes/classes if available.\n" +
                 "3. Avoid using fragile relative paths or sibling combinators (like '+' or '~') that depend on exact nesting, as they frequently fail due to minor HTML structural changes.\n" +
                 "CRITICAL REGEX RULE:\n" +

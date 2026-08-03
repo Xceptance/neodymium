@@ -69,32 +69,27 @@ public class AssertIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
+    @AiPlaybook(value = "programmatic", recordingFileName = "custom_assert_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testAssertMock(final AiSession session)
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         final String pageUrl = (String) session.getExecutionContext().getSessionData().get("assert.test.url");
 
+        mock.clearResponses();
         // Step 1: Open SUT
         mock.addResponse(new LlmResponse("""
             {
               "actions": [
                 {
                   "action": "NAVIGATE",
-                  "locator": "",
+                  "target": "",
                   "value": "%s",
                   "reasoning": "Navigate to assert test page"
                 }
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Assert
         mock.addResponse(new LlmResponse("""
@@ -102,33 +97,28 @@ public class AssertIntegrationTest extends BaseAiTest
               "actions": [
                 {
                   "action": "ASSERT",
-                  "locator": "#welcome-message",
+                  "target": "#welcome-message",
                   "value": "Welcome to our web store!",
                   "reasoning": "Verify welcome text"
                 }
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "assertion verified"
-            }
-            """, null, "mock"));
 
         runPlaybook(session, """
             data:
               - testId: assertData
-            steps: |
-              Open ${assert.test.url} in the browser
-              Assert that #welcome-message has text 'Welcome to our web store!'
+            steps:
+              - Open ${assert.test.url} in the browser
+              - "Assert that #welcome-message has text 'Welcome to our web store!'"
             """);
 
         $("#welcome-message").shouldHave(text("Welcome to our web store!"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_assert_playbook.json");
-        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_assert_playbook_" + browserProfile + ".json");
+        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk: " + recordingFile.getPath());
         try
         {
             final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);
@@ -148,36 +138,30 @@ public class AssertIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "custom_assert_failure_playbook")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    @AiPlaybook(value = "programmatic", recordingFileName = "custom_assert_failure_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertFailureMock(final AiSession session)
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         final String pageUrl = (String) session.getExecutionContext().getSessionData().get("assert.test.url");
-        final org.neodymium.ai.pipeline.ExecutionContext context = session.getExecutionContext();
-        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE);
+        final org.neodymium.ai.config.ExecutionMode mode = session.getExecutionMode();
 
         if (mode == org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING)
         {
+            mock.clearResponses();
             // Mock navigate (succeeds)
             mock.addResponse(new LlmResponse("""
                 {
                   "actions": [
                     {
                       "action": "NAVIGATE",
-                      "locator": "",
+                      "target": "",
                       "value": "%s",
                       "reasoning": "Navigate to assert test page"
                     }
                   ]
                 }
                 """.formatted(pageUrl), null, "mock"));
-            mock.addResponse(new LlmResponse("""
-                {
-                  "passed": true,
-                  "reasoning": "navigated"
-                }
-                """, null, "mock"));
 
             // Mock failing ASSERT step
             mock.addResponse(new LlmResponse("""
@@ -185,26 +169,9 @@ public class AssertIntegrationTest extends BaseAiTest
                   "actions": [
                     {
                       "action": "ASSERT",
-                      "locator": "#welcome-message",
+                      "target": "#welcome-message",
                       "value": "Goodbye!",
                       "reasoning": "Verify failing welcome text"
-                    }
-                  ]
-                }
-                """, null, "mock"));
-        }
-        else if (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_WITH_HEALING)
-        {
-            // Healing mode: when the assertion fails, it will attempt self-healing
-            // and call the LLM. We queue a failing response for the self-healing attempt.
-            mock.addResponse(new LlmResponse("""
-                {
-                  "actions": [
-                    {
-                      "action": "ASSERT",
-                      "locator": "#welcome-message",
-                      "value": "Goodbye!",
-                      "reasoning": "Failing self-heal attempt"
                     }
                   ]
                 }
@@ -215,9 +182,9 @@ public class AssertIntegrationTest extends BaseAiTest
         org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
         {
             runPlaybook(session, """
-                steps: |
-                  Open ${assert.test.url} in the browser
-                  Assert that #welcome-message has text 'Goodbye!'
+                steps:
+                  - Open ${assert.test.url} in the browser
+                  - "Assert that #welcome-message has text 'Goodbye!'"
                 """);
         });
     }

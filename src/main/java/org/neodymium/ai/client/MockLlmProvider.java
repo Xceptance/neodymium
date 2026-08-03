@@ -71,6 +71,19 @@ public final class MockLlmProvider implements LlmProvider
         this.responseQueue.add(response);
     }
 
+    public boolean hasQueuedResponses()
+    {
+        return !this.responseQueue.isEmpty();
+    }
+
+    /**
+     * Clears all enqueued responses from the provider.
+     */
+    public void clearResponses()
+    {
+        this.responseQueue.clear();
+    }
+
     /**
      * Dequeues the next canned response.
      *

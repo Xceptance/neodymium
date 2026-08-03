@@ -78,12 +78,6 @@ public class ClickIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Click
         mock.addResponse(new LlmResponse("""
@@ -96,12 +90,6 @@ public class ClickIntegrationTest extends BaseAiTest
                   "reasoning": "Click the button"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "button clicked"
             }
             """, null, "mock"));
     }
@@ -126,7 +114,8 @@ public class ClickIntegrationTest extends BaseAiTest
         $("#click-status").shouldHave(text("Clicked"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_click_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_click_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

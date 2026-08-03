@@ -116,7 +116,7 @@ public class PageAnalyzer
                 var MAX_HREF = 180;         // Max URL length for captured links
                 var MAX_VALUE = 150;        // Max characters for option/input value properties
 
-                // Map of assigned automation IDs (data-neo-ref) to handle unique stamping
+                // Map of assigned automation IDs (data-ai) to handle unique stamping
                 var usedIds = {};
 
                 // Collect all shadow roots once to avoid O(N^2) DOM traversal
@@ -1129,7 +1129,7 @@ public class PageAnalyzer
 
             // Omit long, wishy-washy climbing selectors that contain child/descendant
             // combinators,
-            // since data-neo-ref is 100% unique and much more stable.
+            // since data-ai is 100% unique and much more stable.
             final boolean isWishyWashy = selStr.contains(" > ");
 
             if (!isSimpleId && !isWishyWashy) {

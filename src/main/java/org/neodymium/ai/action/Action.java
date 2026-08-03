@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -47,6 +49,7 @@ public class Action
     /**
      * The target selector, element details, or path to operate on.
      */
+    @com.fasterxml.jackson.annotation.JsonAlias({"locator", "target"})
     private final String target;
 
     /**
@@ -85,6 +88,38 @@ public class Action
         this.value = new ArrayList<>();
         this.description = "";
         this.reasoning = "";
+    }
+
+    /**
+     * JsonCreator constructor for Jackson deserialization of final fields.
+     */
+    @JsonCreator
+    public Action(
+            @JsonProperty("action") @JsonAlias({"type", "action"}) final String type,
+            @JsonProperty("target") @JsonAlias({"locator", "target"}) final String target,
+            @JsonProperty("value") @JsonAlias({"values", "value"}) final Object value,
+            @JsonProperty("description") final String description,
+            @JsonProperty("reasoning") final String reasoning)
+    {
+        this.type = type != null ? type : "";
+        this.target = target != null ? target : "";
+        this.value = new ArrayList<>();
+        if (value instanceof List<?> list)
+        {
+            for (final Object item : list)
+            {
+                if (item != null)
+                {
+                    this.value.add(item.toString());
+                }
+            }
+        }
+        else if (value instanceof String str && !str.isEmpty())
+        {
+            this.value.add(str);
+        }
+        this.description = description != null ? description : "";
+        this.reasoning = reasoning != null ? reasoning : "";
     }
 
     /**

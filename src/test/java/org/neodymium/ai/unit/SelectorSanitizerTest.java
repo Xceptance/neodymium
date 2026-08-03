@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
 
-import com.xceptance.neodymium.ai.action.ActionExecutor;
+import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 
 /**
@@ -38,54 +38,54 @@ public class SelectorSanitizerTest
     @Test
     public void testStandardCssAndXpath()
     {
-        final By css = ActionExecutor.resolveLocator("#checkout-btn");
+        final By css = LocatorResolver.resolveLocator("#checkout-btn");
         Assertions.assertEquals("By.cssSelector: #checkout-btn", css.toString());
 
-        final By xpath = ActionExecutor.resolveLocator("//div[@id='total']");
+        final By xpath = LocatorResolver.resolveLocator("//div[@id='total']");
         Assertions.assertEquals("By.xpath: //div[@id='total']", xpath.toString());
     }
 
     @Test
     public void testPlaywrightTextPrefix()
     {
-        final By textBy = ActionExecutor.resolveLocator("text=Total Paid: $27.58");
+        final By textBy = LocatorResolver.resolveLocator("text=Total Paid: $27.58");
         Assertions.assertTrue(textBy.toString().contains("Total Paid: $27.58"));
 
-        final By textQuoted = ActionExecutor.resolveLocator("text=\"Order Complete\"");
+        final By textQuoted = LocatorResolver.resolveLocator("text=\"Order Complete\"");
         Assertions.assertTrue(textQuoted.toString().contains("Order Complete"));
     }
 
     @Test
     public void testPlaywrightHasTextAndContains()
     {
-        final By hasTextBy = ActionExecutor.resolveLocator("div:has-text(\"Total Paid: $27.58\")");
+        final By hasTextBy = LocatorResolver.resolveLocator("div:has-text(\"Total Paid: $27.58\")");
         Assertions.assertTrue(hasTextBy.toString().contains("Total Paid: $27.58"));
 
-        final By containsBy = ActionExecutor.resolveLocator("span:contains('Checkout')");
+        final By containsBy = LocatorResolver.resolveLocator("span:contains('Checkout')");
         Assertions.assertTrue(containsBy.toString().contains("Checkout"));
 
-        final By taglessBy = ActionExecutor.resolveLocator(":has-text('Order Placed')");
+        final By taglessBy = LocatorResolver.resolveLocator(":has-text('Order Placed')");
         Assertions.assertTrue(taglessBy.toString().contains("Order Placed"));
     }
 
     @Test
     public void testPlaywrightTextColonPrefix()
     {
-        final By textColonBy = ActionExecutor.resolveLocator("text:Total Paid: $27.58");
+        final By textColonBy = LocatorResolver.resolveLocator("text:Total Paid: $27.58");
         Assertions.assertTrue(textColonBy.toString().contains("Total Paid: $27.58"));
 
-        final By hasTextEqBy = ActionExecutor.resolveLocator("has-text=Order Summary");
+        final By hasTextEqBy = LocatorResolver.resolveLocator("has-text=Order Summary");
         Assertions.assertTrue(hasTextEqBy.toString().contains("Order Summary"));
     }
 
     @Test
-    public void testNeoRefIds()
+    public void testDataAiIds()
     {
-        final By neoRefBy = ActionExecutor.resolveLocator("neo-ref=c12");
-        Assertions.assertEquals("By.cssSelector: [data-neo-ref='c12']", neoRefBy.toString());
+        final By dataAiBy = LocatorResolver.resolveLocator("data-ai=xc123");
+        Assertions.assertEquals("By.cssSelector: [data-ai='xc123']", dataAiBy.toString());
 
-        final By dataNeoRefBy = ActionExecutor.resolveLocator("data-neo-ref=xc_456");
-        Assertions.assertEquals("By.cssSelector: [data-neo-ref='xc_456']", dataNeoRefBy.toString());
+        final By dataAiQuoted = LocatorResolver.resolveLocator("data-ai=xc_456");
+        Assertions.assertEquals("By.cssSelector: [data-ai='xc_456']", dataAiQuoted.toString());
     }
 
     @Test

@@ -21,7 +21,7 @@ package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 import com.xceptance.neodymium.common.testdata.DataFile;
 import com.xceptance.neodymium.common.testdata.DataSet;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -33,6 +33,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  */
 @DataFile("ai-test-pages/aura-manager-workspace-test.yaml")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@NeodymiumAiTest
 public class AuraManagerWorkspaceTest extends BaseAuraManagerUiTest
 {
     public AuraManagerWorkspaceTest()
@@ -45,7 +46,6 @@ public class AuraManagerWorkspaceTest extends BaseAuraManagerUiTest
     @Order(1)
     public void testCreateTest() throws Throwable
     {
-        Neodymium.ai().execute();
     }
 
     @NeodymiumTest
@@ -53,6 +53,5 @@ public class AuraManagerWorkspaceTest extends BaseAuraManagerUiTest
     @Order(2)
     public void testDeleteTest() throws Throwable
     {
-        Neodymium.ai().execute();
     }
 }

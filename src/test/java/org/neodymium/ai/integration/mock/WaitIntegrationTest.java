@@ -78,12 +78,6 @@ public class WaitIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Click start button
         mock.addResponse(new LlmResponse("""
@@ -98,12 +92,6 @@ public class WaitIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "clicked"
-            }
-            """, null, "mock"));
 
         // Step 3: Wait
         mock.addResponse(new LlmResponse("""
@@ -116,12 +104,6 @@ public class WaitIntegrationTest extends BaseAiTest
                   "reasoning": "Wait for success message to be visible"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "element is now visible"
             }
             """, null, "mock"));
     }
@@ -147,7 +129,8 @@ public class WaitIntegrationTest extends BaseAiTest
         $("#success-1").shouldBe(visible);
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_wait_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_wait_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

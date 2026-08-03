@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.ai.BaseAiTest;
+import org.neodymium.ai.testing.BaseAiTest;
 import com.xceptance.neodymium.common.browser.Browser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
