@@ -112,6 +112,7 @@ public class CallLlmStepTest
         final ExecutionContext context = session.getExecutionContext();
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        ExecutionContext.setActiveContext(context);
 
         final AiPrompt<String> prompt = new AiPrompt<>()
         {

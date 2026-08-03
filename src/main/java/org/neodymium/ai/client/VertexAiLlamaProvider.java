@@ -126,8 +126,11 @@ public final class VertexAiLlamaProvider implements LlmProvider
     }
 
     @Override
-    public LlmResponse chat(final LlmRequest request) throws IOException
+    public LlmResponse chat(final LlmRequest rawRequest) throws IOException
     {
+        final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = org.neodymium.ai.prompt.LlmSanitizerHelper.sanitizeRequest(rawRequest);
+        final LlmRequest request = org.neodymium.ai.prompt.LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
+
         final ChatModel activeModel = getChatModel(request.temperature(), request.timeoutSeconds());
 
         final List<ChatMessage> messages = new ArrayList<>();
@@ -199,7 +202,8 @@ public final class VertexAiLlamaProvider implements LlmProvider
                     );
                 }
 
-                return new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
+                final LlmResponse rawResponse = new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
+                return org.neodymium.ai.prompt.LlmSanitizerHelper.unmaskResponse(rawResponse, sanitizedPayload.maskToVariableMap());
             }
             catch (final Exception e)
             {

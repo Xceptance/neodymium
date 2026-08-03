@@ -82,6 +82,20 @@ public final class CallLlmStep<T> implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
+        final ExecutionContext previousContext = ExecutionContext.getActiveContext();
+        try
+        {
+            ExecutionContext.setActiveContext(context);
+            executeInternal(context);
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(previousContext);
+        }
+    }
+
+    private void executeInternal(final ExecutionContext context) throws PipelineException
+    {
         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         if (session == null)
         {
@@ -107,10 +121,7 @@ public final class CallLlmStep<T> implements PipelineStep
             }
         }
 
-        // Perform Context Sanitization (Secret Masking)
-        final org.neodymium.ai.prompt.ContextSanitizer contextSanitizer = new org.neodymium.ai.prompt.DefaultContextSanitizer();
-        final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = contextSanitizer.sanitize(rawUser, lastState, context.getSessionData());
-        final String user = sanitizedPayload.sanitizedPrompt();
+        final String user = rawUser;
 
         if (LOGGER.isTraceEnabled())
         {
@@ -189,16 +200,7 @@ public final class CallLlmStep<T> implements PipelineStep
 
         try
         {
-            String unmaskedContent = response.content();
-            if (unmaskedContent != null && !sanitizedPayload.maskToVariableMap().isEmpty())
-            {
-                for (final java.util.Map.Entry<String, String> entry : sanitizedPayload.maskToVariableMap().entrySet())
-                {
-                    unmaskedContent = unmaskedContent.replace(entry.getKey(), entry.getValue());
-                }
-            }
-
-            final T parsedResult = this.prompt.parseResponse(unmaskedContent, context);
+            final T parsedResult = this.prompt.parseResponse(response.content(), context);
             if (parsedResult instanceof java.util.List<?> list)
             {
                 LOGGER.debug("Successfully parsed response: {} actions extracted", list.size());

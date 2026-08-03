@@ -104,15 +104,18 @@ public final class MockLlmProvider implements LlmProvider
      * @throws IOException if no enqueued responses remain in the queue
      */
     @Override
-    public LlmResponse chat(final LlmRequest request) throws IOException
+    public LlmResponse chat(final LlmRequest rawRequest) throws IOException
     {
+        final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = org.neodymium.ai.prompt.LlmSanitizerHelper.sanitizeRequest(rawRequest);
+        final LlmRequest request = org.neodymium.ai.prompt.LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
         this.lastRequest = request;
+
         final LlmResponse next = this.responseQueue.poll();
         if (next == null)
         {
             throw new IOException("MockLlmProvider has no queued responses left.");
         }
-        return next;
+        return org.neodymium.ai.prompt.LlmSanitizerHelper.unmaskResponse(next, sanitizedPayload.maskToVariableMap());
     }
 
     /**

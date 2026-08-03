@@ -89,6 +89,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final Boolean isHealedStep = (Boolean) context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
         final boolean stepWasReplayed = mode != null && mode.isReplay() && (step == null || !step.isNoReplay()) && !Boolean.TRUE.equals(isHealedStep);
+        context.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
 
         if (mode == null || stepWasReplayed)
         {
