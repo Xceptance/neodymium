@@ -210,8 +210,13 @@ public final class SystemPromptAddonHelper
         }
 
         final String base = systemPrompt != null ? systemPrompt.trim() : "";
+        if (base.contains(ENFORCEMENT_SUFFIX.trim()))
+        {
+            return base;
+        }
         return base + "\n\n### Custom System Add-on Prompt\n\n" + addon.trim() + ENFORCEMENT_SUFFIX;
     }
+
 
     private static void validateLength(final String value)
     {
