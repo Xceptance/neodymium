@@ -29,10 +29,19 @@ import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionEvent;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.resources.PlaybookResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Event listener that monitors execution event dispatches, compiles executed actions,
  * and writes the final parameterized recording as a JSON file through a resource manager
- * only upon successful session completion.
+ * only upon successful session completion when updates occurred.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
@@ -41,27 +50,13 @@ public final class PlaybookRecorder implements ExecutionListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlaybookRecorder.class);
 
-    /**
-     * The resource manager to write recording outputs to.
-     */
     private final PlaybookResourceManager resourceManager;
-
-    /**
-     * The target path where the recording should be written.
-     */
     private final String recordingPath;
-
-    /**
-     * The list of playbook steps to record and serialize.
-     */
     private final List<PlaybookStep> playbookSteps;
+    private final ExecutionMode executionMode;
 
     /**
-     * Constructs a PlaybookRecorder.
-     *
-     * @param resourceManager the resource manager
-     * @param recordingPath the target path for the recording file
-     * @param playbookSteps the steps list to record and serialize
+     * Constructs a PlaybookRecorder with default recording mode.
      */
     public PlaybookRecorder(
         final PlaybookResourceManager resourceManager,
@@ -69,17 +64,25 @@ public final class PlaybookRecorder implements ExecutionListener
         final List<PlaybookStep> playbookSteps
     )
     {
-        this.resourceManager = resourceManager;
-        this.recordingPath = recordingPath;
-        this.playbookSteps = playbookSteps;
+        this(resourceManager, recordingPath, playbookSteps, ExecutionMode.LLM_RECORDING);
     }
 
     /**
-     * Consumes session finished events to serialize and write the steps to resource path
-     * if and only if the session finished successfully.
-     *
-     * @param event the dispatched execution event
+     * Constructs a PlaybookRecorder with explicit execution mode.
      */
+    public PlaybookRecorder(
+        final PlaybookResourceManager resourceManager,
+        final String recordingPath,
+        final List<PlaybookStep> playbookSteps,
+        final ExecutionMode executionMode
+    )
+    {
+        this.resourceManager = resourceManager;
+        this.recordingPath = recordingPath;
+        this.playbookSteps = playbookSteps;
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_RECORDING;
+    }
+
     @Override
     public void onEvent(final ExecutionEvent event)
     {
@@ -96,8 +99,24 @@ public final class PlaybookRecorder implements ExecutionListener
             {
                 final ObjectMapper mapper = new ObjectMapper();
                 mapper.enable(SerializationFeature.INDENT_OUTPUT);
-                final String json = mapper.writeValueAsString(this.playbookSteps);
-                this.resourceManager.write(this.recordingPath, json);
+                final String candidateJson = mapper.writeValueAsString(this.playbookSteps);
+
+                if (!this.executionMode.isRecording())
+                {
+                    final String existingJson = readAsString(this.recordingPath);
+                    if (existingJson != null && existingJson.trim().equals(candidateJson.trim()))
+                    {
+                        LOGGER.info("Session finished with success and 0 step changes. Skipping playbook recording write to {}", this.recordingPath);
+                        return;
+                    }
+                    if (existingJson != null)
+                    {
+                        LOGGER.info("Session finished with success and healed step updates. Overwriting playbook recording at {}", this.recordingPath);
+                    }
+                }
+
+                LOGGER.info("Writing candidate playbook recording to {}", this.recordingPath);
+                this.resourceManager.write(this.recordingPath, candidateJson);
             }
             catch (final Exception e)
             {
@@ -105,5 +124,23 @@ public final class PlaybookRecorder implements ExecutionListener
             }
         }
     }
+
+    private String readAsString(final String path)
+    {
+        try (final java.io.InputStream in = this.resourceManager.read(path))
+        {
+            if (in == null)
+            {
+                return null;
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        catch (final Exception e)
+        {
+            return null;
+        }
+    }
 }
+
+
 

@@ -272,15 +272,16 @@ public final class VerifyOutcomeStep implements PipelineStep
                 {
                     if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                     {
-                        dHash = org.neodymium.ai.util.ScreenshotHasher.computeHash(attachment.base64Data());
+                        dHash = org.neodymium.ai.util.ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
                         break;
                     }
                 }
 
                 if (dHash != null)
                 {
-                    LOGGER.debug("   📸 Computed dHash: {} for instruction: \"{}\"", dHash, step.getInstruction());
+                    LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", step.getInstruction());
                     step.setScreenshotHash(dHash);
+
 
                     // 12. Create synthetic NONE action if no explicit DOM actions were generated to hold visual baseline
                     if (step.getActions().isEmpty())

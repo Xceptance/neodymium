@@ -229,18 +229,38 @@ public final class AiConfiguration
     public int getInt(final String key, final int defaultValue)
     {
         final String val = getProperty(key, null);
-        if (val == null)
+        if (val != null)
         {
-            return defaultValue;
+            try
+            {
+                return Integer.parseInt(val.trim());
+            }
+            catch (final NumberFormatException e)
+            {
+                // Fallback
+            }
         }
-        try
+        return defaultValue;
+    }
+
+    /**
+     * Retrieves a property as a long value, or returns the default value if missing/invalid.
+     */
+    public long getLong(final String key, final long defaultValue)
+    {
+        final String val = getProperty(key, null);
+        if (val != null)
         {
-            return Integer.parseInt(val.trim());
+            try
+            {
+                return Long.parseLong(val.trim());
+            }
+            catch (final NumberFormatException e)
+            {
+                // Fallback
+            }
         }
-        catch (final NumberFormatException e)
-        {
-            return defaultValue;
-        }
+        return defaultValue;
     }
 
     /**

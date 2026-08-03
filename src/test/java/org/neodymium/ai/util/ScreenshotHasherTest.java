@@ -122,7 +122,61 @@ final class ScreenshotHasherTest
         assertEquals(Integer.MAX_VALUE, ScreenshotHasher.getHammingDistance("g123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
     }
 
+    @Test
+    void testComputeSsimMatrix_andCalculateSsim_identicalImages() throws IOException
+    {
+        final BufferedImage img = createSolidColorImage(Color.BLUE, 200, 200);
+        final String base64 = encodeToBase64Png(img);
+
+        final String matrix1 = ScreenshotHasher.computeSsimMatrix(base64);
+        final String matrix2 = ScreenshotHasher.computeSsimMatrix(base64);
+
+        assertNotNull(matrix1, "Matrix should not be null.");
+        assertEquals(matrix1, matrix2);
+        
+        final double score = ScreenshotHasher.calculateSsim(matrix1, matrix2);
+        assertEquals(1.0, score, 0.001, "Identical images must have SSIM score 1.0.");
+    }
+
+    @Test
+    void testComputeSsimMatrix_andCalculateSsim_similarImages() throws IOException
+    {
+        final BufferedImage img1 = createSolidColorImage(Color.WHITE, 200, 200);
+        final BufferedImage img2 = createSolidColorImage(Color.WHITE, 200, 200);
+        final Graphics2D g = img2.createGraphics();
+        g.setColor(Color.BLACK);
+        g.fillRect(95, 95, 10, 10);
+        g.dispose();
+
+        final String base64_1 = encodeToBase64Png(img1);
+        final String base64_2 = encodeToBase64Png(img2);
+
+        final String matrix1 = ScreenshotHasher.computeSsimMatrix(base64_1);
+        final String matrix2 = ScreenshotHasher.computeSsimMatrix(base64_2);
+
+        final double score = ScreenshotHasher.calculateSsim(matrix1, matrix2);
+        assertTrue(score >= 0.90, "Minor visual change should yield high SSIM score (>= 0.90), got: " + score);
+    }
+
+
+    @Test
+    void testComputeSsimMatrix_andCalculateSsim_differentImages() throws IOException
+    {
+        final BufferedImage img1 = createSolidColorImage(Color.BLACK, 200, 200);
+        final BufferedImage img2 = createCheckerboardImage(200, 200);
+
+        final String base64_1 = encodeToBase64Png(img1);
+        final String base64_2 = encodeToBase64Png(img2);
+
+        final String matrix1 = ScreenshotHasher.computeSsimMatrix(base64_1);
+        final String matrix2 = ScreenshotHasher.computeSsimMatrix(base64_2);
+
+        final double score = ScreenshotHasher.calculateSsim(matrix1, matrix2);
+        assertTrue(score < 0.80, "Visually different images should have low SSIM score, got: " + score);
+    }
+
     private BufferedImage createSolidColorImage(final Color color, final int width, final int height)
+
     {
         final BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         final Graphics2D g = img.createGraphics();
