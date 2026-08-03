@@ -787,5 +787,103 @@ All valid action items and findings from Round 5 have been remediated, validated
 3. **3.2 (Product Decision — Replay Verification & Strict Verification Mode):**
    - Confirmed closed in commit `e3c41df1`.
 
+---
+
+# Round 6 — Verification of the Round 5 remediation (2026-08-03)
+
+**Scope:** commits `6412d1e5` (propagate `ExecutionContext` across pipeline runner steps, warn
+on uncontextual dispatches) and `90c62065` (Round 5 summary). Verified against current source.
+
+## B.1 — Closed ✅
+
+All six dispatch paths are now context-bound, with defense in depth:
+
+| Layer | Change |
+|-------|--------|
+| Run loop | `StateMachineRunner:132` binds the context around the entire step loop |
+| Per-step | `VerifyOutcomeStep`, `SemanticDivergenceAnalysisStep`, `VisualRcaStep` each gained an `execute()` wrapper that binds and restores around `executeInternal()` |
+| RCA | `StateMachineRunner:480-489` wraps its own `chat()` dispatch explicitly |
+| **The trap** | `ExecuteActionsStep:291` now restores `previousContext` instead of `setActiveContext(null)` |
+
+That last row is the one that mattered. The Round 5 note called out that wrapping the run
+loop alone would be silently undone by `ExecuteActionsStep`'s hard-null in its `finally`;
+it was handled, so `VerifyOutcomeStep` — which runs immediately after it in `standardFlow` —
+now sees a live context.
+
+**The regression test is what makes this stick.**
+`VerifyOutcomeStepTest.testVerifyOutcomeStepSecretMaskingInProvider` asserts the outbound
+prompt contains `[MASKED_VAR_api_key]` **and** that it does *not* contain the raw
+`SecretKey999!`. That is a real assertion on the exact path that was previously unmasked —
+the class of test whose absence let this drift through three rounds.
+
+Also added: `LlmSanitizerHelper:56-57` now logs a `⚠️ [Security Warning]` when no context is
+bound. It still returns unmasked rather than throwing, but the failure is **visible instead
+of silent**, which is a reasonable balance for a test framework where hard-failing on a
+diagnostic path would be worse than warning loudly.
+
+**B.1 is closed.** Architecture, wiring, and test coverage now agree.
+
+## New defect introduced by this round
+
+### D.1 LOW/MEDIUM — `StateMachineRunner.run()` binds the context but never restores it
+
+```java
+:129   final ExecutionContext previousContext = ExecutionContext.getActiveContext();
+:132   ExecutionContext.setActiveContext(context);
+       ...
+:264   finally { ...dispatch SessionFinishedEvent, logFinalStatsSummary, runPostHooks... }
+       // ← no setActiveContext(previousContext)
+```
+
+`previousContext` is captured at `:129` and **never read**. Every other binding introduced in
+this commit restores correctly; `run()` is the sole exception — the unused local is the tell.
+
+Consequences:
+
+1. **ThreadLocal leak.** After `run()` returns, the thread still holds that session's
+   `ExecutionContext`, which retains `transientData` — captured `SutState`s with base64
+   screenshots and DOM text, plus `SessionData` containing secrets. JUnit reuses threads
+   across tests, so this is retained memory that accumulates across a large suite and keeps
+   secret material reachable longer than necessary.
+2. **Stale-context risk.** Any LLM dispatch occurring outside a `run()` — for example the
+   provider path at `NeodymiumAuraManager:1739` — would mask against a *previous* session's
+   `SessionData`.
+
+This is benign inside normal framework flow, since each `run()` rebinds on entry, so it will
+not surface as a test failure. It is a leak and a latent bug, not a live break.
+
+**Fix:** add `ExecutionContext.setActiveContext(previousContext);` to the `finally` at `:264`,
+making `run()` symmetric with every other site in the commit. One line.
+
+## Status overview
+
+Every finding from the original review and all subsequent rounds is now closed, except:
+
+| Item | Severity | Note |
+|------|----------|------|
+| D.1 context not restored in `run()` | Low/Medium | New this round; one-line fix |
+| Attachments not masked (`toSanitizedRequest:81`) | Low | Long-standing; DOM travels in the prompt text, which *is* masked on every path now |
+| `sanitizedStateText()` computed and discarded | Low | Long-standing; DOM masking remains incidental to prompt masking |
+
+## Round 6 verdict
+
+B.1 took four rounds, but the end state is genuinely correct rather than nominally correct —
+and notably, this round fixed the *specific pitfall* flagged in advance (`ExecuteActionsStep`
+restore) rather than only the headline item. That is the first round where the remediation
+anticipated the follow-on failure mode instead of reproducing it.
+
+The recurring pattern across this review — *"implemented, reported as universal, wired at one
+site"* — was ultimately broken by two things, both worth keeping as standing practice:
+
+1. **Enforce invariants at a choke point** (the provider layer), not at each call site.
+2. **Test the path that was broken**, not the path that already worked. `CallLlmStepTest`
+   passed throughout all three failing rounds because `CallLlmStep` was the one path that
+   bound the context itself. `VerifyOutcomeStepTest` is what actually proves the fix.
+
+The still-outstanding structural suggestion from Round 3 remains the highest-leverage
+process item: a check for unreferenced or ineffective components — which is what would have
+flagged `sanitizedStateText()` being computed and thrown away, and `previousContext` in D.1
+being captured and never used.
+
 
 
