@@ -300,3 +300,201 @@ provider). On replay, if the YAML hash no longer matches, warn loudly (or fail) 
 capability routing, record/replay) are good. The gap is **end-to-end wiring and honest
 failure semantics** — exactly the seams where AI-generated scaffolding tends to look finished
 without being finished.
+
+---
+
+# Round 3 — Remediation review & summary (2026-08-03)
+
+**Context:** Seven remediation commits landed against the findings above — Phases 1–4
+(`f5286cfc`, `a540254f`, `6c912135`) and Rounds 1–3 (`1378f8a7`, `5330bf7b`, `9dba499d`).
+Every item below was re-verified against the **current source** and, where possible,
+**empirically** (on-disk recordings, provider code paths, a successful `mvn compile`) —
+never against commit messages.
+
+## Executive summary
+
+**Remediation: 9 of 11 original findings are genuinely fixed.** Verified in source and on
+disk, not inferred from commit messages.
+
+Two fixes deserve explicit credit for showing judgment beyond the letter of the review:
+
+- **Retry (3.4) was solved better than recommended.** The review said "wrap all six
+  `provider.chat()` call sites." The implementation instead moved retry *inside* the three
+  providers and **removed** the now-redundant `CallLlmStep` wrapper — so all six sites
+  inherit it with no double-retry. That is the more maintainable choice.
+- **The singleton staleness trap was avoided.** Caching `AiConfiguration` risked breaking
+  per-test config (`neodymium.temporaryConfigFile` is snapshotted at construction). The fix
+  correctly calls `resetInstance()` in Neodymium's per-context refresh and in test
+  `@BeforeEach` hooks — the non-obvious part, handled.
+
+Also solid: atomic temp-file + `ATOMIC_MOVE` recording writes, and SHA-256 YAML-coherence
+stamping wired end-to-end into `SessionFinishedEvent.getWarnings()`.
+
+**Still open from the original review:** 3.2 (strict verification) and 3.6 (overlay
+selectors) — untouched across all seven commits.
+
+**Residuals introduced this round:** four hot-path `AiConfiguration` constructions missed by
+the refactor (A.1), and `schemaVersion` as a brand-new dead field (A.2).
+
+**New this round — one HIGH security finding:** secrets are transmitted to the third-party
+LLM provider unmasked, while a complete, correct masking component sits entirely unused
+(B.1). Plus a medium recording-corruption bug (B.2) and one positive confirmation that the
+reflection surface is properly allowlisted (B.3).
+
+**The pattern worth naming:** the failure mode diagnosed in §1 has not disappeared — **it
+moved**. `ContextSanitizer` (B.1) is the identical shape as the original `baselineState`
+bug: a complete implementation with zero call sites. `schemaVersion` (A.2) is a fresh
+instance of the same thing. The remediation loop reliably fixes what a review *names*, but
+does not run the generalized check that would catch the next one. Hence the process
+recommendation at the end of this section, which is the highest-leverage item overall.
+
+## Part A — Status of the original 11 findings
+
+| # | Finding | Status | Evidence |
+|---|---------|--------|----------|
+| 2.1 | Divergence baseline never captured | **Fixed** | `setBaselineState()` called at `ExecuteActionsStep:789`; 92/362 on-disk recordings now carry `baselineState` |
+| 2.2 | Providers ignore `temperature`/`timeout` | **Fixed** | All three route via `getChatModel(request.temperature(), request.timeoutSeconds())` + model cache (Gemini:150, Mistral:128, Vertex:131) |
+| 2.3 | Recordings written on failure | **Fixed** | `if (!isSuccess()) return;` (`PlaybookRecorder:92`); write now atomic — temp file + `ATOMIC_MOVE` (`LocalFileResourceManager:86-103`) |
+| 2.4 | Env vars can't set camelCase keys | **Fixed** | Normalized-key fallback scan (`AiConfiguration:208`) |
+| 3.1 | Auto-healing never persists | **Fixed** | Recorder registered unconditionally + mode-aware (`NeodymiumAiRunner:740`); candidate-diff overwrite persists healed steps |
+| 3.3 | dHash too coarse | **Fixed** | Real windowed MSSIM, bilinear 64×64, configurable `neodymium.ai.ssim.minScore` (`ScreenshotHasher:155`) |
+| 3.4 | No LLM retry | **Fixed (well)** | Retry moved *into* providers (Gemini:148, Mistral:126, Vertex:184); `CallLlmStep` correctly dropped its wrapper → no double-retry, all 6 call sites inherit it |
+| 3.5 | Config re-parsed every use | **Mostly fixed** | 19 `getInstance()` vs 6 `new` — but 4 remain on the per-step hot path (see A.1) |
+| 3.7 | No YAML↔JSON coherence | **Fixed (warn-level)** | SHA-256 `sourceYamlHash` stamped live (`NeodymiumAiRunner:717`), compared on replay (`:729-767`), surfaced via `SessionFinishedEvent.getWarnings()` |
+| 3.2 | Replay has no semantic safety net | **Open** | `VerifyOutcomeStep` unchanged: soft warnings only, still skipped on replay (`:95`, `:207`) |
+| 3.6 | Hardcoded overlay selectors | **Open** | `PrepareRetryStep` untouched across all seven commits |
+
+**9 of 11 fixed.** Two notes of genuine credit:
+
+- **The retry refactor is better than what I recommended.** Pushing retry *into* the
+  providers (instead of wrapping six call sites) is the more maintainable choice, and
+  removing the now-redundant `CallLlmStep` wrapper shows it was reasoned about rather than
+  pattern-matched.
+- **The singleton staleness trap was avoided.** Caching `AiConfiguration` risked breaking
+  per-test config (`neodymium.temporaryConfigFile` is snapshotted at construction). The fix
+  correctly calls `resetInstance()` in Neodymium's per-context refresh
+  (`Neodymium.java:858/859`) and in test `@BeforeEach` hooks. That is the non-obvious part.
+
+### A.1 Residual — 4 hot-path config sites missed
+
+The refactor matched `new AiConfiguration()` but missed the **fully-qualified** form,
+leaving four constructions on the **per-step** path — each re-reading up to five files plus
+all env vars and system properties:
+
+`ExecuteActionsStep:494` (PESAP check), `:638` (mode default), `:673` (SSIM `minScore`),
+`:767` (verification check). (`StateMachineRunner:94` also remains but sits inside
+`if (LOGGER.isTraceEnabled())` — cold, harmless.)
+
+### A.2 Residual — `schemaVersion` is a new dead field
+
+`PlaybookStep.schemaVersion` (default `"2.0"`) is stamped into every recording and
+**never read** — zero call sites for `getSchemaVersion()` outside the model. Either gate on
+it at load time (warn/reject unknown major) or drop it.
+
+### A.3 Nit — coherence check inspects only the first step
+
+`NeodymiumAiRunner:744` reads `playbookSteps.get(0).getSourceYamlHash()`. If step 0 has no
+hash (older recording, or a step prepended post-recording), the check silently passes.
+Prefer the first non-null hash, or stamp at playbook level.
+
+---
+
+## Part B — New findings (previously unreviewed areas)
+
+### B.1 HIGH / SECURITY — secrets go to the LLM provider unmasked; the masking component is dead code
+
+The framework contains a complete, correct secret-masking implementation:
+
+- `SessionData` properly models sensitivity — `DataEntry(value, sensitive)`,
+  `getRawSensitiveData()` (`:246`), `getGuardedDataMap()` (`:218`).
+- `ContextSanitizer` / `DefaultContextSanitizer` / `SanitizedPayload` mask secrets in **both**
+  the prompt text and the SUT DOM, replacing them with `[MASKED_VAR_key]` placeholders.
+
+**None of it is ever called.** Across `src/main/java`, the only references to
+`ContextSanitizer`, `DefaultContextSanitizer`, and `SanitizedPayload` are their own
+declarations; `getGuardedDataMap()` likewise has zero call sites. Only the *action*
+sanitizer is wired (`ExecuteActionsStep:181,362`) — and that governs what is **recorded to
+disk**, not what is **sent to the LLM**.
+
+The raw DOM goes straight into the prompt:
+
+```
+ActionExtractionPrompt.java:87-88
+    sb.append("Current DOM State:\n")
+      .append(state != null ? state.getTextContent() : "No DOM available");
+```
+
+And `PageAnalyzer` does not redact — it **explicitly enumerates `password` as a captured
+input type** (`:228`) and emits `value="…"` verbatim (`:1113`, `:1711`). Screenshots
+(`VISUAL`/`VISUAL_LEAN`, and *always* during verification) are sent unredacted too.
+
+**Consequence:** any credential, token, or PII typed into the SUT — plus anything sensitive
+rendered on the page — is transmitted in cleartext to the configured third-party provider
+(Gemini/Mistral/Vertex) on every live step, and lands in the local trace log when TRACE is
+enabled. For enterprise storefront testing this is a compliance problem (GDPR, PCI) and a
+likely blocker for regulated adopters.
+
+**Fix:** invoke `ContextSanitizer` in the prompt-assembly path (`CallLlmStep` /
+`AiPrompt.compileUserMessage`) so the prompt and `state.getTextContent()` are masked before
+`LlmRequest` is built; unmask returned locators/values via
+`SanitizedPayload.maskToVariableMap`. Additionally redact `input[type=password]` values in
+`PageAnalyzer` (defense in depth), and document that screenshots cannot be masked — so
+sensitive flows should pin `ContextLevel.LEAN`.
+
+### B.2 MEDIUM — `DefaultActionSanitizer` can corrupt recordings via blind substring replacement
+
+It pulls **all** variables (`getAllVariables()`, `:65`) — not just sensitive ones — and does
+unanchored `String.replace(rawVal, "${key}")` across each action's values, target selector,
+and description (`:92`, `:109`, `:124`).
+
+Length-descending sorting (`:73`) prevents collisions *between* variables but not a short
+value matching unrelated text. With a realistic dataset (`qty=1`, `country=US`, `size=L`):
+
+- selector `#item1` → `#item${qty}`
+- price text `$21.50` → `$2${qty}.50`
+- description `Click US shipping` → `Click ${country} shipping`
+
+The corrupted selector is persisted to the companion JSON and replayed, so the damage is
+durable and surfaces later as a mystifying replay failure.
+
+**Fix:** apply a minimum-length threshold (≥ 4–6 chars) and/or word-boundary matching;
+restrict *masking* to `getRawSensitiveData()` and make *parameterization* of non-secret
+values opt-in per key.
+
+### B.3 POSITIVE — the reflection surface is properly allowlisted
+
+Worth stating explicitly, because this is the one path where LLM output could become
+arbitrary code execution, and the design is right: `JavaMethodAction` resolves a method only
+if it is `public` **and** annotated `@AiMethod` (`:219`, `:274`), skips `Object` methods, and
+defaults its scan scope to a single class (`org.neodymium.ai.util.AiAssertions`, `:125`).
+Package scanning is opt-in and still annotation-gated. An LLM cannot reach `Runtime.exec`
+through this path. Keep that invariant — make it an explicit, tested rule rather than an
+accident.
+
+---
+
+## Round 3 verdict
+
+The remediation is real and the quality is rising: 9 of 11 original findings are genuinely
+fixed (verified in source and on disk, not inferred from commit messages), and two of the
+fixes show judgment beyond the letter of the review.
+
+But the failure mode diagnosed in §1 has not disappeared — **it has moved**. `ContextSanitizer`
+(B.1) is the identical shape as the original `baselineState` bug: a complete, correct
+implementation with zero call sites. `schemaVersion` (A.2) is a fresh instance of the same
+thing. The loop reliably fixes what a review *names*, but does not run the generalized check
+that would catch the next one.
+
+**Recommended next actions, in order:**
+
+1. **B.1 — wire `ContextSanitizer` into prompt assembly.** Highest open severity; secrets
+   currently leave the building on every live step.
+2. **B.2 — bound the action-sanitizer replacement** before more recordings are generated
+   with corrupted selectors.
+3. **A.1** (four `getInstance()` sites) and **A.2** (read or drop `schemaVersion`).
+4. **3.2 / 3.6** — the two remaining product decisions from the original review.
+5. **Process fix, highest leverage:** add a build- or review-time check for *unreferenced
+   framework components* — public classes/interfaces in `org.neodymium.ai.*` whose only
+   references are their own declarations. That single check would have caught
+   `baselineState`, `ContextSanitizer`, `getGuardedDataMap()`, and `schemaVersion` — four
+   findings across three review rounds — with no human reading code.
