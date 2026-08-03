@@ -894,3 +894,78 @@ All findings from Round 6 have been remediated, validated against current source
 1. **D.1 (ThreadLocal Context Restore in `StateMachineRunner.run()`):**
    - Added `ExecutionContext.setActiveContext(previousContext);` to the `finally` block of `StateMachineRunner.run()` (`line 272`).
    - Ensures symmetrical cleanup of thread-local state on session completion, completely closing D.1.
+
+---
+
+# Round 7 — Final verification & closing state (2026-08-04)
+
+**Scope:** commits `e9de4ca1` (restore previous `ExecutionContext` in `run()` finally) and
+`8cfa58ef` (Round 6 summary), plus a full regression sweep across every finding closed in
+Rounds 1–6.
+
+## D.1 — Closed ✅
+
+`StateMachineRunner:272` now restores `previousContext` in the `finally`. The ThreadLocal
+leak is closed and the previously-unused local is now read.
+
+The **placement is correct, and non-obviously so**: the restore sits *after* the
+`SessionFinishedEvent` dispatch, `logFinalStatsSummary()`, and `runPostHooks()`. That
+ordering matters — `PlaybookRecorder` consumes that event and post-hooks may rely on a bound
+context, so restoring last keeps the context live for them. Restoring earlier would have
+quietly broken recording.
+
+## Regression sweep — no drift
+
+Every previously-closed finding re-verified against current source:
+
+| Finding | Check | Result |
+|---------|-------|--------|
+| 2.1 baseline captured | `setBaselineState` call site | 1 ✅ |
+| 2.2 per-request temp/timeout | providers honouring `request.temperature()` | 3/3 ✅ |
+| 2.3 success gate + atomic write | `isSuccess()` / `ATOMIC_MOVE` | 1 / 1 ✅ |
+| 2.4 env key mapping | normalized fallback lookup | present ✅ |
+| 3.1 healing persistence | recorder registered unconditionally + mode-aware | ✅ |
+| 3.3 SSIM visual gate | windowed MSSIM + configurable threshold | ✅ |
+| 3.4 LLM retry | providers wrapping `chat()` | 3/3 ✅ |
+| 3.5 config singleton | remaining `new AiConfiguration()` | 2 (singleton itself + cold trace path) ✅ |
+| 3.7 YAML coherence | SHA-256 stamp + replay comparison | ✅ |
+| B.1 secret masking | providers calling `LlmSanitizerHelper` | 4/4 ✅ |
+| B.2 sanitizer bounded | min-length + always-mask-sensitive | ✅ |
+| C.1 sticky healed flag | removed after read | 1 ✅ |
+| D.1 context restore | `setActiveContext(previousContext)` | 2 (run + RCA) ✅ |
+
+## Remaining open items (low severity, accepted)
+
+| Item | Severity | Note |
+|------|----------|------|
+| Attachments not masked (`LlmSanitizerHelper:83`) | Low | Passes `original.attachments()` through. Low impact now that the DOM travels in the prompt text, which *is* masked on every path; screenshots are inherently unmaskable. |
+| `sanitizedStateText()` computed and discarded | Low | Zero consumers. Harmless today, but it is exactly the kind of unused output that misleads a future reader into assuming state is separately sanitized. |
+| D.1 exception-path edge case | Very low | The restore is the last statement in the `finally`, not itself wrapped. A throwing `runPostHooks()` or event dispatch would skip it and re-leak the ThreadLocal. Needs a throwing post-hook to trigger, and the next `run()` rebinds regardless. Fold a nested `try/finally` in whenever `StateMachineRunner` is next touched. |
+
+## Closing assessment
+
+**All 11 original findings, plus the 5 raised across Rounds 3–6, are resolved.** What remains
+are three low-severity items, two of which are cosmetic and one of which is an edge case
+behind a user-supplied hook throwing.
+
+The architecture praised in §1 held up throughout: nothing in seven rounds required a
+structural rewrite. Every defect was a wiring or propagation gap inside a sound design —
+which is the good failure mode to have.
+
+**The one pattern worth carrying forward.** The dominant bug class was *"implemented,
+reported as universal, wired at one site"* — it recurred four times (`baselineState`, retry,
+masking, and `ContextSanitizer`), always looking complete from the commit message and the
+class listing. Two practices broke it, and both are worth making standing policy:
+
+1. **Enforce invariants at a choke point**, not per call site. Retry and masking were both
+   only truly fixed once they moved *into* the provider layer, where new call sites inherit
+   them by default.
+2. **Test the path that was broken**, not the path that already worked. `CallLlmStepTest`
+   passed through three consecutive failing rounds because `CallLlmStep` was the one path
+   that bound its own context. `VerifyOutcomeStepTest` is what actually proved the fix.
+
+**Still recommended, and still not implemented:** the unreferenced/ineffective-component
+check from Round 3. Across this review it would have caught `baselineState`,
+`ContextSanitizer`, `getGuardedDataMap()`, `schemaVersion`, `sanitizedStateText()`, and the
+unused `previousContext` in D.1 — six findings across six rounds, mechanically, with no human
+reading code. That single check is the highest-leverage item left on the board.
