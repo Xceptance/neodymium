@@ -75,7 +75,7 @@ public enum ContextLevel
      * multimodal input. The LLM can visually identify elements that are
      * hidden from the DOM extractor (CSS pseudo-elements, SVG text,
      * canvas-rendered content) and map them back to the nearest
-     * {@code data-neo-ref}.
+     * {@code data-ai}.
      * <p>
      * This is the maximum available context level.
      */

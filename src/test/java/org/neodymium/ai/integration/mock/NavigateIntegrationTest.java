@@ -78,14 +78,6 @@ public class NavigateIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-
-        // Step 1: Semantic verification
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "page opened successfully"
-            }
-            """, null, "mock"));
     }
 
     /**
@@ -107,7 +99,8 @@ public class NavigateIntegrationTest extends BaseAiTest
         $("h1").shouldHave(text("Assert Action Test"));
 
         // Verify that the recorded playbook contains the parameterized placeholders instead of hardcoded URLs
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_navigate_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_navigate_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

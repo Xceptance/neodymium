@@ -170,36 +170,48 @@ public abstract class BaseAiTest extends BaseLlmTest
     protected final void runPlaybook(final AiSession session, final String stepsYaml)
     {
         final ExecutionContext context = session.getExecutionContext();
-        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+        org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+        if (mode == null && session != null)
+        {
+            mode = session.getExecutionMode();
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, mode);
+        }
 
         final PlaybookParser parser = new YamlPlaybookParser();
         final InMemoryResourceManager manager = new InMemoryResourceManager();
         try
         {
-            if (mode != null && mode.isReplay() && context.hasSteps())
-            {
-                final StateMachineRunner runner = new StateMachineRunner(session);
-                runner.run();
-                return;
-            }
+
+            @SuppressWarnings("unchecked")
+            final List<org.neodymium.ai.model.PlaybookStep> sessionSteps = (List<org.neodymium.ai.model.PlaybookStep>) context.getTransientData().get("playbook.steps");
 
             manager.write("programmatic-playbook.yaml", stepsYaml);
             final org.neodymium.ai.model.Playbook playbook = parser.parse("programmatic-playbook.yaml", manager);
+            final List<org.neodymium.ai.model.PlaybookStep> stepsToExecute = playbook.getSteps();
 
-            // Synchronize steps to the active playbook instance so the PlaybookRecorder records them correctly
-            @SuppressWarnings("unchecked")
-            final List<org.neodymium.ai.model.PlaybookStep> sessionSteps = (List<org.neodymium.ai.model.PlaybookStep>) context.getTransientData().get("playbook.steps");
+            if (mode != null && mode.isReplay() && sessionSteps != null && !sessionSteps.isEmpty())
+            {
+                for (int i = 0; i < stepsToExecute.size() && i < sessionSteps.size(); i++)
+                {
+                    final org.neodymium.ai.model.PlaybookStep parsed = stepsToExecute.get(i);
+                    final org.neodymium.ai.model.PlaybookStep recorded = sessionSteps.get(i);
+                    if (recorded.getActions() != null && !recorded.getActions().isEmpty())
+                    {
+                        parsed.setActions(recorded.getActions());
+                    }
+                }
+            }
+
             if (sessionSteps != null)
             {
                 sessionSteps.clear();
-                sessionSteps.addAll(playbook.getSteps());
+                sessionSteps.addAll(stepsToExecute);
             }
 
             // Push steps in reverse order onto execution context stack
-            final List<org.neodymium.ai.model.PlaybookStep> steps = playbook.getSteps();
-            for (int i = steps.size() - 1; i >= 0; i--)
+            for (int i = stepsToExecute.size() - 1; i >= 0; i--)
             {
-                context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(steps.get(i), session, context));
+                context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(stepsToExecute.get(i), session, context));
             }
 
             // Execute using the StateMachineRunner
@@ -208,9 +220,22 @@ public abstract class BaseAiTest extends BaseLlmTest
         }
         catch (final Exception e)
         {
-            if (e instanceof RuntimeException)
+            Throwable root = e;
+            while (root != null)
             {
-                throw (RuntimeException) e;
+                if (root instanceof AssertionError ae)
+                {
+                    throw ae;
+                }
+                if (root.getCause() == root)
+                {
+                    break;
+                }
+                root = root.getCause();
+            }
+            if (e instanceof RuntimeException re)
+            {
+                throw re;
             }
             throw new RuntimeException("Failed to run programmatic playbook", e);
         }

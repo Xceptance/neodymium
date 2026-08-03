@@ -78,12 +78,6 @@ public class SelectIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Select
         mock.addResponse(new LlmResponse("""
@@ -96,12 +90,6 @@ public class SelectIntegrationTest extends BaseAiTest
                   "reasoning": "Select Germany"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "value selected"
             }
             """, null, "mock"));
     }
@@ -126,7 +114,8 @@ public class SelectIntegrationTest extends BaseAiTest
         $("#country-select").shouldHave(value("DE"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_select_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_select_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

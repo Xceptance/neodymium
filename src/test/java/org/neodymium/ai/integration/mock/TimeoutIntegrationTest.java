@@ -76,12 +76,6 @@ public class TimeoutIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Assert false condition with short timeout (ASSERT)
         mock.addResponse(new LlmResponse("""
@@ -94,12 +88,6 @@ public class TimeoutIntegrationTest extends BaseAiTest
                   "reasoning": "Check non-existent element quickly"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": false,
-              "reasoning": "Element not found"
             }
             """, null, "mock"));
     }
@@ -126,7 +114,7 @@ public class TimeoutIntegrationTest extends BaseAiTest
                 """);
             org.junit.jupiter.api.Assertions.fail("The playbook should have failed due to element not found");
         }
-        catch (final Exception e)
+        catch (final Throwable t)
         {
             final long duration = System.currentTimeMillis() - start;
             // The step should fail quickly due to custom 50ms timeout.

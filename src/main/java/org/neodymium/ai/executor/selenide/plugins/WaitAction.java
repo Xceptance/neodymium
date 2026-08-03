@@ -120,6 +120,10 @@ public final class WaitAction implements BrowserActionPlugin
                     {
                         SelenideElementFinder.findElement(target).shouldBe(Condition.hidden, Duration.ofSeconds(10));
                     }
+                    else if (val.contains("visible"))
+                    {
+                        SelenideElementFinder.findElement(target).shouldBe(Condition.visible, Duration.ofSeconds(10));
+                    }
                     else
                     {
                         SelenideElementFinder.findElement(target).shouldHave(Condition.text(value), Duration.ofSeconds(10));

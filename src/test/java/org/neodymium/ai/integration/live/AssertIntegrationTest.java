@@ -97,7 +97,7 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertTitleFailure.yaml")
-    @AiMode({ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTitleFailure(final AiSession session)
     {
         org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
@@ -116,7 +116,7 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertTextFailure.yaml")
-    @AiMode({ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTextFailure(final AiSession session)
     {
         org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
@@ -135,7 +135,7 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertVisibilityFailure.yaml")
-    @AiMode({ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertVisibilityFailure(final AiSession session)
     {
         org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
@@ -154,7 +154,7 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertInvisibilityFailure.yaml")
-    @AiMode({ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertInvisibilityFailure(final AiSession session)
     {
         org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
@@ -173,7 +173,7 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertExistenceFailure.yaml")
-    @AiMode({ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertExistenceFailure(final AiSession session)
     {
         org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 

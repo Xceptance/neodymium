@@ -97,7 +97,17 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         final Method method = context.getRequiredTestMethod();
         return testClass.isAnnotationPresent(NeodymiumAiTest.class)
             || testClass.isAnnotationPresent(AiPlaybook.class)
-            || method.isAnnotationPresent(AiPlaybook.class);
+            || method.isAnnotationPresent(AiPlaybook.class)
+            || testClass.isAnnotationPresent(org.neodymium.common.testdata.DataFile.class)
+            || method.isAnnotationPresent(org.neodymium.common.testdata.DataFile.class)
+            || testClass.isAnnotationPresent(com.xceptance.neodymium.common.testdata.DataFile.class)
+            || method.isAnnotationPresent(com.xceptance.neodymium.common.testdata.DataFile.class);
+    }
+
+    @Override
+    public boolean mayReturnZeroTestTemplateInvocationContexts(final ExtensionContext context)
+    {
+        return true;
     }
 
     @Override
@@ -105,6 +115,14 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     {
         final Method method = context.getRequiredTestMethod();
         final Class<?> testClass = context.getRequiredTestClass();
+
+        if (method.isAnnotationPresent(org.junit.jupiter.api.BeforeEach.class)
+            || method.isAnnotationPresent(org.junit.jupiter.api.AfterEach.class)
+            || method.isAnnotationPresent(org.junit.jupiter.api.BeforeAll.class)
+            || method.isAnnotationPresent(org.junit.jupiter.api.AfterAll.class))
+        {
+            return Stream.empty();
+        }
 
         // 1. Resolve playbook paths
         final List<String> playbookPaths = new ArrayList<>();
@@ -130,6 +148,39 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         if (path != null && !path.isEmpty())
                         {
                             playbookPaths.add(path);
+                        }
+                    }
+                }
+                else
+                {
+                    org.neodymium.common.testdata.DataFile dataFileClass = testClass.getAnnotation(org.neodymium.common.testdata.DataFile.class);
+                    if (dataFileClass == null)
+                    {
+                        final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileClass = testClass.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
+                        if (legacyDataFileClass != null)
+                        {
+                            playbookPaths.add(legacyDataFileClass.value());
+                        }
+                    }
+                    else if (!dataFileClass.value().isEmpty())
+                    {
+                        playbookPaths.add(dataFileClass.value());
+                    }
+
+                    if (playbookPaths.isEmpty())
+                    {
+                        org.neodymium.common.testdata.DataFile dataFileMethod = method.getAnnotation(org.neodymium.common.testdata.DataFile.class);
+                        if (dataFileMethod == null)
+                        {
+                            final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileMethod = method.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
+                            if (legacyDataFileMethod != null && !legacyDataFileMethod.value().isEmpty())
+                            {
+                                playbookPaths.add(legacyDataFileMethod.value());
+                            }
+                        }
+                        else if (!dataFileMethod.value().isEmpty())
+                        {
+                            playbookPaths.add(dataFileMethod.value());
                         }
                     }
                 }
@@ -219,6 +270,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             Collections.addAll(datasetFilters, classDataSets.value());
         }
 
+        final org.neodymium.common.testdata.DataSet neoDataSet = method.getAnnotation(org.neodymium.common.testdata.DataSet.class);
+        final com.xceptance.neodymium.common.testdata.DataSet legacyDataSet = method.getAnnotation(com.xceptance.neodymium.common.testdata.DataSet.class);
+        final String legacyDsIdFilter = (neoDataSet != null && !neoDataSet.id().isEmpty()) ? neoDataSet.id()
+                : (legacyDataSet != null && !legacyDataSet.id().isEmpty()) ? legacyDataSet.id() : null;
+
         final List<String> resolvedPaths = new ArrayList<>();
         for (final String path : playbookPaths)
         {
@@ -246,9 +302,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    // Relative path from test class package
+                    // Relative path from test class package unless it starts with top-level resource folders
                     final String packagePath = testClass.getPackageName().replace('.', '/');
-                    if (path.startsWith(packagePath + "/"))
+                    if (path.startsWith(packagePath + "/") || path.startsWith("verla/") || path.startsWith("playbooks/") || path.startsWith("ai-playbooks/"))
                     {
                         resolvedPaths.add(path);
                     }
@@ -289,7 +345,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 for (final Map<String, SessionData.DataEntry> ds : allDataSets)
                 {
                     final String dsId = getDataSetId(ds);
-                    if (shouldIncludeDataSet(dsId, datasetFilters))
+                    boolean legacyMatch = (legacyDsIdFilter == null) || legacyDsIdFilter.equalsIgnoreCase(dsId);
+                    if (legacyMatch && shouldIncludeDataSet(dsId, datasetFilters))
                     {
                         filteredDataSets.add(ds);
                     }
@@ -525,7 +582,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExecutionEventBus eventBus = new ExecutionEventBus();
             final SelenideTargetExecutor executor = new SelenideTargetExecutor();
 
-            this.session = AiSession.mock(sessionData, registry, eventBus, executor);
+            this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
             final ExecutionContext executionContext = this.session.getExecutionContext();
             executor.setExecutionContext(executionContext);
             
@@ -552,9 +609,17 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 recFileName = methodPb.recordingFileName();
             }
+            else if (methodPb != null && !methodPb.name().isEmpty())
+            {
+                recFileName = methodPb.name();
+            }
             else if (classPb != null && !classPb.recordingFileName().isEmpty())
             {
                 recFileName = classPb.recordingFileName();
+            }
+            else if (classPb != null && !classPb.name().isEmpty())
+            {
+                recFileName = classPb.name();
             }
 
             String resolvedPlaybookPath = playbookPath;
@@ -703,8 +768,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            runPlaybookForMethod(invocationContext.getExecutable());
             invocation.proceed();
+            runPlaybookForMethod(invocationContext.getExecutable());
         }
 
         @Override

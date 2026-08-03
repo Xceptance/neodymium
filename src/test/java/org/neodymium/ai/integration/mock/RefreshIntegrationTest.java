@@ -78,12 +78,6 @@ public class RefreshIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Refresh
         mock.addResponse(new LlmResponse("""
@@ -96,12 +90,6 @@ public class RefreshIntegrationTest extends BaseAiTest
                   "reasoning": "Refresh page"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "refreshed"
             }
             """, null, "mock"));
     }
@@ -126,7 +114,8 @@ public class RefreshIntegrationTest extends BaseAiTest
         $("h1").shouldHave(text("Assert Action Test"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_refresh_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_refresh_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

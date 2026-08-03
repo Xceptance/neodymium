@@ -88,7 +88,7 @@ public final class PlaybookRecorder implements ExecutionListener
             }
             catch (final Exception e)
             {
-                // Silent catch or logger details printout
+                org.slf4j.LoggerFactory.getLogger(PlaybookRecorder.class).error("Failed to write playbook recording to {}", this.recordingPath, e);
             }
         }
     }

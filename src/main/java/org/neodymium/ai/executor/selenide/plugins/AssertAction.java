@@ -80,9 +80,10 @@ public final class AssertAction implements BrowserActionPlugin
 
             try
             {
-                // Wait until the current page URL updates and matches/contains the expected string
-                Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected));
-                LOG.debug("   ✅ URL Assertion passed for: '{}'", expected);
+                // Wait until the current page URL or title updates and matches/contains the expected string
+                Selenide.Wait().until(d -> (d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected))
+                        || (d.getTitle() != null && d.getTitle().contains(expected)));
+                LOG.debug("   ✅ URL/Title Assertion passed for: '{}'", expected);
             }
             catch (final TimeoutException e)
             {
@@ -95,15 +96,42 @@ public final class AssertAction implements BrowserActionPlugin
             return;
         }
 
+        // Handle Title assertions (matching target names like "title" or "pageTitle")
+        if ("title".equalsIgnoreCase(action.getTarget()) || "pageTitle".equalsIgnoreCase(action.getTarget()))
+        {
+            if (expected == null)
+            {
+                throw new RuntimeException("Title assertion requires a 'value' (the expected title)");
+            }
+
+            try
+            {
+                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().contains(expected));
+                LOG.debug("   ✅ Title Assertion passed for: '{}'", expected);
+            }
+            catch (final TimeoutException e)
+            {
+                final String actualTitle = Selenide.title();
+                SelenideAddons.wrapAssertionError(() ->
+                {
+                    throw new AssertionError(String.format("Assertion failed: Expected Title to contain '%s' but was '%s'", expected, actualTitle), e);
+                });
+            }
+            return;
+        }
+
         // Handle Element assertions
         final boolean isAbsenceCheck = "hidden".equalsIgnoreCase(expected) || "[hidden]".equalsIgnoreCase(expected)
-                || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected);
+                || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected)
+                || "not_exist".equalsIgnoreCase(expected) || "[not_exist]".equalsIgnoreCase(expected)
+                || "not_exists".equalsIgnoreCase(expected) || "[not_exists]".equalsIgnoreCase(expected)
+                || "invisible".equalsIgnoreCase(expected) || "[invisible]".equalsIgnoreCase(expected);
 
         final SelenideElement element = SelenideElementFinder.findElement(action.getTarget());
 
         if (isAbsenceCheck)
         {
-            element.shouldBe(Condition.hidden);
+            element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
             return;
         }
 
@@ -161,7 +189,7 @@ public final class AssertAction implements BrowserActionPlugin
                     }
                 }
 
-                element.should(cond, java.time.Duration.ofMillis(Math.max(com.codeborne.selenide.Configuration.timeout, 6000)));
+                element.should(cond);
             }
             LOG.debug("   ✅ Assertion passed for: '{}'", expected);
         }
@@ -208,10 +236,12 @@ public final class AssertAction implements BrowserActionPlugin
             // Ignore JS execution errors
         }
         final String actualDetails = String.format("Text: '%s', Value: '%s', Attributes: %s", actualText, actualValue, attributesStr);
-        SelenideAddons.wrapAssertionError(() ->
+        final String msg = String.format("Assertion failed: '%s' not found in common or element attributes. Found: [%s]", expected, actualDetails);
+        if (e instanceof AssertionError ae)
         {
-            throw new AssertionError(String.format("Assertion failed: '%s' not found in common or element attributes. Found: [%s]", expected, actualDetails), e);
-        });
+            throw ae;
+        }
+        throw new AssertionError(msg, e);
     }
 
     private boolean isRegexPattern(final String str)

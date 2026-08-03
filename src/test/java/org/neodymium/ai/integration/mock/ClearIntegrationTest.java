@@ -78,12 +78,6 @@ public class ClearIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Type first
         mock.addResponse(new LlmResponse("""
@@ -98,12 +92,6 @@ public class ClearIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "typed successfully"
-            }
-            """, null, "mock"));
 
         // Step 3: Clear
         mock.addResponse(new LlmResponse("""
@@ -116,12 +104,6 @@ public class ClearIntegrationTest extends BaseAiTest
                   "reasoning": "Clear the text input field"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "input field cleared"
             }
             """, null, "mock"));
     }
@@ -147,7 +129,8 @@ public class ClearIntegrationTest extends BaseAiTest
         $("#first-name").shouldBe(empty);
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_clear_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_clear_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

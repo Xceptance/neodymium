@@ -32,6 +32,9 @@ import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
@@ -48,7 +51,9 @@ import org.neodymium.util.Neodymium;
  */
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
-@NeodymiumAiTest("/playbooks/integration/main-click.yaml")
+@NeodymiumAiTest
+@AiMode(ExecutionMode.LLM_ONLY)
+@AiDataSet({"datasetA", "datasetB"})
 public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
 {
     private static int setupCount = 0;
@@ -79,16 +84,14 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
         System.clearProperty("neodymium.ai.pesap.enabled");
     }
 
-    @BeforeEach
-    @AiPlaybook("/playbooks/integration/setup-navigate.yaml")
-    public void setup(final AiSession session)
+    public void initMock(final AiSession session)
     {
-        setupCount++;
-        final String pageUrl = String.format("http://localhost:%d/ClickActionTest/testClickStandardButton.html", server.getPort());
+        final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
         System.setProperty("demo.url", pageUrl);
         Neodymium.getData().put("demo.url", pageUrl);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        mock.clearResponses();
 
         // 1. Queue responses for @BeforeEach setup-navigate.yaml (NAVIGATE)
         mock.addResponse(new LlmResponse("""
@@ -103,12 +106,6 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "setup page opened successfully"
-            }
-            """, null, "mock"));
 
         // 2. Queue responses for @Test main-click.yaml (CLICK)
         mock.addResponse(new LlmResponse("""
@@ -116,17 +113,11 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
               "actions": [
                 {
                   "action": "CLICK",
-                  "locator": "#btn-click-standard",
+                  "locator": "#btn-click",
                   "value": "",
                   "reasoning": "Click button in main test"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "button clicked successfully"
             }
             """, null, "mock"));
 
@@ -136,19 +127,21 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
               "actions": [
                 {
                   "action": "ASSERT",
-                  "locator": "body",
-                  "value": "Button Clicked",
+                  "locator": "#click-status",
+                  "value": "Clicked",
                   "reasoning": "Verify state in teardown"
                 }
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "teardown assertion passed"
-            }
-            """, null, "mock"));
+    }
+
+    @BeforeEach
+    @AiPlaybook("/playbooks/integration/setup-navigate.yaml")
+    void setup(final AiSession session)
+    {
+        initMock(session);
+        setupCount++;
     }
 
     @AiPlaybook("/playbooks/integration/main-click.yaml")
@@ -161,9 +154,11 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
 
     @AfterEach
     @AiPlaybook("/playbooks/integration/teardown-verify.yaml")
-    public void teardown(final AiSession session)
+    void teardown(final AiSession session)
     {
         teardownCount++;
         assertNotNull(session, "AiSession must be injected and available in @AfterEach method");
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        mock.clearResponses();
     }
 }

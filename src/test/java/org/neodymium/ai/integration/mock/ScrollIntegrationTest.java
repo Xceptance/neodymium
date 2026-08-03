@@ -77,12 +77,6 @@ public class ScrollIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Scroll
         mock.addResponse(new LlmResponse("""
@@ -95,12 +89,6 @@ public class ScrollIntegrationTest extends BaseAiTest
                   "reasoning": "Scroll to bottom button"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "scrolled"
             }
             """, null, "mock"));
     }
@@ -125,7 +113,8 @@ public class ScrollIntegrationTest extends BaseAiTest
         $("#btn-bottom").click();
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_scroll_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_scroll_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

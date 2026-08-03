@@ -82,12 +82,6 @@ public class BackIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl1), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "page opened successfully"
-            }
-            """, null, "mock"));
 
         // Step 2: Open url2
         mock.addResponse(new LlmResponse("""
@@ -102,12 +96,6 @@ public class BackIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl2), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "second page opened successfully"
-            }
-            """, null, "mock"));
 
         // Step 3: BACK
         mock.addResponse(new LlmResponse("""
@@ -120,12 +108,6 @@ public class BackIntegrationTest extends BaseAiTest
                   "reasoning": "Navigate back to the previous page"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "went back successfully"
             }
             """, null, "mock"));
     }
@@ -153,7 +135,8 @@ public class BackIntegrationTest extends BaseAiTest
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
 
         // Verify that the recorded playbook contains the parameterized placeholders instead of hardcoded URLs
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_back_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_back_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

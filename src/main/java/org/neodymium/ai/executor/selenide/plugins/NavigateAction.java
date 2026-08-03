@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.executor.selenide.plugins;
 
+import java.util.Map;
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.Selenide;
 
@@ -54,8 +55,43 @@ public final class NavigateAction implements BrowserActionPlugin
             }
             if (url != null)
             {
+                if (url.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+                {
+                    final String activeUrl = getActiveServerUrl();
+                    if (activeUrl != null && activeUrl.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+                    {
+                        final String targetPort = url.replaceAll("http://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
+                        final String activePort = activeUrl.replaceAll("http://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
+                        if (!targetPort.equals(activePort))
+                        {
+                            url = url.replace(":" + targetPort, ":" + activePort);
+                        }
+                    }
+                }
                 Selenide.open(url);
             }
         }
+    }
+
+    private String getActiveServerUrl()
+    {
+        try
+        {
+            if (org.neodymium.util.Neodymium.getData() != null)
+            {
+                for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
+                {
+                    if (entry.getValue() != null && entry.getValue().matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+                    {
+                        return entry.getValue();
+                    }
+                }
+            }
+        }
+        catch (final Throwable t)
+        {
+            // ignore
+        }
+        return null;
     }
 }

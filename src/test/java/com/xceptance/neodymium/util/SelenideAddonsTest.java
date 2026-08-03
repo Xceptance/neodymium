@@ -32,7 +32,7 @@ import com.codeborne.selenide.logevents.LogEvent.EventStatus;
 import com.codeborne.selenide.logevents.LogEventListener;
 import com.codeborne.selenide.logevents.SelenideLog;
 import com.codeborne.selenide.logevents.SelenideLogger;
-import com.xceptance.neodymium.ai.util.EmbeddedHtmlServer;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.common.retry.Retry;

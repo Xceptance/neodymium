@@ -59,7 +59,11 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     public InputStream read(final String identifier) throws IOException
     {
         final String normalized = identifier != null && identifier.startsWith("/") ? identifier.substring(1) : identifier;
-        final InputStream in = classLoader.getResourceAsStream(normalized);
+        InputStream in = classLoader.getResourceAsStream(normalized);
+        if (in == null && !normalized.startsWith("ai-playbooks/"))
+        {
+            in = classLoader.getResourceAsStream("ai-playbooks/" + normalized);
+        }
         if (in == null)
         {
             throw new FileNotFoundException("Classpath resource not found: " + identifier);

@@ -81,12 +81,6 @@ public class ForwardIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl1), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "page 1 opened"
-            }
-            """, null, "mock"));
 
         // Step 2: Open url2
         mock.addResponse(new LlmResponse("""
@@ -101,12 +95,6 @@ public class ForwardIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl2), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "page 2 opened"
-            }
-            """, null, "mock"));
 
         // Step 3: BACK
         mock.addResponse(new LlmResponse("""
@@ -121,12 +109,6 @@ public class ForwardIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "went back"
-            }
-            """, null, "mock"));
 
         // Step 4: FORWARD
         mock.addResponse(new LlmResponse("""
@@ -139,12 +121,6 @@ public class ForwardIntegrationTest extends BaseAiTest
                   "reasoning": "Go forward"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "went forward"
             }
             """, null, "mock"));
     }
@@ -171,7 +147,8 @@ public class ForwardIntegrationTest extends BaseAiTest
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_forward_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_forward_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

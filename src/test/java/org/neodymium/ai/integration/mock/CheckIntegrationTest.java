@@ -78,12 +78,6 @@ public class CheckIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Check
         mock.addResponse(new LlmResponse("""
@@ -96,12 +90,6 @@ public class CheckIntegrationTest extends BaseAiTest
                   "reasoning": "Check the checkbox"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "checkbox checked"
             }
             """, null, "mock"));
     }
@@ -126,7 +114,8 @@ public class CheckIntegrationTest extends BaseAiTest
         $("#check-box").shouldBe(selected);
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_check_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_check_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {

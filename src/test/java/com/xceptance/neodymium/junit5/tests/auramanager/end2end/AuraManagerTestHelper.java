@@ -21,7 +21,7 @@ package com.xceptance.neodymium.junit5.tests.auramanager.end2end;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
-import com.xceptance.neodymium.ai.action.plugins.AiMethod;
+import org.neodymium.ai.executor.selenide.plugins.AiMethod;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import com.xceptance.neodymium.util.Neodymium;
 import org.junit.jupiter.api.Assertions;

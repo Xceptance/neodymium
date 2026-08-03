@@ -78,12 +78,6 @@ public class HoverIntegrationTest extends BaseAiTest
               ]
             }
             """.formatted(pageUrl), null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "navigated"
-            }
-            """, null, "mock"));
 
         // Step 2: Hover
         mock.addResponse(new LlmResponse("""
@@ -96,12 +90,6 @@ public class HoverIntegrationTest extends BaseAiTest
                   "reasoning": "Hover mouse cursor over hover-element"
                 }
               ]
-            }
-            """, null, "mock"));
-        mock.addResponse(new LlmResponse("""
-            {
-              "passed": true,
-              "reasoning": "element hovered"
             }
             """, null, "mock"));
     }
@@ -126,7 +114,8 @@ public class HoverIntegrationTest extends BaseAiTest
         $("#hover-status").shouldHave(text("Hovered"));
 
         // Verify parameterization
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_hover_playbook.json");
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_hover_playbook_" + browserProfile + ".json");
         org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
         try
         {
