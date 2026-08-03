@@ -61,7 +61,7 @@ public final class VerifyOutcomeStep implements PipelineStep
     public void execute(final ExecutionContext context) throws PipelineException
     {
         // 1. Check if semantic verification is enabled in configuration
-        final AiConfiguration config = new AiConfiguration();
+        final AiConfiguration config = AiConfiguration.getInstance();
         final Object override = context.getTransientData().get("semanticVerification.enabled");
         final boolean isEnabled = override instanceof Boolean b ? b : config.isSemanticVerificationEnabled();
         if (!isEnabled)

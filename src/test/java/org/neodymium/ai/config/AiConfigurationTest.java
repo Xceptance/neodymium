@@ -71,7 +71,8 @@ public class AiConfigurationTest
         System.setProperty("neodymium.ai.executionMode", "LLM_ONLY");
         System.setProperty("neodymium.ai.timeoutSeconds", "45");
 
-        final AiConfiguration config = new AiConfiguration();
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
         assertEquals(ExecutionMode.LLM_ONLY, config.getExecutionMode(), "Execution mode should resolve from System property.");
         assertEquals(45, config.getTimeoutSeconds("execution"), "Timeout seconds should resolve from System property.");
     }
@@ -82,7 +83,8 @@ public class AiConfigurationTest
         System.setProperty("neodymium.ai.execution.mode", "LLM_RECORDING");
         System.setProperty("neodymium.ai.timeout.seconds", "60");
 
-        final AiConfiguration config = new AiConfiguration();
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
         assertEquals(ExecutionMode.LLM_RECORDING, config.getExecutionMode(), "Dot-separated execution mode should resolve to getExecutionMode().");
         assertEquals(60, config.getTimeoutSeconds("execution"), "Dot-separated timeout should resolve to getTimeoutSeconds().");
     }

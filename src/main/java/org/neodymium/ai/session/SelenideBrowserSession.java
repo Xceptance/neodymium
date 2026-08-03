@@ -76,7 +76,7 @@ class SelenideBrowserSession extends AiSession
     private static LlmRegistry createLlmRegistry()
     {
         final LlmRegistry registry = new LlmRegistry();
-        final AiConfiguration config = new AiConfiguration();
+        final AiConfiguration config = AiConfiguration.getInstance();
         LlmRegistry.bootstrap(registry, config);
         return registry;
     }

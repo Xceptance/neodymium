@@ -59,7 +59,7 @@ public final class MistralLlmProvider implements LlmProvider
      */
     public MistralLlmProvider()
     {
-        this.config = new AiConfiguration();
+        this.config = AiConfiguration.getInstance();
         
         // Resolve Mistral specific properties or fallback to globals
         final String resolvedKey = this.config.getProperty("neodymium.ai.mistral.apiKey", this.config.getApiKey("mistral"));

@@ -243,7 +243,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         }
         if (modes.isEmpty())
         {
-            modes.add(new AiConfiguration().getExecutionMode());
+            modes.add(AiConfiguration.getInstance().getExecutionMode());
         }
 
         // 3. Resolve dataset filters
@@ -576,7 +576,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final SessionData sessionData = new SessionData(new HashMap<>(dataset));
             
             final LlmRegistry registry = new LlmRegistry();
-            final AiConfiguration config = new AiConfiguration();
+            final AiConfiguration config = AiConfiguration.getInstance();
             LlmRegistry.bootstrap(registry, config);
 
             final ExecutionEventBus eventBus = new ExecutionEventBus();

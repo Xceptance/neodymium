@@ -141,7 +141,8 @@ public final class LlmClientAndRegistryTest
         System.setProperty("neodymium.ai.vision.temperature", "0.7");
         System.setProperty("neodymium.ai.pesap.provider", "mock");
 
-        final AiConfiguration config = new AiConfiguration();
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
 
         // 1. Check global default
         assertEquals("global-model", config.getProperty("neodymium.ai.model", "fallback"));
@@ -175,7 +176,8 @@ public final class LlmClientAndRegistryTest
         System.setProperty("neodymium.ai.provider", "mock");
         System.setProperty("neodymium.ai.vision.provider", "mock");
 
-        final AiConfiguration config = new AiConfiguration();
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
         final LlmRegistry registry = new LlmRegistry();
 
         LlmRegistry.bootstrap(registry, config);
@@ -198,7 +200,8 @@ public final class LlmClientAndRegistryTest
         System.setProperty("neodymium.ai.verification.provider", "mock");
         System.setProperty("neodymium.ai.verification.model", "gemini-2.5-pro");
 
-        final AiConfiguration config = new AiConfiguration();
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
         final LlmRegistry registry = new LlmRegistry();
 
         LlmRegistry.bootstrap(registry, config);
@@ -221,7 +224,8 @@ public final class LlmClientAndRegistryTest
         System.setProperty("neodymium.ai.provider", "mock");
         System.setProperty("neodymium.ai.visual.provider", "mock");
 
-        final AiConfiguration config = new AiConfiguration();
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
         final LlmRegistry registry = new LlmRegistry();
 
         LlmRegistry.bootstrap(registry, config);

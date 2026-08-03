@@ -56,7 +56,7 @@ public final class GeminiLlmProvider implements LlmProvider
      */
     public GeminiLlmProvider()
     {
-        this.config = new AiConfiguration();
+        this.config = AiConfiguration.getInstance();
         
         // Resolve Gemini specific properties or fallback to globals
         final String resolvedKey = this.config.getProperty("neodymium.ai.gemini.apiKey", this.config.getApiKey("gemini"));

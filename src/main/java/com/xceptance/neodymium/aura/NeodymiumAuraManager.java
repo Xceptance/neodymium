@@ -1736,7 +1736,7 @@ public final class NeodymiumAuraManager
             "  \"reason\": \"Brief reason for classification\"\n" +
             "}";
 
-        final LlmProvider client = LlmProviderFactory.createProvider("execution", new AiConfiguration());
+        final LlmProvider client = LlmProviderFactory.createProvider("execution", AiConfiguration.getInstance());
         LlmResponse response = null;
         try
         {

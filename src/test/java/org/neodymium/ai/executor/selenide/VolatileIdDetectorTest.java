@@ -34,7 +34,7 @@ public class VolatileIdDetectorTest
     @Test
     public void testDefaultConfiguredVolatilePatterns()
     {
-        final VolatileIdDetector detector = new VolatileIdDetector(new AiConfiguration());
+        final VolatileIdDetector detector = new VolatileIdDetector(AiConfiguration.getInstance());
 
         // 1. React 18 useId() hook
         Assertions.assertTrue(detector.isVolatile(":r0:"));
