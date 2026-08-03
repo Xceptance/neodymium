@@ -94,5 +94,25 @@ public class PlaybookRecorderTest
             assertEquals(existingContent, content, "Pre-existing recording file must remain untouched on failure.");
         }
     }
+
+    @Test
+    public void testPlaybookStepYamlHashSerialization() throws IOException
+    {
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        final List<PlaybookStep> steps = new ArrayList<>();
+        final PlaybookStep step = new PlaybookStep("Open homepage");
+        step.setSourceYamlHash("abc123def456");
+        steps.add(step);
+
+        final PlaybookRecorder recorder = new PlaybookRecorder(manager, "recordings/hash_test.json", steps);
+        recorder.onEvent(new SessionFinishedEvent(100L, true));
+
+        try (final InputStream inputStream = manager.read("recordings/hash_test.json"))
+        {
+            final String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(json.contains("\"sourceYamlHash\" : \"abc123def456\""), "JSON output should serialize sourceYamlHash.");
+            assertTrue(json.contains("\"schemaVersion\" : \"2.0\""), "JSON output should serialize schemaVersion.");
+        }
+    }
 }
 

@@ -93,6 +93,8 @@ public final class ExecutionContext
     public static final String KEY_ACTIVE_DATASET_LABEL = "activeDatasetLabel";
     public static final String KEY_PLAYBOOK = "playbook";
     public static final String KEY_ACTIVE_MODEL = "activeModel";
+    public static final String KEY_EXECUTION_WARNINGS = "executionWarnings";
+    public static final String KEY_YAML_MISMATCH_WARNING = "yamlMismatchWarning";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.
