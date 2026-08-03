@@ -119,14 +119,6 @@ public final class AiConfiguration
         });
 
 
-        // 8. Overlay with System properties
-        System.getProperties().forEach((key, val) -> {
-            final String propKey = String.valueOf(key);
-            if (propKey.startsWith("neodymium.ai"))
-            {
-                this.properties.setProperty(propKey, String.valueOf(val));
-            }
-        });
     }
 
     /**
@@ -199,6 +191,22 @@ public final class AiConfiguration
             // Fallback in case Neodymium class is not initialized or on classpath
         }
 
+        final String sysProp = System.getProperty(key);
+        if (sysProp != null)
+        {
+            return sysProp;
+        }
+
+        final String targetNormalized = normalizeKey(key);
+        for (final java.util.Map.Entry<Object, Object> sysEntry : System.getProperties().entrySet())
+        {
+            final String sysKey = String.valueOf(sysEntry.getKey());
+            if (sysKey.startsWith("neodymium.ai") && normalizeKey(sysKey).equals(targetNormalized))
+            {
+                return String.valueOf(sysEntry.getValue());
+            }
+        }
+
         final String exactValue = this.properties.getProperty(key);
         if (exactValue != null)
         {
@@ -206,7 +214,6 @@ public final class AiConfiguration
         }
 
         // Secondary normalized key lookup for case/separator mismatch (e.g. neodymium.ai.execution.mode -> neodymium.ai.executionMode)
-        final String targetNormalized = normalizeKey(key);
         for (final String propName : this.properties.stringPropertyNames())
         {
             if (normalizeKey(propName).equals(targetNormalized))

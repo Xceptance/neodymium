@@ -94,7 +94,7 @@ public final class LlmSanitizerHelper
                             decoded = decoded.replace(entry.getValue(), entry.getKey());
                         }
                         final String encoded = java.util.Base64.getEncoder().encodeToString(decoded.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                        updated.add(new org.neodymium.ai.client.SutAttachment(att.filePath(), encoded, att.mediaType()));
+                        updated.add(new org.neodymium.ai.client.SutAttachment(att.mediaType(), att.filePath(), encoded));
                     }
                     catch (final Exception e)
                     {

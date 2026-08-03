@@ -391,3 +391,32 @@ default, and no tests on the three classes where the bugs live.
 
 **Recommendations 1, 2, and 8 are worth more than the rest combined, because they are what
 make round 7 unnecessary.**
+
+---
+
+## Team Verification, Decisions & Responses (2026-08-04)
+
+### 1. Architectural & Testing Strategy Decisions
+
+- **Definition of "Live" vs "Mock"**:
+  In Neodymium AI, "Live" (e.g., `@Tag("LiveAPI")`) does **NOT** mean testing against a live production web application/system. It refers specifically to calling a real remote LLM provider (over the network, using real credentials) vs. calling an offline `MockLlmProvider`.
+- **Tag Consolidation (`@Tag("LLM")`)**:
+  All `@Tag("LiveAPI")` and `@Tag("LiveLlm")` annotations across the test suite are consolidated into a single unified tag: **`@Tag("LLM")`**.
+- **Inclusion in Default Build (`mvn test`)**:
+  Real LLM tests (`@Tag("LLM")`) **MUST remain enabled in the default `mvn test` execution**. They provide ~75% of feedback for concept correctness, prompt construction, and model integration. They will not be excluded from default builds.
+
+### 2. Status of Findings & Action Plan
+
+| # | Finding / Area | Decision & Resolution Plan | Status |
+|---|---|---|---|
+| **1** | `YamlPlaybookParser` drops step maps | **Accepted**: Update `YamlPlaybookParser.java` to support structured step maps (`instruction:`, `actions:`) and fail on unexpected step formats. Fix `YamlPlaybookParserTest`. | Planned |
+| **2** | Test Tagging & CI | **Clarified**: Replaced `@Tag("LiveAPI")` / `@Tag("LiveLlm")` with `@Tag("LLM")`. Retained in default `mvn test`. | In Progress |
+| **3** | ThreadLocal Leak in `StateMachineRunner` | **Verified Resolved**: `ExecutionContext.setActiveContext(previousContext)` is already present in `StateMachineRunner.java:277` inside a `finally` block in current branch commits. | Resolved |
+| **4** | `AiConfiguration` System Prop Snapshot | **Accepted**: Modify `AiConfiguration.getProperty()` to check live `System.getProperty(key)` before cached map fallback. Resolves `VertexAiLlamaProviderTest`. | Planned |
+| **5** | Unsanitized LLM `reasoning` written to JSON | **Accepted**: Update `DefaultActionSanitizer.java` to sanitize `rawAction.getReasoning()` before building `Action`. | Planned |
+| **6** | Global `Selenide.Configuration.timeout` mutation | **Accepted**: Refactor custom timeout execution in `ExecuteActionsStep.java` to eliminate static global mutation race conditions. | Planned |
+| **7** | DOM Masking (`sanitizedStateText`) unwired | **Accepted**: Wire `sanitizedStateText` from `SanitizedPayload` into outbound request payload construction in `LlmSanitizerHelper.java`. | Planned |
+| **8** | Substring replacement in `DefaultActionSanitizer` | **Accepted**: Restrict replacement to sensitive entries or token boundary matching. | Planned |
+| **10**| Warning channel duplication | **Accepted**: Consolidate warning channels onto `KEY_EXECUTION_WARNINGS`. | Planned |
+| **11**| Verification call summary counter | **Accepted**: Correct counter logic in `StateMachineRunner` log summary. | Planned |
+
