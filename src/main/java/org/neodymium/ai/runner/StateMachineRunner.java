@@ -269,6 +269,7 @@ public final class StateMachineRunner
             this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
             logFinalStatsSummary(context, durationMs, success, failureCause);
             this.session.runPostHooks(success);
+            ExecutionContext.setActiveContext(previousContext);
         }
     }
 
