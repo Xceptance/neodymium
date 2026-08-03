@@ -113,7 +113,7 @@ public final class CallLlmStep<T> implements PipelineStep
             }
         }
 
-        final AiConfiguration config = new AiConfiguration();
+        final AiConfiguration config = AiConfiguration.getInstance();
         final double temp = config.getTemperature("action");
         final int timeoutSeconds = config.getTimeoutSeconds("action");
 

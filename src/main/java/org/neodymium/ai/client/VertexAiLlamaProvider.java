@@ -63,7 +63,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
      */
     public VertexAiLlamaProvider()
     {
-        this.config = new AiConfiguration();
+        this.config = AiConfiguration.getInstance();
 
         // Resolve api key from properties or env
         final String resolvedKey = this.config.getProperty("neodymium.ai.vertex.apiKey", null);

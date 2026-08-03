@@ -84,7 +84,7 @@ public class Neodymium
             ConfigFactory.setProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:this/path/should/never/exist/noOneShouldCreateMe.properties");
         }
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
-        aiConfiguration = new AiConfiguration();
+        aiConfiguration = AiConfiguration.getInstance();
         localization = NeodymiumLocalization.build(configuration.localizationFile());
     }
 
@@ -855,7 +855,8 @@ public class Neodymium
      */
     public static void reloadAiConfiguration()
     {
-        getContext().aiConfiguration = new AiConfiguration();
+        AiConfiguration.resetInstance();
+        getContext().aiConfiguration = AiConfiguration.getInstance();
     }
 
     /**

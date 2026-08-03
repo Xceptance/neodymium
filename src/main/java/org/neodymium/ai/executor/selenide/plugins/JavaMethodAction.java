@@ -121,7 +121,7 @@ public final class JavaMethodAction implements BrowserActionPlugin
 
     private List<String> getResolvedClasses()
     {
-        final AiConfiguration config = new AiConfiguration();
+        final AiConfiguration config = AiConfiguration.getInstance();
         final String classesStr = config.getProperty("neodymium.ai.agent.methods.classes", "org.neodymium.ai.util.AiAssertions");
         final List<String> classes = new ArrayList<>();
         if (classesStr != null && !classesStr.isBlank())
@@ -139,7 +139,7 @@ public final class JavaMethodAction implements BrowserActionPlugin
 
     private List<String> getResolvedPackages()
     {
-        final AiConfiguration config = new AiConfiguration();
+        final AiConfiguration config = AiConfiguration.getInstance();
         final String packagesStr = config.getProperty("neodymium.ai.agent.methods.packages", "");
         final List<String> packages = new ArrayList<>();
         if (packagesStr != null && !packagesStr.isBlank())

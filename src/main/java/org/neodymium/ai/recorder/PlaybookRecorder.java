@@ -21,14 +21,6 @@ package org.neodymium.ai.recorder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.util.List;
-import org.neodymium.ai.event.ExecutionEvent;
-import org.neodymium.ai.event.ExecutionListener;
-import org.neodymium.ai.event.structural.SessionFinishedEvent;
-import org.neodymium.ai.model.PlaybookStep;
-import org.neodymium.ai.resources.PlaybookResourceManager;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEvent;
 import org.neodymium.ai.event.ExecutionListener;

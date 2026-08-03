@@ -45,7 +45,7 @@ public final class VolatileIdDetector
      */
     public VolatileIdDetector()
     {
-        this(new AiConfiguration());
+        this(AiConfiguration.getInstance());
     }
 
     /**
