@@ -27,6 +27,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
@@ -34,10 +35,19 @@ import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Concrete implementation of {@link PlaybookParser} that parses playbooks
  * recursively from YAML files, resolving nested inclusions and checking for cycles.
+ * <p>
+ * Supported YAML formats:
+ * <ul>
+ *   <li><b>Consumer Format (Multiline Block):</b> {@code steps: |} multiline string block (primary natural language format).</li>
+ *   <li><b>Consumer Format (String List):</b> {@code steps:} list of string instructions.</li>
+ *   <li><b>Internal/Test Format (Structured Action Maps):</b> {@code steps:} list of maps containing {@code instruction} and {@code actions} list for single-file deterministic execution or test fixtures without a JSON companion.</li>
+ *   <li><b>Inclusion Maps:</b> {@code steps:} list of maps containing {@code include: relative/path.yaml}.</li>
+ * </ul>
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
@@ -223,6 +233,11 @@ public final class YamlPlaybookParser implements PlaybookParser
 
         parseRecursive(identifier, manager, activeStack, steps, dataSets);
 
+        if (steps.isEmpty())
+        {
+            throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
+        }
+
         return new Playbook(steps, dataSets, systemPromptAddons);
     }
 
@@ -370,6 +385,44 @@ public final class YamlPlaybookParser implements PlaybookParser
 
                             outSteps.add(includeStep);
                         }
+                        else if (mapStep.containsKey("instruction"))
+                        {
+                            final String instruction = String.valueOf(mapStep.get("instruction"));
+                            final PlaybookStep step = new PlaybookStep(instruction);
+                            initStepLocation(step, fileName, fileContent, instruction);
+
+                            final Object rawActions = mapStep.get("actions");
+                            if (rawActions instanceof List)
+                            {
+                                final ObjectMapper mapper = new ObjectMapper();
+                                for (final Object actObj : (List<?>) rawActions)
+                                {
+                                    if (actObj instanceof Map)
+                                    {
+                                        try
+                                        {
+                                            final Action action = mapper.convertValue(actObj, Action.class);
+                                            step.getActions().add(action);
+                                        }
+                                        catch (final Exception e)
+                                        {
+                                            throw new IllegalArgumentException("Failed to parse action in step: " + instruction, e);
+                                        }
+                                    }
+                                }
+                            }
+                            outSteps.add(step);
+                        }
+                        else
+                        {
+                            throw new IllegalArgumentException("Invalid playbook step format in file: " + fileName 
+                                + ". Expected string step, 'include' map, or 'instruction' map, but found map keys: " + mapStep.keySet());
+                        }
+                    }
+                    else
+                    {
+                        throw new IllegalArgumentException("Invalid playbook step item type in file: " + fileName 
+                            + ". Expected string or map, but found: " + (stepItem != null ? stepItem.getClass().getName() : "null"));
                     }
                 }
             }

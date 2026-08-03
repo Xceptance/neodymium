@@ -6,8 +6,21 @@ The redesigned v2 Neodymium AI framework (contained in `org.neodymium.ai.*`) del
 
 ## 1. Execution Playbooks & Replay Cache
 Instead of executing LLM calls dynamically on every run, the v2 framework uses **Structured Playbooks**:
-* **YAML Playbook**: Contains natural language steps (the test scenario definition).
-* **JSON Companion**: A recording compiled during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
+* **YAML Playbook**: Contains natural language steps written either as a plain-text multiline block (`steps: |`) or a YAML list of step strings. Test scenarios support variables (`${username}`) and modular inclusions (`include: ...`):
+  - **Multiline Block**:
+    ```yaml
+    steps: |
+      include: common/setup.yaml
+      Open ${verla.url}/verla-${quality}/index.html
+      Click login button
+    ```
+  - **YAML List**:
+    ```yaml
+    steps:
+      - "Open store homepage"
+      - "Click login button"
+    ```
+* **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
 
 ---
@@ -74,7 +87,7 @@ To handle complex, compound, or ambiguous instructions, the pipeline executes a 
 After executing the SUT actions for a step, the framework performs a **Post-Action Outcome Verification**:
 * **Always Visual**: Regardless of the initial execution context level, the outcome verification always captures the SUT state at the `VISUAL` level to record baseline images and compute screenshot dHash baselines.
 * **Semantic Verification Prompt**: Evaluates the natural language instruction against the final page DOM and screenshot using the `VerificationPrompt` template via the `LlmCapability.VERIFICATION` capability.
-* **Soft Failures**: Verification failures do not immediately break the test. Instead, they are collected and reported as warnings at the end of the test case, allowing developers to inspect semantic discrepancies without crashing the automation flow.
+* **Advisory & Diagnostic by Design (Soft Failures)**: Verification failures perform post-step semantic auditing and diagnostic scoring. They are collected and reported as warnings at the end of the test case, allowing developers to inspect semantic discrepancies without crashing the automation flow. Verification failures do **not** fail the test case directly; explicit test assertions are enforced via concrete SUT `ASSERT` actions.
 
 ---
 
