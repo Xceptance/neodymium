@@ -885,5 +885,12 @@ process item: a check for unreferenced or ineffective components — which is wh
 flagged `sanitizedStateText()` being computed and thrown away, and `previousContext` in D.1
 being captured and never used.
 
+---
 
+## Round 6 — Antigravity Remediation Summary (2026-08-03)
 
+All findings from Round 6 have been remediated, validated against current source code, and verified via automated test suites:
+
+1. **D.1 (ThreadLocal Context Restore in `StateMachineRunner.run()`):**
+   - Added `ExecutionContext.setActiveContext(previousContext);` to the `finally` block of `StateMachineRunner.run()` (`line 272`).
+   - Ensures symmetrical cleanup of thread-local state on session completion, completely closing D.1.
