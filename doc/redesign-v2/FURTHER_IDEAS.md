@@ -303,3 +303,38 @@ neodymium.ai.sync.scope=ALL
 neodymium.ai.sync.conflictStrategy=SERVER_WINS
 ```
 
+---
+
+## 🎯 Opt-In Strict Verification Mode for Replay
+
+### Background
+Currently, replay mode skips `VerifyOutcomeStep` execution for maximum execution speed (`if (mode.isReplay()) return;`). Even during live runs, failed outcome checks produce soft log warnings rather than failing the test run. While this maximizes execution speed, visual SSIM and selector resolution alone cannot catch subtle text/behavioral regressions (e.g., text changing from "Order Confirmed" to "Order Failed" while maintaining identical element structure).
+
+### Proposal
+Introduce an opt-in strict verification configuration flag:
+```properties
+# Enable strict semantic outcome verification (fails test on outcome assertion failure, including on replay)
+neodymium.ai.verification.strictMode=true
+```
+* **Default (`false`)**: Fast execution — soft warnings logged in live mode; verification skipped on replay.
+* **Strict (`true`)**: Verification steps run on replay and throw a `ConclusiveFailureException` if outcome checks or semantic assertions fail, enforcing strict semantic regression testing.
+
+---
+
+## 🧹 Configurable Overlay & Popup Dismissal Selectors
+
+### Background
+When an interactive action fails, `PrepareRetryStep` attempts to dismiss blocking UI overlays (such as cookie banners or popups) before re-attempting execution. Currently, the CSS selectors for overlay dismissal are hardcoded inside a JavaScript snippet in `PrepareRetryStep`:
+```javascript
+".modal, .overlay, .popup, [role=\"dialog\"], .cookie-banner, #cookie-consent"
+```
+This hardcoded list misses custom popups in modern web applications (e.g., OneTrust `#onetrust-consent-sdk`, Material UI `.MuiDialog-root`, or Tailwind overlays) and provides no mechanism for test authors to customize or disable overlay hiding.
+
+### Proposal
+Expose overlay dismissal selectors as a dynamic configuration property resolved via `AiConfiguration.getInstance()`:
+```properties
+# Configurable CSS selectors for automated overlay dismissal during retry
+neodymium.ai.retry.overlaySelectors=.modal, .overlay, .popup, [role="dialog"], .cookie-banner, #cookie-consent, #onetrust-consent-sdk
+```
+* **Customization**: Allows test engineers to configure application-specific popup selectors per test suite or environment.
+* **Disabling**: Setting `neodymium.ai.retry.overlaySelectors=""` disables automatic overlay hiding entirely for tests that explicitly test modal dialogs.

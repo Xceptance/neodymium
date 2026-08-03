@@ -262,7 +262,9 @@ public final class StateMachineRunner
         finally
         {
             final long durationMs = System.currentTimeMillis() - startTime;
-            this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success));
+            @SuppressWarnings("unchecked")
+            final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+            this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
             logFinalStatsSummary(context, durationMs, success, failureCause);
             this.session.runPostHooks(success);
         }

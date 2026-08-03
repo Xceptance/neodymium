@@ -120,6 +120,16 @@ public final class PlaybookStep
     private String sourceFile;
 
     /**
+     * The SHA-256 hash of the source YAML playbook from which this recording step was generated.
+     */
+    private String sourceYamlHash;
+
+    /**
+     * The schema version of the recorded playbook step.
+     */
+    private String schemaVersion = "2.0";
+
+    /**
      * Returns the line number in the source file.
      *
      * @return the line number, or -1 if unknown
@@ -610,5 +620,45 @@ public final class PlaybookStep
     public void setScreenshotHash(final String screenshotHash)
     {
         this.screenshotHash = screenshotHash;
+    }
+
+    /**
+     * Returns the SHA-256 hash of the source YAML playbook file.
+     *
+     * @return the source YAML hash or null if unrecorded
+     */
+    public String getSourceYamlHash()
+    {
+        return this.sourceYamlHash;
+    }
+
+    /**
+     * Sets the SHA-256 hash of the source YAML playbook file.
+     *
+     * @param sourceYamlHash the SHA-256 hash to set
+     */
+    public void setSourceYamlHash(final String sourceYamlHash)
+    {
+        this.sourceYamlHash = sourceYamlHash;
+    }
+
+    /**
+     * Returns the schema version of this recorded step.
+     *
+     * @return the schema version string
+     */
+    public String getSchemaVersion()
+    {
+        return this.schemaVersion;
+    }
+
+    /**
+     * Sets the schema version of this recorded step.
+     *
+     * @param schemaVersion the schema version to set
+     */
+    public void setSchemaVersion(final String schemaVersion)
+    {
+        this.schemaVersion = schemaVersion;
     }
 }

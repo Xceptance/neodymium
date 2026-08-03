@@ -39,16 +39,34 @@ public final class SessionFinishedEvent extends ExecutionEvent
     private final boolean success;
 
     /**
-     * Constructs a SessionFinishedEvent.
+     * Optional list of non-fatal execution warnings collected during the session.
+     */
+    private final java.util.List<String> warnings;
+
+    /**
+     * Constructs a SessionFinishedEvent without warnings.
      *
      * @param durationMs the session duration in milliseconds
      * @param success the final outcome success status
      */
     public SessionFinishedEvent(final long durationMs, final boolean success)
     {
+        this(durationMs, success, java.util.Collections.emptyList());
+    }
+
+    /**
+     * Constructs a SessionFinishedEvent with execution warnings.
+     *
+     * @param durationMs the session duration in milliseconds
+     * @param success the final outcome success status
+     * @param warnings the list of non-fatal warnings
+     */
+    public SessionFinishedEvent(final long durationMs, final boolean success, final java.util.List<String> warnings)
+    {
         super();
         this.durationMs = durationMs;
         this.success = success;
+        this.warnings = warnings != null ? java.util.Collections.unmodifiableList(new java.util.ArrayList<>(warnings)) : java.util.Collections.emptyList();
     }
 
     /**
@@ -69,6 +87,16 @@ public final class SessionFinishedEvent extends ExecutionEvent
     public boolean isSuccess()
     {
         return this.success;
+    }
+
+    /**
+     * Gets the unmodifiable list of non-fatal execution warnings.
+     *
+     * @return the list of warnings
+     */
+    public java.util.List<String> getWarnings()
+    {
+        return this.warnings;
     }
 
     @Override

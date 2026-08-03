@@ -710,6 +710,62 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             final Playbook playbook = parser.parse(resolvedPlaybookPath, manager);
             final List<PlaybookStep> playbookSteps = new ArrayList<>(playbook.getSteps());
+
+            // YAML Coherence & SHA-256 Hash Stamping / Verification
+            if (this.mode.isLive())
+            {
+                final String yamlHash = computeResourceSha256(manager, resolvedPlaybookPath);
+                if (yamlHash != null)
+                {
+                    for (final PlaybookStep s : playbookSteps)
+                    {
+                        if (s.getSourceYamlHash() == null || s.getSourceYamlHash().isEmpty())
+                        {
+                            s.setSourceYamlHash(yamlHash);
+                        }
+                    }
+                }
+            }
+            else if (this.mode.isReplay())
+            {
+                String companionYamlPath = playbookPath;
+                if (companionYamlPath != null && companionYamlPath.endsWith(".json"))
+                {
+                    companionYamlPath = companionYamlPath.substring(0, companionYamlPath.length() - 5) + ".yaml";
+                }
+                String yamlHash = computeResourceSha256(manager, companionYamlPath);
+                if (yamlHash == null && companionYamlPath != null && companionYamlPath.endsWith(".yaml"))
+                {
+                    yamlHash = computeResourceSha256(manager, companionYamlPath.substring(0, companionYamlPath.length() - 5) + ".yml");
+                }
+
+                if (yamlHash != null && !playbookSteps.isEmpty())
+                {
+                    final String recordedHash = playbookSteps.get(0).getSourceYamlHash();
+                    if (recordedHash != null && !recordedHash.isEmpty() && !recordedHash.equalsIgnoreCase(yamlHash))
+                    {
+                        final String warning = String.format(
+                            "Source YAML file '%s' (SHA-256: %s...) has been modified since recording '%s' (SHA-256: %s...) was generated.",
+                            companionYamlPath,
+                            yamlHash.substring(0, Math.min(8, yamlHash.length())),
+                            resolvedPlaybookPath,
+                            recordedHash.substring(0, Math.min(8, recordedHash.length()))
+                        );
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn("⚠️ [YAML Coherence Mismatch] {}", warning);
+                        executionContext.getTransientData().put(ExecutionContext.KEY_YAML_MISMATCH_WARNING, warning);
+
+                        @SuppressWarnings("unchecked")
+                        List<String> warningsList = (List<String>) executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+                        if (warningsList == null)
+                        {
+                            warningsList = new ArrayList<>();
+                            executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_WARNINGS, warningsList);
+                        }
+                        warningsList.add(warning);
+                    }
+                }
+            }
+
             final List<PlaybookStep> flatSteps = new ArrayList<>();
             flattenSteps(playbookSteps, flatSteps);
             executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
@@ -874,6 +930,34 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 return this.session.getExecutionContext();
             }
+            return null;
+        }
+    }
+
+    private static String computeResourceSha256(final PlaybookResourceManager manager, final String path)
+    {
+        if (manager == null || path == null || path.isEmpty())
+        {
+            return null;
+        }
+        try (final java.io.InputStream in = manager.read(path))
+        {
+            if (in == null)
+            {
+                return null;
+            }
+            final byte[] bytes = in.readAllBytes();
+            final java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            final byte[] hash = digest.digest(bytes);
+            final StringBuilder hex = new StringBuilder();
+            for (final byte b : hash)
+            {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        }
+        catch (final Exception e)
+        {
             return null;
         }
     }
