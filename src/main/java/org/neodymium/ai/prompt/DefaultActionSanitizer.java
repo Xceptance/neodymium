@@ -62,6 +62,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             return rawAction;
         }
 
+        final Map<String, String> sensitiveMap = data.getRawSensitiveData();
         final Map<String, String> varMap = data.getAllVariables();
         if (varMap.isEmpty())
         {
@@ -89,7 +90,11 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                     final String rawVal = entry.getValue();
                     if (rawVal != null && !rawVal.isEmpty())
                     {
-                        cleanVal = cleanVal.replace(rawVal, "${" + varKey + "}");
+                        final boolean isSensitive = sensitiveMap.containsKey(varKey);
+                        if (isSensitive || rawVal.length() >= 4)
+                        {
+                            cleanVal = cleanVal.replace(rawVal, "${" + varKey + "}");
+                        }
                     }
                 }
                 sanitizedValues.add(cleanVal);
@@ -106,7 +111,11 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                 final String rawVal = entry.getValue();
                 if (rawVal != null && !rawVal.isEmpty())
                 {
-                    sanitizedTarget = sanitizedTarget.replace(rawVal, "${" + varKey + "}");
+                    final boolean isSensitive = sensitiveMap.containsKey(varKey);
+                    if (isSensitive || rawVal.length() >= 4)
+                    {
+                        sanitizedTarget = sanitizedTarget.replace(rawVal, "${" + varKey + "}");
+                    }
                 }
             }
         }
@@ -121,7 +130,11 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                 final String rawVal = entry.getValue();
                 if (rawVal != null && !rawVal.isEmpty())
                 {
-                    sanitizedDesc = sanitizedDesc.replace(rawVal, "${" + varKey + "}");
+                    final boolean isSensitive = sensitiveMap.containsKey(varKey);
+                    if (isSensitive || rawVal.length() >= 4)
+                    {
+                        sanitizedDesc = sanitizedDesc.replace(rawVal, "${" + varKey + "}");
+                    }
                 }
             }
         }

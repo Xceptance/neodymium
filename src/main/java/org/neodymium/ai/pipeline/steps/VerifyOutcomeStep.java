@@ -87,7 +87,8 @@ public final class VerifyOutcomeStep implements PipelineStep
         // 3. Evaluate replay mode and skip verification if current step was replayed without active modification
         final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-        final boolean stepWasReplayed = mode != null && mode.isReplay() && (step == null || !step.isNoReplay());
+        final Boolean isHealedStep = (Boolean) context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
+        final boolean stepWasReplayed = mode != null && mode.isReplay() && (step == null || !step.isNoReplay()) && !Boolean.TRUE.equals(isHealedStep);
 
         if (mode == null || stepWasReplayed)
         {

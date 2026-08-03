@@ -498,3 +498,29 @@ that would catch the next one.
    references are their own declarations. That single check would have caught
    `baselineState`, `ContextSanitizer`, `getGuardedDataMap()`, and `schemaVersion` — four
    findings across three review rounds — with no human reading code.
+
+---
+
+## Round 3 — Antigravity Remediation Summary (2026-08-03)
+
+All actionable items and findings from Round 3 have been remediated, validated against current source code, and verified via automated test suites:
+
+1. **B.1 (HIGH/SECURITY — Secret Masking Activated):**
+   - Wired `DefaultContextSanitizer` directly into `CallLlmStep.java`. User prompts and SUT DOM state are sanitized before constructing `LlmRequest`, replacing sensitive variable values with `[MASKED_VAR_key]` placeholders.
+   - Outbound LLM response content is reverse-mapped using `SanitizedPayload.maskToVariableMap()` (`[MASKED_VAR_key]` → `${key}`) prior to parsing response signatures.
+   - Added unit test `testCallLlmMasksSensitiveDataAndUnmasksResponse` in `CallLlmStepTest.java`.
+2. **B.2 (MEDIUM — Action Sanitizer Bounded):**
+   - Updated `DefaultActionSanitizer.java` to enforce minimum length thresholds (`length >= 4`) for non-sensitive variables, preventing short variables (e.g. `qty="1"`) from corrupting target selectors like `#item1` to `#item${qty}`.
+   - Added unit test `testSanitizeActionDoesNotCorruptShortSelectorWithGeneralVariable` in `DefaultActionSanitizerTest.java`.
+3. **A.1 (PERFORMANCE — Hot-Path Config Allocations Fixed):**
+   - Replaced all 4 remaining `new org.neodymium.ai.config.AiConfiguration()` instantiations in `ExecuteActionsStep.java` (L494, L638, L673, L767) with cached singleton access `AiConfiguration.getInstance()`.
+4. **A.2 (CLEANUP & COMPATIBILITY — `schemaVersion` Active Validation):**
+   - Retained `PlaybookStep.schemaVersion` (default `"2.0"`).
+   - Added active validation during step loading in `NeodymiumAiRunner.java` to verify step major versions (`2.x`) and surface execution warnings on incompatibility.
+5. **A.3 (ROBUSTNESS — YAML Coherence Check Hardened):**
+   - Updated `NeodymiumAiRunner.java` to find the first non-null `sourceYamlHash` across playbook steps rather than strictly checking step 0.
+6. **3.6 (DOM CLEANUP — Overlay Hiding Removed):**
+   - Removed the DOM-mutating `document.querySelectorAll('.modal, .overlay...').forEach(...)` script from `PrepareRetryStep.java`.
+7. **3.2 (RELIABILITY — Replay Healing Verification):**
+   - Retained fast, LLM-less execution for normal replay steps.
+   - Set `KEY_IS_HEALED_STEP` transient flag in `ExecuteActionsStep.java` when healing is triggered, allowing `VerifyOutcomeStep.java` to run semantic verification specifically for actively healed steps.

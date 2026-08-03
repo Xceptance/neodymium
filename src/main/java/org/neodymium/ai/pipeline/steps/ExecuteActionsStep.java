@@ -491,7 +491,7 @@ public final class ExecuteActionsStep implements PipelineStep
             LOGGER.debug("================================================================================");
 
             final boolean isReplayMode = executionMode != null && executionMode.isReplay() && !stepNoReplay;
-            final org.neodymium.ai.config.AiConfiguration config = new org.neodymium.ai.config.AiConfiguration();
+            final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
             if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
             {
                 alreadySplitSteps.add(step);
@@ -635,7 +635,7 @@ public final class ExecuteActionsStep implements PipelineStep
             }
 
             final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) contextState.getTransientData()
-                .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> new org.neodymium.ai.config.AiConfiguration().getExecutionMode());
+                .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> org.neodymium.ai.config.AiConfiguration.getInstance().getExecutionMode());
 
             // Check if we are in replay mode and have a recorded dHash for this step
             if (mode.isReplay() && !stepNoReplay && step.isVisualStep() && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
@@ -670,7 +670,7 @@ public final class ExecuteActionsStep implements PipelineStep
                             if (recordedHash.length() > 64 && currentSsimMatrix != null)
                             {
                                 final double ssimScore = org.neodymium.ai.util.ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
-                                final double minScore = new org.neodymium.ai.config.AiConfiguration().getDouble("neodymium.ai.ssim.minScore", 0.99);
+                                final double minScore = org.neodymium.ai.config.AiConfiguration.getInstance().getDouble("neodymium.ai.ssim.minScore", 0.99);
                                 if (ssimScore >= minScore)
 
                                 {
@@ -764,7 +764,7 @@ public final class ExecuteActionsStep implements PipelineStep
             else
             {
                 // Live mode: Query LLM for actions
-                final boolean verificationEnabled = new org.neodymium.ai.config.AiConfiguration().isSemanticVerificationEnabled();
+                final boolean verificationEnabled = org.neodymium.ai.config.AiConfiguration.getInstance().isSemanticVerificationEnabled();
                 final org.neodymium.ai.executor.selenide.ContextLevel captureLevel;
                 if (verificationEnabled && initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.LEAN)
                 {
@@ -857,6 +857,7 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 // Replay Healing: PrepareRetryStep -> CaptureStateStep -> SemanticDivergenceAnalysisStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {
+                    c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                     final PrepareRetryStep prepareStep = new PrepareRetryStep();
                     final SemanticDivergenceAnalysisStep diffStep = new SemanticDivergenceAnalysisStep();
                     final CallLlmStep<List<Action>> healLlmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);

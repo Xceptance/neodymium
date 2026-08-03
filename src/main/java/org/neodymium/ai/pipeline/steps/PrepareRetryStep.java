@@ -63,20 +63,7 @@ public final class PrepareRetryStep implements PipelineStep
                 // Expected when no alert modal is open on screen
             }
 
-            // 3. Hide interfering UI overlays, cookie consent banners, and modal backdrop elements
-            try
-            {
-                Selenide.executeJavaScript(
-                    "document.querySelectorAll('.modal, .overlay, .popup, [role=\"dialog\"], .cookie-banner, #cookie-consent').forEach(el => el.style.display = 'none');"
-                );
-                LOGGER.debug("   Hidden blocking UI overlay elements via JS DOM execution.");
-            }
-            catch (final Exception e)
-            {
-                // Ignore JS execution issues when DOM is clean
-            }
-
-            // 4. Clear active element focus state from form input fields
+            // 3. Clear active element focus state from form input fields
             try
             {
                 Selenide.executeJavaScript(

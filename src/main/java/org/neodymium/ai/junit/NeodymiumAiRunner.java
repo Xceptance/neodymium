@@ -711,6 +711,25 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final Playbook playbook = parser.parse(resolvedPlaybookPath, manager);
             final List<PlaybookStep> playbookSteps = new ArrayList<>(playbook.getSteps());
 
+            // Validate step schemaVersion compatibility
+            for (final PlaybookStep step : playbookSteps)
+            {
+                final String version = step.getSchemaVersion();
+                if (version == null || version.isEmpty() || !version.startsWith("2."))
+                {
+                    final String schemaWarning = String.format(
+                        "Playbook step in '%s' (line %d) specifies schema version '%s', expected major version '2.x'.",
+                        resolvedPlaybookPath, step.getLineNumber(), version
+                    );
+                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn("⚠️ [Schema Version Warning] {}", schemaWarning);
+
+                    @SuppressWarnings("unchecked")
+                    List<String> warningsList = (List<String>) executionContext.getTransientData().computeIfAbsent(ExecutionContext.KEY_EXECUTION_WARNINGS, k -> new ArrayList<String>());
+                    warningsList.add(schemaWarning);
+                    break;
+                }
+            }
+
             // YAML Coherence & SHA-256 Hash Stamping / Verification
             if (this.mode.isLive())
             {
@@ -741,8 +760,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
                 if (yamlHash != null && !playbookSteps.isEmpty())
                 {
-                    final String recordedHash = playbookSteps.get(0).getSourceYamlHash();
-                    if (recordedHash != null && !recordedHash.isEmpty() && !recordedHash.equalsIgnoreCase(yamlHash))
+                    String recordedHash = null;
+                    for (final PlaybookStep step : playbookSteps)
+                    {
+                        if (step.getSourceYamlHash() != null && !step.getSourceYamlHash().isEmpty())
+                        {
+                            recordedHash = step.getSourceYamlHash();
+                            break;
+                        }
+                    }
+                    if (recordedHash != null && !recordedHash.equalsIgnoreCase(yamlHash))
                     {
                         final String warning = String.format(
                             "Source YAML file '%s' (SHA-256: %s...) has been modified since recording '%s' (SHA-256: %s...) was generated.",

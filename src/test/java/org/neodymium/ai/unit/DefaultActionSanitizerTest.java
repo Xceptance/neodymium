@@ -111,4 +111,27 @@ public class DefaultActionSanitizerTest
         Assertions.assertEquals("Thank you for your order ${orderId}!", sanitized.getValues().get(0));
         Assertions.assertEquals("Verify order ${orderId}", sanitized.getDescription());
     }
+
+    @Test
+    public void testSanitizeActionDoesNotCorruptShortSelectorWithGeneralVariable()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("qty", "1", false);
+        sessionData.putDynamic("password", "MySecretPassword123!", true);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action rawAction = new Action(
+            "TYPE",
+            "#item1-input",
+            List.of("MySecretPassword123!"),
+            "Type password into #item1-input",
+            "Reasoning"
+        );
+
+        final Action sanitized = sanitizer.sanitize(rawAction, sessionData);
+
+        Assertions.assertEquals("#item1-input", sanitized.getTarget(), "Target selector #item1-input should NOT be corrupted into #item${qty}-input.");
+        Assertions.assertEquals("${password}", sanitized.getValues().get(0), "Sensitive value should be parameterized into ${password}.");
+    }
 }

@@ -95,6 +95,7 @@ public final class ExecutionContext
     public static final String KEY_ACTIVE_MODEL = "activeModel";
     public static final String KEY_EXECUTION_WARNINGS = "executionWarnings";
     public static final String KEY_YAML_MISMATCH_WARNING = "yamlMismatchWarning";
+    public static final String KEY_IS_HEALED_STEP = "isHealedStep";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.

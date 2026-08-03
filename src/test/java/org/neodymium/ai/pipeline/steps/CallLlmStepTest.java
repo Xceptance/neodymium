@@ -93,4 +93,62 @@ public class CallLlmStepTest
 
         assertNotNull(context.getTransientData().get(ExecutionContext.KEY_LAST_LLM_RESULT), "LLM response result should be placed in context transient storage.");
     }
+
+    @Test
+    public void testCallLlmMasksSensitiveDataAndUnmasksResponse() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        provider.addResponse(new LlmResponse("Selected element with value [MASKED_VAR_password]", null, "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("password", "SuperSecret123!", true);
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final AiPrompt<String> prompt = new AiPrompt<>()
+        {
+            @Override
+            public ResponseSchema getResponseSchema()
+            {
+                return ResponseSchema.TEXT;
+            }
+
+            @Override
+            public String compileSystemMessage(final ExecutionContext ctx)
+            {
+                return "System";
+            }
+
+            @Override
+            public String compileUserMessage(final ExecutionContext ctx)
+            {
+                return "Enter password SuperSecret123! into login form";
+            }
+
+            @Override
+            public String parseResponse(final String rawContent, final ExecutionContext ctx)
+            {
+                return rawContent;
+            }
+        };
+
+        final CallLlmStep<String> callLlmStep = new CallLlmStep<>(prompt, LlmCapability.TEXT_ONLY);
+        callLlmStep.execute(context);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(provider.getLastRequest(), "LlmRequest should be recorded in mock provider.");
+        final String dispatchedPrompt = provider.getLastRequest().userMessage();
+        org.junit.jupiter.api.Assertions.assertTrue(dispatchedPrompt.contains("[MASKED_VAR_password]"), "Dispatched prompt to LLM should contain masked variable placeholder.");
+        org.junit.jupiter.api.Assertions.assertFalse(dispatchedPrompt.contains("SuperSecret123!"), "Dispatched prompt to LLM should NOT contain raw secret password!");
+
+        final Object result = context.getTransientData().get(ExecutionContext.KEY_LAST_LLM_RESULT);
+        org.junit.jupiter.api.Assertions.assertEquals("Selected element with value ${password}", result, "Response content should be unmasked back to variable reference syntax.");
+    }
 }

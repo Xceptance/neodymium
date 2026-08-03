@@ -90,13 +90,7 @@ public final class CallLlmStep<T> implements PipelineStep
 
         LOGGER.debug("Compiling prompt: {}", this.prompt.getClass().getSimpleName());
         final String system = this.prompt.compileSystemMessage(context);
-        final String user = this.prompt.compileUserMessage(context);
-
-        if (LOGGER.isTraceEnabled())
-        {
-            LOGGER.trace("System Prompt:\n{}", system);
-            LOGGER.trace("User Prompt:\n{}", user);
-        }
+        final String rawUser = this.prompt.compileUserMessage(context);
 
         List<SutAttachment> attachments = Collections.emptyList();
         final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
@@ -111,6 +105,17 @@ public final class CallLlmStep<T> implements PipelineStep
                     LOGGER.trace("  - MimeType: {}, Path: {}", attachment.mediaType(), attachment.filePath());
                 }
             }
+        }
+
+        // Perform Context Sanitization (Secret Masking)
+        final org.neodymium.ai.prompt.ContextSanitizer contextSanitizer = new org.neodymium.ai.prompt.DefaultContextSanitizer();
+        final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = contextSanitizer.sanitize(rawUser, lastState, context.getSessionData());
+        final String user = sanitizedPayload.sanitizedPrompt();
+
+        if (LOGGER.isTraceEnabled())
+        {
+            LOGGER.trace("System Prompt:\n{}", system);
+            LOGGER.trace("User Prompt:\n{}", user);
         }
 
         final AiConfiguration config = AiConfiguration.getInstance();
@@ -184,7 +189,16 @@ public final class CallLlmStep<T> implements PipelineStep
 
         try
         {
-            final T parsedResult = this.prompt.parseResponse(response.content(), context);
+            String unmaskedContent = response.content();
+            if (unmaskedContent != null && !sanitizedPayload.maskToVariableMap().isEmpty())
+            {
+                for (final java.util.Map.Entry<String, String> entry : sanitizedPayload.maskToVariableMap().entrySet())
+                {
+                    unmaskedContent = unmaskedContent.replace(entry.getKey(), entry.getValue());
+                }
+            }
+
+            final T parsedResult = this.prompt.parseResponse(unmaskedContent, context);
             if (parsedResult instanceof java.util.List<?> list)
             {
                 LOGGER.debug("Successfully parsed response: {} actions extracted", list.size());

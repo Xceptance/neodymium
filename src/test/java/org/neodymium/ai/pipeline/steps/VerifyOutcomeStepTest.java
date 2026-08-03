@@ -69,6 +69,7 @@ public class VerifyOutcomeStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, targetExecutor);
+        context.getTransientData().put("semanticVerification.enabled", true);
     }
 
     /**
@@ -80,6 +81,7 @@ public class VerifyOutcomeStepTest
     {
         final ExecutionContext emptyContext = new ExecutionContext(new SessionData(new HashMap<>()));
         emptyContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, targetExecutor);
+        emptyContext.getTransientData().put("semanticVerification.enabled", true);
         final VerifyOutcomeStep step = new VerifyOutcomeStep();
 
         // Expect exception when session key is missing
@@ -98,6 +100,7 @@ public class VerifyOutcomeStepTest
     {
         final ExecutionContext emptyContext = new ExecutionContext(new SessionData(new HashMap<>()));
         emptyContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        emptyContext.getTransientData().put("semanticVerification.enabled", true);
         final VerifyOutcomeStep step = new VerifyOutcomeStep();
 
         // Expect exception when executor key is missing
@@ -187,10 +190,10 @@ public class VerifyOutcomeStepTest
         step.execute(context);
 
         @SuppressWarnings("unchecked")
-        final List<String> warnings = (List<String>) context.getTransientData().get("verificationWarnings");
+        final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
         // Assert exactly 1 warning recorded with specific failing reason
         Assertions.assertNotNull(warnings);
         Assertions.assertEquals(1, warnings.size());
-        Assertions.assertTrue(warnings.get(0).contains("Sign in button was disabled"));
+        Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
     }
 }

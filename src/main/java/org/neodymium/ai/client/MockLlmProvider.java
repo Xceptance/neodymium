@@ -84,16 +84,29 @@ public final class MockLlmProvider implements LlmProvider
         this.responseQueue.clear();
     }
 
+    private volatile LlmRequest lastRequest;
+
+    /**
+     * Retrieves the last LlmRequest received by this mock provider.
+     *
+     * @return the last LlmRequest or null if no request was made
+     */
+    public LlmRequest getLastRequest()
+    {
+        return this.lastRequest;
+    }
+
     /**
      * Dequeues the next canned response.
      *
-     * @param request the LLM request context (ignored in mock)
+     * @param request the LLM request context
      * @return the enqueued response
      * @throws IOException if no enqueued responses remain in the queue
      */
     @Override
     public LlmResponse chat(final LlmRequest request) throws IOException
     {
+        this.lastRequest = request;
         final LlmResponse next = this.responseQueue.poll();
         if (next == null)
         {
