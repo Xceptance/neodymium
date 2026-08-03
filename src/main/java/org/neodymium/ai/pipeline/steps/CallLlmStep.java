@@ -134,7 +134,7 @@ public final class CallLlmStep<T> implements PipelineStep
         final LlmResponse response;
         try
         {
-            response = org.neodymium.ai.client.LlmRetryHelper.executeWithRetry(() -> provider.chat(request));
+            response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;
 
             session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmResponseReceivedEvent(request, response, durationMs, capName));

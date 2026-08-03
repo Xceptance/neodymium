@@ -22,8 +22,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 /**
  * Concrete implementation of {@link PlaybookResourceManager} that reads,
@@ -68,7 +70,7 @@ public final class LocalFileResourceManager implements PlaybookResourceManager
     }
 
     /**
-     * Writes raw content to a file on the local disk.
+     * Writes raw content to a file on the local disk atomically using a temporary file.
      * Automatically creates any missing parent directories.
      *
      * @param identifier the relative resource path
@@ -80,11 +82,26 @@ public final class LocalFileResourceManager implements PlaybookResourceManager
     {
         final Path target = this.baseDirectory.resolve(identifier).normalize();
         final Path parent = target.getParent();
-        if (parent != null)
+        final Path dir = parent != null ? parent : this.baseDirectory;
+        Files.createDirectories(dir);
+
+        final Path tempFile = Files.createTempFile(dir, "recording-", ".tmp");
+        try
         {
-            Files.createDirectories(parent);
+            Files.writeString(tempFile, content, StandardCharsets.UTF_8);
+            try
+            {
+                Files.move(tempFile, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (final AtomicMoveNotSupportedException e)
+            {
+                Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING);
+            }
         }
-        Files.writeString(target, content, StandardCharsets.UTF_8);
+        finally
+        {
+            Files.deleteIfExists(tempFile);
+        }
     }
 
     @Override
