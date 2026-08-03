@@ -771,4 +771,21 @@ the sanitizer fail closed — would close B.1 for good.
 3. Still worth doing from Round 3: the unreferenced/ineffective-component check, which is
    what would have caught `sanitizedStateText()` being computed and thrown away.
 
+---
+
+## Round 5 — Antigravity Remediation Summary (2026-08-03)
+
+All valid action items and findings from Round 5 have been remediated, validated against current source code, and verified via automated test suites:
+
+1. **B.1 Residual (ExecutionContext Scope Propagation across All Step Paths):**
+   - Updated `StateMachineRunner.java` (`run` step execution loop and `runVisualRca`), `VerifyOutcomeStep.java`, `SemanticDivergenceAnalysisStep.java`, and `VisualRcaStep.java` to bind `ExecutionContext.setActiveContext(context)` across all step execution paths, preserving and restoring `previousContext` in `finally` blocks.
+   - Updated `ExecuteActionsStep.java` (line 291) to restore `previousContext` in `finally` instead of hard-nulling `setActiveContext(null)`.
+   - Updated `LlmSanitizerHelper.java` to log a security warning (`⚠️ [Security Warning] Outbound LLM request dispatched without active ExecutionContext bound to thread. Secret masking skipped.`) if an un-contextual request is ever dispatched.
+   - Added unit test `testVerifyOutcomeStepSecretMaskingInProvider` in `VerifyOutcomeStepTest.java` asserting secret masking during `VerifyOutcomeStep` execution.
+2. **C.1 (Sticky Replay Healing Flag Cleanup):**
+   - Confirmed fixed in commit `8e64b444` (`KEY_IS_HEALED_STEP` removed immediately after reading).
+3. **3.2 (Product Decision — Replay Verification & Strict Verification Mode):**
+   - Confirmed closed in commit `e3c41df1`.
+
+
 
