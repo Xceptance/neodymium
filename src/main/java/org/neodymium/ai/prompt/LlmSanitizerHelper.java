@@ -53,6 +53,8 @@ public final class LlmSanitizerHelper
         final ExecutionContext ctx = ExecutionContext.getActiveContext();
         if (ctx == null || ctx.getSessionData() == null)
         {
+            org.slf4j.LoggerFactory.getLogger(LlmSanitizerHelper.class)
+                .warn("⚠️ [Security Warning] Outbound LLM request dispatched without active ExecutionContext bound to thread. Secret masking skipped.");
             return new SanitizedPayload(request.userMessage(), null, Map.of());
         }
 

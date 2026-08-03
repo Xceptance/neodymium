@@ -126,8 +126,10 @@ public final class StateMachineRunner
         boolean success = false;
         Throwable failureCause = null;
 
+        final ExecutionContext previousContext = ExecutionContext.getActiveContext();
         try
         {
+            ExecutionContext.setActiveContext(context);
             while (context.hasSteps())
             {
                 final PipelineStep step = context.popStep();
@@ -475,7 +477,17 @@ public final class StateMachineRunner
 
             LOGGER.debug("Calling LLM provider '{}' via capability: VISION (Visual RCA)", provider.getClass().getSimpleName());
             final long startTime = System.currentTimeMillis();
-            final LlmResponse response = provider.chat(request);
+            final ExecutionContext previousContext = ExecutionContext.getActiveContext();
+            final LlmResponse response;
+            try
+            {
+                ExecutionContext.setActiveContext(context);
+                response = provider.chat(request);
+            }
+            finally
+            {
+                ExecutionContext.setActiveContext(previousContext);
+            }
             final long durationMs = System.currentTimeMillis() - startTime;
             LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
             final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);

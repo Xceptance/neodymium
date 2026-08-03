@@ -57,6 +57,20 @@ public final class SemanticDivergenceAnalysisStep implements PipelineStep
     @Override
     public void execute(final ExecutionContext context) throws PipelineException
     {
+        final ExecutionContext previousContext = ExecutionContext.getActiveContext();
+        try
+        {
+            ExecutionContext.setActiveContext(context);
+            executeInternal(context);
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(previousContext);
+        }
+    }
+
+    private void executeInternal(final ExecutionContext context) throws PipelineException
+    {
         // 1. Retrieve the active session instance
         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         if (session == null)

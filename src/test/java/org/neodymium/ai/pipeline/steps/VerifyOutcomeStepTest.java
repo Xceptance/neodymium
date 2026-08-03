@@ -196,4 +196,47 @@ public class VerifyOutcomeStepTest
         Assertions.assertEquals(1, warnings.size());
         Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
     }
+
+    /**
+     * Goal: Verifies that secret variable values are masked before LlmRequest is dispatched to provider during outcome verification.
+     */
+    @Test
+    public void testVerifyOutcomeStepSecretMaskingInProvider() throws Exception
+    {
+        System.setProperty("neodymium.ai.semanticVerificationEnabled", "true");
+        context.getSessionData().putDynamic("api_key", "SecretKey999!", true);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+
+        final PlaybookStep playbookStep = new PlaybookStep("Verify key SecretKey999! is active");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify key SecretKey999! is active");
+
+        final String jsonResponse = """
+            {
+              "rubrics": {
+                "intentMatch": { "analysis": "Key verified", "score": "PASS" },
+                "visualDelta": { "analysis": "UI match", "score": "PASS" },
+                "absenceOfErrors": { "analysis": "No errors", "score": "PASS" }
+              },
+              "overallVerdict": { "passed": true, "summary": "Key verified" }
+            }
+            """;
+        mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        try
+        {
+            ExecutionContext.setActiveContext(context);
+            step.execute(context);
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+
+        Assertions.assertNotNull(mockLlmProvider.getLastRequest(), "LlmRequest should be recorded by provider.");
+        final String userMessage = mockLlmProvider.getLastRequest().userMessage();
+        Assertions.assertTrue(userMessage.contains("[MASKED_VAR_api_key]"), "Outbound verification request user prompt should contain masked variable placeholder.");
+        Assertions.assertFalse(userMessage.contains("SecretKey999!"), "Outbound verification request user prompt should NOT contain raw secret key.");
+    }
 }

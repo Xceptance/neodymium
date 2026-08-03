@@ -136,6 +136,7 @@ public final class ExecuteActionsStep implements PipelineStep
         final ExecutionContext context
     ) throws PipelineException
     {
+        final ExecutionContext previousContext = ExecutionContext.getActiveContext();
         ExecutionContext.setActiveContext(context);
         try
         {
@@ -287,7 +288,7 @@ public final class ExecuteActionsStep implements PipelineStep
         }
         finally
         {
-            ExecutionContext.setActiveContext(null);
+            ExecutionContext.setActiveContext(previousContext);
         }
     }
 
