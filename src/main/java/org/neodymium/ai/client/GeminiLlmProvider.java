@@ -48,7 +48,8 @@ public final class GeminiLlmProvider implements LlmProvider
     private final AiConfiguration config;
     private final String apiKey;
     private final String modelName;
-    private final ChatModel model;
+    private final ChatModel defaultModel;
+    private final java.util.concurrent.ConcurrentHashMap<String, ChatModel> modelCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Constructs a GeminiLlmProvider and dynamically resolves its configuration.
@@ -68,12 +69,36 @@ public final class GeminiLlmProvider implements LlmProvider
 
         this.modelName = this.config.getProperty("neodymium.ai.gemini.model", this.config.getModel("gemini"));
 
-        this.model = GoogleAiGeminiChatModel.builder()
+        this.defaultModel = buildChatModel(0.0, 180);
+    }
+
+    /**
+     * Builds a GoogleAiGeminiChatModel with specified temperature and timeout.
+     */
+    private ChatModel buildChatModel(final double temperature, final int timeoutSeconds)
+    {
+        return GoogleAiGeminiChatModel.builder()
             .apiKey(this.apiKey)
             .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash-lite")
-            .temperature(0.0)
-            .timeout(java.time.Duration.ofSeconds(180))
+            .temperature(temperature)
+            .timeout(java.time.Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180))
             .build();
+    }
+
+    /**
+     * Resolves appropriate ChatModel for the given temperature and timeout settings.
+     */
+    private ChatModel getChatModel(final double temperature, final int timeoutSeconds)
+    {
+        final double temp = temperature >= 0.0 ? temperature : 0.0;
+        final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
+        if (temp == 0.0 && timeout == 180)
+        {
+            return this.defaultModel;
+        }
+
+        final String cacheKey = String.format("%s:%.2f:%d", this.modelName, temp, timeout);
+        return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout));
     }
 
     @Override
@@ -122,7 +147,9 @@ public final class GeminiLlmProvider implements LlmProvider
 
         try
         {
-            final ChatResponse response = this.model.chat(messages);
+            final ChatModel activeModel = getChatModel(request.temperature(), request.timeoutSeconds());
+            final ChatResponse response = activeModel.chat(messages);
+
             final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
             
             TokenUsage mappedUsage = null;

@@ -18,24 +18,29 @@
  */
 package org.neodymium.ai.recorder;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import org.neodymium.ai.action.Action;
 import org.neodymium.ai.event.ExecutionEvent;
 import org.neodymium.ai.event.ExecutionListener;
-import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.resources.PlaybookResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Event listener that monitors execution event dispatches, compiles executed actions,
- * and writes the final parameterized recording as a JSON file through a resource manager.
+ * and writes the final parameterized recording as a JSON file through a resource manager
+ * only upon successful session completion.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 public final class PlaybookRecorder implements ExecutionListener
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlaybookRecorder.class);
+
     /**
      * The resource manager to write recording outputs to.
      */
@@ -49,7 +54,7 @@ public final class PlaybookRecorder implements ExecutionListener
     /**
      * The list of playbook steps to record and serialize.
      */
-    private final List<org.neodymium.ai.model.PlaybookStep> playbookSteps;
+    private final List<PlaybookStep> playbookSteps;
 
     /**
      * Constructs a PlaybookRecorder.
@@ -61,7 +66,7 @@ public final class PlaybookRecorder implements ExecutionListener
     public PlaybookRecorder(
         final PlaybookResourceManager resourceManager,
         final String recordingPath,
-        final List<org.neodymium.ai.model.PlaybookStep> playbookSteps
+        final List<PlaybookStep> playbookSteps
     )
     {
         this.resourceManager = resourceManager;
@@ -70,7 +75,8 @@ public final class PlaybookRecorder implements ExecutionListener
     }
 
     /**
-     * Consumes session finished events to serialize and write the steps to resource path.
+     * Consumes session finished events to serialize and write the steps to resource path
+     * if and only if the session finished successfully.
      *
      * @param event the dispatched execution event
      */
@@ -79,17 +85,25 @@ public final class PlaybookRecorder implements ExecutionListener
     {
         if (event instanceof SessionFinishedEvent)
         {
+            final SessionFinishedEvent sessionFinishedEvent = (SessionFinishedEvent) event;
+            if (!sessionFinishedEvent.isSuccess())
+            {
+                LOGGER.info("Session finished with failure. Skipping playbook recording write to {}", this.recordingPath);
+                return;
+            }
+
             try
             {
-                final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+                final ObjectMapper mapper = new ObjectMapper();
+                mapper.enable(SerializationFeature.INDENT_OUTPUT);
                 final String json = mapper.writeValueAsString(this.playbookSteps);
                 this.resourceManager.write(this.recordingPath, json);
             }
             catch (final Exception e)
             {
-                org.slf4j.LoggerFactory.getLogger(PlaybookRecorder.class).error("Failed to write playbook recording to {}", this.recordingPath, e);
+                LOGGER.error("Failed to write playbook recording to {}", this.recordingPath, e);
             }
         }
     }
 }
+

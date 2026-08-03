@@ -66,8 +66,9 @@ public class VertexAiLlamaProviderTest
 
         assertNotNull(capabilities, "Capabilities should not be null.");
         assertTrue(capabilities.contains(LlmCapability.TEXT_ONLY), "Should support TEXT_ONLY.");
-        assertTrue(capabilities.contains(LlmCapability.VISION), "Should support VISION.");
+        assertTrue(capabilities.contains(LlmCapability.VERIFICATION), "Should support VERIFICATION.");
         assertTrue(capabilities.contains(LlmCapability.EXECUTION), "Should support EXECUTION.");
+
     }
 
     @Test

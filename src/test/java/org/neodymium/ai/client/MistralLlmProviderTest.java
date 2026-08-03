@@ -27,6 +27,8 @@ import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.config.AiConfiguration;
+
 
 /**
  * Unit tests for {@link MistralLlmProvider}.
@@ -73,7 +75,9 @@ public class MistralLlmProviderTest
     @Test
     public void testMissingApiKeyThrowsException()
     {
-        System.clearProperty("neodymium.ai.mistral.apiKey");
+        System.setProperty("neodymium.ai.mistral.apiKey", "");
+        System.setProperty("neodymium.ai.apiKey", "");
+        AiConfiguration.resetInstance();
         final String envKey = System.getenv("MISTRAL_API_KEY");
         if (envKey == null || envKey.isBlank())
         {
@@ -82,4 +86,5 @@ public class MistralLlmProviderTest
             }, "Missing API key should throw IllegalArgumentException.");
         }
     }
+
 }

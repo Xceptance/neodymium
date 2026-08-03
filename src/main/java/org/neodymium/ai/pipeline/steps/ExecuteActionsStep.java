@@ -756,12 +756,21 @@ public final class ExecuteActionsStep implements PipelineStep
                     {
                         final SutState state = executor.captureState(captureLevel);
                         c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+                        if (state != null && state.getTextContent() != null)
+                        {
+                            final PlaybookStep currentStep = (PlaybookStep) c.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                            if (currentStep != null)
+                            {
+                                currentStep.setBaselineState(state.getTextContent());
+                            }
+                        }
                     }
                     catch (final java.io.IOException e)
                     {
                         throw new ConclusiveFailureException("Failed to capture SUT state before execution", e);
                     }
                 });
+
 
                 final LlmCapability capability = (initialLevel != null && initialLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                 final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
