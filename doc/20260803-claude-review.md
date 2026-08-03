@@ -655,4 +655,120 @@ All valid action items and findings from Round 4 have been remediated, validated
    - **Explicit Architectural Decision:** Neodymium AI explicitly chooses *not* to implement an opt-in strict verification mode that aborts test execution on semantic evaluation failures. Outcome verification is designed by contract as an advisory semantic rubric, recording soft warnings while allowing automated test execution to proceed without false-positive test crashes.
    - **Replay Behavior:** Normal replay steps execute fast, cheap, and offline without calling LLM outcome verification. Outcome verification is invoked during replay *only* when a step fails baseline replay and undergoes live LLM self-healing.
 
+---
+
+# Round 5 — Verification of the Round 4 remediation (2026-08-03)
+
+**Scope:** commits `8e64b444` (push secret masking into providers, fix sticky healing flag),
+`dec148de` (README masking docs), `e3c41df1` (Round 4 summary + 3.2 decision). Verified
+against current source.
+
+## C.1 — Fixed, cleanly ✅
+
+`VerifyOutcomeStep:92` now calls
+`context.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP)` immediately after
+reading the flag. Exactly the right fix; the silent cost regression is gone.
+
+## 3.2 — Legitimately closed as a product decision ✅
+
+Declining an opt-in strict verification mode is a valid resolution now that the reasoning is
+stated (advisory rubric by contract; avoid false-positive crashes) and the replay contract is
+spelled out (offline replay; verification only on healed steps). A documented, deliberate
+decision is what the original finding asked for. **3.2 is closed — not open.**
+
+## B.1 — Right architecture, but it does not mask on 5 of 6 paths ❌
+
+The refactor is the correct move (central choke point in the providers), and all four
+providers — Gemini, Mistral, Vertex, Mock — do call `LlmSanitizerHelper`. But the summary's
+claim that this *"Guarantees 100% of all 6 LLM call sites"* does not hold, because of how the
+helper resolves session data:
+
+```java
+LlmSanitizerHelper.java:53-56
+final ExecutionContext ctx = ExecutionContext.getActiveContext();   // ThreadLocal
+if (ctx == null || ctx.getSessionData() == null)
+{
+    return new SanitizedPayload(request.userMessage(), null, Map.of());  // ← returns UNMASKED
+}
+```
+
+`setActiveContext` has only **two** call sites in the entire main tree (grep-confirmed):
+
+- `CallLlmStep:88` — sets it, restores the previous value at `:93`
+- `ExecuteActionsStep:139` — sets it, and **explicitly nulls it** at `:290` in a `finally`
+
+On every other dispatch path the ThreadLocal is therefore `null`, and the helper silently
+returns the payload **unmasked**.
+
+The step ordering proves it for the highest-frequency case. `standardFlow` is assembled as
+`[capture, CallLlmStep, executeStep, verifyStep]` (`ExecuteActionsStep:805-806`), so
+`ExecuteActionsStep` nulls the context in its `finally` and `VerifyOutcomeStep` runs
+**immediately afterwards** with `ctx == null`. The same holds for PESAP (dispatched from the
+static `mapPlaybookStepToPipelineStep` lambda, outside any `setActiveContext` scope),
+`SemanticDivergenceAnalysisStep`, `VisualRcaStep`, and `StateMachineRunner:476`.
+
+| Path | ThreadLocal set at dispatch? | Masked? |
+|------|------------------------------|---------|
+| `CallLlmStep` | Yes (sets it itself, `:88`) | **Yes** |
+| `VerifyOutcomeStep:163` | No — nulled by `ExecuteActionsStep:290` immediately prior | No |
+| `SemanticDivergenceAnalysisStep:111` | No | No |
+| `ExecuteActionsStep:540` (PESAP) | No — static lambda scope | No |
+| `VisualRcaStep:126` | No | No |
+| `StateMachineRunner:476` (RCA) | No | No |
+
+**Net: effective coverage is unchanged from Round 4 — still `CallLlmStep` only.**
+`SemanticDivergenceAnalysisStep` remains the sharpest case: it ships the full
+`baselineState` DOM plus the current DOM, unmasked.
+
+### Why this is worse than the Round 4 state, despite better architecture
+
+Previously the gap was *greppable* — `VerifyOutcomeStep` had no sanitizer reference.
+Now every provider calls the sanitizer and it quietly no-ops, so the code reads as universal
+while behaving as before. For a security control, **silent fail-open is the wrong default.**
+
+Note also that `CallLlmStepTest` still passes, because `CallLlmStep` is precisely the one path
+where the ThreadLocal is set. A test asserting masking through `VerifyOutcomeStep` would have
+caught this.
+
+### Fix — one of
+
+1. **Propagate the context for the whole step.** Wrap `step.execute(context)` in
+   `StateMachineRunner:136` with `setActiveContext(context)` / restore, so every dispatch
+   inherits it. Simplest, closes all paths at once. `ExecuteActionsStep:290` must then stop
+   hard-nulling and instead restore the previous value, the way `CallLlmStep:93` already does.
+2. **Carry `SessionData` on `LlmRequest`** so providers need no ambient state at all.
+
+**Either way, fail closed rather than open.** If `ctx == null` and the request carries no
+session data, emit a warning instead of silently dispatching raw text — otherwise this exact
+regression stays invisible next time.
+
+### Smaller residuals (unchanged)
+
+- `LlmSanitizerHelper.toSanitizedRequest:81` passes `original.attachments()` through
+  untouched — non-image attachments are still decoded to text by providers.
+- `sanitizedStateText()` is still computed and discarded; DOM masking remains incidental to
+  the prompt text.
+- The system message is not masked (`:79`). Low risk — system prompts are static templates —
+  but worth stating deliberately.
+
+## Round 5 verdict
+
+Two of three items are genuinely resolved (C.1 fixed, 3.2 closed by decision). B.1 has the
+**right design for the first time** — a central choke point — and fails only on state
+propagation, which is a much smaller and more tractable gap than the previous
+one-call-site-at-a-time shape.
+
+This is the fourth consecutive round in which a fix landed correctly at one site and was
+reported as universal. The encouraging difference: the remaining defect is now a single
+missing `setActiveContext` in the run loop, not a structural rewrite. Fixing it — and making
+the sanitizer fail closed — would close B.1 for good.
+
+**Open items:**
+
+1. **B.1 residual** — propagate `ExecutionContext` across all step dispatches (or put
+   `SessionData` on `LlmRequest`), and make the sanitizer fail closed.
+2. Attachment masking + `sanitizedStateText()` (both minor, both long-standing).
+3. Still worth doing from Round 3: the unreferenced/ineffective-component check, which is
+   what would have caught `sanitizedStateText()` being computed and thrown away.
+
 
