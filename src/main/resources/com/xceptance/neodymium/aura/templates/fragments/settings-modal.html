@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- SETTINGS MODAL FRAGMENT -->
+<div class="modal-overlay" id="settingsModal" th:fragment="settingsModal" style="display: none;" th:style="${isOpenModal == true} ? 'display: flex;' : 'display: none;'">
+    <div class="modal-card modal-card-xl">
+        <div class="modal-header">
+            <div class="modal-header-title">
+                <i class="fa-solid fa-gear modal-icon"></i>
+                <span>Neodymium Settings</span>
+            </div>
+            <div class="modal-header-actions">
+                <button type="button" class="btn-secondary" onclick="expandAllSettingsGroups()"><i class="fa-solid fa-angles-down"></i> Expand All</button>
+                <button type="button" class="btn-secondary" onclick="collapseAllSettingsGroups()"><i class="fa-solid fa-angles-up"></i> Collapse All</button>
+                <button type="button" class="btn-close" onclick="closeSettingsModal()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <!-- SETTINGS TABS NAVIGATION BAR -->
+        <div class="settings-tabs-bar">
+            <div class="settings-tab-buttons">
+                <button type="button" class="settings-tab-btn" id="tabBtnGeneral" th:classappend="${activeTab == 'browser' ? '' : 'active'}" onclick="switchSettingsTab('general')">
+                    <i class="fa-solid fa-sliders"></i> Framework & General Properties
+                </button>
+                <button type="button" class="settings-tab-btn" id="tabBtnBrowser" th:classappend="${activeTab == 'browser' ? 'active' : ''}" onclick="switchSettingsTab('browser')">
+                    <i class="fa-solid fa-globe"></i> Browser Configuration
+                </button>
+            </div>
+        </div>
+
+        <div class="modal-search-bar">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="settingsSearchInput" class="modal-search-input" placeholder="Search properties by key or description..." onkeyup="filterSettingsProperties(this.value)"/>
+        </div>
+
+        <div th:if="${saveMessage != null}" class="toast-success-banner">
+            <i class="fa-solid fa-circle-check"></i> <span th:text="${saveMessage}">Settings saved</span>
+        </div>
+
+        <form id="settingsForm" class="settings-form-flex" hx-post="/api/settings/save" hx-target="#settingsModal" hx-swap="outerHTML">
+            <input type="hidden" name="activeTab" id="activeTabInput" th:value="${activeTab != null ? activeTab : 'general'}"/>
+
+            <div class="modal-body settings-body-scroll">
+                
+                <!-- Autocomplete Datalist for dev-neodymium.properties keys -->
+                <datalist id="autocompleteKeysList">
+                    <option th:each="k : ${autocompleteKeys}" th:value="${k}"></option>
+                </datalist>
+
+                <!-- TAB 1: GENERAL & FRAMEWORK PROPERTIES -->
+                <div class="settings-tab-pane" id="tabContentGeneral" th:classappend="${activeTab == 'browser' ? '' : 'active'}" th:style="${activeTab == 'browser' ? 'display: none;' : 'display: block;'}">
+                    <th:block th:if="${generalGroups != null}">
+                        <div th:each="group : ${generalGroups}" class="settings-group-card" th:id="'group-' + ${#strings.replace(group.fileName, '.', '-')}">
+                            
+                            <!-- Group Header Accordion Button -->
+                            <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+                                <div class="settings-group-title">
+                                    <i th:class="${group.devNeo ? 'fa-solid fa-flask' : (group.fileName.startsWith('ai') ? 'fa-solid fa-robot' : 'fa-solid fa-file-code')}"></i>
+                                    <span th:text="${group.fileName}">ai.properties</span>
+                                    <span th:if="${group.devNeo}" class="badge-dev-neo">Local Overrides</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-down accordion-arrow" th:classappend="${group.openByDefault ? 'open' : ''}"></i>
+                            </div>
+
+                            <!-- Group Content Body -->
+                            <div class="settings-group-content" th:style="${group.openByDefault ? 'display: block;' : 'display: none;'}">
+                                
+                                <!-- STANDARD PROPERTY FILE CONTENTS -->
+                                <th:block th:if="${!group.devNeo}">
+                                    <div th:each="section : ${group.sections}" class="settings-section">
+                                        <div class="settings-section-title" th:text="${section.name}">Section Title</div>
+                                        
+                                        <div th:each="entry : ${section.entries}" class="settings-entry-row" th:data-key="${entry.key}" th:data-desc="${entry.description}">
+                                            <div class="settings-entry-label-col">
+                                                <div class="settings-entry-key">
+                                                    <span th:text="${entry.key}">neodymium.ai.generate</span>
+                                                    <span th:if="${entry.overridden}" class="badge-overridden" title="This property is currently overridden by dev-neodymium.properties">
+                                                        <i class="fa-solid fa-lock"></i> Overridden
+                                                    </span>
+                                                </div>
+                                                <div th:if="${entry.description != null and !entry.description.isEmpty()}" class="settings-entry-desc" th:text="${entry.description}">
+                                                    Property description text
+                                                </div>
+                                            </div>
+
+                                            <div class="settings-entry-input-col">
+                                                <!-- OVERRIDDEN DISABLED STATE -->
+                                                <th:block th:if="${entry.overridden}">
+                                                    <input type="text" class="modal-input disabled-input" disabled="disabled" th:value="${entry.value}" placeholder="Overridden in dev-neodymium"/>
+                                                </th:block>
+
+                                                <!-- ACTIVE EDITABLE STATE -->
+                                                <th:block th:if="${!entry.overridden}">
+                                                    <!-- Boolean Toggle Switch / Select -->
+                                                    <th:block th:if="${entry.inputType == 'boolean'}">
+                                                        <select class="modal-select" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}">
+                                                            <option value="true" th:selected="${entry.value == 'true'}">true</option>
+                                                            <option value="false" th:selected="${entry.value == 'false' or entry.value == ''}">false</option>
+                                                        </select>
+                                                    </th:block>
+
+                                                    <!-- Number Input -->
+                                                    <th:block th:if="${entry.inputType == 'number'}">
+                                                        <input type="number" class="modal-input" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}" th:value="${entry.value}"/>
+                                                    </th:block>
+
+                                                    <!-- Password Input -->
+                                                    <th:block th:if="${entry.inputType == 'password'}">
+                                                        <input type="password" class="modal-input" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}" th:value="${entry.value}"/>
+                                                    </th:block>
+
+                                                    <!-- Text Input -->
+                                                    <th:block th:if="${entry.inputType == 'text'}">
+                                                        <input type="text" class="modal-input" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}" th:value="${entry.value}"/>
+                                                    </th:block>
+                                                </th:block>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </th:block>
+
+                                <!-- DEV-NEODYMIUM.PROPERTIES SPECIAL GROUP -->
+                                <th:block th:if="${group.devNeo}">
+                                    <div class="dev-neo-info-banner">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span>Temporary configuration values in <code>dev-neodymium.properties</code> take precedence and override standard settings. These values are not committed.</span>
+                                    </div>
+
+                                    <div class="dev-neo-rows-container" id="devNeoRowsContainer">
+                                        <!-- Existing Overrides -->
+                                        <div th:each="devEntry : ${group.devNeoEntries}" class="dev-neo-row">
+                                            <input type="text" name="devNeoKey" class="modal-input dev-neo-key-input" list="autocompleteKeysList" th:value="${devEntry.key}" placeholder="Property Key (e.g. neodymium.ai.apiKey)" oninput="handleDevNeoRowInput(this)"/>
+                                            <input type="text" name="devNeoValue" class="modal-input dev-neo-val-input" th:value="${devEntry.value}" placeholder="Override Value" oninput="handleDevNeoRowInput(this)"/>
+                                            <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+
+                                        <!-- Dynamic Bottom Empty Row -->
+                                        <div class="dev-neo-row">
+                                            <input type="text" name="devNeoKey" class="modal-input dev-neo-key-input" list="autocompleteKeysList" value="" placeholder="Add new property key..." oninput="handleDevNeoRowInput(this)"/>
+                                            <input type="text" name="devNeoValue" class="modal-input dev-neo-val-input" value="" placeholder="Value..." oninput="handleDevNeoRowInput(this)"/>
+                                            <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                </th:block>
+
+                            </div>
+                        </div>
+                    </th:block>
+                </div>
+
+                <!-- TAB 2: BROWSER PROFILES & CONFIGURATION -->
+                <div class="settings-tab-pane" id="tabContentBrowser" th:classappend="${activeTab == 'browser' ? 'active' : ''}" th:style="${activeTab == 'browser' ? 'display: block;' : 'display: none;'}">
+                    
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                        <button type="button" class="btn-secondary" onclick="toggleAddBrowserProfileForm()"><i class="fa-solid fa-plus"></i> Add Profile</button>
+                    </div>
+
+                    <!-- Add New Browser Profile Form -->
+                    <div id="addBrowserProfileFormCard" class="settings-group-card" style="display: none; margin-bottom: 16px; border: 1px solid var(--accent); background: #0f172a;">
+                        <div class="settings-section" style="border-top: none;">
+                            <div class="settings-section-title"><i class="fa-solid fa-plus"></i> Create New Browser Profile</div>
+                            <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+                                <input type="text" name="newProfileName" id="newProfileNameInput" class="modal-input" placeholder="Profile Name (e.g. Firefox_headless, Edge_desktop)" style="flex: 2;"/>
+                                <select name="newBrowserType" id="newBrowserTypeSelect" class="modal-select" style="flex: 1;">
+                                    <option value="chrome">Chrome</option>
+                                    <option value="firefox">Firefox</option>
+                                    <option value="safari">Safari</option>
+                                    <option value="edge">Edge</option>
+                                </select>
+                                <button type="button" class="btn-primary" hx-post="/api/settings/add-browser-profile" hx-include="#newProfileNameInput, #newBrowserTypeSelect" hx-target="#settingsModal" hx-swap="outerHTML"><i class="fa-solid fa-check"></i> Add</button>
+                                <button type="button" class="btn-secondary" onclick="toggleAddBrowserProfileForm()">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <th:block th:if="${browserGroup != null and browserGroup.sections != null}">
+                        <div th:each="section, stat : ${browserGroup.sections}" class="settings-group-card" th:id="'group-browser-' + ${stat.index}">
+                            <!-- Browser Profile Header -->
+                            <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+                                <div class="settings-group-title">
+                                    <i th:class="${section.browserIcon}"></i>
+                                    <span th:text="${section.name}">Global Browser Settings (browserprofile.global)</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-down accordion-arrow" th:classappend="${stat.index == 0 ? 'open' : ''}"></i>
+                            </div>
+
+                            <!-- Browser Profile Content Body -->
+                            <div class="settings-group-content" th:style="${stat.index == 0 ? 'display: block;' : 'display: none;'}">
+                                
+                                <div th:if="${section.profileTag == 'global'}" style="padding: 10px 16px; background: rgba(30, 41, 59, 0.4); border-bottom: 1px solid var(--border); color: #94a3b8; font-size: 12px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-sliders" style="color: var(--accent);"></i>
+                                    <span>Global Browser Defaults (<code>browserprofile.global.*</code>). These settings act as fallback defaults for all browser profiles unless explicitly overridden.</span>
+                                </div>
+
+                                <div class="settings-section" style="border-top: none;">
+                                    <div th:each="entry : ${section.entries}" class="settings-entry-row" th:data-key="${entry.key}" th:data-desc="${entry.description}">
+                                        <div class="settings-entry-label-col">
+                                            <div class="settings-entry-key">
+                                                <span th:text="${entry.key}">browserprofile.global.headless</span>
+                                                <span th:if="${entry.overridden}" class="badge-overridden" title="This property is currently overridden by dev-neodymium.properties">
+                                                    <i class="fa-solid fa-lock"></i> Overridden
+                                                </span>
+                                            </div>
+                                            <div th:if="${entry.description != null and !entry.description.isEmpty()}" class="settings-entry-desc" th:text="${entry.description}">
+                                                Run browser in headless mode without GUI window ('true' or 'false').
+                                            </div>
+                                        </div>
+
+                                        <div class="settings-entry-input-col">
+                                            <!-- OVERRIDDEN DISABLED STATE -->
+                                            <th:block th:if="${entry.overridden}">
+                                                <input type="text" class="modal-input disabled-input" disabled="disabled" th:value="${entry.value}" placeholder="Overridden in dev-neodymium"/>
+                                            </th:block>
+
+                                            <!-- ACTIVE EDITABLE STATE -->
+                                            <th:block th:if="${!entry.overridden}">
+                                                <!-- Boolean Toggle Switch / Select -->
+                                                <th:block th:if="${entry.inputType == 'boolean'}">
+                                                    <select class="modal-select" th:name="'prop__browser.properties__' + ${entry.key}">
+                                                        <option value="true" th:selected="${entry.value == 'true'}">true</option>
+                                                        <option value="false" th:selected="${entry.value == 'false' or entry.value == ''}">false</option>
+                                                    </select>
+                                                </th:block>
+
+                                                <!-- Number Input -->
+                                                <th:block th:if="${entry.inputType == 'number'}">
+                                                    <input type="number" class="modal-input" th:name="'prop__browser.properties__' + ${entry.key}" th:value="${entry.value}"/>
+                                                </th:block>
+
+                                                <!-- Text Input -->
+                                                <th:block th:if="${entry.inputType != 'boolean' and entry.inputType != 'number'}">
+                                                    <input type="text" class="modal-input" th:name="'prop__browser.properties__' + ${entry.key}" th:value="${entry.value}"/>
+                                                </th:block>
+                                            </th:block>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Add Expected Property Row for this Profile -->
+                                <div class="add-prop-container" th:if="${section.missingExpectedProperties != null and !section.missingExpectedProperties.isEmpty()}" style="padding: 10px 16px; background: rgba(255, 255, 255, 0.02); border-top: 1px solid var(--border);">
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <i class="fa-solid fa-plus" style="color: var(--accent); font-size: 12px;"></i>
+                                        <input type="hidden" name="profileTag" th:value="${section.profileTag}"/>
+                                        <select class="modal-select" style="width: 210px; font-size: 12px;" name="newPropertyName">
+                                            <option value="" disabled="disabled" selected="selected">-- Add Expected Setting --</option>
+                                            <option th:each="pName : ${section.missingExpectedProperties}" th:value="${pName}" th:text="${pName}"></option>
+                                        </select>
+                                        <input type="text" class="modal-input" style="flex: 1; font-size: 12px;" placeholder="Setting value (e.g. 1920x1080, true, --disable-gpu)..." name="newPropertyValue"/>
+                                        <button type="button" class="btn-secondary" hx-post="/api/settings/add-browser-property" hx-include="closest .add-prop-container" hx-target="#settingsModal" hx-swap="outerHTML">
+                                            <i class="fa-solid fa-plus"></i> Add
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </th:block>
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeSettingsModal()">Cancel</button>
+                <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

@@ -36,6 +36,7 @@
         <div class="neo-u-2">Neodymium Aura Dashboard</div>
         <div class="neo-u-3">
             <div class="neo-u-4">
+                <button class="btn-edit neo-u-5" id="settingsBtn" onclick="openSettingsModal()" title="Settings"><i class="fa-solid fa-gear"></i></button>
                 <button class="btn-edit neo-u-5" id="themeLight" onclick="changeTheme('light')" title="Light Mode"><i class="fa-solid fa-sun"></i></button>
                 <button class="btn-edit neo-u-5" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode"><i class="fa-solid fa-moon"></i></button>
                 <button class="btn-edit neo-u-5" id="themeSystem" onclick="changeTheme('system')" title="System Theme"><i class="fa-solid fa-desktop"></i></button>
@@ -196,6 +197,7 @@
 </div>
 
 <!-- MODALS -->
+<div th:replace="~{fragments/settings-modal :: settingsModal}"></div>
 <div th:replace="~{fragments/modals :: createTestModal}"></div>
 <div th:replace="~{fragments/modals :: deleteTestModal}"></div>
 

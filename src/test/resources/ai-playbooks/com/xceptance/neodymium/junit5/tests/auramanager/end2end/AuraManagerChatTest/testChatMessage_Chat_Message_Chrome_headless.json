@@ -135,16 +135,16 @@
     },
     {
       "promptLine": "Wait until the last chat message is from the AI",
-      "reasoning": "",
+      "reasoning": "The previous attempt failed due to a visual mismatch, likely because the AI was still in a \u0027Thinking Process\u0027 state. To address this, the first action is to explicitly wait for the \u0027Thinking Process\u0027 element to become hidden. Once the AI has finished processing, the second action asserts that the last chat message displayed is indeed from the \u0027Aura Assistant\u0027, confirming the AI has responded.",
       "actions": [
         {
           "type": "WAIT",
-          "target": "#chatContainer",
+          "target": "[data-neo-ref\u003d\u0027xc_8ocey7\u0027]",
           "value": [
-            "20000"
+            "hidden"
           ],
-          "description": "Wait for the chat container to update with the AI\u0027s response",
-          "elementDetails": "chatContainer",
+          "description": "Wait for \u0027Thinking Process\u0027 to disappear, indicating AI has finished processing.",
+          "elementDetails": "Thinking Process block",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
@@ -152,18 +152,19 @@
         },
         {
           "type": "ASSERT",
-          "target": "#chatContainer",
+          "target": "div.chat-message:last-of-type",
           "value": [
             "Aura Assistant"
           ],
-          "description": "Assert that the last chat message is from the AI by checking for \u0027Aura Assistant\u0027 in the chat container, assuming the AI\u0027s response will",
+          "description": "Assert that the last chat message is from the Aura Assistant (AI).",
+          "elementDetails": "Last chat message",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "8001001004100610c610061004100811841004100411d4190411041054100010",
+      "screenshotHash": "80020400020002080202000c500000080001000c0000080a0000000958000000",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

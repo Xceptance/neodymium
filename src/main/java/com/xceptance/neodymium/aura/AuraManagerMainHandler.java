@@ -40,6 +40,7 @@ public final class AuraManagerMainHandler implements HttpHandler
 
         // Instantiate singletons of domain services
         final AuraFileService fileService = new AuraFileService();
+        final AuraSettingsService settingsService = new AuraSettingsService();
         final AuraChatService chatService = new AuraChatService(fileService);
         final AuraChatSessionService sessionService = new AuraChatSessionService();
         final AuraReportingService reportingService = new AuraReportingService();
@@ -54,10 +55,17 @@ public final class AuraManagerMainHandler implements HttpHandler
         final AuraManagerEditorController editorController = new AuraManagerEditorController(fileService, manager);
         final AuraManagerInteractiveController interactiveController = new AuraManagerInteractiveController(interactiveService, reportingService, queueService, manager);
         final AuraManagerChatController chatController = new AuraManagerChatController(chatService, sessionService, manager);
+        final AuraManagerSettingsController settingsController = new AuraManagerSettingsController(settingsService, manager);
 
         // Register GET & POST mappings declaratively
         router.GET("/", dashboardController::handleDashboard);
         router.POST("/api/theme", dashboardController::handleApiTheme);
+
+        router.GET("/api/settings", settingsController::handleGetSettingsModal);
+        router.POST("/api/settings/save", settingsController::handleSaveSettings);
+        router.POST("/api/settings/add-browser-profile", settingsController::handleAddBrowserProfile);
+        router.POST("/api/settings/add-browser-property", settingsController::handleAddBrowserProperty);
+
 
         router.GET("/api/files", fileController::handleListFiles);
         router.GET("/api/files/list", fileController::handleListFilesPanel);
