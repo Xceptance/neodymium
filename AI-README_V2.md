@@ -78,11 +78,11 @@ After executing the SUT actions for a step, the framework performs a **Post-Acti
 
 ---
 
-## 6. Dynamic Variable Parameterization
-Ensures recorded playbooks remain reusable across environment and data changes:
+## 6. Dynamic Variable Parameterization & Outbound Secret Masking
+Ensures recorded playbooks remain reusable and enterprise credentials remain confidential:
 * **Resolution**: Resolves variables (e.g. `${username}`) at runtime before executing actions.
-* **Masking & Sanitization**: Compares SUT actions against sensitive dataset keys (e.g., passwords or tokens) and dynamically masks/sanitizes them before recording.
-* **Parameterization**: Automatically matches generated dynamic values (such as order numbers or generated URLs) back to their variable definitions, writing parameterized entries like `"${order.number}"` into the companion JSON instead of hardcoded session values.
+* **Outbound Secret Masking (`ContextSanitizer`)**: Before prompts, instructions, or captured SUT DOM state payloads are transmitted over the network to external LLM providers (Gemini, Mistral, Vertex), `DefaultContextSanitizer` scans the payload against sensitive session dataset entries (`DataEntry.sensitive() == true`) and replaces raw secret credentials with format-preserving `[MASKED_VAR_key]` placeholders (e.g. `[MASKED_VAR_password]`). Returned LLM responses are automatically reverse-mapped back to variable reference syntax (`${password}`) prior to action parsing, ensuring raw secrets never leave the client.
+* **Recording Parameterization**: Automatically matches executed values and dynamic response strings (such as order numbers or generated URLs) back to variable definitions, writing parameterized entries like `"${order.number}"` into the companion JSON instead of hardcoded session values.
 
 ---
 
