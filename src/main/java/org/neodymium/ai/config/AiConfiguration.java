@@ -38,9 +38,47 @@ import org.neodymium.util.Neodymium;
 public final class AiConfiguration
 {
     /**
+     * Cached shared configuration instance.
+     */
+    private static volatile AiConfiguration instance;
+
+    /**
      * Map storing loaded hierarchical properties.
      */
     private final Properties properties = new Properties();
+
+    /**
+     * Gets the shared, cached AiConfiguration instance.
+     *
+     * @return the cached configuration instance
+     */
+    public static AiConfiguration getInstance()
+    {
+        AiConfiguration result = instance;
+        if (result == null)
+        {
+            synchronized (AiConfiguration.class)
+            {
+                result = instance;
+                if (result == null)
+                {
+                    instance = result = new AiConfiguration();
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Resets the cached AiConfiguration instance, forcing a re-read on next access.
+     */
+    public static void resetInstance()
+    {
+        synchronized (AiConfiguration.class)
+        {
+            instance = null;
+        }
+    }
 
     /**
      * Constructs a default configuration and loads properties hierarchically.
@@ -80,7 +118,8 @@ public final class AiConfiguration
             }
         });
 
-        // 7. Overlay with System properties
+
+        // 8. Overlay with System properties
         System.getProperties().forEach((key, val) -> {
             final String propKey = String.valueOf(key);
             if (propKey.startsWith("neodymium.ai"))
@@ -99,6 +138,21 @@ public final class AiConfiguration
     private String envToPropKey(final String envKey)
     {
         return envKey.toLowerCase().replace('_', '.');
+    }
+
+    /**
+     * Normalizes a property or environment key by converting to lowercase and stripping dots and underscores.
+     *
+     * @param key the key string
+     * @return normalized alphanumeric key string
+     */
+    private static String normalizeKey(final String key)
+    {
+        if (key == null)
+        {
+            return "";
+        }
+        return key.toLowerCase().replace(".", "").replace("_", "");
     }
 
     /**
@@ -144,8 +198,26 @@ public final class AiConfiguration
         {
             // Fallback in case Neodymium class is not initialized or on classpath
         }
-        return this.properties.getProperty(key, defaultValue);
+
+        final String exactValue = this.properties.getProperty(key);
+        if (exactValue != null)
+        {
+            return exactValue;
+        }
+
+        // Secondary normalized key lookup for case/separator mismatch (e.g. neodymium.ai.execution.mode -> neodymium.ai.executionMode)
+        final String targetNormalized = normalizeKey(key);
+        for (final String propName : this.properties.stringPropertyNames())
+        {
+            if (normalizeKey(propName).equals(targetNormalized))
+            {
+                return this.properties.getProperty(propName);
+            }
+        }
+
+        return defaultValue;
     }
+
 
     /**
      * Gets a configuration value as an integer.

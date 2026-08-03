@@ -18,9 +18,12 @@
  */
 package org.neodymium.ai.recorder;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -35,13 +38,13 @@ import org.neodymium.ai.resources.InMemoryResourceManager;
  * Unit tests for {@link PlaybookRecorder}.
  * Validates step recording and serialization on SessionFinishedEvent.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 public class PlaybookRecorderTest
 {
     @Test
-    public void testOnSessionFinishedWritesJsonRecording() throws IOException
+    public void testOnSessionFinishedWritesJsonRecordingOnSuccess() throws IOException
     {
         final InMemoryResourceManager manager = new InMemoryResourceManager();
         final List<PlaybookStep> steps = new ArrayList<>();
@@ -57,4 +60,39 @@ public class PlaybookRecorderTest
             assertTrue(writtenJson.contains("Open homepage"), "JSON output should contain step instruction.");
         }
     }
+
+    @Test
+    public void testOnSessionFinishedDoesNotWriteRecordingOnFailure()
+    {
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        final List<PlaybookStep> steps = new ArrayList<>();
+        steps.add(new PlaybookStep("Open homepage"));
+
+        final PlaybookRecorder recorder = new PlaybookRecorder(manager, "recordings/test.json", steps);
+        recorder.onEvent(new SessionFinishedEvent(100L, false));
+
+        assertThrows(FileNotFoundException.class, () -> manager.read("recordings/test.json"),
+            "Recording file should not be created on session failure.");
+    }
+
+    @Test
+    public void testOnSessionFinishedFailurePreservesExistingRecording() throws IOException
+    {
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        final String existingContent = "{\"existing\":\"data\"}";
+        manager.write("recordings/test.json", existingContent);
+
+        final List<PlaybookStep> steps = new ArrayList<>();
+        steps.add(new PlaybookStep("Failed new step"));
+
+        final PlaybookRecorder recorder = new PlaybookRecorder(manager, "recordings/test.json", steps);
+        recorder.onEvent(new SessionFinishedEvent(100L, false));
+
+        try (final InputStream inputStream = manager.read("recordings/test.json"))
+        {
+            final String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            assertEquals(existingContent, content, "Pre-existing recording file must remain untouched on failure.");
+        }
+    }
 }
+

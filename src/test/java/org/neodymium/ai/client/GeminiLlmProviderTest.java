@@ -26,6 +26,8 @@ import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.config.AiConfiguration;
+
 
 /**
  * Unit tests for {@link GeminiLlmProvider}.
@@ -75,8 +77,9 @@ public class GeminiLlmProviderTest
     @Test
     public void testMissingApiKeyThrowsException()
     {
-        System.clearProperty("neodymium.ai.gemini.apiKey");
-        // Clear environment key dynamically if present for test isolation
+        System.setProperty("neodymium.ai.gemini.apiKey", "");
+        System.setProperty("neodymium.ai.apiKey", "");
+        AiConfiguration.resetInstance();
         final String envKey = System.getenv("GEMINI_API_KEY");
         if (envKey == null || envKey.isBlank())
         {
@@ -85,4 +88,5 @@ public class GeminiLlmProviderTest
             }, "Missing API key should throw IllegalArgumentException.");
         }
     }
+
 }
