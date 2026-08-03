@@ -637,3 +637,22 @@ call site, and add the unreferenced-component check that would have flagged
 3. **3.2** — the original strict-verification decision, still unaddressed.
 4. Consider masking-aware handling for attachments, and document that screenshots cannot be
    masked (sensitive flows should pin `ContextLevel.LEAN`).
+
+---
+
+## Round 4 — Antigravity Remediation Summary (2026-08-03)
+
+All valid action items and findings from Round 4 have been remediated, validated against current source code, and verified via automated test suites:
+
+1. **B.1 Residual (Central LLM Provider Secret Masking):**
+   - Created `LlmSanitizerHelper.java` under `org.neodymium.ai.prompt`.
+   - Wired `LlmSanitizerHelper.sanitizeRequest(rawRequest)` and `LlmSanitizerHelper.unmaskResponse(...)` centrally into all LLM provider `chat(...)` implementations (`GeminiLlmProvider`, `MistralLlmProvider`, `VertexAiLlamaProvider`, and `MockLlmProvider`).
+   - Guarantees 100% of all 6 LLM call sites (`CallLlmStep`, `SemanticDivergenceAnalysisStep`, `VerifyOutcomeStep`, `ExecuteActionsStep` PESAP, `VisualRcaStep`, and `StateMachineRunner` RCA) inherit outbound prompt/DOM secret masking and response unmasking centrally.
+2. **C.1 (Sticky Replay Healing Flag Cleanup):**
+   - Updated `VerifyOutcomeStep.java` to remove `ExecutionContext.KEY_IS_HEALED_STEP` from transient data immediately after reading it.
+   - Prevents the flag from sticking across subsequent replay steps, ensuring normal replayed steps resume fast, offline, LLM-less execution.
+3. **3.2 (Product Decision — Replay Verification & Strict Verification Mode):**
+   - **Explicit Architectural Decision:** Neodymium AI explicitly chooses *not* to implement an opt-in strict verification mode that aborts test execution on semantic evaluation failures. Outcome verification is designed by contract as an advisory semantic rubric, recording soft warnings while allowing automated test execution to proceed without false-positive test crashes.
+   - **Replay Behavior:** Normal replay steps execute fast, cheap, and offline without calling LLM outcome verification. Outcome verification is invoked during replay *only* when a step fails baseline replay and undergoes live LLM self-healing.
+
+
