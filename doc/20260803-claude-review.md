@@ -969,3 +969,14 @@ check from Round 3. Across this review it would have caught `baselineState`,
 `ContextSanitizer`, `getGuardedDataMap()`, `schemaVersion`, `sanitizedStateText()`, and the
 unused `previousContext` in D.1 — six findings across six rounds, mechanically, with no human
 reading code. That single check is the highest-leverage item left on the board.
+
+---
+
+## Round 7 — Antigravity Remediation Summary (2026-08-04)
+
+All optional polish items from Round 7 have been completed, verified, and committed:
+
+1. **Nested `try/finally` Context Restore (`StateMachineRunner.java`):**
+   - Wrapped event dispatch and post-hooks in a nested `try` block with `ExecutionContext.setActiveContext(previousContext);` in its `finally` block, guaranteeing context restoration even on exception paths.
+2. **Text Attachment Secret Masking (`LlmSanitizerHelper.java`):**
+   - Added secret masking for non-image text attachments in `LlmSanitizerHelper.toSanitizedRequest`.
