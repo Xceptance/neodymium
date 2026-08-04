@@ -1,5 +1,10 @@
 # Neodymium AI Agent: Architectural Options & Deep Analysis
 
+> [!CAUTION]
+> **DEPRECATED / ARCHIVED DOCUMENTATION (v1 Architecture)**
+> This document describes historical v1 architecture proposals and gap analyses.
+> It has been superseded by the **v2 Architecture**: see [`doc/redesign-v2/architecture.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/architecture.md) and [`doc/redesign-v2/annotations.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/annotations.md).
+
 This document provides a thorough analysis of the architectural patterns considered for refactoring the `com.xceptance.neodymium.ai` subsystem. It examines the concurrency model, the pluggable LLM capability routing, and the execution loop design, comparing three major architectural options.
 
 ---

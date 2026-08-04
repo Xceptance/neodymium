@@ -1,5 +1,10 @@
 # Neodymium AI Architecture Review & Strategic Verdict
 
+> [!CAUTION]
+> **DEPRECATED / ARCHIVED DOCUMENTATION (v1 Architecture)**
+> This document describes historical v1 architecture proposals and gap analyses.
+> It has been superseded by the **v2 Architecture**: see [`doc/redesign-v2/architecture.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/architecture.md) and [`doc/redesign-v2/annotations.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/annotations.md).
+
 This document provides a rigorous architectural evaluation of the **Neodymium AI** execution lifecycle. It reviews the viability of the current concepts and implementation details documented in [AI_EXECUTION_SUMMARY.md](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/AI_EXECUTION_SUMMARY.md) against the source codebase, and outlines concrete abstraction suggestions to support strategic future goals.
 
 ---
