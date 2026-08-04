@@ -687,23 +687,36 @@ public final class ExecuteActionsStep implements PipelineStep
                             {
                                 final double ssimScore = org.neodymium.ai.util.ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
                                 final double minScore = org.neodymium.ai.config.AiConfiguration.getInstance().getDouble("neodymium.ai.ssim.minScore", 0.99);
-                                if (ssimScore >= minScore)
+                                LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | SSIM Score: {} | Required Min Score: {}",
+                                    resolvedInstruction, String.format("%.4f", ssimScore), minScore);
 
+                                if (ssimScore >= minScore)
                                 {
                                     isVisualMatch = true;
-                                    org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).info(
-                                        "   ✅ Visual SSIM match (score: {} >= {}) for instruction: \"{}\". Bypassing LLM call/actions.",
+                                    LOGGER.info("   ✅ Visual SSIM match (score: {} >= {}) for instruction: \"{}\". Bypassing LLM call/actions.",
+                                        String.format("%.4f", ssimScore), minScore, resolvedInstruction);
+                                }
+                                else
+                                {
+                                    LOGGER.debug("   ⚠️ Visual SSIM score below threshold ({} < {}) for instruction: \"{}\"",
                                         String.format("%.4f", ssimScore), minScore, resolvedInstruction);
                                 }
                             }
                             else if (currentHash != null)
                             {
                                 final int distance = org.neodymium.ai.util.ScreenshotHasher.getHammingDistance(recordedHash, currentHash);
+                                LOGGER.debug("   🖼️ [Visual dHash Check] Instruction: \"{}\" | Hamming Distance: {} (threshold <= 10)",
+                                    resolvedInstruction, distance);
+
                                 if (distance <= 10)
                                 {
                                     isVisualMatch = true;
-                                    org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).info(
-                                        "   ✅ Visual dHash match (distance: {} <= 10) for instruction: \"{}\". Bypassing LLM call/actions.",
+                                    LOGGER.info("   ✅ Visual dHash match (distance: {} <= 10) for instruction: \"{}\". Bypassing LLM call/actions.",
+                                        distance, resolvedInstruction);
+                                }
+                                else
+                                {
+                                    LOGGER.debug("   ⚠️ Visual dHash distance above threshold ({} > 10) for instruction: \"{}\"",
                                         distance, resolvedInstruction);
                                 }
                             }

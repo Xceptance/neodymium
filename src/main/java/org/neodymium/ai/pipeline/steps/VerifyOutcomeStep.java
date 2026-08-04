@@ -74,8 +74,62 @@ public final class VerifyOutcomeStep implements PipelineStep
 
     private void executeInternal(final ExecutionContext context) throws PipelineException
     {
-        // 1. Check if semantic verification is enabled in configuration
         final AiConfiguration config = AiConfiguration.getInstance();
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+        final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+
+        // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps or unhashed steps
+        if (executor != null && mode != null && !mode.isReplay() && step != null && (step.isVisualStep() || step.getScreenshotHash() == null))
+        {
+            try
+            {
+                final org.neodymium.ai.executor.selenide.ContextLevel level = step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_MINIMAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
+                final SutState capturedState = executor.captureState(level);
+                if (capturedState != null && capturedState.getAttachments() != null)
+                {
+                    for (final SutAttachment attachment : capturedState.getAttachments())
+                    {
+                        if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                        {
+                            final String ssimMatrix = org.neodymium.ai.util.ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
+                            if (ssimMatrix != null)
+                            {
+                                step.setScreenshotHash(ssimMatrix);
+                                LOGGER.debug("📸 [Visual Hashing] Computed SSIM matrix for instruction: \"{}\"", step.getInstruction());
+
+                                if (step.getActions().isEmpty())
+                                {
+                                    final Action noneAction = new Action("NONE", "", "Visual baseline check");
+                                    noneAction.setStepInstruction(step.getInstruction());
+                                    noneAction.setStepLine(step.getLineNumber());
+                                    noneAction.setStepFile(step.getSourceFile());
+                                    noneAction.setStepScreenshotHash(ssimMatrix);
+                                    step.getActions().add(noneAction);
+                                    if (session != null)
+                                    {
+                                        session.getEventBus().dispatch(new org.neodymium.ai.event.structural.ActionExecutedEvent(noneAction, true));
+                                    }
+                                }
+                                else
+                                {
+                                    final Action lastAction = step.getActions().get(step.getActions().size() - 1);
+                                    lastAction.setStepScreenshotHash(ssimMatrix);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.warn("⚠️ Failed to capture visual baseline hash for instruction: \"{}\": {}", step.getInstruction(), e.getMessage());
+            }
+        }
+
+        // 2. Check if optional semantic LLM verification is enabled
         final Object override = context.getTransientData().get("semanticVerification.enabled");
         final boolean isEnabled = override instanceof Boolean b ? b : config.isSemanticVerificationEnabled();
         if (!isEnabled)
@@ -83,10 +137,6 @@ public final class VerifyOutcomeStep implements PipelineStep
             LOGGER.debug("Semantic outcome verification is disabled in configuration. Skipping step.");
             return;
         }
-
-        // 2. Retrieve required context instances from transient execution data map
-        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
 
         // Fail conclusively if essential session runtime structures are missing
         if (session == null)
@@ -99,8 +149,6 @@ public final class VerifyOutcomeStep implements PipelineStep
         }
 
         // 3. Evaluate replay mode and skip verification if current step was replayed without active modification
-        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
-        final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final Boolean isHealedStep = (Boolean) context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
         final boolean stepWasReplayed = mode != null && mode.isReplay() && (step == null || !step.isNoReplay()) && !Boolean.TRUE.equals(isHealedStep);
         context.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
