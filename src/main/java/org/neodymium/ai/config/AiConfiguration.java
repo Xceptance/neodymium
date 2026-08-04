@@ -24,7 +24,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.neodymium.util.Neodymium;
 
 /**
@@ -147,6 +150,19 @@ public final class AiConfiguration
         return key.toLowerCase().replace(".", "").replace("_", "");
     }
 
+    private final Map<String, String> normalizedFileProps = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final Logger LOG = LoggerFactory.getLogger(AiConfiguration.class);
+
+    private void rebuildNormalizedCache()
+    {
+        this.normalizedFileProps.clear();
+        for (final String propName : this.properties.stringPropertyNames())
+        {
+            this.normalizedFileProps.put(normalizeKey(propName), propName);
+        }
+    }
+
     /**
      * Loads properties from a file if it exists.
      *
@@ -160,10 +176,11 @@ public final class AiConfiguration
             try (final InputStream in = new FileInputStream(file))
             {
                 this.properties.load(in);
+                rebuildNormalizedCache();
             }
             catch (final IOException e)
             {
-                // Suppress properties load exceptions
+                LOG.warn("⚠️ Failed to load configuration properties from file {}: {}", file.getAbsolutePath(), e.getMessage());
             }
         }
     }
@@ -197,28 +214,32 @@ public final class AiConfiguration
             return sysProp;
         }
 
-        final String targetNormalized = normalizeKey(key);
-        for (final java.util.Map.Entry<Object, Object> sysEntry : System.getProperties().entrySet())
-        {
-            final String sysKey = String.valueOf(sysEntry.getKey());
-            if (sysKey.startsWith("neodymium.ai") && normalizeKey(sysKey).equals(targetNormalized))
-            {
-                return String.valueOf(sysEntry.getValue());
-            }
-        }
-
         final String exactValue = this.properties.getProperty(key);
         if (exactValue != null)
         {
             return exactValue;
         }
 
-        // Secondary normalized key lookup for case/separator mismatch (e.g. neodymium.ai.execution.mode -> neodymium.ai.executionMode)
-        for (final String propName : this.properties.stringPropertyNames())
+        final String targetNormalized = normalizeKey(key);
+        final String cachedNormalizedName = this.normalizedFileProps.get(targetNormalized);
+        if (cachedNormalizedName != null)
         {
-            if (normalizeKey(propName).equals(targetNormalized))
+            final String cachedVal = this.properties.getProperty(cachedNormalizedName);
+            if (cachedVal != null)
             {
-                return this.properties.getProperty(propName);
+                return cachedVal;
+            }
+        }
+
+        if (key.startsWith("neodymium"))
+        {
+            for (final java.util.Map.Entry<Object, Object> sysEntry : System.getProperties().entrySet())
+            {
+                final String sysKey = String.valueOf(sysEntry.getKey());
+                if (sysKey.startsWith("neodymium.ai") && normalizeKey(sysKey).equals(targetNormalized))
+                {
+                    return String.valueOf(sysEntry.getValue());
+                }
             }
         }
 

@@ -325,7 +325,21 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             Playbook playbook;
             try
             {
-                playbook = parser.parse(playbookPath, manager);
+                if (playbookPath.startsWith("playbooks/integration/programmatic/"))
+                {
+                    try
+                    {
+                        playbook = parser.parse(playbookPath, manager);
+                    }
+                    catch (final IllegalArgumentException e)
+                    {
+                        playbook = new Playbook(new ArrayList<>(), new ArrayList<>());
+                    }
+                }
+                else
+                {
+                    playbook = parser.parse(playbookPath, manager);
+                }
             }
             catch (final Exception e)
             {
@@ -708,7 +722,22 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            final Playbook playbook = parser.parse(resolvedPlaybookPath, manager);
+            Playbook playbook;
+            if (resolvedPlaybookPath != null && resolvedPlaybookPath.startsWith("playbooks/integration/programmatic/"))
+            {
+                try
+                {
+                    playbook = parser.parse(resolvedPlaybookPath, manager);
+                }
+                catch (final IllegalArgumentException e)
+                {
+                    playbook = new Playbook(new ArrayList<>(), new ArrayList<>());
+                }
+            }
+            else
+            {
+                playbook = parser.parse(resolvedPlaybookPath, manager);
+            }
             final List<PlaybookStep> playbookSteps = new ArrayList<>(playbook.getSteps());
 
             // Validate step schemaVersion compatibility
@@ -810,6 +839,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, mode);
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId != null ? this.datasetId : "default");
             executionContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.LEAN);
+            executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+            executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
             executionContext.getTransientData().put("junit.testInstance", context.getRequiredTestInstance());
 
             if (resolvedPlaybookPath != null && resolvedPlaybookPath.contains("/programmatic/"))
@@ -887,10 +918,14 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             if (method != null && method.isAnnotationPresent(AiPlaybook.class) && this.session != null)
             {
+                final ExecutionContext execCtx = this.session.getExecutionContext();
+                if (execCtx != null && Boolean.TRUE.equals(execCtx.getTransientData().get("playbook.programmatic")))
+                {
+                    return;
+                }
                 final AiPlaybook playbookAnnot = method.getAnnotation(AiPlaybook.class);
                 final String path = playbookAnnot.value();
 
-                final ExecutionContext execCtx = this.session.getExecutionContext();
                 final PlaybookParser parser = (PlaybookParser) execCtx.getTransientData().get(ExecutionContext.KEY_PLAYBOOK_PARSER);
                 final PlaybookResourceManager manager = (PlaybookResourceManager) execCtx.getTransientData().get(ExecutionContext.KEY_RESOURCE_MANAGER);
 

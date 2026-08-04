@@ -43,6 +43,8 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
+import com.codeborne.selenide.ex.ElementNotFound;
+import org.openqa.selenium.NoSuchElementException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
@@ -65,6 +67,7 @@ import org.neodymium.ai.session.AiSession;
 public final class ExecuteActionsStep implements PipelineStep
 {
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class);
+    private static final java.util.regex.Pattern TIMEOUT_PATTERN = java.util.regex.Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
 
     /**
      * The sanitizer used for variable parameterization of recorded actions.
@@ -192,15 +195,16 @@ public final class ExecuteActionsStep implements PipelineStep
                          mode = session.getExecutionMode();
                      }
                      final boolean isNoReplay = step.isNoReplay();
-                     if (mode == null || !mode.isReplay() || isNoReplay)
-                      {
-                          if (isNoReplay && Boolean.TRUE.equals(context.getTransientData().get("KEY_CURRENT_STEP_FIRST_ACTION")))
-                          {
-                              step.getActions().clear();
-                              context.getTransientData().put("KEY_CURRENT_STEP_FIRST_ACTION", false);
-                          }
-                          step.getActions().add(sanitized);
-                      }
+                     final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && step.getActions() != null && !step.getActions().isEmpty();
+                     if (!isReplayingStep)
+                     {
+                         if (isNoReplay && Boolean.TRUE.equals(context.getTransientData().get("KEY_CURRENT_STEP_FIRST_ACTION")))
+                         {
+                             step.getActions().clear();
+                             context.getTransientData().put("KEY_CURRENT_STEP_FIRST_ACTION", false);
+                         }
+                         step.getActions().add(sanitized);
+                     }
                 }
                 
                 // Log to local recording and dispatch verification updates to active event listeners
@@ -216,7 +220,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 Long customTimeoutMs = null;
                 if (rawInstruction != null)
                 {
-                    final java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)").matcher(rawInstruction);
+                    final java.util.regex.Matcher m = TIMEOUT_PATTERN.matcher(rawInstruction);
                     if (m.find())
                     {
                         final long parsedVal = Long.parseLong(m.group(1));
@@ -265,9 +269,13 @@ public final class ExecuteActionsStep implements PipelineStep
                     throw pe;
                 }
 
-                boolean isAssertionFailure = t instanceof AssertionError;
+                final boolean isElementNotFound = t instanceof ElementNotFound
+                    || t instanceof NoSuchElementException
+                    || (failureMsg != null && (failureMsg.contains("Element not found") || failureMsg.contains("ElementNotFound")));
+
+                boolean isAssertionFailure = !isElementNotFound && (t instanceof AssertionError);
                 Throwable cause = t.getCause();
-                while (!isAssertionFailure && cause != null && cause != t)
+                while (!isAssertionFailure && !isElementNotFound && cause != null && cause != t)
                 {
                     if (cause instanceof AssertionError)
                     {
@@ -279,8 +287,15 @@ public final class ExecuteActionsStep implements PipelineStep
 
                 if ("ASSERT".equalsIgnoreCase(action.getType()))
                 {
-                    final Throwable finalCause = isAssertionFailure ? t : new AssertionError(failureMsg, t);
-                    throw new ConclusiveFailureException("Assertion failed: " + failureMsg, finalCause);
+                    if (isAssertionFailure)
+                    {
+                        final Throwable finalCause = t;
+                        throw new ConclusiveFailureException("Assertion failed: " + failureMsg, finalCause);
+                    }
+                    else
+                    {
+                        throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription() + " (" + failureMsg + ")", t);
+                    }
                 }
 
                 throw new HealingRequiredException("Action execution failed against SUT: " + action.getDescription() + " (" + failureMsg + ")", t);
@@ -491,7 +506,7 @@ public final class ExecuteActionsStep implements PipelineStep
             }
             LOGGER.debug("================================================================================");
 
-            final boolean isReplayMode = executionMode != null && executionMode.isReplay() && !stepNoReplay;
+            final boolean isReplayMode = executionMode != null && executionMode.isReplay();
             final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
             if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
             {
@@ -787,7 +802,7 @@ public final class ExecuteActionsStep implements PipelineStep
                             final PlaybookStep currentStep = (PlaybookStep) c.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
                             if (currentStep != null)
                             {
-                                currentStep.setBaselineState(state.getTextContent());
+                                currentStep.setBaselineState(new DefaultActionSanitizer().sanitizeText(state.getTextContent(), c.getSessionData()));
                             }
                         }
                     }

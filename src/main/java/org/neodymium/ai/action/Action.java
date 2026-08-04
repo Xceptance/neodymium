@@ -49,6 +49,7 @@ public class Action
     /**
      * The target selector, element details, or path to operate on.
      */
+    @com.fasterxml.jackson.annotation.JsonProperty("target")
     @com.fasterxml.jackson.annotation.JsonAlias({"locator", "target"})
     private final String target;
 
@@ -95,7 +96,7 @@ public class Action
      */
     @JsonCreator
     public Action(
-            @JsonProperty("action") @JsonAlias({"type", "action"}) final String type,
+            @JsonProperty("type") @JsonAlias({"type", "action"}) final String type,
             @JsonProperty("target") @JsonAlias({"locator", "target"}) final String target,
             @JsonProperty("value") @JsonAlias({"values", "value"}) final Object value,
             @JsonProperty("description") final String description,

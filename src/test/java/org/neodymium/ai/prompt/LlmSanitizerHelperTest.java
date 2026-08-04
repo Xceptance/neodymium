@@ -110,26 +110,34 @@ public class LlmSanitizerHelperTest
     @Test
     public void testToSanitizedRequestReplacesPromptAndTextAttachments()
     {
-        final String rawText = "Secret payload: SecretValue123";
-        final String encodedRawText = Base64.getEncoder().encodeToString(rawText.getBytes(StandardCharsets.UTF_8));
-        final SutAttachment textAtt = new SutAttachment("text/plain", "log.txt", encodedRawText);
+        final SessionData data = new SessionData();
+        data.putDynamic("password", "SecretValue123", true);
+        final ExecutionContext ctx = new ExecutionContext(data);
+        ExecutionContext.setActiveContext(ctx);
+        try
+        {
+            final String rawText = "Secret payload: SecretValue123";
+            final String encodedRawText = Base64.getEncoder().encodeToString(rawText.getBytes(StandardCharsets.UTF_8));
+            final SutAttachment textAtt = new SutAttachment("text/plain", "log.txt", encodedRawText);
 
-        final LlmRequest request = new LlmRequest("sys", "Original raw message: SecretValue123", List.of(textAtt), null, 0.0, 30);
-        final SanitizedPayload payload = new SanitizedPayload(
-            "Original raw message: [MASKED_VAR_password]",
-            null,
-            Map.of("[MASKED_VAR_password]", "SecretValue123")
-        );
+            final LlmRequest request = new LlmRequest("sys", "Original raw message: SecretValue123", List.of(textAtt), null, 0.0, 30);
+            final ContextSanitizer sanitizer = new DefaultContextSanitizer();
+            final SanitizedPayload payload = sanitizer.sanitize(request.userMessage(), null, data);
 
-        final LlmRequest sanitized = LlmSanitizerHelper.toSanitizedRequest(request, payload);
+            final LlmRequest sanitized = LlmSanitizerHelper.toSanitizedRequest(request, payload);
 
-        assertNotNull(sanitized);
-        assertEquals("Original raw message: [MASKED_VAR_password]", sanitized.userMessage());
-        assertEquals(1, sanitized.attachments().size());
+            assertNotNull(sanitized);
+            assertEquals("Original raw message: [MASKED_VAR_password]", sanitized.userMessage());
+            assertEquals(1, sanitized.attachments().size());
 
-        final SutAttachment sanitizedAtt = sanitized.attachments().get(0);
-        final String decodedAtt = new String(Base64.getDecoder().decode(sanitizedAtt.base64Data()), StandardCharsets.UTF_8);
-        assertEquals("Secret payload: [MASKED_VAR_password]", decodedAtt);
+            final SutAttachment sanitizedAtt = sanitized.attachments().get(0);
+            final String decodedAtt = new String(Base64.getDecoder().decode(sanitizedAtt.base64Data()), StandardCharsets.UTF_8);
+            assertEquals("Secret payload: [MASKED_VAR_password]", decodedAtt);
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 
     @Test

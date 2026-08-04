@@ -64,11 +64,47 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
         {
             in = classLoader.getResourceAsStream("ai-playbooks/" + normalized);
         }
-        if (in == null)
+        if (in != null)
         {
-            throw new FileNotFoundException("Classpath resource not found: " + identifier);
+            return in;
         }
-        return in;
+
+        final URL rootUrl = classLoader.getResource("");
+        if (rootUrl != null && "file".equals(rootUrl.getProtocol()))
+        {
+            try
+            {
+                final Path rootPath = Path.of(rootUrl.toURI());
+                final java.util.List<Path> candidatePaths = new java.util.ArrayList<>();
+                candidatePaths.add(rootPath.resolve(normalized));
+                candidatePaths.add(rootPath.resolve("ai-playbooks/" + normalized));
+
+                final Path srcRoot = getSourceResourcesRoot();
+                if (srcRoot != null)
+                {
+                    candidatePaths.add(srcRoot.resolve(normalized));
+                    candidatePaths.add(srcRoot.resolve("ai-playbooks/" + normalized));
+                    if (srcRoot.getParent() != null)
+                    {
+                        candidatePaths.add(srcRoot.getParent().resolve(normalized));
+                        candidatePaths.add(srcRoot.getParent().resolve("ai-playbooks/" + normalized));
+                    }
+                }
+
+                for (final Path candidate : candidatePaths)
+                {
+                    if (Files.exists(candidate) && !Files.isDirectory(candidate))
+                    {
+                        return Files.newInputStream(candidate);
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                // ignore and fall through
+            }
+        }
+        throw new FileNotFoundException("Classpath resource not found: " + identifier);
     }
 
     @Override

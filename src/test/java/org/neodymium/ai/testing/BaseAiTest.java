@@ -189,6 +189,8 @@ public abstract class BaseAiTest extends BaseLlmTest
             final org.neodymium.ai.model.Playbook playbook = parser.parse("programmatic-playbook.yaml", manager);
             final List<org.neodymium.ai.model.PlaybookStep> stepsToExecute = playbook.getSteps();
 
+
+
             if (mode != null && mode.isReplay() && sessionSteps != null && !sessionSteps.isEmpty())
             {
                 for (int i = 0; i < stepsToExecute.size() && i < sessionSteps.size(); i++)

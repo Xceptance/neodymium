@@ -125,4 +125,20 @@ public class YamlPlaybookParserTest
 
         assertEquals("Invalid playbook step format in file: invalid-map-playbook.yaml. Expected string step, 'include' map, or 'instruction' map, but found map keys: [invalid_key]", ex.getMessage());
     }
+
+    @Test
+    public void testParseEmptyJsonPlaybookThrowsException() throws Exception
+    {
+        final String jsonContent = "[]";
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("empty-recording.json", jsonContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> {
+            parser.parse("empty-recording.json", manager);
+        });
+
+        assertEquals("Playbook cannot be empty: empty-recording.json parsed to 0 executable steps.", ex.getMessage());
+    }
 }

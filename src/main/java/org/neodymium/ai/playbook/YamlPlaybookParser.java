@@ -55,6 +55,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class YamlPlaybookParser implements PlaybookParser
 {
     private static final Logger LOG = LoggerFactory.getLogger(YamlPlaybookParser.class);
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
     /**
      * Constructs a default YamlPlaybookParser.
@@ -136,7 +137,18 @@ public final class YamlPlaybookParser implements PlaybookParser
 
             if (yamlExists)
             {
-                return parseAndMerge(identifier, yamlPath, manager);
+                try
+                {
+                    final Playbook merged = parseAndMerge(identifier, yamlPath, manager);
+                    if (merged != null && merged.getSteps() != null && !merged.getSteps().isEmpty())
+                    {
+                        return merged;
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // Fall back to reading JSON recording directly
+                }
             }
         }
 
@@ -171,60 +183,71 @@ public final class YamlPlaybookParser implements PlaybookParser
             final String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
             if (content.startsWith("["))
             {
-                final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 try
                 {
-                    final List<PlaybookStep> parsedSteps = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
-                    if (parsedSteps != null && !parsedSteps.isEmpty() && parsedSteps.get(0).getInstruction() != null)
+                    final List<PlaybookStep> parsedSteps = MAPPER.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
+                    if (parsedSteps != null)
                     {
+                        if (parsedSteps.isEmpty())
+                        {
+                            throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
+                        }
                         return new Playbook(parsedSteps, dataSets, systemPromptAddons);
                     }
                 }
+                catch (final IllegalArgumentException e)
+                {
+                    throw e;
+                }
                 catch (final Exception e)
                 {
+                    LOG.error("Jackson exception parsing JSON step list for {}: ", identifier, e);
                     // Fall back to legacy Action list parsing
                 }
 
-                final List<org.neodymium.ai.action.Action> actions = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
+                final List<org.neodymium.ai.action.Action> actions = MAPPER.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
                 final String fileName = new java.io.File(identifier).getName();
                 PlaybookStep currentStep = null;
-                for (final org.neodymium.ai.action.Action action : actions)
+                if (actions != null)
                 {
-                    final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
-                        ? action.getStepInstruction()
-                        : action.getDescription();
-
-                    final String stepFile = (action.getStepFile() != null && !action.getStepFile().trim().isEmpty())
-                        ? action.getStepFile()
-                        : fileName;
-
-                    final int stepLine = action.getStepLine();
-
-                    if (currentStep != null 
-                        && java.util.Objects.equals(currentStep.getInstruction(), stepDesc)
-                        && java.util.Objects.equals(currentStep.getSourceFile(), stepFile)
-                        && currentStep.getLineNumber() == stepLine)
+                    for (final org.neodymium.ai.action.Action action : actions)
                     {
-                        currentStep.getActions().add(action);
-                        if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                        final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
+                            ? action.getStepInstruction()
+                            : action.getDescription();
+
+                        final String stepFile = (action.getStepFile() != null && !action.getStepFile().trim().isEmpty())
+                            ? action.getStepFile()
+                            : fileName;
+
+                        final int stepLine = action.getStepLine();
+
+                        if (currentStep != null 
+                            && java.util.Objects.equals(currentStep.getInstruction(), stepDesc)
+                            && java.util.Objects.equals(currentStep.getSourceFile(), stepFile)
+                            && currentStep.getLineNumber() == stepLine)
                         {
-                            currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                            currentStep.getActions().add(action);
+                            if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                            {
+                                currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                            }
                         }
-                    }
-                    else
-                    {
-                        currentStep = new PlaybookStep(stepDesc);
-                        currentStep.getActions().add(action);
-                        currentStep.setSourceFile(stepFile);
-                        if (stepLine != -1)
+                        else
                         {
-                            currentStep.setLineNumber(stepLine);
+                            currentStep = new PlaybookStep(stepDesc);
+                            currentStep.getActions().add(action);
+                            currentStep.setSourceFile(stepFile);
+                            if (stepLine != -1)
+                            {
+                                currentStep.setLineNumber(stepLine);
+                            }
+                            if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                            {
+                                currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                            }
+                            steps.add(currentStep);
                         }
-                        if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
-                        {
-                            currentStep.setScreenshotHash(action.getStepScreenshotHash());
-                        }
-                        steps.add(currentStep);
                     }
                 }
                 return new Playbook(steps, dataSets, systemPromptAddons);
@@ -394,14 +417,13 @@ public final class YamlPlaybookParser implements PlaybookParser
                             final Object rawActions = mapStep.get("actions");
                             if (rawActions instanceof List)
                             {
-                                final ObjectMapper mapper = new ObjectMapper();
                                 for (final Object actObj : (List<?>) rawActions)
                                 {
                                     if (actObj instanceof Map)
                                     {
                                         try
                                         {
-                                            final Action action = mapper.convertValue(actObj, Action.class);
+                                            final Action action = MAPPER.convertValue(actObj, Action.class);
                                             step.getActions().add(action);
                                         }
                                         catch (final Exception e)

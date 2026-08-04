@@ -199,6 +199,8 @@ public final class VerifyOutcomeStep implements PipelineStep
                 LOGGER.debug("   📊 Verification Tokens: {} in ({} cached) → {} out (total: {})",
                     newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
 
+                context.getTransientData().compute("verificationCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
+
                 final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
                 if (existing == null)
                 {

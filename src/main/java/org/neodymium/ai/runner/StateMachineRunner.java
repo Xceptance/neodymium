@@ -91,7 +91,7 @@ public final class StateMachineRunner
 
         if (LOGGER.isTraceEnabled())
         {
-            final org.neodymium.ai.config.AiConfiguration config = new org.neodymium.ai.config.AiConfiguration();
+            final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
             LOGGER.trace("   ┌─ [Configured LLM Capabilities & Providers] ──────────────────────────────");
             for (final LlmCapability cap : LlmCapability.values())
             {
@@ -364,8 +364,10 @@ public final class StateMachineRunner
             }
             LOGGER.debug("║ ❌ Failure Reason:      {}", root.getMessage() != null ? root.getMessage() : root.toString());
         }
+        final Integer verifCallsObj = (Integer) context.getTransientData().get("verificationCallCount");
+        final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
         LOGGER.debug("║ ⏱️ Duration:            {} ms", String.format("%,d", durationMs));
-        LOGGER.debug("║ 🤖 LLM Calls:           {} (Standard: {}, Verification: {})", llmCalls + (verificationUsage != null ? 1 : 0), llmCalls, verificationUsage != null ? 1 : 0);
+        LOGGER.debug("║ 🤖 LLM Calls:           {} (Standard: {}, Verification: {})", llmCalls + verificationCalls, llmCalls, verificationCalls);
         LOGGER.debug("║ 🎟️ Replays:             {}", replays);
         LOGGER.debug("║ 🪙 Tokens:              {} (Input: {}, Cached: {}, Output: {})",
             String.format("%,d", totalTokens),

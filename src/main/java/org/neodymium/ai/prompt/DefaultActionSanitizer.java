@@ -102,7 +102,16 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         }
 
         // 2. Sanitize target selector/URL
-        String sanitizedTarget = rawAction.getTarget();
+        String rawTarget = rawAction.getTarget();
+        if (("NAVIGATE".equalsIgnoreCase(rawAction.getType()) || "GOTO".equalsIgnoreCase(rawAction.getType()))
+            && (rawTarget == null || rawTarget.isEmpty() || "url".equalsIgnoreCase(rawTarget)))
+        {
+            if (rawAction.getValue() != null && !rawAction.getValue().isEmpty())
+            {
+                rawTarget = rawAction.getValue();
+            }
+        }
+        String sanitizedTarget = rawTarget;
         if (sanitizedTarget != null)
         {
             for (final Map.Entry<String, String> entry : sortedEntries)
@@ -118,6 +127,12 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                     }
                 }
             }
+        }
+        if (("NAVIGATE".equalsIgnoreCase(rawAction.getType()) || "GOTO".equalsIgnoreCase(rawAction.getType()))
+            && (sanitizedTarget == null || sanitizedTarget.isEmpty() || "url".equalsIgnoreCase(sanitizedTarget))
+            && !sanitizedValues.isEmpty() && sanitizedValues.get(0) != null)
+        {
+            sanitizedTarget = sanitizedValues.get(0);
         }
 
         // 3. Sanitize description
@@ -139,13 +154,32 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             }
         }
 
+        // 4. Sanitize reasoning
+        String sanitizedReasoning = rawAction.getReasoning();
+        if (sanitizedReasoning != null)
+        {
+            for (final Map.Entry<String, String> entry : sortedEntries)
+            {
+                final String varKey = entry.getKey();
+                final String rawVal = entry.getValue();
+                if (rawVal != null && !rawVal.isEmpty())
+                {
+                    final boolean isSensitive = sensitiveMap.containsKey(varKey);
+                    if (isSensitive || rawVal.length() >= 4)
+                    {
+                        sanitizedReasoning = sanitizedReasoning.replace(rawVal, "${" + varKey + "}");
+                    }
+                }
+            }
+        }
+
         // Construct the new sanitized action
         final Action sanitizedAction = new Action(
             rawAction.getType(),
             sanitizedTarget,
             sanitizedValues,
             sanitizedDesc,
-            rawAction.getReasoning()
+            sanitizedReasoning
         );
 
         // Copy dynamic parameters map
@@ -183,5 +217,46 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         }
 
         return sanitizedAction;
+    }
+
+    /**
+     * Sanitizes raw text content against SessionData variables.
+     *
+     * @param input the raw input string
+     * @param data the SessionData variable container
+     * @return the sanitized string with variables replaced
+     */
+    public String sanitizeText(final String input, final SessionData data)
+    {
+        if (input == null || input.isEmpty() || data == null)
+        {
+            return input;
+        }
+
+        final Map<String, String> sensitiveMap = data.getRawSensitiveData();
+        final Map<String, String> varMap = data.getAllVariables();
+        if (varMap.isEmpty())
+        {
+            return input;
+        }
+
+        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>(varMap.entrySet());
+        sortedEntries.sort((e1, e2) -> Integer.compare(e2.getValue().length(), e1.getValue().length()));
+
+        String clean = input;
+        for (final Map.Entry<String, String> entry : sortedEntries)
+        {
+            final String varKey = entry.getKey();
+            final String rawVal = entry.getValue();
+            if (rawVal != null && !rawVal.isEmpty())
+            {
+                final boolean isSensitive = sensitiveMap.containsKey(varKey);
+                if (isSensitive || rawVal.length() >= 4)
+                {
+                    clean = clean.replace(rawVal, "${" + varKey + "}");
+                }
+            }
+        }
+        return clean;
     }
 }

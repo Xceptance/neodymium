@@ -1691,6 +1691,9 @@ public class PageAnalyzer
 
         dom.append("  ".repeat(depth));
         dom.append("<").append(tag);
+        if (!refId.isEmpty()) {
+            dom.append(" data-ai=\"").append(escapeAttributeValue(refId)).append("\"");
+        }
         if (!domTagName.isEmpty() && !role.equals(domTagName) && !isImplicitRole(domTagName, role)) {
             dom.append(" role=\"").append(escapeAttributeValue(role)).append("\"");
         }

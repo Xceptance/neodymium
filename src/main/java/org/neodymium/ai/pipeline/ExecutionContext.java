@@ -94,6 +94,7 @@ public final class ExecutionContext
     public static final String KEY_PLAYBOOK = "playbook";
     public static final String KEY_ACTIVE_MODEL = "activeModel";
     public static final String KEY_EXECUTION_WARNINGS = "executionWarnings";
+    public static final String KEY_VERIFICATION_WARNINGS = "verificationWarnings";
     public static final String KEY_YAML_MISMATCH_WARNING = "yamlMismatchWarning";
     public static final String KEY_IS_HEALED_STEP = "isHealedStep";
 

@@ -81,6 +81,11 @@ public final class LlmSanitizerHelper
         List<org.neodymium.ai.client.SutAttachment> sanitizedAttachments = original.attachments();
         if (sanitizedAttachments != null && !sanitizedAttachments.isEmpty() && payload.maskToVariableMap() != null && !payload.maskToVariableMap().isEmpty())
         {
+            final ExecutionContext ctx = ExecutionContext.getActiveContext();
+            final Map<String, String> sensitiveMap = (ctx != null && ctx.getSessionData() != null)
+                ? ctx.getSessionData().getRawSensitiveData()
+                : Map.of();
+
             final List<org.neodymium.ai.client.SutAttachment> updated = new java.util.ArrayList<>();
             for (final org.neodymium.ai.client.SutAttachment att : sanitizedAttachments)
             {
@@ -89,9 +94,25 @@ public final class LlmSanitizerHelper
                     try
                     {
                         String decoded = new String(java.util.Base64.getDecoder().decode(att.base64Data()), java.nio.charset.StandardCharsets.UTF_8);
-                        for (final Map.Entry<String, String> entry : payload.maskToVariableMap().entrySet())
+                        if (!sensitiveMap.isEmpty())
                         {
-                            decoded = decoded.replace(entry.getValue(), entry.getKey());
+                            for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
+                            {
+                                final String varKey = entry.getKey();
+                                final String secretValue = entry.getValue();
+                                if (secretValue != null && !secretValue.isEmpty())
+                                {
+                                    final String maskPlaceholder = "[MASKED_VAR_" + varKey + "]";
+                                    decoded = decoded.replace(secretValue, maskPlaceholder);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            for (final Map.Entry<String, String> entry : payload.maskToVariableMap().entrySet())
+                            {
+                                decoded = decoded.replace(entry.getValue(), entry.getKey());
+                            }
                         }
                         final String encoded = java.util.Base64.getEncoder().encodeToString(decoded.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                         updated.add(new org.neodymium.ai.client.SutAttachment(att.mediaType(), att.filePath(), encoded));
