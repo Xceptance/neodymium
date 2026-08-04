@@ -650,7 +650,7 @@ public final class InteractiveConsoleServer
     /**
      * Simulation combining YAML structure and JSON mock execution results.
      */
-    static void runSimulation(final InteractiveConsoleEngine engine, final String yamlContent,
+    public static void runSimulation(final InteractiveConsoleEngine engine, final String yamlContent,
                               final String jsonContent)
     {
         try

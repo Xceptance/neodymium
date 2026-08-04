@@ -5,7 +5,7 @@ data:
     steps: |
       Open ${auraManagerUrl} in the browser
       Toggle the "Headless Mode" switch
-      java verifyCheckboxUnchecked(#optHeadless)
+      java verifyCheckboxChecked(#optHeadless)
       Toggle the "Record Video" switch
       java verifyCheckboxChecked(#optVideo)
     after:

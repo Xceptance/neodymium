@@ -274,6 +274,8 @@
 							<includes>
 								<include>
 									com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
+								<include>
+									com/xceptance/neodymium/aura/**/*Test.java</include>
 							  <include> com/xceptance/neodymium/util/**/*JUnit5Test.java </include>
 							</includes>
 						</configuration>
@@ -292,8 +294,7 @@
 							<forkCount>1</forkCount>
 							<reuseForks>true</reuseForks>
 							<includes>
-								<include>com/xceptance/neodymium/aura/manager/**/*Test.java</include>
-								<include>com/xceptance/neodymium/junit5/tests/auramanager/**/*Test.java</include>
+								<include>com/xceptance/neodymium/aura/**/*Test.java</include>
 							</includes>
 						</configuration>
 					</plugin>
