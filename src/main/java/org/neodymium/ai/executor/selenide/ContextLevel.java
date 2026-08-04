@@ -64,8 +64,15 @@ public enum ContextLevel
     STANDARD,
 
     /**
+     * Minimal page header (URL and title only, zero DOM element nodes) plus a page screenshot.
+     * Used for pure visual checks and assertions where no element interaction is required.
+     * Escalates directly to {@link #VISUAL_LEAN} if needed.
+     */
+    VISUAL_MINIMAL,
+
+    /**
      * Lean DOM (same as {@link #LEAN}) plus a page screenshot.
-     * Used as the initial context when the instruction is explicitly tagged with `(visual)`.
+     * Used as the context when visual element interaction is needed.
      * Escalates directly to {@link #VISUAL} if needed.
      */
     VISUAL_LEAN,
@@ -95,6 +102,7 @@ public enum ContextLevel
             case AXTREE -> STANDARD;
             case LEAN -> STANDARD;
             case STANDARD -> VISUAL;
+            case VISUAL_MINIMAL -> VISUAL_LEAN;
             case VISUAL_LEAN -> VISUAL;
             case VISUAL -> null;
         };
@@ -107,7 +115,7 @@ public enum ContextLevel
      */
     public boolean includesScreenshot()
     {
-        return this == VISUAL_LEAN || this == VISUAL;
+        return this == VISUAL_MINIMAL || this == VISUAL_LEAN || this == VISUAL;
     }
 
     /**

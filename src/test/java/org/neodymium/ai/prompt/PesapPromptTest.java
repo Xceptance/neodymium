@@ -90,6 +90,28 @@ public final class PesapPromptTest
     }
 
     /**
+     * Verifies that the prompt successfully parses VISUAL_MINIMAL context level from minified JSON response.
+     */
+    @Test
+    public void testParseResponseVisualMinimal() throws Exception
+    {
+        final String rawJson = """
+            {
+              "c": "VISUAL_MINIMAL",
+              "jm": false
+            }
+            """;
+
+        final PesapPrompt prompt = new PesapPrompt("There is a green checkmark (visual)", null, null);
+        final PesapResult result = prompt.parseResponse(rawJson, new ExecutionContext(null));
+
+        assertNotNull(result);
+        assertEquals("VISUAL_MINIMAL", result.contextLevel());
+        assertFalse(result.requiresJavaMethods());
+        assertTrue(result.splitSteps().isEmpty());
+    }
+
+    /**
      * Verifies that the prompt parses fallback defaults on empty or invalid response.
      */
     @Test

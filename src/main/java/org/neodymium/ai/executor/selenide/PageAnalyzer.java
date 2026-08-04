@@ -863,8 +863,12 @@ public class PageAnalyzer
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(title != null ? title : "").append("\n\n");
 
-        if (isEmptyPage) {
-            return dom.toString();
+        if (isEmptyPage || level == ContextLevel.VISUAL_MINIMAL) {
+            final String result = dom.toString();
+            if (!isEmptyPage) {
+                LOG.debug("   📄 Simplified DOM size: {} chars (VISUAL_MINIMAL mode)", result.length());
+            }
+            return result;
         }
 
         if (level == ContextLevel.AXTREE) {

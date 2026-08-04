@@ -460,7 +460,7 @@ public final class ExecuteActionsStep implements PipelineStep
             final String lower = resolvedInstruction.toLowerCase();
             if (lower.contains("(visual)"))
             {
-                initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
+                initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_MINIMAL;
             }
             else if (lower.contains("(layout)"))
             {

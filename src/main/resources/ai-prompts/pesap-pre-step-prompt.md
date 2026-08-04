@@ -4,13 +4,14 @@ Predict minimal context level and metadata for the current step.
 - HINT: Explicit locator provided (hint: .selector).
 - AXTREE: Default for standard clicks/types.
 - STANDARD: Text validation or message checking.
-- VISUAL_LEAN: Visual/layout check without text.
-- VISUAL: Visual/layout check requiring text analysis.
+- VISUAL_MINIMAL: Pure visual check/assertion without element interaction (0 DOM elements + screenshot).
+- VISUAL_LEAN: Visual element interaction required (needs screenshot + compact element locators).
+- VISUAL: Full raw DOM + screenshot.
 
 ## Output Format
 Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 {
-  "c": "HINT|AXTREE|STANDARD|VISUAL_LEAN|VISUAL",
+  "c": "HINT|AXTREE|STANDARD|VISUAL_MINIMAL|VISUAL_LEAN|VISUAL",
   "jm": true|false,
   "sp": ["step 1", "step 2"] // Omit if unsplit
 }
@@ -18,7 +19,8 @@ Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 ## Rules
 1. Minimal Context ('c'):
    - (hint: -> HINT
-   - (visual) -> VISUAL_LEAN (or VISUAL if text check needed)
+   - (visual) check/assertion -> VISUAL_MINIMAL
+   - (visual) element interaction -> VISUAL_LEAN
    - (layout) -> VISUAL
    - Text validation -> STANDARD
    - Default -> AXTREE
