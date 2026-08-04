@@ -764,8 +764,20 @@ public final class ExecuteActionsStep implements PipelineStep
 
             if (isReplay)
             {
-                // Replay mode: Put recorded actions directly into KEY_LAST_LLM_RESULT without querying LLM
+                // Replay mode: Stamp live DOM with data-ai attributes (STANDARD level includes text elements) before executing step actions
                 standardFlow.add(c -> {
+                    final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null)
+                    {
+                        try
+                        {
+                            final SutState state = executor.captureState(org.neodymium.ai.executor.selenide.ContextLevel.STANDARD);
+                            c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
                     c.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, step.getActions() != null ? step.getActions() : List.of());
                     final Integer replays = (Integer) c.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
                     c.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
