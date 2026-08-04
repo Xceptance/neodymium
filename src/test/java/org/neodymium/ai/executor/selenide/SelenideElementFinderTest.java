@@ -68,8 +68,8 @@ public class SelenideElementFinderTest
         final String expected1 = "span.cart-badge.bg-indigo-600.text-white.rounded-full.px-2.py-0\\.5.text-xs.font-bold";
         Assertions.assertEquals(expected1, LocatorResolver.sanitizeCssSelector(raw1));
 
-        final String raw2 = "div.hover:bg-slate-200.px-1.5";
-        final String expected2 = "div.hover\\:bg-slate-200.px-1\\.5";
+        final String raw2 = "div.size-btn.cursor-pointer:nth-of-type(4)";
+        final String expected2 = "div.size-btn.cursor-pointer:nth-of-type(4)";
         Assertions.assertEquals(expected2, LocatorResolver.sanitizeCssSelector(raw2));
     }
 }

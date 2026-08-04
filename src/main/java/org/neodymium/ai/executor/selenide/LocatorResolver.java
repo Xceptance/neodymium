@@ -176,10 +176,6 @@ public final class LocatorResolver
 
         String sanitized = selector;
 
-        // Escape unescaped colons in class variant tokens (e.g., .hover:bg-slate-200 -> .hover\:bg-slate-200)
-        sanitized = Pattern.compile("(\\.[a-zA-Z0-9_\\-]+):([a-zA-Z0-9_\\-]+)")
-                .matcher(sanitized).replaceAll("$1\\\\:$2");
-
         // Escape unescaped decimal dots inside class tokens (e.g., .py-0.5 -> .py-0\.5)
         sanitized = Pattern.compile("(\\.[a-zA-Z0-9_\\-]+)\\.(\\d+)")
                 .matcher(sanitized).replaceAll("$1\\\\.$2");
