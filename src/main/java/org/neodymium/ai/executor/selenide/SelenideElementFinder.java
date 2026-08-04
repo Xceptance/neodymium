@@ -24,7 +24,10 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
 
 /**
  * Shared utility for finding {@link SelenideElement} instances using a multi-tiered sequence of resolution strategies.
@@ -44,11 +47,48 @@ import org.openqa.selenium.By;
  */
 public final class SelenideElementFinder
 {
+    private static final Map<String, Long> LAST_STAMP_TIMESTAMP_PER_URL = new ConcurrentHashMap<>();
+    private static final long STAMP_THROTTLE_MS = 2000L;
+
     /**
      * Private constructor to prevent instantiation of this static utility class.
      */
     private SelenideElementFinder()
     {
+    }
+
+    /**
+     * Checks if dynamic DOM attribute stamping should be attempted based on a 2-second per-URL throttle.
+     *
+     * @param driver the active WebDriver
+     * @return true if DOM stamping should be attempted, false if throttled
+     */
+    private static boolean shouldAttemptDomStamp(final WebDriver driver)
+    {
+        if (driver == null)
+        {
+            return false;
+        }
+        try
+        {
+            final String url = driver.getCurrentUrl();
+            if (url == null || url.isEmpty() || "data:,".equals(url) || "about:blank".equals(url))
+            {
+                return false;
+            }
+            final long now = System.currentTimeMillis();
+            final Long lastStamp = LAST_STAMP_TIMESTAMP_PER_URL.get(url);
+            if (lastStamp != null && (now - lastStamp) < STAMP_THROTTLE_MS)
+            {
+                return false;
+            }
+            LAST_STAMP_TIMESTAMP_PER_URL.put(url, now);
+            return true;
+        }
+        catch (final Exception e)
+        {
+            return false;
+        }
     }
 
     /**
@@ -149,13 +189,17 @@ public final class SelenideElementFinder
                         return els.first();
                     }
 
-                    // Dynamically stamp data-ai attributes into live DOM if absent
-                    try
+                    // Dynamically stamp data-ai attributes into live DOM if absent (throttled to at most 1 stamp per 2 seconds per URL)
+                    final WebDriver driver = WebDriverRunner.getWebDriver();
+                    if (shouldAttemptDomStamp(driver))
                     {
-                        new PageAnalyzer(WebDriverRunner.getWebDriver()).captureSimplifiedDom(ContextLevel.LEAN);
-                    }
-                    catch (final Exception ignored)
-                    {
+                        try
+                        {
+                            new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.LEAN);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
                     }
 
                     final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
