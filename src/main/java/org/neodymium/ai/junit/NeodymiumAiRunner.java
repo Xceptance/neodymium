@@ -460,7 +460,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             try
             {
-                if (val.matches(pattern) || java.util.regex.Pattern.compile(pattern).matcher(val).find())
+                if (val.matches(pattern))
                 {
                     return true;
                 }

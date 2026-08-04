@@ -98,4 +98,28 @@ public class NeodymiumAiRunnerTest
         Assertions.assertEquals("", filePb.recordingMethod());
         Assertions.assertEquals("custom-baseline-file", filePb.recordingFileName());
     }
+
+    /**
+     * Sample test class decorated with dataset annotations to test exact vs prefix dataset matching.
+     */
+    public static class DataSetMatchingTestClass
+    {
+        @Test
+        @AiDataSet("modern-bad")
+        public void testExactMatch()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that @AiDataSet("modern-bad") correctly extracts the dataset annotation and does not match via partial substring.
+     */
+    @Test
+    public void testDataSetAnnotationExtraction() throws Exception
+    {
+        final AiDataSet ds = DataSetMatchingTestClass.class.getMethod("testExactMatch").getAnnotation(AiDataSet.class);
+        Assertions.assertNotNull(ds);
+        Assertions.assertEquals(1, ds.value().length);
+        Assertions.assertEquals("modern-bad", ds.value()[0]);
+    }
 }
