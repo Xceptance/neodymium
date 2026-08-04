@@ -86,6 +86,12 @@ public final class VisualRcaStep implements PipelineStep
 
     private void executeInternal(final ExecutionContext context) throws PipelineException
     {
+        if (!org.neodymium.ai.config.AiConfiguration.getInstance().isVisualRcaEnabled())
+        {
+            LOGGER.debug("Visual RCA is disabled via configuration (neodymium.ai.visualRca.enabled=false). Skipping Visual RCA analysis.");
+            return;
+        }
+
         // 1. Retrieve the active session instance
         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         if (session == null)
@@ -105,6 +111,10 @@ public final class VisualRcaStep implements PipelineStep
         final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(instruction, err);
         final String system = rcaPrompt.compileSystemMessage(context);
         final String user = rcaPrompt.compileUserMessage(context);
+
+        LOGGER.debug("Compiling prompt: VisualRcaPrompt");
+        LOGGER.trace("System Prompt:\n{}", system);
+        LOGGER.trace("User Prompt:\n{}", user);
 
         // 4. Extract image attachments (screenshots) for multimodal vision analysis
         final List<SutAttachment> imageAttachments = new ArrayList<>();
@@ -138,6 +148,7 @@ public final class VisualRcaStep implements PipelineStep
             // 7. Dispatch diagnosis call and parse plain-English RCA diagnosis summary
             LOGGER.debug("Executing Visual RCA via LLM provider '{}'", provider.getClass().getSimpleName());
             final LlmResponse response = provider.chat(request);
+            LOGGER.trace("Raw response content:\n{}", response.content());
             final String diagnosis = rcaPrompt.parseResponse(response.content(), context);
 
             // 8. Log diagnosis warning and dispatch DiagnosticErrorEvent to event bus

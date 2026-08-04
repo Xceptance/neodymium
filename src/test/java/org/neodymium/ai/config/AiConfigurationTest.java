@@ -19,9 +19,11 @@
 package org.neodymium.ai.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +47,17 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.timeoutSeconds");
         System.clearProperty("neodymium.ai.execution.mode");
         System.clearProperty("neodymium.ai.timeout.seconds");
+        System.clearProperty("neodymium.ai.visualRca.enabled");
+    }
+
+    @Test
+    public void testVisualRcaEnabledDefaultAndOverride()
+    {
+        assertTrue(AiConfiguration.getInstance().isVisualRcaEnabled(), "Visual RCA should be enabled by default.");
+
+        System.setProperty("neodymium.ai.visualRca.enabled", "false");
+        AiConfiguration.resetInstance();
+        assertFalse(AiConfiguration.getInstance().isVisualRcaEnabled(), "Visual RCA should be disabled when property is set to false.");
     }
 
     @Test

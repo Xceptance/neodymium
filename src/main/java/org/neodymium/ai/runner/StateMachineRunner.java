@@ -444,6 +444,12 @@ public final class StateMachineRunner
      */
     private void runVisualRca(final ExecutionContext context, final Throwable exception)
     {
+        if (!org.neodymium.ai.config.AiConfiguration.getInstance().isVisualRcaEnabled())
+        {
+            LOGGER.debug("Visual RCA is disabled via configuration (neodymium.ai.visualRca.enabled=false). Skipping Visual RCA analysis.");
+            return;
+        }
+
         try
         {
             final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
@@ -464,6 +470,10 @@ public final class StateMachineRunner
             final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage);
             final String system = rcaPrompt.compileSystemMessage(context);
             final String user = rcaPrompt.compileUserMessage(context);
+
+            LOGGER.debug("Compiling prompt: VisualRcaPrompt");
+            LOGGER.trace("System Prompt:\n{}", system);
+            LOGGER.trace("User Prompt:\n{}", user);
 
             final LlmRequest request = new LlmRequest(
                 system,
@@ -499,8 +509,10 @@ public final class StateMachineRunner
             }
             final long durationMs = System.currentTimeMillis() - startTime;
             LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
+            LOGGER.trace("Raw response content:\n{}", response.content());
             final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);
 
+            LOGGER.info("🚨 [Visual RCA Diagnosis]: {}", rcaExplanation);
             context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, rcaExplanation);
             this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Visual RCA analysis: " + rcaExplanation, exception));
         }

@@ -433,6 +433,16 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if Visual Root Cause Analysis (RCA) is enabled on step execution failures.
+     *
+     * @return true if Visual RCA is enabled (default: true), false otherwise
+     */
+    public boolean isVisualRcaEnabled()
+    {
+        return getBoolean("neodymium.ai.visualRca.enabled", true);
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *
