@@ -419,6 +419,7 @@ public final class ExecuteActionsStep implements PipelineStep
         // For leaf steps, return a pipeline step wrapper setting the active instruction and pushing execution loop
         return contextState -> {
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+            step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
             final String rawInstruction = step.getInstruction();
             final String resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
             final String preparedInstruction = prepareInstruction(resolvedInstruction);
@@ -889,6 +890,17 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     return;
                 }
+                final Boolean isHealed = (Boolean) c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
+                if (Boolean.TRUE.equals(isHealed))
+                {
+                    step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.HEALED);
+                }
+                else
+                {
+                    step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+                }
+                step.setFailed(false);
+                step.setFailureReason(null);
                 final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
                 if (statsObj instanceof org.neodymium.ai.pipeline.StepStats stepStats)
                 {
