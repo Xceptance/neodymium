@@ -195,7 +195,7 @@ public final class ExecuteActionsStep implements PipelineStep
                          mode = session.getExecutionMode();
                      }
                      final boolean isNoReplay = step.isNoReplay();
-                     final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && step.getActions() != null && !step.getActions().isEmpty();
+                     final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
                      if (!isReplayingStep)
                      {
                          if (isNoReplay && Boolean.TRUE.equals(context.getTransientData().get("KEY_CURRENT_STEP_FIRST_ACTION")))
@@ -766,7 +766,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-            final boolean isReplay = mode.isReplay() && !stepNoReplay && step.getActions() != null && !step.getActions().isEmpty();
+            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
 
             if (isReplay)
             {

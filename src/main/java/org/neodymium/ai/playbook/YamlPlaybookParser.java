@@ -602,10 +602,7 @@ public final class YamlPlaybookParser implements PlaybookParser
             if (foundIndex != -1)
             {
                 final PlaybookStep yamlStep = yamlSteps.get(foundIndex);
-                if (!"NONE".equalsIgnoreCase(action.getType()))
-                {
-                    yamlStep.getActions().add(action);
-                }
+                yamlStep.getActions().add(action);
                 if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
                 {
                     yamlStep.setScreenshotHash(action.getStepScreenshotHash());
