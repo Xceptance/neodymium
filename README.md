@@ -6,6 +6,10 @@ Neodymium tries to solve your typical and most pressing UI test automation probl
 
 Neodymium is basically the combination of state of the art open source test libraries with additional glue to make it stick reliably together.
 
+## Requirements
+* **Java**: JDK 21 or higher
+* **Build Tool**: Apache Maven 3.8+
+
 ## Included Projects
 We combine and use several open source frameworks. Here are some honorable mentions:
 

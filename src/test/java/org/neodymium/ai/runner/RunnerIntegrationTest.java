@@ -184,7 +184,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testStateMachineStructuralControls() throws PipelineException
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -236,7 +236,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testTryCatchStepExceptionHandling() throws PipelineException
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -282,7 +282,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testTryCatchBubblingUnhandledExceptions()
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -317,7 +317,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testConcreteExecutionStepsLifecycle() throws PipelineException, IOException
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -383,7 +383,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testExecuteActionsStepAssertionErrorHandling() throws Exception
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final org.neodymium.ai.executor.TargetExecutor executor = new org.neodymium.ai.executor.TargetExecutor()
         {
@@ -448,7 +448,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testDynamicIncludeExpansion() throws PipelineException, IOException
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -512,7 +512,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testVerifyOutcomeStepSuccess() throws Exception
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -566,7 +566,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testVerifyOutcomeStepFailure() throws Exception
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -623,7 +623,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testPrepareRetryStep() throws Exception
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
 
@@ -642,7 +642,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testTwoStageSemanticHealingDiffSummary() throws Exception
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -682,7 +682,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testTwoStageSemanticHealingMatchingStates() throws Exception
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final LlmRegistry registry = new LlmRegistry();
@@ -718,7 +718,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testVisualRcaOnConclusiveFailure()
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();
         final TestLlmProvider provider = new TestLlmProvider();
@@ -763,7 +763,7 @@ public final class RunnerIntegrationTest
     @Test
     public void testReplayHealingCapturesSutState() throws Exception
     {
-        final SessionData sessionData = new SessionData(new HashMap<>());
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor delegate = new MockTargetExecutor();
         final TargetExecutor executor = new TargetExecutor()
