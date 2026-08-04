@@ -12,9 +12,9 @@ Analyze current DOM and visual state to fulfill the active instruction.
 - BACK, FORWARD, REFRESH: set 'action', leave target/value empty.
 - ASSERT: set 'locator' to a specific CSS selector or 'url'. For page-level text assertions (e.g. totals, order confirmation text), use 'body' or the exact target element. NEVER target header, navbar, or announcement bar elements for body text assertions.
 - Locators MUST use stable, reproducible attributes:
-  * PREFER target priority: (1) `data-test`, `data-testid`, `name`, `aria-label`, (2) semantic CSS classes (e.g. `.product-quick-add`, `.btn-primary`), (3) element text.
+  * PREFER target priority: (1) `data-test`, `data-testid`, `name`, `aria-label`, (2) semantic CSS classes (e.g. `.product-quick-add`, `.btn-primary`), (3) exact pre-escaped `selector` attribute provided in the DOM dump, (4) element text.
   * FALLBACK: Use Neodymium's `[data-ai='...']` reference tag as a fallback when the target element has no other unique ID, class, text, or standard attribute.
-  * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes).
+  * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes). Do NOT manually concatenate raw utility classes containing unescaped decimals (e.g. `.py-0.5`), slashes (e.g. `.w-1/2`), or state colons.
 - Regex Values: When an instruction specifies pattern formats (e.g. 'V-[0-9]+-US'), keep the exact regex pattern in action 'value' (e.g. 'V-[0-9]+-US').
 - ESCALATE: Set 'status' to 'ESCALATE' when required elements are missing from the current context. Set 'targetContextLevel' to 'STANDARD' if DOM elements/text are missing from the AXTree, or 'VISUAL' if visual context is required.
 

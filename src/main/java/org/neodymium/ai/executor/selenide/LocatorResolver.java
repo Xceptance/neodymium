@@ -25,10 +25,10 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.InvalidSelectorException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
+import org.neodymium.ai.util.CssSelectorSanitizer;
 
 /**
  * Centralized locator resolution and sanitizer for Neodymium AI Selenide/Selenium execution.
@@ -169,18 +169,7 @@ public final class LocatorResolver
      */
     public static String sanitizeCssSelector(final String selector)
     {
-        if (selector == null || selector.isBlank())
-        {
-            return selector;
-        }
-
-        String sanitized = selector;
-
-        // Escape unescaped decimal dots inside class tokens (e.g., .py-0.5 -> .py-0\.5)
-        sanitized = Pattern.compile("(\\.[a-zA-Z0-9_\\-]+)\\.(\\d+)")
-                .matcher(sanitized).replaceAll("$1\\\\.$2");
-
-        return sanitized;
+        return CssSelectorSanitizer.sanitize(selector);
     }
 
     /**
