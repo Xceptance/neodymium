@@ -22,11 +22,15 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.ai.action.plugins.AiMethod;
+import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import com.xceptance.neodymium.util.Neodymium;
 import org.junit.jupiter.api.Assertions;
 import java.io.File;
 import java.io.IOException;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 /**
  * Static test helper class for Aura Manager UI tests.
@@ -46,6 +50,67 @@ public final class AuraManagerTestHelper
         // Prevent instantiation
     }
 
+    public static void setupMockHistoryReport() throws IOException
+    {
+        final AuraReportingService reportingService = new AuraReportingService();
+        final File historyDir = reportingService.getReportHistoryDir();
+        if (!historyDir.exists())
+        {
+            historyDir.mkdirs();
+        }
+
+        final String runId = "20260803_120000_layout_test_run";
+        final File reportDir = new File(historyDir, runId).getAbsoluteFile();
+        if (!reportDir.exists())
+        {
+            reportDir.mkdirs();
+
+            final String metadataJson = "{\n"
+                + "  \"status\": \"Passed\",\n"
+                + "  \"timestamp\": \"2026-08-03T12:00:00Z\",\n"
+                + "  \"total\": 1,\n"
+                + "  \"passed\": 1,\n"
+                + "  \"failed\": 0,\n"
+                + "  \"durationMs\": 15000,\n"
+                + "  \"headless\": true,\n"
+                + "  \"allureEnabled\": true,\n"
+                + "  \"videoEnabled\": false\n"
+                + "}";
+            Files.writeString(new File(reportDir, "metadata.json").toPath(), metadataJson, StandardCharsets.UTF_8);
+
+            final String executionJson = "{\n"
+                + "  \"testId\": \"T101\",\n"
+                + "  \"testName\": \"Layout Blueprint Verification Test\",\n"
+                + "  \"status\": \"Passed\",\n"
+                + "  \"browser\": \"Chrome\",\n"
+                + "  \"stats\": {\n"
+                + "    \"durationMs\": 15000\n"
+                + "  },\n"
+                + "  \"yamlSource\": \"tests/layout_test.yaml\",\n"
+                + "  \"playbookMode\": \"false\",\n"
+                + "  \"steps\": [\n"
+                + "    {\n"
+                + "      \"index\": 0,\n"
+                + "      \"step\": \"Open homepage and verify header\",\n"
+                + "      \"status\": \"passed\",\n"
+                + "      \"action\": \"open\",\n"
+                + "      \"target\": \"http://localhost\",\n"
+                + "      \"durationMs\": 1200\n"
+                + "    },\n"
+                + "    {\n"
+                + "      \"index\": 1,\n"
+                + "      \"step\": \"Click navigation menu item\",\n"
+                + "      \"status\": \"passed\",\n"
+                + "      \"action\": \"click\",\n"
+                + "      \"target\": \"#navReports\",\n"
+                + "      \"durationMs\": 850\n"
+                + "    }\n"
+                + "  ]\n"
+                + "}";
+            Files.writeString(new File(reportDir, "console-execution-layout.json").toPath(), executionJson, StandardCharsets.UTF_8);
+        }
+    }
+
     public static void setStartPort(final int port)
     {
         startPort = port;
@@ -63,6 +128,7 @@ public final class AuraManagerTestHelper
         {
             return;
         }
+        setupMockHistoryReport();
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
         final String testName = Neodymium.getTestName();
         if (testName != null)

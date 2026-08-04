@@ -18,9 +18,10 @@
  */
 package com.xceptance.neodymium.aura;
 
+import java.io.IOException;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import java.io.IOException;
 
 /**
  * Main HTTP Handler registry for Neodymium Aura Manager server routing.
@@ -51,8 +52,8 @@ public final class AuraManagerMainHandler implements HttpHandler
         final AuraManagerQueueController queueController = new AuraManagerQueueController(queueService, fileService, interactiveService, manager);
         final AuraManagerReportingController reportingController = new AuraManagerReportingController(reportingService, queueService, manager);
         final AuraManagerDashboardController dashboardController = new AuraManagerDashboardController(interactiveService, fileService, queueController, reportingController, sessionService, manager);
-        final AuraManagerFileController fileController = new AuraManagerFileController(fileService, manager);
-        final AuraManagerEditorController editorController = new AuraManagerEditorController(fileService, manager);
+        final AuraManagerFileController fileController = new AuraManagerFileController(fileService, queueController, manager);
+        final AuraManagerEditorController editorController = new AuraManagerEditorController(fileService, queueController, manager);
         final AuraManagerInteractiveController interactiveController = new AuraManagerInteractiveController(interactiveService, reportingService, queueService, manager);
         final AuraManagerChatController chatController = new AuraManagerChatController(chatService, sessionService, manager);
         final AuraManagerSettingsController settingsController = new AuraManagerSettingsController(settingsService, manager);

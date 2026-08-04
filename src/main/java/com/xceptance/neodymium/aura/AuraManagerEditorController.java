@@ -18,8 +18,6 @@
  */
 package com.xceptance.neodymium.aura;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.xceptance.neodymium.aura.dto.SaveRequest;
 import java.io.File;
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -28,9 +26,13 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.thymeleaf.context.Context;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.xceptance.neodymium.aura.dto.SaveRequest;
 
 /**
  * Controller handling Yaml editor rendering, file reading, saving, creating, and deleting operations.
@@ -78,13 +80,17 @@ public final class AuraManagerEditorController
         try
         {
             final Context context = new Context();
+            context.setVariable("queue", manager.getMainHandler().getQueueService().getSelectedQueue());
             final String fragmentPath = getEditorPanel(file, context);
             final String[] parts = fragmentPath.split("::");
             final String template = parts[0].trim();
             final Set<String> fragments = Set.of(parts[1].trim());
 
-            final String html = manager.getTemplateEngine().process(template, fragments, context);
-            AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+            final String editorHtml = manager.getTemplateEngine().process(template, fragments, context);
+            final String runControlsHtml = manager.getTemplateEngine().process("fragments/queue", Set.of("runControls"), context);
+
+            final String combinedHtml = editorHtml + "\n" + runControlsHtml;
+            AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", combinedHtml.getBytes(StandardCharsets.UTF_8));
         }
         catch (final SecurityException e)
         {

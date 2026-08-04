@@ -62,3 +62,8 @@ tmp/
 # Neodymium AI playbooks
 /src/test/resources/ai-playbooks/
 
+# Temporary UI test YAML files
+/src/test/resources/dummy-test-run-*.yaml
+/src/test/resources/dashboard-ui-dummy-*.yaml
+/src/test/resources/*-dummy*.yaml
+

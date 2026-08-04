@@ -7,7 +7,7 @@
     <div class="panel-header">
         <div class="neo-u-11">
             <i class="fa-solid fa-file-lines neo-u-12"></i>
-            <span id="editorFileName" th:text="${activeEditingFile != null ? activeEditingFile : 'test.yaml'}">test.yaml</span>
+            <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
         </div>
         <div class="editor-actions">
             <button class="btn-editor save"

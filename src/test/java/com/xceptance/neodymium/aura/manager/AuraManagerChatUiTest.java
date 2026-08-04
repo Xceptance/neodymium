@@ -111,9 +111,8 @@ public final class AuraManagerChatUiTest
         select.getSelectedOption().shouldHave(Condition.text("Default Session"));
 
         // Verify the initial welcome greeting is present
-        final var messages = $$("#chatMessages .chat-message");
-        messages.shouldHave(CollectionCondition.size(1));
-        messages.first().shouldHave(Condition.text("Hello! I am Aura, your test automation assistant"));
+        $(".chat-welcome-card").shouldBe(Condition.visible);
+        $(".chat-welcome-title").shouldHave(Condition.text("Hello I'm Aura"));
     }
 
     @NeodymiumTest

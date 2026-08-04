@@ -194,7 +194,8 @@ public final class AuraManagerReportingHistoryUiTest
 
         final var firstTest = testCards.first();
         firstTest.shouldBe(Condition.visible);
-        firstTest.$(".test-card-title").shouldHave(Condition.text("login_test (T123)"));
+        firstTest.$(".test-card-title").shouldHave(Condition.text("login_test.yaml"));
+        firstTest.$(".test-card-subtitle").shouldHave(Condition.text("T123"));
         firstTest.$(".badge-success").shouldHave(Condition.text("Passed"));
 
         // Click the test card to expand or load logs details

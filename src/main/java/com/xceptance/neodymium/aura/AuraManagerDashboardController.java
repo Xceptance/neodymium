@@ -29,6 +29,7 @@ import java.util.Set;
 import org.thymeleaf.context.Context;
 
 import com.xceptance.neodymium.aura.dto.ChatSessionDto;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 
 /**
  * Controller handling dashboard core rendering, static themes, and assets.
@@ -61,10 +62,13 @@ public final class AuraManagerDashboardController
     public void handleDashboard(final HttpExchange exchange) throws IOException
     {
         final Context context = new Context();
+        final List<YamlFileDto> filesList = fileService.getYamlFilesList();
         context.setVariable("theme", interactiveService.getActiveTheme());
-        context.setVariable("files", fileService.getYamlFilesList());
+        context.setVariable("files", filesList);
         context.setVariable("expandedFiles", fileService.getExpandedFiles());
         context.setVariable("queue", queueController.getSelectedQueue());
+        context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
+        context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filesList));
         context.setVariable("headless", queueController.isHeadless());
         context.setVariable("video", queueController.isVideo());
         context.setVariable("keepOpen", queueController.isKeepOpen());

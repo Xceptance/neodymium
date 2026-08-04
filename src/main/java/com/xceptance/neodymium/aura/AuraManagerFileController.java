@@ -37,11 +37,13 @@ import org.thymeleaf.context.Context;
 public final class AuraManagerFileController
 {
     private final AuraFileService fileService;
+    private final AuraManagerQueueController queueController;
     private final NeodymiumAuraManager manager;
 
-    public AuraManagerFileController(final AuraFileService fileService, final NeodymiumAuraManager manager)
+    public AuraManagerFileController(final AuraFileService fileService, final AuraManagerQueueController queueController, final NeodymiumAuraManager manager)
     {
         this.fileService = fileService;
+        this.queueController = queueController;
         this.manager = manager;
     }
 
@@ -95,6 +97,9 @@ public final class AuraManagerFileController
         final List<YamlFileDto> responseList = fileService.getYamlFilesList();
         context.setVariable("files", responseList);
         context.setVariable("expandedFiles", fileService.getExpandedFiles());
+        context.setVariable("queue", queueController.getSelectedQueue());
+        context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
+        context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(responseList));
         return "fragments/test-selection :: yamlFileList";
     }
 
@@ -112,6 +117,9 @@ public final class AuraManagerFileController
         final Context context = new Context();
         context.setVariable("files", filteredList);
         context.setVariable("expandedFiles", fileService.getExpandedFiles());
+        context.setVariable("queue", queueController.getSelectedQueue());
+        context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
+        context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filteredList));
 
         final String html = manager.getTemplateEngine().process("fragments/test-selection", Set.of("yamlFileList"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));

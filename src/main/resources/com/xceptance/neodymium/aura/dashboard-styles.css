@@ -1873,9 +1873,13 @@
     color:var(--text-secondary);
 }
 
+#statsPanel,
 .neo-u-13 {
     display: none;
-    flex-shrink: 0;
+    height: auto !important;
+    min-height: auto !important;
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
     padding: 12px;
 }
 

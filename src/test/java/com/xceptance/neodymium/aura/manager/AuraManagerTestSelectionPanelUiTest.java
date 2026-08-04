@@ -136,4 +136,37 @@ public final class AuraManagerTestSelectionPanelUiTest
         // List should restore back to initial count
         $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(initialCount));
     }
+
+    @NeodymiumTest
+    public final void testCheckboxSelectionAndReloadPersistence()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // 1. Expand the first file item first so dataset checkboxes are visible
+        final var firstContainer = $$("#yamlFileList .file-container").first();
+        firstContainer.$(".list-item").click();
+        final var datasetList = firstContainer.$(".dataset-list");
+        datasetList.shouldBe(Condition.visible);
+
+        final var fileCheckbox = firstContainer.$(".file-select-cb");
+        fileCheckbox.shouldBe(Condition.visible);
+
+        // Click file checkbox to select file and verify instant client-side update on dataset checkboxes
+        fileCheckbox.click();
+        fileCheckbox.shouldBe(Condition.selected);
+
+        // Verify dataset checkboxes are all instantly selected on client side
+        final var datasetCheckboxes = datasetList.$$(".dataset-select-cb");
+        datasetCheckboxes.shouldHave(CollectionCondition.sizeGreaterThan(0));
+        datasetCheckboxes.forEach(cb -> cb.shouldBe(Condition.selected));
+
+        // 2. Reload page to verify server-side selection persistence
+        Selenide.refresh();
+
+        // 3. Verify file checkbox and dataset checkboxes remain checked after page reload
+        final var reloadedContainer = $$("#yamlFileList .file-container").first();
+        reloadedContainer.$(".file-select-cb").shouldBe(Condition.selected);
+        reloadedContainer.$(".list-item").click();
+        reloadedContainer.$(".dataset-list").$(".dataset-select-cb").shouldBe(Condition.selected);
+    }
 }

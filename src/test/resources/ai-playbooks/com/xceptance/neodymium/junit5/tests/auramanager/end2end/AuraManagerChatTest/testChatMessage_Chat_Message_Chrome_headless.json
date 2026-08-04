@@ -135,16 +135,16 @@
     },
     {
       "promptLine": "Wait until the last chat message is from the AI",
-      "reasoning": "The previous attempt failed due to a visual mismatch, likely because the AI was still in a \u0027Thinking Process\u0027 state. To address this, the first action is to explicitly wait for the \u0027Thinking Process\u0027 element to become hidden. Once the AI has finished processing, the second action asserts that the last chat message displayed is indeed from the \u0027Aura Assistant\u0027, confirming the AI has responded.",
+      "reasoning": "The previous attempt failed due to a visual mismatch, indicating the AI\u0027s response might not have been fully loaded or rendered. To address this, I\u0027ve added a WAIT action to explicitly wait for the last AI chat message element (`div.chat-message.ai:last-of-type`) to become visible. Following this, an ASSERT action verifies that this element contains the expected introductory text from the AI. This ensures the AI\u0027s response is present and stable before proceeding.",
       "actions": [
         {
           "type": "WAIT",
-          "target": "[data-neo-ref\u003d\u0027xc_8ocey7\u0027]",
+          "target": "div.chat-message.ai:last-of-type",
           "value": [
-            "hidden"
+            "20000"
           ],
-          "description": "Wait for \u0027Thinking Process\u0027 to disappear, indicating AI has finished processing.",
-          "elementDetails": "Thinking Process block",
+          "description": "Wait for the last AI chat message to appear",
+          "elementDetails": "Last AI chat message",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
@@ -152,19 +152,19 @@
         },
         {
           "type": "ASSERT",
-          "target": "div.chat-message:last-of-type",
+          "target": "div.chat-message.ai:last-of-type",
           "value": [
-            "Aura Assistant"
+            "Hello there! I\u0027m Neodymium Aura, your AI Assistant."
           ],
-          "description": "Assert that the last chat message is from the Aura Assistant (AI).",
-          "elementDetails": "Last chat message",
+          "description": "Verify the last chat message is from the AI and contains the expected text",
+          "elementDetails": "Last AI chat message",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "80020400020002080202000c500000080001000c0000080a0000000958000000",
+      "screenshotHash": "8002001004100614c610061004108418841004100410d01004110419a8100010",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

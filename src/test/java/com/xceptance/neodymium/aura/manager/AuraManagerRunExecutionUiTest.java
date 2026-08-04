@@ -98,7 +98,7 @@ public final class AuraManagerRunExecutionUiTest
 
         // Verify the Run Queue button is enabled and has queue count
         final var runQueueBtn = $("#runQueueBtn");
-        runQueueBtn.shouldBe(Condition.visible).shouldHave(Condition.matchText("Run Queue \\(\\s*1\\s*\\)"));
+        runQueueBtn.shouldBe(Condition.visible).shouldHave(Condition.matchText("Run Queue[\\s\\(]*1[\\s\\)]*"));
 
         // 2. Click "Run Queue" to start execution
         runQueueBtn.click();

@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,6 +74,51 @@ public final class AuraManagerQueueController
     public final List<DatasetSelection> getSelectedQueue()
     {
         return this.selectedQueue;
+    }
+
+    public Set<String> getSelectedQueueKeys()
+    {
+        final Set<String> keys = new HashSet<>();
+        synchronized (selectedQueue)
+        {
+            for (final DatasetSelection sel : selectedQueue)
+            {
+                if (sel.file != null && sel.id != null)
+                {
+                    keys.add(sel.file + "::" + sel.id);
+                }
+            }
+        }
+        return keys;
+    }
+
+    public Set<String> getFullySelectedFileKeys(final List<YamlFileDto> files)
+    {
+        final Set<String> fullFiles = new HashSet<>();
+        final Set<String> keys = getSelectedQueueKeys();
+        if (files != null)
+        {
+            for (final YamlFileDto f : files)
+            {
+                if (f.datasets != null && !f.datasets.isEmpty())
+                {
+                    boolean all = true;
+                    for (final DatasetDto d : f.datasets)
+                    {
+                        if (!keys.contains(f.file + "::" + d.id))
+                        {
+                            all = false;
+                            break;
+                        }
+                    }
+                    if (all)
+                    {
+                        fullFiles.add(f.file);
+                    }
+                }
+            }
+        }
+        return fullFiles;
     }
 
     public final boolean isHeadless()
@@ -161,7 +207,7 @@ public final class AuraManagerQueueController
         context.setVariable("queue", selectedQueue);
         context.setVariable("running", isRunning());
         context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
+        final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -244,7 +290,7 @@ public final class AuraManagerQueueController
         context.setVariable("queue", selectedQueue);
         context.setVariable("running", isRunning());
         context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
+        final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -297,7 +343,7 @@ public final class AuraManagerQueueController
         context.setVariable("queue", selectedQueue);
         context.setVariable("running", isRunning());
         context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
+        final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -308,7 +354,7 @@ public final class AuraManagerQueueController
         context.setVariable("queue", selectedQueue);
         context.setVariable("running", isRunning());
         context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("queueListContainer", "runControls"), context);
+        final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
