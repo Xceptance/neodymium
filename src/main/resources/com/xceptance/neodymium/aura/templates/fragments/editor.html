@@ -1,0 +1,32 @@
+<!--
+  Xceptance Aura YAML Editor Contents Fragment
+  @author AI-generated: Antigravity
+  Xceptance GmbH 2026
+-->
+<th:block th:fragment="editorPanelContent">
+    <div class="panel-header">
+        <div class="neo-u-11">
+            <i class="fa-solid fa-file-lines neo-u-12"></i>
+            <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
+        </div>
+        <div class="editor-actions">
+            <button class="btn-editor save"
+                    id="saveYamlBtn"
+                    hx-post="/api/save"
+                    hx-include="#editorContent"
+                    th:hx-vals="${'{\&quot;file\&quot;:\&quot;' + (activeEditingFile != null ? activeEditingFile : '') + '\&quot;}'}"
+                    hx-swap="none"
+                    onclick="if(typeof saveYamlFile === 'function') saveYamlFile();">
+                <i class="fa-solid fa-floppy-disk"></i> Save
+            </button>
+            <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
+            <button class="btn-editor" 
+                    hx-post="/api/editor/close" 
+                    hx-swap="none" 
+                    onclick="closeEditor()">
+                <i class="fa-solid fa-xmark"></i> Close
+            </button>
+        </div>
+    </div>
+    <textarea class="editor-textarea" id="editorContent" name="content" spellcheck="false" th:text="${editorContent != null ? editorContent : ''}"></textarea>
+</th:block>

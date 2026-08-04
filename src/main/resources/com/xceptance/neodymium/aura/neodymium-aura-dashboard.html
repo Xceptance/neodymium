@@ -5,7 +5,7 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Neodymium Aura Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <link href="dashboard-styles.css" rel="stylesheet"/>
 </head>
@@ -163,8 +163,8 @@
 </div>
 <div class="config-row-wrapper neo-u-30">
 <div class="config-row neo-u-31">
-<span class="neo-u-2">Allure Report</span>
-<label class="switch" for="optAllure"><input checked="" id="optAllure" type="checkbox"/><span class="slider"></span></label>
+<span class="neo-u-2">Test Report</span>
+<label class="switch" for="optReporting"><input checked="" id="optReporting" type="checkbox"/><span class="slider"></span></label>
 </div>
 <span class="neo-u-32">Compiles and opens the
                                     visual test report after execution completes.</span>
@@ -195,7 +195,7 @@
 </div>
 <div class="neo-u-37">
 <table class="history-table neo-u-38">
-<tbody id="allureHistoryList">
+<tbody id="reportingHistoryList">
 <!-- Populated by JS -->
 </tbody>
 </table>
@@ -242,7 +242,7 @@
 <div class="iframe-view-pane" id="reportView">
 <div class="neo-report-header">
 <div class="neo-u-44"><i class="fa-solid fa-chart-column neo-u-45"></i>
-                    Allure Report: <span id="reportDisplayName"></span></div>
+                    Test Report: <span id="reportDisplayName"></span></div>
 <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i>
                     Back</button>
 </div>
@@ -303,6 +303,11 @@
 </div>
 </div>
 </div>
-<script src="dashboard-app.js"></script>
+<script src="dashboard-core.js"></script>
+<script src="dashboard-history.js"></script>
+<script src="dashboard-chat.js"></script>
+<script src="dashboard-editor.js"></script>
+<script src="dashboard-runner.js"></script>
+<script src="dashboard-settings.js"></script>
 </body>
 </html>

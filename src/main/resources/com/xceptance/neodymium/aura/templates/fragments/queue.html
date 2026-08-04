@@ -1,0 +1,178 @@
+<!--
+  Xceptance Aura Run Queue and Configuration Contents Fragment
+  @author AI-generated: Antigravity
+  Xceptance GmbH 2026
+-->
+<th:block th:fragment="queueListContainerContent">
+    <!-- If queue is empty -->
+    <div th:if="${queue == null or queue.isEmpty()}" class="empty-state-card">
+        <i class="fa-solid fa-list-check"></i>
+        <div class="empty-title">Queue is Empty</div>
+        <div class="empty-desc">Check one or more test cases on the left to add them to the run queue.</div>
+    </div>
+    
+    <!-- Clear Queue Action Bar -->
+    <div th:if="${queue != null and !queue.isEmpty()}" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 8px 12px; border-radius: var(--border-radius); border: 1px solid var(--border);">
+        <span style="font-size: var(--text-xs); color: var(--text-secondary); font-weight: 500;"><span th:text="${queue.size()}">0</span> test(s) queued</span>
+        <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
+                class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
+            <i class="fa-solid fa-trash-can"></i> Clear Queue
+        </button>
+    </div>
+
+    <!-- Queue Items -->
+    <div th:if="${queue != null and !queue.isEmpty()}" th:each="ds, iter : ${queue}" 
+         class="queue-item" th:data-file="${ds.file}" th:data-id="${ds.id}"
+         style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; margin-bottom: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--border-radius);">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
+            <span style="font-weight: 600; font-size: 12px; color: var(--text-secondary);" th:text="${iter.count} + '.'">1.</span>
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500;" th:text="${ds.file}">file.yaml</span>
+            <span class="badge-dataset"><i class="fa-solid fa-database" style="font-size: 10px;"></i> <span th:text="${ds.id}">id</span></span>
+        </div>
+        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
+            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:-1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
+                <i class="fa-solid fa-chevron-up"></i>
+            </button>
+            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
+                <i class="fa-solid fa-chevron-down"></i>
+            </button>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="configPanelContent">
+    <div class="config-row-wrapper neo-u-30">
+        <div class="config-row neo-u-31">
+            <span class="neo-u-2">Headless Mode</span>
+            <label class="switch" for="optHeadless">
+                <input type="checkbox" id="optHeadless" 
+                       th:checked="${headless != null ? headless : false}" 
+                       hx-post="/api/config/toggle?key=headless" 
+                       hx-target="#configPanel" 
+                       hx-swap="outerHTML" 
+                       onclick="event.stopPropagation()"/>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <span class="neo-u-32">Runs the browser in the background without a GUI.</span>
+    </div>
+
+    <div class="config-row-wrapper neo-u-30">
+        <div class="config-row neo-u-31">
+            <span class="neo-u-2">Record Video</span>
+            <label class="switch" for="optVideo">
+                <input type="checkbox" id="optVideo" 
+                       th:checked="${video != null ? video : false}" 
+                       hx-post="/api/config/toggle?key=video" 
+                       hx-target="#configPanel" 
+                       hx-swap="outerHTML" 
+                       onclick="event.stopPropagation()"/>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <span class="neo-u-32">Records execution video and attaches it to the report.</span>
+    </div>
+
+    <div class="config-row-wrapper neo-u-30">
+        <div class="config-row neo-u-31">
+            <span class="neo-u-2">Keep Browser Open</span>
+            <label class="switch" for="optKeepOpen">
+                <input type="checkbox" id="optKeepOpen" 
+                       th:checked="${keepOpen != null ? keepOpen : false}" 
+                       hx-post="/api/config/toggle?key=keepOpen" 
+                       hx-target="#configPanel" 
+                       hx-swap="outerHTML" 
+                       onclick="event.stopPropagation()"/>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <span class="neo-u-32">Leaves the browser window open after execution finishes.</span>
+    </div>
+
+    <div class="config-row-wrapper neo-u-30">
+        <div class="config-row neo-u-31">
+            <span class="neo-u-2">Interactive Mode</span>
+            <label class="switch" for="optInteractive">
+                <input type="checkbox" id="optInteractive" 
+                       th:checked="${interactive != null ? interactive : false}" 
+                       hx-post="/api/config/toggle?key=interactive" 
+                       hx-target="#configPanel" 
+                       hx-swap="outerHTML" 
+                       onclick="event.stopPropagation()"/>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <span class="neo-u-32">Enables interactive AI elements in the browser during execution.</span>
+    </div>
+
+    <div class="config-row-wrapper neo-u-30">
+        <div class="config-row neo-u-31">
+            <span class="neo-u-2">Test Report</span>
+            <label class="switch" for="optAllure">
+                <input type="checkbox" id="optAllure" 
+                       th:checked="${allure != null ? allure : false}" 
+                       hx-post="/api/config/toggle?key=allure" 
+                       hx-target="#configPanel" 
+                       hx-swap="outerHTML" 
+                       onclick="event.stopPropagation()"/>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <span class="neo-u-32">Compiles and opens the visual test report after execution completes.</span>
+    </div>
+</th:block>
+
+<div id="runControls" th:fragment="runControls" hx-swap-oob="true" style="display: flex; gap: 8px; margin-top: 12px; padding: 0 16px 16px;">
+    <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
+</div>
+
+<th:block th:fragment="runControlsContent">
+    <!-- Run Queue Button -->
+    <button th:if="${!running}" 
+            class="btn-primary" 
+            id="runQueueBtn" 
+            hx-post="/api/run" 
+            hx-swap="none"
+            onclick="prepareClientForExecution()"
+            th:disabled="${queue == null or queue.isEmpty()}"
+            th:style="${activeEditingFile != null or (queue == null or queue.isEmpty()) ? 'filter: saturate(50%) opacity(0.7); display: flex;' : 'display: flex;'}">
+        <i class="fa-solid fa-play"></i> <span>Run Queue</span> <span class="badge-count" th:text="${queue != null ? queue.size() : 0}">0</span>
+    </button>
+    
+    <!-- Run Open Test Button -->
+    <button th:if="${!running}" 
+            class="btn-primary neo-u-33" 
+            id="runCurrentTestBtn" 
+            hx-post="/api/run?runCurrent=true" 
+            hx-swap="none"
+            onclick="prepareClientForExecution()"
+            th:style="${activeEditingFile != null ? 'display: flex;' : 'display: none;'}">
+        <i class="fa-solid fa-play"></i> Run Open Test
+    </button>
+
+    <!-- Stop Execution Button -->
+    <button th:if="${running}" 
+            class="btn-danger neo-u-1" 
+            id="stopQueueBtn" 
+            hx-post="/api/stop" 
+            hx-swap="none"
+            style="display: flex;">
+        <i class="fa-solid fa-stop"></i> Stop Execution
+    </button>
+</th:block>
+
+<th:block th:fragment="statsPanelContent">
+    <div class="neo-u-14">
+        <div>Total Run: <span class="neo-u-15" id="statsTotalExecution" th:text="${total != null ? total : 0}">0</span></div>
+        <div>Passed: <span class="neo-u-16" id="statsPassed" th:text="${passed != null ? passed : 0}">0</span></div>
+        <div>Failed: <span class="neo-u-17" id="statsFailed" th:text="${failed != null ? failed : 0}">0</span></div>
+        <div>Skipped: <span class="neo-u-18" id="statsSkipped" th:text="${skipped != null ? skipped : 0}">0</span></div>
+    </div>
+</th:block>
+
+<th:block th:fragment="executionTriggerContent">
+    <div th:if="${running}" 
+         hx-get="/api/status/panel" 
+         hx-trigger="every 1s" 
+         hx-swap="none"></div>
+</th:block>

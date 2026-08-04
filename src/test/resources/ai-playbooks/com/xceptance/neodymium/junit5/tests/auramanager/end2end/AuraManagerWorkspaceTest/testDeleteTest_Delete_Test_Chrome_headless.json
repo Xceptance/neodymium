@@ -13,7 +13,8 @@
           ],
           "description": "Call createWorkspaceTestFile with param ",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "adjust": false
         }
       ],
@@ -31,7 +32,8 @@
           ],
           "description": "Call startManager with param ",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "adjust": false
         }
       ],
@@ -49,7 +51,8 @@
           "description": "Open http://127.0.0.1:18150 in the browser",
           "elementDetails": "http://127.0.0.1:18150",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "adjust": false
         }
       ],
@@ -57,19 +60,43 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Select the file \"automated-workspace-test.yaml\" from the file selection list",
-      "reasoning": "Identified the button corresponding to \u0027automated-workspace-test.yaml\u0027 by its name and data-neo-ref attribute and generated a CLICK action.",
+      "promptLine": "Hover the file \"automated-workspace-test.yaml\"",
+      "reasoning": "Identified the clickable element representing \u0027automated-workspace-test.yaml\u0027 and generated a HOVER action for it.",
+      "actions": [
+        {
+          "type": "HOVER",
+          "target": "[data-neo-ref\u003d\u0027xc_ys4kuq\u0027]",
+          "description": "Hover the file \u0027automated-workspace-test.yaml\u0027",
+          "elementDetails": "automated-workspace-test.yaml",
+          "elementContext": {
+            "classes": "list-item",
+            "text": "automated-workspace-test.yaml",
+            "tagName": "div"
+          },
+          "durationMs": 0,
+          "replay": "",
+          "frameId": "win_0:main",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "healedContextLevel": "LEAN"
+    },
+    {
+      "promptLine": "Click the pencil icon for the file \"automated-workspace-test.yaml\"",
+      "reasoning": "Identified the button with the aria-label \u0027Edit YAML Steps for automated-workspace-test.yaml\u0027 which corresponds to the pencil icon for the specified file and generated a CLICK action.",
       "actions": [
         {
           "type": "CLICK",
           "target": "[data-neo-ref\u003d\u0027xc_2f2h7a\u0027]",
-          "description": "Select the file \"automated-workspace-test.yaml\" from the file selection list",
-          "elementDetails": "Edit YAML Steps for automated-workspace-test.yaml",
+          "description": "Click the pencil icon for \u0027automated-workspace-test.yaml\u0027",
+          "elementDetails": "Edit YAML Steps for automated-workspace-test.yaml button",
           "elementContext": {
             "classes": "edit-icon-btn",
             "tagName": "button",
             "type": "submit"
           },
+          "durationMs": 0,
           "replay": "",
           "adjust": false
         }
@@ -79,13 +106,13 @@
     },
     {
       "promptLine": "Click the \"Delete\" button in the editor panel",
-      "reasoning": "Found the \u0027Delete\u0027 button by its data-neo-ref attribute and name, and created a CLICK action.",
+      "reasoning": "Identified the \u0027Delete\u0027 button by its ID \u0027deleteTestBtn\u0027 and aria-label \u0027Delete\u0027 in the provided Accessibility Tree.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "[data-neo-ref\u003d\u0027xc_m06owx\u0027]",
-          "description": "Click the \"Delete\" button in the editor panel",
-          "elementDetails": "Delete",
+          "target": "#deleteTestBtn",
+          "description": "Click the \u0027Delete\u0027 button in the editor panel",
+          "elementDetails": "Delete button",
           "elementContext": {
             "classes": "btn-editor delete",
             "text": "Delete",
@@ -93,6 +120,7 @@
             "tagName": "button",
             "type": "submit"
           },
+          "durationMs": 0,
           "replay": "",
           "adjust": false
         }
@@ -102,40 +130,38 @@
     },
     {
       "promptLine": "Wait for the \"Delete Test Case\" modal to appear",
-      "reasoning": "The \u0027Delete Test Case\u0027 modal is identified by its ID \u0027deleteTestModal\u0027 and is currently visible in the DOM. An ASSERT action is used to confirm its appearance.",
+      "reasoning": "The instruction is to wait for the \u0027Delete Test Case\u0027 modal. Although there isn\u0027t an explicit modal element, a form containing \u0027Cancel\u0027 and \u0027Confirm Delete\u0027 buttons is present in the DOM, which strongly suggests it\u0027s part of the modal. I will wait for this form to become visible.",
       "actions": [
         {
-          "type": "ASSERT",
-          "target": "#deleteTestModal",
-          "value": [
-            "visible"
-          ],
-          "description": "Wait for the \u0027Delete Test Case\u0027 modal to appear",
-          "elementDetails": "Delete Test Case modal",
+          "type": "WAIT",
+          "target": "form[data-neo-ref\u003d\u0027xc_bqz3mo\u0027]",
+          "description": "Wait for the \u0027Delete Test Case\u0027 modal (represented by its form) to appear",
+          "elementDetails": "form with Cancel and Confirm Delete buttons",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "",
-          "frameId": "29558F507B7937EA29D94B13C5E4AE0E:main",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "Click the \"Confirm Delete\" button",
-      "reasoning": "Found the button with name \"Confirm Delete\" and data-neo-ref \"xc_qg8rsf\" and created a CLICK action.",
+      "reasoning": "The instruction is to click the \u0027Confirm Delete\u0027 button. I found a button with this exact text and generated a CLICK action targeting it.",
       "actions": [
         {
           "type": "CLICK",
-          "target": "xc_qg8rsf",
+          "target": "button:contains(\"Confirm Delete\")",
           "description": "Click the \"Confirm Delete\" button",
-          "elementDetails": "Confirm Delete",
+          "elementDetails": "Confirm Delete button",
           "elementContext": {
-            "classes": "btn-danger",
+            "classes": "btn-danger neo-u-48",
             "text": "Confirm Delete",
             "tagName": "button",
             "type": "submit"
           },
+          "durationMs": 0,
           "replay": "",
           "adjust": false
         }
@@ -145,39 +171,38 @@
     },
     {
       "promptLine": "java verifyAutomatedWorkspaceTestNotPresent()",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "The instruction explicitly asks to call the Java method `verifyAutomatedWorkspaceTestNotPresent()`. I am generating a `JAVA_METHOD` action for this.",
       "actions": [
         {
           "type": "JAVA_METHOD",
           "target": "verifyAutomatedWorkspaceTestNotPresent",
-          "value": [
-            ""
-          ],
-          "description": "Call verifyAutomatedWorkspaceTestNotPresent with param ",
+          "description": "Invoke Java method verifyAutomatedWorkspaceTestNotPresent()",
+          "elementDetails": "verifyAutomatedWorkspaceTestNotPresent",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "AXTREE"
     },
     {
       "promptLine": "java stopManager()",
-      "reasoning": "directly parsed or local validation succeeded",
+      "reasoning": "Invoked the Java method stopManager.",
       "actions": [
         {
           "type": "JAVA_METHOD",
           "target": "stopManager",
-          "value": [
-            ""
-          ],
-          "description": "Call stopManager with param ",
+          "description": "Invoke Java method stopManager()",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false
+      "expectedFailure": false,
+      "healedContextLevel": "HINT"
     }
   ]
 }

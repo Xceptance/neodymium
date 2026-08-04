@@ -65,7 +65,7 @@
     },
     {
       "promptLine": "Verify the History view is displayed",
-      "reasoning": "The previous attempt failed to find the \u0027Run History heading\u0027. I have identified a stable data-neo-ref attribute for the \u0027Run History\u0027 text element in the DOM, which is `xc_ebk00`. I will use this to assert that the \u0027Run History\u0027 text is visible, confirming the History view is displayed.",
+      "reasoning": "The previous attempt failed due to a visual hash mismatch, which is a brittle way to verify page content. Instead, I am asserting the presence of the \u0027Run History\u0027 text, which is a clear indicator that the History view is displayed. This is a more robust and reliable method.",
       "actions": [
         {
           "type": "ASSERT",
@@ -73,16 +73,15 @@
           "value": [
             "Run History"
           ],
-          "description": "Verify \u0027Run History\u0027 heading is displayed",
-          "elementDetails": "Run History heading",
+          "description": "Verify \u0027Run History\u0027 text is displayed, indicating the History view",
+          "elementDetails": "Run History text",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
-          "frameId": "win_0:main",
           "adjust": false
         }
       ],
-      "screenshotHash": "8001800000024000000040000000400000004000000040000000400000004000",
+      "screenshotHash": "8002000140010000000200010000000100000000000000000000000000000000",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

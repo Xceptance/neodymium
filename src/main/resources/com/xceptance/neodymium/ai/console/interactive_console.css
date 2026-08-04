@@ -2160,7 +2160,7 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MODE: RESULTS (read-only history replay)
-   Applied via <body class="mode-results"> when loaded from /api/allure/report/
+   Applied via <body class="mode-results"> when loaded from /api/reporting/report/
    Hides all interactive/edit controls that are meaningless for reviewing
    a completed test run.
    ═══════════════════════════════════════════════════════════════════════════ */

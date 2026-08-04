@@ -13,6 +13,7 @@
           ],
           "description": "Call startManager with param ",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "(Replay)",
           "adjust": false
         }
@@ -32,6 +33,7 @@
           "description": "Open http://127.0.0.1:18100 in the browser",
           "elementDetails": "http://127.0.0.1:18100",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "(Replay)",
           "adjust": false
         }
@@ -52,6 +54,7 @@
           "description": "Verify the page title is \u0027Neodymium Aura Manager\u0027",
           "elementDetails": "Page Title",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "(Replay)",
           "adjust": false
         }
@@ -61,29 +64,32 @@
     },
     {
       "promptLine": "Enter \"Hello Aura, what can you do?\" into the chat input field",
-      "reasoning": "Identified the chat input field by its data-neo-ref attribute and name, then created a TYPE action to enter the specified text.",
+      "reasoning": "The previous attempt failed because the locator was incorrect. I have identified the chat input field using its unique ID \u0027chatInput\u0027 from the provided DOM and will use that for the TYPE action.",
       "actions": [
         {
           "type": "TYPE",
-          "target": "[data-neo-ref\u003d\u0027xc_ugrpoy\u0027]",
+          "target": "#chatInput",
           "value": [
             "Hello Aura, what can you do?"
           ],
           "description": "Enter \u0027Hello Aura, what can you do?\u0027 into the chat input field",
-          "elementDetails": "Ask Aura...",
+          "elementDetails": "chat input field with id \u0027chatInput\u0027",
           "elementContext": {
             "classes": "chat-input",
+            "name": "prompt",
             "id": "chatInput",
-            "placeholder": "Ask Aura...",
+            "placeholder": "Ask Aura anything about your tests...",
             "tagName": "input",
             "type": "text"
           },
+          "durationMs": 0,
           "replay": "(Replay)",
+          "frameId": "win_0:main",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "AXTREE"
+      "healedContextLevel": "LEAN"
     },
     {
       "promptLine": "Press the Enter key",
@@ -97,6 +103,7 @@
           "description": "Press the Enter key",
           "elementDetails": "Enter key",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "(Replay)",
           "adjust": false
         }
@@ -117,6 +124,7 @@
           "description": "Verify the chat messages list contains \u0027Hello Aura, what can you do?\u0027",
           "elementDetails": "Hello Aura, what can you do?",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "(Replay)",
           "frameId": "A1BB6F7927E5459034027436B8D86439:main",
           "adjust": false
@@ -127,24 +135,23 @@
     },
     {
       "promptLine": "Wait until the last chat message is from the AI",
-      "reasoning": "The instruction is to wait until the last chat message is from the AI. I\u0027ve created an ASSERT action targeting the last div with classes \u0027chat-message\u0027 and \u0027message-ai\u0027, and asserting its visibility. This will implicitly wait for the AI\u0027s response to appear as the last message.",
+      "reasoning": "The instruction is to wait until the last chat message is from the AI. Based on the DOM, user messages have the class \u0027chat-message user\u0027. Assuming AI messages will have \u0027chat-message ai\u0027, I will use a WAIT action to target the last element with these classes, ensuring the AI\u0027s response has appeared and is the most recent message. This addresses the previous visual mismatch by waiting for a specific element state rather than a general visual hash.",
       "actions": [
         {
-          "type": "ASSERT",
-          "target": "div.chat-message.message-ai:last-of-type",
-          "value": [
-            "visible"
-          ],
+          "type": "WAIT",
+          "target": "div.chat-message.ai:last-of-type",
           "description": "Wait until the last chat message is from the AI",
-          "elementDetails": "Last chat message from AI",
+          "elementDetails": "Last AI chat message",
           "elementContext": {},
+          "durationMs": 0,
           "replay": "",
-          "frameId": "AC145C3FF13C0A1414C7DBBFE2C6A9D1:main",
+          "frameId": "win_0:main",
           "adjust": false
         }
       ],
+      "screenshotHash": "8002001004120614c610061004100818841004100410d4100411041954100010",
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "VISUAL"
     },
     {
       "promptLine": "java stopManager()",
@@ -158,7 +165,8 @@
           ],
           "description": "Call stopManager with param ",
           "elementContext": {},
-          "replay": "",
+          "durationMs": 0,
+          "replay": "(Replay)",
           "adjust": false
         }
       ],

@@ -42,7 +42,7 @@ function connectSSE() {
                 const finalSaveText = document.getElementById('finalSaveText');
                 const finalSaveButtons = document.getElementById('finalSaveButtons');
                 if (finalSaveOverlay) {
-                    const editsMade = currentState && currentState.hudPromptChanged === true;
+                    const editsMade = currentState && (currentState.interactivePromptChanged === true || currentState.hudPromptChanged === true);
                     const saveScopeContainer = document.getElementById('saveScopeContainer');
                     if (saveScopeContainer) {
                         saveScopeContainer.style.display = editsMade ? 'block' : 'none';
@@ -61,7 +61,7 @@ function connectSSE() {
                                 files.push(currentState.playbookFile);
                             }
                             let filesHtml = files.length > 0 ? "<div style='margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;'><ul style='margin: 0; padding-left: 20px; text-align: left;'>" + files.map(f => "<li style='word-break: break-all;'><code>" + f + "</code></li>").join("") + "</ul></div>" : "";
-                            finalSaveText.innerHTML = "You have made changes to the test steps during execution. The following files will be updated:" + filesHtml + "Would you like to save these changes?";
+                            finalSaveText.innerHTML = "You have made changes to the test steps during execution. " + (filesHtml ? "The following files will be updated: " + filesHtml + " " : "") + "Would you like to save these changes?";
                         } else {
                             finalSaveText.innerHTML = "Test execution finished successfully!";
                         }
@@ -100,9 +100,9 @@ function tryStaticLoad() {
     const dataUrl = params.get('dataUrl') || params.get('data') || '/run_data.json';
 
     // Extract history run ID if loaded from history
-    if (dataUrl.includes('/api/allure/report/')) {
+    if (dataUrl.includes('/api/reporting/report/')) {
         const parts = dataUrl.split('/');
-        // /api/allure/report/<runId>/...
+        // /api/reporting/report/<runId>/...
         if (parts.length > 4) {
             window.historyRunId = parts[4];
         }
@@ -148,7 +148,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // ── Mode detection ───────────────────────────────────────────────────────
     // Two mutually-exclusive display modes alter what the console shows:
     //
-    //  mode-results   → loaded from history (/api/allure/report/…); read-only.
+    //  mode-results   → loaded from history (/api/reporting/report/…); read-only.
     //                   Hides: add-step buttons, bottom action bar, progress
     //                   pill/bar, shortcuts & info icon.
     //  mode-embedded  → running inside an iframe (window.parent !== window).
@@ -156,7 +156,7 @@ window.addEventListener('DOMContentLoaded', () => {
     //                   mobile-QR button (all owned by the parent dashboard).
     //
     const dataUrl = params.get('dataUrl') || params.get('data') || '';
-    if (dataUrl.includes('/api/allure/report/')) {
+    if (dataUrl.includes('/api/reporting/report/')) {
         document.body.classList.add('mode-results');
     }
     if (window.parent !== window) {
@@ -190,7 +190,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // Load settings from localStorage
-    const savedTheme = localStorage.getItem('neodymium.hud.theme') || 'system';
+    const savedTheme = localStorage.getItem('aura_theme') || localStorage.getItem('neodymium.hud.theme') || 'system';
     const savedZoom = localStorage.getItem('neodymium.hud.zoom') || '100';
 
     const themeSelect = document.getElementById('themeSelect');
@@ -211,6 +211,27 @@ window.addEventListener('DOMContentLoaded', () => {
         const themeSelect = document.getElementById('themeSelect');
         if (themeSelect && themeSelect.value === 'system') {
             applyTheme('system');
+        }
+    });
+
+    // Listen for theme sync messages from parent window
+    window.addEventListener('message', (event) => {
+        if (event.data && (event.data.type === 'aura-theme-change' || event.data.type === 'theme-change')) {
+            const theme = event.data.theme;
+            const themeSelect = document.getElementById('themeSelect');
+            if (themeSelect) themeSelect.value = theme;
+            applyTheme(theme);
+        }
+    });
+
+    // Listen for storage changes from parent window or other tabs
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'aura_theme' || event.key === 'neodymium.hud.theme') {
+            if (event.newValue) {
+                const themeSelect = document.getElementById('themeSelect');
+                if (themeSelect) themeSelect.value = event.newValue;
+                applyTheme(event.newValue);
+            }
         }
     });
 
@@ -598,15 +619,29 @@ function checkActionApprovals() {
     const s = allSteps.find(st => st.index === idx);
     const isThinking = s && s.status === 'running' && !s.reasoning;
 
-    if (isThinking || isAutoMode) {
-        document.getElementById('btnRun').disabled = true;
-    } else {
-        document.getElementById('btnRun').disabled = false;
+    const runBtn = document.getElementById('btnRun');
+    if (runBtn) {
+        if (isThinking || isAutoMode) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        } else {
+            runBtn.disabled = false;
+            runBtn.removeAttribute('disabled');
+        }
     }
 
     // Handle toolbar Back button disabled if index is 0 or auto is on
     const isFirstStep = s && s.index === 0;
-    document.getElementById('btnBack').disabled = isFirstStep || isAutoMode;
+    const backBtn = document.getElementById('btnBack');
+    if (backBtn) {
+        if (isFirstStep || isAutoMode) {
+            backBtn.disabled = true;
+            backBtn.setAttribute('disabled', 'true');
+        } else {
+            backBtn.disabled = false;
+            backBtn.removeAttribute('disabled');
+        }
+    }
 }
 
 function renderBlock(blockName, steps) {
@@ -1644,19 +1679,19 @@ function setButtonsEnabled(enabled) {
         if (btnCancel) btnCancel.style.display = '';
 
         if (isAutoMode) {
-            if (runBtn) runBtn.disabled = true;
-            if (skipBtn) skipBtn.disabled = true;
-            if (backBtn) backBtn.disabled = true;
-            if (autoBtn) autoBtn.disabled = isEditing;
-            if (btnCancel) btnCancel.disabled = isEditing;
+            if (runBtn) { runBtn.disabled = true; runBtn.setAttribute('disabled', 'true'); }
+            if (skipBtn) { skipBtn.disabled = true; skipBtn.setAttribute('disabled', 'true'); }
+            if (backBtn) { backBtn.disabled = true; backBtn.setAttribute('disabled', 'true'); }
+            if (autoBtn) { autoBtn.disabled = isEditing; if (isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
+            if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
         } else {
-            if (runBtn) runBtn.disabled = !enabled || isEditing;
-            if (skipBtn) skipBtn.disabled = !enabled || isEditing;
-            if (backBtn) backBtn.disabled = !enabled || isEditing;
-            if (autoBtn) autoBtn.disabled = !enabled || isEditing;
-            if (btnCancel) btnCancel.disabled = isEditing;
+            if (runBtn) { runBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) runBtn.setAttribute('disabled', 'true'); else runBtn.removeAttribute('disabled'); }
+            if (skipBtn) { skipBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) skipBtn.setAttribute('disabled', 'true'); else skipBtn.removeAttribute('disabled'); }
+            if (backBtn) { backBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) backBtn.setAttribute('disabled', 'true'); else backBtn.removeAttribute('disabled'); }
+            if (autoBtn) { autoBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
+            if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
             const kebabBtn = document.getElementById('btnKebab');
-            if (kebabBtn) kebabBtn.disabled = !enabled || isEditing;
+            if (kebabBtn) { kebabBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) kebabBtn.setAttribute('disabled', 'true'); else kebabBtn.removeAttribute('disabled'); }
         }
     }
 }
@@ -1778,16 +1813,25 @@ function toggleTheme() {
 }
 
 function applyTheme(theme) {
-    if (theme === 'light') {
-        document.documentElement.classList.add('force-light');
-    } else if (theme === 'dark') {
-        document.documentElement.classList.remove('force-light');
-    } else if (theme === 'system') {
-        const systemIsLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-        if (systemIsLight) {
-            document.documentElement.classList.add('force-light');
-        } else {
-            document.documentElement.classList.remove('force-light');
+    const root = document.documentElement;
+    const body = document.body;
+    let effectiveTheme = theme;
+    if (effectiveTheme === 'system') {
+        effectiveTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    if (effectiveTheme === 'light') {
+        root.classList.add('force-light');
+        root.classList.remove('force-dark');
+        if (body) {
+            body.classList.add('force-light');
+            body.classList.remove('force-dark');
+        }
+    } else {
+        root.classList.add('force-dark');
+        root.classList.remove('force-light');
+        if (body) {
+            body.classList.add('force-dark');
+            body.classList.remove('force-light');
         }
     }
 }
@@ -1894,6 +1938,7 @@ function saveSettings() {
     const theme = document.getElementById('themeSelect').value;
     const zoom = parseInt(document.getElementById('zoomInput').value, 10);
     localStorage.setItem('neodymium.hud.theme', theme);
+    localStorage.setItem('aura_theme', theme);
     localStorage.setItem('neodymium.hud.zoom', zoom);
     applyTheme(theme);
     if (!isNaN(zoom)) {

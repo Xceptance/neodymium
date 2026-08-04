@@ -21,7 +21,8 @@ data:
       - java startManager()
     steps: |
       Open ${auraManagerUrl} in the browser
-      Select the file "automated-workspace-test.yaml" from the file selection list
+      Hover the file "automated-workspace-test.yaml"
+      Click the pencil icon for the file "automated-workspace-test.yaml"
       Click the "Delete" button in the editor panel
       Wait for the "Delete Test Case" modal to appear
       Click the "Confirm Delete" button

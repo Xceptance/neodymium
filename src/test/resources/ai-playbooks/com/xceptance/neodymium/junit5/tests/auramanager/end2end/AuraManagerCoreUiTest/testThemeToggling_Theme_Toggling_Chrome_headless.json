@@ -72,7 +72,7 @@
           "description": "Click the Dark Mode button",
           "elementDetails": "Dark Mode button",
           "elementContext": {
-            "classes": "btn-edit",
+            "classes": "btn-edit neo-u-5",
             "id": "themeDark",
             "tagName": "button",
             "type": "submit"
@@ -88,23 +88,23 @@
     },
     {
       "promptLine": "Verify the root element has the \"force-dark\" class",
-      "reasoning": "The instruction is to verify the \u0027force-dark\u0027 class on the root element. I am targeting the \u0027html\u0027 element as the root and asserting the presence of the \u0027force-dark\u0027 class.",
+      "reasoning": "The instruction is to verify the \u0027force-dark\u0027 class on the root element. I\u0027ve chosen the `body` element as the most common root for theme classes and used a CSS selector `body.force-dark` to assert its visibility, which implicitly checks for the class. This is a different approach from a visual hash mismatch, focusing on the DOM state.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "html",
+          "target": "body.force-dark",
           "value": [
-            "force-dark"
+            "visible"
           ],
-          "description": "Verify the root element has the \u0027force-dark\u0027 class",
-          "elementDetails": "root html element",
+          "description": "Verify the body element has the \u0027force-dark\u0027 class, indicating dark mode is active.",
+          "elementDetails": "body element with class \u0027force-dark\u0027",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "6001800882081a0b82088208720882088208520882088208420c820882088008",
+      "screenshotHash": "60020008820882083a088208820842094208820882082a08820882042a088008",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },
@@ -118,7 +118,7 @@
           "description": "Click the Light Mode button",
           "elementDetails": "Light Mode button",
           "elementContext": {
-            "classes": "btn-edit",
+            "classes": "btn-edit neo-u-5",
             "id": "themeLight",
             "tagName": "button",
             "type": "submit"

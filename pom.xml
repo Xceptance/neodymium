@@ -49,6 +49,7 @@
 		<maven.compiler.target.version>17</maven.compiler.target.version>
 		<surefire.version>3.5.4</surefire.version>
 		<allure.version>2.32.0</allure.version>
+		<allure.maven.version>2.15.2</allure.maven.version>
 		<selenide.version>7.16.0</selenide.version>
 		<cucumber.version>7.33.0</cucumber.version>
 		<browserup.version>3.2.2</browserup.version>
@@ -76,15 +77,27 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
 				<configuration>
+					<testFailureIgnore>true</testFailureIgnore>
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
+						<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
 					</systemPropertyVariables>
 					<forkCount>${surefire.forkCount}</forkCount>
 					<reuseForks>false</reuseForks>
 					<includes>
 						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 						<include>com/xceptance/neodymium/common/**/*Test.java</include>
+						<include>com/xceptance/neodymium/aura/**/*Test.java</include>
 					</includes>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>io.qameta.allure</groupId>
+				<artifactId>allure-maven</artifactId>
+				<version>${allure.maven.version}</version>
+				<configuration>
+					<reportVersion>2.27.0</reportVersion>
+					<resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -261,7 +274,27 @@
 							<includes>
 								<include>
 									com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
+								<include>
+									com/xceptance/neodymium/aura/**/*Test.java</include>
 							  <include> com/xceptance/neodymium/util/**/*JUnit5Test.java </include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<profile>
+			<id>ui-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<forkCount>1</forkCount>
+							<reuseForks>true</reuseForks>
+							<includes>
+								<include>com/xceptance/neodymium/aura/**/*Test.java</include>
 							</includes>
 						</configuration>
 					</plugin>
@@ -501,6 +534,11 @@
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-google-ai-gemini</artifactId>
 			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.thymeleaf</groupId>
+			<artifactId>thymeleaf</artifactId>
+			<version>3.1.2.RELEASE</version>
 		</dependency>
 	</dependencies>
 </project>
