@@ -365,6 +365,29 @@ neodymium.ai.ssim.minScore=0.99
 3. **Success Write-Back**: If a test succeeds and steps were healed or updated, the candidate playbook replaces the disk file atomically. If 0 changes occurred on replay, disk writes are skipped.
 4. **YAML Hash Invalidation**: Companion `.json` files store `sourceYamlHash` (SHA-256 of original `.yaml` playbook). On replay, if the source `.yaml` file has been modified, a staleness warning is logged.
 
+---
+
+## 18. Visual Root Cause Analysis (RCA) & Failure Diagnostics
+
+When a test step fails during execution (in `LIVE`, `REPLAY_WITH_HEALING`, or `REPLAY_STRICT` mode), Neodymium AI automatically captures the final SUT page state and invokes the Vision LLM (`LlmCapability.VISION`) to generate a plain-English **Visual Root Cause Analysis (RCA)**.
+
+### Concept & Logging
+* **Post-Mortem Failure Diagnostic**: Visual RCA is strictly a diagnostic feature and does not perform self-healing or alter test execution flow. It attaches root cause explanations to Allure reports, telemetry sinks, and log files.
+* **Detailed Logging**: System/User prompts and raw responses are output at `TRACE` log level (`Compiling prompt: VisualRcaPrompt`), while the final root cause diagnosis is emitted at `INFO` level:
+  ```text
+  INFO - 🚨 [Visual RCA Diagnosis]: The 'Submit Order' button is missing because the checkout page failed to populate payment methods due to an upstream API timeout.
+  ```
+
+### Configuration
+Visual RCA can be optionally disabled (e.g., for token conservation or offline CI test runs):
+
+```properties
+# Enables or disables automatic Visual Root Cause Analysis (RCA) on step execution failures.
+# Default is true. Set to false to bypass Visual RCA calls on step failure.
+neodymium.ai.visualRca.enabled=true
+```
+
+
 
 
 
