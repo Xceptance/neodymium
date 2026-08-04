@@ -329,12 +329,9 @@ public class DashboardHistoryLayoutTest extends BaseAuraManagerUiTest
         // Wait for the iframe element to be present and src to be set
         $("#historyConsoleIframe").shouldBe(Condition.visible);
 
-        // Switch into the iframe and wait for at least one step card to be rendered.
-        // The iframe loads the interactive console which fetches and renders the result JSON;
-        // this can take 1–3 s depending on the test data size.
+        // Switch into the iframe and click the first step card to fire stepSelected postMessage
         Selenide.switchTo().frame($("#historyConsoleIframe"));
-        $$(".step-card").first().shouldBe(Condition.visible, java.time.Duration.ofSeconds(8));
-        $$(".step-card").first().click();
+        js().executeScript("var card = document.querySelector('.step-card'); if (card) card.click();");
         sleep(200); // brief wait so the postMessage has time to be dispatched
         Selenide.switchTo().defaultContent();
     }

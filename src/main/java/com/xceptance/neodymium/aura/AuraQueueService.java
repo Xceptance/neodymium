@@ -362,6 +362,8 @@ public final class AuraQueueService
                         command.add("mvn");
                     }
                     command.add("test");
+                    command.add("-Dmaven.compiler.skip=true");
+                    command.add("-Dcompiler.skip=true");
                     command.add("-Dtest=com.xceptance.neodymium.aura.sandbox." + className);
                     command.add("-Dneodymium.testFileFilter=" + file.replace(".", "\\."));
                     command.add("-Dallure.results.directory=" + new File("target/aura-sandbox/allure-results").getAbsolutePath());

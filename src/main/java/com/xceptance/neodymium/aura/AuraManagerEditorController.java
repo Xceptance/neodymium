@@ -48,9 +48,12 @@ public final class AuraManagerEditorController
     private final AuraFileService fileService;
     private final NeodymiumAuraManager manager;
 
-    public AuraManagerEditorController(final AuraFileService fileService, final NeodymiumAuraManager manager)
+    private AuraManagerQueueController queueController;
+
+    public AuraManagerEditorController(final AuraFileService fileService, AuraManagerQueueController queueController, final NeodymiumAuraManager manager)
     {
         this.fileService = fileService;
+        this.queueController = queueController;
         this.manager = manager;
     }
 
@@ -80,7 +83,7 @@ public final class AuraManagerEditorController
         try
         {
             final Context context = new Context();
-            context.setVariable("queue", manager.getMainHandler().getQueueService().getSelectedQueue());
+            context.setVariable("queue", queueController.getSelectedQueue());
             final String fragmentPath = getEditorPanel(file, context);
             final String[] parts = fragmentPath.split("::");
             final String template = parts[0].trim();

@@ -88,7 +88,7 @@
     },
     {
       "promptLine": "Verify the root element has the \"force-dark\" class",
-      "reasoning": "The instruction is to verify the \u0027force-dark\u0027 class on the root element. In web contexts, the \u0027body\u0027 tag is often used for global theme classes. I am asserting that the \u0027body\u0027 element exists and has the \u0027force-dark\u0027 class, which implies it is visible and correctly styled for dark mode.",
+      "reasoning": "The instruction is to verify the \u0027force-dark\u0027 class on the root element. I\u0027ve chosen the `body` element as the most common root for theme classes and used a CSS selector `body.force-dark` to assert its visibility, which implicitly checks for the class. This is a different approach from a visual hash mismatch, focusing on the DOM state.",
       "actions": [
         {
           "type": "ASSERT",
@@ -104,7 +104,7 @@
           "adjust": false
         }
       ],
-      "screenshotHash": "60020008820882083a088208820162094208820882082a088208820452088008",
+      "screenshotHash": "60020008820882083a088208820842094208820882082a08820882042a088008",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

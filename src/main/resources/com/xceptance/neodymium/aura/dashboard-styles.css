@@ -1043,8 +1043,8 @@
         }
 
         .btn-secondary {
-            background: #1e293b;
-            color: #f8fafc;
+            background: var(--bg-main);
+            color: var(--text-primary);
             border: 1px solid var(--border);
             padding: 8px 14px;
             border-radius: 6px;
@@ -1059,9 +1059,9 @@
         }
 
         .btn-secondary:hover {
-            background: #334155;
-            border-color: rgba(255, 255, 255, 0.2);
-            color: #ffffff;
+            background: var(--bg-card);
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         .btn-close {
@@ -1134,12 +1134,12 @@
         }
 
         .modal-card {
-            background: #0f172a;
-            color: #f8fafc;
+            background: var(--bg-sidebar);
+            color: var(--text-primary);
             width: 400px;
             border-radius: 12px;
             border: 1px solid var(--border);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -1148,8 +1148,8 @@
         .modal-header {
             padding: 16px 20px;
             border-bottom: 1px solid var(--border);
-            background: #1e293b;
-            color: #f8fafc;
+            background: var(--bg-main);
+            color: var(--text-primary);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -1164,8 +1164,8 @@
             padding: 8px 12px;
             border: 1px solid var(--border);
             border-radius: 6px;
-            background: #1e293b;
-            color: #f8fafc;
+            background: var(--bg-main);
+            color: var(--text-primary);
             font-size: 13px;
             outline: none;
             transition: border-color 0.15s, box-shadow 0.15s;
@@ -1179,7 +1179,7 @@
         .modal-footer {
             padding: 16px 20px;
             border-top: 1px solid var(--border);
-            background: #1e293b;
+            background: var(--bg-main);
             display: flex;
             justify-content: flex-end;
             gap: 10px;
@@ -2134,10 +2134,11 @@
     flex-direction: column;
     padding: 0;
     overflow: hidden;
-    background: #0f172a !important;
+    background: var(--bg-sidebar) !important;
+    color: var(--text-primary);
     border: 1px solid var(--border);
     border-radius: 12px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
 .modal-header-actions {
@@ -2149,7 +2150,7 @@
 .modal-search-bar {
     display: flex;
     align-items: center;
-    background: #1e293b;
+    background: var(--bg-main);
     border-bottom: 1px solid var(--border);
     padding: 10px 16px;
     gap: 10px;
@@ -2165,7 +2166,7 @@
     background: transparent;
     border: none;
     outline: none;
-    color: #f8fafc;
+    color: var(--text-primary);
     font-size: 13px;
     font-family: var(--font-sans, inherit);
 }
@@ -2191,7 +2192,7 @@
 .settings-group-card {
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: #1e293b;
+    background: var(--bg-main);
     overflow: hidden;
     transition: border-color 0.2s;
 }
@@ -2201,12 +2202,12 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-card);
     cursor: pointer;
     user-select: none;
     font-weight: 600;
     font-size: 14px;
-    color: #f8fafc;
+    color: var(--text-primary);
 }
 
 .settings-group-header:hover {
@@ -2294,7 +2295,7 @@
     font-weight: 500;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: #f8fafc;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -2317,10 +2318,10 @@
 .modal-select {
     width: 100%;
     padding: 8px 12px;
-    background: #0f172a;
+    background: var(--bg-main);
     border: 1px solid var(--border);
     border-radius: 6px;
-    color: #f8fafc;
+    color: var(--text-primary);
     font-size: 13px;
     font-family: var(--font-sans, inherit);
     outline: none;
@@ -2341,8 +2342,8 @@
 }
 
 .modal-select option {
-    background: #0f172a;
-    color: #f8fafc;
+    background: var(--bg-sidebar);
+    color: var(--text-primary);
 }
 
 .dev-neo-info-banner {
@@ -2407,7 +2408,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #1e293b;
+    background: var(--bg-main);
     border-bottom: 1px solid var(--border);
     padding: 0 16px;
 }
@@ -2434,7 +2435,7 @@
 }
 
 .settings-tab-btn:hover {
-    color: #f8fafc;
+    color: var(--text-primary);
 }
 
 .settings-tab-btn.active {

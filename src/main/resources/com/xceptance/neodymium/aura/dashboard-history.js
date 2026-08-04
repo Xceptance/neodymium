@@ -292,8 +292,9 @@ function loadInteractiveTest(reportId, testFile, testName, rowElement) {
     if (miniStrip) miniStrip.style.display = 'none';
 
     const buster = reportId || Date.now();
+    const targetFile = testFile || currentTestFile || 'console-execution-1.json';
     let reportUrl = `/api/reporting/report/${reportId}/allure-report/index.html?t=${encodeURIComponent(buster)}`;
-    let consoleUrl = `/interactive_console.html?dataUrl=${encodeURIComponent(`/api/reporting/report/${reportId}/step-replay.json`)}&t=${encodeURIComponent(buster)}`;
+    let consoleUrl = `/interactive_console.html?dataUrl=${encodeURIComponent(`/api/reporting/report/${reportId}/${targetFile}`)}&t=${encodeURIComponent(buster)}`;
 
     if (reportIframe) {
         reportIframe.style.display = 'block';

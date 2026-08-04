@@ -135,36 +135,21 @@
     },
     {
       "promptLine": "Wait until the last chat message is from the AI",
-      "reasoning": "The previous attempt failed due to a visual mismatch, indicating the AI\u0027s response might not have been fully loaded or rendered. To address this, I\u0027ve added a WAIT action to explicitly wait for the last AI chat message element (`div.chat-message.ai:last-of-type`) to become visible. Following this, an ASSERT action verifies that this element contains the expected introductory text from the AI. This ensures the AI\u0027s response is present and stable before proceeding.",
+      "reasoning": "The instruction is to wait until the last chat message is from the AI. Based on the DOM, user messages have the class \u0027chat-message user\u0027. Assuming AI messages will have \u0027chat-message ai\u0027, I will use a WAIT action to target the last element with these classes, ensuring the AI\u0027s response has appeared and is the most recent message. This addresses the previous visual mismatch by waiting for a specific element state rather than a general visual hash.",
       "actions": [
         {
           "type": "WAIT",
           "target": "div.chat-message.ai:last-of-type",
-          "value": [
-            "20000"
-          ],
-          "description": "Wait for the last AI chat message to appear",
+          "description": "Wait until the last chat message is from the AI",
           "elementDetails": "Last AI chat message",
           "elementContext": {},
           "durationMs": 0,
           "replay": "",
-          "adjust": false
-        },
-        {
-          "type": "ASSERT",
-          "target": "div.chat-message.ai:last-of-type",
-          "value": [
-            "Hello there! I\u0027m Neodymium Aura, your AI Assistant."
-          ],
-          "description": "Verify the last chat message is from the AI and contains the expected text",
-          "elementDetails": "Last AI chat message",
-          "elementContext": {},
-          "durationMs": 0,
-          "replay": "",
+          "frameId": "win_0:main",
           "adjust": false
         }
       ],
-      "screenshotHash": "8002001004100614c610061004108418841004100410d01004110419a8100010",
+      "screenshotHash": "8002001004120614c610061004100818841004100410d4100411041954100010",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },

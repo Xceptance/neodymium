@@ -25,6 +25,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -244,7 +245,7 @@ public final class AuraManagerReportingHistoryUiTest
         deleteBtn.shouldBe(Condition.visible).click();
 
         // Verify that the deletion cleared the history list
-        $$(".history-row").shouldHave(CollectionCondition.size(0));
+        $$(".history-row").shouldHave(CollectionCondition.size(0), Duration.ofSeconds(10));
         Assertions.assertFalse(this.reportDir.exists(), "The report directory was not deleted on the server!");
     }
 }

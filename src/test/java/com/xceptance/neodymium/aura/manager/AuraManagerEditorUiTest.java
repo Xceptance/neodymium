@@ -212,4 +212,41 @@ public final class AuraManagerEditorUiTest
                 .find(Condition.text("new-interactive-aura-test.yaml"))
                 .shouldNotBe(Condition.visible);
     }
+
+    @NeodymiumTest
+    public final void testOpenEditorDisplaysRunOpenTestButton()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Find a file in the list and click its edit pencil icon
+        final var fileItem = $$("#yamlFileList .file-container").first();
+        fileItem.hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
+
+        // Verify editor panel opens and "Run Open Test" button becomes visible
+        $("#editorPanel").shouldBe(Condition.visible);
+        $("#runCurrentTestBtn").shouldBe(Condition.visible);
+        $("#runCurrentTestBtn").shouldHave(Condition.text("Run Open Test"));
+    }
+
+    @NeodymiumTest
+    public final void testCloseEditorClosesPanelAndHidesRunOpenTestButton()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Open editor panel
+        final var fileItem = $$("#yamlFileList .file-container").first();
+        fileItem.hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Click Close button
+        $(".btn-editor:not(.save):not(.delete)").shouldBe(Condition.visible).click();
+
+        // Verify editor panel closes and "Run Open Test" button is hidden
+        $("#editorPanel").shouldNotBe(Condition.visible);
+        $("#runCurrentTestBtn").shouldNotBe(Condition.visible);
+
+        // Sleep briefly to ensure HTMX response settle event does not re-open the editor
+        Selenide.sleep(500);
+        $("#editorPanel").shouldNotBe(Condition.visible);
+    }
 }
