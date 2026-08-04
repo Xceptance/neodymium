@@ -281,6 +281,25 @@
 				</plugins>
 			</build>
 		</profile>
+		<profile>
+			<id>ui-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<forkCount>1</forkCount>
+							<reuseForks>true</reuseForks>
+							<includes>
+								<include>com/xceptance/neodymium/aura/manager/**/*Test.java</include>
+								<include>com/xceptance/neodymium/junit5/tests/auramanager/**/*Test.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 	</profiles>
 
 	<reporting>
