@@ -664,7 +664,6 @@ public final class ExecuteActionsStep implements PipelineStep
                         final SutState currentState = executor.captureState(org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
                         contextState.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
 
-                        String currentHash = null;
                         String currentSsimMatrix = null;
                         if (currentState != null && currentState.getAttachments() != null)
                         {
@@ -673,7 +672,6 @@ public final class ExecuteActionsStep implements PipelineStep
                                 if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                                 {
                                     currentSsimMatrix = org.neodymium.ai.util.ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
-                                    currentHash = org.neodymium.ai.util.ScreenshotHasher.computeHash(attachment.base64Data());
                                     break;
                                 }
                             }
@@ -683,7 +681,7 @@ public final class ExecuteActionsStep implements PipelineStep
                         {
                             boolean isVisualMatch = false;
                             final String recordedHash = step.getScreenshotHash();
-                            if (recordedHash.length() > 64 && currentSsimMatrix != null)
+                            if (currentSsimMatrix != null)
                             {
                                 final double ssimScore = org.neodymium.ai.util.ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
                                 final double minScore = org.neodymium.ai.config.AiConfiguration.getInstance().getDouble("neodymium.ai.ssim.minScore", 0.99);
@@ -700,24 +698,6 @@ public final class ExecuteActionsStep implements PipelineStep
                                 {
                                     LOGGER.debug("   ⚠️ Visual SSIM score below threshold ({} < {}) for instruction: \"{}\"",
                                         String.format("%.4f", ssimScore), minScore, resolvedInstruction);
-                                }
-                            }
-                            else if (currentHash != null)
-                            {
-                                final int distance = org.neodymium.ai.util.ScreenshotHasher.getHammingDistance(recordedHash, currentHash);
-                                LOGGER.debug("   🖼️ [Visual dHash Check] Instruction: \"{}\" | Hamming Distance: {} (threshold <= 10)",
-                                    resolvedInstruction, distance);
-
-                                if (distance <= 10)
-                                {
-                                    isVisualMatch = true;
-                                    LOGGER.info("   ✅ Visual dHash match (distance: {} <= 10) for instruction: \"{}\". Bypassing LLM call/actions.",
-                                        distance, resolvedInstruction);
-                                }
-                                else
-                                {
-                                    LOGGER.debug("   ⚠️ Visual dHash distance above threshold ({} > 10) for instruction: \"{}\"",
-                                        distance, resolvedInstruction);
                                 }
                             }
 

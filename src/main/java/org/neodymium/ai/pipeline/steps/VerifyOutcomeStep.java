@@ -80,8 +80,8 @@ public final class VerifyOutcomeStep implements PipelineStep
         final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
 
-        // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps or unhashed steps
-        if (executor != null && mode != null && !mode.isReplay() && step != null && (step.isVisualStep() || step.getScreenshotHash() == null))
+        // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution ONLY for visual steps
+        if (executor != null && mode != null && !mode.isReplay() && step != null && step.isVisualStep())
         {
             try
             {
