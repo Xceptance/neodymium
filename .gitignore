@@ -60,5 +60,7 @@ tmp/
 /src/test/resources/ai-playbooks/
 /src/test/resources/playbooks/integration/programmatic/
 
+/chat-history/
+
 # Added by code-review-graph
 .code-review-graph/
