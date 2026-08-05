@@ -1117,8 +1117,6 @@ public class PageAnalyzer
         appendAttribute(dom, "value", el.get("value"));
         appendAttribute(dom, "options", el.get("options"));
 
-        appendAttribute(dom, "data-ai", el.get("automationId"));
-
         final Object selector = el.get("selector");
         if (selector != null && !selector.toString().isEmpty()) {
             final String selStr = selector.toString();
@@ -1140,6 +1138,8 @@ public class PageAnalyzer
                 appendAttribute(dom, "selector", selStr);
             }
         }
+
+        appendAttribute(dom, "data-ai", el.get("automationId"));
 
         appendAttribute(dom, "frameId", el.get("frameId"));
 
@@ -1695,9 +1695,6 @@ public class PageAnalyzer
 
         dom.append("  ".repeat(depth));
         dom.append("<").append(tag);
-        if (!refId.isEmpty()) {
-            dom.append(" data-ai=\"").append(escapeAttributeValue(refId)).append("\"");
-        }
         if (!domTagName.isEmpty() && !role.equals(domTagName) && !isImplicitRole(domTagName, role)) {
             dom.append(" role=\"").append(escapeAttributeValue(role)).append("\"");
         }
@@ -1736,6 +1733,9 @@ public class PageAnalyzer
         }
         if (!autocomplete.isEmpty()) {
             dom.append(" autocomplete=\"").append(escapeAttributeValue(autocomplete)).append("\"");
+        }
+        if (!refId.isEmpty()) {
+            dom.append(" data-ai=\"").append(escapeAttributeValue(refId)).append("\"");
         }
 
         final StringBuilder childrenContent = new StringBuilder();

@@ -19,68 +19,137 @@
 package org.neodymium.ai.integration.verla;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
-
-import org.neodymium.ai.testing.BaseAiTest;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
-import org.neodymium.common.testdata.DataFile;
-import org.neodymium.common.testdata.DataSet;
-import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
 
 /**
- * Runs YAML-based VERLA integration tests for adding items to cart and applying coupons.
+ * Runs YAML-based VERLA integration tests for adding items to cart and applying coupons
+ * in recording mode first and strict replay mode second.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@DataFile("verla/AddToCartTest.yaml")
-@NeodymiumAiTest
 @Tag("integration")
 @Tag("verla")
+@Tag("AuraIntegration")
+@Tag("LiveAPI")
+@NeodymiumAiTest
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class AddToCartTest extends BaseAiTest
 {
     /**
-     * Setup method to inject the dynamic server port.
+     * Constructs a default AddToCartTest.
+     */
+    public AddToCartTest()
+    {
+    }
+
+    /**
+     * Setup method to inject dynamic server URLs.
      */
     @BeforeEach
     public void setup()
     {
+        EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
+        Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
     }
 
     /**
-     * Executes the add to cart YAML steps on the bad environment.
-     *
-     * @throws Throwable if execution fails
+     * Live recording mode execution for dataset 'perfect'.
      */
-    @NeodymiumTest
-    @DataSet(id = "bad")
-    public void testCartBad() throws Throwable
+    @Order(1)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook("/verla/AddToCartTest.yaml")
+    public void testCartLivePerfect()
     {
     }
 
     /**
-     * Executes the add to cart YAML steps on the normal environment.
-     *
-     * @throws Throwable if execution fails
+     * Strict replay mode execution using recorded playbook for dataset 'perfect'.
      */
-    @NeodymiumTest
-    @DataSet(id = "normal")
-    public void testCartNormal() throws Throwable
+    @Order(2)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLivePerfect")
+    public void testCartReplayPerfect()
     {
     }
 
     /**
-     * Executes the add to cart YAML steps on the perfect environment.
-     *
-     * @throws Throwable if execution fails
+     * Live recording mode execution for dataset 'normal'.
      */
-    @NeodymiumTest
-    @DataSet(id = "perfect")
-    public void testCartPerfect() throws Throwable
+    @Order(3)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("normal")
+    @AiPlaybook("/verla/AddToCartTest.yaml")
+    public void testCartLiveNormal()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'normal'.
+     */
+    @Order(4)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("normal")
+    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLiveNormal")
+    public void testCartReplayNormal()
+    {
+    }
+
+    /**
+     * Live recording mode execution for dataset 'bad'.
+     */
+    @Order(5)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("bad")
+    @AiPlaybook("/verla/AddToCartTest.yaml")
+    public void testCartLiveBad()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'bad'.
+     */
+    @Order(6)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("bad")
+    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLiveBad")
+    public void testCartReplayBad()
+    {
+    }
+
+    /**
+     * Live recording mode execution across all datasets in the playbook.
+     */
+    @Order(7)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("/verla/AddToCartTest.yaml")
+    public void testCartLiveAllDataSets()
+    {
+    }
+
+    /**
+     * Strict replay mode execution across all datasets in the playbook.
+     */
+    @Order(8)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLiveAllDataSets")
+    public void testCartReplayAllDataSets()
     {
     }
 }

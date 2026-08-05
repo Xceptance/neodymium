@@ -46,7 +46,7 @@ public final class ContextLevelTest
     @Test
     public void testEscalate()
     {
-        assertEquals(ContextLevel.AXTREE, ContextLevel.HINT.escalate());
+        assertEquals(ContextLevel.LEAN, ContextLevel.HINT.escalate());
         assertEquals(ContextLevel.STANDARD, ContextLevel.AXTREE.escalate());
         assertEquals(ContextLevel.STANDARD, ContextLevel.LEAN.escalate());
         assertEquals(ContextLevel.VISUAL, ContextLevel.STANDARD.escalate());

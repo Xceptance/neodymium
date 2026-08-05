@@ -131,6 +131,7 @@ public final class ExecuteActionsStep implements PipelineStep
     /**
      * Helper executing a single action, applying sanitization, logging, and throwing healing exceptions on failure.
      */
+    @SuppressWarnings("deprecation")
     private void executeSingleAction(
         final Action action,
         final TargetExecutor executor,
@@ -182,7 +183,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
                 // Execute SUT action via targeted SUT driver
                 // Mask any raw sensitive inputs dynamically matching SessionData variable keys
-                final Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
+                Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
                 final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
                 if (step != null)
                 {
@@ -243,6 +244,54 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                     context.getTransientData().put("currentAction", resolvedAction);
                     executor.execute(resolvedAction);
+
+                    if (org.neodymium.ai.config.AiConfiguration.getInstance().isLocatorImproverEnabled()
+                        && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted()
+                        && resolvedAction.getTarget() != null
+                        && !resolvedAction.getTarget().isBlank())
+                    {
+                        try
+                        {
+                            final org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+                            final com.codeborne.selenide.SelenideElement found = org.neodymium.ai.executor.selenide.SelenideElementFinder.findElement(resolvedAction.getTarget());
+                            if (found != null && found.toWebElement() != null)
+                            {
+                                final String improvedLocator = org.neodymium.ai.util.LocatorImprover.improveLocator(driver, found.toWebElement(), resolvedAction.getTarget());
+                                if (improvedLocator != null && !improvedLocator.equals(resolvedAction.getTarget()))
+                                {
+                                    final Action upgraded = sanitized.withTarget(improvedLocator);
+                                    if (step.getActions() != null && !step.getActions().isEmpty())
+                                    {
+                                        final int idx = step.getActions().indexOf(sanitized);
+                                        if (idx != -1)
+                                        {
+                                            step.getActions().set(idx, upgraded);
+                                        }
+                                    }
+                                    if (recordedActions != null && !recordedActions.isEmpty())
+                                    {
+                                        final int idx = recordedActions.indexOf(sanitized);
+                                        if (idx != -1)
+                                        {
+                                            recordedActions.set(idx, upgraded);
+                                        }
+                                    }
+                                    if (stepActions != null && !stepActions.isEmpty())
+                                    {
+                                        final int idx = stepActions.indexOf(sanitized);
+                                        if (idx != -1)
+                                        {
+                                            stepActions.set(idx, upgraded);
+                                        }
+                                    }
+                                    sanitized = upgraded;
+                                }
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
                 }
                 finally
                 {

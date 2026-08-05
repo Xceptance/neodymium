@@ -387,6 +387,39 @@ Visual RCA can be optionally disabled (e.g., for token conservation or offline C
 neodymium.ai.visualRca.enabled=true
 ```
 
+---
+
+## 19. Automatic Validated Locator Improver & Locator Quality Scoring
+
+Neodymium AI automatically inspects target DOM elements during LLM step execution, generates candidate standard CSS locators (`#id`, `[data-testid='...']`, `[name='...']`, `[aria-label='...']`, `[placeholder='...']`), and validates them against live browser DOM invariants before upgrading saved playbook action locators.
+
+### Quality Scoring Scale (0 to 10)
+
+| Score | Locator Type | Examples |
+| :---: | :--- | :--- |
+| **10/10** | Unique ID or Test ID | `#purchase-btn`, `[data-testid='submit-order']`, `[data-test='checkout']` |
+| **8/10** | Standard Attribute | `input[name='email']`, `[aria-label='Search']`, `[placeholder='Enter address']` |
+| **6/10** | Single Clean Class | `.product-quick-add`, `.btn-primary` |
+| **4/10** | Neodymium Fingerprint Tag | `[data-ai='xccaql7f']` |
+| **2/10** | Complex Combinator / Deep Path | `header > div > form > input:nth-child(2)`, `//html/body/div[1]/input` |
+| **0/10** | Volatile Dynamic ID / Invalid | `#v-btn-129481`, `#react-node-9941` |
+
+### Validation & Safety Invariants
+1. **Quality Score Upgrade Gate**: Candidate locators are upgraded ONLY if candidate quality score strictly exceeds the original locator score ($\text{CandidateScore} > \text{OriginalScore}$).
+2. **Uniqueness Check**: The candidate locator must match **exactly 1 element** in the live DOM (`findElements().size() == 1`).
+3. **Identity Check**: The element returned by the candidate locator must be the **exact same `WebElement` instance** (`matchedElement.equals(targetElement)`).
+4. **Volatile ID Protection**: Ignores dynamic/framework auto-generated IDs using `VolatileIdDetector`.
+
+### Configuration
+The Locator Improver is enabled by default and can be configured via `neodymium.properties` or system properties:
+
+```properties
+# Enables or disables automatic live DOM locator upgrading and quality scoring for recorded playbooks.
+# Default is true. Set to false for testing or disabling locator upgrades.
+neodymium.ai.locatorImprover.enabled=true
+```
+
+
 
 
 

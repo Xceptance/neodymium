@@ -19,45 +19,137 @@
 package org.neodymium.ai.integration.verla;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
-
-import org.neodymium.ai.testing.BaseAiTest;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
-import org.neodymium.common.testdata.DataFile;
-import org.neodymium.common.testdata.DataSet;
-import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
 
 /**
- * Runs YAML-based VERLA integration tests for user registration, input validation, and account creation flow.
+ * Runs YAML-based VERLA integration tests for user registration and account creation flows
+ * in recording mode first and strict replay mode second.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@DataFile("verla/RegisterTest.yaml")
-@NeodymiumAiTest
 @Tag("integration")
 @Tag("verla")
+@Tag("AuraIntegration")
+@Tag("LiveAPI")
+@NeodymiumAiTest
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class RegisterTest extends BaseAiTest
 {
     /**
-     * Setup method to inject the dynamic server port.
+     * Constructs a default RegisterTest.
+     */
+    public RegisterTest()
+    {
+    }
+
+    /**
+     * Setup method to inject dynamic server URLs.
      */
     @BeforeEach
     public void setup()
     {
+        EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
+        Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
     }
 
     /**
-     * Executes user registration test across all datasets.
-     *
-     * @throws Throwable if execution fails
+     * Live recording mode execution for dataset 'us'.
      */
-    @NeodymiumTest
-    public void testRegister() throws Throwable
+    @Order(1)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("us")
+    @AiPlaybook("/verla/RegisterTest.yaml")
+    public void testRegisterLiveUs()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'us'.
+     */
+    @Order(2)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("us")
+    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveUs")
+    public void testRegisterReplayUs()
+    {
+    }
+
+    /**
+     * Live recording mode execution for dataset 'de'.
+     */
+    @Order(3)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("de")
+    @AiPlaybook("/verla/RegisterTest.yaml")
+    public void testRegisterLiveDe()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'de'.
+     */
+    @Order(4)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("de")
+    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveDe")
+    public void testRegisterReplayDe()
+    {
+    }
+
+    /**
+     * Live recording mode execution for dataset 'jp'.
+     */
+    @Order(5)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("jp")
+    @AiPlaybook("/verla/RegisterTest.yaml")
+    public void testRegisterLiveJp()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'jp'.
+     */
+    @Order(6)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("jp")
+    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveJp")
+    public void testRegisterReplayJp()
+    {
+    }
+
+    /**
+     * Live recording mode execution across all datasets in the playbook.
+     */
+    @Order(7)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("/verla/RegisterTest.yaml")
+    public void testRegisterLiveAllDataSets()
+    {
+    }
+
+    /**
+     * Strict replay mode execution across all datasets in the playbook.
+     */
+    @Order(8)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveAllDataSets")
+    public void testRegisterReplayAllDataSets()
     {
     }
 }

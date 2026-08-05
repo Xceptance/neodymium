@@ -303,7 +303,7 @@ public final class SelenideElementFinder
         // -------------------------------------------------------------------------
         if (!forceCss)
         {
-            if (forceXpath || clean.startsWith("/") || clean.startsWith("(") || clean.startsWith(".") || clean.startsWith("*") || clean.contains("["))
+            if (forceXpath || clean.startsWith("/") || clean.startsWith("./") || clean.startsWith("("))
             {
                 try
                 {

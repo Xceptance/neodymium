@@ -19,68 +19,137 @@
 package org.neodymium.ai.integration.verla;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
-
-import org.neodymium.ai.testing.BaseAiTest;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
-import org.neodymium.common.testdata.DataFile;
-import org.neodymium.common.testdata.DataSet;
-import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
 
 /**
- * Runs YAML-based VERLA integration tests for homepage navigation and hero banner interactions.
+ * Runs YAML-based VERLA integration tests for homepage navigation and layout verification
+ * in recording mode first and strict replay mode second.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@DataFile("verla/HomepageTest.yaml")
-@NeodymiumAiTest
 @Tag("integration")
 @Tag("verla")
+@Tag("AuraIntegration")
+@Tag("LiveAPI")
+@NeodymiumAiTest
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class HomepageTest extends BaseAiTest
 {
     /**
-     * Setup method to inject the dynamic server port.
+     * Constructs a default HomepageTest.
+     */
+    public HomepageTest()
+    {
+    }
+
+    /**
+     * Setup method to inject dynamic server URLs.
      */
     @BeforeEach
     public void setup()
     {
+        EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
+        Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
     }
 
     /**
-     * Executes the homepage YAML steps on the bad environment.
-     *
-     * @throws Throwable if execution fails
+     * Live recording mode execution for dataset 'perfect'.
      */
-    @NeodymiumTest
-    @DataSet(id = "bad")
-    public void testHomepageBad() throws Throwable
+    @Order(1)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook("/verla/HomepageTest.yaml")
+    public void testHomepageLivePerfect()
     {
     }
 
     /**
-     * Executes the homepage YAML steps on the normal environment.
-     *
-     * @throws Throwable if execution fails
+     * Strict replay mode execution using recorded playbook for dataset 'perfect'.
      */
-    @NeodymiumTest
-    @DataSet(id = "normal")
-    public void testHomepageNormal() throws Throwable
+    @Order(2)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLivePerfect")
+    public void testHomepageReplayPerfect()
     {
     }
 
     /**
-     * Executes the homepage YAML steps on the perfect environment.
-     *
-     * @throws Throwable if execution fails
+     * Live recording mode execution for dataset 'normal'.
      */
-    @NeodymiumTest
-    @DataSet(id = "perfect")
-    public void testHomepagePerfect() throws Throwable
+    @Order(3)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("normal")
+    @AiPlaybook("/verla/HomepageTest.yaml")
+    public void testHomepageLiveNormal()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'normal'.
+     */
+    @Order(4)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("normal")
+    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLiveNormal")
+    public void testHomepageReplayNormal()
+    {
+    }
+
+    /**
+     * Live recording mode execution for dataset 'bad'.
+     */
+    @Order(5)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("bad")
+    @AiPlaybook("/verla/HomepageTest.yaml")
+    public void testHomepageLiveBad()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'bad'.
+     */
+    @Order(6)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("bad")
+    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLiveBad")
+    public void testHomepageReplayBad()
+    {
+    }
+
+    /**
+     * Live recording mode execution across all datasets in the playbook.
+     */
+    @Order(7)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("/verla/HomepageTest.yaml")
+    public void testHomepageLiveAllDataSets()
+    {
+    }
+
+    /**
+     * Strict replay mode execution across all datasets in the playbook.
+     */
+    @Order(8)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLiveAllDataSets")
+    public void testHomepageReplayAllDataSets()
     {
     }
 }

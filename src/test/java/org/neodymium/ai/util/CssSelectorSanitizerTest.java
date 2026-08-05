@@ -88,4 +88,16 @@ public class CssSelectorSanitizerTest
         final String expectedFullMix = "a.btn-primary.px-1\\.5.w-1\\/3:hover";
         Assertions.assertEquals(expectedFullMix, CssSelectorSanitizer.sanitize(rawFullMix));
     }
+
+    @Test
+    public void testSanitizeAttributeSelectorNotEscaped()
+    {
+        final String rawAttr = "button.product-quick-add[aria-label=\"Add Premium Off-White shirts to shopping cart\"]";
+        final String expectedAttr = "button.product-quick-add[aria-label=\"Add Premium Off-White shirts to shopping cart\"]";
+        Assertions.assertEquals(expectedAttr, CssSelectorSanitizer.sanitize(rawAttr));
+
+        final String rawDataAi = "a.nav-link[data-ai=\"xc123\"]";
+        final String expectedDataAi = "a.nav-link[data-ai=\"xc123\"]";
+        Assertions.assertEquals(expectedDataAi, CssSelectorSanitizer.sanitize(rawDataAi));
+    }
 }

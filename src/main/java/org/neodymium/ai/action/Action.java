@@ -178,6 +178,27 @@ public class Action
     }
 
     /**
+     * Creates a new Action copy with an updated target selector.
+     *
+     * @param newTarget the new target selector
+     * @return a new Action instance with the updated target
+     */
+    public Action withTarget(final String newTarget)
+    {
+        final Action copy = new Action(this.type, newTarget, this.value, this.description, this.reasoning);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    /**
      * Returns the primary value of this action, or null if no values exist.
      *
      * @return the first value in the values list, or null

@@ -69,11 +69,17 @@ public final class CssSelectorSanitizer
         sanitized = TAILWIND_VARIANTS_PATTERN.matcher(sanitized).replaceAll("$1\\\\:$2");
 
         // 4. Escape brackets and hashes in Tailwind arbitrary values (e.g. .top-[10px] -> .top-\[10px\], .bg-[#f0f0f0] -> .bg-\[\#f0f0f0\])
+        // Standard CSS attribute selectors contain '=' (e.g., button.btn[aria-label='...']) and must NOT have their brackets escaped.
         sanitized = ARBITRARY_BRACKETS_PATTERN.matcher(sanitized).replaceAll(matcher ->
         {
             final String prefix = matcher.group(1);
-            final String inner = matcher.group(2).replace("#", "\\#");
-            return Matcher.quoteReplacement(prefix + "\\[" + inner + "\\]");
+            final String inner = matcher.group(2);
+            if (inner.contains("="))
+            {
+                return Matcher.quoteReplacement(prefix + "[" + inner + "]");
+            }
+            final String escapedInner = inner.replace("#", "\\#");
+            return Matcher.quoteReplacement(prefix + "\\[" + escapedInner + "\\]");
         });
 
         return sanitized;

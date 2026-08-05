@@ -121,7 +121,7 @@ public final class PesapPromptTest
         final PesapResult result = prompt.parseResponse("", new ExecutionContext(null));
 
         assertNotNull(result);
-        assertEquals("AXTREE", result.contextLevel());
+        assertEquals("LEAN", result.contextLevel());
         assertFalse(result.requiresJavaMethods());
         assertTrue(result.splitSteps().isEmpty());
     }

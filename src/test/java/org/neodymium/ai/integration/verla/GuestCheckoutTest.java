@@ -19,68 +19,137 @@
 package org.neodymium.ai.integration.verla;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
-
-import org.neodymium.ai.testing.BaseAiTest;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
-import org.neodymium.common.testdata.DataFile;
-import org.neodymium.common.testdata.DataSet;
-import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
 
 /**
- * Runs YAML-based Aura integration tests for registration, login, checkout forms, guest checkouts, tracking, and purchase rules.
+ * Runs YAML-based VERLA integration tests for guest checkout flows
+ * in recording mode first and strict replay mode second.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000")
-@DataFile("verla/GuestCheckoutTest.yaml")
-@NeodymiumAiTest
 @Tag("integration")
 @Tag("verla")
+@Tag("AuraIntegration")
+@Tag("LiveAPI")
+@NeodymiumAiTest
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class GuestCheckoutTest extends BaseAiTest
 {
     /**
-     * Setup method to inject the dynamic server port.
+     * Constructs a default GuestCheckoutTest.
+     */
+    public GuestCheckoutTest()
+    {
+    }
+
+    /**
+     * Setup method to inject dynamic server URLs.
      */
     @BeforeEach
     public void setup()
     {
+        EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
+        Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
     }
 
     /**
-     * Executes the checkout and purchase YAML steps on the bad environment.
-     *
-     * @throws Throwable if execution fails
+     * Live recording mode execution for dataset 'perfect'.
      */
-    @NeodymiumTest
-    @DataSet(id = "bad")
-    public void testCheckoutBad() throws Throwable
+    @Order(1)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    public void testCheckoutLivePerfect()
     {
     }
 
     /**
-     * Executes the checkout and purchase YAML steps on the normal environment.
-     *
-     * @throws Throwable if execution fails
+     * Strict replay mode execution using recorded playbook for dataset 'perfect'.
      */
-    @NeodymiumTest
-    @DataSet(id = "normal")
-    public void testCheckoutNormal() throws Throwable
+    @Order(2)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLivePerfect")
+    public void testCheckoutReplayPerfect()
     {
     }
 
     /**
-     * Executes the checkout and purchase YAML steps on the perfect environment.
-     *
-     * @throws Throwable if execution fails
+     * Live recording mode execution for dataset 'normal'.
      */
-    @NeodymiumTest
-    @DataSet(id = "perfect")
-    public void testCheckoutPerfect() throws Throwable
+    @Order(3)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("normal")
+    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    public void testCheckoutLiveNormal()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'normal'.
+     */
+    @Order(4)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("normal")
+    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveNormal")
+    public void testCheckoutReplayNormal()
+    {
+    }
+
+    /**
+     * Live recording mode execution for dataset 'bad'.
+     */
+    @Order(5)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("bad")
+    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    public void testCheckoutLiveBad()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'bad'.
+     */
+    @Order(6)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("bad")
+    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveBad")
+    public void testCheckoutReplayBad()
+    {
+    }
+
+    /**
+     * Live recording mode execution across all datasets in the playbook.
+     */
+    @Order(7)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    public void testCheckoutLiveAllDataSets()
+    {
+    }
+
+    /**
+     * Strict replay mode execution across all datasets in the playbook.
+     */
+    @Order(8)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
+    public void testCheckoutReplayAllDataSets()
     {
     }
 }

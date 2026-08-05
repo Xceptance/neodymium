@@ -127,12 +127,12 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
         final String jsonContent = LlmResponseSanitizer.extractJson(rawContent);
         if (jsonContent.isEmpty())
         {
-            return new PesapResult("AXTREE", false, List.of());
+            return new PesapResult("LEAN", false, List.of());
         }
 
         final JsonNode root = MAPPER.readTree(jsonContent);
         
-        final String contextLevel = root.hasNonNull("c") ? root.path("c").asText("AXTREE").toUpperCase().trim() : "AXTREE";
+        final String contextLevel = root.hasNonNull("c") ? root.path("c").asText("LEAN").toUpperCase().trim() : "LEAN";
         final boolean requiresJavaMethods = root.hasNonNull("jm") && root.path("jm").asBoolean();
         
         final List<String> splitSteps = new ArrayList<>();

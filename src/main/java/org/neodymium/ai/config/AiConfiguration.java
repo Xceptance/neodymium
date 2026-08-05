@@ -443,6 +443,16 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if automatic locator improvement is enabled for recorded/executed actions.
+     *
+     * @return true if locator improvement is enabled (default: true), false otherwise
+     */
+    public boolean isLocatorImproverEnabled()
+    {
+        return getBoolean("neodymium.ai.locatorImprover.enabled", true);
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *

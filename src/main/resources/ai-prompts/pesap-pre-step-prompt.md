@@ -2,7 +2,7 @@ Predict minimal context level and metadata for the current step.
 
 ## Context Levels
 - HINT: Explicit locator provided (hint: .selector).
-- AXTREE: Default for standard clicks/types.
+- LEAN: Default for standard clicks/types.
 - STANDARD: Text validation or message checking.
 - VISUAL_MINIMAL: Pure visual check/assertion without element interaction (0 DOM elements + screenshot).
 - VISUAL_LEAN: Visual element interaction required (needs screenshot + compact element locators).
@@ -11,7 +11,7 @@ Predict minimal context level and metadata for the current step.
 ## Output Format
 Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 {
-  "c": "HINT|AXTREE|STANDARD|VISUAL_MINIMAL|VISUAL_LEAN|VISUAL",
+  "c": "HINT|LEAN|STANDARD|VISUAL_MINIMAL|VISUAL_LEAN|VISUAL",
   "jm": true|false,
   "sp": ["step 1", "step 2"] // Omit if unsplit
 }
@@ -23,7 +23,7 @@ Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
    - (visual) element interaction -> VISUAL_LEAN
    - (layout) -> VISUAL
    - Text validation -> STANDARD
-   - Default -> AXTREE
+   - Default -> LEAN
 2. Escalation Carryover: If [PREVIOUS] step escalated/failed, upgrade [CURRENT] step context level accordingly.
 3. Java Method ('jm'): Set true ONLY if an explicit custom Java method name (e.g. assertCalculation) is specified; false for natural language descriptions.
 4. Step Splitting ('sp'):

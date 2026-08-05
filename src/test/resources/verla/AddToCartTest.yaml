@@ -5,9 +5,20 @@
 steps: |
   Open ${verla.url}/verla-${quality}/index.html
   Verify that the storefront home page has loaded.
-  Locate the first product card and click its 'Add to Cart' or 'Add' button.
+  Locate the first product card and hover over it
+  Click its 'Add to Cart' button
   Click the size 'S'
-  Verify that the cart item count in the header updates.
+  Verify that the cart item count in the header updated.
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+  - testId: "normal"
+    quality: "normal"
+  - testId: "bad"
+    quality: "bad"
+
+dummy:
   Open ${verla.url}/verla-${quality}/cart.html
   Verify that the shopping cart page is loaded showing the added product.
   Locate the promo code input field with id 'couponCode' and type '10p-off' into it.
@@ -20,12 +31,3 @@ steps: |
   Locate the country search input with id 'country-search' and type 'Sweden' into it.
   Select 'Sweden' from the filtered country list results.
   Verify that the page reloads or redirects, and prices/totals are now displayed in Swedish Krona 'kr' currency.
-
-data:
-  - testId: "perfect"
-    quality: "perfect"
-    sku: ""
-  - testId: "normal"
-    quality: "normal"
-  - testId: "bad"
-    quality: "bad"
