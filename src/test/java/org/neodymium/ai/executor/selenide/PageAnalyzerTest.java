@@ -56,9 +56,41 @@ public class PageAnalyzerTest
         {
             com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/verla-perfect/index.html");
             final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
-            final String dom = analyzer.captureSimplifiedDom(ContextLevel.LEAN);
-            assertNotNull(dom);
-            assertTrue(dom.length() > 500);
+            final String leanDom = analyzer.captureSimplifiedDom(ContextLevel.LEAN);
+            final String standardDom = analyzer.captureSimplifiedDom(ContextLevel.STANDARD);
+            final String richDom = analyzer.captureSimplifiedDom(ContextLevel.RICH);
+
+            assertNotNull(leanDom);
+            assertNotNull(standardDom);
+            assertNotNull(richDom);
+
+            // STANDARD includes full text copy (<p>) which makes it larger than LEAN
+            assertTrue(standardDom.length() >= leanDom.length(), "STANDARD DOM should be >= LEAN DOM in size");
+            assertTrue(richDom.length() >= standardDom.length(), "RICH DOM should be >= STANDARD DOM in size");
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testVerlaNormalDomCapture() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/verla-normal/index.html");
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+            final String leanDom = analyzer.captureSimplifiedDom(ContextLevel.LEAN);
+            final String standardDom = analyzer.captureSimplifiedDom(ContextLevel.STANDARD);
+
+            assertNotNull(leanDom);
+            assertNotNull(standardDom);
+            System.out.println("--- LEAN DOM (normal) ---");
+            System.out.println(leanDom.substring(0, Math.min(1000, leanDom.length())));
         }
         finally
         {

@@ -85,7 +85,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         {
             try
             {
-                final org.neodymium.ai.executor.selenide.ContextLevel level = step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_MINIMAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
+                final org.neodymium.ai.executor.selenide.ContextLevel level = step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
                 final SutState capturedState = executor.captureState(level);
                 if (capturedState != null && capturedState.getAttachments() != null)
                 {

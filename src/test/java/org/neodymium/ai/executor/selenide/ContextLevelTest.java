@@ -16,72 +16,72 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 package org.neodymium.ai.executor.selenide;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests verifying ContextLevel behavior, escalation paths, screenshot inclusion, and text content inclusion.
+ * Unit tests for {@link ContextLevel} enum escalation sequence and capability boolean checks.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.6 Flash (High)
  * @author Xceptance GmbH 2026
  */
-public final class ContextLevelTest
+public class ContextLevelTest
 {
-    /**
-     * Default constructor.
-     */
-    public ContextLevelTest()
-    {
-    }
-
-    /**
-     * Verifies escalation paths across all context levels, including VISUAL_MINIMAL -> VISUAL_LEAN -> VISUAL.
-     */
     @Test
-    public void testEscalate()
+    public void testEscalationSequence()
     {
-        assertEquals(ContextLevel.LEAN, ContextLevel.HINT.escalate());
-        assertEquals(ContextLevel.STANDARD, ContextLevel.AXTREE.escalate());
-        assertEquals(ContextLevel.STANDARD, ContextLevel.LEAN.escalate());
-        assertEquals(ContextLevel.VISUAL, ContextLevel.STANDARD.escalate());
-        assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.VISUAL_MINIMAL.escalate());
-        assertEquals(ContextLevel.VISUAL, ContextLevel.VISUAL_LEAN.escalate());
-        assertNull(ContextLevel.VISUAL.escalate());
+        Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.HINT.escalate());
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.AXTREE.escalate());
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.LEAN.escalate());
+        Assertions.assertEquals(ContextLevel.RICH, ContextLevel.STANDARD.escalate());
+        Assertions.assertEquals(ContextLevel.VISUAL, ContextLevel.RICH.escalate());
+        Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.VISUAL.escalate());
+        Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.VISUAL_LEAN.escalate());
+        Assertions.assertNull(ContextLevel.VISUAL_RICH.escalate());
     }
 
-    /**
-     * Verifies screenshot inclusion flags for visual context levels.
-     */
     @Test
     public void testIncludesScreenshot()
     {
-        assertFalse(ContextLevel.HINT.includesScreenshot());
-        assertFalse(ContextLevel.AXTREE.includesScreenshot());
-        assertFalse(ContextLevel.LEAN.includesScreenshot());
-        assertFalse(ContextLevel.STANDARD.includesScreenshot());
-        assertTrue(ContextLevel.VISUAL_MINIMAL.includesScreenshot());
-        assertTrue(ContextLevel.VISUAL_LEAN.includesScreenshot());
-        assertTrue(ContextLevel.VISUAL.includesScreenshot());
+        Assertions.assertFalse(ContextLevel.HINT.includesScreenshot());
+        Assertions.assertFalse(ContextLevel.AXTREE.includesScreenshot());
+        Assertions.assertFalse(ContextLevel.LEAN.includesScreenshot());
+        Assertions.assertFalse(ContextLevel.STANDARD.includesScreenshot());
+        Assertions.assertFalse(ContextLevel.RICH.includesScreenshot());
+
+        Assertions.assertTrue(ContextLevel.VISUAL.includesScreenshot());
+        Assertions.assertTrue(ContextLevel.VISUAL_LEAN.includesScreenshot());
+        Assertions.assertTrue(ContextLevel.VISUAL_RICH.includesScreenshot());
     }
 
-    /**
-     * Verifies text content inclusion flags.
-     */
     @Test
     public void testIncludesTextContent()
     {
-        assertFalse(ContextLevel.HINT.includesTextContent());
-        assertFalse(ContextLevel.AXTREE.includesTextContent());
-        assertFalse(ContextLevel.LEAN.includesTextContent());
-        assertFalse(ContextLevel.VISUAL_MINIMAL.includesTextContent());
-        assertFalse(ContextLevel.VISUAL_LEAN.includesTextContent());
-        assertTrue(ContextLevel.STANDARD.includesTextContent());
-        assertTrue(ContextLevel.VISUAL.includesTextContent());
+        Assertions.assertFalse(ContextLevel.HINT.includesTextContent());
+        Assertions.assertFalse(ContextLevel.AXTREE.includesTextContent());
+        Assertions.assertFalse(ContextLevel.LEAN.includesTextContent());
+        Assertions.assertFalse(ContextLevel.VISUAL.includesTextContent());
+        Assertions.assertFalse(ContextLevel.VISUAL_LEAN.includesTextContent());
+
+        Assertions.assertTrue(ContextLevel.STANDARD.includesTextContent());
+        Assertions.assertTrue(ContextLevel.RICH.includesTextContent());
+        Assertions.assertTrue(ContextLevel.VISUAL_RICH.includesTextContent());
+    }
+
+    @Test
+    public void testIncludesRichMetadata()
+    {
+        Assertions.assertFalse(ContextLevel.HINT.includesRichMetadata());
+        Assertions.assertFalse(ContextLevel.AXTREE.includesRichMetadata());
+        Assertions.assertFalse(ContextLevel.LEAN.includesRichMetadata());
+        Assertions.assertFalse(ContextLevel.STANDARD.includesRichMetadata());
+        Assertions.assertFalse(ContextLevel.VISUAL.includesRichMetadata());
+        Assertions.assertFalse(ContextLevel.VISUAL_LEAN.includesRichMetadata());
+
+        Assertions.assertTrue(ContextLevel.RICH.includesRichMetadata());
+        Assertions.assertTrue(ContextLevel.VISUAL_RICH.includesRichMetadata());
     }
 }

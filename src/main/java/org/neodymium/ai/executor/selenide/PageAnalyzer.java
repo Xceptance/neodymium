@@ -109,7 +109,7 @@ public class PageAnalyzer
      * fallback.
      */
     static final String CAPTURE_SCRIPT = """
-            return (function(level, includesText, volatilePatterns) {
+            return (function(level, includesText, includesRich, volatilePatterns) {
                 // Configuration constants to prevent payload bloat
                 var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
                 var MAX_TEXT = 200;         // Max characters captured for element text labels
@@ -673,9 +673,18 @@ public class PageAnalyzer
 
                     // 3. Text leaf element (paragraphs, spans, table cells, or divs with text)
                     var textContent = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
-                    if (textContent.length > 0 && textContent.length <= MAX_TEXT && children.length === 0) {
+                    var isInlineWrapper = children.length > 0 && children.every(function(c) {
+                        return c && (c.nodeType === 'leaf' || Array.isArray(c)) && ['span','b','strong','i','em','small','code','a'].indexOf(c.tagName || (c[0] && c[0].tagName)) !== -1;
+                    });
+                    if (textContent.length > 0 && textContent.length <= MAX_TEXT && (children.length === 0 || isInlineWrapper)) {
+                        // In LEAN mode (!includesText), filter out massive paragraph copy (> 120 chars)
+                        if (!includesText) {
+                            if ((tag === 'p' || tag === 'blockquote') && textContent.length > 120) {
+                                return null;
+                            }
+                        }
                         var autoId = assignId(el);
-                        return {
+                        var leafNode = {
                             nodeType: 'leaf',
                             tagName: tag,
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
@@ -684,6 +693,13 @@ public class PageAnalyzer
                             selector: generateSelector(el),
                             automationId: autoId
                         };
+                        if (includesRich) {
+                            var titleAttr = el.getAttribute('title');
+                            if (titleAttr) leafNode.title = titleAttr;
+                            var ariaDesc = el.getAttribute('aria-describedby');
+                            if (ariaDesc) leafNode.ariaDescribedBy = ariaDesc;
+                        }
+                        return leafNode;
                     }
 
                     // 4. Collapse transparent wrapper divs/spans having children
@@ -958,10 +974,10 @@ public class PageAnalyzer
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(title != null ? title : "").append("\n\n");
 
-        if (isEmptyPage || level == ContextLevel.VISUAL_MINIMAL) {
+        if (isEmptyPage || level == ContextLevel.VISUAL) {
             final String result = dom.toString();
             if (!isEmptyPage) {
-                LOG.debug("   📄 Simplified DOM size: {} chars (VISUAL_MINIMAL mode)", result.length());
+                LOG.debug("   📄 Simplified DOM size: {} chars (VISUAL mode)", result.length());
             }
             return result;
         }
@@ -1039,7 +1055,7 @@ public class PageAnalyzer
         }
         try {
             final Map<String, Object> data = (Map<String, Object>) js
-                    .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(),
+                    .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(), level.includesRichMetadata(),
                             this.volatileIdDetector.getPatterns().stream().map(java.util.regex.Pattern::pattern).toList());
             // Render element tree
             final List<Map<String, Object>> tree = (List<Map<String, Object>>) data.get("tree");

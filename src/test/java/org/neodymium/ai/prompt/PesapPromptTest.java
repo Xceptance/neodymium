@@ -97,7 +97,7 @@ public final class PesapPromptTest
     {
         final String rawJson = """
             {
-              "c": "VISUAL_MINIMAL",
+              "c": "VISUAL",
               "jm": false
             }
             """;
@@ -106,7 +106,7 @@ public final class PesapPromptTest
         final PesapResult result = prompt.parseResponse(rawJson, new ExecutionContext(null));
 
         assertNotNull(result);
-        assertEquals("VISUAL_MINIMAL", result.contextLevel());
+        assertEquals("VISUAL", result.contextLevel());
         assertFalse(result.requiresJavaMethods());
         assertTrue(result.splitSteps().isEmpty());
     }

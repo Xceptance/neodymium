@@ -45,48 +45,40 @@ public enum ContextLevel
 
     /**
      * Interactive elements only: links, buttons, inputs, selects, textareas,
-     * clickable div/span, headings (h1-h5), and forms.
-     * No text content blocks. No screenshot.
-     * <p>
-     * Sufficient for ~80% of instructions (click, type, select, navigate).
+     * clickable div/span, headings (h1-h6), and forms.
+     * Excludes long paragraph copy (&lt;p&gt;) and non-interactive static text blocks. No screenshot.
      */
     LEAN,
 
     /**
-     * Everything in {@link #LEAN} plus all visible text content
-     * ({@code p, span, li, td, div} elements with non-empty text).
-     * No screenshot.
-     * <p>
-     * Equivalent to the previous {@code forValidation=true} mode.
-     * Required for capture, verify, and assert instructions, or when
-     * LEAN data is insufficient to disambiguate similar elements.
+     * Everything in {@link #LEAN} plus standard static text content
+     * ({@code p, span, li, td, div} elements with non-empty text). No screenshot.
      */
     STANDARD,
 
     /**
-     * Minimal page header (URL and title only, zero DOM element nodes) plus a page screenshot.
-     * Used for pure visual checks and assertions where no element interaction is required.
-     * Escalates directly to {@link #VISUAL_LEAN} if needed.
+     * Enhanced textual context including all DOM text nodes, full data-* &amp; aria-* attributes,
+     * un-truncated URLs, complete data tables, and 5-level deep parent text context. No screenshot.
      */
-    VISUAL_MINIMAL,
+    RICH,
 
     /**
-     * Lean DOM (same as {@link #LEAN}) plus a page screenshot.
-     * Used as the context when visual element interaction is needed.
-     * Escalates directly to {@link #VISUAL} if needed.
+     * Minimal page header (URL and title only, zero DOM element nodes) plus a page screenshot.
+     * Used for pure visual checks and assertions where no element interaction is required.
+     */
+    VISUAL,
+
+    /**
+     * LEAN DOM (same as {@link #LEAN}) plus a page screenshot.
+     * Used when visual element interaction is required.
      */
     VISUAL_LEAN,
 
     /**
-     * Same DOM as {@link #STANDARD} plus a page screenshot sent as a
-     * multimodal input. The LLM can visually identify elements that are
-     * hidden from the DOM extractor (CSS pseudo-elements, SVG text,
-     * canvas-rendered content) and map them back to the nearest
-     * {@code data-ai}.
-     * <p>
-     * This is the maximum available context level.
+     * RICH DOM (same as {@link #RICH}) plus a page screenshot sent as a multimodal input.
+     * Maximum available context level.
      */
-    VISUAL;
+    VISUAL_RICH;
 
     /**
      * Returns the next escalation level, or {@code null} if already at the
@@ -101,10 +93,11 @@ public enum ContextLevel
             case HINT -> LEAN;
             case AXTREE -> STANDARD;
             case LEAN -> STANDARD;
-            case STANDARD -> VISUAL;
-            case VISUAL_MINIMAL -> VISUAL_LEAN;
-            case VISUAL_LEAN -> VISUAL;
-            case VISUAL -> null;
+            case STANDARD -> RICH;
+            case RICH -> VISUAL;
+            case VISUAL -> VISUAL_LEAN;
+            case VISUAL_LEAN -> VISUAL_RICH;
+            case VISUAL_RICH -> null;
         };
     }
 
@@ -115,17 +108,28 @@ public enum ContextLevel
      */
     public boolean includesScreenshot()
     {
-        return this == VISUAL_MINIMAL || this == VISUAL_LEAN || this == VISUAL;
+        return this == VISUAL || this == VISUAL_LEAN || this == VISUAL_RICH;
     }
 
     /**
-     * Whether this context level includes the full text content section
+     * Whether this context level includes standard static text content
      * (paragraphs, spans, list items, table cells, divs with text).
      *
      * @return {@code true} if text content is included
      */
     public boolean includesTextContent()
     {
-        return this == STANDARD || this == VISUAL;
+        return this == STANDARD || this == RICH || this == VISUAL_RICH;
+    }
+
+    /**
+     * Whether this context level includes rich data attributes, aria metadata,
+     * and deep parent text context.
+     *
+     * @return {@code true} if rich metadata is included
+     */
+    public boolean includesRichMetadata()
+    {
+        return this == RICH || this == VISUAL_RICH;
     }
 }

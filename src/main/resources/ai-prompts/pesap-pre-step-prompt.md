@@ -2,16 +2,17 @@ Predict minimal context level and metadata for the current step.
 
 ## Context Levels
 - HINT: Explicit locator provided (hint: .selector).
-- LEAN: Default for standard clicks/types.
-- STANDARD: Text validation or message checking.
-- VISUAL_MINIMAL: Pure visual check/assertion without element interaction (0 DOM elements + screenshot).
-- VISUAL_LEAN: Visual element interaction required (needs screenshot + compact element locators).
-- VISUAL: Full raw DOM + screenshot.
+- LEAN: Default for standard clicks/types (interactive elements + headings + container skeleton).
+- STANDARD: Standard static text nodes and paragraph checks.
+- RICH: Enhanced DOM with all data-*/aria-* attributes and deep parent context.
+- VISUAL: Pure visual check/assertion without element interaction (0 DOM elements + screenshot).
+- VISUAL_LEAN: Visual element interaction required (needs screenshot + LEAN element locators).
+- VISUAL_RICH: Full RICH DOM + screenshot (maximum context).
 
 ## Output Format
 Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 {
-  "c": "HINT|LEAN|STANDARD|VISUAL_MINIMAL|VISUAL_LEAN|VISUAL",
+  "c": "HINT|LEAN|STANDARD|RICH|VISUAL|VISUAL_LEAN|VISUAL_RICH",
   "jm": true|false,
   "sp": ["step 1", "step 2"] // Omit if unsplit
 }
@@ -19,9 +20,10 @@ Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 ## Rules
 1. Minimal Context ('c'):
    - (hint: -> HINT
-   - (visual) check/assertion -> VISUAL_MINIMAL
+   - (visual) check/assertion -> VISUAL
    - (visual) element interaction -> VISUAL_LEAN
-   - (layout) -> VISUAL
+   - (layout/rich visual) -> VISUAL_RICH
+   - Complex data/table validation -> RICH
    - Text validation -> STANDARD
    - Default -> LEAN
 2. Escalation Carryover: If [PREVIOUS] step escalated/failed, upgrade [CURRENT] step context level accordingly.

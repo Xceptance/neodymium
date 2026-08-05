@@ -70,16 +70,88 @@ This prevents internal execution instructions from polluting the natural languag
 
 ---
 
-## 4. Pre-Step Split Analysis (PESAP)
+## 4. Pre-Step Split Analysis (PESAP) & Context Escalation
 To handle complex, compound, or ambiguous instructions, the pipeline executes a **Pre-Step Split Analysis (PESAP)** using the `LlmCapability.PESAP` capability:
 * **Contextual Inputs**: The analysis receives the current step, the previously executed step's instruction (for flow context), and up to two subsequent steps' instructions.
 * **JIT Upfront Step Splitting**: If a compound step (e.g. `"Search for shirt, select size L, and click Checkout"`) is identified, the LLM splits the instruction into distinct leaf sub-steps. These are instantiated dynamically as child `PlaybookStep` instances and pushed onto the execution stack.
-* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal interaction mode (Context Level) required for the step:
-  - `LEAN`: Basic DOM-only execution.
-  - `VISUAL_LEAN`: DOM with screenshot captures.
-  - `VISUAL`: Full visual screenshot representation.
-  - `HINT`: Targeted visual hints.
+* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal initial interaction mode (Context Level) required for the step across the 7-tier context escalation ladder.
 * **Bypassing on Replay**: PESAP runs during live recording mode; replay runs skip this analysis and execute the already-split steps directly from the JSON companion.
+
+---
+
+## 4.1 Tiered Context Escalation Ladder & Payload Modes
+
+Neodymium AI uses a **7-tier context level escalation ladder** that progresses deterministically when higher DOM fidelity or visual context is needed:
+
+$$\text{HINT} \longrightarrow \mathbf{LEAN} \longrightarrow \mathbf{STANDARD} \longrightarrow \mathbf{RICH} \longrightarrow \mathbf{VISUAL} \longrightarrow \mathbf{VISUAL\_LEAN} \longrightarrow \mathbf{VISUAL\_RICH}$$
+
+### Context Level Spectrum & Meaning
+
+| Context Level | Mode Type | Payload Content Description | Trigger Conditions / Use Cases |
+| :--- | :--- | :--- | :--- |
+| **`HINT`** | Text | **0 DOM Nodes.** Explicit selector hint provided (e.g. `(hint: #id)`). Saves 100% of DOM tokens. | When explicit CSS selector hint is provided in playbook step. |
+| **`LEAN`** | Text | **Interactive Elements + Headings + Container Skeleton + Concise Text Labels.** Filters out massive paragraph copy (`<p>`/`blockquote` > 120 chars). | Default mode for standard clicks, types, selects, and form interactions. |
+| **`STANDARD`** | Text | **`LEAN` + Standard Static Text.** Includes full static body `<p>` paragraph copy of any length, text spans, badges, and order totals. | Selected for text assertions, paragraph matching, or when `LEAN` escalates. |
+| **`RICH`** | Text | **`STANDARD` + Full HTML Metadata.** Includes all `data-*`, `title`, `aria-describedby` attributes, un-truncated URLs, and 5-level parent context. | Selected for SKU/data-attribute targeting, table sorting, or deep card disambiguation. |
+| **`VISUAL`** | Visual | **Page Screenshot + 0 DOM Element Nodes.** Pure visual assertion/check. | Triggered by `(visual)` check/assertion without element interaction. |
+| **`VISUAL_LEAN`** | Visual | **Page Screenshot + `LEAN` DOM.** Visual element interaction. | Triggered when screenshot is required alongside compact element locators. |
+| **`VISUAL_RICH`** | Visual | **Page Screenshot + `RICH` DOM.** Maximum multimodal context. | Triggered by `(layout)` checks or complex visual layout debugging. |
+
+### DOM Serialization Differences: `LEAN` vs `STANDARD` vs `RICH`
+
+To understand how `LEAN`, `STANDARD`, and `RICH` differ at runtime:
+
+```html
+<!-- LEAN DOM Capture (Interactive Elements + Headings + Concise Labels; Excludes Long Paragraph Copy) -->
+<div class="product-card" data-ai="xce869u2">
+  <div class="product-info" data-ai="xc9g93c4">
+    <span class="product-category" selector="span.product-category" data-ai="xc2nupq6">TOPS</span>
+    <h3 class="product-title" selector="h3.product-title" data-ai="xceg4w4t">Minimalist Oversized Hoodie</h3>
+    <p class="product-price" selector="p.product-price" data-ai="xc1j5c6g">$120.00 USD</p>
+    <div class="product-actions" data-ai="xc5f2v4m">
+      <button class="btn-quick-add" type="button" selector="button.btn-quick-add:nth-of-type(1)" data-ai="xce624f1">ADD TO BAG</button>
+    </div>
+  </div>
+</div>
+```
+
+```html
+<!-- STANDARD DOM Capture (LEAN + Full Static Paragraph Copy & Body Text) -->
+<div class="product-card" data-ai="xce869u2">
+  <div class="product-info" data-ai="xc9g93c4">
+    <span class="product-category" selector="span.product-category" data-ai="xc2nupq6">TOPS</span>
+    <h3 class="product-title" selector="h3.product-title" data-ai="xceg4w4t">Minimalist Oversized Hoodie</h3>
+    <p class="product-desc" selector="p.product-desc" data-ai="xch294lm">Minimalist silhouettes engineered with sustainable organic textiles and precision craftsmanship in Berlin.</p>
+    <p class="product-price" selector="p.product-price" data-ai="xc1j5c6g">$120.00 USD</p>
+    <div class="product-actions" data-ai="xc5f2v4m">
+      <button class="btn-quick-add" type="button" selector="button.btn-quick-add:nth-of-type(1)" data-ai="xce624f1">ADD TO BAG</button>
+    </div>
+  </div>
+</div>
+```
+
+```html
+<!-- RICH DOM Capture (STANDARD + data-*, title, aria-describedby + 5-Level Parent Context) -->
+<div class="product-card" data-product-id="prod-101" data-category="tops" data-ai="xce869u2">
+  <div class="product-info" data-ai="xc9g93c4">
+    <span class="product-category" selector="span.product-category" data-ai="xc2nupq6">TOPS</span>
+    <h3 class="product-title" selector="h3.product-title" title="Minimalist Oversized Hoodie - Organic Cotton" data-ai="xceg4w4t">Minimalist Oversized Hoodie</h3>
+    <p class="product-desc" selector="p.product-desc" data-ai="xch294lm">Minimalist silhouettes engineered with sustainable organic textiles and precision craftsmanship in Berlin.</p>
+    <p class="product-price" selector="p.product-price" aria-describedby="price-disclaimer-101" data-ai="xc1j5c6g">$120.00 USD</p>
+    <div class="product-actions" data-ai="xc5f2v4m">
+      <button class="btn-quick-add" type="button" data-analytics="add-cart-top-101" selector="button.btn-quick-add:nth-of-type(1)" data-parent-text="TOPS > Minimalist Oversized Hoodie > $120.00 USD > Size M" data-ai="xce624f1">ADD TO BAG</button>
+    </div>
+  </div>
+</div>
+```
+
+### Automatic Escalation Flow Example
+
+When an action step cannot be fulfilled at the initial context level, the framework automatically escalates to the next level:
+1. **Initial Step**: `"Click 'Add to Cart'"` $\rightarrow$ Starts at **`LEAN`**.
+2. **Escalation 1 (`LEAN` $\rightarrow$ `STANDARD`)**: If text content or paragraph copy is missing from `LEAN`, LLM requests escalation to **`STANDARD`**.
+3. **Escalation 2 (`STANDARD` $\rightarrow$ `RICH`)**: If custom `data-*` attributes or deeper 5-level parent context are required to build a unique locator, escalates to **`RICH`**.
+4. **Escalation 3 (`RICH` $\rightarrow$ `VISUAL`)**: If DOM elements are unrendered or hidden, escalates to **`VISUAL`** (screenshot).
 
 ---
 
