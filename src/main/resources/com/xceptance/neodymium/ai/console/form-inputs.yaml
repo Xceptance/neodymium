@@ -1,0 +1,2 @@
+steps: |
+  Enter '${streetAddress}' into the Street input field.

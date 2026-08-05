@@ -142,4 +142,38 @@ public final class ClasspathResourceManagerTest
         final String resolved = manager.resolveInclude("playbooks/integration/guest-checkout-verla.yaml", "../common/setup.yaml");
         assertEquals("playbooks/common/setup.yaml", resolved);
     }
+
+    /**
+     * Verifies that when reading a package-prefixed path that does not exist in the package folder,
+     * {@link ClasspathResourceManager} successfully falls back to loading the file from the root resources.
+     *
+     * @throws IOException if file operations fail
+     */
+    @Test
+    public void testFallbackToRootResource() throws IOException
+    {
+        final ClasspathResourceManager manager = new ClasspathResourceManager();
+        final String rootIdentifier = "test-temp-fallback-root-resource-delete-me.yaml";
+        final String packagePrefixedIdentifier = "com/example/tests/" + rootIdentifier;
+        final String expectedContent = "key: fallbackValue";
+
+        try
+        {
+            // 1. Write file directly to root resources identifier
+            manager.write(rootIdentifier, expectedContent);
+
+            // 2. Attempt to read via package-prefixed path
+            try (final InputStream in = manager.read(packagePrefixedIdentifier);
+                 final BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8)))
+            {
+                final String result = reader.lines().collect(Collectors.joining("\n"));
+                assertEquals(expectedContent, result);
+            }
+        }
+        finally
+        {
+            // Clean up created test file
+            manager.delete(rootIdentifier);
+        }
+    }
 }

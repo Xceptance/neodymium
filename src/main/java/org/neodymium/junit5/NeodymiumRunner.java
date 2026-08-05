@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.stream.Stream;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
 
 public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 {
@@ -60,8 +62,20 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
     }
 
     @Override
-    public boolean supportsTestTemplate(ExtensionContext context)
+    public boolean supportsTestTemplate(final ExtensionContext context)
     {
+        if (context.getTestMethod().isEmpty())
+        {
+            return false;
+        }
+        final Class<?> testClass = context.getRequiredTestClass();
+        final Method method = context.getRequiredTestMethod();
+        if (testClass.isAnnotationPresent(NeodymiumAiTest.class)
+            || testClass.isAnnotationPresent(AiPlaybook.class)
+            || method.isAnnotationPresent(AiPlaybook.class))
+        {
+            return false;
+        }
         return true;
     }
 

@@ -252,59 +252,72 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             INLINE_PLAYBOOKS.put(key, yamlContent);
             playbookPaths.add(key);
         }
-        else if (methodPlaybook != null && !methodPlaybook.value().isEmpty())
-        {
-            playbookPaths.add(methodPlaybook.value());
-        }
         else
         {
-            if (classPlaybook != null && !classPlaybook.value().isEmpty())
+            final String testFileFilter = com.xceptance.neodymium.util.Neodymium.configuration().getTestFileFilter();
+            if (org.apache.commons.lang3.StringUtils.isNotBlank(testFileFilter))
             {
-                playbookPaths.add(classPlaybook.value());
+                String cleanFilter = testFileFilter.replace("\\.", ".").replaceAll("^\\^\\(|\\)\\$$", "");
+                if (!cleanFilter.endsWith(".yaml") && !cleanFilter.endsWith(".yml"))
+                {
+                    cleanFilter = cleanFilter + ".yaml";
+                }
+                playbookPaths.add(cleanFilter);
+            }
+            else if (methodPlaybook != null && !methodPlaybook.value().isEmpty())
+            {
+                playbookPaths.add(methodPlaybook.value());
             }
             else
             {
-                final NeodymiumAiTest classAiTest = testClass.getAnnotation(NeodymiumAiTest.class);
-                if (classAiTest != null && classAiTest.value().length > 0)
+                if (classPlaybook != null && !classPlaybook.value().isEmpty())
                 {
-                    for (final String path : classAiTest.value())
-                    {
-                        if (path != null && !path.isEmpty())
-                        {
-                            playbookPaths.add(path);
-                        }
-                    }
+                    playbookPaths.add(classPlaybook.value());
                 }
                 else
                 {
-                    org.neodymium.common.testdata.DataFile dataFileClass = testClass.getAnnotation(org.neodymium.common.testdata.DataFile.class);
-                    if (dataFileClass == null)
+                    final NeodymiumAiTest classAiTest = testClass.getAnnotation(NeodymiumAiTest.class);
+                    if (classAiTest != null && classAiTest.value().length > 0)
                     {
-                        final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileClass = testClass.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
-                        if (legacyDataFileClass != null)
+                        for (final String path : classAiTest.value())
                         {
-                            playbookPaths.add(legacyDataFileClass.value());
-                        }
-                    }
-                    else if (!dataFileClass.value().isEmpty())
-                    {
-                        playbookPaths.add(dataFileClass.value());
-                    }
-
-                    if (playbookPaths.isEmpty())
-                    {
-                        org.neodymium.common.testdata.DataFile dataFileMethod = method.getAnnotation(org.neodymium.common.testdata.DataFile.class);
-                        if (dataFileMethod == null)
-                        {
-                            final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileMethod = method.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
-                            if (legacyDataFileMethod != null && !legacyDataFileMethod.value().isEmpty())
+                            if (path != null && !path.isEmpty())
                             {
-                                playbookPaths.add(legacyDataFileMethod.value());
+                                playbookPaths.add(path);
                             }
                         }
-                        else if (!dataFileMethod.value().isEmpty())
+                    }
+                    else
+                    {
+                        org.neodymium.common.testdata.DataFile dataFileClass = testClass.getAnnotation(org.neodymium.common.testdata.DataFile.class);
+                        if (dataFileClass == null)
                         {
-                            playbookPaths.add(dataFileMethod.value());
+                            final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileClass = testClass.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
+                            if (legacyDataFileClass != null)
+                            {
+                                playbookPaths.add(legacyDataFileClass.value());
+                            }
+                        }
+                        else if (!dataFileClass.value().isEmpty())
+                        {
+                            playbookPaths.add(dataFileClass.value());
+                        }
+
+                        if (playbookPaths.isEmpty())
+                        {
+                            org.neodymium.common.testdata.DataFile dataFileMethod = method.getAnnotation(org.neodymium.common.testdata.DataFile.class);
+                            if (dataFileMethod == null)
+                            {
+                                final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileMethod = method.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
+                                if (legacyDataFileMethod != null && !legacyDataFileMethod.value().isEmpty())
+                                {
+                                    playbookPaths.add(legacyDataFileMethod.value());
+                                }
+                            }
+                            else if (!dataFileMethod.value().isEmpty())
+                            {
+                                playbookPaths.add(dataFileMethod.value());
+                            }
                         }
                     }
                 }
@@ -423,9 +436,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    // Relative path from test class package unless it starts with top-level resource folders
+                    // Relative path from test class package unless it contains path separators
                     final String packagePath = testClass.getPackageName().replace('.', '/');
-                    if (path.startsWith(packagePath + "/") || path.startsWith("verla/") || path.startsWith("playbooks/") || path.startsWith("ai-playbooks/"))
+                    if (path.startsWith(packagePath + "/") || path.contains("/"))
                     {
                         resolvedPaths.add(path);
                     }
@@ -477,14 +490,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             else
             {
+                final String globalTestIdFilter = com.xceptance.neodymium.util.Neodymium.configuration().getTestIdFilter();
+                final java.util.regex.Pattern globalTestIdPattern = org.apache.commons.lang3.StringUtils.isNotBlank(globalTestIdFilter)
+                        ? java.util.regex.Pattern.compile(globalTestIdFilter)
+                        : null;
+
+                int dsIndex = 1;
                 for (final Map<String, SessionData.DataEntry> ds : allDataSets)
                 {
-                    final String dsId = getDataSetId(ds);
+                    String dsId = getDataSetId(ds);
+                    if (dsId == null)
+                    {
+                        dsId = String.valueOf(dsIndex);
+                    }
                     boolean legacyMatch = (legacyDsIdFilter == null) || legacyDsIdFilter.equalsIgnoreCase(dsId);
-                    if (legacyMatch && shouldIncludeDataSet(dsId, datasetFilters))
+                    boolean globalMatch = (globalTestIdPattern == null) || globalTestIdPattern.matcher(dsId).find();
+                    if (legacyMatch && globalMatch && shouldIncludeDataSet(dsId, datasetFilters))
                     {
                         filteredDataSets.add(ds);
                     }
+                    dsIndex++;
                 }
             }
 
@@ -798,15 +823,41 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    final String msg = String.format(
-                        "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
-                        this.mode,
-                        testClass != null ? testClass.getSimpleName() : "UnknownClass",
-                        method != null ? method.getName() : "unknownMethod",
-                        String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
-                    );
-                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
-                    throw new java.io.FileNotFoundException(msg);
+                    boolean yamlExists = false;
+                    try (final java.io.InputStream in = manager.read(playbookPath))
+                    {
+                        if (in != null)
+                        {
+                            yamlExists = true;
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+
+                    if (yamlExists)
+                    {
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn(
+                            "⚠️ [Mode Fallback] Replay mode '{}' requested for test '{}.{}', but no recorded companion JSON file was found. Falling back to original YAML playbook '{}'.",
+                            this.mode,
+                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                            method != null ? method.getName() : "unknownMethod",
+                            playbookPath
+                        );
+                        resolvedPlaybookPath = playbookPath;
+                    }
+                    else
+                    {
+                        final String msg = String.format(
+                            "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
+                            this.mode,
+                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                            method != null ? method.getName() : "unknownMethod",
+                            String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
+                        );
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
+                        throw new java.io.FileNotFoundException(msg);
+                    }
                 }
             }
             else if (this.mode.isLive())

@@ -64,6 +64,18 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
         {
             in = classLoader.getResourceAsStream("ai-playbooks/" + normalized);
         }
+        if (in == null && normalized != null && normalized.contains("/"))
+        {
+            final String fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+            if (!fileName.isEmpty())
+            {
+                in = classLoader.getResourceAsStream(fileName);
+                if (in == null && !fileName.startsWith("ai-playbooks/"))
+                {
+                    in = classLoader.getResourceAsStream("ai-playbooks/" + fileName);
+                }
+            }
+        }
         if (in != null)
         {
             return in;
