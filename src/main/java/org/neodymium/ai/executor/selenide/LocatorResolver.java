@@ -125,11 +125,28 @@ public final class LocatorResolver
             {
                 return isExact ? Selectors.byText(textVal) : Selectors.withText(textVal);
             }
+            String xpathTag = "*";
+            String classOrIdCondition = "";
+            if (tag.startsWith("."))
+            {
+                final String className = tag.substring(1).trim();
+                classOrIdCondition = " and contains(concat(' ', normalize-space(@class), ' '), ' " + className + " ')";
+            }
+            else if (tag.startsWith("#"))
+            {
+                final String idName = tag.substring(1).trim();
+                classOrIdCondition = " and @id=" + escapeXpath(idName);
+            }
+            else if (tag.matches("^[a-zA-Z0-9_-]+$"))
+            {
+                xpathTag = tag;
+            }
+
             if (isExact)
             {
-                return By.xpath("//" + tag + "[normalize-space(.)=" + escapeXpath(textVal) + " or normalize-space(text())=" + escapeXpath(textVal) + "]");
+                return By.xpath("//" + xpathTag + "[(normalize-space(.)=" + escapeXpath(textVal) + " or normalize-space(text())=" + escapeXpath(textVal) + ")" + classOrIdCondition + "]");
             }
-            return By.xpath("//" + tag + "[contains(normalize-space(.), " + escapeXpath(textVal) + ")]");
+            return By.xpath("//" + xpathTag + "[contains(normalize-space(.), " + escapeXpath(textVal) + ")" + classOrIdCondition + "]");
         }
 
         // 5. Explicit Shadow DOM targets (e.g. host-el ::shadow button)

@@ -108,7 +108,7 @@ public class PageAnalyzer
      * (null means hidden for non-fixed/non-body elements) and getComputedStyle as
      * fallback.
      */
-    private static final String CAPTURE_SCRIPT = """
+    static final String CAPTURE_SCRIPT = """
             return (function(level, includesText, volatilePatterns) {
                 // Configuration constants to prevent payload bloat
                 var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
@@ -271,8 +271,7 @@ public class PageAnalyzer
                         if (typeof CSS !== 'undefined' && CSS.escape) {
                             return CSS.escape(str);
                         }
-                        // Fallback escaping mechanism for older or non-standard browser contexts
-                        return str.replace(/([!"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])/g, '\\\\$1');
+                        return str;
                     }
 
                     // Step 1: Check for unique immediate attributes (ID or Name) to keep selectors minimal
@@ -286,7 +285,7 @@ public class PageAnalyzer
                     var tag = el.tagName.toLowerCase();
                     var name = el.getAttribute('name');
                     if (name) {
-                        var nameSel = tag + "[name='" + name.replace(/'/g, "\\\\'") + "']";
+                        var nameSel = tag + "[name='" + name.replaceAll("'", "\\\\'") + "']";
                         if (isUnique(nameSel)) {
                             return nameSel;
                         }
@@ -322,7 +321,7 @@ public class PageAnalyzer
                         var className = current.className;
                         if (typeof className === 'string' && className.trim()) {
                             // Split by whitespace to extract individual class names
-                            var classes = className.trim().split(/\\s+/).filter(Boolean);
+                            var classes = className.trim().split(new RegExp('\\s+')).filter(Boolean);
                             if (classes.length > 0) {
                                 segment += '.' + classes.map(escapeIdentifier).join('.');
                             }
@@ -367,7 +366,7 @@ public class PageAnalyzer
                             if (!isVisible(el)) continue;
 
                             var autoId = assignId(el);
-                            var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                            var text = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
                             var options = null;
                             // Format select dropdown options neatly
                             if (el.tagName.toLowerCase() === 'select') {
@@ -424,10 +423,8 @@ public class PageAnalyzer
                             var style = window.getComputedStyle(el);
                             // A custom element is considered clickable if it has pointer cursor, onclick attribute, or onclick handler
                             var isClickable = style.cursor === 'pointer' || el.hasAttribute('onclick') || typeof el.onclick === 'function';
-                            if (!isClickable) continue;
-
-                            var autoId = assignId(el);
-                            var text = (el.innerText || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                            if (!isClickable) continue;                            var autoId = assignId(el);
+                            var text = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
                             var options = null;
                             if (el.tagName && el.tagName.toLowerCase() === 'select') {
                                 options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
@@ -541,75 +538,173 @@ public class PageAnalyzer
                     var elObj = interactiveElements[i];
                     var lbl = getDisplayLabel(elObj);
                     if (lbl && textCounts[lbl] > 1 && elObj.domElement) {
-                        // If multiple elements share the same label on this page, resolve a local parent text
-                        // block (e.g. card name, list item, or table cell) to disambiguate them.
                         var parentText = '';
                         var p = elObj.domElement.parentElement;
                         var depth = 0;
-
-                        // Cap parent traversal to 3 levels to guarantee context remains local to the component (e.g. card/grid cell)
                         while (p && p !== document.body && depth < 3) {
                             var tag = p.tagName.toLowerCase();
                             var role = p.getAttribute('role') || '';
                             var cls = (typeof p.className === 'string' ? p.className : '').toLowerCase();
                             var id = (p.id || '').toLowerCase();
-
-                            // Heuristic 1: Stop climbing if we reach major HTML5 semantic landmarks
-                            if (tag === 'header' || tag === 'footer' || tag === 'nav' || tag === 'aside') {
-                                break;
-                            }
-                            // Heuristic 2: Stop climbing if we hit standard global ARIA landmark roles
-                            if (role === 'banner' || role === 'navigation' || role === 'contentinfo' || role === 'complementary') {
-                                break;
-                            }
-                            // Heuristic 3: Stop climbing at typical layout containers (generic class/ID names)
+                            if (tag === 'header' || tag === 'footer' || tag === 'nav' || tag === 'aside') break;
+                            if (role === 'banner' || role === 'navigation' || role === 'contentinfo' || role === 'complementary') break;
                             if (cls.includes('navbar') || cls.includes('header') || cls.includes('footer') ||
-                                id.includes('navbar') || id.includes('header') || id.includes('footer')) {
-                                break;
-                            }
-
+                                id.includes('navbar') || id.includes('header') || id.includes('footer')) break;
                             var pText = (p.innerText || '').trim();
-                            // Only capture context if it's descriptive (longer than the label itself) but compact (< 300 chars)
                             if (pText.length > lbl.length && pText.length < 300) {
                                 parentText = pText;
                                 break;
                             }
-                            // Prevent pulling in massive generic containers
-                            if (pText.length >= 300) {
-                                break;
-                            }
+                            if (pText.length >= 300) break;
                             p = p.parentElement;
                             depth++;
                         }
                         if (parentText) {
-                            elObj.parentText = truncate(parentText.replace(/\\s*\\n\\s*/g, ' | '), MAX_TEXT);
+                            elObj.parentText = truncate(parentText.replace(new RegExp('\\s*\\n\\s*', 'g'), ' | '), MAX_TEXT);
+                            if (elObj.domElement && typeof elObj.domElement.setAttribute === 'function') {
+                                elObj.domElement.setAttribute('data-parent-text', elObj.parentText);
+                            }
                         }
                     }
-                    delete elObj.domElement; // Remove reference to allow browser garbage collection
+                    delete elObj.domElement;
                 }
 
-                // LEVEL 1 (LEAN Mode): Capture all compiled interactive elements and page structure headings
-                if (level >= 1) {
-                    sections.push({heading: '=== Interactive Elements ===', elements: interactiveElements});
+                // Pre-stamp headings and text content in exact original sequence
+                captureElements('h1', 'heading')
+                    .concat(captureElements('h2', 'heading'))
+                    .concat(captureElements('h3', 'heading'))
+                    .concat(captureElements('h4', 'heading'))
+                    .concat(captureElements('h5', 'heading'));
 
-                    // Capture semantic headings to help the LLM structure the page logically
-                    sections.push({heading: '\\n=== Page Structure ===', elements:
-                        captureElements('h1', 'heading')
-                        .concat(captureElements('h2', 'heading'))
-                        .concat(captureElements('h3', 'heading'))
-                        .concat(captureElements('h4', 'heading'))
-                        .concat(captureElements('h5', 'heading'))
-                    });
-                }
-                // LEVEL 2 (STANDARD Mode): Capture visible paragraph and plain text contents for full validation
-                if (includesText) {
-                    sections.push({heading: '\\n=== Text Content (Validation Mode) ===', elements:
-                        captureElements('p, span, li, td, div', 'text')
-                        .filter(function(e) { return e.text.length > 0; })
-                    });
+
+                // Helper to test if element is interactive
+                function isInteractive(el) {
+                    if (!el || !el.tagName) return false;
+                    var tag = el.tagName.toLowerCase();
+                    if (['a', 'button', 'input', 'select', 'textarea', 'option', 'label'].indexOf(tag) !== -1) return true;
+                    if (el.hasAttribute('onclick') || typeof el.onclick === 'function') return true;
+                    if (el.hasAttribute('tabindex') || el.hasAttribute('contenteditable')) return true;
+                    var role = el.getAttribute('role') || '';
+                    if (['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'combobox'].indexOf(role) !== -1) return true;
+                    var id = el.id ? el.id.toLowerCase() : '';
+                    var cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+                    if (id.includes('btn') || id.includes('button') || id.includes('click') || id.includes('nav') || id.includes('cart') || id.includes('trigger') ||
+                        cls.includes('btn') || cls.includes('button') || cls.includes('click') || cls.includes('nav') || cls.includes('cart') || cls.includes('trigger')) return true;
+                    var style = window.getComputedStyle(el);
+                    if (style.cursor === 'pointer' && !el.closest('a')) return true;
+                    return false;
                 }
 
-                return {sections: sections, forms: level >= 1 ? captureForms() : []};
+                // Recursive Structural DOM Tree Traversal
+                function buildNodeTree(el) {
+                    if (!el || !isVisible(el)) return null;
+                    var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                    if (['script', 'style', 'svg', 'noscript', 'meta', 'link', 'head'].indexOf(tag) !== -1) return null;
+                    if (el.closest && el.closest('.neodymium-ai-hud')) return null;
+
+                    var isInter = isInteractive(el);
+                    var isHead = ['h1','h2','h3','h4','h5','h6'].indexOf(tag) !== -1;
+                    var isStandardLeaf = ['a', 'button', 'input', 'select', 'textarea', 'option', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].indexOf(tag) !== -1;
+                    var isCustomLeaf = (isInter || isHead) && el.children.length === 0;
+
+                    // 1. Leaf interactive or heading element (Atomic)
+                    if (isStandardLeaf || isCustomLeaf) {
+                        var autoId = assignId(el);
+                        var text = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
+                        var options = null;
+                        if (tag === 'select') {
+                            options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
+                            if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
+                        }
+                        return {
+                            nodeType: 'leaf',
+                            tagName: tag,
+                            className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
+                            text: text.length <= MAX_TEXT ? text : '',
+                            id: el.id || null,
+                            name: el.getAttribute('name'),
+                            href: truncate(el.getAttribute('href'), MAX_HREF),
+                            type: el.getAttribute('type'),
+                            role: el.getAttribute('role'),
+                            checked: isChecked(el) ? 'true' : null,
+                            placeholder: el.getAttribute('placeholder'),
+                            ariaLabel: el.getAttribute('aria-label'),
+                            value: getElementValue(el, tag),
+                            options: options,
+                            selector: generateSelector(el),
+                            automationId: autoId,
+                            parentText: el.getAttribute('data-parent-text') || null
+                        };
+                    }
+
+                    var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol'].indexOf(tag) !== -1;
+                    var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0));
+                    var isDivContainer = (tag === 'div' || tag === 'li') && hasClassOrId;
+
+                    var children = [];
+                    var childNodes = Array.from(el.children);
+                    for (var i = 0; i < childNodes.length; i++) {
+                        var childRes = buildNodeTree(childNodes[i]);
+                        if (childRes) {
+                            if (Array.isArray(childRes)) {
+                                children = children.concat(childRes);
+                            } else {
+                                children.push(childRes);
+                            }
+                        }
+                    }
+
+                    // 2. Container node with extracted children
+                    if ((isContainerTag || isDivContainer) && children.length > 0) {
+                        var autoIdContainer = assignId(el);
+                        return {
+                            nodeType: 'container',
+                            tagName: tag,
+                            id: el.id || null,
+                            className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
+                            name: el.getAttribute('name'),
+                            role: el.getAttribute('role'),
+                            ariaLabel: el.getAttribute('aria-label'),
+                            parentText: el.getAttribute('data-parent-text') || null,
+                            automationId: autoIdContainer,
+                            children: children
+                        };
+                    }
+
+                    // 3. Text leaf element (paragraphs, spans, table cells, or divs with text)
+                    var textContent = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
+                    if (textContent.length > 0 && textContent.length <= MAX_TEXT && children.length === 0) {
+                        var autoId = assignId(el);
+                        return {
+                            nodeType: 'leaf',
+                            tagName: tag,
+                            className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
+                            text: textContent,
+                            id: el.id || null,
+                            selector: generateSelector(el),
+                            automationId: autoId
+                        };
+                    }
+
+                    // 4. Collapse transparent wrapper divs/spans having children
+                    if (children.length > 0) {
+                        return children;
+                    }
+
+                    return null;
+                }
+
+                var tree = buildNodeTree(document.body);
+                var rootNodes = [];
+                if (tree) {
+                    if (Array.isArray(tree)) {
+                        rootNodes = tree;
+                    } else {
+                        rootNodes = [tree];
+                    }
+                }
+
+                return {tree: rootNodes, forms: level >= 1 ? captureForms() : []};
             })(arguments[0], arguments[1]);
             """;
 
@@ -946,25 +1041,16 @@ public class PageAnalyzer
             final Map<String, Object> data = (Map<String, Object>) js
                     .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(),
                             this.volatileIdDetector.getPatterns().stream().map(java.util.regex.Pattern::pattern).toList());
-            // Render element sections
-            final List<Map<String, Object>> sections = (List<Map<String, Object>>) data.get("sections");
-            if (sections != null) {
-                for (final Map<String, Object> section : sections) {
-                    final List<Map<String, Object>> elements = (List<Map<String, Object>>) section.get("elements");
-                    if (elements != null && !elements.isEmpty()) {
-                        if (showFrameId) {
-                            dom.append(section.get("heading")).append(" (Frame: ").append(frameId).append(")\n");
-                        } else {
-                            dom.append(section.get("heading")).append("\n");
-                        }
-                        for (final Map<String, Object> el : elements) {
-                            if (showFrameId) {
-                                el.put("frameId", frameId);
-                            }
-                            dom.append("  ");
-                            formatElement(dom, el);
-                        }
-                    }
+            // Render element tree
+            final List<Map<String, Object>> tree = (List<Map<String, Object>>) data.get("tree");
+            if (tree != null && !tree.isEmpty()) {
+                if (showFrameId) {
+                    dom.append("=== Structural DOM Tree (Frame: ").append(frameId).append(") ===\n");
+                } else {
+                    dom.append("=== Structural DOM Tree ===\n");
+                }
+                for (final Map<String, Object> node : tree) {
+                    formatElementNode(dom, node, 0, showFrameId, frameId);
                 }
             }
 
@@ -979,10 +1065,10 @@ public class PageAnalyzer
                             var el = arguments[0];
                             function escapeId(str) {
                               if (typeof CSS !== 'undefined' && CSS.escape) { return CSS.escape(str); }
-                              return str.replace(/([!"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])/g, '\\\\$1');
+                              return str;
                             }
                             function escapeAttr(str) {
-                              return str.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'");
+                              return (str || '').replaceAll("'", "\\\\'");
                             }
                             if (el.id) { return '#' + escapeId(el.id); }
                             if (el.name) { return el.tagName.toLowerCase() + "[name='" + escapeAttr(el.name) + "']"; }
@@ -1074,6 +1160,60 @@ public class PageAnalyzer
     }
 
     private final VolatileIdDetector volatileIdDetector = new VolatileIdDetector();
+
+    /**
+     * Formats a single node in the compact structural tree into the output string builder,
+     * maintaining 2-space indentation depth and container tags (<header>, <main>, <article>, etc.).
+     */
+    @SuppressWarnings("unchecked")
+    private void formatElementNode(final StringBuilder dom, final Map<String, Object> node, final int depth, final boolean showFrameId, final String frameId)
+    {
+        if (node == null)
+        {
+            return;
+        }
+
+        final String indent = "  ".repeat(depth);
+        final String nodeType = (String) node.get("nodeType");
+
+        if ("container".equals(nodeType))
+        {
+            final String tag = (String) node.get("tagName");
+            dom.append(indent).append("<").append(tag);
+            final Object rawId = node.get("id");
+            if (rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString()))
+            {
+                appendAttribute(dom, "id", rawId);
+            }
+            appendAttribute(dom, "class", node.get("className"));
+            appendAttribute(dom, "name", node.get("name"));
+            appendAttribute(dom, "role", node.get("role"));
+            appendAttribute(dom, "aria-label", node.get("ariaLabel"));
+            appendAttribute(dom, "parentText", node.get("parentText"));
+            appendAttribute(dom, "data-ai", node.get("automationId"));
+            dom.append(">\n");
+
+            final List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("children");
+            if (children != null)
+            {
+                for (final Map<String, Object> child : children)
+                {
+                    formatElementNode(dom, child, depth + 1, showFrameId, frameId);
+                }
+            }
+
+            dom.append(indent).append("</").append(tag).append(">\n");
+        }
+        else if ("leaf".equals(nodeType))
+        {
+            if (showFrameId)
+            {
+                node.put("frameId", frameId);
+            }
+            dom.append(indent);
+            formatElement(dom, node);
+        }
+    }
 
     /**
      * Formats a single element map into the output string builder. Produces the

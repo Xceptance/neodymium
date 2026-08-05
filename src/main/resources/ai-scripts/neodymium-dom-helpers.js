@@ -55,13 +55,24 @@ function getFrameworkComponent(el) {
  * Checks whether an element ID is auto-generated or volatile.
  */
 function isVolatileId(id) {
-    if (!id) return false;
+    if (!id || typeof id !== 'string') return false;
     if (/^(v-btn|v-node|react-div|react|ember|aria)-\d+$/i.test(id)) return true;
     if (/[_-]\d{4,}$/.test(id)) return true;
     if (typeof volatilePatterns !== 'undefined' && Array.isArray(volatilePatterns)) {
         for (var i = 0; i < volatilePatterns.length; i++) {
             try {
-                if (new RegExp(volatilePatterns[i]).test(id)) return true;
+                var pat = volatilePatterns[i];
+                if (pat && typeof pat === 'string' && pat.trim().length > 0) {
+                    var pStr = pat.trim();
+                    if (pStr.startsWith('/') && pStr.lastIndexOf('/') > 0) {
+                        var lastSlash = pStr.lastIndexOf('/');
+                        var body = pStr.substring(1, lastSlash);
+                        var flags = pStr.substring(lastSlash + 1);
+                        if (new RegExp(body, flags).test(id)) return true;
+                    } else {
+                        if (new RegExp(pStr).test(id)) return true;
+                    }
+                }
             } catch (e) {}
         }
     }
@@ -100,10 +111,10 @@ function getAncestorPath(el) {
     while (curr && curr.tagName && depth < 3) {
         var tag = curr.tagName.toLowerCase();
         if (tag === 'body' || tag === 'html') break;
-        var cls = (typeof curr.className === 'string' ? curr.className : '').trim().replace(/\s+/g, ' ');
+        var cls = (typeof curr.className === 'string' ? curr.className : '').trim().replace(new RegExp('\\s+', 'g'), ' ');
         if (cls) {
-            cls = cls.replace(/__[a-zA-Z0-9_-]{5,8}\b/g, '');
-            cls = cls.replace(/\b(is-active|active|is-open|open|hovered|focused|loading|disabled|collapsed|show|expanded|checked|hydrated)\b/g, '').trim().split(/\s+/)[0] || '';
+            cls = cls.replace(new RegExp('__[a-zA-Z0-9_-]{5,8}\\b', 'g'), '');
+            cls = cls.replace(new RegExp('\\b(is-active|active|is-open|open|hovered|focused|loading|disabled|collapsed|show|expanded|checked|hydrated)\\b', 'g'), '').trim().split(new RegExp('\\s+'))[0] || '';
         }
         parts.push(tag + (cls ? '.' + cls : ''));
         curr = curr.parentElement;
@@ -126,12 +137,12 @@ function fingerprint(el) {
     var testId = el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa') || el.getAttribute('data-cy') || '';
 
     // Normalize CSS classes to remove transient and dynamic segments
-    var cls = (typeof el.className === 'string' ? el.className : '').trim().replace(/\s+/g, ' ');
+    var cls = (typeof el.className === 'string' ? el.className : '').trim().replace(new RegExp('\\s+', 'g'), ' ');
     if (cls) {
         // Strip build-specific CSS Module hashes (e.g., '__1a2b3c') to keep classes stable across builds
-        cls = cls.replace(/__[a-zA-Z0-9_-]{5,8}\b/g, '');
+        cls = cls.replace(new RegExp('__[a-zA-Z0-9_-]{5,8}\\b', 'g'), '');
         // Strip transient interaction/state-dependent classes to keep hashes stable across active element states
-        cls = cls.replace(/\b(is-active|active|is-open|open|hovered|focused|loading|disabled|collapsed|show|expanded|checked)\b/g, '').trim().replace(/\s+/g, ' ');
+        cls = cls.replace(new RegExp('\\b(is-active|active|is-open|open|hovered|focused|loading|disabled|collapsed|show|expanded|checked)\\b', 'g'), '').trim().replace(new RegExp('\\s+', 'g'), ' ');
     }
     var path = getAncestorPath(el);
     var idx = getElementIndex(el);

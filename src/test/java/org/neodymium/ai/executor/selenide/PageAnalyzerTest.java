@@ -19,6 +19,7 @@
 package org.neodymium.ai.executor.selenide;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -44,5 +45,25 @@ public class PageAnalyzerTest
         final PageAnalyzer analyzer = new PageAnalyzer();
         final String dom = analyzer.captureSimplifiedDom(ContextLevel.AXTREE, null);
         assertNotNull(dom);
+    }
+
+    @Test
+    public void testVerlaDomCaptureOutput() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/verla-perfect/index.html");
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+            final String dom = analyzer.captureSimplifiedDom(ContextLevel.LEAN);
+            assertNotNull(dom);
+            assertTrue(dom.length() > 500);
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
     }
 }
