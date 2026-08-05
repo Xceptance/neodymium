@@ -787,7 +787,7 @@ public final class StorefrontPatcher
                 "\n" +
                 "                fetch('../index.html')\n" +
                 "                    .then(() => {\n" +
-                "                        const delay = Math.floor(Math.random() * 901) + 300;\n" +
+                "                        const delay = 300;\n" +
                 "                        setTimeout(() => {\n" +
                 "                            const card = btn.closest('.product-card, .item-box, .product-card-bad');\n" +
                 "                            if (card) {\n" +
@@ -1055,7 +1055,7 @@ public final class StorefrontPatcher
                 "            // --- 6. Global Delayed Navigation Interceptor ---\n" +
                 "            document.addEventListener('click', (e) => {\n" +
                 "                const anchor = e.target.closest('a') || e.target.closest('.x-nav-clickable') || (e.target.getAttribute('onclick')?.includes('location.href') ? e.target : null);\n" +
-                "                if (anchor) {\n" +
+"                if (anchor) {\n" +
                 "                    let url = anchor.getAttribute('href') || anchor.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];\n" +
                 "                    if (url && !url.includes('#') && !anchor.getAttribute('target') && !url.startsWith('javascript:')) {\n" +
                 "                        // Make sure to resolve the relative URL\n" +
@@ -1063,7 +1063,7 @@ public final class StorefrontPatcher
                 "                        e.stopPropagation();\n" +
                 "                        const loader = document.getElementById('global-page-loader');\n" +
                 "                        if (loader) loader.style.display = 'flex';\n" +
-                "                        const delay = Math.floor(Math.random() * (1200 - 300 + 1)) + 300;\n" +
+                "                        const delay = 300;\n" +
                 "                        setTimeout(() => {\n" +
                 "                            window.location.href = url;\n" +
                 "                        }, delay);\n" +

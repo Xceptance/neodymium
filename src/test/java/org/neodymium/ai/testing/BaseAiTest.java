@@ -93,6 +93,8 @@ public abstract class BaseAiTest extends BaseLlmTest
     public void setupPageUrl(final TestInfo testInfo)
     {
         this.testInfo = testInfo;
+        EmbeddedHtmlServer.resetInventory();
+
         final String className = testInfo.getTestClass().get().getSimpleName();
         final String methodName = testInfo.getTestMethod().get().getName();
         

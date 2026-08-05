@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -271,6 +272,7 @@ public final class EmbeddedHtmlServer
     private static final List<Product> catalogProducts = new ArrayList<>();
     private static final Map<String, Map<String, Integer>> productInventory = new ConcurrentHashMap<>();
     private static final Map<String, Country> countriesMap = new HashMap<>();
+    private static final Random SEEDED_RANDOM = new Random(42L);
 
     static
     {
@@ -281,6 +283,25 @@ public final class EmbeddedHtmlServer
         usersDb.put(defaultUser.email, defaultUser);
         
         loadCatalogData();
+    }
+
+    /**
+     * Resets product inventory levels to initial values, resets seeded random, and clears active carts/orders.
+     */
+    public static void resetInventory()
+    {
+        SEEDED_RANDOM.setSeed(42L);
+        productInventory.clear();
+        for (final Product p : catalogProducts)
+        {
+            if (p.initialStock != null)
+            {
+                productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
+            }
+        }
+        activeCarts.clear();
+        ordersDb.clear();
+        LOG.info("VÉRLA Product inventory, carts, and random seed reset to initial state.");
     }
 
     /**
@@ -1416,11 +1437,10 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("checkout/purchase".equals(apiMethod))
                 {
-                    // Simulate server response time of 1 to 4 seconds
+                    // Simulate server response time deterministically
                     try
                     {
-                        final long delay = 1000 + (long) (Math.random() * 3000);
-                        Thread.sleep(delay);
+                        Thread.sleep(50L);
                     }
                     catch (final InterruptedException e)
                     {
@@ -1488,7 +1508,8 @@ public final class EmbeddedHtmlServer
                     final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
                     final double total = subtotal - discount + shipping + tax;
                     
-                    final String orderNum = "V-" + (int)(Math.random()*900000 + 100000) + "-" + activeCountry.code;
+                    final int orderRand = 100000 + SEEDED_RANDOM.nextInt(900000);
+                    final String orderNum = "V-" + orderRand + "-" + activeCountry.code;
                     final Address shippingAddr = new Address("addr-order", street, city, state, postcode, country);
                     final Card paymentCard = new Card("card-order", cardNumber, cardType, cardExpiry, cardCvv);
                     final boolean giftAdded = "freegift".equals(cart.coupon);
@@ -2205,7 +2226,7 @@ public final class EmbeddedHtmlServer
 
     private static String getDynamicId(final String prefix)
     {
-        final int rand = (int) (Math.random() * 900000) + 100000;
+        final int rand = 100000 + SEEDED_RANDOM.nextInt(900000);
         return prefix + "-" + rand;
     }
 

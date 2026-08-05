@@ -22,7 +22,6 @@ import static com.codeborne.selenide.Condition.text;
 import static com.codeborne.selenide.Selenide.$;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
@@ -33,6 +32,7 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -64,6 +64,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @BeforeEach
     public void setup()
     {
+        EmbeddedHtmlServer.resetInventory();
         // Resolve dynamic server port for the test execution
         Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
     }
@@ -251,7 +252,6 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Live mode execution running with all datasets defined in the playbook.
      */
-    @Disabled
     @Order(16)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
@@ -263,12 +263,22 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Strict replay mode execution running with all datasets defined in the playbook.
      */
-    @Disabled
     @Order(17)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
     public void testCheckoutReplayAllDataSets()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
+     * Healing replay mode execution running with all datasets defined in the playbook.
+     */
+    @Order(17)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
+    public void testCheckoutHealAllDataSets()
+    {
+        $("body").shouldHave(text("Thank you for your purchase!"));
     }
 }
