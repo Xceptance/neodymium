@@ -70,7 +70,7 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
             context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
                 ? cl
-                : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
         final org.neodymium.ai.executor.selenide.ContextLevel nextLevel = activeLevel.escalate();
 
         final StringBuilder sb = new StringBuilder();
@@ -161,7 +161,7 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                     final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
                         context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
                             ? cl
-                            : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                            : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
                     final String nextLevelStr = activeLevel.escalate().name();
                     throw new org.neodymium.ai.pipeline.ToLevelEscalationException(
                         "Extracted target selector '" + target + "' uses an invalid volatile ID. Escalating context level.",

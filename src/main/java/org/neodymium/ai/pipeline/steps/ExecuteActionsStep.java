@@ -510,7 +510,7 @@ public final class ExecuteActionsStep implements PipelineStep
             final Set<PlaybookStep> alreadySplitSteps = (Set<PlaybookStep>) contextState.getTransientData()
                 .computeIfAbsent("pesap.alreadySplitSteps", k -> new HashSet<>());
 
-            org.neodymium.ai.executor.selenide.ContextLevel initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+            org.neodymium.ai.executor.selenide.ContextLevel initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
             final String lower = resolvedInstruction.toLowerCase();
             if (lower.contains("(visual)"))
             {
@@ -851,7 +851,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 // Live mode: Query LLM for actions
                 final boolean verificationEnabled = org.neodymium.ai.config.AiConfiguration.getInstance().isSemanticVerificationEnabled();
                 final org.neodymium.ai.executor.selenide.ContextLevel captureLevel;
-                if (verificationEnabled && initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.LEAN)
+                if (verificationEnabled && (initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL || initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.LEAN))
                 {
                     captureLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
                 }
@@ -902,7 +902,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
                         c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
                             ? cl
-                            : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                            : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
                     final org.neodymium.ai.executor.selenide.ContextLevel escalatedLevel = activeLevel.escalate();
                     c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, escalatedLevel);
                     org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("⚠️ Context escalated on action execution failure to: {}", escalatedLevel);
@@ -930,7 +930,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 handlers.put(org.neodymium.ai.pipeline.ToLevelEscalationException.class, c -> {
                     final org.neodymium.ai.pipeline.ToLevelEscalationException e = (org.neodymium.ai.pipeline.ToLevelEscalationException) c.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
                     final String targetLevelStr = e.getTargetLevel();
-                    org.neodymium.ai.executor.selenide.ContextLevel targetLevel = org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                    org.neodymium.ai.executor.selenide.ContextLevel targetLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
                     try
                     {
                         targetLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(targetLevelStr.toUpperCase());

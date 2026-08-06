@@ -2,7 +2,8 @@ Predict minimal context level and metadata for the current step.
 
 ## Context Levels
 - HINT: Explicit locator provided (hint: .selector).
-- LEAN: Default for standard clicks/types (interactive elements + headings + container skeleton).
+- MINIMAL: Ultra-compact default for standard clicks/types (interactive controls + form containers only).
+- LEAN: Includes structural layout wrappers and component skeletons.
 - STANDARD: Standard static text nodes and paragraph checks.
 - RICH: Enhanced DOM with all data-*/aria-* attributes and deep parent context.
 - VISUAL: Pure visual check/assertion without element interaction (0 DOM elements + screenshot).
@@ -12,7 +13,7 @@ Predict minimal context level and metadata for the current step.
 ## Output Format
 Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 {
-  "c": "HINT|LEAN|STANDARD|RICH|VISUAL|VISUAL_LEAN|VISUAL_RICH",
+  "c": "HINT|MINIMAL|LEAN|STANDARD|RICH|VISUAL|VISUAL_LEAN|VISUAL_RICH",
   "jm": true|false,
   "sp": ["step 1", "step 2"] // Omit if unsplit
 }
@@ -25,7 +26,8 @@ Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
    - (layout/rich visual) -> VISUAL_RICH
    - Complex data/table validation -> RICH
    - Text validation -> STANDARD
-   - Default -> LEAN
+   - Structural container / component boundary target -> LEAN
+   - Default -> MINIMAL
 2. Escalation Carryover: If [PREVIOUS] step escalated/failed, upgrade [CURRENT] step context level accordingly.
 3. Java Method ('jm'): Set true ONLY if an explicit custom Java method name (e.g. assertCalculation) is specified; false for natural language descriptions.
 4. Step Splitting ('sp'):

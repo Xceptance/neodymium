@@ -109,7 +109,7 @@ public class PageAnalyzer
      * fallback.
      */
     static final String CAPTURE_SCRIPT = """
-            return (function(level, includesText, includesRich, volatilePatterns) {
+            return (function(level, includesText, includesRich, isMinimal, volatilePatterns) {
                 // Configuration constants to prevent payload bloat
                 var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
                 var MAX_TEXT = 200;         // Max characters captured for element text labels
@@ -655,7 +655,9 @@ public class PageAnalyzer
                     }
 
                     // 2. Container node with extracted children
-                    if ((isContainerTag || isDivContainer) && children.length > 0) {
+                    var isFormContainer = tag === 'form' || tag === 'fieldset';
+                    var allowContainer = !isMinimal || isFormContainer;
+                    if (allowContainer && (isContainerTag || isDivContainer) && children.length > 0) {
                         var autoIdContainer = assignId(el);
                         return {
                             nodeType: 'container',
@@ -676,7 +678,7 @@ public class PageAnalyzer
                     var isInlineWrapper = children.length > 0 && children.every(function(c) {
                         return c && (c.nodeType === 'leaf' || Array.isArray(c)) && ['span','b','strong','i','em','small','code','a'].indexOf(c.tagName || (c[0] && c[0].tagName)) !== -1;
                     });
-                    if (textContent.length > 0 && textContent.length <= MAX_TEXT && (children.length === 0 || isInlineWrapper)) {
+                    if (!isMinimal && textContent.length > 0 && textContent.length <= MAX_TEXT && (children.length === 0 || isInlineWrapper)) {
                         // In LEAN mode (!includesText), filter out massive paragraph copy (> 120 chars)
                         if (!includesText) {
                             if ((tag === 'p' || tag === 'blockquote') && textContent.length > 120) {
@@ -905,7 +907,7 @@ public class PageAnalyzer
      * @return simplified DOM as a structured text
      */
     public String captureSimplifiedDom() {
-        return captureSimplifiedDom(ContextLevel.LEAN);
+        return captureSimplifiedDom(ContextLevel.MINIMAL);
     }
 
     /**
@@ -920,7 +922,7 @@ public class PageAnalyzer
      */
     @Deprecated
     public String captureSimplifiedDom(final boolean forValidation) {
-        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.LEAN);
+        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.MINIMAL);
     }
 
     /**
@@ -1040,6 +1042,7 @@ public class PageAnalyzer
         try {
             final Map<String, Object> data = (Map<String, Object>) js
                     .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(), level.includesRichMetadata(),
+                            level == ContextLevel.MINIMAL,
                             this.volatileIdDetector.getPatterns().stream().map(java.util.regex.Pattern::pattern).toList());
             // Render element tree
             final List<Map<String, Object>> tree = (List<Map<String, Object>>) data.get("tree");
@@ -1130,10 +1133,10 @@ public class PageAnalyzer
 
     /**
      * Returns a compact page context combining URL, title, and key element info.
-     * Uses {@link ContextLevel#LEAN} by default.
+     * Uses {@link ContextLevel#MINIMAL} by default.
      */
     public String getPageContext() {
-        return getPageContext(ContextLevel.LEAN);
+        return getPageContext(ContextLevel.MINIMAL);
     }
 
     /**
@@ -1145,7 +1148,7 @@ public class PageAnalyzer
      */
     @Deprecated
     public String getPageContext(final boolean forValidation) {
-        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.LEAN);
+        return captureSimplifiedDom(forValidation ? ContextLevel.STANDARD : ContextLevel.MINIMAL);
     }
 
     /**
