@@ -39,6 +39,7 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -1508,7 +1509,7 @@ public final class EmbeddedHtmlServer
                     final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
                     final double total = subtotal - discount + shipping + tax;
                     
-                    final int orderRand = 100000 + SEEDED_RANDOM.nextInt(900000);
+                    final int orderRand = ThreadLocalRandom.current().nextInt(1000000, 10000000);
                     final String orderNum = "V-" + orderRand + "-" + activeCountry.code;
                     final Address shippingAddr = new Address("addr-order", street, city, state, postcode, country);
                     final Card paymentCard = new Card("card-order", cardNumber, cardType, cardExpiry, cardCvv);
