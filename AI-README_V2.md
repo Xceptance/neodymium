@@ -491,6 +491,47 @@ The Locator Improver is enabled by default and can be configured via `neodymium.
 neodymium.ai.locatorImprover.enabled=true
 ```
 
+---
+
+## 20. Target Safeguarding & Full Escalation Flow
+
+Neodymium AI enforces a multi-tier **Target Safeguarding & Escalation Pipeline** to prevent invalid, volatile, or hallucinated selectors (such as fake `#xc...` ID selectors or framework dynamic hashes) from executing or polluting recorded playbook files.
+
+### Escalation & Safeguard Architecture
+
+```mermaid
+flowchart TD
+    A["1. LLM Returns Action"] --> B{"ActionExtractionPrompt Safeguard"}
+    B -->|"Illegal #xc... Selector / Volatile ID"| C["Throw ToLevelEscalationException"]
+    B -->|"Valid Selector"| D["Execute Action against SUT"]
+    
+    C --> E["Escalate Context Level (LEAN -> STANDARD -> VISUAL)"]
+    E --> F["Capture Higher Context State"]
+    F --> G["Re-prompt LLM with Higher Context"]
+    
+    D -->|"Action Execution Fails (Element Not Found)"| H["HealingRequiredException Handler"]
+    H --> E
+```
+
+### Safeguard Rules & Pipeline Invariants
+
+1. **Early Volatile ID Rejection (`ActionExtractionPrompt`):**
+   - When the LLM parses an action, target locators are evaluated against `VolatileIdDetector` rules (including configured `neodymium.ai.dom.volatileIdPatterns` and framework invariant `^xc[a-z0-9_]+$`).
+   - If an action returns an illegal `#xc...` ID selector or a volatile ID, `ActionExtractionPrompt` throws `ToLevelEscalationException` directly during response parsing.
+   - **Result:** Context immediately escalates from `LEAN` to `STANDARD` (or `VISUAL`), capturing higher context and re-prompting the LLM with richer state before an execution attempt is made.
+
+2. **No Magic Selection Fallbacks (`SelenideElementFinder`):**
+   - `SelenideElementFinder` restricts `data-ai` attribute matching strictly to explicit `[data-ai=...]` or `data-ai=` selectors.
+   - If the LLM returns an invalid ID selector like `#xck520w4`, `SelenideElementFinder` queries `id="xck520w4"` directly on the HTML DOM, failing cleanly instead of silently rewriting the selector under the hood.
+
+3. **Action Retry Context Escalation (`ExecuteActionsStep`):**
+   - When an action execution fails on SUT (e.g. `Element not found`), `ExecuteActionsStep` catches `HealingRequiredException` and automatically escalates `KEY_CURRENT_CONTEXT_LEVEL` to the next level (`LEAN` -> `STANDARD` -> `VISUAL`), capturing state before re-querying the LLM.
+   - **Result:** Eliminates retry loops at `LEAN` and ensures the LLM receives visual screenshot context to fix broken locators.
+
+4. **Extensible TargetExecutor Capability Abstraction:**
+   - Decoupled from specific driver implementations via `TargetExecutor.supportsLocatorImprovement()`.
+   - Ensures DOM-specific locator improvement only runs for web browser executors (`SelenideTargetExecutor`, `PlaywrightTargetExecutor`), preserving clean architectural boundaries for non-DOM executors (`RestTargetExecutor`).
+
 
 
 
