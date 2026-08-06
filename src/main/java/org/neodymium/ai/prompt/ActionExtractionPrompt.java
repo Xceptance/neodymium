@@ -67,8 +67,21 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
         final Object lastError = context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
+        final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
+            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                ? cl
+                : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+        final org.neodymium.ai.executor.selenide.ContextLevel nextLevel = activeLevel.escalate();
+
         final StringBuilder sb = new StringBuilder();
-        sb.append("Instruction: ").append(instruction).append("\n\n");
+        sb.append("## Execution Context\n");
+        sb.append("[INSTRUCTION]      ").append(instruction).append("\n");
+        sb.append("[CURRENT_LEVEL]    ").append(activeLevel.name()).append("\n");
+        if (nextLevel != activeLevel)
+        {
+            sb.append("[NEXT_ESCALATION]  ").append(nextLevel.name()).append("\n");
+        }
+        sb.append("\n");
 
         if (lastError != null)
         {
@@ -94,22 +107,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     {
         final String jsonContent = LlmResponseSanitizer.extractJson(rawContent);
         final JsonNode root = MAPPER.readTree(jsonContent);
-        
+
         final String status = root.hasNonNull("status") ? root.path("status").asText() : (root.hasNonNull("st") ? root.path("st").asText() : "");
         final String statusReasoning = root.hasNonNull("reasoning") ? root.path("reasoning").asText() : (root.hasNonNull("r") ? root.path("r").asText() : "");
 
-        if ("ESCALATE".equalsIgnoreCase(status))
-        {
-            final String targetLevel = root.hasNonNull("targetContextLevel") ? root.path("targetContextLevel").asText() : (root.hasNonNull("tc") ? root.path("tc").asText() : "STANDARD");
-            throw new org.neodymium.ai.pipeline.ToLevelEscalationException(statusReasoning.isEmpty() ? "LLM requested escalation" : statusReasoning, targetLevel);
-        }
-        else if ("FAILED".equalsIgnoreCase(status) || "ERROR".equalsIgnoreCase(status))
-        {
-            throw new org.neodymium.ai.pipeline.DivergenceException(statusReasoning.isEmpty() ? "Visual check assertion failed." : statusReasoning);
-        }
-
         final List<Action> actions = new ArrayList<>();
-        
         final JsonNode actionsNode = root.path("actions");
         if (actionsNode.isArray())
         {
@@ -118,7 +120,34 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 actions.add(parseActionNode(node));
             }
         }
-        
+
+        if ("ESCALATE".equalsIgnoreCase(status))
+        {
+            String targetLevelStr = root.hasNonNull("targetContextLevel") ? root.path("targetContextLevel").asText() : (root.hasNonNull("tc") ? root.path("tc").asText() : "STANDARD");
+            final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
+                context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                    ? cl
+                    : null;
+            if (activeLevel != null)
+            {
+                final org.neodymium.ai.executor.selenide.ContextLevel reqLevel =
+                    org.neodymium.ai.executor.selenide.ContextLevel.fromString(targetLevelStr, null);
+                if (reqLevel == null || reqLevel.ordinal() <= activeLevel.ordinal())
+                {
+                    targetLevelStr = activeLevel.escalate().name();
+                }
+            }
+            throw new org.neodymium.ai.pipeline.ToLevelEscalationException(statusReasoning.isEmpty() ? "LLM requested escalation" : statusReasoning, targetLevelStr);
+        }
+        else if ("FAILED".equalsIgnoreCase(status) || "ERROR".equalsIgnoreCase(status))
+        {
+            if (!actions.isEmpty())
+            {
+                return actions;
+            }
+            throw new org.neodymium.ai.pipeline.DivergenceException(statusReasoning.isEmpty() ? "Visual check assertion failed." : statusReasoning);
+        }
+
         return actions;
     }
 

@@ -917,11 +917,15 @@ public final class ExecuteActionsStep implements PipelineStep
                     
                     final LlmCapability escalationCapability = (targetLevel != null && targetLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                     final CallLlmStep<List<Action>> escalationLlmStep = new CallLlmStep<>(activePrompt, escalationCapability);
-                    
-                    c.pushStep(verifyStep);
-                    c.pushStep(executeStep);
-                    c.pushStep(escalationLlmStep);
-                    c.pushStep(new CaptureStateStep());
+
+                    final List<PipelineStep> escFlow = new java.util.ArrayList<>();
+                    escFlow.add(new CaptureStateStep());
+                    escFlow.add(escalationLlmStep);
+                    escFlow.add(executeStep);
+                    escFlow.add(verifyStep);
+
+                    final TryCatchStep escTryCatch = new TryCatchStep(new SequenceStep(escFlow), handlers);
+                    c.pushStep(escTryCatch);
                 });
             }
             else if (mode.supportsHealing() && isReplay && !step.isOptional() && !step.isNoHealing())

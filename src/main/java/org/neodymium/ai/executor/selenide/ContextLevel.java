@@ -132,4 +132,27 @@ public enum ContextLevel
     {
         return this == RICH || this == VISUAL_RICH;
     }
+
+    /**
+     * Safely parses a string name into a ContextLevel enum value.
+     *
+     * @param name the level name string
+     * @param fallback the default fallback level if parsing fails or input is null
+     * @return the parsed ContextLevel or fallback
+     */
+    public static ContextLevel fromString(final String name, final ContextLevel fallback)
+    {
+        if (name == null || name.trim().isEmpty())
+        {
+            return fallback;
+        }
+        try
+        {
+            return ContextLevel.valueOf(name.trim().toUpperCase());
+        }
+        catch (final Exception ignored)
+        {
+            return fallback;
+        }
+    }
 }

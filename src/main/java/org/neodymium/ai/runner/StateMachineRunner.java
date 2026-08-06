@@ -175,7 +175,9 @@ public final class StateMachineRunner
 
                     // Check if the current PlaybookStep is marked with a bug
                     final org.neodymium.ai.model.PlaybookStep playbookStep = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                    if (playbookStep != null && playbookStep.isBug() && !(e instanceof org.neodymium.ai.pipeline.UnexpectedSuccessException))
+                    if (playbookStep != null && playbookStep.isBug()
+                        && !(e instanceof org.neodymium.ai.pipeline.UnexpectedSuccessException)
+                        && !(e instanceof org.neodymium.ai.pipeline.ToLevelEscalationException))
                     {
                         if (activeScope instanceof TryCatchStep tryCatch)
                         {
