@@ -52,7 +52,7 @@ public final class LocatorImproverTest
     @BeforeEach
     public void setUp()
     {
-        System.clearProperty("neodymium.ai.locatorImprover.enabled");
+        System.setProperty("neodymium.ai.locatorImprover.enabled", "true");
     }
 
     @AfterEach
