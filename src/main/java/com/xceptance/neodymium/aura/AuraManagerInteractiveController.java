@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 
 /**
  * Controller handling live event routing, step submissions, screenshots serving,
@@ -133,7 +134,7 @@ public final class AuraManagerInteractiveController
         }
         if (targetFile == null || !targetFile.exists())
         {
-            final String screenshotsDirPath = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+            final String screenshotsDirPath = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
             final File activeDir = new File(screenshotsDirPath).getCanonicalFile();
             targetFile = new File(activeDir, file).getCanonicalFile();
             if (!targetFile.getPath().startsWith(activeDir.getPath()))

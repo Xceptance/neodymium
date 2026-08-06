@@ -49,6 +49,28 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.timeout.seconds");
         System.clearProperty("neodymium.ai.visualRca.enabled");
         System.clearProperty("neodymium.ai.action.embeddedJudging.enabled");
+        System.clearProperty("neodymium.ai.interactive");
+        System.clearProperty("neodymium.managerActive");
+    }
+
+    @Test
+    public void testIsInteractiveAndIsManagerActiveDefaultsAndOverrides()
+    {
+        System.setProperty("neodymium.ai.interactive", "false");
+        System.setProperty("neodymium.managerActive", "false");
+        AiConfiguration.resetInstance();
+
+        final AiConfiguration falseConfig = AiConfiguration.getInstance();
+        assertFalse(falseConfig.isInteractive(), "Interactive mode should be false when set to false.");
+        assertFalse(falseConfig.isManagerActive(), "Manager active should be false when set to false.");
+
+        System.setProperty("neodymium.ai.interactive", "true");
+        System.setProperty("neodymium.managerActive", "true");
+        AiConfiguration.resetInstance();
+
+        final AiConfiguration trueConfig = AiConfiguration.getInstance();
+        assertTrue(trueConfig.isInteractive(), "Interactive mode should resolve true when property is set to true.");
+        assertTrue(trueConfig.isManagerActive(), "Manager active should resolve true when property is set to true.");
     }
 
     @Test

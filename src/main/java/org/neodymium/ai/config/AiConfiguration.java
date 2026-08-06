@@ -546,6 +546,26 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks whether interactive console mode is enabled.
+     *
+     * @return true if neodymium.ai.interactive is set to true
+     */
+    public boolean isInteractive()
+    {
+        return getBoolean("neodymium.ai.interactive", false);
+    }
+
+    /**
+     * Checks whether Aura Manager integration is active.
+     *
+     * @return true if neodymium.managerActive is set to true
+     */
+    public boolean isManagerActive()
+    {
+        return getBoolean("neodymium.managerActive", false);
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *

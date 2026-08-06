@@ -43,6 +43,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 
 /**
  * Service managing the test execution queue, starting test processes, monitoring output,
@@ -440,7 +441,7 @@ public final class AuraQueueService
                             final Matcher consoleMatcher = java.util.regex.Pattern
                                     .compile("Interactive Console:\\s*(http://.*)").matcher(cleanLine);
                             if (consoleMatcher.find()
-                                    && !"true".equals(System.getProperty("neodymium.managerActive")))
+                                    && !AiConfiguration.getInstance().isManagerActive())
                             {
                                 broadcastInteractiveConsoleReady(consoleMatcher.group(1));
                             }

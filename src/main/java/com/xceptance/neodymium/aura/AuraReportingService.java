@@ -42,6 +42,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 
 /**
  * Service handling test execution reporting, run history, metadata storage, and report compilation.
@@ -485,7 +486,7 @@ public final class AuraReportingService
                 }
             }
 
-            final String screenshotsDirPath = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+            final String screenshotsDirPath = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
             File screenshotsDir = new File(screenshotsDirPath);
             if (!screenshotsDir.exists() || !screenshotsDir.isDirectory())
             {
