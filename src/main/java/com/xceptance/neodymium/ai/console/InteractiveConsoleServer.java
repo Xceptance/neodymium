@@ -35,6 +35,7 @@ import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 import org.yaml.snakeyaml.Yaml;
 
 import com.google.gson.Gson;
@@ -128,14 +129,12 @@ public final class InteractiveConsoleServer
             }
             config.browser(browser);
             config.headless(false); // force non-headless
-
             if (browser.toLowerCase().contains("chrome"))
             {
                 final org.openqa.selenium.chrome.ChromeOptions options = new org.openqa.selenium.chrome.ChromeOptions();
                 options.addArguments("--app=" + url);
                 config.browserCapabilities(options);
             }
-
             final com.codeborne.selenide.SelenideDriver driver = new com.codeborne.selenide.SelenideDriver(config);
             driver.open(url);
             return;
@@ -144,8 +143,8 @@ public final class InteractiveConsoleServer
         {
             LOG.warn("Could not open browser via Selenide: {}. Falling back to Desktop.", e.getMessage());
         }
-
         // Fallback if selnide failed.
+
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE))
         {
             try
@@ -155,25 +154,24 @@ public final class InteractiveConsoleServer
             }
             catch (final Exception e)
             {
-                // fall through to OS-specific fallback
+                LOG.warn("Could not open browser via Desktop.browse: {}. Trying OS fallback.", e.getMessage());
             }
         }
 
-        // Fallback for the fallback
         try
         {
             final String os = System.getProperty("os.name", "").toLowerCase();
             if (os.contains("win"))
             {
-                Runtime.getRuntime().exec("rundll32 url.dll,FileProtocolHandler " + url);
+                Runtime.getRuntime().exec(new String[] { "cmd.exe", "/c", "start", url });
             }
             else if (os.contains("mac"))
             {
-                Runtime.getRuntime().exec("open " + url);
+                Runtime.getRuntime().exec(new String[] { "open", url });
             }
             else
             {
-                Runtime.getRuntime().exec("xdg-open " + url);
+                Runtime.getRuntime().exec(new String[] { "xdg-open", url });
             }
         }
         catch (final Exception e)
@@ -406,7 +404,7 @@ public final class InteractiveConsoleServer
                         exchange.sendResponseHeaders(403, -1);
                         return;
                     }
-                    final String screenshotsDir = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+                    final String screenshotsDir = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
                     final Path file = Paths.get(screenshotsDir, fileName);
                     if (Files.exists(file))
                     {

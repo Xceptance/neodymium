@@ -2444,5 +2444,21 @@
     font-weight: 600;
 }
 
+.run-controls-container {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 0 16px 16px;
+}
 
+.d-none {
+    display: none !important;
+}
 
+.d-flex {
+    display: flex !important;
+}
+
+.btn-muted {
+    filter: saturate(50%) opacity(0.7);
+}

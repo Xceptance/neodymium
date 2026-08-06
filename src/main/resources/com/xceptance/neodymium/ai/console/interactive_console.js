@@ -325,16 +325,15 @@ function applyState(state) {
         }
     }
 
-    // Only update currentPauseId when the incoming state explicitly carries a
-    // pauseId field. The server never embeds pauseId in pushState() payloads —
-    // it is sent exclusively via the separate 'pause' SSE event. Local re-renders
-    // (toggleBp, handleStepClick, openAddStepOverlay …) pass currentState back
-    // into applyState; if we blindly overwrote currentPauseId here those calls
-    // would clear the token that was set by the pause event, causing sendAction()
-    // to silently drop the next Run/Skip click.
-    if ('pauseId' in state) {
+    if (state.status === 'paused' && state.pauseId) {
         currentPauseId = state.pauseId;
-        window.currentPauseId = currentPauseId; // Expose to Selenium
+        window.currentPauseId = currentPauseId;
+    } else if (state.status === 'running' || state.status === 'passed' || state.status === 'failed') {
+        currentPauseId = null;
+        window.currentPauseId = null;
+    } else if (state.pauseId) {
+        currentPauseId = state.pauseId;
+        window.currentPauseId = currentPauseId;
     }
 
     // On a new test run, clear the selected step to fall back to default behavior
@@ -617,7 +616,7 @@ function checkActionApprovals() {
         ...(currentState?.blocks?.after || [])
     ];
     const s = allSteps.find(st => st.index === idx);
-    const isThinking = s && s.status === 'running' && !s.reasoning;
+    const isThinking = s && s.status === 'running' && !s.reasoning && currentPauseId === null;
 
     const runBtn = document.getElementById('btnRun');
     if (runBtn) {

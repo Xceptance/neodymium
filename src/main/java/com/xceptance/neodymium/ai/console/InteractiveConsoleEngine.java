@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -188,7 +189,15 @@ public final class InteractiveConsoleEngine {
 
             // Inject the LAN IP so the UI can use it for QR codes/links
             state.addProperty("lanIp", this.lanIp);
-            //
+
+            if (state.has("pauseId") && !state.get("pauseId").isJsonNull())
+            {
+                final String pid = state.get("pauseId").getAsString();
+                if (pid != null && !pid.isEmpty())
+                {
+                    this.currentPauseId.set(pid);
+                }
+            }
 
             minified = GSON.toJson(state);
         } catch (final Exception e) {
@@ -197,11 +206,11 @@ public final class InteractiveConsoleEngine {
         
         this.currentStateJson = minified;
         
-        if ("true".equals(System.getProperty("neodymium.managerActive")))
+        if (AiConfiguration.getInstance().isManagerActive())
         {
             try
             {
-                final String managerUrl = System.getProperty("neodymium.managerUrl");
+                final String managerUrl = AiConfiguration.getInstance().getProperty("neodymium.managerUrl", null);
                 final HttpClient client = HttpClient.newHttpClient();
                 final HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(managerUrl + "/api/console/internal/pushState"))
@@ -277,11 +286,11 @@ public final class InteractiveConsoleEngine {
      */
     public JsonObject waitForAction(final String customPauseId, final long timeoutMs) throws InterruptedException
     {
-        if ("true".equals(System.getProperty("neodymium.managerActive")))
+        if (AiConfiguration.getInstance().isManagerActive())
         {
             try
             {
-                final String managerUrl = System.getProperty("neodymium.managerUrl");
+                final String managerUrl = AiConfiguration.getInstance().getProperty("neodymium.managerUrl", null);
                 final HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(java.time.Duration.ofSeconds(10))
                     .build();
@@ -438,9 +447,9 @@ public final class InteractiveConsoleEngine {
      */
     public void broadcastSseEvent(final String eventName, final String payloadJson)
     {
-        if ("true".equals(System.getProperty("neodymium.managerActive"))) {
+        if (AiConfiguration.getInstance().isManagerActive()) {
             try {
-                final String managerUrl = System.getProperty("neodymium.managerUrl");
+                final String managerUrl = AiConfiguration.getInstance().getProperty("neodymium.managerUrl", null);
                 final JsonObject envelope = new JsonObject();
                 envelope.addProperty("event", eventName);
                 envelope.addProperty("payload", payloadJson);

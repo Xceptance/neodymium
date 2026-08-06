@@ -137,17 +137,20 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 }
             }
 
-            final String stateJson = InteractiveStateBuilder.buildStateJson(
-                this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", this.consoleEngine.getCurrentPauseId());
-
-            this.consoleEngine.pushState(stateJson);
-
             if (this.interactive && !this.autoRun)
             {
-                LOG.info("[InteractiveConsoleListener] Pausing for user action at step {}", stepIndex);
+                final String pauseId = java.util.UUID.randomUUID().toString();
+                this.consoleEngine.registerPauseId(pauseId);
+
+                final String stateJson = InteractiveStateBuilder.buildStateJson(
+                    this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId);
+
+                this.consoleEngine.pushState(stateJson);
+
+                LOG.info("[InteractiveConsoleListener] Pausing for user action at step {} (pauseId={})", stepIndex, pauseId);
                 try
                 {
-                    final JsonObject userAction = this.consoleEngine.waitForAction();
+                    final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
                     handleUserAction(userAction, currentStep, context);
                 }
                 catch (final InterruptedException e)
@@ -155,6 +158,13 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     Thread.currentThread().interrupt();
                     throw new RuntimeException("Interactive execution interrupted", e);
                 }
+            }
+            else
+            {
+                final String stateJson = InteractiveStateBuilder.buildStateJson(
+                    this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null);
+
+                this.consoleEngine.pushState(stateJson);
             }
         }
         else if (event instanceof StepFinishedEvent stepFinished)

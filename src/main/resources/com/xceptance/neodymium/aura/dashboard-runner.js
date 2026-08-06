@@ -159,19 +159,35 @@ function updateRunButtons() {
     const runQueueBtn = document.getElementById('runQueueBtn');
     const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
     const stopQueueBtn = document.getElementById('stopQueueBtn');
-    if (!runQueueBtn || !stopQueueBtn) return;
 
     if (isRunning) {
-        runQueueBtn.style.display = 'none';
-        if (runCurrentTestBtn) runCurrentTestBtn.style.display = 'none';
-        stopQueueBtn.style.display = 'flex';
+        if (runQueueBtn) {
+            runQueueBtn.classList.add('d-none');
+            runQueueBtn.classList.remove('d-flex');
+        }
+        if (runCurrentTestBtn) {
+            runCurrentTestBtn.classList.add('d-none');
+            runCurrentTestBtn.classList.remove('d-flex');
+        }
+        if (stopQueueBtn) {
+            stopQueueBtn.classList.remove('d-none');
+            stopQueueBtn.classList.add('d-flex');
+        }
     } else {
-        stopQueueBtn.style.display = 'none';
-        runQueueBtn.style.display = 'flex';
+        if (stopQueueBtn) {
+            stopQueueBtn.classList.add('d-none');
+            stopQueueBtn.classList.remove('d-flex');
+        }
+        if (runQueueBtn) {
+            runQueueBtn.classList.remove('d-none');
+            runQueueBtn.classList.add('d-flex');
+        }
         if (activeEditingFile && runCurrentTestBtn) {
-            runCurrentTestBtn.style.display = 'flex';
+            runCurrentTestBtn.classList.remove('d-none');
+            runCurrentTestBtn.classList.add('d-flex');
         } else if (runCurrentTestBtn) {
-            runCurrentTestBtn.style.display = 'none';
+            runCurrentTestBtn.classList.add('d-none');
+            runCurrentTestBtn.classList.remove('d-flex');
         }
     }
 }

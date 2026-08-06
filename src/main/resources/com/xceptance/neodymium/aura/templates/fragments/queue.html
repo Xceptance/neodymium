@@ -125,41 +125,38 @@
     </div>
 </th:block>
 
-<div id="runControls" th:fragment="runControls" hx-swap-oob="true" style="display: flex; gap: 8px; margin-top: 12px; padding: 0 16px 16px;">
+<div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
     <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
 </div>
 
 <th:block th:fragment="runControlsContent">
     <!-- Run Queue Button -->
-    <button th:if="${!running}" 
-            class="btn-primary" 
+    <button class="btn-primary" 
             id="runQueueBtn" 
             hx-post="/api/run" 
             hx-swap="none"
             onclick="prepareClientForExecution()"
             th:disabled="${queue == null or queue.isEmpty()}"
-            th:style="${activeEditingFile != null or (queue == null or queue.isEmpty()) ? 'filter: saturate(50%) opacity(0.7); display: flex;' : 'display: flex;'}">
+            th:classappend="${running ? 'd-none' : ((activeEditingFile != null or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
         <i class="fa-solid fa-play"></i> <span>Run Queue</span> <span class="badge-count" th:text="${queue != null ? queue.size() : 0}">0</span>
     </button>
     
     <!-- Run Open Test Button -->
-    <button th:if="${!running}" 
-            class="btn-primary neo-u-33" 
+    <button class="btn-primary" 
             id="runCurrentTestBtn" 
             hx-post="/api/run?runCurrent=true" 
             hx-swap="none"
             onclick="prepareClientForExecution()"
-            th:style="${activeEditingFile != null ? 'display: flex;' : 'display: none;'}">
+            th:classappend="${!running and activeEditingFile != null ? 'd-flex' : 'd-none'}">
         <i class="fa-solid fa-play"></i> Run Open Test
     </button>
 
     <!-- Stop Execution Button -->
-    <button th:if="${running}" 
-            class="btn-danger neo-u-1" 
+    <button class="btn-danger neo-u-1" 
             id="stopQueueBtn" 
             hx-post="/api/stop" 
             hx-swap="none"
-            style="display: flex;">
+            th:classappend="${running ? 'd-flex' : 'd-none'}">
         <i class="fa-solid fa-stop"></i> Stop Execution
     </button>
 </th:block>

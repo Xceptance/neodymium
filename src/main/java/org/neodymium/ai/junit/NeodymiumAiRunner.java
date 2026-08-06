@@ -72,6 +72,7 @@ import org.neodymium.common.browser.Browsers;
 import org.neodymium.util.Neodymium;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
 
 /**
  * JUnit 5 {@link TestTemplateInvocationContextProvider} implementation for Neodymium AI tests.
@@ -650,9 +651,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             // Set test name dynamically in the Neodymium context
             if (context.getRequiredTestMethod() != null && context.getRequiredTestClass() != null)
             {
-                Neodymium.setTestName(
-                    context.getRequiredTestClass().getSimpleName() + "." + context.getRequiredTestMethod().getName()
-                );
+                final String testName = context.getRequiredTestClass().getSimpleName() + "." + context.getRequiredTestMethod().getName();
+                Neodymium.setTestName(testName);
+                com.xceptance.neodymium.util.Neodymium.setTestName(testName);
             }
 
             // Resolve browser profile name from annotations if not already set
@@ -689,6 +690,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (annotBrowser != null)
                 {
                     Neodymium.setBrowserProfileName(annotBrowser);
+                    com.xceptance.neodymium.util.Neodymium.setBrowserProfileName(annotBrowser);
                 }
             }
 
@@ -711,7 +713,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     Neodymium.getTestName());
                 if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
                 {
-                    com.codeborne.selenide.WebDriverRunner.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
+                    final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getWebDriver();
+                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
+                    final com.xceptance.neodymium.common.browser.WebDriverStateContainer legacyCont = new com.xceptance.neodymium.common.browser.WebDriverStateContainer();
+                    legacyCont.setWebDriver(driver);
+                    com.xceptance.neodymium.util.Neodymium.setWebDriverStateContainer(legacyCont);
                 }
             }
 
@@ -751,13 +757,28 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExecutionContext executionContext = this.session.getExecutionContext();
             executor.setExecutionContext(executionContext);
 
-            final boolean isInteractive = "true".equalsIgnoreCase(System.getProperty("neodymium.ai.interactive"));
-            final boolean isManagerActive = "true".equalsIgnoreCase(System.getProperty("neodymium.managerActive"));
+            final boolean isInteractive = config.isInteractive();
+            final boolean isManagerActive = config.isManagerActive();
 
             if (isInteractive || isManagerActive)
             {
-                final String runId = System.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
+                final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
                 final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
+
+                if (isInteractive && !isManagerActive)
+                {
+                    try
+                    {
+                        final InteractiveConsoleServer consoleServer = new InteractiveConsoleServer(consoleEngine);
+                        consoleServer.openBrowser();
+                        executionContext.getTransientData().put("interactiveConsoleServer", consoleServer);
+                    }
+                    catch (final Exception e)
+                    {
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("Failed to start standalone InteractiveConsoleServer", e);
+                    }
+                }
+
                 final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
                 eventBus.registerListener(interactiveListener);
             }
@@ -1156,6 +1177,17 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 if (this.session != null)
                 {
+                    final ExecutionContext execCtx = this.session.getExecutionContext();
+                    if (execCtx != null && execCtx.getTransientData().get("interactiveConsoleServer") instanceof InteractiveConsoleServer consoleServer)
+                    {
+                        try
+                        {
+                            consoleServer.stop();
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
                     this.session.close();
                 }
             }

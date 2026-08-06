@@ -122,7 +122,7 @@
                 <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel">
                     <div th:replace="~{fragments/queue :: configPanelContent}"></div>
                 </div>
-                <div id="runControls" style="display: flex; gap: 8px; margin-top: 12px; padding: 0 16px 16px;">
+                <div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
                     <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
                 </div>
             </div>
