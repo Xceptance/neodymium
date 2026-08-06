@@ -1,7 +1,19 @@
 # Agent Instructions
 
+> [!CRITICAL]
+> ## MANDATORY APPROVAL PROTOCOL (ZERO EXCEPTIONS)
+> **NEVER modify files or execute state-changing operations without explicit user approval first.**
+> 
+> 1. **Phase 1 — Investigation & Proposal Only:**
+>    - You MAY read files (`view_file`, `grep_search`), inspect logs, or use `code-review-graph` tools.
+>    - You MUST re-interpret requests like "Fix X" or "Implement Y" as "Diagnose/Plan X and propose a solution".
+>    - Present your diagnosis and detailed implementation plan to the user.
+>    - **HARD STOP:** End your turn with a clear request for approval (e.g. *"Do you approve this plan to proceed with implementation?"*) without invoking any edit tools.
+> 
+> 2. **Phase 2 — Implementation:**
+>    - Do NOT call editing tools (`replace_file_content`, `multi_replace_file_content`, `write_to_file`) or run state-mutating shell commands until the user responds with explicit approval in a subsequent turn.
+
 ## General
-- **Confirm First:** Never implement without user confirmation.
 - **Java First:** Prefer Java for scripting/agent tasks over Python/Bash, unless standard Unix tooling fits perfectly.
 - **Workflow:** Check `specifications/openspec/changes/` for active changes and delta specs before implementing. Use `/opsx-*` workflows.
 - **Secrets & Security:** You must never directly store any secrets, such as API keys, in source code, configuration files (e.g. `neodymium.properties`, `ai.properties`), or templates. All API keys and credentials must be injected dynamically via environment variables (such as `GEMINI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Before you commit anything, verify your staged changes do not contain keys by running `git diff --cached | grep -E "(apiKey|API_KEY|AQ\.[a-zA-Z0-9_\-]{10,})"`. If a secret is accidentally committed, notify the user immediately.
