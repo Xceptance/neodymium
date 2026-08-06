@@ -323,32 +323,7 @@ $$\text{RecordingPath} = \text{\{DirectoryPath\}} / \text{\{ClassName\}} \_\, \t
 
 ---
 
-## 14. Accessibility Tree (AXTree) Density & Coverage Floor
-
-To maximize speed and token efficiency, Neodymium AI defaults to using the browser's Accessibility Tree (`AXTREE` context level) during initial step execution. However, on custom web applications, non-WCAG storefronts, or dynamic frameworks that lack standard ARIA accessibility markup, the browser's accessibility tree can be sparse or incomplete.
-
-To prevent selector hallucination or missed elements on inaccessible pages, Neodymium AI calculates an in-memory **Accessibility Coverage Ratio**:
-
-$$\text{Accessibility Coverage Ratio} = \frac{\text{Interactive Nodes in AXTree}}{\text{Interactive HTML Elements in LEAN DOM}}$$
-
-### Concept & Mechanics
-1. **Calculation**: During page context inspection, the framework counts interactive nodes in the Chrome DevTools Protocol (`Accessibility.getFullAXTree`) payload and compares them against interactive HTML elements (`a`, `button`, `input`, `select`, `textarea`, `[onclick]`, `[role]`) in the DOM.
-2. **Performance Impact**: The calculation completes in **$< 0.1\text{ ms}$** via lightweight in-browser JS evaluation and in-memory line counting (zero additional HTTP or CDP roundtrips).
-3. **Dynamic Context Floor**:
-   - If PESAP predicts `AXTREE` for a step, but the page's calculated ratio falls below the configured threshold (`neodymium.ai.pesap.axtreeCoverageThreshold`, default: `0.30`), Neodymium AI automatically elevates the step's context level from `AXTREE` to **`LEAN`**.
-   - This guarantees that the LLM receives the complete HTML DOM structure on inaccessible or non-standard pages without relying on a sparse accessibility tree.
-   - If PESAP predicts a higher context level (`STANDARD`, `VISUAL_LEAN`, `VISUAL`), Neodymium AI respects PESAP's higher prediction.
-
-### Configuration
-```properties
-# Threshold ratio (0.0 to 1.0) of AXTree interactive nodes to LEAN DOM elements.
-# Default is 0.30 (30% coverage). Below this, context is elevated to LEAN.
-neodymium.ai.pesap.axtreeCoverageThreshold=0.30
-```
-
----
-
-## 15. Centralized Selenide Locator Resolver (`LocatorResolver`)
+## 14. Centralized Selenide Locator Resolver (`LocatorResolver`)
 
 To support vendor-neutral prompt outputs and handle custom browser pseudo-selectors without failing W3C CSS parsing engines, Neodymium AI provides a centralized **`LocatorResolver`**:
 
@@ -371,7 +346,7 @@ To support vendor-neutral prompt outputs and handle custom browser pseudo-select
 
 ---
 
-## 16. Multi-Dimensional Prompt Resolution Architecture
+## 15. Multi-Dimensional Prompt Resolution Architecture
 
 To optimize prompt engineering across different LLM providers (e.g. Gemini, GPT-4o, Claude 3.5) and target execution engines (e.g. Selenide/Selenium vs. Playwright), Neodymium AI implements **Multi-Dimensional Prompt Resolution** in `AiAgentPrompts`.
 
@@ -414,7 +389,7 @@ The framework supports two prompt tuning workflows:
 
 ---
 
-## 17. SSIM 64×64 Visual Verification & Candidate Playbook Persistence
+## 16. SSIM 64×64 Visual Verification & Candidate Playbook Persistence
 
 To ensure fast visual verification, immunity against subpixel rendering noise, and persistent self-healing cache convergence, Neodymium AI implements **SSIM 64×64 Visual Matrix Verification** and **Universal Candidate Playbook Capture**.
 
@@ -439,7 +414,7 @@ neodymium.ai.ssim.minScore=0.99
 
 ---
 
-## 18. Visual Root Cause Analysis (RCA) & Failure Diagnostics
+## 17. Visual Root Cause Analysis (RCA) & Failure Diagnostics
 
 When a test step fails during execution (in `LIVE`, `REPLAY_WITH_HEALING`, or `REPLAY_STRICT` mode), Neodymium AI automatically captures the final SUT page state and invokes the Vision LLM (`LlmCapability.VISION`) to generate a plain-English **Visual Root Cause Analysis (RCA)**.
 
@@ -461,7 +436,7 @@ neodymium.ai.visualRca.enabled=true
 
 ---
 
-## 19. Automatic Validated Locator Improver & Locator Quality Scoring
+## 18. Automatic Validated Locator Improver & Locator Quality Scoring
 
 Neodymium AI automatically inspects target DOM elements during LLM step execution, generates candidate standard CSS locators (`#id`, `[data-testid='...']`, `[name='...']`, `[aria-label='...']`, `[placeholder='...']`), and validates them against live browser DOM invariants before upgrading saved playbook action locators.
 
@@ -493,7 +468,7 @@ neodymium.ai.locatorImprover.enabled=true
 
 ---
 
-## 20. Target Safeguarding & Full Escalation Flow
+## 19. Target Safeguarding & Full Escalation Flow
 
 Neodymium AI enforces a multi-tier **Target Safeguarding & Escalation Pipeline** to prevent invalid, volatile, or hallucinated selectors (such as fake `#xc...` ID selectors or framework dynamic hashes) from executing or polluting recorded playbook files.
 

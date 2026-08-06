@@ -43,7 +43,7 @@ public class PageAnalyzerTest
     public void testCaptureSimplifiedDomWithNullDriverReturnsNonNullFallbackOrEmpty()
     {
         final PageAnalyzer analyzer = new PageAnalyzer();
-        final String dom = analyzer.captureSimplifiedDom(ContextLevel.AXTREE, null);
+        final String dom = analyzer.captureSimplifiedDom(ContextLevel.LEAN, null);
         assertNotNull(dom);
     }
 

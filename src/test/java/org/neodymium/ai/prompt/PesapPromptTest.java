@@ -72,7 +72,7 @@ public final class PesapPromptTest
     {
         final String rawJson = """
             {
-              "c": "AXTREE",
+              "c": "LEAN",
               "jm": false,
               "sp": ["Click Submit", "Verify success"]
             }
@@ -82,7 +82,7 @@ public final class PesapPromptTest
         final PesapResult result = prompt.parseResponse(rawJson, new ExecutionContext(null));
 
         assertNotNull(result);
-        assertEquals("AXTREE", result.contextLevel());
+        assertEquals("LEAN", result.contextLevel());
         assertFalse(result.requiresJavaMethods());
         assertEquals(2, result.splitSteps().size());
         assertEquals("Click Submit", result.splitSteps().get(0));

@@ -34,7 +34,6 @@ public class ContextLevelTest
     public void testEscalationSequence()
     {
         Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.HINT.escalate());
-        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.AXTREE.escalate());
         Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.LEAN.escalate());
         Assertions.assertEquals(ContextLevel.RICH, ContextLevel.STANDARD.escalate());
         Assertions.assertEquals(ContextLevel.VISUAL, ContextLevel.RICH.escalate());
@@ -47,7 +46,6 @@ public class ContextLevelTest
     public void testIncludesScreenshot()
     {
         Assertions.assertFalse(ContextLevel.HINT.includesScreenshot());
-        Assertions.assertFalse(ContextLevel.AXTREE.includesScreenshot());
         Assertions.assertFalse(ContextLevel.LEAN.includesScreenshot());
         Assertions.assertFalse(ContextLevel.STANDARD.includesScreenshot());
         Assertions.assertFalse(ContextLevel.RICH.includesScreenshot());
@@ -61,7 +59,6 @@ public class ContextLevelTest
     public void testIncludesTextContent()
     {
         Assertions.assertFalse(ContextLevel.HINT.includesTextContent());
-        Assertions.assertFalse(ContextLevel.AXTREE.includesTextContent());
         Assertions.assertFalse(ContextLevel.LEAN.includesTextContent());
         Assertions.assertFalse(ContextLevel.VISUAL.includesTextContent());
         Assertions.assertFalse(ContextLevel.VISUAL_LEAN.includesTextContent());
@@ -75,7 +72,6 @@ public class ContextLevelTest
     public void testIncludesRichMetadata()
     {
         Assertions.assertFalse(ContextLevel.HINT.includesRichMetadata());
-        Assertions.assertFalse(ContextLevel.AXTREE.includesRichMetadata());
         Assertions.assertFalse(ContextLevel.LEAN.includesRichMetadata());
         Assertions.assertFalse(ContextLevel.STANDARD.includesRichMetadata());
         Assertions.assertFalse(ContextLevel.VISUAL.includesRichMetadata());

@@ -167,7 +167,7 @@ public final class SelenideActionPluginsTest extends BaseAiTest
             {
                 return new LlmResponse(
                     "{\n" +
-                    "  \"c\": \"AXTREE\",\n" +
+                    "  \"c\": \"LEAN\",\n" +
                     "  \"jm\": false,\n" +
                     "  \"sp\": [\"Click #check-box-1\", \"Click #radio-1\"]\n" +
                     "}",
