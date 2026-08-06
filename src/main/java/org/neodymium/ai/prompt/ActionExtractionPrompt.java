@@ -134,7 +134,8 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                     org.neodymium.ai.executor.selenide.ContextLevel.fromString(targetLevelStr, null);
                 if (reqLevel == null || reqLevel.ordinal() <= activeLevel.ordinal())
                 {
-                    targetLevelStr = activeLevel.escalate().name();
+                    final org.neodymium.ai.executor.selenide.ContextLevel nextLevel = activeLevel.escalate();
+                    targetLevelStr = nextLevel != null ? nextLevel.name() : activeLevel.name();
                 }
             }
             throw new org.neodymium.ai.pipeline.ToLevelEscalationException(statusReasoning.isEmpty() ? "LLM requested escalation" : statusReasoning, targetLevelStr);

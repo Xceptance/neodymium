@@ -184,19 +184,20 @@ public final class ExecuteActionsStep implements PipelineStep
                 // Execute SUT action via targeted SUT driver
                 // Mask any raw sensitive inputs dynamically matching SessionData variable keys
                 Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
+                org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+                if (mode == null && session != null)
+                {
+                    mode = session.getExecutionMode();
+                }
                 final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                final boolean isNoReplay = step != null && step.isNoReplay();
+                final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && (step == null || mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
+
                 if (step != null)
                 {
                      sanitized.setStepInstruction(step.getInstruction());
                      sanitized.setStepLine(step.getLineNumber());
                      sanitized.setStepFile(step.getSourceFile());
-                     org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
-                     if (mode == null && session != null)
-                     {
-                         mode = session.getExecutionMode();
-                     }
-                     final boolean isNoReplay = step.isNoReplay();
-                     final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
                      if (!isReplayingStep)
                      {
                          if (isNoReplay && Boolean.TRUE.equals(context.getTransientData().get("KEY_CURRENT_STEP_FIRST_ACTION")))
@@ -245,7 +246,8 @@ public final class ExecuteActionsStep implements PipelineStep
                     context.getTransientData().put("currentAction", resolvedAction);
                     executor.execute(resolvedAction);
 
-                    if (executor != null
+                    if (!isReplayingStep
+                        && executor != null
                         && executor.supportsLocatorImprovement()
                         && org.neodymium.ai.config.AiConfiguration.getInstance().isLocatorImproverEnabled()
                         && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted()
@@ -526,6 +528,38 @@ public final class ExecuteActionsStep implements PipelineStep
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
 
+            LOGGER.debug("================================================================================");
+            if (flatSteps != null && flatSteps.contains(step))
+            {
+                final int stepIndex = flatSteps.indexOf(step) + 1;
+                LOGGER.debug("▶ [Step {}/{}] Instruction: \"{}\"", stepIndex, flatSteps.size(), resolvedInstruction);
+            }
+            else
+            {
+                LOGGER.debug("▶ [Step] Instruction: \"{}\"", resolvedInstruction);
+            }
+
+            if (step.getSourceFile() != null && !step.getSourceFile().isEmpty())
+            {
+                LOGGER.debug("       Location:    {}:{}", step.getSourceFile(), step.getLineNumber());
+            }
+            if (executionMode != null)
+            {
+                LOGGER.debug("       Mode:        {}", executionMode);
+            }
+
+            final List<String> flags = new ArrayList<>();
+            if (step.isOptional()) flags.add("optional");
+            if (step.isBug()) flags.add("bug");
+            if (step.isNoHealing()) flags.add("noHealing");
+            if (step.isNoReplay()) flags.add("noReplay");
+            if (step.isContinueOnError()) flags.add("continueOnError");
+            if (!flags.isEmpty())
+            {
+                LOGGER.debug("       Flags:       {}", flags);
+            }
+            LOGGER.debug("================================================================================");
+
             final boolean isReplayMode = executionMode != null && executionMode.isReplay();
             final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
             if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
@@ -779,40 +813,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-            // Log step execution start header ONLY when step actually begins execution
-            standardFlow.add(c -> {
-                LOGGER.debug("================================================================================");
-                if (flatSteps != null && flatSteps.contains(step))
-                {
-                    final int stepIndex = flatSteps.indexOf(step) + 1;
-                    LOGGER.debug("▶ [Step {}/{}] Instruction: \"{}\"", stepIndex, flatSteps.size(), resolvedInstruction);
-                }
-                else
-                {
-                    LOGGER.debug("▶ [Step] Instruction: \"{}\"", resolvedInstruction);
-                }
 
-                if (step.getSourceFile() != null && !step.getSourceFile().isEmpty())
-                {
-                    LOGGER.debug("       Location:    {}:{}", step.getSourceFile(), step.getLineNumber());
-                }
-                if (executionMode != null)
-                {
-                    LOGGER.debug("       Mode:        {}", executionMode);
-                }
-
-                final List<String> flags = new ArrayList<>();
-                if (step.isOptional()) flags.add("optional");
-                if (step.isBug()) flags.add("bug");
-                if (step.isNoHealing()) flags.add("noHealing");
-                if (step.isNoReplay()) flags.add("noReplay");
-                if (step.isContinueOnError()) flags.add("continueOnError");
-                if (!flags.isEmpty())
-                {
-                    LOGGER.debug("       Flags:       {}", flags);
-                }
-                LOGGER.debug("================================================================================");
-            });
 
             final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
 
