@@ -29,6 +29,7 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.util.Neodymium;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -52,13 +53,13 @@ public final class LocatorImproverTest
     @BeforeEach
     public void setUp()
     {
-        System.setProperty("neodymium.ai.locatorImprover.enabled", "true");
+        Neodymium.getData().put("neodymium.ai.locatorImprover.enabled", "true");
     }
 
     @AfterEach
     public void tearDown()
     {
-        System.clearProperty("neodymium.ai.locatorImprover.enabled");
+        Neodymium.getData().remove("neodymium.ai.locatorImprover.enabled");
     }
 
     @Test
@@ -213,7 +214,7 @@ public final class LocatorImproverTest
     @Test
     public void testImproveLocator_disabledByConfigProperty()
     {
-        System.setProperty("neodymium.ai.locatorImprover.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.locatorImprover.enabled", "false");
 
         final WebElement target = createMockElement("button", Map.of("id", "purchase-btn"));
         final WebDriver driver = createMockDriver(Map.of("#purchase-btn", List.of(target)));
