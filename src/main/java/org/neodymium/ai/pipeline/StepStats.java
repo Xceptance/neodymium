@@ -356,4 +356,30 @@ public final class StepStats
     {
         return this.subStats;
     }
+
+    /**
+     * Checks if this step (or any of its sub-steps) was executed.
+     *
+     * @return true if step has recorded execution activity, false otherwise
+     */
+    public boolean isExecuted()
+    {
+        if (this.durationMs > 0 || !this.contextLevels.isEmpty() || !this.actions.isEmpty()
+            || this.standardCalls > 0 || this.verificationCalls > 0 || this.pesapCalls > 0
+            || this.failureReason != null)
+        {
+            return true;
+        }
+        if (this.subStats != null)
+        {
+            for (final StepStats child : this.subStats)
+            {
+                if (child.isExecuted())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }

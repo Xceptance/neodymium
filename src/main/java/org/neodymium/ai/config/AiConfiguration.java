@@ -495,16 +495,13 @@ public final class AiConfiguration
             index++;
         }
 
-        // 2. Also check single comma-separated property fallback: neodymium.ai.dom.volatileIdPatterns
-        final String singleProp = getProperty("neodymium.ai.dom.volatileIdPatterns", null);
-        if (singleProp != null && !singleProp.isBlank())
+        // 2. Also check single comma-separated property fallback
+        final String singleProp = getProperty("neodymium.ai.dom.volatileIdPatterns", "");
+        for (final String token : singleProp.split(","))
         {
-            for (final String token : singleProp.split(","))
+            if (!token.isBlank())
             {
-                if (!token.isBlank())
-                {
-                    patterns.add(token.trim());
-                }
+                patterns.add(token.trim());
             }
         }
 

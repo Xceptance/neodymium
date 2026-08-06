@@ -77,7 +77,7 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         sb.append("## Execution Context\n");
         sb.append("[INSTRUCTION]      ").append(instruction).append("\n");
         sb.append("[CURRENT_LEVEL]    ").append(activeLevel.name()).append("\n");
-        if (nextLevel != activeLevel)
+        if (nextLevel != null && nextLevel != activeLevel)
         {
             sb.append("[NEXT_ESCALATION]  ").append(nextLevel.name()).append("\n");
         }
@@ -146,6 +146,28 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 return actions;
             }
             throw new org.neodymium.ai.pipeline.DivergenceException(statusReasoning.isEmpty() ? "Visual check assertion failed." : statusReasoning);
+        }
+
+        final org.neodymium.ai.executor.selenide.VolatileIdDetector volatileDetector = new org.neodymium.ai.executor.selenide.VolatileIdDetector();
+        for (final Action action : actions)
+        {
+            final String target = action.getTarget();
+            if (target != null && target.contains("#"))
+            {
+                final String idVal = target.substring(target.indexOf('#') + 1);
+                if (volatileDetector.isVolatile(idVal))
+                {
+                    final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
+                        context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                            ? cl
+                            : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                    final String nextLevelStr = activeLevel.escalate().name();
+                    throw new org.neodymium.ai.pipeline.ToLevelEscalationException(
+                        "Extracted target selector '" + target + "' uses an invalid volatile ID. Escalating context level.",
+                        nextLevelStr
+                    );
+                }
+            }
         }
 
         return actions;

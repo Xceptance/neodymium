@@ -245,7 +245,9 @@ public final class ExecuteActionsStep implements PipelineStep
                     context.getTransientData().put("currentAction", resolvedAction);
                     executor.execute(resolvedAction);
 
-                    if (org.neodymium.ai.config.AiConfiguration.getInstance().isLocatorImproverEnabled()
+                    if (executor != null
+                        && executor.supportsLocatorImprovement()
+                        && org.neodymium.ai.config.AiConfiguration.getInstance().isLocatorImproverEnabled()
                         && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted()
                         && resolvedAction.getTarget() != null
                         && !resolvedAction.getTarget().isBlank())
@@ -524,38 +526,6 @@ public final class ExecuteActionsStep implements PipelineStep
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
 
-            LOGGER.debug("================================================================================");
-            if (flatSteps != null && flatSteps.contains(step))
-            {
-                final int stepIndex = flatSteps.indexOf(step) + 1;
-                LOGGER.debug("▶ [Step {}/{}] Instruction: \"{}\"", stepIndex, flatSteps.size(), resolvedInstruction);
-            }
-            else
-            {
-                LOGGER.debug("▶ [Step] Instruction: \"{}\"", resolvedInstruction);
-            }
-
-            if (step.getSourceFile() != null && !step.getSourceFile().isEmpty())
-            {
-                LOGGER.debug("       Location:    {}:{}", step.getSourceFile(), step.getLineNumber());
-            }
-            if (executionMode != null)
-            {
-                LOGGER.debug("       Mode:        {}", executionMode);
-            }
-
-            final List<String> flags = new ArrayList<>();
-            if (step.isOptional()) flags.add("optional");
-            if (step.isBug()) flags.add("bug");
-            if (step.isNoHealing()) flags.add("noHealing");
-            if (step.isNoReplay()) flags.add("noReplay");
-            if (step.isContinueOnError()) flags.add("continueOnError");
-            if (!flags.isEmpty())
-            {
-                LOGGER.debug("       Flags:       {}", flags);
-            }
-            LOGGER.debug("================================================================================");
-
             final boolean isReplayMode = executionMode != null && executionMode.isReplay();
             final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
             if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
@@ -704,7 +674,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> org.neodymium.ai.config.AiConfiguration.getInstance().getExecutionMode());
 
             // Check if we are in replay mode and have a recorded dHash for this step
-            if (mode.isReplay() && !stepNoReplay && step.isVisualStep() && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
+            if (mode.isReplay() && !stepNoReplay && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
             {
                 final TargetExecutor executor = (TargetExecutor) contextState.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                 if (executor != null)
@@ -809,12 +779,55 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
+            // Log step execution start header ONLY when step actually begins execution
+            standardFlow.add(c -> {
+                LOGGER.debug("================================================================================");
+                if (flatSteps != null && flatSteps.contains(step))
+                {
+                    final int stepIndex = flatSteps.indexOf(step) + 1;
+                    LOGGER.debug("▶ [Step {}/{}] Instruction: \"{}\"", stepIndex, flatSteps.size(), resolvedInstruction);
+                }
+                else
+                {
+                    LOGGER.debug("▶ [Step] Instruction: \"{}\"", resolvedInstruction);
+                }
+
+                if (step.getSourceFile() != null && !step.getSourceFile().isEmpty())
+                {
+                    LOGGER.debug("       Location:    {}:{}", step.getSourceFile(), step.getLineNumber());
+                }
+                if (executionMode != null)
+                {
+                    LOGGER.debug("       Mode:        {}", executionMode);
+                }
+
+                final List<String> flags = new ArrayList<>();
+                if (step.isOptional()) flags.add("optional");
+                if (step.isBug()) flags.add("bug");
+                if (step.isNoHealing()) flags.add("noHealing");
+                if (step.isNoReplay()) flags.add("noReplay");
+                if (step.isContinueOnError()) flags.add("continueOnError");
+                if (!flags.isEmpty())
+                {
+                    LOGGER.debug("       Flags:       {}", flags);
+                }
+                LOGGER.debug("================================================================================");
+            });
+
             final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
 
             if (isReplay)
             {
-                // Replay mode: Stamp live DOM with data-ai attributes (STANDARD level includes text elements) before executing step actions
+                // Replay mode: Stamp live DOM with data-ai attributes before executing step actions
                 standardFlow.add(c -> {
+                    if (step.getStatus() == org.neodymium.ai.model.PlaybookStepStatus.FAILED || step.isFailed())
+                    {
+                        final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
+                            ? step.getFailureReason()
+                            : "Recorded step execution failed.";
+                        throw new org.neodymium.ai.pipeline.ConclusiveFailureException(reason);
+                    }
+
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     if (executor != null)
                     {
@@ -885,12 +898,31 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 // Live Escalation: PrepareRetryStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {
+                    final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
+                        c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                            ? cl
+                            : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                    final org.neodymium.ai.executor.selenide.ContextLevel escalatedLevel = activeLevel.escalate();
+                    c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, escalatedLevel);
+                    org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("⚠️ Context escalated on action execution failure to: {}", escalatedLevel);
+
+                    final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                    if (statsObj instanceof org.neodymium.ai.pipeline.StepStats stepStats)
+                    {
+                        stepStats.getContextLevels().add(escalatedLevel.name());
+                    }
+
+                    final LlmCapability capability = escalatedLevel.includesScreenshot() ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                     final PrepareRetryStep prepareStep = new PrepareRetryStep();
-                    final CallLlmStep<List<Action>> escalationLlmStep = new CallLlmStep<>(activePrompt, LlmCapability.TEXT_ONLY);
+                    final CallLlmStep<List<Action>> escalationLlmStep = new CallLlmStep<>(activePrompt, capability);
                     
                     c.pushStep(verifyStep);
                     c.pushStep(executeStep);
                     c.pushStep(escalationLlmStep);
+                    if (escalatedLevel.includesScreenshot())
+                    {
+                        c.pushStep(new CaptureStateStep());
+                    }
                     c.pushStep(prepareStep);
                 });
 

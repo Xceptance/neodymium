@@ -73,6 +73,8 @@ public final class LocatorImproverTest
     {
         assertEquals(0, LocatorImprover.scoreLocator("#v-btn-129481"));
         assertEquals(0, LocatorImprover.scoreLocator("#react-node-9941"));
+        assertEquals(0, LocatorImprover.scoreLocator("#xck520w4"));
+        assertEquals(0, LocatorImprover.scoreLocator("#xcj0ot0j_1"));
     }
 
     @Test

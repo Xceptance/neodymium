@@ -65,4 +65,14 @@ public interface TargetExecutor
      * @return the set of supported ActionDefinitions
      */
     Set<ActionDefinition> getSupportedActions();
+
+    /**
+     * Indicates whether this target executor supports automated locator improvement.
+     *
+     * @return true if locator improvement is supported, false otherwise
+     */
+    default boolean supportsLocatorImprovement()
+    {
+        return false;
+    }
 }

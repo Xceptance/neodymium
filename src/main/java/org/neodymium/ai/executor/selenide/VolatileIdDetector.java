@@ -100,6 +100,12 @@ public final class VolatileIdDetector
         }
 
         final String trimmed = idStr.trim();
+        // Always treat Neodymium synthetic tracking tags (e.g. xck520w4, xcj0ot0j_1) as volatile
+        if (trimmed.matches("^xc[a-z0-9_]+$"))
+        {
+            return true;
+        }
+
         for (final Pattern pattern : this.patterns)
         {
             if (pattern.matcher(trimmed).matches() || pattern.matcher(trimmed).find())

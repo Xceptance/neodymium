@@ -80,12 +80,18 @@ public final class VerifyOutcomeStep implements PipelineStep
         final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
 
-        // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution ONLY for visual steps
-        if (executor != null && mode != null && !mode.isReplay() && step != null && step.isVisualStep())
+        final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
+            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                ? cl
+                : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+        final boolean isVisualExecution = (step != null && step.isVisualStep()) || (activeLevel != null && activeLevel.includesScreenshot());
+
+        // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps / escalated visual context
+        if (executor != null && mode != null && !mode.isReplay() && step != null && isVisualExecution)
         {
             try
             {
-                final org.neodymium.ai.executor.selenide.ContextLevel level = step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
+                final org.neodymium.ai.executor.selenide.ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) ? activeLevel : (step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
                 final SutState capturedState = executor.captureState(level);
                 if (capturedState != null && capturedState.getAttachments() != null)
                 {

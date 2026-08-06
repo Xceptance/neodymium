@@ -6,6 +6,7 @@ Analyze current DOM and visual state to fulfill the active instruction.
 3. For visual-only checks (layout, colors, images, or '(visual)'), return empty 'actions' and status 'SUCCESS' or 'FAILED'.
 4. Use exact specified input values; do not use placeholders.
 5. For verification/assertion or WAIT instructions, generate an explicit ASSERT or WAIT action when the target element and value are present in the DOM. If the element or target text is missing from the DOM text dump, set 'status' to 'ESCALATE' to request visual context before concluding.
+6. For verification/assertion instructions (e.g., instructions starting with 'Verify', 'Check', 'Assert'), NEVER generate interactive state-changing actions (such as TYPE, CLICK, CLEAR) to attempt to fix or fulfill the missing state. If the expected element or text is missing even at visual context levels, return 'status': 'FAILED' with empty 'actions'.
 
 ## Action Rules
 - Valid actions: CLICK, TYPE, NAVIGATE, CLEAR, HOVER, SCROLL, WAIT, SELECT, KEY_PRESS, ASSERT, BACK, FORWARD, REFRESH.
@@ -14,7 +15,7 @@ Analyze current DOM and visual state to fulfill the active instruction.
 - Locators MUST use stable, reproducible attributes:
   * PREFER target priority: (1) Standard ID (`#id`), `name`, `data-test`, `data-testid`, or `aria-label`, (2) clean semantic CSS classes (e.g. `.product-quick-add`, `.btn-primary`) or `selector` attribute provided in the DOM dump, (3) element text / link text.
   * FALLBACK ONLY: Use `[data-ai='...']` ONLY as a last resort when the element has NO standard unique ID, name, test-id, aria-label, or clean class/selector. NEVER use `[data-ai='...']` if a standard attribute exists on the element.
-  * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes). Do NOT manually concatenate raw utility classes containing unescaped decimals (e.g. `.py-0.5`), slashes (e.g. `.w-1/2`), or state colons.
+  * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes). NEVER convert `data-ai="xc..."` attributes into `#xc...` ID selectors (such as `#xck520w4`). Do NOT manually concatenate raw utility classes containing unescaped decimals (e.g. `.py-0.5`), slashes (e.g. `.w-1/2`), or state colons.
 - Regex Values: When an instruction specifies pattern formats (e.g. 'V-[0-9]+-US'), keep the exact regex pattern in action 'value' (e.g. 'V-[0-9]+-US').
 - ESCALATE: Set 'status' to 'ESCALATE' when required elements/texts are missing or not visible in the current context. Set 'targetContextLevel' to the exact level value provided in '[NEXT_ESCALATION]' in the user prompt. Do NOT request a lower or equal level.
 

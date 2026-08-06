@@ -173,9 +173,9 @@ public final class SelenideElementFinder
         }
 
         // -------------------------------------------------------------------------
-        // Strategy 1: Neodymium Automation ID (xc...) extraction
+        // Strategy 1: Neodymium Automation ID (data-ai=...) extraction
         // -------------------------------------------------------------------------
-        if (!forceXpath && (clean.contains("data-ai=") || clean.contains("xc")))
+        if (!forceXpath && (clean.contains("data-ai=") || clean.startsWith("[data-ai=")))
         {
             final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
             if (matcher.find())

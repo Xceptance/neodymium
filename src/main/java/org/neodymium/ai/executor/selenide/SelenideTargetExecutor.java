@@ -313,6 +313,12 @@ public final class SelenideTargetExecutor implements TargetExecutor
         );
     }
 
+    @Override
+    public boolean supportsLocatorImprovement()
+    {
+        return true;
+    }
+
     /**
      * Helper to compute layout hash of page DOM HTML.
      */

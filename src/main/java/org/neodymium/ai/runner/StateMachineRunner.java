@@ -187,8 +187,10 @@ public final class StateMachineRunner
                             context.discardStepsUpToTryCatch(tryCatch);
                         }
 
-                        // Mark step status on playbook step
-                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+                        // Mark step status on playbook step as FAILED so recorded playbook preserves the failure
+                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setFailed(true);
+                        playbookStep.setFailureReason(e.getMessage());
 
                         final String bugComment = playbookStep.getBugDetails();
                         final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
@@ -332,7 +334,11 @@ public final class StateMachineRunner
             }
             for (int i = 0; i < stepStatsList.size(); i++)
             {
-                logStats(stepStatsList.get(i), "  ", String.valueOf(i + 1));
+                final org.neodymium.ai.pipeline.StepStats stats = stepStatsList.get(i);
+                if (stats.isExecuted())
+                {
+                    logStats(stats, "  ", String.valueOf(i + 1));
+                }
             }
             LOGGER.debug("=================================================");
         }
@@ -595,7 +601,11 @@ public final class StateMachineRunner
         {
             for (int j = 0; j < stats.getSubStats().size(); j++)
             {
-                logStats(stats.getSubStats().get(j), prefix + "  ", stepNum + "." + (j + 1));
+                final org.neodymium.ai.pipeline.StepStats child = stats.getSubStats().get(j);
+                if (child.isExecuted())
+                {
+                    logStats(child, prefix + "  ", stepNum + "." + (j + 1));
+                }
             }
         }
     }
