@@ -11,7 +11,7 @@ Analyze current DOM and visual state to fulfill the active instruction.
 ## Action Rules
 - Valid actions: CLICK, TYPE, NAVIGATE, CLEAR, HOVER, SCROLL, WAIT, SELECT, KEY_PRESS, ASSERT, BACK, FORWARD, REFRESH.
 - BACK, FORWARD, REFRESH: set 'action', leave target/value empty.
-- ASSERT: set 'locator' to a specific CSS selector or 'url'. For page-level text assertions (e.g. totals, order confirmation text), use 'body' or the exact target element. NEVER target header, navbar, or announcement bar elements for body text assertions.
+- ASSERT: set 'locator' to a specific CSS selector or 'url'. For text assertions or pattern matching, ALWAYS target the exact element or the nearest enclosing parent container (e.g. '.content-box' or 'body') that actually wraps the target text. NEVER target a sibling heading, unrelated child element, header, navbar, or announcement bar.
 - Locators MUST use stable, reproducible attributes:
   * PREFER target priority: (1) Standard ID (`#id`), `name`, `data-test`, `data-testid`, or `aria-label`, (2) clean semantic CSS classes (e.g. `.product-quick-add`, `.btn-primary`) or `selector` attribute provided in the DOM dump, (3) element text / link text.
   * FALLBACK ONLY: Use `[data-ai='...']` ONLY as a last resort when the element has NO standard unique ID, name, test-id, aria-label, or clean class/selector. NEVER use `[data-ai='...']` if a standard attribute exists on the element.
