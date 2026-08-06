@@ -28,9 +28,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
@@ -51,25 +51,27 @@ import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
-import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
+import org.neodymium.ai.playbook.PlaybookParser;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
-import org.neodymium.ai.playbook.PlaybookParser;
-import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.Browser;
-import org.neodymium.common.browser.Browsers;
 import org.neodymium.common.browser.BrowserMethodData;
 import org.neodymium.common.browser.BrowserRunner;
+import org.neodymium.common.browser.Browsers;
 import org.neodymium.util.Neodymium;
+
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 
 /**
  * JUnit 5 {@link TestTemplateInvocationContextProvider} implementation for Neodymium AI tests.
@@ -748,6 +750,17 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
             final ExecutionContext executionContext = this.session.getExecutionContext();
             executor.setExecutionContext(executionContext);
+
+            final boolean isInteractive = "true".equalsIgnoreCase(System.getProperty("neodymium.ai.interactive"));
+            final boolean isManagerActive = "true".equalsIgnoreCase(System.getProperty("neodymium.managerActive"));
+
+            if (isInteractive || isManagerActive)
+            {
+                final String runId = System.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
+                final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
+                final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
+                eventBus.registerListener(interactiveListener);
+            }
             
             final PlaybookParser parser = new YamlPlaybookParser();
             final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
@@ -756,6 +769,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final Class<?> testClass = context.getRequiredTestClass();
             final Method method = context.getRequiredTestMethod();
             final String browserProfile = Neodymium.getBrowserProfileName();
+
+            if (testClass != null)
+            {
+                executionContext.getTransientData().put("testClass", testClass.getName());
+            }
+            if (method != null)
+            {
+                executionContext.getTransientData().put("testMethod", method.getName());
+            }
+            if (playbookPath != null)
+            {
+                executionContext.getTransientData().put("yamlSource", playbookPath);
+            }
+            if (this.datasetId != null)
+            {
+                executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
+            }
 
             String recMethod = null;
             String recFileName = null;
@@ -928,6 +958,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             final List<PlaybookStep> playbookSteps = new ArrayList<>(playbook.getSteps());
+            if (resolvedPlaybookPath != null)
+            {
+                executionContext.getTransientData().put("playbookFile", resolvedPlaybookPath);
+            }
 
             if (this.mode.isRecording() && !playbookSteps.isEmpty())
             {

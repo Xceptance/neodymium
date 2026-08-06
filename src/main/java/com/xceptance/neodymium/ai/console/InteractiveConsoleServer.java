@@ -49,9 +49,9 @@ import com.xceptance.neodymium.util.Neodymium;
 /**
  * Lightweight standalone HTTP server for the Interactive Console.
  * <p>
- * This wrapper is used when tests are executed with {@code neodymium.interactive=true} but without the Neodymium Aura
- * Manager. It starts a minimal {@link HttpServer} and wires in the provided {@link InteractiveConsoleEngine}'s HTTP
- * handlers.
+ * This wrapper is used when tests are executed with {@code neodymium.ai.interactive=true} but without the Neodymium
+ * Aura Manager. It starts a minimal {@link HttpServer} and wires in the provided {@link InteractiveConsoleEngine}'s
+ * HTTP handlers.
  * </p>
  * <p>
  * When the Aura Manager is active (detected via the {@code aura.manager} JVM property), this class should <em>not</em>

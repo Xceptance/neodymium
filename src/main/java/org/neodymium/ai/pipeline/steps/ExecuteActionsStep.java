@@ -565,6 +565,22 @@ public final class ExecuteActionsStep implements PipelineStep
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
 
+            if (session != null && session.getEventBus() != null)
+            {
+                final int stepIndex = flatSteps != null ? flatSteps.indexOf(step) : 0;
+                session.getEventBus().dispatch(new org.neodymium.ai.event.structural.StepStartedEvent(step, stepIndex));
+            }
+
+            if (step.getStatus() == org.neodymium.ai.model.PlaybookStepStatus.SKIPPED)
+            {
+                LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new org.neodymium.ai.event.structural.StepFinishedEvent(step, org.neodymium.ai.model.PlaybookStepStatus.SKIPPED));
+                }
+                return;
+            }
+
             LOGGER.debug("================================================================================");
             if (flatSteps != null && flatSteps.contains(step))
             {

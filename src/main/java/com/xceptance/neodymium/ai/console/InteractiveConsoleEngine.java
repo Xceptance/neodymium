@@ -256,6 +256,16 @@ public final class InteractiveConsoleEngine {
     }
 
     /**
+     * Returns the active pause token, or null if not paused.
+     *
+     * @return the active pause token string, or null
+     */
+    public String getCurrentPauseId()
+    {
+        return this.currentPauseId.get();
+    }
+
+    /**
      * Blocks the current thread until an action is received from the UI.
      * Sends a Server-Sent Event (SSE) indicating the runner is paused.
      *

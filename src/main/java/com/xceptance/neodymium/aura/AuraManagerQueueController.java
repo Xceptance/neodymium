@@ -347,6 +347,44 @@ public final class AuraManagerQueueController
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
+    public void handleRemoveQueue(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String file = params.get("file");
+        final String id = params.get("id");
+        int index = -1;
+        if (params.containsKey("index"))
+        {
+            try
+            {
+                index = Integer.parseInt(params.get("index"));
+            }
+            catch (final NumberFormatException e)
+            {
+                // ignore
+            }
+        }
+
+        synchronized (selectedQueue)
+        {
+            if (index >= 0 && index < selectedQueue.size())
+            {
+                selectedQueue.remove(index);
+            }
+            else if (file != null && id != null)
+            {
+                selectedQueue.removeIf(item -> file.equals(item.file) && id.equals(item.id));
+            }
+        }
+
+        final Context context = new Context();
+        context.setVariable("queue", selectedQueue);
+        context.setVariable("running", isRunning());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
     public void handleClearQueue(final HttpExchange exchange) throws IOException
     {
         selectedQueue.clear();

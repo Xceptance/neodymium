@@ -331,13 +331,15 @@ public final class SessionData
         // 1. Neodymium configuration properties
         try
         {
-            if (org.neodymium.util.Neodymium.configuration() instanceof org.aeonbits.owner.Accessible)
+            if (org.neodymium.util.Neodymium.configuration() instanceof org.aeonbits.owner.Accessible acc)
             {
-                final org.aeonbits.owner.Accessible acc = (org.aeonbits.owner.Accessible) org.neodymium.util.Neodymium.configuration();
-                final String urlVal = acc.getProperty("url", null);
-                if (urlVal != null && urlVal.length() >= 3)
+                for (final String propName : acc.propertyNames())
                 {
-                    varMap.put("url", urlVal);
+                    final String val = acc.getProperty(propName, null);
+                    if (val != null && !val.isEmpty())
+                    {
+                        varMap.put(propName, val);
+                    }
                 }
             }
         }
@@ -352,7 +354,7 @@ public final class SessionData
             {
                 for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
                 {
-                    if (entry.getValue() != null && entry.getValue().length() >= 3)
+                    if (entry.getValue() != null)
                     {
                         varMap.put(entry.getKey(), entry.getValue());
                     }
@@ -372,7 +374,7 @@ public final class SessionData
                 for (final String key : sysProps.stringPropertyNames())
                 {
                     final String val = sysProps.getProperty(key);
-                    if (val != null && val.length() >= 3 && !key.startsWith("java.") && !key.startsWith("sun.") && !key.startsWith("user.") && !key.startsWith("path.") && !key.startsWith("file.") && !key.startsWith("line."))
+                    if (val != null && !key.startsWith("java.") && !key.startsWith("sun.") && !key.startsWith("user.") && !key.startsWith("path.") && !key.startsWith("file.") && !key.startsWith("line."))
                     {
                         varMap.put(key, val);
                     }
@@ -398,6 +400,29 @@ public final class SessionData
             if (entry.getValue().value() != null)
             {
                 varMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+            }
+        }
+
+        // Recursively resolve nested variable placeholders in varMap values
+        for (int pass = 0; pass < 5; pass++)
+        {
+            boolean changed = false;
+            for (final Map.Entry<String, String> entry : new java.util.HashMap<>(varMap).entrySet())
+            {
+                final String val = entry.getValue();
+                if (val != null && val.contains("${"))
+                {
+                    final String resolved = resolveVariables(val);
+                    if (!val.equals(resolved))
+                    {
+                        varMap.put(entry.getKey(), resolved);
+                        changed = true;
+                    }
+                }
+            }
+            if (!changed)
+            {
+                break;
             }
         }
         

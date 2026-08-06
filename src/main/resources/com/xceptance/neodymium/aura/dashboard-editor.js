@@ -55,14 +55,16 @@ function toggleDatasetCheckboxInstant(datasetCb) {
 }
 window.toggleDatasetCheckboxInstant = toggleDatasetCheckboxInstant;
 
-function toggleExpandFile(file) {
-    const list = document.getElementById('datasets-' + file);
+function toggleExpandFile(file, targetEl) {
+    if (!file) return;
+    const escapedFile = String(file).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const list = document.getElementById('datasets-' + file) || document.querySelector(`.dataset-list[data-file="${escapedFile}"]`);
+    const listItem = targetEl ? targetEl.closest('.list-item') : document.querySelector(`.list-item[data-file="${escapedFile}"]`);
+    
     if (list) {
-        const isHidden = list.style.display === 'none';
+        const isHidden = window.getComputedStyle(list).display === 'none' || list.style.display === 'none';
         list.style.display = isHidden ? 'flex' : 'none';
         
-        const escapedFile = file.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        const listItem = document.querySelector(`.list-item[data-file="${escapedFile}"]`);
         if (listItem) {
             const icon = listItem.querySelector('.item-main i');
             if (icon) {
@@ -76,7 +78,7 @@ function toggleExpandFile(file) {
             }
         }
     }
-    fetch('/api/files/toggle?file=' + encodeURIComponent(file), { method: 'POST' });
+    fetch('/api/files/toggle?file=' + encodeURIComponent(file), { method: 'POST' }).catch(() => {});
 }
 window.toggleExpandFile = toggleExpandFile;
 
@@ -102,7 +104,7 @@ function loadFiles() {
                     }
                 };
                 document.addEventListener('htmx:afterSwap', listener);
-                htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'outerHTML' });
+                htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'innerHTML' });
             } else {
                 window.initializedAlready = true;
                 syncCheckboxesFromState();

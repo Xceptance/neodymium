@@ -392,6 +392,14 @@ public final class VerifyOutcomeStep implements PipelineStep
                     LOGGER.warn("   ⚠️ No image attachment found or base64 data was empty to compute dHash for instruction: \"{}\"", step.getInstruction());
                 }
             }
+            if (step != null)
+            {
+                step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new org.neodymium.ai.event.structural.StepFinishedEvent(step, org.neodymium.ai.model.PlaybookStepStatus.SUCCESS));
+                }
+            }
         }
         catch (final Exception e)
         {
@@ -401,6 +409,14 @@ public final class VerifyOutcomeStep implements PipelineStep
             final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
             warnings.add(String.format("Step: %s. Execution error: %s", stepStr, e.getMessage()));
             LOGGER.warn("   ⚠️ Semantic outcome verification execution FAILED for step: {}", stepStr, e);
+            if (step != null)
+            {
+                step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new org.neodymium.ai.event.structural.StepFinishedEvent(step, org.neodymium.ai.model.PlaybookStepStatus.FAILED));
+                }
+            }
         }
         finally
         {

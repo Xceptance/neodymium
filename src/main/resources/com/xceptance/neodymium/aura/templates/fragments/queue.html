@@ -36,6 +36,9 @@
             <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
                 <i class="fa-solid fa-chevron-down"></i>
             </button>
+            <button hx-post="/api/queue/remove" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;file\&quot;:\&quot;' + ds.file + '\&quot;,\&quot;id\&quot;:\&quot;' + ds.id + '\&quot;}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
     </div>
 </th:block>

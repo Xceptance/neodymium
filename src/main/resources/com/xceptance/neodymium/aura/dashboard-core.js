@@ -327,6 +327,19 @@ function init() {
     if (typeof initResizers === 'function') initResizers();
     if (typeof applyHistoryState === 'function') applyHistoryState(1);
 
+    let savedYamlFileListScrollTop = 0;
+
+    document.addEventListener('htmx:beforeSwap', function(evt) {
+        if (evt.detail && evt.detail.target && evt.detail.target.id === 'yamlFileList') {
+            const isSearch = evt.detail.elt && evt.detail.elt.id === 'testSearchInput';
+            if (isSearch) {
+                savedYamlFileListScrollTop = 0;
+            } else {
+                savedYamlFileListScrollTop = evt.detail.target.scrollTop;
+            }
+        }
+    });
+
     document.addEventListener('htmx:oobAfterSwap', function(evt) {
         onEditorPanelSwapped();
         if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
@@ -337,6 +350,13 @@ function init() {
         onEditorPanelSwapped();
         if (evt.detail && evt.detail.target) {
             if (evt.detail.target.id === 'yamlFileList') {
+                const scrollPos = savedYamlFileListScrollTop;
+                evt.detail.target.scrollTop = scrollPos;
+                requestAnimationFrame(() => {
+                    if (evt.detail.target) {
+                        evt.detail.target.scrollTop = scrollPos;
+                    }
+                });
                 if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
             } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls') {
                 if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();

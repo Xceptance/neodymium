@@ -893,9 +893,16 @@ function insertVarAtTarget(varName, targetSelector) {
 function resolveVariables(text, bindings) {
     if (!text || !bindings) return text || '';
     let result = text;
-    for (const key in bindings) {
-        const placeholder = `\${${key}}`;
-        result = result.replaceAll(placeholder, bindings[key]);
+    for (let pass = 0; pass < 5; pass++) {
+        let changed = false;
+        for (const key in bindings) {
+            const placeholder = `\${${key}}`;
+            if (result.includes(placeholder)) {
+                result = result.replaceAll(placeholder, bindings[key]);
+                changed = true;
+            }
+        }
+        if (!changed || !result.includes('${')) break;
     }
     return result;
 }
@@ -970,7 +977,7 @@ function renderStepCard(step) {
     }
 
     // Playbook steps: no type-tag in the card (shown as a note in reasoning area instead)
-    const isPlaybook = step.source === 'playbook';
+    const isPlaybook = step.source === 'playbook' || Boolean(step.file);
     const sourceTag = isPlaybook
         ? ''
         : step.source === 'healed'
@@ -1474,9 +1481,10 @@ function updateBigScreenDetails() {
     }
 
     const detailsHtml = buildStepDetailsHtml(step);
+    const resolvedDetailInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
 
     content.innerHTML = `
-                <div style="font-weight: 600; font-size:14px; margin-bottom: 8px;">Step #${step.index}: ${escHtml(step.instruction)}</div>
+                <div style="font-weight: 600; font-size:14px; margin-bottom: 8px;">Step #${step.index}: ${escHtml(resolvedDetailInstruction)}</div>
                 <div style="margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap;">${sourceTag}${includeBreadcrumb}</div>
                 ${detailsHtml}
             `;

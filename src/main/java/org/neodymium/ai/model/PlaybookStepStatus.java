@@ -54,5 +54,10 @@ public enum PlaybookStepStatus
     /**
      * The step was split into sub-steps.
      */
-    SPLITTED
+    SPLITTED,
+
+    /**
+     * The step was skipped by the user or control flow.
+     */
+    SKIPPED
 }
