@@ -445,23 +445,23 @@ public final class AiConfiguration
     /**
      * Checks if the LLM Quality Judge ("second opinion") evaluation step is enabled.
      *
-     * @return true if Quality Judge is enabled (default: true), false otherwise
+     * @return true if Quality Judge is enabled (default: false), false otherwise
      */
     public boolean isJudgeEnabled()
     {
-        return getBoolean("neodymium.ai.judge.enabled", true);
+        return getBoolean("neodymium.ai.judge.enabled", false);
     }
 
     /**
      * Resolves the execution mode for the LLM Quality Judge.
-     * Valid options: "ALWAYS" (default), "ON_AMBIGUITY", "ON_FAIL".
+     * Valid options: "ON_AMBIGUITY" (default), "ALWAYS", "ON_FAIL".
      *
      * @return the resolved judge mode string (uppercase)
      */
     public String getJudgeMode()
     {
-        final String mode = getProperty("neodymium.ai.judge.mode", "ALWAYS");
-        return mode != null ? mode.trim().toUpperCase() : "ALWAYS";
+        final String mode = getProperty("neodymium.ai.judge.mode", "ON_AMBIGUITY");
+        return mode != null ? mode.trim().toUpperCase() : "ON_AMBIGUITY";
     }
 
     /**

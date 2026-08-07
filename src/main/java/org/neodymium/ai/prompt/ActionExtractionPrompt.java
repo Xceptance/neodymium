@@ -209,6 +209,10 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         
         final boolean isRegex = node.path("isRegex").asBoolean(false);
         final Action action = new Action(actionType, locator, valueList, "Extracted " + actionType + " action", reasoning).withIsRegex(isRegex);
+        if (node.hasNonNull("selfCritique"))
+        {
+            action.setSelfCritique(node.path("selfCritique").asText(""));
+        }
 
         final List<LocatorCandidate> candidates = new ArrayList<>();
         final JsonNode candNode = node.hasNonNull("candidateLocators") ? node.path("candidateLocators") : node.path("candidates");

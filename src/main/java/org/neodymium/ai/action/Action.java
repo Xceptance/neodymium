@@ -77,6 +77,12 @@ public class Action
     private String stepScreenshotHash = "";
 
     /**
+     * Self-judging critique evaluating candidates against stability rules.
+     */
+    @JsonProperty("selfCritique")
+    private String selfCritique = "";
+
+    /**
      * Ranked alternative candidate locators provided by LLM extraction or recording.
      */
     @JsonProperty("candidateLocators")
@@ -264,6 +270,26 @@ public class Action
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.parameters.putAll(this.parameters);
         return copy;
+    }
+
+    /**
+     * Returns the self-judging critique string.
+     *
+     * @return self-critique reasoning or empty string
+     */
+    public final String getSelfCritique()
+    {
+        return this.selfCritique != null ? this.selfCritique : "";
+    }
+
+    /**
+     * Sets the self-judging critique string.
+     *
+     * @param selfCritique self-critique reasoning string
+     */
+    public final void setSelfCritique(final String selfCritique)
+    {
+        this.selfCritique = selfCritique != null ? selfCritique : "";
     }
 
     /**

@@ -17,10 +17,11 @@ Analyze current DOM and visual state to fulfill the active instruction.
   * FALLBACK ONLY: Use `[data-ai='...']` ONLY as a last resort when the element has NO standard unique ID, name, test-id, aria-label, or clean class/selector. NEVER use `[data-ai='...']` if a standard attribute exists on the element.
   * FORBIDDEN: Auto-generated dynamic framework IDs (e.g. `#v-btn-...`, `#v-node-...`, `#react-...`, `#ember...`, or IDs ending in numeric hashes). NEVER convert `data-ai="xc..."` attributes into `#xc...` ID selectors (such as `#xck520w4`). Do NOT manually concatenate raw utility classes containing unescaped decimals (e.g. `.py-0.5`), slashes (e.g. `.w-1/2`), or state colons.
 - Regex Values: When an instruction specifies format or pattern constraints (e.g. 'INV-[0-9]+' or 'formatted ID'), set the regex pattern in action 'value' and set 'isRegex': true. NEVER put dynamic text values or dynamic strings inside the 'locator' field. Always target a static element or enclosing container (e.g. '#order-summary', '.info-block', or 'body').
-- Candidate Locators: For interactive and assertion actions, provide 2-3 candidate locators ranked by stability in 'candidateLocators':
+- Candidate Locators & Self-Critique: For interactive and assertion actions, provide 2-3 candidate locators ranked by stability in 'candidateLocators':
   * Candidate 1 (Primary): Best unique ID (`#id`), standard `name`, `data-test`, `data-testid`, or `aria-label`.
   * Candidate 2 (Semantic Fallback): Clean semantic CSS class or attribute combination.
   * Candidate 3 (Stability Fallback): `[data-ai='...']` selector attribute provided in the DOM dump.
+  * Self-Critique: Evaluate 'candidateLocators' against stability rules. If Candidate 1 contains dynamic framework hashes (e.g. `#v-btn-123`), reject it in 'selfCritique' and promote Candidate 2. Set 'locator' to the self-judged winning candidate.
 - ESCALATE: Set 'status' to 'ESCALATE' when required elements/texts are missing or not visible in the current context. Set 'targetContextLevel' to the exact level value provided in '[NEXT_ESCALATION]' in the user prompt. Do NOT request a lower or equal level.
 
 ## Response Format
@@ -32,7 +33,6 @@ Return ONLY a raw JSON object (no conversational preambles, markdown blocks, or 
   "actions": [
     {
       "action": "ACTION_TYPE",
-      "locator": "CSS selector or URL",
       "candidateLocators": [
         {
           "locator": "primary selector",
@@ -47,6 +47,8 @@ Return ONLY a raw JSON object (no conversational preambles, markdown blocks, or 
           "reasoning": "fallback locator choice"
         }
       ],
+      "selfCritique": "Self-judging evaluation comparing candidates and choosing winning locator",
+      "locator": "winning self-judged CSS selector or URL",
       "value": "text or regex",
       "isRegex": false,
       "reasoning": "action reasoning"
