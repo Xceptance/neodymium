@@ -620,6 +620,8 @@ public final class ExecuteActionsStep implements PipelineStep
                         LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
                     }
 
+                    contextState.getTransientData().compute("pesapCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
+
                     final org.neodymium.ai.client.TokenUsage newUsage = response.tokenUsage();
                     if (newUsage != null)
                     {

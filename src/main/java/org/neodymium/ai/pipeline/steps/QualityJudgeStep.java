@@ -141,6 +141,8 @@ public final class QualityJudgeStep implements PipelineStep
 
             final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
             context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);
+            final Integer judgeCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0);
+            context.getTransientData().put(ExecutionContext.KEY_JUDGE_CALL_COUNT, judgeCalls + 1);
 
             final org.neodymium.ai.client.TokenUsage newUsage = response != null ? response.tokenUsage() : null;
             if (newUsage != null)

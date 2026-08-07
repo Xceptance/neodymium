@@ -164,6 +164,8 @@ public final class CallLlmStep<T> implements PipelineStep
             final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
             LOGGER.info("📞 CallLlmStep incrementing totalLlmCalls from {} to {} for instruction: {}", calls, calls + 1, context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
             context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);
+            final Integer stdCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_STANDARD_CALL_COUNT, 0);
+            context.getTransientData().put(ExecutionContext.KEY_STANDARD_CALL_COUNT, stdCalls + 1);
 
             final org.neodymium.ai.client.TokenUsage newUsage = response.tokenUsage();
             if (newUsage != null)
