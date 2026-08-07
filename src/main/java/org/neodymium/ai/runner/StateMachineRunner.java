@@ -405,14 +405,14 @@ public final class StateMachineRunner
                 String.format("%,d", totalIn),
                 String.format("%,d", totalOut),
                 String.format("%,d", totalCached));
+        LOGGER.debug("║   ├─ PESAP:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+                String.format("%,d", pesapCalls), String.format("%,d", pesapTotal), String.format("%,d", pesapIn), String.format("%,d", pesapOut), String.format("%,d", pesapCached));
         LOGGER.debug("║   ├─ Action:            {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", standardCalls), String.format("%,d", standardTotal), String.format("%,d", standardIn), String.format("%,d", standardOut), String.format("%,d", standardCached));
         LOGGER.debug("║   ├─ Judge:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", judgeCalls), String.format("%,d", judgeTotal), String.format("%,d", judgeIn), String.format("%,d", judgeOut), String.format("%,d", judgeCached));
-        LOGGER.debug("║   ├─ Verification:      {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+        LOGGER.debug("║   └─ Verification:      {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", verificationCalls), String.format("%,d", verificationTotal), String.format("%,d", verificationIn), String.format("%,d", verificationOut), String.format("%,d", verificationCached));
-        LOGGER.debug("║   └─ PESAP:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
-                String.format("%,d", pesapCalls), String.format("%,d", pesapTotal), String.format("%,d", pesapIn), String.format("%,d", pesapOut), String.format("%,d", pesapCached));
         LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
         @SuppressWarnings("unchecked")
         final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
