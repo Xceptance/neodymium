@@ -245,6 +245,21 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             candidates.add(new LocatorCandidate(locator, 1.0));
         }
         action.setCandidateLocators(candidates);
+
+        // Rule Checker: If extracted target contains data-ai, auto-promote a clean candidate without data-ai if present
+        if (action.getTarget().contains("data-ai"))
+        {
+            for (final LocatorCandidate candidate : candidates)
+            {
+                final String candLoc = candidate.getLocator();
+                if (candLoc != null && !candLoc.contains("data-ai") && !candLoc.matches(".*#v-[a-z0-9-]+.*"))
+                {
+                    LOGGER.info("🧹 Action rule checker auto-promoted clean candidate '{}' over data-ai target '{}'", candLoc, action.getTarget());
+                    action = action.withTarget(candLoc);
+                    break;
+                }
+            }
+        }
         
         final JsonNode condNode = node.path("condition");
         if (condNode.isArray())
