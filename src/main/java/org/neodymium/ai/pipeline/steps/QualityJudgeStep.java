@@ -137,6 +137,10 @@ public final class QualityJudgeStep implements PipelineStep
                 if (!result.getChosenLocator().isEmpty())
                 {
                     Action updatedAction = proposedAction.withTarget(result.getChosenLocator());
+                    if (result.getChosenValue() != null && !result.getChosenValue().isEmpty())
+                    {
+                        updatedAction = updatedAction.withValue(result.getChosenValue());
+                    }
                     if (result.isRegex() != proposedAction.isRegex())
                     {
                         updatedAction = updatedAction.withIsRegex(result.isRegex());

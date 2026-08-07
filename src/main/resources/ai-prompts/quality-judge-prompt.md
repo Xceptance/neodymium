@@ -25,6 +25,7 @@ Return ONLY a raw JSON object matching this schema:
 {
   "judgment": "APPROVED|REFINED|REJECTED",
   "chosenLocator": "selected locator string",
+  "chosenValue": "selected text or regex value (or empty string if not applicable)",
   "isRegex": true|false,
   "confidence": 0.95,
   "reasoning": "Concise justification for judgment and choice"

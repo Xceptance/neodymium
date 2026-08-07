@@ -130,7 +130,7 @@ public class QualityJudgePrompt
     {
         if (rawResponse == null || rawResponse.isBlank())
         {
-            return new QualityJudgeResult("APPROVED", "", false, 0.5, "Empty response from judge");
+            return new QualityJudgeResult("APPROVED", "", null, false, 0.5, "Empty response from judge");
         }
 
         try
@@ -155,7 +155,7 @@ public class QualityJudgePrompt
         catch (final Exception e)
         {
             LOGGER.warn("Failed to parse Quality Judge LLM response: {}. Raw: {}", e.getMessage(), rawResponse);
-            return new QualityJudgeResult("APPROVED", "", false, 0.5, "Parse error, defaulting to primary action");
+            return new QualityJudgeResult("APPROVED", "", null, false, 0.5, "Parse error, defaulting to primary action");
         }
     }
 
@@ -167,6 +167,7 @@ public class QualityJudgePrompt
     {
         private final String judgment;
         private final String chosenLocator;
+        private final String chosenValue;
         private final boolean isRegex;
         private final double confidence;
         private final String reasoning;
@@ -175,12 +176,14 @@ public class QualityJudgePrompt
         public QualityJudgeResult(
                 @JsonProperty("judgment") final String judgment,
                 @JsonProperty("chosenLocator") final String chosenLocator,
+                @JsonProperty("chosenValue") final String chosenValue,
                 @JsonProperty("isRegex") final Boolean isRegex,
                 @JsonProperty("confidence") final Double confidence,
                 @JsonProperty("reasoning") final String reasoning)
         {
             this.judgment = judgment != null ? judgment.trim().toUpperCase() : "APPROVED";
             this.chosenLocator = chosenLocator != null ? chosenLocator.trim() : "";
+            this.chosenValue = chosenValue != null ? chosenValue.trim() : null;
             this.isRegex = isRegex != null ? isRegex : false;
             this.confidence = confidence != null ? confidence : 0.9;
             this.reasoning = reasoning != null ? reasoning.trim() : "";
@@ -194,6 +197,11 @@ public class QualityJudgePrompt
         public String getChosenLocator()
         {
             return chosenLocator;
+        }
+
+        public String getChosenValue()
+        {
+            return chosenValue;
         }
 
         public boolean isRegex()

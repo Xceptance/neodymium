@@ -244,6 +244,29 @@ public class Action
     }
 
     /**
+     * Creates a new Action copy with an updated target value.
+     *
+     * @param newValue the new action value string
+     * @return a new Action instance with the updated value
+     */
+    public Action withValue(final String newValue)
+    {
+        final List<String> newValues = newValue != null && !newValue.isEmpty() ? List.of(newValue) : List.of();
+        final Action copy = new Action(this.type, this.target, newValues, this.description, this.reasoning, this.isRegex);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    /**
      * Returns the list of alternative candidate locators.
      *
      * @return candidate locators list
