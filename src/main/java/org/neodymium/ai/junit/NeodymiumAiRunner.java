@@ -73,7 +73,7 @@ import org.neodymium.util.Neodymium;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider, BeforeEachCallback
+public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider, BeforeEachCallback, AfterEachCallback
 {
     /**
      * In-memory storage for inline playbooks registered at test runtime.
@@ -98,7 +98,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         }
 
         final Method method = context.getTestMethod().orElse(null);
-        if (method != null && !method.isAnnotationPresent(AiPlaybook.class))
+        if (method != null && !method.isAnnotationPresent(AiPlaybook.class) && !method.isAnnotationPresent(AiInlinePlaybook.class))
         {
             final String profileName = resolveBrowserAnnotation(context);
             if (profileName != null)
@@ -113,6 +113,35 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     WebDriverRunner.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
                 }
+            }
+        }
+    }
+
+    @Override
+    public void afterEach(final ExtensionContext context) throws Exception
+    {
+        final Method method = context.getTestMethod().orElse(null);
+        if (method != null && !method.isAnnotationPresent(AiPlaybook.class) && !method.isAnnotationPresent(AiInlinePlaybook.class))
+        {
+            teardownBrowserProfile();
+        }
+    }
+
+    private static void teardownBrowserProfile()
+    {
+        try
+        {
+            org.neodymium.util.WebDriverUtils.preventReuseAndTearDown();
+        }
+        catch (final Exception e)
+        {
+            try
+            {
+                com.codeborne.selenide.Selenide.closeWebDriver();
+            }
+            catch (final Exception ignored)
+            {
+                // Ignore fallback closure errors
             }
         }
     }
@@ -166,6 +195,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         return testClass.isAnnotationPresent(NeodymiumAiTest.class)
             || testClass.isAnnotationPresent(AiPlaybook.class)
             || method.isAnnotationPresent(AiPlaybook.class)
+            || method.isAnnotationPresent(AiInlinePlaybook.class)
             || testClass.isAnnotationPresent(org.neodymium.common.testdata.DataFile.class)
             || method.isAnnotationPresent(org.neodymium.common.testdata.DataFile.class)
             || testClass.isAnnotationPresent(com.xceptance.neodymium.common.testdata.DataFile.class)
@@ -192,11 +222,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             return Stream.empty();
         }
 
-        // 1. Resolve playbook paths
+        // 1. Resolve playbook paths or inline playbooks
         final List<String> playbookPaths = new ArrayList<>();
+        final AiInlinePlaybook methodInlinePlaybook = method.getAnnotation(AiInlinePlaybook.class);
         final AiPlaybook methodPlaybook = method.getAnnotation(AiPlaybook.class);
         final AiPlaybook classPlaybook = testClass.getAnnotation(AiPlaybook.class);
-        if (methodPlaybook != null && !methodPlaybook.value().isEmpty())
+
+        if (methodInlinePlaybook != null && !methodInlinePlaybook.value().isEmpty())
+        {
+            final String yamlContent = methodInlinePlaybook.value();
+            final String key = "inline-" + Math.abs(yamlContent.hashCode()) + ".yaml";
+            INLINE_PLAYBOOKS.put(key, yamlContent);
+            playbookPaths.add(key);
+        }
+        else if (methodPlaybook != null && !methodPlaybook.value().isEmpty())
         {
             playbookPaths.add(methodPlaybook.value());
         }
@@ -348,20 +387,17 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             if (path != null && !path.isEmpty())
             {
-                if ("programmatic".equalsIgnoreCase(path))
+                if (INLINE_PLAYBOOKS.containsKey(path))
+                {
+                    resolvedPaths.add(path);
+                }
+                else if ("programmatic".equalsIgnoreCase(path))
                 {
                     final String name = (methodPlaybook != null && !methodPlaybook.name().isEmpty()) ? methodPlaybook.name()
                                       : (classPlaybook != null && !classPlaybook.name().isEmpty()) ? classPlaybook.name()
                                       : testClass.getSimpleName() + "_" + method.getName();
                     final String virtualPath = "playbooks/integration/programmatic/" + name + ".yaml";
                     resolvedPaths.add(virtualPath);
-                }
-                else if (path.startsWith("inline:"))
-                {
-                    final String yamlContent = path.substring("inline:".length()).trim();
-                    final String key = "inline-" + Math.abs(yamlContent.hashCode()) + ".yaml";
-                    INLINE_PLAYBOOKS.put(key, yamlContent);
-                    resolvedPaths.add(key);
                 }
                 else if (path.startsWith("/"))
                 {
@@ -1035,9 +1071,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         @Override
         public void afterEach(final ExtensionContext context) throws Exception
         {
-            if (this.session != null)
+            try
             {
-                this.session.close();
+                if (this.session != null)
+                {
+                    this.session.close();
+                }
+            }
+            finally
+            {
+                teardownBrowserProfile();
             }
         }
 

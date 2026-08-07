@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.junit.AiInlinePlaybook;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -156,20 +157,19 @@ public final class VerlaProgrammaticDemoTest
     }
 
     /**
-     * Concept 3: Annotation-driven inline playbook using Java text blocks with {@code @AiPlaybook}.
+     * Concept 3: Annotation-driven inline playbook using Java text blocks with {@link AiInlinePlaybook}.
      *
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("""
-        inline:
-          steps: |
-            Open ${verla.url}/verla-perfect/index.html in the browser
-            Locate the search input field and type '${searchTerm}' into it
-            Press enter to submit search
-          data:
-            - testId: "default"
-              searchTerm: "Minimalist"
+    @AiInlinePlaybook("""
+        steps: |
+          Open ${verla.url}/verla-perfect/index.html in the browser
+          Locate the search input field and type '${searchTerm}' into it
+          Press enter to submit search
+        data:
+          - testId: "default"
+            searchTerm: "Minimalist"
         """)
     public void test3_AnnotationDrivenInlinePlaybookTextBlocks(final AiSession session)
     {

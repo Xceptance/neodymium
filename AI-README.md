@@ -580,6 +580,118 @@ Test completion stats and log summaries report an exact breakdown of LLM calls a
   └─ Verification:      0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
 ```
 
+---
+
+## 21. Playbook Annotations & Execution Patterns
+
+Neodymium AI provides 8 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
+
+### A. Annotation-Driven Execution
+
+#### 1. External File Playbooks (`@AiPlaybook`)
+* **Purpose**: Specifies external playbook resource files located on the classpath.
+* **Strict Boundary**: Only resolves external file resource paths. Does **not** accept inline text content.
+* **Explicit Path**: `@AiPlaybook("/playbooks/integration/verla-search-demo.yaml")` resolves starting from the classpath root.
+* **Relative Path**: `@AiPlaybook("verla-search-demo.yaml")` resolves relative to the test class package.
+* **Convention Path**: `@AiPlaybook` without value resolves to `<package>/<TestClass>_<methodName>.yaml`.
+
+#### 2. Inline Playbooks & Text Blocks (`@AiInlinePlaybook`)
+* **Purpose**: Defines multi-line YAML playbooks (with `steps:` and `data:` sections) or step prompt text blocks directly on JUnit test methods in Java code.
+* **Syntax Example**:
+  ```java
+  @AiMode(ExecutionMode.FORCE_RECORDING)
+  @AiInlinePlaybook("""
+      steps: |
+        Open ${verla.url}/verla-perfect/index.html in the browser
+        Locate the search input field and type '${searchTerm}' into it
+        Press enter to submit search
+      data:
+        - testId: "default"
+          searchTerm: "Minimalist"
+      """)
+  public void test3_AnnotationDrivenInlinePlaybookTextBlocks(final AiSession session)
+  {
+  }
+  ```
+
+---
+
+### B. Programmatic & Debugging APIs
+
+#### 3. Fully Programmatic Java Builder (`Playbook.builder()`)
+Construct steps programmatically using `PlaybookStep` and `Playbook.builder()`:
+```java
+final Playbook playbook = Playbook.builder()
+    .step("Open ${verla.url}/verla-perfect/index.html in the browser")
+    .step("Locate the search input field and type '${searchTerm}' into it")
+    .step("Press enter to submit search")
+    .build();
+
+try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
+{
+    session.execute(playbook);
+}
+```
+
+#### 4. Multiline Text Block String with Embedded YAML Data
+Execute raw multiline text blocks containing embedded YAML `steps:` and `data:` sections via `session.execute(...)`:
+```java
+try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
+{
+    session.execute("""
+        steps: |
+          Open ${verla.url}/verla-perfect/index.html in the browser
+          Locate the search input field and type '${searchTerm}' into it
+          Press enter to submit search
+
+        data:
+          - testId: "default"
+            searchTerm: "Minimalist"
+        """);
+}
+```
+
+#### 5. Multiline Text Block String with `SessionData`
+Execute text block prompt strings seeded with a programmatic `SessionData` container:
+```java
+final SessionData sessionData = new SessionData();
+sessionData.set("searchTerm", "Minimalist");
+
+try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
+{
+    session.execute("""
+        Open ${verla.url}/verla-perfect/index.html in the browser
+        Locate the search input field and type '${searchTerm}' into it
+        Press enter to submit search
+        """, sessionData);
+}
+```
+
+#### 6. Step-by-Step Java Statement Debugging
+Execute single-statement prompts allowing standard IDE breakpoints on individual Java lines:
+```java
+try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
+{
+    session.execute("Open ${verla.url}/verla-perfect/index.html in the browser");
+    session.execute("Locate the search input field and type '${searchTerm}' into it");
+    session.execute("Press enter to submit search");
+}
+```
+
+#### 7. Hybrid Execution (Mixing Direct Selenide Commands & AI Steps)
+Mix direct Java Selenide browser calls (`open`, `shouldBe`, `pressEnter`) seamlessly with AI prompt steps:
+```java
+open(Neodymium.getData().get("verla.url") + "/verla-perfect/index.html");
+$("#search-input").shouldBe(visible);
+
+try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
+{
+    session.execute("Locate the search input field and type '${searchTerm}' into it");
+}
+
+$("#search-input").pressEnter();
+```
+
 
 
 

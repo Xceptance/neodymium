@@ -18,15 +18,13 @@
  */
 package org.neodymium.ai.playbook;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 
 /**
@@ -74,14 +72,8 @@ public final class InlinePlaybookParser implements PlaybookParser
         final String trimmed = this.content.trim();
         if (trimmed.startsWith("steps:") || trimmed.startsWith("inline:") || trimmed.startsWith("---") || trimmed.contains("\nsteps:") || trimmed.contains("\ndata:"))
         {
-            final PlaybookResourceManager stringManager = new PlaybookResourceManager()
-            {
-                @Override
-                public InputStream read(final String resourcePath) throws IOException
-                {
-                    return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
-                }
-            };
+            final InMemoryResourceManager stringManager = new InMemoryResourceManager();
+            stringManager.write("inline.yaml", content);
             return new YamlPlaybookParser().parse("inline.yaml", stringManager);
         }
 
