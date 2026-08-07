@@ -348,6 +348,7 @@ public final class StateMachineRunner
         
         final org.neodymium.ai.client.TokenUsage standardUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
         final org.neodymium.ai.client.TokenUsage verificationUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
+        final org.neodymium.ai.client.TokenUsage judgeUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
 
         final long standardIn = standardUsage != null ? standardUsage.inputTokenCount() : 0;
         final long standardOut = standardUsage != null ? standardUsage.outputTokenCount() : 0;
@@ -355,10 +356,13 @@ public final class StateMachineRunner
         final long verificationIn = verificationUsage != null ? verificationUsage.inputTokenCount() : 0;
         final long verificationOut = verificationUsage != null ? verificationUsage.outputTokenCount() : 0;
         final long verificationCached = verificationUsage != null ? verificationUsage.cachedTokenCount() : 0;
+        final long judgeIn = judgeUsage != null ? judgeUsage.inputTokenCount() : 0;
+        final long judgeOut = judgeUsage != null ? judgeUsage.outputTokenCount() : 0;
+        final long judgeCached = judgeUsage != null ? judgeUsage.cachedTokenCount() : 0;
         
-        final long totalIn = standardIn + verificationIn;
-        final long totalOut = standardOut + verificationOut;
-        final long totalCached = standardCached + verificationCached;
+        final long totalIn = standardIn + verificationIn + judgeIn;
+        final long totalOut = standardOut + verificationOut + judgeOut;
+        final long totalCached = standardCached + verificationCached + judgeCached;
         final long totalTokens = totalIn + totalOut;
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");

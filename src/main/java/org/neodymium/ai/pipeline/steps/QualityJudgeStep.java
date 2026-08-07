@@ -131,7 +131,34 @@ public final class QualityJudgeStep implements PipelineStep
         try
         {
             final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+            session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmRequestSentEvent(request, "JUDGE"));
+            final long startTime = System.currentTimeMillis();
+
             final LlmResponse response = provider.chat(request);
+            final long durationMs = System.currentTimeMillis() - startTime;
+
+            session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
+
+            final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+            context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);
+
+            final org.neodymium.ai.client.TokenUsage newUsage = response != null ? response.tokenUsage() : null;
+            if (newUsage != null)
+            {
+                final org.neodymium.ai.client.TokenUsage existing = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+                if (existing != null)
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new org.neodymium.ai.client.TokenUsage(
+                            existing.inputTokenCount() + newUsage.inputTokenCount(),
+                            existing.outputTokenCount() + newUsage.outputTokenCount(),
+                            existing.totalTokenCount() + newUsage.totalTokenCount()
+                    ));
+                }
+                else
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, newUsage);
+                }
+            }
 
             if (response != null && response.content() != null)
             {
