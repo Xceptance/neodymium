@@ -78,6 +78,7 @@ class SelenideBrowserSession extends AiSession
         final LlmRegistry registry = new LlmRegistry();
         final AiConfiguration config = AiConfiguration.getInstance();
         LlmRegistry.bootstrap(registry, config);
+        org.neodymium.ai.client.LlmCacheHelper.wrapRegistryIfActive(registry);
         return registry;
     }
 

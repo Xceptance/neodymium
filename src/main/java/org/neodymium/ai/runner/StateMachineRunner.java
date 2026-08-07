@@ -399,6 +399,11 @@ public final class StateMachineRunner
         }
         LOGGER.debug("║ ⏱️ Duration:            {} ms", String.format("%,d", durationMs));
         LOGGER.debug("║ 🎟️ Replays:             {}", replays);
+        final Integer internalCacheHits = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_INTERNAL_CACHE_HITS, 0);
+        if (internalCacheHits > 0)
+        {
+            LOGGER.debug("║ ⚡ Internal Cache Hits: {} hits", internalCacheHits);
+        }
         LOGGER.debug("║ 🤖 LLM Calls & Tokens:  {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", totalCalls),
                 String.format("%,d", totalTokens),

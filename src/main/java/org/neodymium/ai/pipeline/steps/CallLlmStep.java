@@ -161,6 +161,14 @@ public final class CallLlmStep<T> implements PipelineStep
             }
 
             // Track stats
+            final boolean isInternalCacheHit = response.modelName() != null && response.modelName().contains("(Cached)");
+            if (isInternalCacheHit)
+            {
+                final Integer cacheHits = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_INTERNAL_CACHE_HITS, 0);
+                context.getTransientData().put(ExecutionContext.KEY_INTERNAL_CACHE_HITS, cacheHits + 1);
+                LOGGER.info("⚡ CallLlmStep replayed response from internal LLM cache for instruction: {}", context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
+            }
+
             final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
             LOGGER.info("📞 CallLlmStep incrementing totalLlmCalls from {} to {} for instruction: {}", calls, calls + 1, context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
             context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);

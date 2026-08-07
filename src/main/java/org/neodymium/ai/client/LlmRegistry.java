@@ -90,6 +90,29 @@ public final class LlmRegistry
     }
 
     /**
+     * Wraps all currently registered providers and the default fallback provider using the specified mapping function.
+     *
+     * @param wrapper the function that transforms an LlmProvider instance
+     */
+    public void wrapProviders(final java.util.function.Function<LlmProvider, LlmProvider> wrapper)
+    {
+        if (wrapper != null)
+        {
+            for (final Map.Entry<LlmCapability, LlmProvider> entry : this.providers.entrySet())
+            {
+                if (entry.getValue() != null)
+                {
+                    entry.setValue(wrapper.apply(entry.getValue()));
+                }
+            }
+            if (this.defaultProvider != null)
+            {
+                this.defaultProvider = wrapper.apply(this.defaultProvider);
+            }
+        }
+    }
+
+    /**
      * Retrieves the default fallback provider.
      *
      * @return the default provider instance, or null if none is configured

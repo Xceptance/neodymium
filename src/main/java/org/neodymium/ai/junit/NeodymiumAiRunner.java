@@ -32,7 +32,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -42,6 +44,9 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
+import org.neodymium.ai.client.CachingLlmProvider;
+import org.neodymium.ai.client.InMemoryLlmCache;
+import org.neodymium.ai.client.LlmCacheHelper;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
@@ -73,7 +78,7 @@ import org.neodymium.util.Neodymium;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider, BeforeEachCallback, AfterEachCallback
+public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider, BeforeEachCallback, AfterEachCallback, BeforeAllCallback, AfterAllCallback
 {
     /**
      * In-memory storage for inline playbooks registered at test runtime.
@@ -85,6 +90,18 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
      */
     public NeodymiumAiRunner()
     {
+    }
+
+    @Override
+    public void beforeAll(final ExtensionContext context) throws Exception
+    {
+        InMemoryLlmCache.clear();
+    }
+
+    @Override
+    public void afterAll(final ExtensionContext context) throws Exception
+    {
+        InMemoryLlmCache.clear();
     }
 
     @Override
@@ -696,6 +713,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final LlmRegistry registry = new LlmRegistry();
             final AiConfiguration config = AiConfiguration.getInstance();
             LlmRegistry.bootstrap(registry, config);
+            LlmCacheHelper.wrapRegistryIfActive(registry);
 
             final ExecutionEventBus eventBus = new ExecutionEventBus();
             final SelenideTargetExecutor executor = new SelenideTargetExecutor();
@@ -1080,6 +1098,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             finally
             {
+                final Method method = context.getTestMethod().orElse(null);
+                final Class<?> testClass = context.getTestClass().orElse(null);
+                if (method != null && method.isAnnotationPresent(AiLlmCache.class) && (testClass == null || !testClass.isAnnotationPresent(AiLlmCache.class)))
+                {
+                    InMemoryLlmCache.clear();
+                }
                 teardownBrowserProfile();
             }
         }

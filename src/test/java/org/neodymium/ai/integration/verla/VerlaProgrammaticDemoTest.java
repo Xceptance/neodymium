@@ -30,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.junit.AiInlinePlaybook;
+import org.neodymium.ai.junit.AiLlmCache;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -53,6 +54,7 @@ import org.neodymium.util.Neodymium;
 @Browser("Chrome_1500x1000")
 @Tag("integration")
 @Tag("verla")
+@AiLlmCache
 @NeodymiumAiTest
 public final class VerlaProgrammaticDemoTest
 {
@@ -100,6 +102,7 @@ public final class VerlaProgrammaticDemoTest
      * Concept 1: Fully Programmatic Java Object API using {@link PlaybookStep} and {@link Playbook}.
      */
     @Test
+    @AiLlmCache
     public void test1_FullyProgrammaticObjects() throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
@@ -120,6 +123,7 @@ public final class VerlaProgrammaticDemoTest
      * Concept 2a: Programmatic Text Block string execution with embedded YAML steps and data sections.
      */
     @Test
+    @AiLlmCache
     public void test2a_ProgrammaticTextBlockWithEmbeddedYamlData() throws Exception
     {
         try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))

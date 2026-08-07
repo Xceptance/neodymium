@@ -692,6 +692,32 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 $("#search-input").pressEnter();
 ```
 
+---
+
+## 22. In-Memory LLM Request Caching (`@AiLlmCache`)
+
+Neodymium AI provides an in-memory key-value prompt response caching mechanism specifically for fast, zero-cost, reproducible framework testing:
+
+```java
+@Test
+@AiLlmCache
+public void test3_AnnotationDrivenInlinePlaybookTextBlocks(final AiSession session)
+{
+    // Identical prompt executions return cached responses instantly
+}
+```
+
+### Scoping & Lifecycle Rules
+
+1. **Method-Only Scope (`@AiLlmCache` on `@Test` method)**:
+   The in-memory cache is created before the method starts and cleared immediately upon method completion. Responses are isolated strictly to that single method.
+2. **Class Execution Scope (`@AiLlmCache` on `@Test` class and method)**:
+   The cache lives for the duration of the entire test class run. Test methods carrying `@AiLlmCache` share identical prompt responses recorded during that class execution.
+3. **No Cache (`@Test` method without `@AiLlmCache`)**:
+   Caching is completely bypassed and live LLM execution is performed, even if the surrounding test class is annotated with `@AiLlmCache`.
+4. **Human-Readable Logging**:
+   Cache lookups use human-readable instruction prompt keys (not hashes), outputting explicit `[LLM Cache HIT]` / `[LLM Cache MISS]` log lines during execution.
+
 
 
 

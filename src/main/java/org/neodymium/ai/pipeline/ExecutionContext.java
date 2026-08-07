@@ -102,6 +102,7 @@ public final class ExecutionContext
     public static final String KEY_VERIFICATION_WARNINGS = "verificationWarnings";
     public static final String KEY_YAML_MISMATCH_WARNING = "yamlMismatchWarning";
     public static final String KEY_IS_HEALED_STEP = "isHealedStep";
+    public static final String KEY_INTERNAL_CACHE_HITS = "internalCacheHits";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.
