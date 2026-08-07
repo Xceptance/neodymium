@@ -23,13 +23,13 @@ public class AuraManagerCoreUiTest extends BaseAuraManagerUiTest
         super(18120);
     }
 
-    @AiPlaybook("ai-test-pages/aura-manager-core-ui-test.yaml")
+    @AiPlaybook("ai-test-pages/aura-manager-core-ui-theme-test.yaml")
     @DataSet(id = "Theme_Toggling")
     public void testThemeToggling() throws Throwable
     {
     }
 
-    @AiPlaybook("ai-test-pages/aura-manager-core-ui-test.yaml")
+    @AiPlaybook("ai-test-pages/aura-manager-core-ui-view-test.yaml")
     @DataSet(id = "View_Switching")
     public void testViewSwitching() throws Throwable
     {

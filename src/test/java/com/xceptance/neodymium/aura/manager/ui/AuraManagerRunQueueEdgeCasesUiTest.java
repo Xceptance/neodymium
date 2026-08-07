@@ -156,6 +156,15 @@ public final class AuraManagerRunQueueEdgeCasesUiTest
 
         // Return to Workspace tab and verify workspace controls remain functional
         $("#navWorkspace").shouldBe(Condition.visible).click();
+        final var targetItem = $$("#yamlFileList .list-item").first();
+        if (targetItem.exists())
+        {
+            final var checkbox = targetItem.$("input[type='checkbox']");
+            if (checkbox.exists() && !checkbox.isSelected())
+            {
+                checkbox.click();
+            }
+        }
         $("#runQueueBtn").shouldBe(Condition.visible);
     }
 

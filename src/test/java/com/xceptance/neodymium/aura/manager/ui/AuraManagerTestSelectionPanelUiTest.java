@@ -124,8 +124,14 @@ public final class AuraManagerTestSelectionPanelUiTest
     {
         Selenide.open("http://localhost:" + this.port + "/");
 
-        // Verify initial files list has items
-        final int initialCount = $$("#yamlFileList .file-container").size();
+        // Count YAML test files dynamically in resources
+        final java.util.List<String> dynamicFiles = new java.util.ArrayList<>();
+        final java.io.File resourcesDir = new java.io.File("src/test/resources").getAbsoluteFile();
+        new com.xceptance.neodymium.aura.AuraFileService().scanDirStatic(resourcesDir, resourcesDir, dynamicFiles);
+        final int dynamicCount = dynamicFiles.size();
+
+        // Verify initial files list matches dynamically counted files
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(dynamicCount));
 
         // Enter search term into search input
         $("#testSearchInput").shouldBe(Condition.visible).setValue("test");
@@ -134,10 +140,11 @@ public final class AuraManagerTestSelectionPanelUiTest
         $$("#yamlFileList .file-container").shouldHave(CollectionCondition.sizeGreaterThan(0));
 
         // Clear search input
-        $("#testSearchInput").clear();
+        $("#testSearchInput").setValue("").sendKeys(" ");
+        $("#testSearchInput").sendKeys(org.openqa.selenium.Keys.BACK_SPACE);
 
-        // List should restore back to initial count
-        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(initialCount));
+        // List should restore back to dynamic count
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(dynamicCount));
     }
 
     @NeodymiumTest

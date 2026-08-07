@@ -99,6 +99,7 @@
 				<configuration>
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
+						<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
 					</systemPropertyVariables>
 					<forkCount>${surefire.forkCount}</forkCount>
 					<reuseForks>false</reuseForks>

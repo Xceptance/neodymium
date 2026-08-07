@@ -23,13 +23,13 @@ public class AuraManagerWorkspacePlaybookUiTest extends BaseAuraManagerUiTest
         super(18130);
     }
 
-    @AiPlaybook("ai-test-pages/aura-manager-workspace-test.yaml")
+    @AiPlaybook("ai-test-pages/aura-manager-workspace-create-test.yaml")
     @DataSet(id = "Create_Test")
     public void testCreateTest() throws Throwable
     {
     }
 
-    @AiPlaybook("ai-test-pages/aura-manager-workspace-test.yaml")
+    @AiPlaybook("ai-test-pages/aura-manager-workspace-delete-test.yaml")
     @DataSet(id = "Delete_Test")
     public void testDeleteTest() throws Throwable
     {

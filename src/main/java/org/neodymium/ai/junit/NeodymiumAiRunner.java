@@ -760,6 +760,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final boolean isInteractive = config.isInteractive();
             final boolean isManagerActive = config.isManagerActive();
 
+            if (isInteractive)
+            {
+                org.junit.jupiter.api.Assertions.assertFalse(isInteractive,
+                    "Interactive mode is currently active ('neodymium.ai.interactive'=true or configured in properties). Automated batch UI tests must run with interactive mode disabled to prevent halting and waiting for manual UI console input.");
+            }
+
             if (isInteractive || isManagerActive)
             {
                 final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());

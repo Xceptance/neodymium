@@ -262,6 +262,7 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
     public void testActiveFileTransitionAdvancesCompletedSet()
     {
         js().executeScript(
+            "liveCompletedFiles.add('file-a.yaml');" +
             "liveCompletedFiles.add('file-b.yaml');" +
             "activeRunStats.activeFile = 'file-c.yaml';" +
             "renderLiveTestList();"

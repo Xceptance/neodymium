@@ -31,6 +31,9 @@ public abstract class BaseAuraManagerUiTest
     @BeforeEach
     public void setupHelper()
     {
+        final boolean isInteractive = org.neodymium.ai.config.AiConfiguration.getInstance().isInteractive();
+        org.junit.jupiter.api.Assertions.assertFalse(isInteractive,
+            "Interactive mode is currently active ('neodymium.ai.interactive'=true or configured in properties). Automated batch UI tests must run with interactive mode disabled (isInteractive=false) to prevent halting and waiting for manual UI console input.");
         AuraManagerTestHelper.setStartPort(this.startPort);
     }
 
