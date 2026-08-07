@@ -117,7 +117,12 @@ public final class QualityJudgeStep implements PipelineStep
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
         final Object stateObj = context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
         final String domContext = stateObj instanceof SutState sutState ? sutState.getTextContent() : "";
-        final AiSession session = context.getSession();
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+        if (session == null)
+        {
+            LOGGER.debug("No AiSession found in context. Skipping Quality Judge step.");
+            return;
+        }
 
         LOGGER.info("⚖️ Quality Judge reviewing proposed action '{}' on target '{}'...", proposedAction.getType(), proposedAction.getTarget());
 
