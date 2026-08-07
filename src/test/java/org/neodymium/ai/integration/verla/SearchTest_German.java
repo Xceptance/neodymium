@@ -21,7 +21,6 @@ package org.neodymium.ai.integration.verla;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
@@ -29,41 +28,28 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
 /**
  * Runs YAML-based VERLA integration tests for product search and search result filtering in German
- * in recording mode first and strict replay mode second.
+ * in recording mode first and strict replay mode second. This tests search but with a test 
+ * script in German.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_1500x1000_headless")
-@Tag("integration")
-@Tag("verla")
-@Tag("AuraIntegration")
-@Tag("LiveAPI")
+@Browser("Chrome_1500x1000")
 @NeodymiumAiTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public final class SearchTest_DE extends BaseAiTest
+public final class SearchTest_German extends BaseAiTest
 {
-    /**
-     * Constructs a default SearchTest_DE.
-     */
-    public SearchTest_DE()
-    {
-    }
-
     /**
      * Setup method to inject dynamic server URLs.
      */
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
-        Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
         Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
     }
 
@@ -73,7 +59,7 @@ public final class SearchTest_DE extends BaseAiTest
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("US")
-    @AiPlaybook("/verla/SearchTest_DE.yaml")
+    @AiPlaybook("/verla/SearchTest_German.yaml")
     public void testSearchDeLiveUs()
     {
     }
@@ -84,7 +70,7 @@ public final class SearchTest_DE extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("US")
-    @AiPlaybook(value = "/verla/SearchTest_DE.yaml", recordingMethod = "testSearchDeLiveUs")
+    @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveUs")
     public void testSearchDeReplayUs()
     {
     }
@@ -95,7 +81,7 @@ public final class SearchTest_DE extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("DE")
-    @AiPlaybook("/verla/SearchTest_DE.yaml")
+    @AiPlaybook("/verla/SearchTest_German.yaml")
     public void testSearchDeLiveDe()
     {
     }
@@ -106,7 +92,7 @@ public final class SearchTest_DE extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("DE")
-    @AiPlaybook(value = "/verla/SearchTest_DE.yaml", recordingMethod = "testSearchDeLiveDe")
+    @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveDe")
     public void testSearchDeReplayDe()
     {
     }
@@ -117,7 +103,7 @@ public final class SearchTest_DE extends BaseAiTest
     @Order(5)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("FIN")
-    @AiPlaybook("/verla/SearchTest_DE.yaml")
+    @AiPlaybook("/verla/SearchTest_German.yaml")
     public void testSearchDeLiveFin()
     {
     }
@@ -128,7 +114,7 @@ public final class SearchTest_DE extends BaseAiTest
     @Order(6)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("FIN")
-    @AiPlaybook(value = "/verla/SearchTest_DE.yaml", recordingMethod = "testSearchDeLiveFin")
+    @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveFin")
     public void testSearchDeReplayFin()
     {
     }
@@ -138,7 +124,7 @@ public final class SearchTest_DE extends BaseAiTest
      */
     @Order(7)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("/verla/SearchTest_DE.yaml")
+    @AiPlaybook("/verla/SearchTest_German.yaml")
     public void testSearchDeLiveAllDataSets()
     {
     }
@@ -148,7 +134,7 @@ public final class SearchTest_DE extends BaseAiTest
      */
     @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook(value = "/verla/SearchTest_DE.yaml", recordingMethod = "testSearchDeLiveAllDataSets")
+    @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveAllDataSets")
     public void testSearchDeReplayAllDataSets()
     {
     }

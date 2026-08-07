@@ -303,6 +303,39 @@ public final class ExecuteActionsStep implements PipelineStep
                     context.getTransientData().remove("currentAction");
                 }
                 
+                final long settleMs = org.neodymium.ai.config.AiConfiguration.getInstance()
+                    .getLong("neodymium.ai.visual.postActionSettleMs", 1000L);
+                if (settleMs > 0)
+                {
+                    try
+                    {
+                        Thread.sleep(settleMs);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+
+                if (executor != null && !isReplayingStep)
+                {
+                    try
+                    {
+                        final org.neodymium.ai.executor.selenide.ContextLevel cl = (step != null && step.isVisualStep())
+                            ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL
+                            : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
+                        final SutState postActionState = executor.captureState(cl);
+                        if (postActionState != null)
+                        {
+                            context.getTransientData().put("KEY_POST_ACTION_STATE", postActionState);
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.debug("Failed to capture post-action state for visual baseline: {}", e.getMessage());
+                    }
+                }
+
                 session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
                 context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
             }

@@ -12,7 +12,9 @@ search: &search |
 
 steps:
   - Öffne ${verla.url}/verla-perfect/index.html
-  - Wähle "${country}" aus dem Länder-Dropdown.
+  - Öffne das Länder-Dropdown.
+  - Klicke "${country}".
+  - Die Landesflagge ist die Flagge von "${country}".
   - *search
   - Auf der linken Seite wird eine Filterbox mit Kategorien, Farben, Preis und Angebot angezeigt.
 

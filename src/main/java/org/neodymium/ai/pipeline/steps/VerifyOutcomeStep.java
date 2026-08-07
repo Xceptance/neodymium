@@ -91,8 +91,20 @@ public final class VerifyOutcomeStep implements PipelineStep
         {
             try
             {
-                final org.neodymium.ai.executor.selenide.ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) ? activeLevel : (step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
-                final SutState capturedState = executor.captureState(level);
+                SutState capturedState = (SutState) context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
+                {
+                    final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+                    if (lastState != null && lastState.getAttachments() != null && !lastState.getAttachments().isEmpty())
+                    {
+                        capturedState = lastState;
+                    }
+                    else
+                    {
+                        final org.neodymium.ai.executor.selenide.ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) ? activeLevel : (step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
+                        capturedState = executor.captureState(level);
+                    }
+                }
                 if (capturedState != null && capturedState.getAttachments() != null)
                 {
                     for (final SutAttachment attachment : capturedState.getAttachments())

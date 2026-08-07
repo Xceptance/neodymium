@@ -402,10 +402,14 @@ Rather than using lossy 17×16 perceptual bit-hashes, visual steps capture struc
 2. **8-bit Luminance Matrix**: Calculates a 4,096-byte luminance matrix (0..255 brightness per grid cell), serialized as a Base64 string in `step.setScreenshotHash()`.
 3. **In-Memory SSIM Comparison**: During replay, Neodymium computes Mean SSIM ($0.0 \rightarrow 1.0$) across $8 \times 8$ local blocks in $< 0.05\text{ ms}$.
 4. **Visual Match Gate**: Checks `ssimScore >= neodymium.ai.ssim.minScore` (default: `0.99`). If visual score passes, execution bypasses unnecessary LLM verification calls while staying immune to font anti-aliasing and subpixel noise.
+5. **Post-Action Visual Settling**: Controlled by `neodymium.ai.visual.postActionSettleMs` (default: `1000` ms). Pauses execution for the configured duration after interactive actions complete in both recording and replay modes, allowing CSS transitions, modal fade-outs, and DOM animations to fully settle before post-action state capture.
 
 ```properties
 # Minimum SSIM score (0.0 to 1.0) required for visual match gate approval
 neodymium.ai.ssim.minScore=0.99
+
+# Post-action UI settling delay in milliseconds (default: 1000ms) before capturing visual state/screenshots
+neodymium.ai.visual.postActionSettleMs=1000
 ```
 
 
