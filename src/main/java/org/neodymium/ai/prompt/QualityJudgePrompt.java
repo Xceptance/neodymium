@@ -1,0 +1,214 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.prompt;
+
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.action.LocatorCandidate;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.config.AiConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * Prompt builder and parser for the Quality Judge ("second opinion") evaluation step.
+ * Compiles DOM context, proposed action, and candidate locators into a structured LLM query.
+ *
+ * @author AI-generated: Gemini 3.6 Flash
+ * @author Xceptance GmbH 2026
+ */
+public class QualityJudgePrompt
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(QualityJudgePrompt.class);
+    private static final String PROMPT_RESOURCE = "/ai-prompts/quality-judge-prompt.md";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private final String systemPrompt;
+
+    public QualityJudgePrompt()
+    {
+        this.systemPrompt = loadResourcePrompt();
+    }
+
+    private String loadResourcePrompt()
+    {
+        try (final InputStream is = getClass().getResourceAsStream(PROMPT_RESOURCE))
+        {
+            if (is != null)
+            {
+                return new String(is.readAllBytes(), StandardCharsets.UTF_8).trim();
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("Failed to load {}, falling back to default judge system prompt.", PROMPT_RESOURCE, e);
+        }
+        return "You are the Neodymium AI Quality Judge. Review proposed actions and candidate locators for stability, accuracy, and text targeting.";
+    }
+
+    /**
+     * Compiles an LlmRequest for evaluating the proposed action against the DOM context.
+     *
+     * @param instruction      the step instruction
+     * @param domContext       the current DOM text context
+     * @param proposedAction   the primary action extracted by the first LLM call
+     * @param aiConfig         AI configuration instance
+     * @return compiled LlmRequest
+     */
+    public LlmRequest compileRequest(
+            final String instruction,
+            final String domContext,
+            final Action proposedAction,
+            final AiConfiguration aiConfig)
+    {
+        final StringBuilder userMsg = new StringBuilder();
+        userMsg.append("## Execution Instruction\n");
+        userMsg.append(instruction != null ? instruction : "").append("\n\n");
+
+        userMsg.append("## Proposed Action\n");
+        userMsg.append("Action Type: ").append(proposedAction.getType()).append("\n");
+        userMsg.append("Primary Locator: ").append(proposedAction.getTarget()).append("\n");
+        userMsg.append("Value: ").append(proposedAction.getValue() != null ? proposedAction.getValue() : "").append("\n");
+        userMsg.append("isRegex: ").append(proposedAction.isRegex()).append("\n");
+        userMsg.append("Reasoning: ").append(proposedAction.getReasoning()).append("\n\n");
+
+        userMsg.append("## Candidate Locators\n");
+        final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
+        if (candidates != null && !candidates.isEmpty())
+        {
+            for (int i = 0; i < candidates.size(); i++)
+            {
+                final LocatorCandidate cand = candidates.get(i);
+                userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f, reasoning='%s'\n",
+                        i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore(), cand.getReasoning()));
+            }
+        }
+        else
+        {
+            userMsg.append("Candidate 1: locator='").append(proposedAction.getTarget()).append("'\n");
+        }
+        userMsg.append("\n");
+
+        userMsg.append("## Current DOM Context\n");
+        userMsg.append(domContext != null ? domContext : "").append("\n");
+
+        final double temp = aiConfig.getTemperature("judge");
+        final int timeout = aiConfig.getTimeoutSeconds("judge");
+
+        return new LlmRequest(systemPrompt, userMsg.toString(), java.util.Collections.emptyList(), null, temp, timeout);
+    }
+
+    /**
+     * Parses the Quality Judge LLM JSON response.
+     *
+     * @param rawResponse raw JSON string from LLM provider
+     * @return QualityJudgeResult containing judgment, chosen locator, isRegex, and reasoning
+     */
+    public QualityJudgeResult parseResponse(final String rawResponse)
+    {
+        if (rawResponse == null || rawResponse.isBlank())
+        {
+            return new QualityJudgeResult("APPROVED", "", false, 0.5, "Empty response from judge");
+        }
+
+        try
+        {
+            String cleanedJson = rawResponse.trim();
+            if (cleanedJson.startsWith("```json"))
+            {
+                cleanedJson = cleanedJson.substring(7);
+            }
+            if (cleanedJson.startsWith("```"))
+            {
+                cleanedJson = cleanedJson.substring(3);
+            }
+            if (cleanedJson.endsWith("```"))
+            {
+                cleanedJson = cleanedJson.substring(0, cleanedJson.length() - 3);
+            }
+            cleanedJson = cleanedJson.trim();
+
+            return MAPPER.readValue(cleanedJson, QualityJudgeResult.class);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("Failed to parse Quality Judge LLM response: {}. Raw: {}", e.getMessage(), rawResponse);
+            return new QualityJudgeResult("APPROVED", "", false, 0.5, "Parse error, defaulting to primary action");
+        }
+    }
+
+    /**
+     * DTO for deserializing Quality Judge evaluation result.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class QualityJudgeResult
+    {
+        private final String judgment;
+        private final String chosenLocator;
+        private final boolean isRegex;
+        private final double confidence;
+        private final String reasoning;
+
+        @JsonCreator
+        public QualityJudgeResult(
+                @JsonProperty("judgment") final String judgment,
+                @JsonProperty("chosenLocator") final String chosenLocator,
+                @JsonProperty("isRegex") final Boolean isRegex,
+                @JsonProperty("confidence") final Double confidence,
+                @JsonProperty("reasoning") final String reasoning)
+        {
+            this.judgment = judgment != null ? judgment.trim().toUpperCase() : "APPROVED";
+            this.chosenLocator = chosenLocator != null ? chosenLocator.trim() : "";
+            this.isRegex = isRegex != null ? isRegex : false;
+            this.confidence = confidence != null ? confidence : 0.9;
+            this.reasoning = reasoning != null ? reasoning.trim() : "";
+        }
+
+        public String getJudgment()
+        {
+            return judgment;
+        }
+
+        public String getChosenLocator()
+        {
+            return chosenLocator;
+        }
+
+        public boolean isRegex()
+        {
+            return isRegex;
+        }
+
+        public double getConfidence()
+        {
+            return confidence;
+        }
+
+        public String getReasoning()
+        {
+            return reasoning;
+        }
+    }
+}

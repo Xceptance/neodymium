@@ -31,13 +31,16 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
+import java.io.IOException;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookRecording;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
+import org.neodymium.ai.playbook.InlinePlaybookParser;
 import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.util.Neodymium;
@@ -282,6 +285,44 @@ public abstract class AiSession implements AutoCloseable
         runner.run();
 
         return new PlaybookRecording(playbookSteps);
+    }
+
+    /**
+     * Programmatically executes a multiline steps string in this session using the active target executor.
+     *
+     * @param stepsContent the raw multi-line steps content or YAML string
+     * @return the resulting playbook recording
+     * @throws PipelineException if parsing or execution fails
+     */
+    public final PlaybookRecording execute(final String stepsContent) throws PipelineException
+    {
+        return execute(stepsContent, null);
+    }
+
+    /**
+     * Programmatically executes a multiline steps string in this session with seeded dataset variables.
+     *
+     * @param stepsContent the raw multi-line steps content or YAML string
+     * @param sessionData parameter dataset values to seed into the execution context
+     * @return the resulting playbook recording
+     * @throws PipelineException if parsing or execution fails
+     */
+    public final PlaybookRecording execute(final String stepsContent, final SessionData sessionData) throws PipelineException
+    {
+        if (stepsContent == null)
+        {
+            throw new IllegalArgumentException("Steps content must not be null.");
+        }
+
+        try
+        {
+            final Playbook playbook = new InlinePlaybookParser(stepsContent).parse("inline", null);
+            return execute(playbook, sessionData);
+        }
+        catch (final IOException e)
+        {
+            throw new ConclusiveFailureException("Failed to parse inline playbook content", e);
+        }
     }
 
     /**

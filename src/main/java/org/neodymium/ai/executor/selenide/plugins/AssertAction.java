@@ -159,7 +159,7 @@ public final class AssertAction implements BrowserActionPlugin
             else
             {
                 final WebElementCondition cond;
-                if (isRegexPattern(expected))
+                if (action.isRegex() || isRegexPattern(expected))
                 {
                     cond = new RegexMatch(expected);
                 }

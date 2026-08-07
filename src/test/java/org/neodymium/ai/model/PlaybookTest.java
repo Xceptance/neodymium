@@ -19,6 +19,7 @@
 package org.neodymium.ai.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
@@ -93,5 +94,22 @@ public final class PlaybookTest
         assertThrows(UnsupportedOperationException.class, () -> {
             playbook.getDataSets().get(0).put("password", new SessionData.DataEntry("pass", true));
         });
+    }
+
+    /**
+     * Verifies that {@link Playbook#builder()} programmatically constructs a valid Playbook instance.
+     */
+    @Test
+    public void testPlaybookBuilder()
+    {
+        final Playbook playbook = Playbook.builder()
+            .step("Navigate to homepage")
+            .step("Click login button")
+            .build();
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+        assertEquals("Navigate to homepage", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Click login button", playbook.getSteps().get(1).getInstruction());
     }
 }

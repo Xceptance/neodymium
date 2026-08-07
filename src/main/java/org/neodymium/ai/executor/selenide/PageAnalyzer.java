@@ -1192,7 +1192,6 @@ public class PageAnalyzer
             appendAttribute(dom, "name", node.get("name"));
             appendAttribute(dom, "role", node.get("role"));
             appendAttribute(dom, "aria-label", node.get("ariaLabel"));
-            appendAttribute(dom, "parentText", node.get("parentText"));
             appendAttribute(dom, "data-ai", node.get("automationId"));
             dom.append(">\n");
 
@@ -1241,7 +1240,6 @@ public class PageAnalyzer
 
         final String text = (String) el.get("text");
 
-        appendAttribute(dom, "parentText", el.get("parentText"));
         appendAttribute(dom, "href", el.get("href"));
         appendAttribute(dom, "placeholder", el.get("placeholder"));
         appendAttribute(dom, "aria-label", el.get("ariaLabel"));
@@ -1259,28 +1257,6 @@ public class PageAnalyzer
         appendAttribute(dom, "multiple", el.get("multiple"));
         appendAttribute(dom, "value", el.get("value"));
         appendAttribute(dom, "options", el.get("options"));
-
-        final Object selector = el.get("selector");
-        if (selector != null && !selector.toString().isEmpty()) {
-            final String selStr = selector.toString();
-            final Object id = el.get("id");
-            final String idStr = id != null ? id.toString() : "";
-
-            // Check if the selector is simply the ID selector (either raw or escaped) to
-            // prevent redundant printout
-            final boolean isSimpleId = !idStr.isEmpty() &&
-                    (selStr.equals("#" + idStr) ||
-                            selStr.equals("#" + escapeCssIdentifier(idStr)));
-
-            // Omit long, wishy-washy climbing selectors that contain child/descendant
-            // combinators,
-            // since data-ai is 100% unique and much more stable.
-            final boolean isWishyWashy = selStr.contains(" > ");
-
-            if (!isSimpleId && !isWishyWashy) {
-                appendAttribute(dom, "selector", selStr);
-            }
-        }
 
         appendAttribute(dom, "data-ai", el.get("automationId"));
 

@@ -317,6 +317,10 @@ public final class ExecuteActionsStep implements PipelineStep
                 final String failureMsg = t.getMessage() != null ? t.getMessage() : t.toString();
                 LOGGER.error("   ❌ Action execution failed on SUT: {}", failureMsg);
                 session.getEventBus().dispatch(new ActionExecutedEvent(action, false));
+                context.getTransientData().put(
+                    ExecutionContext.KEY_LAST_EXECUTION_ERROR,
+                    "Action " + action.getType() + " on locator '" + action.getTarget() + "' failed: " + failureMsg
+                );
                 if (t instanceof PipelineException pe)
                 {
                     throw pe;
@@ -885,6 +889,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 final LlmCapability capability = (initialLevel != null && initialLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                 final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
                 standardFlow.add(llmStep);
+                standardFlow.add(new QualityJudgeStep());
             }
 
             standardFlow.add(executeStep);

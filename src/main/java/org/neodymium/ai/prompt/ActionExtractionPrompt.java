@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -206,7 +207,40 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             locator = valueStr;
         }
         
-        final Action action = new Action(actionType, locator, valueList, "Extracted " + actionType + " action", reasoning);
+        final boolean isRegex = node.path("isRegex").asBoolean(false);
+        final Action action = new Action(actionType, locator, valueList, "Extracted " + actionType + " action", reasoning).withIsRegex(isRegex);
+
+        final List<LocatorCandidate> candidates = new ArrayList<>();
+        final JsonNode candNode = node.hasNonNull("candidateLocators") ? node.path("candidateLocators") : node.path("candidates");
+        if (candNode.isArray())
+        {
+            int index = 0;
+            for (final JsonNode cNode : candNode)
+            {
+                if (cNode.isObject())
+                {
+                    final String cLoc = cNode.path("locator").asText();
+                    final String cStrat = cNode.path("strategy").asText("UNKNOWN");
+                    final double cScore = cNode.path("score").asDouble(1.0 - (index * 0.15));
+                    final String cReason = cNode.path("reasoning").asText("");
+                    if (!cLoc.isEmpty())
+                    {
+                        candidates.add(new LocatorCandidate(cLoc, cStrat, cScore, cReason));
+                    }
+                }
+                else if (cNode.isTextual() && !cNode.asText().isEmpty())
+                {
+                    final double cScore = Math.max(0.1, 1.0 - (index * 0.15));
+                    candidates.add(new LocatorCandidate(cNode.asText(), cScore));
+                }
+                index++;
+            }
+        }
+        if (candidates.isEmpty() && !locator.isEmpty())
+        {
+            candidates.add(new LocatorCandidate(locator, 1.0));
+        }
+        action.setCandidateLocators(candidates);
         
         final JsonNode condNode = node.path("condition");
         if (condNode.isArray())
