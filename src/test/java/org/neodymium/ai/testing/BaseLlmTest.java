@@ -18,28 +18,12 @@
  */
 package org.neodymium.ai.testing;
 
-import org.junit.jupiter.api.BeforeAll;
-
 /**
  * Lightweight, browserless base class for LLM-based integration tests.
- * Automatically resolves the Gemini API key from the environment before tests run.
  * 
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
  */
 public abstract class BaseLlmTest
 {
-    /**
-     * Resolves the Gemini API key from the environment and registers it
-     * as a system property before any tests run.
-     */
-    @BeforeAll
-    public static void setUpApiKey()
-    {
-        final String envKey = System.getenv("GEMINI_API_KEY");
-        if (envKey != null && !envKey.trim().isEmpty() && System.getProperty("neodymium.ai.apiKey") == null)
-        {
-            System.setProperty("neodymium.ai.apiKey", envKey.trim());
-        }
-    }
 }

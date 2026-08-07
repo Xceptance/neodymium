@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.junit;
 
+import com.codeborne.selenide.WebDriverRunner;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -72,7 +73,7 @@ import org.neodymium.util.Neodymium;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider
+public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider, BeforeEachCallback
 {
     /**
      * In-memory storage for inline playbooks registered at test runtime.
@@ -84,6 +85,73 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
      */
     public NeodymiumAiRunner()
     {
+    }
+
+    @Override
+    public void beforeEach(final ExtensionContext context) throws Exception
+    {
+        if (context.getTestMethod().isPresent() && context.getTestClass().isPresent())
+        {
+            Neodymium.setTestName(
+                context.getRequiredTestClass().getSimpleName() + "." + context.getRequiredTestMethod().getName()
+            );
+        }
+
+        final Method method = context.getTestMethod().orElse(null);
+        if (method != null && !method.isAnnotationPresent(AiPlaybook.class))
+        {
+            final String profileName = resolveBrowserAnnotation(context);
+            if (profileName != null)
+            {
+                Neodymium.setBrowserProfileName(profileName);
+                final BrowserRunner runner = new BrowserRunner();
+                runner.setUpTest(
+                    new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                    Neodymium.getTestName()
+                );
+                if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
+                {
+                    WebDriverRunner.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
+                }
+            }
+        }
+    }
+
+    private static String resolveBrowserAnnotation(final ExtensionContext context)
+    {
+        if (context.getTestMethod().isPresent())
+        {
+            final Method method = context.getRequiredTestMethod();
+            if (method.isAnnotationPresent(Browser.class))
+            {
+                return method.getAnnotation(Browser.class).value();
+            }
+            if (method.isAnnotationPresent(Browsers.class))
+            {
+                final Browser[] bs = method.getAnnotation(Browsers.class).value();
+                if (bs.length > 0)
+                {
+                    return bs[0].value();
+                }
+            }
+        }
+        if (context.getTestClass().isPresent())
+        {
+            final Class<?> testClass = context.getRequiredTestClass();
+            if (testClass.isAnnotationPresent(Browser.class))
+            {
+                return testClass.getAnnotation(Browser.class).value();
+            }
+            if (testClass.isAnnotationPresent(Browsers.class))
+            {
+                final Browser[] bs = testClass.getAnnotation(Browsers.class).value();
+                if (bs.length > 0)
+                {
+                    return bs[0].value();
+                }
+            }
+        }
+        return null;
     }
 
     @Override

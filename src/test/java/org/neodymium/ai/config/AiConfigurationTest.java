@@ -54,7 +54,9 @@ public class AiConfigurationTest
     @Test
     public void testVisualRcaEnabledDefaultAndOverride()
     {
-        assertTrue(AiConfiguration.getInstance().isVisualRcaEnabled(), "Visual RCA should be enabled by default.");
+        System.setProperty("neodymium.ai.visualRca.enabled", "true");
+        AiConfiguration.resetInstance();
+        assertTrue(AiConfiguration.getInstance().isVisualRcaEnabled(), "Visual RCA should be enabled when system property is set to true.");
 
         System.setProperty("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
@@ -64,7 +66,9 @@ public class AiConfigurationTest
     @Test
     public void testEmbeddedJudgingEnabledDefaultAndOverride()
     {
-        assertTrue(AiConfiguration.getInstance().isEmbeddedJudgingEnabled(), "Embedded judging should be enabled by default.");
+        System.setProperty("neodymium.ai.action.embeddedJudging.enabled", "true");
+        AiConfiguration.resetInstance();
+        assertTrue(AiConfiguration.getInstance().isEmbeddedJudgingEnabled(), "Embedded judging should be enabled when system property is set to true.");
 
         System.setProperty("neodymium.ai.action.embeddedJudging.enabled", "false");
         AiConfiguration.resetInstance();
@@ -111,6 +115,21 @@ public class AiConfigurationTest
         final AiConfiguration config = AiConfiguration.getInstance();
         assertEquals(ExecutionMode.LLM_RECORDING, config.getExecutionMode(), "Dot-separated execution mode should resolve to getExecutionMode().");
         assertEquals(60, config.getTimeoutSeconds("execution"), "Dot-separated timeout should resolve to getTimeoutSeconds().");
+    }
+
+    @Test
+    public void testPlaceholderSubstitution()
+    {
+        System.setProperty("MY_TEST_SECRET", "super-secret-key-123");
+        System.setProperty("neodymium.ai.testProp", "Prefix-${MY_TEST_SECRET}-Suffix");
+
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
+        assertEquals("Prefix-super-secret-key-123-Suffix", config.getProperty("neodymium.ai.testProp", null),
+            "Placeholders in property values should be dynamically substituted.");
+
+        System.clearProperty("MY_TEST_SECRET");
+        System.clearProperty("neodymium.ai.testProp");
     }
 }
 

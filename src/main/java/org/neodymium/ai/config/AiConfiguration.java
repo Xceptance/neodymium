@@ -23,12 +23,15 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.PropertiesUtil;
 
 /**
  * Hierarchical configuration properties loader for Neodymium AI.
@@ -186,6 +189,52 @@ public final class AiConfiguration
     }
 
     /**
+     * Resolves property placeholders formatted as {@code ${VAR_NAME}} against System properties,
+     * environment variables, loaded configuration properties, and Neodymium data overrides
+     * using {@link PropertiesUtil#substitutePropertyValue(String, Map, java.util.Set)}.
+     *
+     * @param value the raw property value
+     * @return the resolved property value with placeholders replaced
+     */
+    private String resolvePlaceholders(final String value)
+    {
+        if (value == null || !value.contains("${"))
+        {
+            return value;
+        }
+
+        final Map<String, String> mergedMap = new HashMap<>();
+
+        // 1. Base properties loaded from configuration files
+        for (final String propName : this.properties.stringPropertyNames())
+        {
+            mergedMap.put(propName, this.properties.getProperty(propName));
+        }
+
+        // 2. System Environment variables
+        System.getenv().forEach(mergedMap::put);
+
+        // 3. System Properties
+        System.getProperties().forEach((k, v) -> mergedMap.put(String.valueOf(k), String.valueOf(v)));
+
+        // 4. Thread-local Neodymium data overrides
+        try
+        {
+            Neodymium.getData().forEach((k, v) -> {
+                if (v != null)
+                {
+                    mergedMap.put(k, String.valueOf(v));
+                }
+            });
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        return PropertiesUtil.substitutePropertyValue(value, mergedMap, new HashSet<>());
+    }
+
+    /**
      * Gets a configuration value by key, returning the default value if key is not found.
      * Checks thread-local overrides in Neodymium data first.
      *
@@ -200,7 +249,7 @@ public final class AiConfiguration
             final Object threadVal = Neodymium.getData().get(key);
             if (threadVal != null)
             {
-                return String.valueOf(threadVal);
+                return resolvePlaceholders(String.valueOf(threadVal));
             }
         }
         catch (final Throwable ignored)
@@ -211,13 +260,13 @@ public final class AiConfiguration
         final String sysProp = System.getProperty(key);
         if (sysProp != null)
         {
-            return sysProp;
+            return resolvePlaceholders(sysProp);
         }
 
         final String exactValue = this.properties.getProperty(key);
         if (exactValue != null)
         {
-            return exactValue;
+            return resolvePlaceholders(exactValue);
         }
 
         final String targetNormalized = normalizeKey(key);
@@ -227,7 +276,7 @@ public final class AiConfiguration
             final String cachedVal = this.properties.getProperty(cachedNormalizedName);
             if (cachedVal != null)
             {
-                return cachedVal;
+                return resolvePlaceholders(cachedVal);
             }
         }
 
@@ -238,12 +287,12 @@ public final class AiConfiguration
                 final String sysKey = String.valueOf(sysEntry.getKey());
                 if (sysKey.startsWith("neodymium.ai") && normalizeKey(sysKey).equals(targetNormalized))
                 {
-                    return String.valueOf(sysEntry.getValue());
+                    return resolvePlaceholders(String.valueOf(sysEntry.getValue()));
                 }
             }
         }
 
-        return defaultValue;
+        return resolvePlaceholders(defaultValue);
     }
 
 

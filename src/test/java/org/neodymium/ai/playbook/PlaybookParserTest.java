@@ -209,4 +209,33 @@ public final class PlaybookParserTest
         assertEquals("Add to cart", steps.get(2).getInstruction());
         assertTrue(playbook.getDataSets().isEmpty());
     }
+
+    /**
+     * Verifies that the InlinePlaybookParser correctly detects and parses structured YAML
+     * multiline string content with steps and data sections.
+     *
+     * @throws IOException if parsing fails
+     */
+    @Test
+    public void testInlinePlaybookParserWithStructuredYaml() throws IOException
+    {
+        final String content = """
+            steps: |
+              Open homepage in browser
+              Type '${searchTerm}' into input
+            data:
+              - searchTerm: "Minimalist"
+            """;
+
+        final PlaybookParser parser = new InlinePlaybookParser(content);
+        final Playbook playbook = parser.parse("inline", null);
+
+        assertNotNull(playbook);
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(2, steps.size());
+        assertEquals("Open homepage in browser", steps.get(0).getInstruction());
+        assertEquals("Type '${searchTerm}' into input", steps.get(1).getInstruction());
+        assertEquals(1, playbook.getDataSets().size());
+        assertEquals("Minimalist", playbook.getDataSets().get(0).get("searchTerm").value());
+    }
 }

@@ -18,19 +18,22 @@
  */
 package org.neodymium.ai.playbook;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 
 /**
- * Concrete implementation of {@link PlaybookParser} that parses raw multi-line
- * strings directly into playbook steps (without using external resource managers).
- * Useful for inline playbook specifications inside test annotations.
+ * Parser implementation that parses inline multi-line playbook strings into a {@link Playbook}.
+ * Supports both plain line-by-line step instructions and structured YAML string content.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 public final class InlinePlaybookParser implements PlaybookParser
@@ -52,7 +55,8 @@ public final class InlinePlaybookParser implements PlaybookParser
 
     /**
      * Parses the inline content directly into a Playbook.
-     * Splitting the content by line feeds and skipping empty lines.
+     * Delegates to YamlPlaybookParser if structured YAML content is detected,
+     * otherwise splits the content by line feeds.
      *
      * @param identifier the identifier (ignored for inline parsing)
      * @param manager the resource manager (ignored for inline parsing)
@@ -62,21 +66,36 @@ public final class InlinePlaybookParser implements PlaybookParser
     @Override
     public Playbook parse(final String identifier, final PlaybookResourceManager manager) throws IOException
     {
-        final List<PlaybookStep> steps = new ArrayList<>();
-        
-        if (this.content != null)
+        if (this.content == null || this.content.trim().isEmpty())
         {
-            final String[] lines = this.content.split("\\r?\\n");
-            for (final String line : lines)
+            return new Playbook(Collections.emptyList(), Collections.emptyList());
+        }
+
+        final String trimmed = this.content.trim();
+        if (trimmed.startsWith("steps:") || trimmed.startsWith("inline:") || trimmed.startsWith("---") || trimmed.contains("\nsteps:") || trimmed.contains("\ndata:"))
+        {
+            final PlaybookResourceManager stringManager = new PlaybookResourceManager()
             {
-                final String trimmed = line.trim();
-                if (!trimmed.isEmpty())
+                @Override
+                public InputStream read(final String resourcePath) throws IOException
                 {
-                    steps.add(new PlaybookStep(trimmed));
+                    return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
                 }
+            };
+            return new YamlPlaybookParser().parse("inline.yaml", stringManager);
+        }
+
+        final List<PlaybookStep> steps = new ArrayList<>();
+        final String[] lines = this.content.split("\\r?\\n");
+        for (final String line : lines)
+        {
+            final String lineTrimmed = line.trim();
+            if (!lineTrimmed.isEmpty() && !lineTrimmed.startsWith("#"))
+            {
+                steps.add(new PlaybookStep(lineTrimmed));
             }
         }
-        
-        return new Playbook(steps, new ArrayList<>());
+
+        return new Playbook(steps, Collections.emptyList());
     }
 }

@@ -262,7 +262,7 @@ public class PropertiesUtil
      *     a set to track visited placeholders to prevent circular dependencies
      * @return the value with placeholders substituted
      */
-    private static String substitutePropertyValue(String value, Map<String, String> propertiesMap, Set<String> visitedPlaceholders)
+    public static String substitutePropertyValue(String value, Map<String, String> propertiesMap, Set<String> visitedPlaceholders)
     {
         // If the value does not contain any placeholders, return it as is
         String result = value;
