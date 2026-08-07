@@ -136,6 +136,13 @@ public final class SessionDebugger
             result.put("pesap", pesap);
         }
 
+        // 5. Extract Quality Judge token metrics
+        final TokenUsage judge = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+        if (judge != null)
+        {
+            result.put("judge", judge);
+        }
+
         return Collections.unmodifiableMap(result);
     }
 

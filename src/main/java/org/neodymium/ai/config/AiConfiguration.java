@@ -443,6 +443,40 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if the LLM Quality Judge ("second opinion") evaluation step is enabled.
+     *
+     * @return true if Quality Judge is enabled (default: false), false otherwise
+     */
+    public boolean isJudgeEnabled()
+    {
+        return getBoolean("neodymium.ai.judge.enabled", false);
+    }
+
+    /**
+     * Resolves the execution mode for the LLM Quality Judge.
+     * Valid options: "ON_AMBIGUITY" (default), "ALWAYS", "ON_FAIL".
+     *
+     * @return the resolved judge mode string (uppercase)
+     */
+    public String getJudgeMode()
+    {
+        final String mode = getProperty("neodymium.ai.judge.mode", "ON_AMBIGUITY");
+        return mode != null ? mode.trim().toUpperCase() : "ON_AMBIGUITY";
+    }
+
+    /**
+     * Resolves the candidate locators formatting mode.
+     * Valid options: "DETAILED" (default) or "COMPACT".
+     *
+     * @return the locators format mode string (uppercase)
+     */
+    public String getLocatorsFormat()
+    {
+        final String format = getProperty("neodymium.ai.action.locators.format", "DETAILED");
+        return format != null ? format.trim().toUpperCase() : "DETAILED";
+    }
+
+    /**
      * Checks if automatic locator improvement is enabled for recorded/executed actions.
      *
      * @return true if locator improvement is enabled (default: true), false otherwise

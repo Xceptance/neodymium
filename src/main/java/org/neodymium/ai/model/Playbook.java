@@ -116,5 +116,84 @@ public final class Playbook
     {
         return this.systemPromptAddons;
     }
+
+    /**
+     * Creates a new Builder instance for programmatically constructing a Playbook.
+     *
+     * @return a new Playbook.Builder
+     */
+    public static Builder builder()
+    {
+        return new Builder();
+    }
+
+    /**
+     * Builder class for fluent programmatic construction of {@link Playbook} instances.
+     */
+    public static final class Builder
+    {
+        private final List<PlaybookStep> steps = new ArrayList<>();
+        private final List<Map<String, SessionData.DataEntry>> dataSets = new ArrayList<>();
+        private final Map<String, String> systemPromptAddons = new HashMap<>();
+
+        private Builder()
+        {
+        }
+
+        /**
+         * Adds a step by instruction string.
+         *
+         * @param instruction the step instruction prompt
+         * @return this builder instance
+         */
+        public Builder step(final String instruction)
+        {
+            if (instruction != null && !instruction.isBlank())
+            {
+                this.steps.add(new PlaybookStep(instruction));
+            }
+            return this;
+        }
+
+        /**
+         * Adds a {@link PlaybookStep}.
+         *
+         * @param step the playbook step
+         * @return this builder instance
+         */
+        public Builder step(final PlaybookStep step)
+        {
+            if (step != null)
+            {
+                this.steps.add(step);
+            }
+            return this;
+        }
+
+        /**
+         * Adds a list of {@link PlaybookStep} instances.
+         *
+         * @param steps the list of steps to add
+         * @return this builder instance
+         */
+        public Builder steps(final List<PlaybookStep> steps)
+        {
+            if (steps != null)
+            {
+                this.steps.addAll(steps);
+            }
+            return this;
+        }
+
+        /**
+         * Builds and returns the immutable {@link Playbook} instance.
+         *
+         * @return a new Playbook
+         */
+        public Playbook build()
+        {
+            return new Playbook(this.steps, this.dataSets, this.systemPromptAddons);
+        }
+    }
 }
 

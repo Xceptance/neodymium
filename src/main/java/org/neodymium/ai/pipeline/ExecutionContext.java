@@ -82,6 +82,11 @@ public final class ExecutionContext
     public static final String KEY_VERIFICATION_TOKEN_USAGE = "verificationTokenUsage";
     public static final String KEY_STANDARD_TOKEN_USAGE = "standardTokenUsage";
     public static final String KEY_PESAP_TOKEN_USAGE = "pesapTokenUsage";
+    public static final String KEY_JUDGE_TOKEN_USAGE = "judgeTokenUsage";
+    public static final String KEY_STANDARD_CALL_COUNT = "standardCallCount";
+    public static final String KEY_VERIFICATION_CALL_COUNT = "verificationCallCount";
+    public static final String KEY_PESAP_CALL_COUNT = "pesapCallCount";
+    public static final String KEY_JUDGE_CALL_COUNT = "judgeCallCount";
     public static final String KEY_TOTAL_LLM_CALLS = "totalLlmCalls";
     public static final String KEY_TOTAL_REPLAYS = "totalReplays";
     public static final String KEY_CURRENT_CONTEXT_LEVEL = "currentContextLevel";

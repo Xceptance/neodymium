@@ -174,4 +174,21 @@ public class AiSessionTest
             Assertions.assertEquals("testAdmin", session.getExecutionContext().getSessionData().get("user"));
         }
     }
+
+    @Test
+    @DisplayName("execute(String) executes inline string steps programmatically")
+    public void testExecuteInlineStepsString() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final PlaybookRecording recording = session.execute("""
+                Navigate to homepage
+                Click login
+                """);
+            Assertions.assertNotNull(recording);
+            Assertions.assertEquals(2, recording.getRecordedSteps().size());
+            Assertions.assertEquals("Navigate to homepage", recording.getRecordedSteps().get(0).getInstruction());
+            Assertions.assertEquals("Click login", recording.getRecordedSteps().get(1).getInstruction());
+        }
+    }
 }

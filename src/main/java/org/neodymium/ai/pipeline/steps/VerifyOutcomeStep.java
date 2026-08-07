@@ -83,7 +83,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
             context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
                 ? cl
-                : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
         final boolean isVisualExecution = (step != null && step.isVisualStep()) || (activeLevel != null && activeLevel.includesScreenshot());
 
         // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps / escalated visual context

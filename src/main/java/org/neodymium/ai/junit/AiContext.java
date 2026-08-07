@@ -40,5 +40,5 @@ public @interface AiContext
      *
      * @return the context level
      */
-    ContextLevel value() default ContextLevel.LEAN;
+    ContextLevel value() default ContextLevel.MINIMAL;
 }

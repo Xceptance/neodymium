@@ -56,15 +56,18 @@ public class PageAnalyzerTest
         {
             com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/verla-perfect/index.html");
             final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+            final String minimalDom = analyzer.captureSimplifiedDom(ContextLevel.MINIMAL);
             final String leanDom = analyzer.captureSimplifiedDom(ContextLevel.LEAN);
             final String standardDom = analyzer.captureSimplifiedDom(ContextLevel.STANDARD);
             final String richDom = analyzer.captureSimplifiedDom(ContextLevel.RICH);
 
+            assertNotNull(minimalDom);
             assertNotNull(leanDom);
             assertNotNull(standardDom);
             assertNotNull(richDom);
 
-            // STANDARD includes full text copy (<p>) which makes it larger than LEAN
+            // MINIMAL DOM excludes non-form layout wrappers and static copy text, so LEAN >= MINIMAL
+            assertTrue(leanDom.length() >= minimalDom.length(), "LEAN DOM should be >= MINIMAL DOM in size");
             assertTrue(standardDom.length() >= leanDom.length(), "STANDARD DOM should be >= LEAN DOM in size");
             assertTrue(richDom.length() >= standardDom.length(), "RICH DOM should be >= STANDARD DOM in size");
         }

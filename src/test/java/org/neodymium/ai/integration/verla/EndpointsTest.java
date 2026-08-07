@@ -191,6 +191,7 @@ public class EndpointsTest extends BaseAiTest
         final HttpResponse<String> successResp = client.send(successReq, HttpResponse.BodyHandlers.ofString());
         Assertions.assertEquals(200, successResp.statusCode());
         Assertions.assertTrue(successResp.body().contains("Success") || successResp.body().contains("success") || successResp.body().contains("Order Number") || successResp.body().contains("V-"));
+        Assertions.assertTrue(successResp.body().matches("(?s).*V-\\d{7}-US.*"), "Order number should match V-XXXXXXX-US format with 7 random digits");
     }
 
     /**

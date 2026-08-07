@@ -20,14 +20,14 @@ package org.neodymium.ai.executor.selenide;
 
 /**
  * Defines the amount of page context sent to the LLM for a given instruction step.
- * The agent always starts at {@link #LEAN} and escalates to richer levels only
+ * The agent always starts at {@link #MINIMAL} and escalates to richer levels only
  * when the LLM explicitly requests it (via an {@code ESCALATE} response status)
  * or when an action execution fails.
  * <p>
  * Escalation does <em>not</em> count against the retry budget — it is a
  * different strategy, not a repeated attempt with the same data.
  *
- * @author AI-generated: Gemini 2.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 public enum ContextLevel
@@ -36,6 +36,12 @@ public enum ContextLevel
      * Minimal context with ZERO DOM elements. Used when an explicit inline (hint: #id) is provided.
      */
     HINT,
+
+    /**
+     * Ultra-minimal context with interactive form elements, links, buttons, inputs, selects, textareas
+     * and form containers only. Excludes structural layout wrappers and static copy text.
+     */
+    MINIMAL,
 
     /**
      * Interactive elements only: links, buttons, inputs, selects, textareas,
@@ -84,7 +90,8 @@ public enum ContextLevel
     {
         return switch (this)
         {
-            case HINT -> LEAN;
+            case HINT -> MINIMAL;
+            case MINIMAL -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> RICH;
             case RICH -> VISUAL;

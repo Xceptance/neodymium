@@ -343,22 +343,47 @@ public final class StateMachineRunner
             LOGGER.debug("=================================================");
         }
 
-        final Integer llmCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
         final Integer replays = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
-        
+
+        final Integer stdCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
+        final Integer judgeCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
+        final Integer verifCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
+        final Integer pesapCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
+
         final org.neodymium.ai.client.TokenUsage standardUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
+        final org.neodymium.ai.client.TokenUsage judgeUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
         final org.neodymium.ai.client.TokenUsage verificationUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
+        final org.neodymium.ai.client.TokenUsage pesapUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
+
+        final int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
+        final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
+        final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
+        final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
 
         final long standardIn = standardUsage != null ? standardUsage.inputTokenCount() : 0;
         final long standardOut = standardUsage != null ? standardUsage.outputTokenCount() : 0;
         final long standardCached = standardUsage != null ? standardUsage.cachedTokenCount() : 0;
+        final long standardTotal = standardIn + standardOut;
+
+        final long judgeIn = judgeUsage != null ? judgeUsage.inputTokenCount() : 0;
+        final long judgeOut = judgeUsage != null ? judgeUsage.outputTokenCount() : 0;
+        final long judgeCached = judgeUsage != null ? judgeUsage.cachedTokenCount() : 0;
+        final long judgeTotal = judgeIn + judgeOut;
+
         final long verificationIn = verificationUsage != null ? verificationUsage.inputTokenCount() : 0;
         final long verificationOut = verificationUsage != null ? verificationUsage.outputTokenCount() : 0;
         final long verificationCached = verificationUsage != null ? verificationUsage.cachedTokenCount() : 0;
-        
-        final long totalIn = standardIn + verificationIn;
-        final long totalOut = standardOut + verificationOut;
-        final long totalCached = standardCached + verificationCached;
+        final long verificationTotal = verificationIn + verificationOut;
+
+        final long pesapIn = pesapUsage != null ? pesapUsage.inputTokenCount() : 0;
+        final long pesapOut = pesapUsage != null ? pesapUsage.outputTokenCount() : 0;
+        final long pesapCached = pesapUsage != null ? pesapUsage.cachedTokenCount() : 0;
+        final long pesapTotal = pesapIn + pesapOut;
+
+        final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls;
+        final long totalIn = standardIn + judgeIn + verificationIn + pesapIn;
+        final long totalOut = standardOut + judgeOut + verificationOut + pesapOut;
+        final long totalCached = standardCached + judgeCached + verificationCached + pesapCached;
         final long totalTokens = totalIn + totalOut;
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
@@ -372,16 +397,22 @@ public final class StateMachineRunner
             }
             LOGGER.debug("║ ❌ Failure Reason:      {}", root.getMessage() != null ? root.getMessage() : root.toString());
         }
-        final Integer verifCallsObj = (Integer) context.getTransientData().get("verificationCallCount");
-        final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
         LOGGER.debug("║ ⏱️ Duration:            {} ms", String.format("%,d", durationMs));
-        LOGGER.debug("║ 🤖 LLM Calls:           {} (Standard: {}, Verification: {})", llmCalls + verificationCalls, llmCalls, verificationCalls);
         LOGGER.debug("║ 🎟️ Replays:             {}", replays);
-        LOGGER.debug("║ 🪙 Tokens:              {} (Input: {}, Cached: {}, Output: {})",
-            String.format("%,d", totalTokens),
-            String.format("%,d", totalIn),
-            String.format("%,d", totalCached),
-            String.format("%,d", totalOut));
+        LOGGER.debug("║ 🤖 LLM Calls & Tokens:  {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+                String.format("%,d", totalCalls),
+                String.format("%,d", totalTokens),
+                String.format("%,d", totalIn),
+                String.format("%,d", totalOut),
+                String.format("%,d", totalCached));
+        LOGGER.debug("║   ├─ PESAP:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+                String.format("%,d", pesapCalls), String.format("%,d", pesapTotal), String.format("%,d", pesapIn), String.format("%,d", pesapOut), String.format("%,d", pesapCached));
+        LOGGER.debug("║   ├─ Action:            {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+                String.format("%,d", standardCalls), String.format("%,d", standardTotal), String.format("%,d", standardIn), String.format("%,d", standardOut), String.format("%,d", standardCached));
+        LOGGER.debug("║   ├─ Judge:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+                String.format("%,d", judgeCalls), String.format("%,d", judgeTotal), String.format("%,d", judgeIn), String.format("%,d", judgeOut), String.format("%,d", judgeCached));
+        LOGGER.debug("║   └─ Verification:      {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+                String.format("%,d", verificationCalls), String.format("%,d", verificationTotal), String.format("%,d", verificationIn), String.format("%,d", verificationOut), String.format("%,d", verificationCached));
         LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
         @SuppressWarnings("unchecked")
         final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
