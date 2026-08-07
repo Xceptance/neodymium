@@ -43,7 +43,7 @@ import org.neodymium.ai.junit.NeodymiumAiTest;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
