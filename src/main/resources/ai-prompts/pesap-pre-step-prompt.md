@@ -31,7 +31,8 @@ Return ONLY minified JSON (no markdown blocks, preambles, or extra text):
 2. Escalation Carryover: If [PREVIOUS] step escalated/failed, upgrade [CURRENT] step context level accordingly.
 3. Java Method ('jm'): Set true ONLY if an explicit custom Java method name (e.g. assertCalculation) is specified; false for natural language descriptions.
 4. Step Splitting ('sp'):
-   - Omit if single action.
-   - DO NOT split prerequisite flows (e.g. wait before store, hover before click, focus before type).
-   - DO split independent sequential actions (e.g. "Type user, type pass, click Login" -> ["Type user", "type pass", "click Login"]).
-   - Preserve Conditional Branches: Keep conditional blocks ("If/When ... else ...") as a single unsplit step. Split only independent actions before or after the conditional block.
+   - DEFAULT: Omit 'sp' (keep unsplit) by default. Unsplit instructions are always safer than over-split instructions.
+   - FORBIDDEN (Single Target Flow): NEVER split instructions that locate or target a single element or object (e.g. "Locate X and [action]", "Find Y and [action]", "Select Z and [action]"). These describe a single continuous interaction flow on one target.
+   - FORBIDDEN (Referential Dependency): NEVER split an instruction if any downstream clause depends on context, nouns, or targets established in an earlier clause.
+   - ALLOWED ONLY (Multiple Explicit Targets): Split ONLY when the instruction contains multiple distinct target elements with explicit, independent actions for each target (e.g. "Type user into #username, type pass into #password, click Login" -> ["Type user into #username", "type pass into #password", "click Login"]).
+   - Preserve Conditional Branches: Keep conditional blocks ("If/When ... else ...") as a single unsplit step.
