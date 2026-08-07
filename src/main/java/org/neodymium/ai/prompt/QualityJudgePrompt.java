@@ -96,13 +96,21 @@ public class QualityJudgePrompt
 
         userMsg.append("## Candidate Locators\n");
         final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
+        final boolean isCompact = "COMPACT".equalsIgnoreCase(aiConfig != null ? aiConfig.getLocatorsFormat() : "DETAILED");
         if (candidates != null && !candidates.isEmpty())
         {
             for (int i = 0; i < candidates.size(); i++)
             {
                 final LocatorCandidate cand = candidates.get(i);
-                userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f, reasoning='%s'\n",
-                        i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore(), cand.getReasoning()));
+                if (isCompact)
+                {
+                    userMsg.append(String.format("Candidate %d: '%s' (%s)\n", i + 1, cand.getLocator(), cand.getStrategy()));
+                }
+                else
+                {
+                    userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f, reasoning='%s'\n",
+                            i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore(), cand.getReasoning()));
+                }
             }
         }
         else

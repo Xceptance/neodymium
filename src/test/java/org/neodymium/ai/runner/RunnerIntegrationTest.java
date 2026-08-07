@@ -803,6 +803,7 @@ public final class RunnerIntegrationTest
         // Enqueue state for state capture during healing
         final MockSutState state = new MockSutState("<html><body>Healed Page</body></html>", "healed-hash");
         delegate.enqueueState(state);
+        delegate.enqueueState(state);
 
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
         final ExecutionContext context = session.getExecutionContext();

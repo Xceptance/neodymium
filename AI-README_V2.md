@@ -523,9 +523,12 @@ For every extracted action, the primary LLM generates 2–3 candidate locators r
 * **Candidate 2 (Semantic Fallback)**: Clean semantic CSS class or standard attribute combination (e.g. `.btn-secondary[type='submit']`). `data-ai` attributes and dynamic CSS module hashes are **strictly forbidden**.
 * **Candidate 3 (Stability Fallback)**: `[data-ai='...']` selector attribute provided in the DOM dump (strategy `DATA_AI`).
 
-### B. Single-Call Self-Critique (`selfCritique` - Default & Enabled)
+### B. Embedded Judging & Self-Critique (`neodymium.ai.action.embeddedJudging.enabled`)
 
-To evaluate selector quality **without making an extra API call or duplicating DOM payload tokens**, the primary LLM performs internal self-judging in `action-extraction-prompt.md`:
+To evaluate selector quality **without making an extra API call or duplicating DOM payload tokens**, the primary LLM can perform internal self-judging:
+* **Configuration**: Controlled by `neodymium.ai.action.embeddedJudging.enabled=true|false` (default: `true`).
+  - **`true` (Enabled - Default):** Loads `action-extraction-prompt-judging.md`. For every extracted action, the primary LLM generates `candidateLocators`, evaluates them against stability rules, penalizes dynamic/mangled framework class hashes ($< 0.50$), and outputs `selfCritique` to select the winning `locator`.
+  - **`false` (Disabled):** Loads `action-extraction-prompt-non-judging.md`. Sends the lightweight non-judging system prompt template, omitting `candidateLocators` and `selfCritique` from the output JSON for ~40–60% lower token consumption and faster response times.
 * **Evaluation**: Evaluates `candidateLocators` against stability rules inside the primary HTTP request.
 * **Dynamic / Mangled Class Penalty**: Auto-generated dynamic framework IDs (e.g. `#v-btn-123`) and mangled CSS module hashes (e.g. `._app_child_level3_8392`, `.css-1x839a`) are assigned low scores ($< 0.50$).
 * **Self-Critique Rejection & Promotion**: If Candidate 1 contains dynamic framework hashes or `data-ai` attributes while Candidate 2 is a clean class/attribute selector, `selfCritique` explicitly rejects Candidate 1 and sets `locator` to Candidate 2.
@@ -550,6 +553,9 @@ When an independent "second opinion" model is desired (e.g. using Llama to criti
 * **Output**: Returns structured `QualityJudgeResult` JSON containing `judgment` (`APPROVED`, `REFINED`, `REJECTED`), `chosenLocator`, `chosenValue`, `isRegex`, `confidence`, and `reasoning`.
 * **Configuration**:
   ```properties
+  # Enables or disables embedded judging (candidateLocators & self-critique) inside action extraction prompt.
+  neodymium.ai.action.embeddedJudging.enabled=true
+
   # Enables or disables the external LLM Quality Judge ("second opinion") step.
   # Default is false (using Single-Call Self-Critique instead for token conservation).
   neodymium.ai.judge.enabled=false

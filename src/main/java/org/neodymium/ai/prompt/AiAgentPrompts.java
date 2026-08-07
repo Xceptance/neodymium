@@ -21,6 +21,7 @@ package org.neodymium.ai.prompt;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
+import org.neodymium.util.Neodymium;
 
 /**
  * Contains prompt loaders for the AI agent.
@@ -81,12 +82,25 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the action extraction system prompt template.
+     * Loads the action extraction system prompt template based on global configuration.
      *
      * @return the action extraction system prompt
      */
     public static String getActionExtractionPrompt()
     {
-        return getPrompt("action-extraction-prompt.md");
+        return getActionExtractionPrompt(Neodymium.aiConfiguration().isEmbeddedJudgingEnabled());
+    }
+
+    /**
+     * Loads the action extraction system prompt template.
+     *
+     * @param embeddedJudgingEnabled true to load judging prompt, false to load non-judging prompt
+     * @return the action extraction system prompt
+     */
+    public static String getActionExtractionPrompt(final boolean embeddedJudgingEnabled)
+    {
+        return embeddedJudgingEnabled
+            ? getPrompt("action-extraction-prompt-judging.md")
+            : getPrompt("action-extraction-prompt-non-judging.md");
     }
 }

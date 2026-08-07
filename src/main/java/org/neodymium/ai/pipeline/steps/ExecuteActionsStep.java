@@ -891,7 +891,10 @@ public final class ExecuteActionsStep implements PipelineStep
                 final LlmCapability capability = (initialLevel != null && initialLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                 final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
                 standardFlow.add(llmStep);
-                standardFlow.add(new QualityJudgeStep());
+                if (org.neodymium.ai.config.AiConfiguration.getInstance().isJudgeEnabled())
+                {
+                    standardFlow.add(new QualityJudgeStep());
+                }
             }
 
             standardFlow.add(executeStep);

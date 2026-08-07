@@ -453,6 +453,16 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if embedded judging (candidate locators ranking & self-critique) is enabled in action calls.
+     *
+     * @return true if embedded judging is enabled (default: true), false otherwise
+     */
+    public boolean isEmbeddedJudgingEnabled()
+    {
+        return getBoolean("neodymium.ai.action.embeddedJudging.enabled", true);
+    }
+
+    /**
      * Resolves the execution mode for the LLM Quality Judge.
      * Valid options: "ON_AMBIGUITY" (default), "ALWAYS", "ON_FAIL".
      *
