@@ -145,6 +145,7 @@ public final class VerlaProgrammaticDemoTest
      * Concept 2b: Programmatic Text Block string execution seeded with SessionData container.
      */
     @Test
+    @AiLlmCache
     public void test2b_ProgrammaticTextBlockWithSessionData() throws Exception
     {
         final SessionData sessionData = new SessionData();
@@ -166,6 +167,7 @@ public final class VerlaProgrammaticDemoTest
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiLlmCache
     @AiInlinePlaybook("""
         steps: |
           Open ${verla.url}/verla-perfect/index.html in the browser
@@ -185,6 +187,7 @@ public final class VerlaProgrammaticDemoTest
      * Allows setting breakpoints on individual Java statements to step through prompt execution.
      */
     @Test
+    @AiLlmCache
     public void test4_StepByStepJavaDebugging() throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
@@ -201,6 +204,7 @@ public final class VerlaProgrammaticDemoTest
      * Concept 5: Mixing direct Java Selenide commands with AI prompt step executions.
      */
     @Test
+    @AiLlmCache
     public void test5_MixStepsAndSelenideCommands() throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
@@ -222,6 +226,7 @@ public final class VerlaProgrammaticDemoTest
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiLlmCache
     @AiPlaybook("/playbooks/integration/verla-search-demo.yaml")
     public void test6_AnnotationDrivenExternalPlaybookExplicit(final AiSession session)
     {
@@ -234,6 +239,7 @@ public final class VerlaProgrammaticDemoTest
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiLlmCache
     @AiPlaybook
     public void test7_AnnotationDrivenExternalPlaybookConvention(final AiSession session)
     {

@@ -696,27 +696,76 @@ $("#search-input").pressEnter();
 
 ## 22. In-Memory LLM Request Caching (`@AiLlmCache`)
 
-Neodymium AI provides an in-memory key-value prompt response caching mechanism specifically for fast, zero-cost, reproducible framework testing:
+Neodymium AI provides an in-memory key-value prompt response caching mechanism (`@AiLlmCache`) specifically designed to speed up test suites, eliminate LLM API costs during replay verification, and ensure fast, deterministic integration test execution.
 
 ```java
-@Test
+@Browser("Chrome_1500x1000")
+@Tag("integration")
 @AiLlmCache
-public void test3_AnnotationDrivenInlinePlaybookTextBlocks(final AiSession session)
+@NeodymiumAiTest
+public final class VerlaProgrammaticDemoTest
 {
-    // Identical prompt executions return cached responses instantly
+    @Test
+    @AiLlmCache
+    public void test1_FullyProgrammaticObjects() throws Exception
+    {
+        // First execution populates in-memory cache on MISS
+    }
+
+    @Test
+    @AiLlmCache
+    public void test2a_ProgrammaticTextBlockWithEmbeddedYamlData() throws Exception
+    {
+        // Subsequent execution with identical prompt hits cache instantly
+    }
 }
 ```
 
 ### Scoping & Lifecycle Rules
 
-1. **Method-Only Scope (`@AiLlmCache` on `@Test` method)**:
-   The in-memory cache is created before the method starts and cleared immediately upon method completion. Responses are isolated strictly to that single method.
-2. **Class Execution Scope (`@AiLlmCache` on `@Test` class and method)**:
-   The cache lives for the duration of the entire test class run. Test methods carrying `@AiLlmCache` share identical prompt responses recorded during that class execution.
+1. **Class Execution Scope (`@AiLlmCache` on test class)**:
+   The cache persists for the entire test class run. Any test method annotated with `@AiLlmCache` inside the class shares and reuses identical prompt responses recorded during that test class run. The cache is automatically cleared when the class completes.
+2. **Method-Only Scope (`@AiLlmCache` on `@Test` method without class annotation)**:
+   The in-memory cache lives strictly for that single method execution. It is initialized before `beforeEach` and cleared immediately upon method completion in `afterEach`.
 3. **No Cache (`@Test` method without `@AiLlmCache`)**:
    Caching is completely bypassed and live LLM execution is performed, even if the surrounding test class is annotated with `@AiLlmCache`.
-4. **Human-Readable Logging**:
-   Cache lookups use human-readable instruction prompt keys (not hashes), outputting explicit `[LLM Cache HIT]` / `[LLM Cache MISS]` log lines during execution.
+4. **Programmatic & Annotation Support**:
+   Both annotation-driven tests (`@AiPlaybook`, `@AiInlinePlaybook`) and programmatic `AiSession.selenide(...)` calls automatically inherit caching when `@AiLlmCache` is present on the executing thread stack via `LlmCacheHelper`.
+
+### Human-Readable Logging & Telemetry
+
+Cache keys are constructed directly from human-readable prompt instruction strings (not opaque hashes), making execution logs transparent and readable:
+
+```text
+21:00:47 [LLM Cache MISS] Prompt: "Open http://localhost:8542/verla-perfect/index.html in the browser" -> Executing live LLM provider
+21:00:47 [LLM Cache HIT]  Prompt: "Open http://localhost:8542/verla-perfect/index.html in the browser" -> Returning cached response (gemini-3.5-flash-lite)
+⚡ CallLlmStep replayed response from internal LLM cache for instruction: Open http://localhost:8542/verla-perfect/index.html in the browser
+```
+
+Test statistics summary reports report exact internal cache hits and cached token metrics:
+
+```text
+======== 📊 AI Step Execution Statistics ========
+  Step 1: Open ${verla.url}/verla-perfect/index.html in the browser
+      Mode:           LLM
+      Duration:       267 ms
+      Escalations:    0
+      Context Levels: MINIMAL
+      Actions:        1 (NAVIGATE)
+      Standard Calls: 1 (Tokens: 0 in (1,459 cached) → 0 out)
+=================================================
+╔════════════════════════════════════════════════════════════════════════════════════
+║ 🏁 TEST CASE COMPLETED: SUCCESS
+║ ⏱️ Duration:            269 ms
+║ 🎟️ Replays:             0
+║ ⚡ Internal Cache Hits: 1 hits
+║ 🤖 LLM Calls & Tokens:  1 calls | 1,459 tokens (In: 0, Out: 0, Cached: 1,459)
+║   ├─ PESAP:             0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
+║   ├─ Action:            1 calls | 1,459 tokens (In: 0, Out: 0, Cached: 1,459)
+║   ├─ Judge:             0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
+║   └─ Verification:      0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
+╚════════════════════════════════════════════════════════════════════════════════════
+```
 
 
 

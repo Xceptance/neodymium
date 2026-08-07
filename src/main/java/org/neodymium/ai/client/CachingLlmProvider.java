@@ -64,10 +64,11 @@ public final class CachingLlmProvider implements LlmProvider
         {
             LOGGER.info("[LLM Cache HIT] Prompt: \"{}\" -> Returning cached response ({})",
                 request.userMessage(), cached.modelName());
+            final int cachedTokens = cached.tokenUsage() != null ? cached.tokenUsage().totalTokenCount() : 0;
             return new LlmResponse(
                 cached.content(),
-                new TokenUsage(0, 0, cached.tokenUsage().totalTokenCount()),
-                cached.modelName() + " (Cached)"
+                new TokenUsage(0, 0, cachedTokens, cachedTokens),
+                cached.modelName().contains("(Cached)") ? cached.modelName() : cached.modelName() + " (Cached)"
             );
         }
 

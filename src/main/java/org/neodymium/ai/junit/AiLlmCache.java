@@ -27,8 +27,13 @@ import java.lang.annotation.Target;
  * Opt-in annotation for Neodymium AI engine testing that enables in-memory
  * LLM response caching across annotated test methods in a test class execution.
  *
- * <p>When present on a test method, identical prompt instructions return cached
+ * <p>When present on a test class or test method, identical prompt instructions return cached
  * responses instantly without making duplicate live LLM calls during internal testing.</p>
+ *
+ * <ul>
+ *   <li><b>Class Scope:</b> When placed on a test class, the cache persists across all annotated methods in the class.</li>
+ *   <li><b>Method Scope:</b> When placed on a single test method without class annotation, the cache is isolated strictly to that method.</li>
+ * </ul>
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
