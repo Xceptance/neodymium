@@ -19,33 +19,32 @@
 package org.neodymium.ai.integration.live;
 
 import static com.codeborne.selenide.Condition.exist;
+import static com.codeborne.selenide.Condition.focused;
 import static com.codeborne.selenide.Condition.hidden;
 import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Condition.value;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
 import com.codeborne.selenide.Selenide;
-import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
 
 /**
  * Live integration test for the ASSERT action plugin.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
-@Tag("AuraIntegration")
-@Tag("LiveAPI")
 @NeodymiumAiTest
 public class AssertIntegrationTest extends BaseAiTest
 {
@@ -63,12 +62,12 @@ public class AssertIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Executes Assert integration test in both live and strict replay modes.
+     * Executes Assert integration test in live, strict replay, and healing replay modes.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssert.yaml")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiDataSet("assertData")
     public void testAssert(final AiSession session)
     {
@@ -77,11 +76,17 @@ public class AssertIntegrationTest extends BaseAiTest
               - testId: assertData
             steps: |
               Open ${assert.test.url} in the browser
-              Assert that the page title is 'Assert Action Test'
+              Assert that currentUrl contains 'testAssertHappyPath.html'
+              Assert that the pageTitle is 'Assert Action Test'
+              Assert that the welcome text matches '/Welcome.*store!/'
               Assert that the welcome text 'Welcome to our web store!' is visible
-              Assert that the 'Clickable Button' button is visible
-              Assert that the hidden 'Secret Button' is invisible
+              Assert that the 'Clickable Button' button is present
+              Assert that the hidden 'Secret Button' is absent
               Assert that the 'Clickable Button' button exists
+              Assert that the 'Username Input' value is 'JohnDoe'
+              Assert that the 'Username Input' placeholder is 'Enter username'
+              Click the 'Username Input' field
+              Assert that the 'Username Input' field is focused
             """);
 
         Selenide.Wait().until(d -> "Assert Action Test".equals(d.getTitle()));
@@ -89,6 +94,8 @@ public class AssertIntegrationTest extends BaseAiTest
         $("#visible-btn").shouldBe(visible);
         $("#hidden-btn").shouldBe(hidden);
         $("#visible-btn").should(exist);
+        $("#username").shouldHave(value("JohnDoe"));
+        $("#username").shouldBe(focused);
     }
 
     /**
@@ -100,12 +107,31 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTitleFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the page title is 'Incorrect Title'
+                """);
+        });
+    }
+
+    /**
+     * Verifies that incorrect URL assertion throws AssertionError in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUrlFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertUrlFailure(final AiSession session)
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that currentUrl contains 'nonexistent-page.html'
                 """);
         });
     }
@@ -119,7 +145,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTextFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -138,7 +164,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertVisibilityFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -157,7 +183,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertInvisibilityFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -176,7 +202,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertExistenceFailure(final AiSession session)
     {
-        org.junit.jupiter.api.Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(Throwable.class, () -> 
         {
             runPlaybook(session, """
                 steps: |
@@ -185,4 +211,44 @@ public class AssertIntegrationTest extends BaseAiTest
                 """);
         });
     }
+
+    /**
+     * Verifies that focused unfocused element assertion throws error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertFocusFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertFocusFailure(final AiSession session)
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'Clickable Button' button is focused
+                """);
+        });
+    }
+
+    /**
+     * Verifies that incorrect element attribute assertion throws error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertAttributeFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertAttributeFailure(final AiSession session)
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            runPlaybook(session, """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'Username Input' placeholder is 'Invalid Placeholder'
+                """);
+        });
+    }
 }
+
+

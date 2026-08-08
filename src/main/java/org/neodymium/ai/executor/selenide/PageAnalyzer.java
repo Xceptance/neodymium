@@ -116,6 +116,9 @@ public class PageAnalyzer
                 var MAX_HREF = 180;         // Max URL length for captured links
                 var MAX_VALUE = 150;        // Max characters for option/input value properties
 
+                // Preserve current active element focus across script execution
+                var activeElementBeforeAnalysis = document.activeElement;
+
                 // Map of assigned automation IDs (data-ai) to handle unique stamping
                 var usedIds = {};
 
@@ -385,6 +388,7 @@ public class PageAnalyzer
                                 type: el.getAttribute('type'),
                                 role: el.getAttribute('role'),
                                 checked: isChecked(el) ? 'true' : null,
+                                focused: (document.activeElement === el) ? 'true' : null,
                                 placeholder: el.getAttribute('placeholder'),
                                 ariaLabel: el.getAttribute('aria-label'),
                                 pattern: el.getAttribute('pattern'),
@@ -627,6 +631,7 @@ public class PageAnalyzer
                             type: el.getAttribute('type'),
                             role: el.getAttribute('role'),
                             checked: isChecked(el) ? 'true' : null,
+                            focused: (document.activeElement === el) ? 'true' : null,
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
                             value: getElementValue(el, tag),
@@ -722,6 +727,10 @@ public class PageAnalyzer
                     }
                 }
 
+                if (activeElementBeforeAnalysis && activeElementBeforeAnalysis !== document.body && typeof activeElementBeforeAnalysis.focus === 'function') {
+                    try { activeElementBeforeAnalysis.focus(); } catch (e) {}
+                }
+
                 return {tree: rootNodes, forms: level >= 1 ? captureForms() : []};
             })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
             """;
@@ -814,6 +823,7 @@ public class PageAnalyzer
                         }
                         var hud = document.getElementById('neodymium-ai-hud-container');
                         var hasHud = !!(hud && hud.style.display !== 'none');
+                        var activeEl = document.activeElement;
                         var overlay = document.createElement('div');
                         overlay.id = 'neo-screenshot-flash-overlay';
                         overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(255,255,255,0); z-index: 2147483646; display: flex; align-items: center; justify-content: center; pointer-events: none; transition: background-color 0.12s ease-out;';
@@ -838,6 +848,7 @@ public class PageAnalyzer
                             setTimeout(function() {
                                 if (document.body.contains(overlay)) { document.body.removeChild(overlay); }
                                 if (hasHud) { hud.style.display = 'none'; }
+                                if (activeEl && activeEl !== document.body && typeof activeEl.focus === 'function') { try { activeEl.focus(); } catch (e) {} }
                                 callback(hasHud);
                             }, 180);
                         }, 420);

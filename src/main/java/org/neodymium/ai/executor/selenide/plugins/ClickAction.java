@@ -58,6 +58,15 @@ public final class ClickAction implements BrowserActionPlugin
             {
                 Selenide.executeJavaScript("arguments[0].click();", element);
             }
+            try
+            {
+                Selenide.executeJavaScript(
+                        "if (arguments[0] && typeof arguments[0].focus === 'function') { arguments[0].focus(); }",
+                        element);
+            }
+            catch (final Exception ignored)
+            {
+            }
         }
     }
 }
