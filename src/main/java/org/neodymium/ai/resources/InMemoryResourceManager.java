@@ -41,30 +41,53 @@ public final class InMemoryResourceManager implements PlaybookResourceManager
      * Thread-safe memory storage mapping resource identifiers to their raw string content payloads.
      */
     private final Map<String, String> storage = new ConcurrentHashMap<>();
+    private final PlaybookResourceManager delegate;
 
     /**
-     * Constructs a default InMemoryResourceManager.
+     * Constructs a default InMemoryResourceManager with ClasspathResourceManager fallback.
      */
     public InMemoryResourceManager()
     {
+        this(new ClasspathResourceManager());
     }
 
     /**
-     * Opens an input stream to read a resource's raw content from the in-memory map.
+     * Constructs an InMemoryResourceManager with a fallback delegate resource manager.
+     *
+     * @param delegate the fallback resource manager
+     */
+    public InMemoryResourceManager(final PlaybookResourceManager delegate)
+    {
+        this.delegate = delegate;
+    }
+
+    /**
+     * Opens an input stream to read a resource's raw content from memory or fallback delegate.
      *
      * @param identifier the resource key
      * @return the input stream to read the resource content
-     * @throws IOException if the resource is not found in the storage map
+     * @throws IOException if the resource is not found
      */
     @Override
     public InputStream read(final String identifier) throws IOException
     {
         final String content = this.storage.get(identifier);
-        if (content == null)
+        if (content != null)
         {
-            throw new FileNotFoundException("Resource not found in memory: " + identifier);
+            return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
         }
-        return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+        if (this.delegate != null)
+        {
+            try
+            {
+                return this.delegate.read(identifier);
+            }
+            catch (final Exception ignored)
+            {
+                // Fall through to throw exception below
+            }
+        }
+        throw new FileNotFoundException("Resource not found in memory or delegate: " + identifier);
     }
 
     /**
@@ -88,7 +111,6 @@ public final class InMemoryResourceManager implements PlaybookResourceManager
 
     /**
      * Resolves a relative resource inclusion path against a parent resource path.
-     * Normalizes the result and returns a string with standardized forward slashes.
      *
      * @param parentIdentifier the identifier of the parent resource
      * @param relativePath the relative path to resolve
@@ -97,6 +119,11 @@ public final class InMemoryResourceManager implements PlaybookResourceManager
     @Override
     public String resolveInclude(final String parentIdentifier, final String relativePath)
     {
+        if (this.delegate != null)
+        {
+            return this.delegate.resolveInclude(parentIdentifier, relativePath);
+        }
+
         if (parentIdentifier == null || parentIdentifier.isEmpty())
         {
             return relativePath;

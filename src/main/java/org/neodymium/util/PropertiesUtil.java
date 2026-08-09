@@ -289,30 +289,40 @@ public class PropertiesUtil
                     String placeholder = result.substring(startIndex, endIndex + 1);
                     String key = result.substring(startIndex + 2, endIndex);
 
-                    // Check for circular dependencies
-                    if (visitedPlaceholders.contains(key))
-                    {
-                        throw new RuntimeException(
-                            "Circular properties reference detected for key: " + key + ". Please check your properties for circular dependencies and remove them.");
-                    }
-
-                    // Add this key to the visited set for this substitution chain
-                    visitedPlaceholders.add(key);
-
-                    // Get the replacement value
+                    // Get the replacement value (check propertiesMap first, then System properties, then environment variables)
                     String replacement = propertiesMap.get(key);
-                    // If no value found, keep the placeholder as is
                     if (replacement == null)
                     {
-                        replacement = placeholder;
+                        replacement = System.getProperty(key);
+                    }
+                    if (replacement == null)
+                    {
+                        replacement = System.getenv(key);
                     }
 
-                    result = result.replace(placeholder, replacement);
-                    changed = !result.equals(previousResult);
+                    if (replacement != null)
+                    {
+                        // Check for circular dependencies
+                        if (visitedPlaceholders.contains(key))
+                        {
+                            throw new RuntimeException(
+                                "Circular properties reference detected for key: " + key + ". Please check your properties for circular dependencies and remove them.");
+                        }
 
-                    // Continue searching for more placeholders from the beginning since the replacement could have introduced new placeholders
-                    // By resetting startIndex to the beginning of the string, the possible new placeholders will be found
-                    startIndex = result.indexOf("${");
+                        // Add this key to the visited set for this substitution chain
+                        visitedPlaceholders.add(key);
+
+                        result = result.replace(placeholder, replacement);
+                        changed = !result.equals(previousResult);
+
+                        // Continue searching for more placeholders from the beginning since the replacement could have introduced new placeholders
+                        startIndex = result.indexOf("${");
+                    }
+                    else
+                    {
+                        // Placeholder could not be resolved; skip it without treating it as a circular reference
+                        startIndex = result.indexOf("${", endIndex + 1);
+                    }
                 }
                 else
                 {

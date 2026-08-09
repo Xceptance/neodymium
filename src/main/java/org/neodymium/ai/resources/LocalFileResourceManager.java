@@ -122,9 +122,10 @@ public final class LocalFileResourceManager implements PlaybookResourceManager
     @Override
     public String resolveInclude(final String parentIdentifier, final String relativePath)
     {
-        if (parentIdentifier == null || parentIdentifier.isEmpty())
+        if (parentIdentifier == null || parentIdentifier.isEmpty()
+            || relativePath.startsWith("playbooks/") || relativePath.startsWith("ai-playbooks/") || relativePath.startsWith("src/") || relativePath.startsWith("/"))
         {
-            return relativePath;
+            return Path.of(relativePath).normalize().toString().replace('\\', '/');
         }
         
         final Path parent = Path.of(parentIdentifier);

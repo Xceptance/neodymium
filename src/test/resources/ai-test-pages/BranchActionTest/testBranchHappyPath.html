@@ -28,13 +28,19 @@
             document.getElementById('btn-accept').innerText = acceptText;
         }
 
+        const actions = [];
+        function logAction(actionText) {
+            actions.push(actionText);
+            document.getElementById('result').innerText = actions.join(' -> ');
+        }
+
         document.getElementById('btn-accept').addEventListener('click', function() {
             document.getElementById('cookie-banner').style.display = 'none';
-            document.getElementById('result').innerText = 'Cookies Accepted!';
+            logAction('Cookies Accepted!');
         });
         
         document.getElementById('btn-main-action').addEventListener('click', function() {
-            document.getElementById('result').innerText = 'Main Action Triggered!';
+            logAction('Main Action Triggered!');
         });
     </script>
 </body>
