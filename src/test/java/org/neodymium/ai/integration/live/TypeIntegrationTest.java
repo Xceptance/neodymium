@@ -54,13 +54,13 @@ public class TypeIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("typeData")
-    public void testType(final AiSession session)
+    public void testType(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("type.test.url", pageUrl, false);
-        session.getExecutionContext().getSessionData().putDynamic("type.test.first", "John", false);
+        session.data().putDynamic("type.test.url", pageUrl, false);
+        session.data().putDynamic("type.test.first", "John", false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: typeData
             steps: |

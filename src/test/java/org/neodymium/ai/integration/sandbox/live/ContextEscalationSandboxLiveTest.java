@@ -1,7 +1,7 @@
 /*
  * GNU Affero General Public License (AGPLv3)
  *
- * Copyright (c) 2026 Xceptance
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -32,19 +32,25 @@ import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
 /**
- * Live LLM integration test for the Mock Payment iFrame sandbox challenge.
- * Tests live Gemini execution across 3 modes.
+ * Live LLM integration test for the Context Escalation sandbox challenge.
+ * Verifies dynamic context escalation from LEAN to STANDARD mode.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @Tag("LiveLlm")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", recordingFileName = "live_mock_payment_iframe_playbook")
-public class MockPaymentIframeSandboxLiveTest extends BaseAiTest
+@AiPlaybook(value = "programmatic", recordingFileName = "live_context_escalation_playbook")
+public class ContextEscalationSandboxLiveTest extends BaseAiTest
 {
+    /**
+     * Constructs a default ContextEscalationSandboxLiveTest.
+     */
+    public ContextEscalationSandboxLiveTest()
+    {
+    }
 
     /**
      * Set up test page URL dynamically before each test.
@@ -52,30 +58,28 @@ public class MockPaymentIframeSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session) throws Exception
+    public void setupProperties(final AiSession session)
     {
-        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/mock-payment-iframe.html", server.getPort());
-        session.data().putDynamic("payment.iframe.test.url", pageUrl, false);
+        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/escalation.html", server.getPort());
+        session.data().putDynamic("escalation.test.url", pageUrl, false);
     }
 
     /**
-     * Tests mock payment iframe challenge using live LLM across 3 execution modes.
+     * Tests context escalation challenge using live LLM across 3 execution modes.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testMockPaymentIframeLive(final AiSession session) throws Exception
+    public void testContextEscalationLive(final AiSession session) throws Exception
     {
         session.execute( """
             steps: |
-              Open ${payment.iframe.test.url} in the browser
-              Type Alice Smith into the card holder name field
-              Type 4111111111111111 into the card number field
-              Click the submit payment button
-              Verify that #iframe-status shows "Processing payment..."
+              Open ${escalation.test.url} in the browser
+              Click the span element with text "Click Link Challenge"
+              Verify that the page body contains "AURA-9921-SECURE"
             """);
 
-        $("#iframe-status").shouldHave(text("Processing payment..."));
+        $("#secret-text").shouldHave(text("AURA-9921-SECURE"));
     }
 }

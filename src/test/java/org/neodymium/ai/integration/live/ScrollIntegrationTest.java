@@ -53,12 +53,12 @@ public class ScrollIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("scrollData")
-    public void testScroll(final AiSession session)
+    public void testScroll(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/ScrollActionTest/testScrollHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("scroll.test.url", pageUrl, false);
+        session.data().putDynamic("scroll.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: scrollData
             steps: |

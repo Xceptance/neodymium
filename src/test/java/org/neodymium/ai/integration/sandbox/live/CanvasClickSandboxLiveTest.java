@@ -52,10 +52,10 @@ public class CanvasClickSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/canvas-click.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("canvas.click.test.url", pageUrl, false);
+        session.data().putDynamic("canvas.click.test.url", pageUrl, false);
     }
 
     /**
@@ -65,9 +65,9 @@ public class CanvasClickSandboxLiveTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testCanvasClickLive(final AiSession session)
+    public void testCanvasClickLive(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${canvas.click.test.url} in the browser
               Click the blue canvas element

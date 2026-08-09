@@ -52,10 +52,10 @@ public class DynamicRevealSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/dynamic-reveal.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("reveal.test.url", pageUrl, false);
+        session.data().putDynamic("reveal.test.url", pageUrl, false);
     }
 
     /**
@@ -65,9 +65,9 @@ public class DynamicRevealSandboxLiveTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testDynamicRevealLive(final AiSession session)
+    public void testDynamicRevealLive(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${reveal.test.url} in the browser
               Click the promotional toggle button to reveal the coupon section

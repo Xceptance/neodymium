@@ -54,14 +54,14 @@ public class ForwardIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("forwardData")
-    public void testForward(final AiSession session)
+    public void testForward(final AiSession session) throws Exception
     {
         final String pageUrl1 = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
         final String pageUrl2 = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("forward.test.url1", pageUrl1, false);
-        session.getExecutionContext().getSessionData().putDynamic("forward.test.url2", pageUrl2, false);
+        session.data().putDynamic("forward.test.url1", pageUrl1, false);
+        session.data().putDynamic("forward.test.url2", pageUrl2, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: forwardData
             steps: |

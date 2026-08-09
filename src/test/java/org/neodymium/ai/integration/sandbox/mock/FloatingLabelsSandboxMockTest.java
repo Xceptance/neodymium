@@ -64,10 +64,10 @@ public class FloatingLabelsSandboxMockTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/floating-labels.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("floating.labels.test.url", pageUrl, false);
+        session.data().putDynamic("floating.labels.test.url", pageUrl, false);
 
         org.neodymium.ai.client.LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         if (!(provider instanceof MockLlmProvider))
@@ -142,9 +142,9 @@ public class FloatingLabelsSandboxMockTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testFloatingLabelsMock(final AiSession session)
+    public void testFloatingLabelsMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${floating.labels.test.url} in the browser
               Type John Doe into #username-input

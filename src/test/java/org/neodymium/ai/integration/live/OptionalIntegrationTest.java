@@ -52,12 +52,12 @@ public class OptionalIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("optionalData")
-    public void testOptional(final AiSession session)
+    public void testOptional(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("optional.test.url", pageUrl, false);
+        session.data().putDynamic("optional.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: optionalData
             steps: |

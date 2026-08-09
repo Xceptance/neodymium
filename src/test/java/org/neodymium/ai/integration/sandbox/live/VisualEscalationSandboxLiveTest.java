@@ -1,7 +1,7 @@
 /*
  * GNU Affero General Public License (AGPLv3)
  *
- * Copyright (c) 2026 Xceptance
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -18,7 +18,7 @@
  */
 package org.neodymium.ai.integration.sandbox.live;
 
-import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,19 +32,25 @@ import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
 /**
- * Live LLM integration test for the Mock Payment iFrame sandbox challenge.
- * Tests live Gemini execution across 3 modes.
+ * Live LLM integration test for the Visual Context Escalation sandbox challenge.
+ * Verifies dynamic context escalation from STANDARD to VISUAL mode for graphical assets.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @Tag("LiveLlm")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", recordingFileName = "live_mock_payment_iframe_playbook")
-public class MockPaymentIframeSandboxLiveTest extends BaseAiTest
+@AiPlaybook(value = "programmatic", recordingFileName = "live_visual_escalation_playbook")
+public class VisualEscalationSandboxLiveTest extends BaseAiTest
 {
+    /**
+     * Constructs a default VisualEscalationSandboxLiveTest.
+     */
+    public VisualEscalationSandboxLiveTest()
+    {
+    }
 
     /**
      * Set up test page URL dynamically before each test.
@@ -52,30 +58,28 @@ public class MockPaymentIframeSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session) throws Exception
+    public void setupProperties(final AiSession session)
     {
-        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/mock-payment-iframe.html", server.getPort());
-        session.data().putDynamic("payment.iframe.test.url", pageUrl, false);
+        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/visual-escalation.html", server.getPort());
+        session.data().putDynamic("visual.escalation.test.url", pageUrl, false);
     }
 
     /**
-     * Tests mock payment iframe challenge using live LLM across 3 execution modes.
+     * Tests visual escalation challenge using live LLM across 3 execution modes.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testMockPaymentIframeLive(final AiSession session) throws Exception
+    public void testVisualEscalationLive(final AiSession session) throws Exception
     {
         session.execute( """
             steps: |
-              Open ${payment.iframe.test.url} in the browser
-              Type Alice Smith into the card holder name field
-              Type 4111111111111111 into the card number field
-              Click the submit payment button
-              Verify that #iframe-status shows "Processing payment..."
+              Open ${visual.escalation.test.url} in the browser
+              Click the canvas element containing the target text
+              Verify that the canvas element #canvas-target is visible
             """);
 
-        $("#iframe-status").shouldHave(text("Processing payment..."));
+        $("#canvas-target").shouldBe(visible);
     }
 }

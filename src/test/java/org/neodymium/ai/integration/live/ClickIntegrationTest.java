@@ -54,12 +54,12 @@ public class ClickIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("clickData")
-    public void testClick(final AiSession session)
+    public void testClick(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("click.test.url", pageUrl, false);
+        session.data().putDynamic("click.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: clickData
             steps: |

@@ -55,10 +55,10 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("assert.test.url", pageUrl, false);
+        session.data().putDynamic("assert.test.url", pageUrl, false);
     }
 
     /**
@@ -69,9 +69,9 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssert.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiDataSet("assertData")
-    public void testAssert(final AiSession session)
+    public void testAssert(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: assertData
             steps: |
@@ -105,11 +105,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertTitleFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertTitleFailure(final AiSession session)
+    public void testAssertTitleFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the page title is 'Incorrect Title'
@@ -124,11 +124,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUrlFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertUrlFailure(final AiSession session)
+    public void testAssertUrlFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that currentUrl contains 'nonexistent-page.html'
@@ -143,11 +143,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertTextFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertTextFailure(final AiSession session)
+    public void testAssertTextFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the welcome text 'Goodbye!' is visible
@@ -162,11 +162,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertVisibilityFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertVisibilityFailure(final AiSession session)
+    public void testAssertVisibilityFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the hidden 'Secret Button' is visible
@@ -181,11 +181,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertInvisibilityFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertInvisibilityFailure(final AiSession session)
+    public void testAssertInvisibilityFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the 'Clickable Button' button is hidden
@@ -200,11 +200,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertExistenceFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertExistenceFailure(final AiSession session)
+    public void testAssertExistenceFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the non-existent button exists
@@ -219,11 +219,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertFocusFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertFocusFailure(final AiSession session)
+    public void testAssertFocusFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the 'Clickable Button' button is focused
@@ -238,11 +238,11 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertAttributeFailure.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertAttributeFailure(final AiSession session)
+    public void testAssertAttributeFailure(final AiSession session) throws Exception
     {
         Assertions.assertThrows(Throwable.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the 'Username Input' placeholder is 'Invalid Placeholder'

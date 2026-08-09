@@ -58,10 +58,10 @@ public class WaitIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/WaitActionTest/testWaitHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("wait.test.url", pageUrl, false);
+        session.data().putDynamic("wait.test.url", pageUrl, false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -115,9 +115,9 @@ public class WaitIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testWaitMock(final AiSession session)
+    public void testWaitMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: waitData
             steps: |

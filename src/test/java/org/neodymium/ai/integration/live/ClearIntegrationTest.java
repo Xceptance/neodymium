@@ -54,12 +54,12 @@ public class ClearIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("clearData")
-    public void testClear(final AiSession session)
+    public void testClear(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("clear.test.url", pageUrl, false);
+        session.data().putDynamic("clear.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: clearData
             steps: |

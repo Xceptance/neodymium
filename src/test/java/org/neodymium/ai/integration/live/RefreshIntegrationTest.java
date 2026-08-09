@@ -54,12 +54,12 @@ public class RefreshIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("refreshData")
-    public void testRefresh(final AiSession session)
+    public void testRefresh(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("refresh.test.url", pageUrl, false);
+        session.data().putDynamic("refresh.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: refreshData
             steps: |

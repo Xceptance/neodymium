@@ -58,10 +58,10 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("assert.test.url", pageUrl, false);
+        session.data().putDynamic("assert.test.url", pageUrl, false);
     }
 
     /**
@@ -71,10 +71,10 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook(value = "programmatic", recordingFileName = "custom_assert_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testAssertMock(final AiSession session)
+    public void testAssertMock(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
-        final String pageUrl = (String) session.getExecutionContext().getSessionData().get("assert.test.url");
+        final String pageUrl = (String) session.data().get("assert.test.url");
 
         mock.clearResponses();
         // Step 1: Open SUT
@@ -105,7 +105,7 @@ public class AssertIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: assertData
             steps:
@@ -140,10 +140,10 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook(value = "programmatic", recordingFileName = "custom_assert_failure_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testAssertFailureMock(final AiSession session)
+    public void testAssertFailureMock(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
-        final String pageUrl = (String) session.getExecutionContext().getSessionData().get("assert.test.url");
+        final String pageUrl = (String) session.data().get("assert.test.url");
         final org.neodymium.ai.config.ExecutionMode mode = session.getExecutionMode();
 
         if (mode == org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING)
@@ -181,7 +181,7 @@ public class AssertIntegrationTest extends BaseAiTest
         // The assertion should fail, throwing AssertionError
         org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
         {
-            runPlaybook(session, """
+            session.execute( """
                 steps:
                   - Open ${assert.test.url} in the browser
                   - "Assert that #welcome-message has text 'Goodbye!'"

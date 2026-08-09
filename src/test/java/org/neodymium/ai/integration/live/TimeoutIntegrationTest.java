@@ -52,16 +52,16 @@ public class TimeoutIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING})
     @AiDataSet("timeoutData")
-    public void testTimeout(final AiSession session)
+    public void testTimeout(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("timeout.test.url", pageUrl, false);
+        session.data().putDynamic("timeout.test.url", pageUrl, false);
 
         final long start = System.currentTimeMillis();
         
         try
         {
-            runPlaybook(session, """
+            session.execute( """
                 data:
                   - testId: timeoutData
                 steps: |

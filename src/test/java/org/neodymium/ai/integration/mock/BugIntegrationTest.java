@@ -38,10 +38,10 @@ public class BugIntegrationTest extends BaseAiTest
     private String pageUrl;
 
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("bug.test.url", pageUrl, false);
+        session.data().putDynamic("bug.test.url", pageUrl, false);
     }
 
     /**
@@ -49,7 +49,7 @@ public class BugIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testBugFailureStopsTestSuccessfully(final AiSession session)
+    public void testBugFailureStopsTestSuccessfully(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -83,7 +83,7 @@ public class BugIntegrationTest extends BaseAiTest
 
         // Note: No mock response for Step 3, because it should not be executed!
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: bugData
             steps: |
@@ -100,7 +100,7 @@ public class BugIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testBugFailureContinueOnError(final AiSession session)
+    public void testBugFailureContinueOnError(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -146,7 +146,7 @@ public class BugIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: bugData
             steps: |
@@ -163,7 +163,7 @@ public class BugIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testBugSuccessFailsTest(final AiSession session)
+    public void testBugSuccessFailsTest(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -195,8 +195,8 @@ public class BugIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        final RuntimeException ex = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
-            runPlaybook(session, """
+        org.junit.jupiter.api.Assertions.assertThrows(org.neodymium.ai.pipeline.UnexpectedSuccessException.class, () -> {
+            session.execute( """
                 data:
                   - testId: bugData
                 steps: |
@@ -204,9 +204,6 @@ public class BugIntegrationTest extends BaseAiTest
                   Verify that page title is 'All Actions Integration Test Page' (bug: expected_bug)
                 """);
         });
-
-        org.junit.jupiter.api.Assertions.assertTrue(ex.getCause() instanceof org.neodymium.ai.pipeline.UnexpectedSuccessException,
-            "Cause of the exception should be UnexpectedSuccessException");
     }
 
     /**
@@ -214,7 +211,7 @@ public class BugIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testBugSuccessContinueOnError(final AiSession session)
+    public void testBugSuccessContinueOnError(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -260,7 +257,7 @@ public class BugIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: bugData
             steps: |
@@ -277,7 +274,7 @@ public class BugIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testBugSplitStepInheritsFlags(final AiSession session)
+    public void testBugSplitStepInheritsFlags(final AiSession session) throws Exception
     {
         Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
         try
@@ -326,7 +323,7 @@ public class BugIntegrationTest extends BaseAiTest
 
             // Note: Sub-step 2 is skipped because Sub-step 1 fails and it's a bug step, which halts the test!
 
-            runPlaybook(session, """
+            session.execute( """
                 data:
                   - testId: bugData
                 steps: |

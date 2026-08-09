@@ -92,7 +92,7 @@ public class AiSessionTest
         data.set("env", "staging");
         final AiSession session = AiSession.selenide(data);
         Assertions.assertNotNull(session);
-        Assertions.assertEquals("staging", session.getExecutionContext().getSessionData().get("env"));
+        Assertions.assertEquals("staging", session.data().get("env"));
     }
 
     @Test
@@ -114,7 +114,7 @@ public class AiSessionTest
         data.set("baseUrl", "http://api.example.com");
         final AiSession session = AiSession.rest(data);
         Assertions.assertNotNull(session);
-        Assertions.assertEquals("http://api.example.com", session.getExecutionContext().getSessionData().get("baseUrl"));
+        Assertions.assertEquals("http://api.example.com", session.data().get("baseUrl"));
     }
 
     @Test
@@ -136,7 +136,7 @@ public class AiSessionTest
         data.set("key", "value");
         final AiSession session = AiSession.mock(data);
         Assertions.assertNotNull(session);
-        Assertions.assertEquals("value", session.getExecutionContext().getSessionData().get("key"));
+        Assertions.assertEquals("value", session.data().get("key"));
     }
 
     @Test
@@ -171,7 +171,7 @@ public class AiSessionTest
 
             final PlaybookRecording recording = session.execute(playbook, customData);
             Assertions.assertNotNull(recording);
-            Assertions.assertEquals("testAdmin", session.getExecutionContext().getSessionData().get("user"));
+            Assertions.assertEquals("testAdmin", session.data().get("user"));
         }
     }
 

@@ -58,10 +58,10 @@ public class HoverIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("hover.test.url", pageUrl, false);
+        session.data().putDynamic("hover.test.url", pageUrl, false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -101,9 +101,9 @@ public class HoverIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testHoverMock(final AiSession session)
+    public void testHoverMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: hoverData
             steps: |

@@ -60,12 +60,12 @@ public class BackIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl1 = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
         final String pageUrl2 = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("back.test.url1", pageUrl1, false);
-        session.getExecutionContext().getSessionData().putDynamic("back.test.url2", pageUrl2, false);
+        session.data().putDynamic("back.test.url1", pageUrl1, false);
+        session.data().putDynamic("back.test.url2", pageUrl2, false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -119,9 +119,9 @@ public class BackIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBackMock(final AiSession session)
+    public void testBackMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: backData
             steps: |

@@ -56,10 +56,10 @@ public class TimeoutIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("timeout.test.url", pageUrl, false);
+        session.data().putDynamic("timeout.test.url", pageUrl, false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -99,13 +99,13 @@ public class TimeoutIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING})
-    public void testTimeoutMock(final AiSession session)
+    public void testTimeoutMock(final AiSession session) throws Exception
     {
         final long start = System.currentTimeMillis();
         
         try
         {
-            runPlaybook(session, """
+            session.execute( """
                 data:
                   - testId: timeoutData
                 steps: |

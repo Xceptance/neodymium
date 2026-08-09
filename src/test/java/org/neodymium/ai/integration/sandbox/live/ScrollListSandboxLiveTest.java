@@ -52,10 +52,10 @@ public class ScrollListSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/scroll-list.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("scroll.list.test.url", pageUrl, false);
+        session.data().putDynamic("scroll.list.test.url", pageUrl, false);
     }
 
     /**
@@ -65,9 +65,9 @@ public class ScrollListSandboxLiveTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testScrollListLive(final AiSession session)
+    public void testScrollListLive(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${scroll.list.test.url} in the browser
               Scroll the scrollable container all the way to the bottom

@@ -59,12 +59,12 @@ public class ForwardIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl1 = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
         final String pageUrl2 = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("forward.test.url1", pageUrl1, false);
-        session.getExecutionContext().getSessionData().putDynamic("forward.test.url2", pageUrl2, false);
+        session.data().putDynamic("forward.test.url1", pageUrl1, false);
+        session.data().putDynamic("forward.test.url2", pageUrl2, false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -132,9 +132,9 @@ public class ForwardIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testForwardMock(final AiSession session)
+    public void testForwardMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: forwardData
             steps: |

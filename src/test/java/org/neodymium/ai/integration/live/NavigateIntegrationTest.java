@@ -54,12 +54,12 @@ public class NavigateIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("navigateData")
-    public void testNavigate(final AiSession session)
+    public void testNavigate(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("navigate.test.url", pageUrl, false);
+        session.data().putDynamic("navigate.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: navigateData
             steps: |

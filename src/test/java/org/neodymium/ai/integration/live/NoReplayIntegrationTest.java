@@ -55,12 +55,12 @@ public class NoReplayIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("noReplayData")
-    public void testNoReplay(final AiSession session)
+    public void testNoReplay(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("noReplay.test.url", pageUrl, false);
+        session.data().putDynamic("noReplay.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: noReplayData
             steps: |

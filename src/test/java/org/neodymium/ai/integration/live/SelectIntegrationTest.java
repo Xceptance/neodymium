@@ -54,12 +54,12 @@ public class SelectIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("selectData")
-    public void testSelect(final AiSession session)
+    public void testSelect(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/SelectActionTest/testSelectHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("select.test.url", pageUrl, false);
+        session.data().putDynamic("select.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: selectData
             steps: |

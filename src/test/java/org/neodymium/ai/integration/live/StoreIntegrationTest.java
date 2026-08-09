@@ -54,12 +54,12 @@ public class StoreIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("storeData")
-    public void testStore(final AiSession session)
+    public void testStore(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/StoreActionTest/testStoreHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("store.test.url", pageUrl, false);
+        session.data().putDynamic("store.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: storeData
             steps: |

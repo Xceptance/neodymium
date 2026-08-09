@@ -49,10 +49,10 @@ public class MockOauthLoginSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/mock-oauth-login.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("oauth.test.url", pageUrl, false);
+        session.data().putDynamic("oauth.test.url", pageUrl, false);
     }
 
     /**
@@ -62,9 +62,9 @@ public class MockOauthLoginSandboxLiveTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testMockOauthLoginLive(final AiSession session)
+    public void testMockOauthLoginLive(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${oauth.test.url} in the browser
               Type user@example.com into the email field

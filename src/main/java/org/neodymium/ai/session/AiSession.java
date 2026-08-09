@@ -153,6 +153,26 @@ public abstract class AiSession implements AutoCloseable
     }
 
     /**
+     * Retrieves the session dataset container.
+     *
+     * @return the session data container
+     */
+    public final SessionData data()
+    {
+        return this.executionContext.getSessionData();
+    }
+
+    /**
+     * Alias for {@link #data()} returning the session dataset container.
+     *
+     * @return the session data container
+     */
+    public final SessionData getData()
+    {
+        return data();
+    }
+
+    /**
      * Retrieves the LLM provider registry.
      *
      * @return the LLM registry
@@ -274,6 +294,29 @@ public abstract class AiSession implements AutoCloseable
         this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
 
         final List<PlaybookStep> playbookSteps = playbook.getSteps();
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.steps");
+
+        if (this.executionMode != null && this.executionMode.isReplay() && sessionSteps != null && !sessionSteps.isEmpty())
+        {
+            for (int i = 0; i < playbookSteps.size() && i < sessionSteps.size(); i++)
+            {
+                final PlaybookStep parsed = playbookSteps.get(i);
+                final PlaybookStep recorded = sessionSteps.get(i);
+                if (recorded.getActions() != null && !recorded.getActions().isEmpty())
+                {
+                    parsed.setActions(recorded.getActions());
+                }
+            }
+        }
+
+        if (sessionSteps != null && sessionSteps != playbookSteps)
+        {
+            sessionSteps.clear();
+            sessionSteps.addAll(playbookSteps);
+        }
+
         for (int i = playbookSteps.size() - 1; i >= 0; i--)
         {
             this.executionContext.pushStep(
@@ -281,8 +324,28 @@ public abstract class AiSession implements AutoCloseable
             );
         }
 
-        final StateMachineRunner runner = new StateMachineRunner(this);
-        runner.run();
+        try
+        {
+            final StateMachineRunner runner = new StateMachineRunner(this);
+            runner.run();
+        }
+        catch (final Exception e)
+        {
+            Throwable root = e;
+            while (root != null)
+            {
+                if (root instanceof AssertionError ae)
+                {
+                    throw ae;
+                }
+                if (root.getCause() == root)
+                {
+                    break;
+                }
+                root = root.getCause();
+            }
+            throw e;
+        }
 
         return new PlaybookRecording(playbookSteps);
     }

@@ -54,12 +54,12 @@ public class HoverIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("hoverData")
-    public void testHover(final AiSession session)
+    public void testHover(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("hover.test.url", pageUrl, false);
+        session.data().putDynamic("hover.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: hoverData
             steps: |

@@ -52,10 +52,10 @@ public class ClickInterceptSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/click-intercept.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("intercept.test.url", pageUrl, false);
+        session.data().putDynamic("intercept.test.url", pageUrl, false);
     }
 
     /**
@@ -65,9 +65,9 @@ public class ClickInterceptSandboxLiveTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testClickInterceptLive(final AiSession session)
+    public void testClickInterceptLive(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${intercept.test.url} in the browser
               Close or dismiss the blocking overlay

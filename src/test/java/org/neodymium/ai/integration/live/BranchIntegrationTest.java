@@ -54,12 +54,12 @@ public class BranchIntegrationTest extends BaseAiTest
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     @AiDataSet("branchData")
-    public void testBranch(final AiSession session)
+    public void testBranch(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("branch.test.url", pageUrl, false);
+        session.data().putDynamic("branch.test.url", pageUrl, false);
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: branchData
             steps: |

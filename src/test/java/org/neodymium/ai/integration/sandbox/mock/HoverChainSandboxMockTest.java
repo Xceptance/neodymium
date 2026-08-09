@@ -61,10 +61,10 @@ public class HoverChainSandboxMockTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/hover-chain.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("hover.chain.test.url", pageUrl, false);
+        session.data().putDynamic("hover.chain.test.url", pageUrl, false);
 
         org.neodymium.ai.client.LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         if (!(provider instanceof MockLlmProvider))
@@ -153,9 +153,9 @@ public class HoverChainSandboxMockTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testHoverChainMock(final AiSession session)
+    public void testHoverChainMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${hover.chain.test.url} in the browser
               Hover over #menu-products

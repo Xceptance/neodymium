@@ -53,10 +53,10 @@ public class CrossOriginIframeSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/cross-origin-iframe.html?iframePort=%d", server.getPort(), server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("cross.iframe.test.url", pageUrl, false);
+        session.data().putDynamic("cross.iframe.test.url", pageUrl, false);
     }
 
     /**
@@ -66,9 +66,9 @@ public class CrossOriginIframeSandboxLiveTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testCrossOriginIframeLive(final AiSession session)
+    public void testCrossOriginIframeLive(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${cross.iframe.test.url} in the browser
             """);

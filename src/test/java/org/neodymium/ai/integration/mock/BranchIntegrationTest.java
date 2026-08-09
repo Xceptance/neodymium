@@ -60,10 +60,10 @@ public class BranchIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("branch.test.url", pageUrl, false);
+        session.data().putDynamic("branch.test.url", pageUrl, false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -119,9 +119,9 @@ public class BranchIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBranchMock(final AiSession session)
+    public void testBranchMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: branchData
             steps: |
@@ -156,7 +156,7 @@ public class BranchIntegrationTest extends BaseAiTest
      */
     @AiPlaybook(value = "programmatic", name = "unpopulated_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBranchUnpopulatedStrictMock(final AiSession session)
+    public void testBranchUnpopulatedStrictMock(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         try
@@ -220,7 +220,7 @@ public class BranchIntegrationTest extends BaseAiTest
         if (mode == ExecutionMode.REPLAY_STRICT)
         {
             org.junit.jupiter.api.Assertions.assertThrows(UnpopulatedBranchAssertionError.class, () -> {
-                runPlaybook(session, """
+                session.execute( """
                     data:
                       - testId: branchData
                     steps: |
@@ -231,7 +231,7 @@ public class BranchIntegrationTest extends BaseAiTest
         }
         else
         {
-            runPlaybook(session, """
+            session.execute( """
                 data:
                   - testId: branchData
                 steps: |
@@ -248,7 +248,7 @@ public class BranchIntegrationTest extends BaseAiTest
      */
     @AiPlaybook(value = "programmatic", name = "unpopulated_branch_healing_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBranchUnpopulatedHealingMock(final AiSession session)
+    public void testBranchUnpopulatedHealingMock(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         try
@@ -335,7 +335,7 @@ public class BranchIntegrationTest extends BaseAiTest
         }
         else
         {
-            runPlaybook(session, """
+            session.execute( """
                 data:
                   - testId: branchData
                 steps: |
@@ -352,7 +352,7 @@ public class BranchIntegrationTest extends BaseAiTest
      */
     @AiPlaybook(value = "programmatic", name = "ifelse_then_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBranchIfElseThenMock(final AiSession session)
+    public void testBranchIfElseThenMock(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         try
@@ -368,7 +368,7 @@ public class BranchIntegrationTest extends BaseAiTest
         }
 
         final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("branch.test.url", pageUrl, false);
+        session.data().putDynamic("branch.test.url", pageUrl, false);
 
         mock.addResponse(new LlmResponse("""
             {
@@ -420,7 +420,7 @@ public class BranchIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: branchData
             steps: |
@@ -438,7 +438,7 @@ public class BranchIntegrationTest extends BaseAiTest
      */
     @AiPlaybook(value = "programmatic", name = "ifelse_else_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBranchIfElseElseMock(final AiSession session)
+    public void testBranchIfElseElseMock(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         try
@@ -454,7 +454,7 @@ public class BranchIntegrationTest extends BaseAiTest
         }
 
         final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html?noCookies=true", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("branch.test.url", pageUrl, false);
+        session.data().putDynamic("branch.test.url", pageUrl, false);
 
         mock.addResponse(new LlmResponse("""
             {
@@ -506,7 +506,7 @@ public class BranchIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: branchData
             steps: |

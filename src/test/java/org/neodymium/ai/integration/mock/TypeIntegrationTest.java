@@ -58,11 +58,11 @@ public class TypeIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupPropertiesAndMock(final AiSession session)
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("type.test.url", pageUrl, false);
-        session.getExecutionContext().getSessionData().putDynamic("type.test.first", "John", false);
+        session.data().putDynamic("type.test.url", pageUrl, false);
+        session.data().putDynamic("type.test.first", "John", false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
 
@@ -102,9 +102,9 @@ public class TypeIntegrationTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testTypeMock(final AiSession session)
+    public void testTypeMock(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             data:
               - testId: typeData
             steps: |

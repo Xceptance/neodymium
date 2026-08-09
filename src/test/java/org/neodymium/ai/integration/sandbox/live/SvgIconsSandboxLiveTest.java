@@ -52,10 +52,10 @@ public class SvgIconsSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/svg-icons.html", server.getPort());
-        session.getExecutionContext().getSessionData().putDynamic("svg.icons.test.url", pageUrl, false);
+        session.data().putDynamic("svg.icons.test.url", pageUrl, false);
     }
 
     /**
@@ -65,9 +65,9 @@ public class SvgIconsSandboxLiveTest extends BaseAiTest
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testSvgIconsLive(final AiSession session)
+    public void testSvgIconsLive(final AiSession session) throws Exception
     {
-        runPlaybook(session, """
+        session.execute( """
             steps: |
               Open ${svg.icons.test.url} in the browser
               Click the delete button with the SVG trash icon
