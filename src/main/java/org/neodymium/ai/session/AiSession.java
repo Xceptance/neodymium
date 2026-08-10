@@ -18,9 +18,11 @@
  */
 package org.neodymium.ai.session;
 
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRegistry;
@@ -32,13 +34,16 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
 import java.io.IOException;
+import org.neodymium.ai.model.ExecutionMetrics;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookRecording;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
+import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.InlinePlaybookParser;
 import org.neodymium.ai.prompt.ActionExtractionPrompt;
@@ -143,6 +148,56 @@ public abstract class AiSession implements AutoCloseable
     }
 
     /**
+     * Checks if this session executes in live LLM action generation mode.
+     *
+     * @return true if live execution mode, false otherwise
+     */
+    public final boolean isLive()
+    {
+        return this.executionMode.isLive();
+    }
+
+    /**
+     * Checks if this session executes pre-recorded actions from replay cache.
+     *
+     * @return true if replay mode, false otherwise
+     */
+    public final boolean isReplay()
+    {
+        return this.executionMode.isReplay();
+    }
+
+    /**
+     * Checks if this session automatically records executed actions.
+     *
+     * @return true if recording mode, false otherwise
+     */
+    public final boolean isRecording()
+    {
+        return this.executionMode.isRecording();
+    }
+
+    /**
+     * Checks if this session supports self-healing on step replay failure.
+     *
+     * @return true if healing supported, false otherwise
+     */
+    public final boolean supportsHealing()
+    {
+        return this.executionMode.supportsHealing();
+    }
+
+    /**
+     * Checks if this session executes under strict replay mode without LLM fallbacks.
+     *
+     * @return true if strict replay mode, false otherwise
+     */
+    public final boolean isStrictReplay()
+    {
+        return this.executionMode == ExecutionMode.REPLAY_STRICT;
+    }
+
+    /**
      * Retrieves the thread-isolated execution context.
      *
      * @return the execution context
@@ -170,6 +225,119 @@ public abstract class AiSession implements AutoCloseable
     public final SessionData getData()
     {
         return data();
+    }
+
+    /**
+     * Alias for {@link #data()} returning the session dataset container.
+     *
+     * @return the session data container
+     */
+    public final SessionData getSessionData()
+    {
+        return data();
+    }
+
+    /**
+     * Retrieves a variable value from the session dataset container.
+     *
+     * @param key the variable key name
+     * @return the variable object value, or null
+     */
+    public final Object getData(final String key)
+    {
+        return this.executionContext.getSessionData().get(key);
+    }
+
+    /**
+     * Sets a non-sensitive variable in the dynamic dataset container.
+     *
+     * @param key the variable key name
+     * @param value the variable object value
+     */
+    public final void setData(final String key, final Object value)
+    {
+        this.executionContext.getSessionData().set(key, value);
+    }
+
+    /**
+     * Retrieves total LLM API calls made during this session.
+     *
+     * @return total LLM call count
+     */
+    public final int getTotalLlmCalls()
+    {
+        final Integer calls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_TOTAL_LLM_CALLS);
+        return calls != null ? calls : 0;
+    }
+
+    /**
+     * Retrieves total replay steps executed from cache during this session.
+     *
+     * @return total replayed step count
+     */
+    public final int getTotalReplays()
+    {
+        final Integer replays = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_TOTAL_REPLAYS);
+        return replays != null ? replays : 0;
+    }
+
+    /**
+     * Retrieves total internal LLM prompt cache hits during this session.
+     *
+     * @return total internal cache hits
+     */
+    public final int getInternalCacheHits()
+    {
+        final Integer hits = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_INTERNAL_CACHE_HITS);
+        return hits != null ? hits : 0;
+    }
+
+    /**
+     * Computes an ExecutionMetrics snapshot instance for this session's active execution context state.
+     *
+     * @return execution metrics snapshot
+     */
+    public final ExecutionMetrics getMetrics()
+    {
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.steps");
+        final int stepCount = sessionSteps != null ? sessionSteps.size() : 0;
+        final int healedCount = sessionSteps != null ? (int) sessionSteps.stream().filter(s -> s.getStatus() == PlaybookStepStatus.HEALED).count() : 0;
+        final int softFailedCount = sessionSteps != null ? (int) sessionSteps.stream().filter(s -> s.isFailed() || s.getStatus() == PlaybookStepStatus.FAILED).count() : 0;
+
+        final Integer stdCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
+        final Integer verifCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
+        final Integer pesapCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
+        final Integer judgeCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
+
+        @SuppressWarnings("unchecked")
+        final List<StepStats> stepStatsList = (List<StepStats>) this.executionContext.getTransientData().get("execution.stepStatsList");
+        final Map<String, Integer> contextLevelCounts = new HashMap<>();
+        int totalEscalations = 0;
+        if (stepStatsList != null)
+        {
+            for (final StepStats stats : stepStatsList)
+            {
+                totalEscalations += aggregateStepStats(stats, contextLevelCounts);
+            }
+        }
+
+        return new ExecutionMetrics(
+            this.executionMode,
+            getTotalLlmCalls(),
+            stdCalls != null ? stdCalls : 0,
+            verifCalls != null ? verifCalls : 0,
+            pesapCalls != null ? pesapCalls : 0,
+            judgeCalls != null ? judgeCalls : 0,
+            stepCount,
+            healedCount,
+            softFailedCount,
+            getTotalReplays(),
+            getInternalCacheHits(),
+            totalEscalations,
+            contextLevelCounts,
+            null
+        );
     }
 
     /**
@@ -347,7 +515,57 @@ public abstract class AiSession implements AutoCloseable
             throw e;
         }
 
-        return new PlaybookRecording(playbookSteps);
+        final Map<String, Object> recordingMetadata = new HashMap<>(this.executionContext.getRecordingMetadata());
+        recordingMetadata.put("totalLlmCalls", getTotalLlmCalls());
+        recordingMetadata.put("standardCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_STANDARD_CALL_COUNT, 0));
+        recordingMetadata.put("verificationCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 0));
+        recordingMetadata.put("pesapCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_PESAP_CALL_COUNT, 0));
+        recordingMetadata.put("judgeCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0));
+        recordingMetadata.put("totalReplays", getTotalReplays());
+        recordingMetadata.put("internalCacheHits", getInternalCacheHits());
+
+        @SuppressWarnings("unchecked")
+        final List<StepStats> stepStatsList = (List<StepStats>) this.executionContext.getTransientData().get("execution.stepStatsList");
+        final Map<String, Integer> contextLevelCounts = new HashMap<>();
+        int totalEscalations = 0;
+        if (stepStatsList != null)
+        {
+            for (final StepStats stats : stepStatsList)
+            {
+                totalEscalations += aggregateStepStats(stats, contextLevelCounts);
+            }
+        }
+        recordingMetadata.put("totalEscalations", totalEscalations);
+        recordingMetadata.put("contextLevelCounts", contextLevelCounts);
+
+        return new PlaybookRecording(playbookSteps, recordingMetadata, this.executionMode);
+    }
+
+    private static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)
+    {
+        if (stats == null)
+        {
+            return 0;
+        }
+        int escalations = 0;
+        final List<String> levels = stats.getContextLevels();
+        if (levels != null && !levels.isEmpty())
+        {
+            escalations += Math.max(0, levels.size() - 1);
+            for (final String lvl : levels)
+            {
+                if (lvl != null && !lvl.isBlank())
+                {
+                    final String normalized = lvl.trim().toUpperCase();
+                    contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
+                }
+            }
+        }
+        for (final StepStats child : stats.getSubStats())
+        {
+            escalations += aggregateStepStats(child, contextLevelCounts);
+        }
+        return escalations;
     }
 
     /**

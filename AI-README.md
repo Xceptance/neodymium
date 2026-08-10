@@ -771,6 +771,108 @@ Test statistics summary reports report exact internal cache hits and cached toke
 ╚════════════════════════════════════════════════════════════════════════════════════
 ```
 
+---
+
+## 23. Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters
+
+Neodymium AI provides programmatic access to session dataset variables, execution mode contexts, and telemetry metrics (such as LLM call counts, replayed steps, self-healing status, and token usage) directly from `AiSession` and `PlaybookRecording`.
+
+### A. Session Data & Variable Management
+
+Session data variables are stored in the thread-isolated `SessionData` container attached to `AiSession`:
+
+```java
+// Set dynamic variables during test case execution
+session.setData("userEmail", "test@example.com");
+
+// Retrieve variables (resolves dynamic layer, static dataset, System props, and Neodymium data)
+Object user = session.getData("userEmail");
+SessionData sessionData = session.getSessionData(); // or session.data()
+```
+
+### B. Execution Mode Querying
+
+You can inspect the governing `ExecutionMode` (`LLM_ONLY`, `LLM_RECORDING`, `FORCE_RECORDING`, `REPLAY_WITH_HEALING`, `REPLAY_STRICT`) directly from `AiSession`, `PlaybookRecording`, or `ExecutionMetrics`:
+
+```java
+// Query execution mode directly
+ExecutionMode mode = session.getExecutionMode();       // or recording.getExecutionMode()
+
+// Mode query helper booleans available on Session, Recording, & Metrics:
+boolean live      = session.isLive();           // FORCE_RECORDING, LLM_ONLY, LLM_RECORDING
+boolean replay    = session.isReplay();         // REPLAY_STRICT, REPLAY_WITH_HEALING, LLM_RECORDING
+boolean strict    = session.isStrictReplay();   // REPLAY_STRICT
+boolean recording = session.isRecording();      // FORCE_RECORDING, LLM_RECORDING
+boolean healing   = session.supportsHealing();  // REPLAY_WITH_HEALING
+```
+
+### C. Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)
+
+To validate execution invariants across different `@AiMode` parameterized test runs, `PlaybookRecording` provides a fluent `MetricsAsserter` with overloaded breakdown and range assertions:
+
+```java
+// Execute playbook and perform mode-conditional lambda validations:
+session.execute(playbook)
+    .verifyMetrics()
+    .hasStepCount(12)
+    .hasNoSoftFailures()
+    .onLive(m -> m.hasStandardCalls(12).hasLlmCalls(12, 24))
+    .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed())
+    .onMode(ExecutionMode.REPLAY_WITH_HEALING, m -> {
+        if (m.isHealed()) {
+            m.hasLlmCalls();
+        } else {
+            m.hasNoLlmCalls().hasAllStepsReplayed();
+        }
+    });
+```
+
+#### Overloaded Range & Breakdown Assertions
+
+`MetricsAsserter` supports exact counts (`hasLlmCalls(12)`) and inclusive ranges (`hasLlmCalls(12, 24)`):
+
+```java
+asserter
+    .hasStepCount(12)                // exact step count
+    .hasStepCount(10, 15)            // range [10, 15]
+    .hasLlmCalls(12, 24)             // total LLM calls between 12 and 24
+    .hasStandardCalls(12)            // exact standard action extraction calls
+    .hasPesapCalls(0, 12)            // PESAP pre-step analysis calls
+    .hasVerificationCalls(0)         // post-action verification calls
+    .hasJudgeCalls(0)                // quality judge calls
+    .hasNoEscalations()              // asserts 0 context level escalations occurred
+    .hasContextLevelCount(ContextLevel.MINIMAL, 12); // asserts ContextLevel.MINIMAL was used 12 times
+```
+
+#### Escalation & Context Level Usage Assertions
+
+`MetricsAsserter` tracks step context level escalations and context level distribution (`ContextLevel.MINIMAL`, `LEAN`, `STANDARD`, `FULL`, `VISUAL`, `HINT`):
+
+```java
+asserter
+    .hasNoEscalations()                              // asserts 0 escalations
+    .hasEscalationCount(0)                           // exact escalation count
+    .hasEscalationCount(0, 2)                        // range [0, 2]
+    .hasContextLevelCount(ContextLevel.MINIMAL, 12)  // MINIMAL used 12 times
+    .hasContextLevelCount(ContextLevel.LEAN, 0, 5)   // LEAN used between 0 and 5 times
+    .hasContextLevelCount("MINIMAL", 12);            // String level overload
+```
+
+#### Automated Mode Invariants (`matchesModeExpectations()`)
+
+For parameterized test methods running under multiple `@AiMode` configurations, `matchesModeExpectations()` automatically validates the correct telemetry invariants:
+
+```java
+session.execute(playbook)
+    .verifyMetrics()
+    .matchesModeExpectations();
+```
+
+* **In `REPLAY_STRICT`:** Asserts `llmCalls == 0`, `healedSteps == 0`, `replayedSteps == stepCount`, and `softFailedSteps == 0`.
+* **In `FORCE_RECORDING` / `LLM_ONLY`:** Asserts `llmCalls > 0`, `replayedSteps == 0`, and `softFailedSteps == 0`.
+* **In `REPLAY_WITH_HEALING`:** Asserts that if any step was healed, `healedStepCount > 0` and `llmCalls > 0` (for healed steps only), otherwise `llmCalls == 0`.
+
+
 
 
 

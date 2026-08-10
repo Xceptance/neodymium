@@ -191,4 +191,48 @@ public class AiSessionTest
             Assertions.assertEquals("Click login", recording.getRecordedSteps().get(1).getInstruction());
         }
     }
+
+    @Test
+    @DisplayName("AiSession data accessors and mode query helpers delegate cleanly")
+    public void testSessionDataAndModeAccessors() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            session.setData("city", "Berlin");
+            Assertions.assertEquals("Berlin", session.getData("city"));
+            Assertions.assertEquals("Berlin", session.getSessionData().get("city"));
+
+            Assertions.assertEquals(ExecutionMode.REPLAY_STRICT, session.getExecutionMode());
+            Assertions.assertTrue(session.isStrictReplay());
+            Assertions.assertTrue(session.isReplay());
+            Assertions.assertFalse(session.isLive());
+            Assertions.assertFalse(session.isRecording());
+        }
+    }
+
+    @Test
+    @DisplayName("PlaybookRecording carries executionMode and supports Option 3 verifyMetrics conditional lambdas")
+    public void testRecordingMetricsAndOption3Lambdas() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookRecording recording = session.execute("Open homepage");
+            Assertions.assertNotNull(recording);
+            Assertions.assertEquals(ExecutionMode.REPLAY_STRICT, recording.getExecutionMode());
+            Assertions.assertTrue(recording.isStrictReplay());
+            Assertions.assertEquals(1, recording.getStepCount());
+
+            final java.util.concurrent.atomic.AtomicBoolean strictLambdaCalled = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+            recording.verifyMetrics()
+                .hasStepCount(1)
+                .hasNoSoftFailures()
+                .onStrictReplay(m -> {
+                    strictLambdaCalled.set(true);
+                    m.wasNotHealed();
+                });
+
+            Assertions.assertTrue(strictLambdaCalled.get(), "onStrictReplay lambda should have been triggered");
+        }
+    }
 }

@@ -161,6 +161,53 @@ public final class AssertAction implements BrowserActionPlugin
             {
                 element.shouldBe(Condition.visible);
             }
+            // Checked assertion: Verify that checkbox/radio button is checked
+            else if ("checked".equalsIgnoreCase(expected) || "[checked]".equalsIgnoreCase(expected))
+            {
+                element.shouldBe(Condition.checked);
+            }
+            // Unchecked assertion: Verify that checkbox/radio button is unchecked
+            else if ("unchecked".equalsIgnoreCase(expected) || "[unchecked]".equalsIgnoreCase(expected) || "not_checked".equalsIgnoreCase(expected) || "[not_checked]".equalsIgnoreCase(expected))
+            {
+                element.shouldNotBe(Condition.checked);
+            }
+            // Disabled assertion: Verify that input/button/element is disabled
+            else if ("disabled".equalsIgnoreCase(expected) || "[disabled]".equalsIgnoreCase(expected))
+            {
+                element.shouldBe(Condition.disabled);
+            }
+            // Enabled assertion: Verify that input/button/element is enabled
+            else if ("enabled".equalsIgnoreCase(expected) || "[enabled]".equalsIgnoreCase(expected))
+            {
+                element.shouldBe(Condition.enabled);
+            }
+            // Selected assertion: Verify that select option / ARIA option is selected
+            else if ("selected".equalsIgnoreCase(expected) || "[selected]".equalsIgnoreCase(expected))
+            {
+                element.shouldBe(Condition.selected);
+            }
+            // Readonly assertion: Verify that input is readonly
+            else if ("readonly".equalsIgnoreCase(expected) || "[readonly]".equalsIgnoreCase(expected) || "read_only".equalsIgnoreCase(expected) || "[read_only]".equalsIgnoreCase(expected))
+            {
+                element.shouldBe(Condition.readonly);
+            }
+            // Editable assertion: Verify that input is editable
+            else if ("editable".equalsIgnoreCase(expected) || "[editable]".equalsIgnoreCase(expected))
+            {
+                element.shouldBe(Condition.editable);
+            }
+            // Checkbox/radio boolean state shortcut: if expected is "true" or "false" on a checkbox or radio button
+            else if (("true".equalsIgnoreCase(expected) || "false".equalsIgnoreCase(expected)) && isCheckboxOrRadio(element))
+            {
+                if ("true".equalsIgnoreCase(expected))
+                {
+                    element.shouldBe(Condition.checked);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.checked);
+                }
+            }
             // Content assertions: verify text, regex matching, or attribute contents of the target element
             else
             {
@@ -175,10 +222,74 @@ public final class AssertAction implements BrowserActionPlugin
                     final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
                     if (attributeMatcher.matches())
                     {
-                        final String attrName = attributeMatcher.group(1);
-                        final String attrValue = attributeMatcher.group(2);
+                        final String rawAttrName = attributeMatcher.group(1);
+                        final String rawAttrValue = attributeMatcher.group(2);
+                        final String attrName = rawAttrName.toLowerCase();
+                        final String attrValue = rawAttrValue.toLowerCase();
+
+                        if ("checked".equals(attrName))
+                        {
+                            if ("false".equals(attrValue))
+                            {
+                                element.shouldNotBe(Condition.checked);
+                            }
+                            else
+                            {
+                                element.shouldBe(Condition.checked);
+                            }
+                            return;
+                        }
+                        if ("disabled".equals(attrName))
+                        {
+                            if ("false".equals(attrValue))
+                            {
+                                element.shouldBe(Condition.enabled);
+                            }
+                            else
+                            {
+                                element.shouldBe(Condition.disabled);
+                            }
+                            return;
+                        }
+                        if ("enabled".equals(attrName))
+                        {
+                            if ("false".equals(attrValue))
+                            {
+                                element.shouldBe(Condition.disabled);
+                            }
+                            else
+                            {
+                                element.shouldBe(Condition.enabled);
+                            }
+                            return;
+                        }
+                        if ("selected".equals(attrName))
+                        {
+                            if ("false".equals(attrValue))
+                            {
+                                element.shouldNotBe(Condition.selected);
+                            }
+                            else
+                            {
+                                element.shouldBe(Condition.selected);
+                            }
+                            return;
+                        }
+                        if ("readonly".equals(attrName) || "read_only".equals(attrName))
+                        {
+                            if ("false".equals(attrValue))
+                            {
+                                element.shouldBe(Condition.editable);
+                            }
+                            else
+                            {
+                                element.shouldBe(Condition.readonly);
+                            }
+                            return;
+                        }
+
                         cond = Condition.or("Assertion for " + expected,
-                                Condition.attribute(attrName, attrValue),
+                                Condition.attribute(rawAttrName, rawAttrValue),
                                 Condition.exactText(expected),
                                 Condition.partialText(expected),
                                 Condition.value(expected),
@@ -389,5 +500,23 @@ public final class AssertAction implements BrowserActionPlugin
             }
             return new CheckResult(false, null);
         }
+    }
+
+    private static boolean isCheckboxOrRadio(final SelenideElement element)
+    {
+        try
+        {
+            final String tagName = element.getTagName();
+            if ("input".equalsIgnoreCase(tagName))
+            {
+                final String type = element.getAttribute("type");
+                return "checkbox".equalsIgnoreCase(type) || "radio".equalsIgnoreCase(type);
+            }
+        }
+        catch (final Exception e)
+        {
+            // Ignore
+        }
+        return false;
     }
 }
