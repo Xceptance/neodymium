@@ -1,8 +1,9 @@
 package com.xceptance.neodymium;
 
+import java.util.Collections;
+import java.util.List;
 import com.xceptance.neodymium.util.DebugUtils;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.SelenideAddons;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -14,8 +15,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(NeodymiumWebDriverListener.class);
 
-    private static final ThreadLocal<By> lastHighlightedLocator = new ThreadLocal<>();
-    private static final ThreadLocal<Long> lastHighlightTimestamp = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> IS_HIGHLIGHTING = ThreadLocal.withInitial(() -> false);
 
     private boolean isHighlightOrOutlineSelector(final By by)
     {
@@ -27,88 +27,75 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         return selector.contains("neodymium-highlight-box") || selector.contains("neodymium-outline-box");
     }
 
-    private boolean shouldTriggerHighlight(final By locator)
-    {
-        if (locator == null)
-        {
-            return true;
-        }
-        final long now = System.currentTimeMillis();
-        final By lastLocator = lastHighlightedLocator.get();
-        final Long lastTimestamp = lastHighlightTimestamp.get();
-        if (locator.equals(lastLocator) && lastTimestamp != null && (now - lastTimestamp < 2000))
-        {
-            return false;
-        }
-        lastHighlightedLocator.set(locator);
-        lastHighlightTimestamp.set(now);
-        return true;
-    }
-
     @Override
     public void beforeFindElement(final WebDriver driver, final By by)
     {
         Neodymium.setLastUsedLocator(by);
-        try
-        {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by) && shouldTriggerHighlight(by))
-            {
-                DebugUtils.injectHighlightingJs();
-                DebugUtils.highlightAllElements(by, driver);
-            }
-        }
-        catch (final Throwable e)
-        {
-            LOGGER.debug("Could not highlight element: {}", e.getMessage());
-        }
     }
 
     @Override
     public void beforeFindElements(final WebDriver driver, final By by)
     {
         Neodymium.setLastUsedLocator(by);
-        try
-        {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by) && shouldTriggerHighlight(by))
-            {
-                DebugUtils.injectHighlightingJs();
-                DebugUtils.highlightAllElements(by, driver);
-            }
-        }
-        catch (final Throwable e)
-        {
-            LOGGER.debug("Could not highlight element: {}", e.getMessage());
-        }
     }
 
     @Override
     public void beforeFindElement(final WebElement element, final By locator)
     {
         Neodymium.setLastUsedLocator(element, locator);
-        try
-        {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
-            {
-                DebugUtils.injectHighlightingJs();
-                SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
-            }
-        }
-        catch (final Throwable e)
-        {
-            LOGGER.debug("Could not highlight element: {}", e.getMessage());
-        }
     }
 
     @Override
     public void beforeFindElements(final WebElement element, final By locator)
     {
         Neodymium.setLastUsedLocator(element, locator);
+    }
+
+    @Override
+    public void afterFindElement(final WebDriver driver, final By by, final WebElement result)
+    {
+        highlightResult(by, result != null ? Collections.singletonList(result) : null, driver);
+    }
+
+    @Override
+    public void afterFindElements(final WebDriver driver, final By by, final List<WebElement> result)
+    {
+        highlightResult(by, result, driver);
+    }
+
+    @Override
+    public void afterFindElement(final WebElement element, final By locator, final WebElement result)
+    {
+        highlightResult(locator, result != null ? Collections.singletonList(result) : null, Neodymium.hasDriver() ? Neodymium.getDriver() : null);
+    }
+
+    @Override
+    public void afterFindElements(final WebElement element, final By locator, final List<WebElement> result)
+    {
+        highlightResult(locator, result, Neodymium.hasDriver() ? Neodymium.getDriver() : null);
+    }
+
+    private void highlightResult(final By by, final List<WebElement> elements, final WebDriver driver)
+    {
+        if (IS_HIGHLIGHTING.get() || elements == null || elements.isEmpty() || driver == null)
+        {
+            return;
+        }
+
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver() && !isHighlightOrOutlineSelector(locator) && shouldTriggerHighlight(locator))
+            if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by))
             {
-                DebugUtils.injectHighlightingJs();
-                SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
+                IS_HIGHLIGHTING.set(true);
+                try
+                {
+                    DebugUtils.injectHighlightingJs();
+                    DebugUtils.highlightAllElements(elements, driver);
+                }
+                finally
+                {
+                    IS_HIGHLIGHTING.set(false);
+                }
             }
         }
         catch (final Throwable e)

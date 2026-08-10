@@ -67,7 +67,10 @@ public abstract class BaseAiTest extends BaseLlmTest
     @BeforeAll
     public static void startServer() throws IOException
     {
-        Configuration.headless = Boolean.parseBoolean(System.getProperty("selenide.headless", "true"));
+        if (System.getProperty("selenide.headless") != null)
+        {
+            Configuration.headless = Boolean.parseBoolean(System.getProperty("selenide.headless"));
+        }
         server = new EmbeddedHtmlServer();
         server.start();
     }

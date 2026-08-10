@@ -63,8 +63,7 @@ public final class HomepageTest extends BaseAiTest
     public void setup()
     {
         EmbeddedHtmlServer.resetInventory();
-        Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
-        Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
+        Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
     }
 
     /**

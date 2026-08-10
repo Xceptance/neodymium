@@ -120,18 +120,21 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         final Method method = context.getTestMethod().orElse(null);
         if (method != null && !method.isAnnotationPresent(AiPlaybook.class) && !method.isAnnotationPresent(AiInlinePlaybook.class))
         {
-            final String profileName = resolveBrowserAnnotation(context);
-            if (profileName != null)
+            if (!Neodymium.hasDriver())
             {
-                Neodymium.setBrowserProfileName(profileName);
-                final BrowserRunner runner = new BrowserRunner();
-                runner.setUpTest(
-                    new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                    Neodymium.getTestName()
-                );
-                if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
+                final String profileName = resolveBrowserAnnotation(context);
+                if (profileName != null)
                 {
-                    WebDriverRunner.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
+                    Neodymium.setBrowserProfileName(profileName);
+                    final BrowserRunner runner = new BrowserRunner();
+                    runner.setUpTest(
+                        new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                        Neodymium.getTestName()
+                    );
+                    if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
+                    {
+                        WebDriverRunner.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
+                    }
                 }
             }
         }
@@ -694,30 +697,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            // Automatically reset/clean the browser state at the start of a new AI session
-            try
+            if (!Neodymium.hasDriver())
             {
-                com.codeborne.selenide.Selenide.closeWebDriver();
-            }
-            catch (final Exception e)
-            {
-                // Ignore driver closure errors
-            }
-
-            final String profileName = Neodymium.getBrowserProfileName();
-            if (profileName != null)
-            {
-                final BrowserRunner runner = new BrowserRunner();
-                runner.setUpTest(
-                    new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                    Neodymium.getTestName());
-                if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
+                final String profileName = Neodymium.getBrowserProfileName();
+                if (profileName != null)
                 {
-                    final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getWebDriver();
-                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
-                    final com.xceptance.neodymium.common.browser.WebDriverStateContainer legacyCont = new com.xceptance.neodymium.common.browser.WebDriverStateContainer();
-                    legacyCont.setWebDriver(driver);
-                    com.xceptance.neodymium.util.Neodymium.setWebDriverStateContainer(legacyCont);
+                    final BrowserRunner runner = new BrowserRunner();
+                    runner.setUpTest(
+                        new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
+                        Neodymium.getTestName());
+                    if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
+                    {
+                        final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getWebDriver();
+                        com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
+                        final com.xceptance.neodymium.common.browser.WebDriverStateContainer legacyCont = new com.xceptance.neodymium.common.browser.WebDriverStateContainer();
+                        legacyCont.setWebDriver(driver);
+                        com.xceptance.neodymium.util.Neodymium.setWebDriverStateContainer(legacyCont);
+                    }
                 }
             }
 

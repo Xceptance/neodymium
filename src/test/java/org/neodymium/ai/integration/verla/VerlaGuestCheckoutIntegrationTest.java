@@ -44,7 +44,7 @@ import org.neodymium.util.Neodymium;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_1500x1000_headless")
+@Browser("Chrome_1500x1000")
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
@@ -65,8 +65,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     public void setup()
     {
         EmbeddedHtmlServer.resetInventory();
-        // Resolve dynamic server port for the test execution
-        Neodymium.getData().put("verla.url.host", String.format("localhost:%d", server.getPort()));
+        Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
     }
 
     /**

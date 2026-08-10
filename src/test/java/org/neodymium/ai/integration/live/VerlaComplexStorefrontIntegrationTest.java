@@ -63,7 +63,7 @@ public class VerlaComplexStorefrontIntegrationTest extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        Neodymium.getData().put("verla.url", String.format("http://localhost:%d", server.getPort()));
+        Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
     }
 
     /**

@@ -56,7 +56,13 @@ public final class ClickAction implements BrowserActionPlugin
             }
             catch (final Exception | AssertionError e)
             {
-                Selenide.executeJavaScript("arguments[0].click();", element);
+                try
+                {
+                    Selenide.executeJavaScript("arguments[0].click();", element);
+                }
+                catch (final Throwable ignored)
+                {
+                }
             }
             try
             {
@@ -64,7 +70,7 @@ public final class ClickAction implements BrowserActionPlugin
                         "if (arguments[0] && typeof arguments[0].focus === 'function') { arguments[0].focus(); }",
                         element);
             }
-            catch (final Exception ignored)
+            catch (final Throwable ignored)
             {
             }
         }

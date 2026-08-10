@@ -157,6 +157,10 @@ public class ElementHighlightUtils
         if (Neodymium.configuration().debuggingHighlightSelectedElements())
         {
             final List<WebElement> elements = getElements.get();
+            if (elements == null || elements.isEmpty())
+            {
+                return;
+            }
 
             long duration = Neodymium.configuration().debuggingHighlightDuration();
             if (duration <= 0)

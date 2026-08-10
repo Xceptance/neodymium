@@ -18,19 +18,9 @@
  */
 package org.neodymium.ai.executor.selenide.plugins;
 
-import static com.codeborne.selenide.Condition.checked;
-import static com.codeborne.selenide.Condition.disabled;
-import static com.codeborne.selenide.Condition.editable;
-import static com.codeborne.selenide.Condition.enabled;
-import static com.codeborne.selenide.Condition.focused;
-import static com.codeborne.selenide.Condition.hidden;
-import static com.codeborne.selenide.Condition.readonly;
-import static com.codeborne.selenide.Condition.selected;
-import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
 import com.codeborne.selenide.Selenide;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
