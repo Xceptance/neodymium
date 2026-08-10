@@ -620,6 +620,10 @@ if (!window.NEODYMIUM) {
 			var _oddColor = oddColor ? oddColor	: 'rgb(255, 255, 90)';
 			var _evenColor = evenColor ? evenColor : 'rgb(255, 255, 210)';
 
+			if (elements && !Array.isArray(elements) && typeof elements.length !== 'number') {
+				elements = [elements];
+			}
+
 			if (elements && elements.length > 0 && baseDocument) {
 				var moreThanOnce = elements.length > 1;
 				let hash = new Date().getTime();
