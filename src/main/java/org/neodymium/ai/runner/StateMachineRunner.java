@@ -240,6 +240,66 @@ public final class StateMachineRunner
                         continue;
                     }
 
+                    if (playbookStep != null)
+                    {
+                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setFailed(true);
+                        playbookStep.setFailureReason(e.getMessage());
+                    }
+
+                    org.neodymium.ai.event.InteractiveConsoleListener interactiveListener = null;
+                    if (this.session != null && this.session.getEventBus() != null)
+                    {
+                        for (final org.neodymium.ai.event.ExecutionListener listener : this.session.getEventBus().getListeners())
+                        {
+                            if (listener instanceof org.neodymium.ai.event.InteractiveConsoleListener icl && icl.isInteractive())
+                            {
+                                interactiveListener = icl;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (interactiveListener != null)
+                    {
+                        final String userAction = interactiveListener.pauseOnStepFailure(context, playbookStep, e);
+                        if ("RUN".equalsIgnoreCase(userAction) || "EXECUTE".equalsIgnoreCase(userAction))
+                        {
+                            if (playbookStep != null)
+                            {
+                                playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.PENDING);
+                                playbookStep.setFailed(false);
+                                playbookStep.setFailureReason(null);
+                                context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                            }
+                            continue;
+                        }
+                        else if ("HEAL".equalsIgnoreCase(userAction))
+                        {
+                            if (playbookStep != null)
+                            {
+                                playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
+                                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.VISUAL);
+                                context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                            }
+                            continue;
+                        }
+                        else if ("SKIP".equalsIgnoreCase(userAction))
+                        {
+                            if (playbookStep != null)
+                            {
+                                playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
+                            }
+                            continue;
+                        }
+                        else if ("FINISH".equalsIgnoreCase(userAction) || "ACCEPT_FINISH".equalsIgnoreCase(userAction))
+                        {
+                            context.clearSteps();
+                            success = true;
+                            break;
+                        }
+                    }
+
                     // Bubbling up out of loop
                     if (t instanceof RuntimeException)
                     {

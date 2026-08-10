@@ -2000,6 +2000,38 @@
     font-size: 24px;
 }
 
+.final-save-box h2.failed {
+    color: var(--accent-danger, #f44336) !important;
+}
+
+.btn-warning {
+    color: #ffffff;
+    border-color: #f59e0b !important;
+    background: #d97706 !important;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+
+.btn-warning:hover:not(:disabled) {
+    background-color: #b45309 !important;
+    border-color: #b45309 !important;
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.50) !important;
+    color: white !important;
+}
+
+.btn-heal {
+    color: #ffffff !important;
+    border-color: #8b5cf6 !important;
+    background: #7c3aed !important;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+}
+
+.btn-heal:hover:not(:disabled) {
+    background-color: #6d28d9 !important;
+    border-color: #6d28d9 !important;
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.50) !important;
+    color: white !important;
+}
+
 .final-save-box p {
     font-size: 16px;
     color: #ccc;

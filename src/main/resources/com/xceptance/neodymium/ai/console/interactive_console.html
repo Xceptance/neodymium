@@ -233,9 +233,12 @@
                         <button class="btn" id="btnBack" onclick="sendAction('REWIND')"
                             title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i
                                 class="fa-solid fa-backward-step" aria-hidden="true"></i> <span>Back</span></button>
-                        <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')"
+                        <button class="btn btn-success" id="btnRun" onclick="handlePrimaryAction()"
                             title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)"
                             disabled><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Run</span></button>
+                        <button class="btn btn-warning" id="btnFinish" onclick="sendAction('FINISH')"
+                            title="Accept current state and finish test" aria-label="Accept current state and finish test"
+                            style="display: none;" disabled><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span>Finish</span></button>
                         <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)"
                             aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step"
                                 aria-hidden="true"></i> <span>Skip</span></button>

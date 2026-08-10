@@ -51,6 +51,12 @@ public enum DebugAction
     /** Save changes to the YAML file and exit interactive mode. */
     SAVE_EXIT,
 
+    /** Trigger AI healing analysis on a failed step. */
+    HEAL,
+
+    /** Accept current step failure state and finish test execution. */
+    FINISH,
+
     /** Dump the current page context and DOM to a debug file. */
     DUMP,
 

@@ -61,6 +61,16 @@ public final class ExecutionEventBus
     }
 
     /**
+     * Returns an unmodifiable view of all registered event listeners.
+     *
+     * @return list of registered execution listeners
+     */
+    public List<ExecutionListener> getListeners()
+    {
+        return java.util.Collections.unmodifiableList(this.listeners);
+    }
+
+    /**
      * Unregisters an event listener subscriber.
      *
      * @param listener the listener to remove
