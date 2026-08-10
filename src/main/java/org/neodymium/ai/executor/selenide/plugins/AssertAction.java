@@ -184,7 +184,14 @@ public final class AssertAction implements BrowserActionPlugin
             // Selected assertion: Verify that select option / ARIA option is selected
             else if ("selected".equalsIgnoreCase(expected) || "[selected]".equalsIgnoreCase(expected))
             {
-                element.shouldBe(Condition.selected);
+                if ("SELECT".equalsIgnoreCase(element.getTagName()))
+                {
+                    element.getSelectedOption().shouldBe(Condition.exist);
+                }
+                else
+                {
+                    element.shouldBe(Condition.selected);
+                }
             }
             // Readonly assertion: Verify that input is readonly
             else if ("readonly".equalsIgnoreCase(expected) || "[readonly]".equalsIgnoreCase(expected) || "read_only".equalsIgnoreCase(expected) || "[read_only]".equalsIgnoreCase(expected))
