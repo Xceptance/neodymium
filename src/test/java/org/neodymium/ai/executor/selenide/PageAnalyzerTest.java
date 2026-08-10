@@ -22,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
 
 /**
  * Dedicated unit tests for {@link PageAnalyzer}.
@@ -30,7 +33,9 @@ import org.junit.jupiter.api.Test;
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-public class PageAnalyzerTest
+@Browser("Chrome_headless")
+@NeodymiumAiTest
+public class PageAnalyzerTest extends BaseAiTest
 {
     @Test
     public void testDefaultConstructorInitialization()

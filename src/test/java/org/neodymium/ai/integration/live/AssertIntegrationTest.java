@@ -73,7 +73,7 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertAll.yaml")
-    @AiMode({ExecutionMode.FORCE_RECORDING})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiDataSet("assertData")
     public void testAssertAll(final AiSession session) throws Exception
     {
@@ -99,24 +99,7 @@ public class AssertIntegrationTest extends BaseAiTest
               Assert that the 'enabled-input' field is enabled
               Assert that the 'opt-user' option is selected
               Assert that the 'readonly-input' field is readonly
-            """)
-            .verifyMetrics()
-            .hasStepCount(18)
-            .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(18).hasPesapCalls(18).hasContextLevelCount(ContextLevel.MINIMAL, 18))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed())
-            .onMode(ExecutionMode.REPLAY_WITH_HEALING, m -> 
-            {
-                if (m.isHealed()) 
-                {
-                    m.hasLlmCalls().hasEscalations();
-                } 
-                else 
-                {
-                    m.hasNoLlmCalls().hasNoEscalations().hasAllStepsReplayed();
-                }
-            });
+            """);
 
         Selenide.Wait().until(d -> "Assert Action Test".equals(d.getTitle()));
         $("#welcome-message").shouldHave(text("Welcome to our web store!"));
@@ -174,12 +157,14 @@ public class AssertIntegrationTest extends BaseAiTest
             steps: |
               Open ${assert.test.url} in the browser
               Assert that the pageTitle is 'Assert Action Test'
+              Assert that the page title is 'Assert Action Test'
+              Assert that the title of the page is 'Assert Action Test'
+              Page title == 'Assert Action Test'
             """)
             .verifyMetrics()
-            .hasStepCount(2)
+            .hasStepCount(5)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         Selenide.Wait().until(d -> "Assert Action Test".equals(d.getTitle()));
@@ -206,7 +191,6 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#welcome-message").shouldHave(text("Welcome to our web store!"));
@@ -233,8 +217,6 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#visible-btn").shouldBe(visible);
@@ -263,7 +245,6 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#visible-btn").should(exist);

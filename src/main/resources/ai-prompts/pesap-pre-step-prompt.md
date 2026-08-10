@@ -4,8 +4,8 @@ Predict minimal context level and metadata for the current step.
 1. Context Level ('c'):
    - Instruction contains literal '(hint: ...)' tag with CSS/XPath selector -> HINT
    - Visual assertion `(visual)` -> VISUAL | Visual interaction -> VISUAL_LEAN | Visual layout -> VISUAL_RICH
-   - DOM state assertion (focused, checked, unchecked, disabled, enabled, selected, readonly, editable) -> MINIMAL
-   - Data/table validation -> RICH | Text check -> STANDARD | Component boundary -> LEAN | Default -> MINIMAL
+   - DOM state or presence assertion (focused, checked, unchecked, disabled, enabled, selected, readonly, editable, present, absent, exists, visible) -> MINIMAL
+   - Data/table validation -> RICH | Text check -> STANDARD | Scoped container section (modal, dialog, form, header, card) -> LEAN | Default -> MINIMAL
    - Escalation Carryover: If [PREVIOUS] step escalated/failed, upgrade [CURRENT] level accordingly.
 
 2. Java Method ('jm'): Set true ONLY if explicit custom Java method name (e.g. assertCalculation) is specified; false for text instructions.
