@@ -43,7 +43,7 @@ import static com.codeborne.selenide.Selenide.$;
  * @author Xceptance GmbH 2026
  */
 @RunWith(NeodymiumRunner.class)
-@Browser("Chrome_headless")
+@Browser("Chrome_1500x1000")
 public class ElementHighlightUtilsTest
 {
     @Test

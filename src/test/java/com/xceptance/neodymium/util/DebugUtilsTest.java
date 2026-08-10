@@ -23,7 +23,7 @@ import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 
 @RunWith(NeodymiumRunner.class)
-@Browser("Chrome_headless")
+@Browser("Chrome_1500x1000")
 public class DebugUtilsTest {
     @Test
     public void testHighlighting() throws Exception {

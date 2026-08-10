@@ -133,7 +133,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     );
                     if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
                     {
-                        WebDriverRunner.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
+                        final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getDecoratedWebDriver() != null
+                            ? Neodymium.getWebDriverStateContainer().getDecoratedWebDriver()
+                            : Neodymium.getWebDriverStateContainer().getWebDriver();
+                        WebDriverRunner.setWebDriver(driver);
                     }
                 }
             }
@@ -708,10 +711,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         Neodymium.getTestName());
                     if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
                     {
-                        final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getWebDriver();
+                        final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getDecoratedWebDriver() != null
+                            ? Neodymium.getWebDriverStateContainer().getDecoratedWebDriver()
+                            : Neodymium.getWebDriverStateContainer().getWebDriver();
                         com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
                         final com.xceptance.neodymium.common.browser.WebDriverStateContainer legacyCont = new com.xceptance.neodymium.common.browser.WebDriverStateContainer();
-                        legacyCont.setWebDriver(driver);
+                        legacyCont.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
+                        legacyCont.setDecoratedWebDriver(driver);
                         com.xceptance.neodymium.util.Neodymium.setWebDriverStateContainer(legacyCont);
                     }
                 }
