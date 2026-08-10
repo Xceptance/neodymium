@@ -760,12 +760,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final boolean isInteractive = config.isInteractive();
             final boolean isManagerActive = config.isManagerActive();
 
-            if (isInteractive)
-            {
-                org.junit.jupiter.api.Assertions.assertFalse(isInteractive,
-                    "Interactive mode is currently active ('neodymium.ai.interactive'=true or configured in properties). Automated batch UI tests must run with interactive mode disabled to prevent halting and waiting for manual UI console input.");
-            }
-
             if (isInteractive || isManagerActive)
             {
                 final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
@@ -1040,6 +1034,48 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             flattenSteps(playbookSteps, flatSteps);
             executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
             executionContext.getTransientData().put("playbook.steps", playbookSteps);
+
+            if (testClass != null)
+            {
+                final List<PlaybookStep> beforeFlat = new ArrayList<>();
+                final List<PlaybookStep> afterFlat = new ArrayList<>();
+                for (final Method m : testClass.getDeclaredMethods())
+                {
+                    if (m.isAnnotationPresent(org.junit.jupiter.api.BeforeEach.class) && m.isAnnotationPresent(AiPlaybook.class))
+                    {
+                        final String beforePbPath = m.getAnnotation(AiPlaybook.class).value();
+                        try
+                        {
+                            final Playbook beforePb = parser.parse(beforePbPath, manager);
+                            flattenSteps(beforePb.getSteps(), beforeFlat);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    else if (m.isAnnotationPresent(org.junit.jupiter.api.AfterEach.class) && m.isAnnotationPresent(AiPlaybook.class))
+                    {
+                        final String afterPbPath = m.getAnnotation(AiPlaybook.class).value();
+                        try
+                        {
+                            final Playbook afterPb = parser.parse(afterPbPath, manager);
+                            flattenSteps(afterPb.getSteps(), afterFlat);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+                if (!beforeFlat.isEmpty())
+                {
+                    executionContext.getTransientData().put("playbook.beforeSteps", beforeFlat);
+                }
+                if (!afterFlat.isEmpty())
+                {
+                    executionContext.getTransientData().put("playbook.afterSteps", afterFlat);
+                }
+            }
+
             if (playbook.getSystemPromptAddons() != null)
             {
                 executionContext.getTransientData().put("playbook.systemPromptAddons", playbook.getSystemPromptAddons());
@@ -1145,6 +1181,17 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     final Playbook playbook = parser.parse(path, manager);
                     final List<PlaybookStep> playbookSteps = new ArrayList<>(playbook.getSteps());
+                    final List<PlaybookStep> flat = new ArrayList<>();
+                    flattenSteps(playbookSteps, flat);
+
+                    if (method.isAnnotationPresent(org.junit.jupiter.api.BeforeEach.class))
+                    {
+                        execCtx.getTransientData().put("playbook.beforeSteps", flat);
+                    }
+                    else if (method.isAnnotationPresent(org.junit.jupiter.api.AfterEach.class))
+                    {
+                        execCtx.getTransientData().put("playbook.afterSteps", flat);
+                    }
 
                     for (int i = playbookSteps.size() - 1; i >= 0; i--)
                     {

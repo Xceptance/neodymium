@@ -32,16 +32,33 @@ function connectSSE() {
             currentState.pauseId = data.pauseId;
         }
         if (currentRunId && data.runId !== currentRunId) {
+            isAutoMode = false;
+            autoStartStepIndex = null;
+            syncAutoButton();
             showStaleBanner(data.runId);
         } else {
             currentRunId = data.runId;
             setButtonsEnabled(true);
             checkActionApprovals();
             if (currentPauseId && currentPauseId.startsWith('pause-final-')) {
+                isAutoMode = false;
+                autoStartStepIndex = null;
+                syncAutoButton();
                 const finalSaveOverlay = document.getElementById('finalSaveOverlay');
+                const finalSaveTitle = document.getElementById('finalSaveTitle');
                 const finalSaveText = document.getElementById('finalSaveText');
                 const finalSaveButtons = document.getElementById('finalSaveButtons');
                 if (finalSaveOverlay) {
+                    const isFailed = currentState && currentState.status === 'failed';
+                    if (finalSaveTitle) {
+                        if (isFailed) {
+                            finalSaveTitle.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Test Finished';
+                            finalSaveTitle.classList.add('failed');
+                        } else {
+                            finalSaveTitle.innerHTML = '<i class="fa-solid fa-circle-check"></i> Test Finished';
+                            finalSaveTitle.classList.remove('failed');
+                        }
+                    }
                     const editsMade = currentState && (currentState.interactivePromptChanged === true || currentState.hudPromptChanged === true);
                     const saveScopeContainer = document.getElementById('saveScopeContainer');
                     if (saveScopeContainer) {
@@ -63,7 +80,7 @@ function connectSSE() {
                             let filesHtml = files.length > 0 ? "<div style='margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;'><ul style='margin: 0; padding-left: 20px; text-align: left;'>" + files.map(f => "<li style='word-break: break-all;'><code>" + f + "</code></li>").join("") + "</ul></div>" : "";
                             finalSaveText.innerHTML = "You have made changes to the test steps during execution. " + (filesHtml ? "The following files will be updated: " + filesHtml + " " : "") + "Would you like to save these changes?";
                         } else {
-                            finalSaveText.innerHTML = "Test execution finished successfully!";
+                            finalSaveText.innerHTML = isFailed ? "Test execution finished with failure." : "Test execution finished successfully!";
                         }
                     }
                     if (finalSaveButtons) {
@@ -360,6 +377,33 @@ function applyState(state) {
     window.currentState = currentState; // Expose to Selenium
     currentRunId = state.runId;
 
+    let hasFailedStep = false;
+    let failedIdx = null;
+    if (state && state.blocks) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const list = state.blocks[bKey] || [];
+            for (const step of list) {
+                if (step.status === 'failed' || step.failed === true) {
+                    hasFailedStep = true;
+                    failedIdx = step.index;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (failedIdx !== lastFailedStepIndex) {
+        userEditedFailedStep = false;
+        lastFailedStepIndex = failedIdx;
+    }
+
+    if (hasFailedStep && !userEditedFailedStep) {
+        isErrorMode = true;
+    } else {
+        isErrorMode = false;
+    }
+    updateToolbarControls(true);
+
     // Header info
     setTextIfChanged('testNameDisplay', state.testName || '—');
     setTextIfChanged('testIdDisplay', state.testId ? `(ID: ${state.testId})` : '');
@@ -481,7 +525,10 @@ function applyState(state) {
         }
     }
 
-    if (isFirstLoad) {
+    if (state.status === 'passed' || state.status === 'failed') {
+        isAutoMode = false;
+        autoStartStepIndex = null;
+    } else if (isFirstLoad) {
         isAutoMode = state.autoRun || false;
     }
     syncAutoButton();
@@ -1619,6 +1666,9 @@ function saveEdit(btnElement) {
         // because the user might have changed dataBindings.
         if (currentPauseId) {
             console.error('Sending EDIT action');
+            userEditedFailedStep = true;
+            isErrorMode = false;
+            updateToolbarControls(true);
             sendAction('EDIT', { index: idx, instruction: newVal, bindings: currentState?.dataBindings });
         }
         card.classList.remove('editing');
@@ -1645,6 +1695,47 @@ function copyError(elementId) {
 
 function showScreenshot(src) {
     // No-op fallback since DOM Snapshot card is removed. Lightbox handles clicks.
+}
+
+let isErrorMode = false;
+let userEditedFailedStep = false;
+let lastFailedStepIndex = null;
+
+function handlePrimaryAction() {
+    if (isErrorMode) {
+        sendAction('HEAL');
+    } else {
+        sendAction('RUN');
+    }
+}
+
+function updateToolbarControls(enabled) {
+    const runBtn = document.getElementById('btnRun');
+    const finishBtn = document.getElementById('btnFinish');
+    const isEditing = document.querySelector('.step-card.editing') !== null;
+
+    if (isErrorMode) {
+        if (runBtn) {
+            runBtn.className = 'btn btn-heal';
+            runBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Heal</span>';
+            runBtn.title = 'Heal step using AI (Alt+R)';
+        }
+        if (finishBtn) {
+            finishBtn.style.display = '';
+            finishBtn.disabled = !enabled || isEditing;
+            if (!enabled || isEditing) finishBtn.setAttribute('disabled', 'true'); else finishBtn.removeAttribute('disabled');
+        }
+    } else {
+        if (runBtn) {
+            runBtn.className = 'btn btn-success';
+            runBtn.innerHTML = '<i class="fa-solid fa-play" aria-hidden="true"></i> <span>Run</span>';
+            runBtn.title = 'Run step (Alt+R / Ctrl+Enter)';
+        }
+        if (finishBtn) {
+            finishBtn.style.display = 'none';
+            finishBtn.disabled = true;
+        }
+    }
 }
 
 function setButtonsEnabled(enabled) {
@@ -1701,6 +1792,7 @@ function setButtonsEnabled(enabled) {
             if (kebabBtn) { kebabBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) kebabBtn.setAttribute('disabled', 'true'); else kebabBtn.removeAttribute('disabled'); }
         }
     }
+    updateToolbarControls(enabled);
 }
 
 

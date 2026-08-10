@@ -963,6 +963,19 @@ public final class ExecuteActionsStep implements PipelineStep
                             ? cl
                             : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
                     final org.neodymium.ai.executor.selenide.ContextLevel escalatedLevel = activeLevel.escalate();
+
+                    if (escalatedLevel == null)
+                    {
+                        final Object lastErrObj = c.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                        final String lastErr = lastErrObj != null ? String.valueOf(lastErrObj) : "Maximum context escalation level reached (" + activeLevel + ")";
+                        throw new ConclusiveFailureException("Action execution failed after maximum context escalation (" + activeLevel + "): " + lastErr);
+                    }
+
+                    if (!com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                    {
+                        throw new ConclusiveFailureException("Browser/WebDriver has not started yet. Ensure the playbook starts with a NAVIGATE step or browser is initialized in setup.");
+                    }
+
                     c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, escalatedLevel);
                     org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("⚠️ Context escalated on action execution failure to: {}", escalatedLevel);
 

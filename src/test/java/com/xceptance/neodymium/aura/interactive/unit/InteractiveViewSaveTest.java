@@ -46,6 +46,15 @@ public class InteractiveViewSaveTest extends BaseAiTest
     private File tempDatasetYaml;
     private Thread bgThread;
 
+    @Override
+    @BeforeEach
+    public void setupPageUrl(final org.junit.jupiter.api.TestInfo testInfo)
+    {
+        System.clearProperty("neodymium.ai.interactive");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
+        super.setupPageUrl(testInfo);
+    }
+
     @BeforeEach
     public void setup() throws Exception
     {
@@ -53,6 +62,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
         System.setProperty("neodymium.ai.interactive.allowHeadlessHUD", "true");
         // Decrease think delay to make test fast
         System.setProperty("neodymium.ai.console.simulation.thinkMs", "20");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
         Configuration.timeout = 10000;
         Configuration.headless = true;
     }
@@ -63,6 +73,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
         System.clearProperty("neodymium.ai.console.simulation.thinkMs");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
         if (tempDatasetYaml != null && tempDatasetYaml.exists())
         {
             // tempDatasetYaml.delete();
@@ -173,7 +184,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
                 consoleUrl.set(server.getLocalUrl());
                 urlLatch.countDown();
                 try {
-                    engine.waitForAction(10_000);
+                    com.xceptance.neodymium.ai.console.InteractiveConsoleServer.runSimulation(engine, Files.readString(tempDatasetYaml.toPath()), null);
                 } finally {
                     server.stop();
                 }

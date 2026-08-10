@@ -95,6 +95,10 @@ public abstract class BaseAiTest extends BaseLlmTest
         this.testInfo = testInfo;
         EmbeddedHtmlServer.resetInventory();
 
+        final boolean isInteractive = org.neodymium.ai.config.AiConfiguration.getInstance().isInteractive();
+        org.junit.jupiter.api.Assertions.assertFalse(isInteractive,
+            "Interactive mode is currently active ('neodymium.ai.interactive'=true or configured in properties). Automated batch tests must run with interactive mode disabled (isInteractive=false) to prevent halting and waiting for manual UI console input.");
+
         final String className = testInfo.getTestClass().get().getSimpleName();
         final String methodName = testInfo.getTestMethod().get().getName();
         

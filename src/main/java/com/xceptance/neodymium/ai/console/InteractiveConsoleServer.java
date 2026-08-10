@@ -84,6 +84,8 @@ public final class InteractiveConsoleServer
 
     private final int port;
 
+    private com.codeborne.selenide.SelenideDriver consoleDriver;
+
     /**
      * Creates and starts the standalone server, binding it to the first free port at or above
      * {@link #DEFAULT_START_PORT} on all network interfaces ({@code 0.0.0.0}).
@@ -107,6 +109,11 @@ public final class InteractiveConsoleServer
      * @return the local URL, e.g. {@code http://localhost:18090}
      */
     public String getLocalUrl()
+    {
+        return "http://localhost:" + this.port;
+    }
+
+    public String getLanUrl()
     {
         return "http://" + (engine != null ? engine.getLanIp() : "localhost") + ":" + this.port;
     }
@@ -135,8 +142,8 @@ public final class InteractiveConsoleServer
                 options.addArguments("--app=" + url);
                 config.browserCapabilities(options);
             }
-            final com.codeborne.selenide.SelenideDriver driver = new com.codeborne.selenide.SelenideDriver(config);
-            driver.open(url);
+            this.consoleDriver = new com.codeborne.selenide.SelenideDriver(config);
+            this.consoleDriver.open(url);
             return;
         }
         catch (final Exception e)
@@ -181,10 +188,26 @@ public final class InteractiveConsoleServer
     }
 
     /**
-     * Stops the HTTP server gracefully.
+     * Stops the HTTP server gracefully and closes the interactive console browser if running.
      */
     public void stop()
     {
+        if (this.consoleDriver != null)
+        {
+            try
+            {
+                this.consoleDriver.close();
+                if (this.consoleDriver.hasWebDriverStarted())
+                {
+                    this.consoleDriver.getWebDriver().quit();
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("[InteractiveConsoleServer] Could not close console browser driver: {}", e.getMessage());
+            }
+            this.consoleDriver = null;
+        }
         this.server.stop(0);
         LOG.info("[InteractiveConsoleServer] Stopped.");
     }

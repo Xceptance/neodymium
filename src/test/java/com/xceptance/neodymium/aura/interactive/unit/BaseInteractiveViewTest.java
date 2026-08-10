@@ -54,6 +54,7 @@ public abstract class BaseInteractiveViewTest
         // Bind mock properties
         System.setProperty("neodymium.ai.interactive", "true");
         System.setProperty("neodymium.ai.interactive.allowHeadlessHUD", "true");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
 
         // Initialize engine and server on a random free port
         this.engine = new InteractiveConsoleEngine("test-run-id");
@@ -88,6 +89,7 @@ public abstract class BaseInteractiveViewTest
 
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
         Neodymium.clearThreadContext();
     }
 

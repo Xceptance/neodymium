@@ -163,14 +163,59 @@ public final class InteractiveStateBuilder
         if (context != null)
         {
             @SuppressWarnings("unchecked")
+            final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+            @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+
+            boolean beforeActive = false;
+            boolean stepsActive = false;
+            boolean afterActive = false;
+
+            if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+            {
+                beforeActive = true;
+            }
+            else if (afterSteps != null && afterSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+            {
+                afterActive = true;
+            }
+            else
+            {
+                stepsActive = true;
+            }
+
+            final boolean beforePassed = !beforeActive && (stepsActive || afterActive);
+            final boolean stepsPassed = !beforeActive && !stepsActive && afterActive;
+
+            if (beforeSteps != null)
+            {
+                for (int i = 0; i < beforeSteps.size(); i++)
+                {
+                    final PlaybookStep step = beforeSteps.get(i);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "before", beforeActive, beforePassed);
+                    beforeArray.add(stepObj);
+                }
+            }
+
             if (flatSteps != null)
             {
                 for (int i = 0; i < flatSteps.size(); i++)
                 {
                     final PlaybookStep step = flatSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed);
                     stepsArray.add(stepObj);
+                }
+            }
+
+            if (afterSteps != null)
+            {
+                for (int i = 0; i < afterSteps.size(); i++)
+                {
+                    final PlaybookStep step = afterSteps.get(i);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "after", afterActive, false);
+                    afterArray.add(stepObj);
                 }
             }
         }
@@ -183,26 +228,45 @@ public final class InteractiveStateBuilder
         return GSON.toJson(state);
     }
 
-    private static JsonObject serializeStep(final PlaybookStep step, final int stepIndex, final int activeStepIndex, final ExecutionContext context)
+    private static JsonObject serializeStep(
+        final PlaybookStep step,
+        final int stepIndex,
+        final int activeStepIndex,
+        final ExecutionContext context,
+        final String source,
+        final boolean isCurrentSection,
+        final boolean isPastSection
+    )
     {
         final JsonObject obj = new JsonObject();
-        obj.addProperty("id", "step_" + stepIndex);
+        obj.addProperty("id", source + "_" + stepIndex);
         obj.addProperty("index", stepIndex + 1);
         obj.addProperty("instruction", step.getInstruction() != null ? step.getInstruction() : "");
         obj.addProperty("line", step.getLineNumber());
         obj.addProperty("file", step.getSourceFile() != null ? step.getSourceFile() : "");
-        obj.addProperty("source", "playbook");
+        obj.addProperty("source", source);
 
         PlaybookStepStatus status = step.getStatus();
         if (status == null || status == PlaybookStepStatus.PENDING)
         {
-            if (stepIndex < activeStepIndex)
+            if (isCurrentSection)
+            {
+                if (stepIndex < activeStepIndex)
+                {
+                    status = PlaybookStepStatus.SUCCESS;
+                }
+                else if (stepIndex == activeStepIndex)
+                {
+                    status = PlaybookStepStatus.RUNNING;
+                }
+                else
+                {
+                    status = PlaybookStepStatus.PENDING;
+                }
+            }
+            else if (isPastSection)
             {
                 status = PlaybookStepStatus.SUCCESS;
-            }
-            else if (stepIndex == activeStepIndex)
-            {
-                status = PlaybookStepStatus.RUNNING;
             }
             else
             {
@@ -220,7 +284,7 @@ public final class InteractiveStateBuilder
         };
         obj.addProperty("status", statusStr);
 
-        if (stepIndex == activeStepIndex && context != null)
+        if (isCurrentSection && stepIndex == activeStepIndex && context != null)
         {
             final String currentScreenshot = (String) context.getTransientData().get("currentScreenshot");
             if (currentScreenshot != null && !currentScreenshot.isEmpty())

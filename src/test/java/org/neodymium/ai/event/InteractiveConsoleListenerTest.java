@@ -90,6 +90,22 @@ public class InteractiveConsoleListenerTest
     }
 
     @Test
+    public void testInteractiveSessionFinishedEventPausesForFinalAction()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final JsonObject finalAction = new JsonObject();
+        finalAction.addProperty("action", "DISCARD");
+        submitActionAsynchronously(finalAction);
+
+        eventBus.dispatch(new SessionFinishedEvent(100, true, Collections.emptyList()));
+
+        assertTrue(consoleEngine.getCurrentStateJson().contains("\"status\":\"passed\""));
+        assertTrue(consoleEngine.getCurrentStateJson().contains("pause-final-"));
+    }
+
+    @Test
     public void testInteractiveAutoActionResumesAutoRun()
     {
         final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
@@ -157,6 +173,44 @@ public class InteractiveConsoleListenerTest
         assertThrows(RuntimeException.class, () -> {
             eventBus.dispatch(new StepStartedEvent(step, 0));
         });
+    }
+
+    @Test
+    public void testPauseOnStepFailureReturnsHealAction()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Fail step for Heal");
+        step.setLineNumber(10);
+        step.setSourceFile("test.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final JsonObject healAction = new JsonObject();
+        healAction.addProperty("action", "HEAL");
+        submitActionAsynchronously(healAction);
+
+        final String resultAction = listener.pauseOnStepFailure(session.getExecutionContext(), step, new RuntimeException("Element missing"));
+        assertEquals("HEAL", resultAction);
+    }
+
+    @Test
+    public void testPauseOnStepFailureReturnsFinishAction()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Fail step for Finish");
+        step.setLineNumber(11);
+        step.setSourceFile("test.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final JsonObject finishAction = new JsonObject();
+        finishAction.addProperty("action", "FINISH");
+        submitActionAsynchronously(finishAction);
+
+        final String resultAction = listener.pauseOnStepFailure(session.getExecutionContext(), step, new RuntimeException("Assertion failed"));
+        assertEquals("FINISH", resultAction);
     }
 
     private void submitActionAsynchronously(final JsonObject actionObj)

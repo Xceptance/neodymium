@@ -172,12 +172,25 @@ public final class InteractiveConsoleListener implements ExecutionListener
             int stepIndex = 0;
             if (context != null && stepFinished.getStep() != null)
             {
+                final PlaybookStep target = stepFinished.getStep();
                 @SuppressWarnings("unchecked")
-                final java.util.List<org.neodymium.ai.model.PlaybookStep> flatSteps =
-                    (java.util.List<org.neodymium.ai.model.PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-                if (flatSteps != null)
+                final java.util.List<PlaybookStep> beforeSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+                @SuppressWarnings("unchecked")
+                final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+                @SuppressWarnings("unchecked")
+                final java.util.List<PlaybookStep> afterSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+
+                if (beforeSteps != null && beforeSteps.contains(target))
                 {
-                    stepIndex = flatSteps.indexOf(stepFinished.getStep());
+                    stepIndex = beforeSteps.indexOf(target);
+                }
+                else if (flatSteps != null && flatSteps.contains(target))
+                {
+                    stepIndex = flatSteps.indexOf(target);
+                }
+                else if (afterSteps != null && afterSteps.contains(target))
+                {
+                    stepIndex = afterSteps.indexOf(target);
                 }
             }
             final String stateJson = InteractiveStateBuilder.buildStateJson(
@@ -188,14 +201,90 @@ public final class InteractiveConsoleListener implements ExecutionListener
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
             final String overallStatus = sessionFinished.isSuccess() ? "passed" : "failed";
-            final String stateJson = InteractiveStateBuilder.buildStateJson(
-                this.session, context, this.consoleEngine.getRunId(), 0, overallStatus);
 
-            this.consoleEngine.pushState(stateJson);
+            if (this.interactive)
+            {
+                final String pauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
+                this.consoleEngine.registerPauseId(pauseId);
+
+                final String stateJson = InteractiveStateBuilder.buildStateJson(
+                    this.session, context, this.consoleEngine.getRunId(), 0, overallStatus, pauseId);
+
+                this.consoleEngine.pushState(stateJson);
+
+                LOG.info("[InteractiveConsoleListener] Session finished with status '{}'. Awaiting user final action (pauseId={})", overallStatus, pauseId);
+                try
+                {
+                    final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
+                    handleUserAction(userAction, null, context);
+                }
+                catch (final InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            else
+            {
+                final String stateJson = InteractiveStateBuilder.buildStateJson(
+                    this.session, context, this.consoleEngine.getRunId(), 0, overallStatus);
+
+                this.consoleEngine.pushState(stateJson);
+            }
         }
         else if (event instanceof DiagnosticErrorEvent errorEvent)
         {
             LOG.warn("[InteractiveConsoleListener] Execution diagnostic error reported: {}", errorEvent.getMessage());
+        }
+    }
+
+    /**
+     * Pauses the interactive console on a step failure, allowing the user to
+     * trigger AI Healing, retry/re-execute, skip, or finish/accept the test.
+     *
+     * @param context active execution context
+     * @param step playbook step that failed
+     * @param error failure cause
+     * @return the user action string ("HEAL", "RUN", "SKIP", "FINISH", "ABORT", etc.)
+     */
+    public String pauseOnStepFailure(final ExecutionContext context, final PlaybookStep step, final Throwable error)
+    {
+        this.autoRun = false;
+        if (!this.interactive || this.consoleEngine == null)
+        {
+            return "ABORT";
+        }
+
+        int stepIndex = 0;
+        if (context != null && step != null)
+        {
+            @SuppressWarnings("unchecked")
+            final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (flatSteps != null && flatSteps.contains(step))
+            {
+                stepIndex = flatSteps.indexOf(step);
+            }
+        }
+
+        final String pauseId = java.util.UUID.randomUUID().toString();
+        this.consoleEngine.registerPauseId(pauseId);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(
+            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId);
+
+        this.consoleEngine.pushState(stateJson);
+
+        LOG.info("[InteractiveConsoleListener] Step failure encountered at step {}. Pausing for user recovery action (pauseId={})", stepIndex, pauseId);
+        try
+        {
+            final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
+            final String action = userAction != null && userAction.has("action") ? userAction.get("action").getAsString().toUpperCase() : "ABORT";
+            handleUserAction(userAction, step, context);
+            return action;
+        }
+        catch (final InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+            return "ABORT";
         }
     }
 
@@ -226,9 +315,27 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 }
                 break;
 
+            case "HEAL":
+                this.autoRun = false;
+                LOG.info("[InteractiveConsoleListener] AI Healing requested by user for step");
+                break;
+
+            case "FINISH":
+            case "ACCEPT_FINISH":
+                this.autoRun = false;
+                LOG.info("[InteractiveConsoleListener] User accepted current state and requested to finish test");
+                break;
+
             case "ABORT":
             case "STOP":
                 throw new RuntimeException(new ConclusiveFailureException("Interactive test execution aborted by user via Aura Manager"));
+
+            case "SAVE_EXIT":
+            case "DISCARD":
+            case "CLOSE":
+                this.autoRun = false;
+                LOG.info("[InteractiveConsoleListener] Session final action completed ({})", action);
+                break;
 
             case "RUN":
             case "NEXT":
