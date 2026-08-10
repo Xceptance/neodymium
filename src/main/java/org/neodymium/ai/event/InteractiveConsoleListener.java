@@ -18,6 +18,13 @@
  */
 package org.neodymium.ai.event;
 
+import java.util.Collections;
+
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
@@ -26,10 +33,12 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveStateBuilder;
@@ -320,6 +329,12 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 LOG.info("[InteractiveConsoleListener] AI Healing requested by user for step");
                 break;
 
+            case "SUGGEST_FIX":
+                this.autoRun = false;
+                LOG.info("[InteractiveConsoleListener] AI Fix Suggestion requested by user for step");
+                handleSuggestFix(userAction, currentStep, context);
+                break;
+
             case "FINISH":
             case "ACCEPT_FINISH":
                 this.autoRun = false;
@@ -346,6 +361,57 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 this.autoRun = false;
                 LOG.info("[InteractiveConsoleListener] Executing single step; will pause on next step");
                 break;
+        }
+    }
+
+    private void handleSuggestFix(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
+    {
+        final String instruction = currentStep != null ? currentStep.getInstruction() : "";
+        String suggestion = instruction;
+        try
+        {
+            if (this.session != null && instruction != null && !instruction.isBlank())
+            {
+                final PesapPrompt pesapPrompt = new PesapPrompt(instruction, null, null);
+                final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.PESAP);
+                if (provider != null)
+                {
+                    final AiConfiguration config = AiConfiguration.getInstance();
+                    final double temp = config.getTemperature("action");
+                    final int timeoutSeconds = config.getTimeoutSeconds("action");
+
+                    final LlmRequest request = new LlmRequest(
+                        pesapPrompt.compileSystemMessage(context),
+                        pesapPrompt.compileUserMessage(context),
+                        Collections.emptyList(),
+                        pesapPrompt.getResponseSchema(),
+                        temp,
+                        timeoutSeconds
+                    );
+
+                    final LlmResponse response = provider.chat(request);
+                    if (response != null && response.content() != null)
+                    {
+                        final PesapPrompt.PesapResult result = pesapPrompt.parseResponse(response.content(), context);
+                        if (result != null && result.splitSteps() != null && !result.splitSteps().isEmpty())
+                        {
+                            suggestion = String.join(" and ", result.splitSteps());
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Throwable t)
+        {
+            LOG.warn("[InteractiveConsoleListener] Failed to generate PESAP suggestion for step: {}", t.getMessage());
+        }
+
+        final JsonObject fixEvent = new JsonObject();
+        fixEvent.addProperty("originalInstruction", instruction);
+        fixEvent.addProperty("suggestedInstruction", suggestion);
+        if (this.consoleEngine != null)
+        {
+            this.consoleEngine.broadcastSseEvent("fixSuggestion", new Gson().toJson(fixEvent));
         }
     }
 }

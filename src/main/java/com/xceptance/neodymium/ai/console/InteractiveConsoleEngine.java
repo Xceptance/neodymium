@@ -198,6 +198,10 @@ public final class InteractiveConsoleEngine {
                     this.currentPauseId.set(pid);
                 }
             }
+            else if (this.currentPauseId.get() != null)
+            {
+                state.addProperty("pauseId", this.currentPauseId.get());
+            }
 
             minified = GSON.toJson(state);
         } catch (final Exception e) {

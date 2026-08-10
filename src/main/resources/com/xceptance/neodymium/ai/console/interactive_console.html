@@ -494,6 +494,35 @@
             </div>
         </div>
     </div>
+
+    <!-- AI Fix Suggestion Overlay -->
+    <div id="suggestionOverlay" class="modal-overlay" onclick="closeOverlay('suggestionOverlay')" role="dialog" aria-labelledby="suggestionTitle" aria-modal="true">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 580px; width: 90%;">
+            <div class="modal-header">
+                <h3 id="suggestionTitle"><i class="fa-solid fa-wand-magic-sparkles" style="color:#8b5cf6;"></i> AI Instruction Fix Suggestion</h3>
+                <button class="close-btn" onclick="closeOverlay('suggestionOverlay')" aria-label="Close Suggestion">&times;</button>
+            </div>
+            <div id="suggestionLoading" style="display: none; padding: 24px; text-align: center;">
+                <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2rem; color: #8b5cf6; margin-bottom: 12px;"></i>
+                <p style="color: var(--text-secondary); font-size: 14px;">Analyzing SUT page state & generating fix suggestion...</p>
+            </div>
+            <div id="suggestionBody" style="display: none; flex-direction: column; gap: 14px; margin: 16px 0; text-align: left;">
+                <div>
+                    <label style="display: block; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px;">Original Instruction</label>
+                    <div id="suggestionOriginalText" style="padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); word-break: break-all;"></div>
+                </div>
+                <div>
+                    <label for="suggestionTextarea" style="display: block; font-weight: 600; font-size: 12px; text-transform: uppercase; color: #8b5cf6; margin-bottom: 4px;">Suggested Fix (Editable)</label>
+                    <textarea id="suggestionTextarea" rows="3" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid #8b5cf6; color: var(--text-main); padding: 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; outline: none; resize: vertical;"></textarea>
+                </div>
+            </div>
+            <div class="inline-edit-actions" id="suggestionActions" style="display: none; gap: 10px; justify-content: flex-end; margin-top: 12px;">
+                <button class="btn" onclick="closeOverlay('suggestionOverlay')">Dismiss</button>
+                <button class="btn btn-primary" onclick="applySuggestionOnly()">Apply Only</button>
+                <button class="btn btn-success" onclick="applySuggestionAndRun()"><i class="fa-solid fa-play"></i> Approve & Run</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

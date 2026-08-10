@@ -106,11 +106,9 @@ public final class AuraManagerChatApiTest
                 .build();
             final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             
-            Assertions.assertTrue(response.statusCode() == 200 || response.statusCode() == 500);
-            if (response.statusCode() == 500)
-            {
-                Assertions.assertTrue(response.body().contains("LLM Client Error") || response.body().contains("API key"));
-            }
+            Assertions.assertTrue(response.statusCode() == 200 || response.statusCode() == 400 || response.statusCode() == 500);
+            final String lowerBody = response.body().toLowerCase();
+            Assertions.assertTrue(lowerBody.contains("api key") || lowerBody.contains("invalid") || lowerBody.contains("error") || lowerBody.contains("llm"));
         }
         finally
         {

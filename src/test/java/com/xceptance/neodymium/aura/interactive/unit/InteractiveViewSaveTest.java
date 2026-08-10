@@ -84,8 +84,8 @@ public class InteractiveViewSaveTest extends BaseAiTest
         }
     }
 
-    private void uiEditStep(int stepIndex, String newText) {
-        final SelenideElement step = $(".step-card[data-step-idx='" + stepIndex + "']");
+    private void uiEditStep(int globalStepIndex, String newText) {
+        final SelenideElement step = $(".step-card[data-step-idx='" + globalStepIndex + "']");
         com.codeborne.selenide.Selenide.executeJavaScript("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));", step.$(".step-edit-btn"));
         step.$(".inline-edit-textarea").should(Condition.exist);
         step.$(".inline-edit-textarea").setValue(newText);
@@ -94,8 +94,8 @@ public class InteractiveViewSaveTest extends BaseAiTest
         step.shouldNotHave(Condition.cssClass("editing"));
     }
 
-    private void uiSkipStep(int stepIndex) {
-        final SelenideElement step = $(".step-card[data-step-idx='" + stepIndex + "']");
+    private void uiSkipStep(int globalStepIndex) {
+        final SelenideElement step = $(".step-card[data-step-idx='" + globalStepIndex + "']");
         com.codeborne.selenide.Selenide.executeJavaScript("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));", $("#btnSkip"));
         step.shouldHave(Condition.cssClass("skipped"));
     }
@@ -121,33 +121,27 @@ public class InteractiveViewSaveTest extends BaseAiTest
         $(".active.editing .step-save-btn").click();
     }
     
-    private void uiAdvanceToStep(String blockName, int stepIndex) {
+    private void uiAdvanceToStep(String blockName, int targetGlobalIndex) {
+        final java.util.Set<String> processedPauseIds = new java.util.HashSet<>();
         com.codeborne.selenide.Selenide.Wait().until(driver -> {
-            Boolean hasPauseId = (Boolean) com.codeborne.selenide.Selenide.executeJavaScript("return !!window.currentPauseId;");
-            if (hasPauseId != null && hasPauseId) {
+            String pauseId = (String) com.codeborne.selenide.Selenide.executeJavaScript("return window.currentPauseId;");
+            if (pauseId != null && !pauseId.isEmpty()) {
                 String js = "if (!window.currentState || !window.currentState.blocks) return null;" +
                             "for (const b of ['before', 'steps', 'after']) {" +
                             "  const steps = window.currentState.blocks[b] || [];" +
                             "  for (const s of steps) {" +
-                            "    if (s.status === 'running') return b + ':' + s.index;" +
+                            "    if (s.status === 'running') return s.index;" +
                             "  }" +
                             "}" +
                             "return null;";
-                String activeTarget = (String) com.codeborne.selenide.Selenide.executeJavaScript(js);
-                if (activeTarget != null) {
-                    String[] parts = activeTarget.split(":");
-                    String activeBlock = parts[0];
-                    int activeIdx = Integer.parseInt(parts[1]);
-                    
-                    int blockOrderTarget = blockName.equals("before") ? 0 : (blockName.equals("steps") ? 1 : 2);
-                    int blockOrderActive = activeBlock.equals("before") ? 0 : (activeBlock.equals("steps") ? 1 : 2);
-                    
-                    if (blockOrderActive == blockOrderTarget && activeIdx == stepIndex) {
+                Object activeTargetObj = com.codeborne.selenide.Selenide.executeJavaScript(js);
+                if (activeTargetObj != null) {
+                    int activeGlobalIdx = ((Number) activeTargetObj).intValue();
+                    if (activeGlobalIdx >= targetGlobalIndex) {
                         return true;
-                    } else if (blockOrderActive < blockOrderTarget || (blockOrderActive == blockOrderTarget && activeIdx < stepIndex)) {
+                    }
+                    if (processedPauseIds.add(pauseId)) {
                         com.codeborne.selenide.Selenide.executeJavaScript("sendAction('RUN');");
-                    } else {
-                        return true; // We are already past it!
                     }
                 }
             }
@@ -184,7 +178,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
                 consoleUrl.set(server.getLocalUrl());
                 urlLatch.countDown();
                 try {
-                    com.xceptance.neodymium.ai.console.InteractiveConsoleServer.runSimulation(engine, Files.readString(tempDatasetYaml.toPath()), null);
+                    com.xceptance.neodymium.ai.console.InteractiveConsoleServer.runSimulation(engine, tempDatasetYaml, null);
                 } finally {
                     server.stop();
                 }
@@ -200,7 +194,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
 
         Selenide.open(consoleUrl.get());
 
-        final SelenideElement step0 = $(".step-card[data-step-idx='0']");
+        final SelenideElement step0 = $(".step-card");
         step0.should(Condition.exist);
         
         waitPauseId();
@@ -209,7 +203,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
         uiActions.run();
         // auto run till the End
         if (!$("#finalSaveOverlay").is(Condition.visible)) {
-            $("#btnAuto").shouldBe(Condition.enabled, java.time.Duration.ofSeconds(15)).click();
+            Selenide.executeJavaScript("if (!window.isAutoMode) { toggleAuto(); }");
         }
 
         $("#finalSaveOverlay").shouldBe(Condition.visible, java.time.Duration.ofSeconds(45));
@@ -220,7 +214,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
         // Save changes
         $("#finalSaveButtons .btn-primary").shouldBe(Condition.visible, java.time.Duration.ofSeconds(10)).click();
 
-        bgThread.join(2000);
+        bgThread.join(10000);
 
         String finalContent = Files.readString(tempDatasetYaml.toPath());
         System.out.println("====== GENERATED YAML ======");
@@ -271,7 +265,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testSkipstepsStep_Global() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testSkipstepsStep_Global");
         runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
-            uiAdvanceToStep("steps", 0);
+            uiAdvanceToStep("steps", 1);
             uiSkipStep(1);
         }, (final String content) -> {
             assertGlobalBlock(content, "steps", "// [SKIPPED] Step 1 \"${var}\" (optional)");
@@ -283,7 +277,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testEditstepsStep_Global() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testEditstepsStep_Global");
         runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
-            uiAdvanceToStep("steps", 0);
+            uiAdvanceToStep("steps", 1);
             uiEditStep(1, "steps step modified");
         }, (final String content) -> {
             assertGlobalBlock(content, "steps", "steps step modified");
@@ -296,7 +290,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     {
         System.out.println(">>> RUNNING TEST: " + "testAddAfterstepsStep_Global");
         runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
-            uiAdvanceToStep("steps", 0);
+            uiAdvanceToStep("steps", 1);
             uiAddStep("steps", "New after steps");
         }, (final String content) -> {
             assertGlobalBlock(content, "steps", "Step 1 \"${var}\" (optional)\nNew after steps");
@@ -308,7 +302,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testSkipAfterStep_Global() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testSkipAfterStep_Global");
         runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
-            uiAdvanceToStep("after", 0);
+            uiAdvanceToStep("after", 2);
             uiSkipStep(2);
         }, (final String content) -> {
             assertGlobalBlock(content, "after", "// [SKIPPED] After step 1");
@@ -320,7 +314,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testEditAfterStep_Global() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testEditAfterStep_Global");
         runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
-            uiAdvanceToStep("after", 0);
+            uiAdvanceToStep("after", 2);
             uiEditStep(2, "After step modified");
         }, (final String content) -> {
             assertGlobalBlock(content, "after", "After step modified");
@@ -333,7 +327,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     {
         System.out.println(">>> RUNNING TEST: " + "testAddAfterAfterStep_Global");
         runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
-            uiAdvanceToStep("after", 0);
+            uiAdvanceToStep("after", 2);
             uiAddStep("after", "New after After");
         }, (final String content) -> {
             assertGlobalBlock(content, "after", "After step 1\nNew after After");
@@ -383,7 +377,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testSkipstepsStep_Local() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testSkipstepsStep_Local");
         runInteractiveConsoleTest("save_dataset_local.yaml", () -> {
-            uiAdvanceToStep("steps", 0);
+            uiAdvanceToStep("steps", 1);
             uiSkipStep(1);
         }, (final String content) -> {
             assertLocalBlock(content, "steps", "// [SKIPPED] Step 1 \"${var}\" (optional)");
@@ -394,8 +388,8 @@ public class InteractiveViewSaveTest extends BaseAiTest
     @NeodymiumTest
     public void testEditstepsStep_Local() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testEditstepsStep_Local");
-        runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
-            uiAdvanceToStep("steps", 0);
+        runInteractiveConsoleTest("save_dataset_local.yaml", () -> {
+            uiAdvanceToStep("steps", 1);
             uiEditStep(1, "steps step modified");
         }, (final String content) -> {
             assertLocalBlock(content, "steps", "steps step modified");
@@ -407,7 +401,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testAddAfterstepsStep_Local() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testAddAfterstepsStep_Local");
         runInteractiveConsoleTest("save_dataset_local.yaml", () -> {
-            uiAdvanceToStep("steps", 0);
+            uiAdvanceToStep("steps", 1);
             uiAddStep("steps", "New after steps");
         }, (final String content) -> {
             assertLocalBlock(content, "steps", "Step 1 \"${var}\" (optional)\nNew after steps");
@@ -419,7 +413,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testSkipAfterStep_Local() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testSkipAfterStep_Local");
         runInteractiveConsoleTest("save_dataset_local.yaml", () -> {
-            uiAdvanceToStep("after", 0);
+            uiAdvanceToStep("after", 2);
             uiSkipStep(2);
         }, (final String content) -> {
             assertLocalBlock(content, "after", "// [SKIPPED] After step 1");
@@ -431,7 +425,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     public void testEditAfterStep_Local() throws Exception {
         System.out.println(">>> RUNNING TEST: " + "testEditAfterStep_Local");
         runInteractiveConsoleTest("save_dataset_local.yaml", () -> {
-            uiAdvanceToStep("after", 0);
+            uiAdvanceToStep("after", 2);
             uiEditStep(2, "After step modified");
         }, (final String content) -> {
             assertLocalBlock(content, "after", "After step modified");
@@ -444,7 +438,7 @@ public class InteractiveViewSaveTest extends BaseAiTest
     {
         System.out.println(">>> RUNNING TEST: " + "testAddAfterAfterStep_Local");
         runInteractiveConsoleTest("save_dataset_local.yaml", () -> {
-            uiAdvanceToStep("after", 0);
+            uiAdvanceToStep("after", 2);
             uiAddStep("after", "New after After");
         }, (final String content) -> {
             assertLocalBlock(content, "after", "After step 1\nNew after After");

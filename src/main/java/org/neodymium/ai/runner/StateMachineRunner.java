@@ -262,41 +262,52 @@ public final class StateMachineRunner
 
                     if (interactiveListener != null)
                     {
-                        final String userAction = interactiveListener.pauseOnStepFailure(context, playbookStep, e);
-                        if ("RUN".equalsIgnoreCase(userAction) || "EXECUTE".equalsIgnoreCase(userAction))
+                        while (true)
                         {
-                            if (playbookStep != null)
+                            final String userAction = interactiveListener.pauseOnStepFailure(context, playbookStep, e);
+                            if ("SUGGEST_FIX".equalsIgnoreCase(userAction))
                             {
-                                playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.PENDING);
-                                playbookStep.setFailed(false);
-                                playbookStep.setFailureReason(null);
-                                context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                continue;
                             }
-                            continue;
-                        }
-                        else if ("HEAL".equalsIgnoreCase(userAction))
-                        {
-                            if (playbookStep != null)
+                            else if ("RUN".equalsIgnoreCase(userAction) || "EXECUTE".equalsIgnoreCase(userAction))
                             {
-                                playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
-                                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.VISUAL);
-                                context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                if (playbookStep != null)
+                                {
+                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.PENDING);
+                                    playbookStep.setFailed(false);
+                                    playbookStep.setFailureReason(null);
+                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                }
+                                break;
                             }
-                            continue;
-                        }
-                        else if ("SKIP".equalsIgnoreCase(userAction))
-                        {
-                            if (playbookStep != null)
+                            else if ("HEAL".equalsIgnoreCase(userAction))
                             {
-                                playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
+                                if (playbookStep != null)
+                                {
+                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.VISUAL);
+                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                }
+                                break;
                             }
-                            continue;
-                        }
-                        else if ("FINISH".equalsIgnoreCase(userAction) || "ACCEPT_FINISH".equalsIgnoreCase(userAction))
-                        {
-                            context.clearSteps();
-                            success = true;
-                            break;
+                            else if ("SKIP".equalsIgnoreCase(userAction))
+                            {
+                                if (playbookStep != null)
+                                {
+                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
+                                }
+                                break;
+                            }
+                            else if ("FINISH".equalsIgnoreCase(userAction) || "ACCEPT_FINISH".equalsIgnoreCase(userAction))
+                            {
+                                context.clearSteps();
+                                success = false;
+                                break;
+                            }
+                            else
+                            {
+                                break;
+                            }
                         }
                     }
 

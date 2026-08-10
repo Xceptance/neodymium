@@ -138,6 +138,21 @@ public final class SessionData
         {
             // ignore on configuration lookup failure
         }
+        try
+        {
+            if (com.xceptance.neodymium.util.Neodymium.getData().exists(key))
+            {
+                final String neoProp = com.xceptance.neodymium.util.Neodymium.getData().asString(key);
+                if (neoProp != null)
+                {
+                    return new DataEntry(neoProp, false);
+                }
+            }
+        }
+        catch (final Throwable t)
+        {
+            // ignore on configuration lookup failure
+        }
         // 5. Fallback to Neodymium configuration properties
         try
         {

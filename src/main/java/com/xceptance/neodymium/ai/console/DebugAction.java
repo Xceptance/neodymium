@@ -57,6 +57,9 @@ public enum DebugAction
     /** Accept current step failure state and finish test execution. */
     FINISH,
 
+    /** Query AI/PESAP for an improved instruction fix suggestion. */
+    SUGGEST_FIX,
+
     /** Dump the current page context and DOM to a debug file. */
     DUMP,
 

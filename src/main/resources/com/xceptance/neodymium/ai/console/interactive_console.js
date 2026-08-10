@@ -23,9 +23,15 @@ function connectSSE() {
         applyState(data);
     });
 
+    eventSource.addEventListener('fixSuggestion', (e) => {
+        const data = JSON.parse(e.data);
+        handleFixSuggestionReceived(data);
+    });
+
     eventSource.addEventListener('pause', (e) => {
         const data = JSON.parse(e.data);
         currentPauseId = data.pauseId;
+        window.currentPauseId = currentPauseId;
         // Mirror into currentState so local re-renders (toggleBp, handleStepClick, …)
         // that call applyState(currentState) pick up the token via the 'pauseId' in state guard.
         if (currentState) {
@@ -342,15 +348,12 @@ function applyState(state) {
         }
     }
 
-    if (state.status === 'paused' && state.pauseId) {
+    if (state.pauseId) {
         currentPauseId = state.pauseId;
         window.currentPauseId = currentPauseId;
     } else if (state.status === 'running' || state.status === 'passed' || state.status === 'failed') {
         currentPauseId = null;
         window.currentPauseId = null;
-    } else if (state.pauseId) {
-        currentPauseId = state.pauseId;
-        window.currentPauseId = currentPauseId;
     }
 
     // On a new test run, clear the selected step to fall back to default behavior
@@ -1176,6 +1179,7 @@ function renderStepCard(step) {
                     <div class="step-text-container">
                         <div class="tag-row">${sourceTag}${thinkingBadge}</div>
                         <div class="step-text">${stepTextContent}</div>
+                        ${isFailed ? `<div style="margin-top:6px;"><button class="btn-suggest-fix" onclick="requestFixSuggestion(event, ${step.index})" title="Get AI Instruction Fix Suggestion"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Suggest Fix</button></div>` : ''}
                         <div class="step-edit-form">
                             <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${isEditing && window.currentEditText != null ? escHtml(window.currentEditText) : escHtml(step.rawInstruction || step.instruction)}</textarea>
                             <div class="inline-edit-actions">
@@ -1653,18 +1657,20 @@ function saveEdit(btnElement) {
         }
     }
 
+    const activePauseId = currentPauseId || window.currentPauseId || currentState?.pauseId;
     if (isTemp) {
-        if (newVal && currentPauseId) {
+        if (newVal && activePauseId) {
             sendAction('ADD', { instruction: newVal, block: blockName });
         } else {
             cancelEdit(btnElement);
         }
         card.classList.remove('editing');
+        setButtonsEnabled(true);
     } else {
-        console.error('Found step in state blocks:', blockName, idx, 'oldVal:', oldVal, 'newVal:', newVal, 'currentPauseId:', currentPauseId);
+        console.error('Found step in state blocks:', blockName, idx, 'oldVal:', oldVal, 'newVal:', newVal, 'activePauseId:', activePauseId);
         // We always want to send an EDIT action if the user clicks Save, even if the text didn't change, 
         // because the user might have changed dataBindings.
-        if (currentPauseId) {
+        if (activePauseId) {
             console.error('Sending EDIT action');
             userEditedFailedStep = true;
             isErrorMode = false;
@@ -1695,6 +1701,90 @@ function copyError(elementId) {
 
 function showScreenshot(src) {
     // No-op fallback since DOM Snapshot card is removed. Lightbox handles clicks.
+}
+
+let currentSuggestionStepIndex = null;
+
+function requestFixSuggestion(event, stepIndex) {
+    if (event) event.stopPropagation();
+    currentSuggestionStepIndex = stepIndex;
+
+    const overlay = document.getElementById('suggestionOverlay');
+    const loading = document.getElementById('suggestionLoading');
+    const body = document.getElementById('suggestionBody');
+    const actions = document.getElementById('suggestionActions');
+    const origText = document.getElementById('suggestionOriginalText');
+
+    if (!overlay) return;
+
+    overlay.classList.add('active');
+    if (loading) loading.style.display = 'block';
+    if (body) body.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+
+    let stepInstruction = '';
+    if (currentState && currentState.blocks) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const list = currentState.blocks[bKey] || [];
+            const found = list.find(s => s.index == stepIndex);
+            if (found) {
+                stepInstruction = found.instruction || '';
+                break;
+            }
+        }
+    }
+
+    if (origText && (!origText.innerText || !origText.innerText.trim())) origText.innerText = stepInstruction;
+
+    sendAction('SUGGEST_FIX', { index: stepIndex });
+}
+
+function handleFixSuggestionReceived(data) {
+    const loading = document.getElementById('suggestionLoading');
+    const body = document.getElementById('suggestionBody');
+    const actions = document.getElementById('suggestionActions');
+    const textarea = document.getElementById('suggestionTextarea');
+    const origText = document.getElementById('suggestionOriginalText');
+
+    if (loading) loading.style.display = 'none';
+    if (body) body.style.display = 'flex';
+    if (actions) actions.style.display = 'flex';
+
+    if (data.originalInstruction && origText && (!origText.innerText || !origText.innerText.trim())) {
+        origText.innerText = data.originalInstruction;
+    }
+
+    if (textarea) {
+        textarea.value = data.suggestedInstruction || data.suggestion || data.instruction || '';
+        textarea.focus();
+    }
+}
+
+function applySuggestionAndRun() {
+    const textarea = document.getElementById('suggestionTextarea');
+    const newInstruction = textarea ? textarea.value.trim() : '';
+    if (currentSuggestionStepIndex != null && newInstruction && currentPauseId) {
+        userEditedFailedStep = true;
+        isErrorMode = false;
+        updateToolbarControls(true);
+        sendAction('EDIT', { index: currentSuggestionStepIndex, instruction: newInstruction, bindings: currentState?.dataBindings });
+        setTimeout(() => {
+            sendAction('RUN');
+        }, 150);
+    }
+    closeOverlay('suggestionOverlay');
+}
+
+function applySuggestionOnly() {
+    const textarea = document.getElementById('suggestionTextarea');
+    const newInstruction = textarea ? textarea.value.trim() : '';
+    if (currentSuggestionStepIndex != null && newInstruction && currentPauseId) {
+        userEditedFailedStep = true;
+        isErrorMode = false;
+        updateToolbarControls(true);
+        sendAction('EDIT', { index: currentSuggestionStepIndex, instruction: newInstruction, bindings: currentState?.dataBindings });
+    }
+    closeOverlay('suggestionOverlay');
 }
 
 let isErrorMode = false;
@@ -1963,10 +2053,18 @@ function escAttr(str) {
 // Overlays & autocompletes
 // -------------------------------------------------------------------------
 function openOverlay(id) {
-    document.getElementById(id).style.display = 'flex';
+    const overlay = document.getElementById(id);
+    if (overlay) {
+        overlay.style.display = 'flex';
+        overlay.classList.add('active');
+    }
 }
 function closeOverlay(id) {
-    document.getElementById(id).style.display = 'none';
+    const overlay = document.getElementById(id);
+    if (overlay) {
+        overlay.style.display = 'none';
+        overlay.classList.remove('active');
+    }
     if (id === 'helpOverlay') {
         helpOverlayClicked = false;
     }

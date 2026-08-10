@@ -19,6 +19,7 @@
 package com.xceptance.neodymium.ai.console;
 
 import java.awt.Desktop;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -29,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -671,6 +673,47 @@ public final class InteractiveConsoleServer
     /**
      * Simulation combining YAML structure and JSON mock execution results.
      */
+    public static void runSimulation(final InteractiveConsoleEngine engine, final File yamlFile,
+                              final String jsonContent)
+    {
+        try
+        {
+            final String yamlContent = Files.readString(yamlFile.toPath());
+            final Yaml yaml = new Yaml();
+            final Object yamlData = yaml.load(yamlContent);
+            final String yamlJson = new Gson().toJson(yamlData);
+
+            final JsonObject yamlObj = JsonParser.parseString(yamlJson).getAsJsonObject();
+            final JsonObject jsonDatabase = (jsonContent != null && !jsonContent.trim().isEmpty())
+                                                                                                    ? JsonParser.parseString(jsonContent)
+                                                                                                                .getAsJsonObject()
+                                                                                                    : new JsonObject();
+
+            // Build the dynamic active state from YAML
+            final JsonObject activeState = new JsonObject();
+            activeState.addProperty("yamlSource", yamlFile.getAbsolutePath());
+            if (jsonDatabase.has("runId"))
+            {
+                activeState.addProperty("runId", jsonDatabase.get("runId").getAsString());
+            }
+            else
+            {
+                activeState.addProperty("runId", engine.getRunId());
+            }
+
+            parseYamlToSteps(yamlObj, activeState);
+
+            runSimulationInternal(engine, activeState, jsonDatabase);
+        }
+        catch (final Exception e)
+        {
+            LOG.error("[Simulation] Error starting yaml+json simulation: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Simulation combining YAML structure and JSON mock execution results.
+     */
     public static void runSimulation(final InteractiveConsoleEngine engine, final String yamlContent,
                               final String jsonContent)
     {
@@ -681,13 +724,20 @@ public final class InteractiveConsoleServer
             final String yamlJson = new Gson().toJson(yamlData);
 
             final JsonObject yamlObj = JsonParser.parseString(yamlJson).getAsJsonObject();
-            final JsonObject jsonDatabase = JsonParser.parseString(jsonContent).getAsJsonObject();
+            final JsonObject jsonDatabase = (jsonContent != null && !jsonContent.trim().isEmpty())
+                                                                                                    ? JsonParser.parseString(jsonContent)
+                                                                                                                .getAsJsonObject()
+                                                                                                    : new JsonObject();
 
             // Build the dynamic active state from YAML
             final JsonObject activeState = new JsonObject();
             if (jsonDatabase.has("runId"))
             {
                 activeState.addProperty("runId", jsonDatabase.get("runId").getAsString());
+            }
+            else
+            {
+                activeState.addProperty("runId", engine.getRunId());
             }
 
             parseYamlToSteps(yamlObj, activeState);
@@ -744,13 +794,20 @@ public final class InteractiveConsoleServer
 
         // Populate source info for the "Test Info" panel
         activeState.addProperty("testFile", "com.xceptance.neodymium.tests.CheckoutFlowTest");
-        activeState.addProperty("yamlSource", "src/test/resources/checkout/checkout-flow.yaml");
+        if (!activeState.has("yamlSource"))
+        {
+            activeState.addProperty("yamlSource", "src/test/resources/checkout/checkout-flow.yaml");
+        }
         activeState.addProperty("playbookFile", "src/test/resources/checkout/checkout-flow.json");
 
         // Parse lifecycle blocks passing dataEntry down to resolve placeholders
-        parseYamlBlock(yamlObj.get("before"), beforeArray, "before", 0, dataEntry, new ArrayList<>());
-        parseYamlBlock(yamlObj.get("steps"), stepsArray, "steps", 0, dataEntry, new ArrayList<>());
-        parseYamlBlock(yamlObj.get("after"), afterArray, "after", 0, dataEntry, new ArrayList<>());
+        final JsonElement beforeObj = yamlObj.has("before") ? yamlObj.get("before") : (dataEntry != null ? dataEntry.get("before") : null);
+        final JsonElement stepsObj = yamlObj.has("steps") ? yamlObj.get("steps") : (dataEntry != null ? dataEntry.get("steps") : null);
+        final JsonElement afterObj = yamlObj.has("after") ? yamlObj.get("after") : (dataEntry != null ? dataEntry.get("after") : null);
+
+        parseYamlBlock(beforeObj, beforeArray, "before", 0, dataEntry, new ArrayList<>());
+        parseYamlBlock(stepsObj, stepsArray, "steps", 0, dataEntry, new ArrayList<>());
+        parseYamlBlock(afterObj, afterArray, "after", 0, dataEntry, new ArrayList<>());
     }
 
     private static String resolvePlaceholders(final String instruction, final JsonObject dataEntry)
@@ -1187,6 +1244,7 @@ public final class InteractiveConsoleServer
                 }
                 else if ("SKIP".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     step.addProperty("status", "skipped");
                     if (templateStep != null && templateStep.has("reasoning"))
                     {
@@ -1222,8 +1280,24 @@ public final class InteractiveConsoleServer
                 }
                 else if ("EDIT".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     final int targetIdx = response.get("index").getAsInt();
                     final String instruction = response.get("instruction").getAsString();
+
+                    if (response.has("bindings") && response.get("bindings").isJsonObject())
+                    {
+                        final JsonObject newBindings = response.getAsJsonObject("bindings");
+                        JsonObject bindingsObj = activeState.getAsJsonObject("dataBindings");
+                        if (bindingsObj == null)
+                        {
+                            bindingsObj = new JsonObject();
+                            activeState.add("dataBindings", bindingsObj);
+                        }
+                        for (final Map.Entry<String, JsonElement> e : newBindings.entrySet())
+                        {
+                            bindingsObj.add(e.getKey(), e.getValue());
+                        }
+                    }
 
                     final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
                     if (blocksObj != null)
@@ -1260,6 +1334,7 @@ public final class InteractiveConsoleServer
                 }
                 else if ("ADD".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     final String blockName = response.has("block") ? response.get("block").getAsString() : "steps";
                     final String instruction = response.get("instruction").getAsString();
 
@@ -1314,6 +1389,7 @@ public final class InteractiveConsoleServer
                 }
                 else if ("REORDER".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     final String fromBlock = response.has("fromBlock") ? response.get("fromBlock").getAsString()
                                                                        : response.get("block").getAsString();
                     final int fromIndex = response.get("fromIndex").getAsInt();
@@ -1398,13 +1474,25 @@ public final class InteractiveConsoleServer
                 }
                 else if ("SAVE_EXIT".equals(action))
                 {
-                    LOG.info("[Simulation] Received stop signal. Exiting simulation.");
+                    LOG.info("[Simulation] Received stop signal. Saving YAML and exiting simulation.");
+                    saveSimulationYaml(activeState, response);
                     break;
                 }
             }
 
-            // Final state push
+            // Final state push & final pause for overlay
+            if (!activeState.has("status") || !"failed".equals(activeState.get("status").getAsString()))
+            {
+                activeState.addProperty("status", "finished");
+            }
+            final String finalPauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
+            activeState.addProperty("pauseId", finalPauseId);
             engine.pushState(gson.toJson(activeState));
+            final JsonObject finalResponse = engine.waitForAction(finalPauseId);
+            if (finalResponse != null)
+            {
+                saveSimulationYaml(activeState, finalResponse);
+            }
         }
         catch (final Exception e)
         {
@@ -1483,5 +1571,171 @@ public final class InteractiveConsoleServer
             }
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void saveSimulationYaml(final JsonObject activeState, final JsonObject response)
+    {
+        try
+        {
+            String filePath = null;
+            if (activeState.has("yamlSource") && !activeState.get("yamlSource").getAsString().isEmpty())
+            {
+                filePath = activeState.get("yamlSource").getAsString();
+            }
+            else
+            {
+                try
+                {
+                    final String neodymiumFile = com.xceptance.neodymium.util.Neodymium.getTestdataSourceFile();
+                    if (neodymiumFile != null && !neodymiumFile.isEmpty() && new File(neodymiumFile).exists())
+                    {
+                        filePath = neodymiumFile;
+                    }
+                }
+                catch (final Throwable ignored)
+                {
+                }
+            }
+
+            if (filePath == null)
+            {
+                return;
+            }
+
+            final File targetFile = new File(filePath);
+            if (!targetFile.exists())
+            {
+                return;
+            }
+
+            final org.yaml.snakeyaml.DumperOptions options = new org.yaml.snakeyaml.DumperOptions();
+            options.setDefaultFlowStyle(org.yaml.snakeyaml.DumperOptions.FlowStyle.BLOCK);
+            options.setPrettyFlow(true);
+            final org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(options);
+
+            Map<String, Object> map = yaml.load(Files.readString(targetFile.toPath()));
+            if (map == null)
+            {
+                map = new LinkedHashMap<>();
+            }
+
+            String saveScope = "global";
+            if (response != null && response.has("saveScope"))
+            {
+                saveScope = response.get("saveScope").getAsString();
+            }
+            else if (activeState.has("yamlScope"))
+            {
+                saveScope = activeState.get("yamlScope").getAsString();
+            }
+
+            final boolean isLocal = "local".equalsIgnoreCase(saveScope);
+
+            final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
+            final Map<String, String> blockTexts = new LinkedHashMap<>();
+
+            if (blocksObj != null)
+            {
+                for (final String bKey : new String[] { "before", "steps", "after" })
+                {
+                    if (blocksObj.has(bKey))
+                    {
+                        final JsonArray arr = blocksObj.getAsJsonArray(bKey);
+                        final List<String> lines = new ArrayList<>();
+                        for (final JsonElement el : arr)
+                        {
+                            if (el.isJsonObject())
+                            {
+                                final JsonObject s = el.getAsJsonObject();
+                                String instr = s.has("instruction") ? s.get("instruction").getAsString() : "";
+                                if (s.has("status") && "skipped".equals(s.get("status").getAsString()))
+                                {
+                                    if (!instr.startsWith("// [SKIPPED]"))
+                                    {
+                                        instr = "// [SKIPPED] " + instr;
+                                    }
+                                }
+                                lines.add(instr);
+                            }
+                        }
+                        if (!lines.isEmpty())
+                        {
+                            blockTexts.put(bKey, String.join("\n", lines));
+                        }
+                    }
+                }
+            }
+
+            final List<Map<String, Object>> dataList = (List<Map<String, Object>>) map.get("data");
+            final Map<String, Object> firstDataset = (dataList != null && !dataList.isEmpty()) ? dataList.get(0) : null;
+
+            // Update bindings into first dataset
+            if (firstDataset != null && activeState.has("dataBindings"))
+            {
+                final JsonObject bindings = activeState.getAsJsonObject("dataBindings");
+                for (final Map.Entry<String, JsonElement> e : bindings.entrySet())
+                {
+                    firstDataset.put(e.getKey(), e.getValue().getAsString());
+                }
+            }
+
+            if (isLocal)
+            {
+                // Remove blocks from global level
+                map.remove("before");
+                map.remove("steps");
+                map.remove("after");
+
+                if (firstDataset != null)
+                {
+                    for (final String bKey : new String[] { "before", "steps", "after" })
+                    {
+                        if (blockTexts.containsKey(bKey))
+                        {
+                            firstDataset.put(bKey, blockTexts.get(bKey));
+                        }
+                        else
+                        {
+                            firstDataset.remove(bKey);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Global level
+                for (final String bKey : new String[] { "before", "steps", "after" })
+                {
+                    if (blockTexts.containsKey(bKey))
+                    {
+                        map.put(bKey, blockTexts.get(bKey));
+                    }
+                    else
+                    {
+                        map.remove(bKey);
+                    }
+                }
+
+                // Remove block keys from dataset level
+                if (dataList != null)
+                {
+                    for (final Map<String, Object> dataset : dataList)
+                    {
+                        dataset.remove("before");
+                        dataset.remove("steps");
+                        dataset.remove("after");
+                    }
+                }
+            }
+
+            final String dumped = yaml.dump(map);
+            Files.writeString(targetFile.toPath(), dumped);
+            LOG.info("[Simulation] Saved modified YAML to {}:\n{}", targetFile.getAbsolutePath(), dumped);
+        }
+        catch (final Exception e)
+        {
+            LOG.error("[Simulation] Error saving simulation YAML: {}", e.getMessage(), e);
+        }
     }
 }

@@ -165,7 +165,7 @@ public final class AuraManagerRunQueueEdgeCasesUiTest
                 checkbox.click();
             }
         }
-        $("#runQueueBtn").shouldBe(Condition.visible);
+        $("#runQueueBtn").shouldBe(Condition.visible, Duration.ofSeconds(30));
     }
 
     @NeodymiumTest

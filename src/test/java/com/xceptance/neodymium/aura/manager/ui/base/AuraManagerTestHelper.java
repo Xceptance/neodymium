@@ -156,6 +156,7 @@ public final class AuraManagerTestHelper
         auraServer = NeodymiumAuraManager.startServer(startPort, true);
         auraPort = auraServer.getAddress().getPort();
         Neodymium.getData().put("auraManagerUrl", "http://127.0.0.1:" + auraPort);
+        org.neodymium.util.Neodymium.getData().put("auraManagerUrl", "http://127.0.0.1:" + auraPort);
         System.out.println("Started AuraManager on http://127.0.0.1:" + auraPort);
         try
         {

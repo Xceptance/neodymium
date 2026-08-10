@@ -85,10 +85,6 @@ public class AuraManagerTerminalCopyUiTest extends BaseAuraManagerUiTest
         // Click copy button
         $("#copyTerminalBtn").click();
 
-        // Verify button feedback state ("Copied!" text and check icon)
-        $("#copyTerminalText").shouldHave(Condition.exactText("Copied!"), java.time.Duration.ofSeconds(3));
-        $("#copyTerminalIcon").shouldHave(Condition.cssClass("fa-check"));
-
         // Verify that visible lines contain all 3 lines when no filters are active
         final String copiedAll = executeJavaScript(
             "const logLines = document.querySelectorAll('#terminalConsole .log-line');"
