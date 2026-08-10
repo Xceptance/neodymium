@@ -24,7 +24,7 @@ public interface NeodymiumConfiguration extends Mutable, Accessible
     public boolean debuggingHighlightSelectedElements();
 
     @Key("neodymium.debugUtils.highlight.duration")
-    @DefaultValue("500")
+    @DefaultValue("100")
     public long debuggingHighlightDuration();
 
     @Key("neodymium.debugUtils.highlight.blink.count")
