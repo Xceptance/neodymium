@@ -2,7 +2,7 @@ Predict minimal context level and metadata for the current step.
 
 ## Rules
 1. Context Level ('c'):
-   - Explicit locator `(hint: .selector)` -> HINT
+   - Instruction contains literal '(hint: ...)' tag with CSS/XPath selector -> HINT
    - Visual assertion `(visual)` -> VISUAL | Visual interaction -> VISUAL_LEAN | Visual layout -> VISUAL_RICH
    - DOM state assertion (focused, checked, unchecked, disabled, enabled, selected, readonly, editable) -> MINIMAL
    - Data/table validation -> RICH | Text check -> STANDARD | Component boundary -> LEAN | Default -> MINIMAL

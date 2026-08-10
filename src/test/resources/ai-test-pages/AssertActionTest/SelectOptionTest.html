@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Select Option Integration Test</title>
+</head>
+<body>
+    <h1>Select Option Test Page</h1>
+    
+    <h2>Country Dropdown</h2>
+    <select id="country-select" name="country">
+        <option id="opt-us" value="US">United States</option>
+        <option id="opt-de" value="DE" selected>Germany</option>
+        <option id="opt-fr" value="FR">France</option>
+        <option id="opt-dis" value="DIS" disabled>Disabled Country</option>
+    </select>
+
+    <h2>Multi-Select Interests</h2>
+    <select id="interests-select" name="interests" multiple>
+        <option id="opt-tech" value="tech" selected>Technology</option>
+        <option id="opt-sports" value="sports">Sports</option>
+        <option id="opt-music" value="music" selected>Music</option>
+        <option id="opt-art" value="art">Art</option>
+    </select>
+
+    <h2>Car Brand Dropdown</h2>
+    <select id="car-select" name="car">
+        <optgroup label="German Cars">
+            <option id="opt-bmw" value="bmw">BMW</option>
+            <option id="opt-audi" value="audi" selected>Audi</option>
+        </optgroup>
+        <optgroup label="American Cars">
+            <option id="opt-ford" value="ford">Ford</option>
+            <option id="opt-tesla" value="tesla">Tesla</option>
+        </optgroup>
+    </select>
+</body>
+</html>

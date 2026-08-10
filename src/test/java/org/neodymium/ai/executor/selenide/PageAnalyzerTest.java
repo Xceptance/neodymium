@@ -101,4 +101,28 @@ public class PageAnalyzerTest
             com.codeborne.selenide.Selenide.closeWebDriver();
         }
     }
+
+    @Test
+    public void testSelectAndOptionPresenceInMinimalDom() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/AssertActionTest/SelectOptionTest.html");
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+
+            final String minimalDom = analyzer.captureSimplifiedDom(ContextLevel.MINIMAL);
+            assertNotNull(minimalDom);
+            assertTrue(minimalDom.contains("<select"), "MINIMAL DOM must contain <select> container tags");
+            assertTrue(minimalDom.contains("<option"), "MINIMAL DOM must contain <option> leaf tags");
+            assertTrue(minimalDom.contains("opt-de"), "MINIMAL DOM must contain option element ID opt-de");
+            assertTrue(minimalDom.contains("country-select"), "MINIMAL DOM must contain select element ID country-select");
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
+    }
 }

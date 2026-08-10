@@ -179,6 +179,10 @@ public class PageAnalyzer
                     if (el.closest && el.closest('.neodymium-ai-hud')) return false;
 
                     var tagName = el.tagName ? el.tagName.toLowerCase() : '';
+                    if (tagName === 'option' || tagName === 'optgroup') {
+                        return el.parentElement ? isVisible(el.parentElement) : true;
+                    }
+
                     var type = el.getAttribute ? el.getAttribute('type') : null;
                     var isCheckableInput = tagName === 'input' && (type === 'radio' || type === 'checkbox');
 
@@ -223,13 +227,11 @@ public class PageAnalyzer
                     );
                 }
 
-                // Helper to extract the input value, filtering out text entry fields to protect privacy and token counts
+                // Helper to extract input values, masking sensitive password fields while exposing standard input values for assertions
                 function getElementValue(el, label) {
                     var tag = el.tagName ? el.tagName.toLowerCase() : '';
-                    var type = (el.getAttribute('type') || 'text').toLowerCase();
-                    var isTextEntry = tag === 'input' && 
-                        ['text', 'password', 'email', 'tel', 'url', 'search', 'number', 'date', 'datetime-local', 'month', 'time', 'week'].indexOf(type) !== -1;
-                    if (isTextEntry) {
+                    var type = (el.getAttribute('type') || '').toLowerCase();
+                    if (tag === 'input' && type === 'password') {
                         return null;
                     }
                     return truncate(el.value || el.getAttribute('value'), MAX_VALUE);
@@ -608,7 +610,7 @@ public class PageAnalyzer
 
                     var isInter = isInteractive(el);
                     var isHead = ['h1','h2','h3','h4','h5','h6'].indexOf(tag) !== -1;
-                    var isStandardLeaf = ['a', 'button', 'input', 'select', 'textarea', 'option', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].indexOf(tag) !== -1;
+                    var isStandardLeaf = ['a', 'button', 'input', 'textarea', 'option', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].indexOf(tag) !== -1;
                     var isCustomLeaf = (isInter || isHead) && el.children.length === 0;
 
                     // 1. Leaf interactive or heading element (Atomic)
@@ -617,7 +619,7 @@ public class PageAnalyzer
                         var text = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
                         var options = null;
                         if (tag === 'select') {
-                            options = Array.from(el.options).slice(0, 50).map(o => o.text.trim()).filter(t => t.length > 0).join(', ');
+                            options = Array.from(el.options).slice(0, 50).map(o => (o.id ? '#' + o.id + '=' : '') + o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
                         }
                         return {
@@ -631,6 +633,8 @@ public class PageAnalyzer
                             type: el.getAttribute('type'),
                             role: el.getAttribute('role'),
                             checked: isChecked(el) ? 'true' : null,
+                            selected: (tag === 'option' ? (el.selected || el.hasAttribute('selected') ? 'true' : null) : null),
+                            disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
                             focused: (document.activeElement === el) ? 'true' : null,
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
@@ -642,12 +646,12 @@ public class PageAnalyzer
                         };
                     }
 
-                    var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol'].indexOf(tag) !== -1;
+                    var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol','select','optgroup'].indexOf(tag) !== -1;
                     var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0));
                     var isDivContainer = (tag === 'div' || tag === 'li') && hasClassOrId;
 
                     var children = [];
-                    var childNodes = Array.from(el.children);
+                    var childNodes = (tag === 'select' || tag === 'optgroup') ? Array.from(el.children).slice(0, 50) : Array.from(el.children);
                     for (var i = 0; i < childNodes.length; i++) {
                         var childRes = buildNodeTree(childNodes[i]);
                         if (childRes) {
@@ -660,7 +664,7 @@ public class PageAnalyzer
                     }
 
                     // 2. Container node with extracted children
-                    var isFormContainer = tag === 'form' || tag === 'fieldset';
+                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup';
                     var allowContainer = !isMinimal || isFormContainer;
                     if (allowContainer && (isContainerTag || isDivContainer) && children.length > 0) {
                         var autoIdContainer = assignId(el);
@@ -1248,6 +1252,7 @@ public class PageAnalyzer
         appendAttribute(dom, "type", el.get("type"));
         appendAttribute(dom, "role", el.get("role"));
         appendAttribute(dom, "checked", el.get("checked"));
+        appendAttribute(dom, "selected", el.get("selected"));
 
         final String text = (String) el.get("text");
 
