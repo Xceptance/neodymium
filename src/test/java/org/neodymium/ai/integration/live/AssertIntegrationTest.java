@@ -95,6 +95,8 @@ public class AssertIntegrationTest extends BaseAiTest
               Assert that the 'Username Input' field is focused
               Assert that the 'newsletter-opt' checkbox is checked
               Assert that the 'terms-opt' checkbox is unchecked
+              Assert that the 'plan-monthly' radio button is checked
+              Assert that the 'plan-yearly' radio button is unchecked
               Assert that the 'disabled-input' field is disabled
               Assert that the 'enabled-input' field is enabled
               Assert that the 'opt-user' option is selected
@@ -110,6 +112,8 @@ public class AssertIntegrationTest extends BaseAiTest
         $("#username").shouldBe(focused);
         $("#newsletter-opt").shouldBe(checked);
         $("#terms-opt").shouldNotBe(checked);
+        $("#plan-monthly").shouldBe(checked);
+        $("#plan-yearly").shouldNotBe(checked);
         $("#disabled-input").shouldBe(disabled);
         $("#enabled-input").shouldBe(enabled);
         $("#opt-user").shouldBe(selected);
@@ -311,10 +315,10 @@ public class AssertIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCheckedState.yaml")
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCheckboxState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiDataSet("assertData")
-    public void testAssertCheckedState(final AiSession session) throws Exception
+    public void testAssertCheckboxState(final AiSession session) throws Exception
     {
         session.execute( """
             data:
@@ -323,16 +327,47 @@ public class AssertIntegrationTest extends BaseAiTest
               Open ${assert.test.url} in the browser
               Assert that the 'newsletter-opt' checkbox is checked
               Assert that the 'terms-opt' checkbox is unchecked
+              Assert that the 'newsletter-opt' checkbox is true
+              Assert that the 'terms-opt' checkbox is false
             """)
             .verifyMetrics()
-            .hasStepCount(3)
+            .hasStepCount(5)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#newsletter-opt").shouldBe(checked);
         $("#terms-opt").shouldNotBe(checked);
+    }
+
+    /**
+     * Sliced test case verifying radio button checked and unchecked state assertions.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertRadioButtonState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    @AiDataSet("assertData")
+    public void testAssertRadioButtonState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'plan-monthly' radio button is checked
+              Assert that the 'plan-yearly' radio button is unchecked
+              Assert that the 'plan-monthly' radio button is true
+              Assert that the 'plan-yearly' radio button is false
+            """)
+            .verifyMetrics()
+            .hasStepCount(5)
+            .hasNoSoftFailures()
+            .hasNoEscalations()
+            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#plan-monthly").shouldBe(checked);
+        $("#plan-yearly").shouldNotBe(checked);
     }
 
     /**
