@@ -9,7 +9,7 @@
     <meta charset="UTF-8"/>
     <title>Neodymium Aura Manager</title>
     <!-- Stylesheets, fonts, and scripts -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <link href="/material-symbols.css" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
     <link href="dashboard-styles.css" rel="stylesheet"/>
     <script src="dashboard-htmx.js"></script>
@@ -20,13 +20,13 @@
 
 <!-- Sidebar Navigation -->
 <div class="sidebar">
-    <div class="logo"><i class="fa-solid fa-atom"></i></div>
+    <div class="logo"><span class="material-symbols-outlined">auto_awesome</span></div>
     <div class="nav-item active" id="navWorkspace" onclick="showView('dashboardView')" title="Workspace Explorer">
-        <i class="fa-solid fa-folder-tree"></i>
-        <div class="nav-badge neo-u-1" id="sidebarRunBadge" style="display: none;"><i class="fa-solid fa-circle-notch spinner"></i></div>
+        <span class="material-symbols-outlined">account_tree</span>
+        <div class="nav-badge neo-u-1" id="sidebarRunBadge" style="display: none;"><span class="material-symbols-outlined spinner">progress_activity</span></div>
     </div>
     <div class="nav-item" id="navReports" onclick="showView('reportViewContainer')" title="History &amp; Reports">
-        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span class="material-symbols-outlined">schedule</span>
     </div>
 </div>
 
@@ -36,10 +36,10 @@
         <div class="neo-u-2">Neodymium Aura Dashboard</div>
         <div class="neo-u-3">
             <div class="neo-u-4">
-                <button class="btn-edit neo-u-5" id="settingsBtn" onclick="openSettingsModal()" title="Settings"><i class="fa-solid fa-gear"></i></button>
-                <button class="btn-edit neo-u-5" id="themeLight" onclick="changeTheme('light')" title="Light Mode"><i class="fa-solid fa-sun"></i></button>
-                <button class="btn-edit neo-u-5" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode"><i class="fa-solid fa-moon"></i></button>
-                <button class="btn-edit neo-u-5" id="themeSystem" onclick="changeTheme('system')" title="System Theme"><i class="fa-solid fa-desktop"></i></button>
+                <button class="btn-edit neo-u-5" id="settingsBtn" onclick="openSettingsModal()" title="Settings"><span class="material-symbols-outlined">settings</span></button>
+                <button class="btn-edit neo-u-5" id="themeLight" onclick="changeTheme('light')" title="Light Mode"><span class="material-symbols-outlined">light_mode</span></button>
+                <button class="btn-edit neo-u-5" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode"><span class="material-symbols-outlined">dark_mode</span></button>
+                <button class="btn-edit neo-u-5" id="themeSystem" onclick="changeTheme('system')" title="System Theme"><span class="material-symbols-outlined">desktop_windows</span></button>
             </div>
         </div>
     </div>
@@ -57,7 +57,7 @@
                     <!-- Insert Run Queue Panel Fragment -->
                     <div class="panel">
                         <div class="panel-header">
-                            <div class="panel-title"><i class="fa-solid fa-list-ol" style="color: var(--accent);"></i> <span>Run Queue</span></div>
+                            <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">format_list_numbered</span> <span>Run Queue</span></div>
                         </div>
                         <div class="content-scroll">
                             <div class="queue-list" id="queueListContainer" th:fragment="queueListContainer">
@@ -87,14 +87,14 @@
             <div class="panel neo-u-19" id="consolePanel">
                 <div class="terminal-panel">
                     <div class="neo-u-20">
-                        <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><i class="fa-solid fa-circle-notch spinner neo-u-21"></i></span></span>
+                        <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
                         <div class="neo-u-22">
                             <input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
                             <label for="aiOnlyCb">AI Only</label>
                             <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
                             <label for="errorsOnlyCb">Errors Only</label>
                             <button id="copyTerminalBtn" class="btn-edit" onclick="copyTerminalOutput()" title="Copy terminal output" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
-                                <i class="fa-regular fa-copy" id="copyTerminalIcon"></i>
+                                <span class="material-symbols-outlined" id="copyTerminalIcon">content_copy</span>
                                 <span id="copyTerminalText">Copy</span>
                             </button>
                         </div>
@@ -117,7 +117,7 @@
             <!-- Insert Configuration Panel Fragment -->
             <div class="panel config-container">
                 <div class="panel-header">
-                    <div class="panel-title"><i class="fa-solid fa-sliders" style="color: var(--accent);"></i> <span>Run Configuration</span></div>
+                    <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">tune</span> <span>Run Configuration</span></div>
                 </div>
                 <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel">
                     <div th:replace="~{fragments/queue :: configPanelContent}"></div>
@@ -140,7 +140,7 @@
             <div class="panel neo-u-35">
                 <div class="panel-header">
                     <span>Run History</span>
-                    <button class="btn btn-secondary neo-u-36" hx-get="/api/reporting/history" hx-target="#allureHistoryList" hx-swap="outerHTML"><i aria-hidden="true" class="fa-solid fa-arrows-rotate"></i></button>
+                    <button class="btn btn-secondary neo-u-36" hx-get="/api/reporting/history" hx-target="#allureHistoryList" hx-swap="outerHTML"><span aria-hidden="true" class="material-symbols-outlined">sync</span></button>
                 </div>
                 <div class="neo-u-37" id="reportingHistoryList">
                     <table class="history-table neo-u-38">
@@ -172,7 +172,7 @@
                 <div class="neo-u-40">
                     <iframe class="neo-u-41" id="historyConsoleIframe"></iframe>
                     <div class="neo-u-42" id="historyPlaceholder">
-                        <i class="fa-solid fa-clock-rotate-left neo-u-43"></i>
+                        <span class="material-symbols-outlined neo-u-43">schedule</span>
                         <p>Select a run from the history to view its interactive report.</p>
                     </div>
                 </div>
@@ -183,9 +183,9 @@
     <!-- REPORT IFRAME VIEW (Hidden until report opened) -->
     <div class="iframe-view-pane" id="reportView">
         <div class="neo-report-header">
-            <div class="neo-u-44"><i class="fa-solid fa-chart-column neo-u-45"></i>
+            <div class="neo-u-44"><span class="material-symbols-outlined neo-u-45">bar_chart</span>
                 Test Report: <span id="reportDisplayName"></span></div>
-            <button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+            <button class="btn-edit" onclick="closeReportView()"><span class="material-symbols-outlined">arrow_back</span> Back</button>
         </div>
         <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
     </div>
@@ -193,8 +193,8 @@
     <!-- INTERACTIVE CONSOLE VIEW -->
     <div class="iframe-view-pane" id="interactiveConsoleView">
         <div class="neo-report-header">
-            <div class="neo-u-44"><i class="fa-solid fa-terminal neo-u-46"></i> Interactive Console</div>
-            <button class="btn-edit" onclick="closeInteractiveConsoleView()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+            <div class="neo-u-44"><span class="material-symbols-outlined neo-u-46">terminal</span> Interactive Console</div>
+            <button class="btn-edit" onclick="closeInteractiveConsoleView()"><span class="material-symbols-outlined">arrow_back</span> Back</button>
         </div>
         <iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
     </div>
@@ -210,7 +210,7 @@
     <div class="modal-card neo-u-50">
         <div class="modal-header neo-u-31">
             <span>Execution Log</span>
-            <button class="btn-editor neo-u-51" id="downloadLogBtn"><i class="fa-solid fa-download"></i> Download</button>
+            <button class="btn-editor neo-u-51" id="downloadLogBtn"><span class="material-symbols-outlined">download</span> Download</button>
         </div>
         <div class="modal-body neo-u-52">
             <pre class="neo-u-53" id="logModalContent"></pre>

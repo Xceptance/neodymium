@@ -803,6 +803,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             if (playbookPath != null)
             {
+                executionContext.getTransientData().put("playbookFile", playbookPath);
                 executionContext.getTransientData().put("yamlSource", playbookPath);
             }
             if (this.datasetId != null)
@@ -872,6 +873,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
                 if (companionJsonPath != null)
                 {
+                    executionContext.getTransientData().put("playbookRecordingFile", companionJsonPath);
                     resolvedPlaybookPath = companionJsonPath;
                 }
                 else

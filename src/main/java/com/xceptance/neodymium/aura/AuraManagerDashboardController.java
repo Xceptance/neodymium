@@ -140,7 +140,19 @@ public final class AuraManagerDashboardController
             AuraHttpUtils.sendError(exchange, 404, "Not found");
             return;
         }
-        final String contentType = path.endsWith(".css") ? "text/css" : "application/javascript";
+        final String contentType;
+        if (path.endsWith(".css"))
+        {
+            contentType = "text/css; charset=UTF-8";
+        }
+        else if (path.endsWith(".woff2"))
+        {
+            contentType = "font/woff2";
+        }
+        else
+        {
+            contentType = "application/javascript; charset=UTF-8";
+        }
         AuraHttpUtils.sendResponse(exchange, 200, contentType, is.readAllBytes());
     }
 }

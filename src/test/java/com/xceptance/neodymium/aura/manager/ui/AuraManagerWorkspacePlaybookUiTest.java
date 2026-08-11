@@ -1,9 +1,11 @@
 package com.xceptance.neodymium.aura.manager.ui;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 
+import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
 import com.xceptance.neodymium.common.testdata.DataSet;
 
@@ -21,6 +23,12 @@ public class AuraManagerWorkspacePlaybookUiTest extends BaseAuraManagerUiTest
     public AuraManagerWorkspacePlaybookUiTest()
     {
         super(18130);
+    }
+
+    @BeforeEach
+    public void setupWorkspaceTest() throws Exception
+    {
+        AuraManagerTestHelper.createWorkspaceTestFile();
     }
 
     @AiPlaybook("ai-test-pages/aura-manager-workspace-create-test.yaml")

@@ -30,13 +30,13 @@ public enum ExecutionMode
 {
     /**
      * Live execution using the LLM to determine actions.
-     * Does not record the executed steps to a json playbook file.
+     * Does not record the executed steps to a playbook recording JSON file.
      */
     LLM_ONLY,
 
     /**
      * Live execution using the LLM to determine actions,
-     * and automatically records the executed steps to a json playbook file.
+     * and automatically records the executed steps to a playbook recording JSON file.
      */
     LLM_RECORDING,
 

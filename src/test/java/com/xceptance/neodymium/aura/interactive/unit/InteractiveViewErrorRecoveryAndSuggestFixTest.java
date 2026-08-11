@@ -204,6 +204,6 @@ public final class InteractiveViewErrorRecoveryAndSuggestFixTest extends BaseInt
         final SelenideElement finalTitle = $("#finalSaveTitle");
         finalTitle.should(Condition.exist);
         finalTitle.shouldHave(Condition.cssClass("failed"));
-        finalTitle.$("i.fa-circle-xmark").should(Condition.exist);
+        finalTitle.$(".material-symbols-outlined").shouldHave(Condition.exactText("cancel"));
     }
 }

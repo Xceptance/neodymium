@@ -350,6 +350,16 @@ public final class InteractiveConsoleServer
                 resourcePath = "com/xceptance/neodymium/ai/console/interactive_console.js";
                 contentType = "application/javascript; charset=UTF-8";
             }
+            else if ("/material-symbols.css".equals(path))
+            {
+                resourcePath = "com/xceptance/neodymium/ai/console/material-symbols.css";
+                contentType = "text/css; charset=UTF-8";
+            }
+            else if ("/material-symbols-outlined.woff2".equals(path))
+            {
+                resourcePath = "com/xceptance/neodymium/ai/console/material-symbols-outlined.woff2";
+                contentType = "font/woff2";
+            }
             else
             {
                 final byte[] msg = "Not Found".getBytes(StandardCharsets.UTF_8);
@@ -691,7 +701,7 @@ public final class InteractiveConsoleServer
 
             // Build the dynamic active state from YAML
             final JsonObject activeState = new JsonObject();
-            activeState.addProperty("yamlSource", yamlFile.getAbsolutePath());
+            activeState.addProperty("playbookFile", yamlFile.getAbsolutePath());
             if (jsonDatabase.has("runId"))
             {
                 activeState.addProperty("runId", jsonDatabase.get("runId").getAsString());
@@ -742,6 +752,20 @@ public final class InteractiveConsoleServer
 
             parseYamlToSteps(yamlObj, activeState);
 
+            if (jsonDatabase.has("dataBindings") && jsonDatabase.get("dataBindings").isJsonObject())
+            {
+                final JsonObject activeBindings = activeState.has("dataBindings") ? activeState.getAsJsonObject("dataBindings") : new JsonObject();
+                final JsonObject jsonBindings = jsonDatabase.getAsJsonObject("dataBindings");
+                for (final Map.Entry<String, JsonElement> entry : jsonBindings.entrySet())
+                {
+                    if (!activeBindings.has(entry.getKey()))
+                    {
+                        activeBindings.add(entry.getKey(), entry.getValue());
+                    }
+                }
+                activeState.add("dataBindings", activeBindings);
+            }
+
             runSimulationInternal(engine, activeState, jsonDatabase);
         }
         catch (final Exception e)
@@ -782,6 +806,7 @@ public final class InteractiveConsoleServer
                     bindings.add(entry.getKey(), entry.getValue());
                 }
                 activeState.add("dataBindings", bindings);
+                activeState.add("localDataBindings", bindings);
             }
         }
 
@@ -794,11 +819,11 @@ public final class InteractiveConsoleServer
 
         // Populate source info for the "Test Info" panel
         activeState.addProperty("testFile", "com.xceptance.neodymium.tests.CheckoutFlowTest");
-        if (!activeState.has("yamlSource"))
+        if (!activeState.has("playbookFile"))
         {
-            activeState.addProperty("yamlSource", "src/test/resources/checkout/checkout-flow.yaml");
+            activeState.addProperty("playbookFile", "src/test/resources/checkout/checkout-flow.yaml");
         }
-        activeState.addProperty("playbookFile", "src/test/resources/checkout/checkout-flow.json");
+        activeState.addProperty("playbookRecordingFile", "src/test/resources/checkout/checkout-flow.json");
 
         // Parse lifecycle blocks passing dataEntry down to resolve placeholders
         final JsonElement beforeObj = yamlObj.has("before") ? yamlObj.get("before") : (dataEntry != null ? dataEntry.get("before") : null);
@@ -1579,7 +1604,11 @@ public final class InteractiveConsoleServer
         try
         {
             String filePath = null;
-            if (activeState.has("yamlSource") && !activeState.get("yamlSource").getAsString().isEmpty())
+            if (activeState.has("playbookFile") && !activeState.get("playbookFile").getAsString().isEmpty())
+            {
+                filePath = activeState.get("playbookFile").getAsString();
+            }
+            else if (activeState.has("yamlSource") && !activeState.get("yamlSource").getAsString().isEmpty())
             {
                 filePath = activeState.get("yamlSource").getAsString();
             }

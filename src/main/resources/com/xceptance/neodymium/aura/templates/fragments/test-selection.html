@@ -5,11 +5,11 @@
 -->
 <div class="panel" th:fragment="testSelectionContent">
     <div class="panel-header">
-        <div class="panel-title"><i class="fa-solid fa-list-check" style="color: var(--accent);"></i> <span>Test Selection</span></div>
-        <button class="btn-edit neo-u-8" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><i class="fa-solid fa-rotate-right"></i></button>
+        <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">checklist</span> <span>Test Selection</span></div>
+        <button class="btn-edit neo-u-8" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
     </div>
     <div class="search-container">
-        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <span class="material-symbols-outlined search-icon">search</span>
         <input type="text" id="testSearchInput" name="q" placeholder="Search test cases..."
                class="search-input"
                hx-get="/api/files/search" hx-trigger="keyup changed delay:200ms, search"
@@ -20,7 +20,7 @@
     </div>
     <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border);">
         <button class="btn-edit" id="openModalBtn" hx-get="/api/modals/create" hx-target="#modalContainer" hx-swap="innerHTML" style="width: 100%; justify-content: center; padding: 8px; font-weight: 500;">
-            <i class="fa-solid fa-plus"></i> Create New Test
+            <span class="material-symbols-outlined">add</span> Create New Test
         </button>
     </div>
 </div>
@@ -28,7 +28,7 @@
 <th:block th:fragment="yamlFileListContent">
     <!-- If files is null or empty, display a message -->
     <div th:if="${files == null or files.isEmpty()}" class="empty-state-card">
-        <i class="fa-solid fa-folder-open"></i>
+        <span class="material-symbols-outlined">folder_open</span>
         <div class="empty-title">No Test Files Found</div>
         <div class="empty-desc">No YAML test files were found in src/test/resources.</div>
     </div>
@@ -40,9 +40,9 @@
                  th:data-file="${item.file}"
                  onclick="if(typeof toggleExpandFile==='function') toggleExpandFile(this.getAttribute('data-file'), this);">
                 <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
-                    <i class="fa-solid" 
-                       th:classappend="${#sets.contains(expandedFiles, item.file) ? 'fa-chevron-down' : 'fa-chevron-right'}"
-                       style="margin-right: 8px; color: var(--text-secondary); font-size: 10px; width: 12px; text-align: center;"></i>
+                    <span class="material-symbols-outlined" 
+                          th:text="${#sets.contains(expandedFiles, item.file) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'}"
+                          style="margin-right: 8px; color: var(--text-secondary); font-size: 16px; width: 16px; text-align: center;"></span>
                     <label class="custom-checkbox" onclick="event.stopPropagation();">
                         <input type="checkbox" class="file-select-cb" th:data-file="${item.file}" 
                                th:checked="${selectedFileKeys != null and selectedFileKeys.contains(item.file)}"
@@ -58,7 +58,7 @@
                         onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
                         style="padding: 4px 8px; color: var(--text-secondary);" 
                         th:title="'Edit YAML Steps for ' + ${item.file}" th:alt="'Edit YAML Steps for ' + ${item.file}" th:aria-label="'Edit YAML Steps for ' + ${item.file}">
-                    <i class="fa-solid fa-pen" style="font-size: 11px;" aria-hidden="true"></i>
+                    <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true">edit</span>
                 </button>
             </div>
             
@@ -72,7 +72,7 @@
                                    hx-post="/api/queue/toggle" th:hx-vals="${'{\&quot;file\&quot;:\&quot;' + item.file + '\&quot;,\&quot;id\&quot;:\&quot;' + dataset.id + '\&quot;}'}"
                                    hx-target="#queueListContainer" hx-swap="innerHTML">
                         </label>
-                        <i class="fa-solid fa-database" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0;"></i>
+                        <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>
                         <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 2px;" th:text="${dataset.label}">dataset label</span>
                     </div>
                 </div>

@@ -443,4 +443,39 @@ public final class SessionData
         
         return varMap;
     }
+
+    /**
+     * Returns a map containing only the local static dataset variables and Neodymium test data.
+     *
+     * @return map of local dataset variable keys and string values
+     */
+    public Map<String, String> getStaticDataVariables()
+    {
+        final Map<String, String> map = new HashMap<>();
+        try
+        {
+            if (org.neodymium.util.Neodymium.getData() != null)
+            {
+                for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
+                {
+                    if (entry.getValue() != null)
+                    {
+                        map.put(entry.getKey(), entry.getValue());
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
+        {
+            if (entry.getValue() != null && entry.getValue().value() != null)
+            {
+                map.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+            }
+        }
+        return map;
+    }
 }

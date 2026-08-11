@@ -78,10 +78,10 @@ function showToast(message, type = 'info') {
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    let iconClass = 'fa-info-circle';
-    if (type === 'success') iconClass = 'fa-check-circle';
-    else if (type === 'error') iconClass = 'fa-exclamation-circle';
-    toast.innerHTML = `<i class="fa-solid ${iconClass}"></i> <span>${message}</span>`;
+    let iconName = 'info';
+    if (type === 'success') iconName = 'check_circle';
+    else if (type === 'error') iconName = 'warning';
+    toast.innerHTML = `<span class="material-symbols-outlined">${iconName}</span> <span>${message}</span>`;
     toast.style.cursor = 'pointer';
     toast.onclick = () => toast.remove();
     container.appendChild(toast);

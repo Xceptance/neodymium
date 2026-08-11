@@ -6,7 +6,7 @@
 <th:block th:fragment="queueListContainerContent">
     <!-- If queue is empty -->
     <div th:if="${queue == null or queue.isEmpty()}" class="empty-state-card">
-        <i class="fa-solid fa-list-check"></i>
+        <span class="material-symbols-outlined">checklist</span>
         <div class="empty-title">Queue is Empty</div>
         <div class="empty-desc">Check one or more test cases on the left to add them to the run queue.</div>
     </div>
@@ -16,7 +16,7 @@
         <span style="font-size: var(--text-xs); color: var(--text-secondary); font-weight: 500;"><span th:text="${queue.size()}">0</span> test(s) queued</span>
         <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
                 class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
-            <i class="fa-solid fa-trash-can"></i> Clear Queue
+            <span class="material-symbols-outlined">delete</span> Clear Queue
         </button>
     </div>
 
@@ -27,17 +27,17 @@
         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
             <span style="font-weight: 600; font-size: 12px; color: var(--text-secondary);" th:text="${iter.count} + '.'">1.</span>
             <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500;" th:text="${ds.file}">file.yaml</span>
-            <span class="badge-dataset"><i class="fa-solid fa-database" style="font-size: 10px;"></i> <span th:text="${ds.id}">id</span></span>
+            <span class="badge-dataset"><span class="material-symbols-outlined" style="font-size: 12px;">database</span> <span th:text="${ds.id}">id</span></span>
         </div>
         <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
             <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:-1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
-                <i class="fa-solid fa-chevron-up"></i>
+                <span class="material-symbols-outlined">keyboard_arrow_up</span>
             </button>
             <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
-                <i class="fa-solid fa-chevron-down"></i>
+                <span class="material-symbols-outlined">keyboard_arrow_down</span>
             </button>
             <button hx-post="/api/queue/remove" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;file\&quot;:\&quot;' + ds.file + '\&quot;,\&quot;id\&quot;:\&quot;' + ds.id + '\&quot;}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
-                <i class="fa-solid fa-xmark"></i>
+                <span class="material-symbols-outlined">close</span>
             </button>
         </div>
     </div>
@@ -138,7 +138,7 @@
             onclick="prepareClientForExecution()"
             th:disabled="${queue == null or queue.isEmpty()}"
             th:classappend="${running ? 'd-none' : ((activeEditingFile != null or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
-        <i class="fa-solid fa-play"></i> <span>Run Queue</span> <span class="badge-count" th:text="${queue != null ? queue.size() : 0}">0</span>
+        <span class="material-symbols-outlined">play_arrow</span> <span>Run Queue</span> <span class="badge-count" th:text="${queue != null ? queue.size() : 0}">0</span>
     </button>
     
     <!-- Run Open Test Button -->
@@ -148,7 +148,7 @@
             hx-swap="none"
             onclick="prepareClientForExecution()"
             th:classappend="${!running and activeEditingFile != null ? 'd-flex' : 'd-none'}">
-        <i class="fa-solid fa-play"></i> Run Open Test
+        <span class="material-symbols-outlined">play_arrow</span> Run Open Test
     </button>
 
     <!-- Stop Execution Button -->
@@ -157,7 +157,7 @@
             hx-post="/api/stop" 
             hx-swap="none"
             th:classappend="${running ? 'd-flex' : 'd-none'}">
-        <i class="fa-solid fa-stop"></i> Stop Execution
+        <span class="material-symbols-outlined">stop</span> Stop Execution
     </button>
 </th:block>
 

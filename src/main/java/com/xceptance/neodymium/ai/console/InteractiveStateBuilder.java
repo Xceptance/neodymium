@@ -94,15 +94,17 @@ public final class InteractiveStateBuilder
             final String testMethod = (String) context.getTransientData().get("testMethod");
             final String datasetLabel = (String) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL);
             final String yamlSource = (String) context.getTransientData().get("yamlSource");
-            final String playbookFile = (String) context.getTransientData().get("playbookFile");
+            final String playbookFileRaw = (String) context.getTransientData().get("playbookFile");
+            final String playbookRecordingFile = (String) context.getTransientData().get("playbookRecordingFile");
+            final String playbookFile = playbookFileRaw != null ? playbookFileRaw : yamlSource;
             final String simpleClass = testClass != null && testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
 
             String testName = (String) context.getTransientData().get("testName");
             if (testName == null || testName.isEmpty())
             {
-                if (yamlSource != null && !yamlSource.isEmpty())
+                if (playbookFile != null && !playbookFile.isEmpty())
                 {
-                    testName = yamlSource + (datasetLabel != null && !datasetLabel.isEmpty() ? " · " + datasetLabel : "");
+                    testName = playbookFile + (datasetLabel != null && !datasetLabel.isEmpty() ? " · " + datasetLabel : "");
                 }
                 else if (simpleClass != null)
                 {
@@ -115,13 +117,13 @@ public final class InteractiveStateBuilder
             }
             state.addProperty("testName", testName);
 
-            if (yamlSource != null)
-            {
-                state.addProperty("yamlSource", yamlSource);
-            }
             if (playbookFile != null)
             {
                 state.addProperty("playbookFile", playbookFile);
+            }
+            if (playbookRecordingFile != null)
+            {
+                state.addProperty("playbookRecordingFile", playbookRecordingFile);
             }
             if (testClass != null)
             {
@@ -152,6 +154,13 @@ public final class InteractiveStateBuilder
                 bindings.addProperty(entry.getKey(), entry.getValue());
             }
             state.add("dataBindings", bindings);
+
+            final JsonObject localBindings = new JsonObject();
+            for (final Map.Entry<String, String> entry : context.getSessionData().getStaticDataVariables().entrySet())
+            {
+                localBindings.addProperty(entry.getKey(), entry.getValue());
+            }
+            state.add("localDataBindings", localBindings);
         }
 
         // Playbook steps block

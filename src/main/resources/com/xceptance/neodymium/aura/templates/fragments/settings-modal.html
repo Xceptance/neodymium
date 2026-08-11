@@ -7,13 +7,13 @@
     <div class="modal-card modal-card-xl">
         <div class="modal-header">
             <div class="modal-header-title">
-                <i class="fa-solid fa-gear modal-icon"></i>
+                <span class="material-symbols-outlined modal-icon">settings</span>
                 <span>Neodymium Settings</span>
             </div>
             <div class="modal-header-actions">
-                <button type="button" class="btn-secondary" onclick="expandAllSettingsGroups()"><i class="fa-solid fa-angles-down"></i> Expand All</button>
-                <button type="button" class="btn-secondary" onclick="collapseAllSettingsGroups()"><i class="fa-solid fa-angles-up"></i> Collapse All</button>
-                <button type="button" class="btn-close" onclick="closeSettingsModal()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                <button type="button" class="btn-secondary" onclick="expandAllSettingsGroups()"><span class="material-symbols-outlined">keyboard_double_arrow_down</span> Expand All</button>
+                <button type="button" class="btn-secondary" onclick="collapseAllSettingsGroups()"><span class="material-symbols-outlined">keyboard_double_arrow_up</span> Collapse All</button>
+                <button type="button" class="btn-close" onclick="closeSettingsModal()" title="Close"><span class="material-symbols-outlined">close</span></button>
             </div>
         </div>
 
@@ -21,21 +21,21 @@
         <div class="settings-tabs-bar">
             <div class="settings-tab-buttons">
                 <button type="button" class="settings-tab-btn" id="tabBtnGeneral" th:classappend="${activeTab == 'browser' ? '' : 'active'}" onclick="switchSettingsTab('general')">
-                    <i class="fa-solid fa-sliders"></i> Framework & General Properties
+                    <span class="material-symbols-outlined">tune</span> Framework & General Properties
                 </button>
                 <button type="button" class="settings-tab-btn" id="tabBtnBrowser" th:classappend="${activeTab == 'browser' ? 'active' : ''}" onclick="switchSettingsTab('browser')">
-                    <i class="fa-solid fa-globe"></i> Browser Configuration
+                    <span class="material-symbols-outlined">language</span> Browser Configuration
                 </button>
             </div>
         </div>
 
         <div class="modal-search-bar">
-            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <span class="material-symbols-outlined search-icon">search</span>
             <input type="text" id="settingsSearchInput" class="modal-search-input" placeholder="Search properties by key or description..." onkeyup="filterSettingsProperties(this.value)"/>
         </div>
 
         <div th:if="${saveMessage != null}" class="toast-success-banner">
-            <i class="fa-solid fa-circle-check"></i> <span th:text="${saveMessage}">Settings saved</span>
+            <span class="material-symbols-outlined">check_circle</span> <span th:text="${saveMessage}">Settings saved</span>
         </div>
 
         <form id="settingsForm" class="settings-form-flex" hx-post="/api/settings/save" hx-target="#settingsModal" hx-swap="outerHTML">
@@ -56,11 +56,11 @@
                             <!-- Group Header Accordion Button -->
                             <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
                                 <div class="settings-group-title">
-                                    <i th:class="${group.devNeo ? 'fa-solid fa-flask' : (group.fileName.startsWith('ai') ? 'fa-solid fa-robot' : 'fa-solid fa-file-code')}"></i>
+                                    <span class="material-symbols-outlined" th:text="${group.devNeo ? 'science' : (group.fileName.startsWith('ai') ? 'smart_toy' : 'code')}"></span>
                                     <span th:text="${group.fileName}">ai.properties</span>
                                     <span th:if="${group.devNeo}" class="badge-dev-neo">Local Overrides</span>
                                 </div>
-                                <i class="fa-solid fa-chevron-down accordion-arrow" th:classappend="${group.openByDefault ? 'open' : ''}"></i>
+                                <span class="material-symbols-outlined accordion-arrow" th:classappend="${group.openByDefault ? 'open' : ''}">keyboard_arrow_down</span>
                             </div>
 
                             <!-- Group Content Body -->
@@ -76,7 +76,7 @@
                                                 <div class="settings-entry-key">
                                                     <span th:text="${entry.key}">neodymium.ai.generate</span>
                                                     <span th:if="${entry.overridden}" class="badge-overridden" title="This property is currently overridden by dev-neodymium.properties">
-                                                        <i class="fa-solid fa-lock"></i> Overridden
+                                                        <span class="material-symbols-outlined">lock</span> Overridden
                                                     </span>
                                                 </div>
                                                 <div th:if="${entry.description != null and !entry.description.isEmpty()}" class="settings-entry-desc" th:text="${entry.description}">
@@ -123,7 +123,7 @@
                                 <!-- DEV-NEODYMIUM.PROPERTIES SPECIAL GROUP -->
                                 <th:block th:if="${group.devNeo}">
                                     <div class="dev-neo-info-banner">
-                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span class="material-symbols-outlined">info</span>
                                         <span>Temporary configuration values in <code>dev-neodymium.properties</code> take precedence and override standard settings. These values are not committed.</span>
                                     </div>
 
@@ -132,14 +132,14 @@
                                         <div th:each="devEntry : ${group.devNeoEntries}" class="dev-neo-row">
                                             <input type="text" name="devNeoKey" class="modal-input dev-neo-key-input" list="autocompleteKeysList" th:value="${devEntry.key}" placeholder="Property Key (e.g. neodymium.ai.apiKey)" oninput="handleDevNeoRowInput(this)"/>
                                             <input type="text" name="devNeoValue" class="modal-input dev-neo-val-input" th:value="${devEntry.value}" placeholder="Override Value" oninput="handleDevNeoRowInput(this)"/>
-                                            <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><i class="fa-solid fa-trash"></i></button>
+                                            <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><span class="material-symbols-outlined">delete</span></button>
                                         </div>
 
                                         <!-- Dynamic Bottom Empty Row -->
                                         <div class="dev-neo-row">
                                             <input type="text" name="devNeoKey" class="modal-input dev-neo-key-input" list="autocompleteKeysList" value="" placeholder="Add new property key..." oninput="handleDevNeoRowInput(this)"/>
                                             <input type="text" name="devNeoValue" class="modal-input dev-neo-val-input" value="" placeholder="Value..." oninput="handleDevNeoRowInput(this)"/>
-                                            <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><i class="fa-solid fa-trash"></i></button>
+                                            <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><span class="material-symbols-outlined">delete</span></button>
                                         </div>
                                     </div>
                                 </th:block>
@@ -153,13 +153,13 @@
                 <div class="settings-tab-pane" id="tabContentBrowser" th:classappend="${activeTab == 'browser' ? 'active' : ''}" th:style="${activeTab == 'browser' ? 'display: block;' : 'display: none;'}">
                     
                     <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
-                        <button type="button" class="btn-secondary" onclick="toggleAddBrowserProfileForm()"><i class="fa-solid fa-plus"></i> Add Profile</button>
+                        <button type="button" class="btn-secondary" onclick="toggleAddBrowserProfileForm()"><span class="material-symbols-outlined">add</span> Add Profile</button>
                     </div>
 
                     <!-- Add New Browser Profile Form -->
                     <div id="addBrowserProfileFormCard" class="settings-group-card" style="display: none; margin-bottom: 16px; border: 1px solid var(--accent); background: #0f172a;">
                         <div class="settings-section" style="border-top: none;">
-                            <div class="settings-section-title"><i class="fa-solid fa-plus"></i> Create New Browser Profile</div>
+                            <div class="settings-section-title"><span class="material-symbols-outlined">add</span> Create New Browser Profile</div>
                             <div style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
                                 <input type="text" name="newProfileName" id="newProfileNameInput" class="modal-input" placeholder="Profile Name (e.g. Firefox_headless, Edge_desktop)" style="flex: 2;"/>
                                 <select name="newBrowserType" id="newBrowserTypeSelect" class="modal-select" style="flex: 1;">
@@ -168,7 +168,7 @@
                                     <option value="safari">Safari</option>
                                     <option value="edge">Edge</option>
                                 </select>
-                                <button type="button" class="btn-primary" hx-post="/api/settings/add-browser-profile" hx-include="#newProfileNameInput, #newBrowserTypeSelect" hx-target="#settingsModal" hx-swap="outerHTML"><i class="fa-solid fa-check"></i> Add</button>
+                                <button type="button" class="btn-primary" hx-post="/api/settings/add-browser-profile" hx-include="#newProfileNameInput, #newBrowserTypeSelect" hx-target="#settingsModal" hx-swap="outerHTML"><span class="material-symbols-outlined">check</span> Add</button>
                                 <button type="button" class="btn-secondary" onclick="toggleAddBrowserProfileForm()">Cancel</button>
                             </div>
                         </div>
@@ -179,17 +179,17 @@
                             <!-- Browser Profile Header -->
                             <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
                                 <div class="settings-group-title">
-                                    <i th:class="${section.browserIcon}"></i>
+                                    <span class="material-symbols-outlined" th:text="${section.browserIcon}"></span>
                                     <span th:text="${section.name}">Global Browser Settings (browserprofile.global)</span>
                                 </div>
-                                <i class="fa-solid fa-chevron-down accordion-arrow" th:classappend="${stat.index == 0 ? 'open' : ''}"></i>
+                                <span class="material-symbols-outlined accordion-arrow" th:classappend="${stat.index == 0 ? 'open' : ''}">keyboard_arrow_down</span>
                             </div>
 
                             <!-- Browser Profile Content Body -->
                             <div class="settings-group-content" th:style="${stat.index == 0 ? 'display: block;' : 'display: none;'}">
                                 
                                 <div th:if="${section.profileTag == 'global'}" style="padding: 10px 16px; background: rgba(30, 41, 59, 0.4); border-bottom: 1px solid var(--border); color: #94a3b8; font-size: 12px; display: flex; align-items: center; gap: 8px;">
-                                    <i class="fa-solid fa-sliders" style="color: var(--accent);"></i>
+                                    <span class="material-symbols-outlined" style="color: var(--accent);">tune</span>
                                     <span>Global Browser Defaults (<code>browserprofile.global.*</code>). These settings act as fallback defaults for all browser profiles unless explicitly overridden.</span>
                                 </div>
 
@@ -199,7 +199,7 @@
                                             <div class="settings-entry-key">
                                                 <span th:text="${entry.key}">browserprofile.global.headless</span>
                                                 <span th:if="${entry.overridden}" class="badge-overridden" title="This property is currently overridden by dev-neodymium.properties">
-                                                    <i class="fa-solid fa-lock"></i> Overridden
+                                                    <span class="material-symbols-outlined">lock</span> Overridden
                                                 </span>
                                             </div>
                                             <div th:if="${entry.description != null and !entry.description.isEmpty()}" class="settings-entry-desc" th:text="${entry.description}">
@@ -240,7 +240,7 @@
                                 <!-- Add Expected Property Row for this Profile -->
                                 <div class="add-prop-container" th:if="${section.missingExpectedProperties != null and !section.missingExpectedProperties.isEmpty()}" style="padding: 10px 16px; background: rgba(255, 255, 255, 0.02); border-top: 1px solid var(--border);">
                                     <div style="display: flex; gap: 8px; align-items: center;">
-                                        <i class="fa-solid fa-plus" style="color: var(--accent); font-size: 12px;"></i>
+                                        <span class="material-symbols-outlined" style="color: var(--accent); font-size: 16px;">add</span>
                                         <input type="hidden" name="profileTag" th:value="${section.profileTag}"/>
                                         <select class="modal-select" style="width: 210px; font-size: 12px;" name="newPropertyName">
                                             <option value="" disabled="disabled" selected="selected">-- Add Expected Setting --</option>
@@ -248,7 +248,7 @@
                                         </select>
                                         <input type="text" class="modal-input" style="flex: 1; font-size: 12px;" placeholder="Setting value (e.g. 1920x1080, true, --disable-gpu)..." name="newPropertyValue"/>
                                         <button type="button" class="btn-secondary" hx-post="/api/settings/add-browser-property" hx-include="closest .add-prop-container" hx-target="#settingsModal" hx-swap="outerHTML">
-                                            <i class="fa-solid fa-plus"></i> Add
+                                            <span class="material-symbols-outlined">add</span> Add
                                         </button>
                                     </div>
                                 </div>
@@ -262,7 +262,7 @@
 
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" onclick="closeSettingsModal()">Cancel</button>
-                <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+                <button type="submit" class="btn-primary"><span class="material-symbols-outlined">save</span> Save Settings</button>
             </div>
         </form>
     </div>

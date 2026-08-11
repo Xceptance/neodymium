@@ -8,13 +8,19 @@
   "browser": "Chrome 120 (Headless Linux)",
   "startedAt": "2026-06-29T10:30:00+02:00",
   "durationMs": 95400,
-  "yamlSource": "src/test/resources/checkout/checkout-flow.yaml",
-  "playbookFile": "src/test/resources/checkout/checkout-flow.json",
+  "playbookFile": "src/test/resources/checkout/checkout-flow.yaml",
+  "playbookRecordingFile": "src/test/resources/checkout/checkout-flow.json",
   "activeBlock": "steps",
   "reasoning": "Execution stopped: Encountered an error while trying to type into the Street input field.",
   "reasoningFailed": true,
   "autoRun": false,
   "dataBindings": {
+    "testId": "Checkout-092",
+    "streetAddress": "123 Test Street",
+    "email": "john.doe@example.com",
+    "password": "securePassword123"
+  },
+  "localDataBindings": {
     "testId": "Checkout-092",
     "streetAddress": "123 Test Street",
     "email": "john.doe@example.com",

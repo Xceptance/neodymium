@@ -464,6 +464,7 @@ public final class AuraReportingService
                             final Map<String, Object> testData = new HashMap<>();
                             testData.put("testName", yamlLabel + " (" + ds + ")");
                             testData.put("testId", ds);
+                            testData.put("playbookFile", file);
                             testData.put("yamlSource", file);
                             testData.put("status", status);
                             testData.put("steps", Collections.emptyList());
@@ -476,6 +477,7 @@ public final class AuraReportingService
                     {
                         final Map<String, Object> testData = new HashMap<>();
                         testData.put("testName", yamlLabel);
+                        testData.put("playbookFile", file);
                         testData.put("yamlSource", file);
                         testData.put("status", status);
                         testData.put("steps", Collections.emptyList());

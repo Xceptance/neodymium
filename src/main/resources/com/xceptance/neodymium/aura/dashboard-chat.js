@@ -36,13 +36,13 @@ function clearChatInput() {
     if (chatMessages) {
         const userBubble = document.createElement('div');
         userBubble.className = 'chat-message user message-user';
-        userBubble.innerHTML = `<div class="chat-message-header"><div class="avatar user-avatar"><i class="fa-solid fa-user"></i></div><span class="sender">You</span></div><div class="text">${escapeHtml(prompt)}</div>`;
+        userBubble.innerHTML = `<div class="chat-message-header"><div class="avatar user-avatar"><span class="material-symbols-outlined">person</span></div><span class="sender">You</span></div><div class="text">${escapeHtml(prompt)}</div>`;
         chatMessages.appendChild(userBubble);
 
         const thinkingBubble = document.createElement('div');
         thinkingBubble.className = 'chat-message ai message-ai thinking-bubble';
         thinkingBubble.innerHTML = `
-            <div class="chat-message-header"><div class="avatar ai-avatar"><i class="fa-solid fa-robot"></i></div><span class="sender">Aura Assistant</span></div>
+            <div class="chat-message-header"><div class="avatar ai-avatar"><span class="material-symbols-outlined">smart_toy</span></div><span class="sender">Aura Assistant</span></div>
             <div class="typing-indicator"><span></span><span></span><span></span></div>
         `;
         chatMessages.appendChild(thinkingBubble);

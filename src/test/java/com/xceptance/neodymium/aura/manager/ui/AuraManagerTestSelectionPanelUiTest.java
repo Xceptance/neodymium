@@ -86,15 +86,15 @@ public final class AuraManagerTestSelectionPanelUiTest
         final var firstFileItem = $$("#yamlFileList .file-container").first().$(".list-item");
         firstFileItem.shouldBe(Condition.visible);
 
-        // Check original state (should be collapsed, so chevron-right is present)
-        final var chevron = firstFileItem.$("i.fa-solid");
-        chevron.shouldHave(Condition.cssClass("fa-chevron-right"));
+        // Check original state (should be collapsed, so keyboard_arrow_right is present)
+        final var chevron = firstFileItem.$(".material-symbols-outlined");
+        chevron.shouldHave(Condition.exactText("keyboard_arrow_right"));
 
         // Click to expand
         firstFileItem.click();
 
-        // Verify the chevron has toggled to chevron-down and datasets list is visible
-        chevron.shouldHave(Condition.cssClass("fa-chevron-down"));
+        // Verify the chevron has toggled to keyboard_arrow_down and datasets list is visible
+        chevron.shouldHave(Condition.exactText("keyboard_arrow_down"));
         final var datasetList = $$("#yamlFileList .file-container").first().$(".dataset-list");
         datasetList.shouldBe(Condition.visible);
         datasetList.$$(".dataset-item").shouldHave(CollectionCondition.sizeGreaterThan(0));
@@ -103,7 +103,7 @@ public final class AuraManagerTestSelectionPanelUiTest
         firstFileItem.click();
 
         // Verify the chevron toggles back and datasets list is hidden/not visible
-        chevron.shouldHave(Condition.cssClass("fa-chevron-right"));
+        chevron.shouldHave(Condition.exactText("keyboard_arrow_right"));
         datasetList.shouldNotBe(Condition.visible);
     }
 

@@ -814,11 +814,11 @@ public class PageAnalyzer
             {
                 final String script = """
                         var callback = arguments[arguments.length - 1];
-                        if (!document.querySelector('link[href*="font-awesome"]')) {
-                            var fa = document.createElement('link');
-                            fa.rel = 'stylesheet';
-                            fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
-                            document.head.appendChild(fa);
+                        if (!document.querySelector('link[href*="material-symbols"]')) {
+                            var ms = document.createElement('link');
+                            ms.rel = 'stylesheet';
+                            ms.href = '/material-symbols.css';
+                            document.head.appendChild(ms);
                         }
                         if (document.getElementById('neo-screenshot-flash-overlay')) {
                             var hud0 = document.getElementById('neodymium-ai-hud-container');
@@ -833,8 +833,9 @@ public class PageAnalyzer
                         overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(255,255,255,0); z-index: 2147483646; display: flex; align-items: center; justify-content: center; pointer-events: none; transition: background-color 0.12s ease-out;';
                         var badge = document.createElement('div');
                         badge.style.cssText = 'background: rgba(30,30,46,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.12); border-radius: 50%; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 36px rgba(0,0,0,0.55); opacity: 0; transform: scale(0.75); transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.175,0.885,0.32,1.275);';
-                        var icon = document.createElement('i');
-                        icon.className = 'fa-solid fa-camera';
+                        var icon = document.createElement('span');
+                        icon.className = 'material-symbols-outlined';
+                        icon.textContent = 'photo_camera';
                         icon.style.cssText = 'font-size: 46px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4);';
                         badge.appendChild(icon);
                         overlay.appendChild(badge);

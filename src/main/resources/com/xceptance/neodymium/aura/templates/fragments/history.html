@@ -11,7 +11,7 @@
                 <span class="run-number">#—</span>
                 <span class="run-timestamp" th:text="${runningStartTime}">Running Time</span>
                 <span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;">
-                    <i class="fa-solid fa-circle-notch spinner" style="margin-right: 4px;"></i> Running
+                    <span class="material-symbols-outlined spinner" style="margin-right: 4px;">progress_activity</span> Running
                 </span>
             </div>
         </td>
@@ -38,14 +38,14 @@
                 <span th:if="${item.status == 'Aborted'}" class="badge-aborted">Aborted</span>
                 <span th:if="${item.status != 'Passed' and item.status != 'Aborted'}" class="badge-failed" th:text="${item.status}">Failed</span>
                 <span th:if="${item.durationLabel != ''}" class="run-duration-chip">
-                    <i class="fa-regular fa-clock"></i> <span th:text="${item.durationLabel}">45s</span>
+                    <span class="material-symbols-outlined">schedule</span> <span th:text="${item.durationLabel}">45s</span>
                 </span>
             </div>
             <div class="run-stats-row">
-                <span class="run-stat-passed"><i class="fa-solid fa-check" aria-hidden="true"></i> <span th:text="${item.passed != null ? item.passed : 0}">1</span> passed</span>
-                <span class="run-stat-failed"><i class="fa-solid fa-xmark" aria-hidden="true"></i> <span th:text="${item.failed != null ? item.failed : 0}">0</span> failed</span>
+                <span class="run-stat-passed"><span class="material-symbols-outlined" aria-hidden="true">check</span> <span th:text="${item.passed != null ? item.passed : 0}">1</span> passed</span>
+                <span class="run-stat-failed"><span class="material-symbols-outlined" aria-hidden="true">close</span> <span th:text="${item.failed != null ? item.failed : 0}">0</span> failed</span>
                 <span th:if="${item.skipped != null and item.skipped != '0'}" class="run-stat-skipped" style="color:var(--text-muted); font-weight:600;">
-                    <i class="fa-solid fa-forward-step" aria-hidden="true"></i> <span th:text="${item.skipped}">0</span> skipped
+                    <span class="material-symbols-outlined" aria-hidden="true">skip_next</span> <span th:text="${item.skipped}">0</span> skipped
                 </span>
             </div>
             <div class="run-actions-row">
@@ -54,13 +54,13 @@
                         th:title="${!item.allureEnabled ? 'Allure was disabled for this run' : (!item.hasReport ? 'Allure report not available' : '')}"
                         th:data-report-id="${item.hasReport ? item.id : ''}"
                         onclick="event.stopPropagation(); const rid = this.getAttribute('data-report-id'); if (rid) { window.open('/api/reporting/report/' + rid + '/allure-report/index.html', '_blank'); }">
-                    <i class="fa-solid fa-chart-bar"></i> Allure Report
+                    <span class="material-symbols-outlined">bar_chart</span> Allure Report
                 </button>
                 <button th:if="${item.runConfig != null and !running}" class="run-action-btn"
                         th:data-run-config="${item.runConfigJson}"
                         onclick="event.stopPropagation(); rerunFullRun(this.getAttribute('data-run-config'))"
                         title="Re-run this entire suite with the same configuration">
-                    <i class="fa-solid fa-rotate-right"></i> Rerun
+                    <span class="material-symbols-outlined">sync</span> Rerun
                 </button>
             </div>
             <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
@@ -72,11 +72,11 @@
                         th:hx-confirm="'Are you sure you want to delete report &quot;' + ${item.id} + '&quot;?'"
                         onclick="event.stopPropagation();"
                         title="Delete this run">
-                    <i class="fa-solid fa-trash-can"></i> Delete
+                    <span class="material-symbols-outlined">delete</span> Delete
                 </button>
             </div>
             <div th:if="${!item.allureEnabled}" class="run-allure-note">
-                <i class="fa-solid fa-circle-info"></i> Allure was disabled for this run
+                <span class="material-symbols-outlined">info</span> Allure was disabled for this run
             </div>
         </td>
     </tr>
@@ -107,7 +107,7 @@
             
             <div class="test-card-subtitle">
                 <span th:if="${t.testId != null and !t.testId.isEmpty()}" class="badge-dataset">
-                    <i class="fa-solid fa-database"></i> <span th:text="${t.testId}">dataset_id</span>
+                    <span class="material-symbols-outlined">database</span> <span th:text="${t.testId}">dataset_id</span>
                 </span>
                 <span th:if="${t.testId == null or t.testId.isEmpty()}" th:text="${t.name}" style="opacity: 0.7;">test_name</span>
             </div>
@@ -115,12 +115,12 @@
             <div class="test-card-footer">
                 <div class="test-card-meta-chips">
                     <span th:if="${t.durationLabel != null and t.durationLabel != ''}" class="duration-chip">
-                        <i class="fa-regular fa-clock"></i> <span th:text="${t.durationLabel}">29.0s</span>
+                        <span class="material-symbols-outlined">schedule</span> <span th:text="${t.durationLabel}">29.0s</span>
                     </span>
                     
                     <!-- Playbook Badge -->
                     <span th:class="'pb-badge ' + ${t.playbookMode != null ? t.playbookMode : 'llm'}">
-                        <i th:class="${t.playbookMode == 'playbook' ? 'fa-solid fa-rotate' : (t.playbookMode == 'healing' ? 'fa-solid fa-wrench' : 'fa-solid fa-wand-magic-sparkles')}"></i>
+                        <span class="material-symbols-outlined" th:text="${t.playbookMode == 'playbook' ? 'sync' : (t.playbookMode == 'healing' ? 'build' : 'auto_awesome')}"></span>
                         <span th:text="${t.playbookMode == 'playbook' ? 'Playbook' : (t.playbookMode == 'healing' ? 'Healing' : 'AI')}">AI</span>
                     </span>
                 </div>
@@ -132,13 +132,13 @@
                             th:data-test-name="${t.name}"
                             onclick="event.stopPropagation(); openTestLog(this.getAttribute('data-report-id'), this.getAttribute('data-test-name'))"
                             title="View test log">
-                        <i class="fa-solid fa-file-lines"></i> Log
+                        <span class="material-symbols-outlined">description</span> Log
                     </button>
                     <button th:if="${t.rerunPayload != null and !running}" class="btn-edit" style="font-size:10px; padding:2px 7px;"
                             th:data-payload="${t.rerunPayload}"
                             onclick="event.stopPropagation(); rerunSingleTest(this.getAttribute('data-payload'))"
                             title="Re-run this test case with the same configuration">
-                        <i class="fa-solid fa-rotate-right"></i> Rerun
+                        <span class="material-symbols-outlined">sync</span> Rerun
                     </button>
                 </div>
             </div>

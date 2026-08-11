@@ -198,11 +198,11 @@ function toggleConsoleSize() {
     const icon = document.getElementById('consoleSizeIcon');
     const btn = document.getElementById('toggleConsoleSizeBtn');
     if (consoleExpanded) {
-        if (icon) icon.className = 'fa-solid fa-chevron-down';
-        if (btn) btn.innerHTML = '<i class="fa-solid fa-chevron-down" id="consoleSizeIcon" aria-hidden="true"></i> Shrink';
+        if (icon) icon.textContent = 'keyboard_arrow_down';
+        if (btn) btn.innerHTML = '<span class="material-symbols-outlined" id="consoleSizeIcon" aria-hidden="true">keyboard_arrow_down</span> Shrink';
     } else {
-        if (icon) icon.className = 'fa-solid fa-chevron-up';
-        if (btn) btn.innerHTML = '<i class="fa-solid fa-chevron-up" id="consoleSizeIcon" aria-hidden="true"></i> Expand';
+        if (icon) icon.textContent = 'keyboard_arrow_up';
+        if (btn) btn.innerHTML = '<span class="material-symbols-outlined" id="consoleSizeIcon" aria-hidden="true">keyboard_arrow_up</span> Expand';
     }
     updateCenterLayout();
 }

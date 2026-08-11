@@ -97,6 +97,8 @@ public final class AuraManagerMainHandler implements HttpHandler
 
         // Serve Static Assets & Views
         router.prefix("GET", "/dashboard-", dashboardController::handleDashboardAssets);
+        router.GET("/material-symbols.css", dashboardController::handleDashboardAssets);
+        router.GET("/material-symbols-outlined.woff2", dashboardController::handleDashboardAssets);
         router.GET("/interactive_console.html", interactiveController::handleHtml);
         router.GET("/interactive_console.css", interactiveController::handleCss);
         router.GET("/interactive_console.js", interactiveController::handleJs);

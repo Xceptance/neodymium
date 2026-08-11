@@ -6,7 +6,7 @@
 <th:block th:fragment="editorPanelContent">
     <div class="panel-header">
         <div class="neo-u-11">
-            <i class="fa-solid fa-file-lines neo-u-12"></i>
+            <span class="material-symbols-outlined neo-u-12">description</span>
             <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
         </div>
         <div class="editor-actions">
@@ -17,14 +17,14 @@
                     th:hx-vals="${'{\&quot;file\&quot;:\&quot;' + (activeEditingFile != null ? activeEditingFile : '') + '\&quot;}'}"
                     hx-swap="none"
                     onclick="if(typeof saveYamlFile === 'function') saveYamlFile();">
-                <i class="fa-solid fa-floppy-disk"></i> Save
+                <span class="material-symbols-outlined">save</span> Save
             </button>
-            <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
+            <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><span class="material-symbols-outlined">delete</span> Delete</button>
             <button class="btn-editor" 
                     hx-post="/api/editor/close" 
                     hx-swap="none" 
                     onclick="closeEditor()">
-                <i class="fa-solid fa-xmark"></i> Close
+                <span class="material-symbols-outlined">close</span> Close
             </button>
         </div>
     </div>

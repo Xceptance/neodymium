@@ -58,10 +58,10 @@ function connectSSE() {
                     const isFailed = currentState && currentState.status === 'failed';
                     if (finalSaveTitle) {
                         if (isFailed) {
-                            finalSaveTitle.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Test Finished';
+                            finalSaveTitle.innerHTML = '<span class="material-symbols-outlined">cancel</span> Test Finished';
                             finalSaveTitle.classList.add('failed');
                         } else {
-                            finalSaveTitle.innerHTML = '<i class="fa-solid fa-circle-check"></i> Test Finished';
+                            finalSaveTitle.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Test Finished';
                             finalSaveTitle.classList.remove('failed');
                         }
                     }
@@ -77,13 +77,14 @@ function connectSSE() {
                     if (finalSaveText) {
                         if (editsMade) {
                             let files = [];
-                            if (currentState.yamlSource) {
-                                files.push(currentState.yamlSource);
+                            const pbPath = currentState.playbookFile || currentState.yamlSource;
+                            if (pbPath) {
+                                files.push(pbPath);
                             }
-                            if (currentState.playbookFile) {
-                                files.push(currentState.playbookFile);
+                            if (currentState.playbookRecordingFile) {
+                                files.push(currentState.playbookRecordingFile);
                             }
-                            let filesHtml = files.length > 0 ? "<div style='margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;'><ul style='margin: 0; padding-left: 20px; text-align: left;'>" + files.map(f => "<li style='word-break: break-all;'><code>" + f + "</code></li>").join("") + "</ul></div>" : "";
+                            let filesHtml = files.length > 0 ? "<div style='margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;'><ul style='margin: 0; padding-left: 20px; text-align: left;'>" + files.map(f => "<li style='word-break: break-all;'><code>" + escHtml(f) + "</code></li>").join("") + "</ul></div>" : "";
                             finalSaveText.innerHTML = "You have made changes to the test steps during execution. " + (filesHtml ? "The following files will be updated: " + filesHtml + " " : "") + "Would you like to save these changes?";
                         } else {
                             finalSaveText.innerHTML = isFailed ? "Test execution finished with failure." : "Test execution finished successfully!";
@@ -415,15 +416,7 @@ function applyState(state) {
     const browserLower = (state.browser || '').toLowerCase();
     const browserIcon = document.getElementById('browserIcon');
     if (browserIcon) {
-        if (browserLower.includes('firefox')) {
-            browserIcon.innerHTML = '<i class="fa-brands fa-firefox-browser"></i>';
-        } else if (browserLower.includes('safari') && !browserLower.includes('chrome')) {
-            browserIcon.innerHTML = '<i class="fa-brands fa-safari"></i>';
-        } else if (browserLower.includes('edge')) {
-            browserIcon.innerHTML = '<i class="fa-brands fa-edge"></i>';
-        } else {
-            browserIcon.innerHTML = '<i class="fa-brands fa-chrome"></i>';
-        }
+        browserIcon.innerHTML = '<span class="material-symbols-outlined">language</span>';
     }
 
     // Reasoning panel
@@ -439,9 +432,8 @@ function applyState(state) {
         panel.className = 'current-reasoning-panel' +
             (isFailed ? ' failed' : '') +
             (isThinking ? ' idle' : '');
-        icon.className = (isFailed
-            ? 'fa-solid fa-triangle-exclamation'
-            : 'fa-solid fa-brain') + ' reasoning-icon';
+        icon.className = 'material-symbols-outlined reasoning-icon';
+        icon.textContent = isFailed ? 'warning' : 'psychology';
         // Show timer only while AI is actively thinking (has reasoning, not failed, not idle)
         if (timer) timer.style.display = (!isThinking && !isFailed) ? '' : 'none';
     }
@@ -487,9 +479,10 @@ function applyState(state) {
     const topTestSource = document.getElementById('topTestSource');
     if (topTestSource) {
         const files = [];
-        if (state.testFile) files.push({ label: 'Java Test', value: state.testFile, icon: 'fa-file-code' });
-        if (state.yamlSource) files.push({ label: 'YAML Source', value: state.yamlSource, icon: 'fa-file-lines' });
-        if (state.playbookFile) files.push({ label: 'Playbook', value: state.playbookFile, icon: 'fa-file-contract' });
+        if (state.testFile) files.push({ label: 'Java Test', value: state.testFile, icon: 'code' });
+        const pbFile = state.playbookFile || state.yamlSource;
+        if (pbFile) files.push({ label: 'Playbook', value: pbFile, icon: 'description' });
+        if (state.playbookRecordingFile) files.push({ label: 'Playbook Recording', value: state.playbookRecordingFile, icon: 'album' });
 
         if (files.length > 0) {
             const formatPath = (p) => {
@@ -501,7 +494,7 @@ function applyState(state) {
             topTestSource.innerHTML = files.map(f => `
                         <div style="margin-bottom:8px;" title="${escAttr(f.value)}">
                             <span style="color:var(--text-muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">
-                                <i class="fa-solid ${f.icon}" style="margin-right:4px;"></i>${f.label}
+                                <span class="material-symbols-outlined" style="margin-right:4px;">${f.icon}</span>${f.label}
                             </span>
                             <div style="font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">${formatPath(f.value)}</div>
                         </div>
@@ -565,8 +558,9 @@ function applyState(state) {
     }
     const topTestDataBody = document.getElementById('topTestDataBody');
     if (topTestDataBody && state.dataBindings) {
+        const usedKeysSet = getUsedVariableKeys(state);
         const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
-        const keys = Object.keys(state.dataBindings).filter(k => !excludedKeys.includes(k));
+        const keys = Object.keys(state.dataBindings).filter(k => !excludedKeys.includes(k) && usedKeysSet.has(k));
         if (keys.length > 0) {
             topTestDataBody.innerHTML = keys.map(k => `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
@@ -575,7 +569,7 @@ function applyState(state) {
                         </tr>
                     `).join('');
         } else {
-            topTestDataBody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data.</td></tr>`;
+            topTestDataBody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data used in this test case.</td></tr>`;
         }
     }
 
@@ -747,7 +741,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
             const parts = [];
             if (a.target) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(a.target)}</span>`);
             if (a.value) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(a.value)}</code></span>`);
-            if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);"></i> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
+            if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><span class="material-symbols-outlined" style="color:var(--accent-warning);">bolt</span> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
             return `<div class="acc-action-row">
                         <span class="acc-action-type-badge" data-type="${escAttr(a.type || 'unknown')}">${escHtml(a.type || 'unknown')}</span>
                         ${parts.join('')}
@@ -756,49 +750,49 @@ function buildStepDetailsHtml(step, isActiveStep) {
         : '<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">No actions recorded yet.</div>';
 
     const actionsLabel = isActiveStep
-        ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><i class="fa-solid fa-list-check" style="color:var(--accent-primary);"></i> Actions to perform</div>`
-        : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><i class="fa-solid fa-list-check"></i> Actions performed</div>`;
+        ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined" style="color:var(--accent-primary);">checklist</span> Actions to perform</div>`
+        : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined">checklist</span> Actions performed</div>`;
 
     const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${actionsLabel}${actionsHtml}</div>`;
 
     const errorBox = step.errorMessage ? `
                 <div class="error-message-box" style="margin-bottom:12px;">
                     <span id="err-text-detail-${step.index}">${escHtml(step.errorMessage)}</span>
-                    <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard"><i class="fa-regular fa-copy" aria-hidden="true"></i></button>
+                    <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button>
                 </div>` : '';
 
     // When a step fails, remind the user that individual sub-steps inside an
     // include block cannot be skipped — the entire include block must be managed
     // as a unit. Displayed for any failed step to guide the user on recovery.
     const substepWarning = isFailed
-        ? `<div class="substep-warning-info" style="font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:var(--accent-warning);"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Sub-steps cannot be skipped individually. Skip the parent include to skip this step.</div>`
+        ? `<div class="substep-warning-info" style="font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:var(--accent-warning);"><span class="material-symbols-outlined" aria-hidden="true">warning</span> Sub-steps cannot be skipped individually. Skip the parent include to skip this step.</div>`
         : '';
 
     // Right-column panel compact reasoning (not shown for active steps; the card has the bubble)
     const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null;
     const reasoningText = !isActiveStep && (isThinking || step.reasoning)
         ? (isThinking
-            ? `<div class="acc-reasoning" style="margin-bottom:12px;"><i class="fa-solid fa-circle-notch fa-spin" style="color:var(--accent-purple)" aria-hidden="true"></i> AI is thinking...</div>`
+            ? `<div class="acc-reasoning" style="margin-bottom:12px;"><span class="material-symbols-outlined spinner" style="color:var(--accent-purple)" aria-hidden="true">progress_activity</span> AI is thinking...</div>`
             : `<div class="acc-reasoning" style="margin-bottom:12px; ${isFailed ? 'color:var(--accent-danger)' : ''}">
-                        <i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-brain'}" style="margin-right:8px;" aria-hidden="true"></i>${escHtml(step.reasoning)}</div>`)
+                        <span class="material-symbols-outlined" style="margin-right:8px;" aria-hidden="true">${isFailed ? 'warning' : 'psychology'}</span>${escHtml(step.reasoning)}</div>`)
         : '';
 
     // Timing meta — only show execution time for steps that have finished
     const thinkingTimeBlock = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
-        ? `<span class="acc-timing-detail" title="Thinking duration"><i class="fa-solid fa-hourglass-half" style="color:var(--accent-purple);" aria-hidden="true"></i> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
+        ? `<span class="acc-timing-detail" title="Thinking duration"><span class="material-symbols-outlined" style="color:var(--accent-purple);" aria-hidden="true">hourglass_empty</span> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
         : '';
     const durationBlock = (isPassed || isFailed || isSkipped) && step.durationMs
-        ? `<span title="Execution duration"><i class="fa-solid fa-bolt" style="color:var(--accent-warning);" aria-hidden="true"></i> ${(step.durationMs / 1000).toFixed(1)}s</span>`
+        ? `<span title="Execution duration"><span class="material-symbols-outlined" style="color:var(--accent-warning);" aria-hidden="true">bolt</span> ${(step.durationMs / 1000).toFixed(1)}s</span>`
         : '';
     const tokenBlock = (step.inputTokens || step.outputTokens)
-        ? `<span title="Tokens (Input / Output)"><i class="fa-solid fa-calculator" style="color:var(--text-muted);" aria-hidden="true"></i> Tokens: ${step.inputTokens || 0} in / ${step.outputTokens || 0} out</span>`
+        ? `<span title="Tokens (Input / Output)"><span class="material-symbols-outlined" style="color:var(--text-muted);" aria-hidden="true">calculate</span> Tokens: ${step.inputTokens || 0} in / ${step.outputTokens || 0} out</span>`
         : '';
     const timingRow = (thinkingTimeBlock || durationBlock || tokenBlock)
         ? `<div style="display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text-secondary);flex-wrap:wrap;justify-content:flex-end;">${thinkingTimeBlock}${durationBlock}${tokenBlock}</div>`
         : '';
 
     const domBlock = step.simplifiedDom
-        ? `<div class="acc-dom" style="font-size:12px;"><i class="fa-solid fa-code" aria-hidden="true"></i> DOM: <a href="#" onclick="openDomOverlay(event, \`${escAttr(step.simplifiedDom)}\`)" style="color:var(--accent-primary);text-decoration:underline;">View Content</a></div>`
+        ? `<div class="acc-dom" style="font-size:12px;"><span class="material-symbols-outlined" aria-hidden="true">code</span> DOM: <a href="#" onclick="openDomOverlay(event, \`${escAttr(step.simplifiedDom)}\`)" style="color:var(--accent-primary);text-decoration:underline;">View Content</a></div>`
         : '';
     let screenshotUrl = step.screenshot;
     const effRunId = window.historyRunId || currentRunId;
@@ -807,7 +801,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
     }
     const screenshotBlock = screenshotUrl
         ? `<div class="acc-screenshot-block" style="margin-top:12px;">
-                       <div class="screenshot-header" style="font-size:12px;"><i class="fa-solid fa-image" aria-hidden="true"></i> Screenshot: <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
+                       <div class="screenshot-header" style="font-size:12px;"><span class="material-symbols-outlined" aria-hidden="true">image</span> Screenshot: <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
                        <img class="acc-screenshot" src="${escAttr(screenshotUrl)}" alt="Step screenshot"
                             onerror="handleScreenshotError(this)"
                             onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="cursor:pointer;margin-top:8px;max-height:200px;width:100%;object-fit:cover;border-radius:8px;">
@@ -819,9 +813,9 @@ function buildStepDetailsHtml(step, isActiveStep) {
         ? (() => {
             if (includeChain.length > 0) {
                 const ct = includeChain.join(' > ');
-                return `<div class="include-breadcrumb" title="${escAttr(ct)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(ct)}</div>`;
+                return `<div class="include-breadcrumb" title="${escAttr(ct)}"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(ct)}</div>`;
             }
-            return `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
+            return `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
         })()
         : '';
 
@@ -832,7 +826,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
         // secondary (timing/DOM/screenshot/breadcrumb) behind a More details toggle.
         const secondaryHtml = hasSecondary ? `
                     <button class="step-more-details-btn" onclick="toggleStepSecondary(event, this)" aria-expanded="false">
-                        <i class="fa-solid fa-chevron-right" style="font-size:9px;transition:transform 0.2s;"></i>
+                        <span class="material-symbols-outlined" style="font-size:14px;transition:transform 0.2s;">chevron_right</span>
                         <span class="toggle-label"> More details</span>
                     </button>
                     <div class="step-secondary-details">
@@ -872,34 +866,144 @@ function buildStepDetailsHtml(step, isActiveStep) {
             </div>`;
 }
 
+function getUsedVariableKeys(state) {
+    const usedKeys = new Set();
+    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
+
+    if (!state) return usedKeys;
+
+    // 1. Local dataset bindings from YAML data section
+    const localBindings = state.localDataBindings !== undefined ? state.localDataBindings : (state.dataBindings || {});
+    if (localBindings) {
+        Object.keys(localBindings).forEach(k => {
+            if (!excludedKeys.includes(k)) {
+                usedKeys.add(k);
+            }
+        });
+    }
+
+    // 2. Scan all step instructions across before, steps, and after blocks for ${varName}
+    if (state.blocks) {
+        const varRegex = /\$\{([^}]+)\}/g;
+        ['before', 'steps', 'after'].forEach(blockName => {
+            const steps = state.blocks[blockName] || [];
+            steps.forEach(step => {
+                const text = (step.rawInstruction || step.instruction || '');
+                let match;
+                while ((match = varRegex.exec(text)) !== null) {
+                    const varName = match[1].trim();
+                    if (!excludedKeys.includes(varName)) {
+                        usedKeys.add(varName);
+                    }
+                }
+            });
+        });
+    }
+
+    return usedKeys;
+}
+
 function generateEditableBindingsTable(bindings, textareaIdOrClass) {
-    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps','neodymium.testdata.index'];
-    const keys = Object.keys(bindings || {}).filter(k => !excludedKeys.includes(k));
-    if (keys.length === 0) {
+    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
+    const allKeys = Object.keys(bindings || {}).filter(k => !excludedKeys.includes(k));
+    if (allKeys.length === 0) {
         return '<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px;">No variables available.</div>';
     }
 
-    return `
-                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Insert/Edit Variables:</div>
-                <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.15);">
-                    <thead>
-                        <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02); text-align: left;">
-                            <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Variable Name (click to insert)</th>
-                            <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 60%;">Value</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${keys.map(k => `
-                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                                <td class="editable-binding-key binding-badge" onclick="insertVarAtTarget('${escAttr(k)}', '${escAttr(textareaIdOrClass)}')" style="cursor: pointer; padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--accent-primary);" title="Click to insert \${${escHtml(k)}}">${escHtml(k)}</td>
-                                <td style="padding: 4px 8px;">
-                                    <input type="text" value="${escAttr(bindings[k] || '')}" oninput="updateDataBinding('${escAttr(k)}', this.value)" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;" aria-label="Value for variable ${escHtml(k)}" />
-                                </td>
+    const localDataBindings = currentState?.localDataBindings !== undefined ? currentState.localDataBindings : (currentState?.dataBindings || {});
+    const usedKeysSet = getUsedVariableKeys(currentState);
+
+    // Categorize keys
+    const localKeys = allKeys.filter(k => Object.prototype.hasOwnProperty.call(localDataBindings, k));
+    const usedKeys = allKeys.filter(k => !localKeys.includes(k) && usedKeysSet.has(k));
+    const otherKeys = allKeys.filter(k => !localKeys.includes(k) && !usedKeys.includes(k));
+
+    const renderRow = (k, tagLabel, tagStyle) => `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+            <td class="editable-binding-key binding-badge" onclick="insertVarAtTarget('${escAttr(k)}', '${escAttr(textareaIdOrClass)}')" style="cursor: pointer; padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--accent-primary);" title="Click to insert \${${escHtml(k)}}">
+                ${escHtml(k)}
+                ${tagLabel ? `<span class="badge-tag" style="${tagStyle}">${tagLabel}</span>` : ''}
+            </td>
+            <td style="padding: 4px 8px;">
+                <input type="text" value="${escAttr(bindings[k] || '')}" oninput="updateDataBinding('${escAttr(k)}', this.value)" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;" aria-label="Value for variable ${escHtml(k)}" />
+            </td>
+        </tr>
+    `;
+
+    const localTagStyle = 'background: rgba(59,130,246,0.15); color: var(--accent-primary); border: 1px solid rgba(59,130,246,0.3); font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 6px; font-weight: 500; display: inline-block; vertical-align: middle;';
+    const usedTagStyle = 'background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 6px; font-weight: 500; display: inline-block; vertical-align: middle;';
+
+    const localRows = localKeys.map(k => renderRow(k, 'Local', localTagStyle)).join('');
+    const usedRows = usedKeys.map(k => renderRow(k, 'Used', usedTagStyle)).join('');
+    const otherRows = otherKeys.map(k => renderRow(k, null, '')).join('');
+
+    const hasPrimaryRows = localKeys.length > 0 || usedKeys.length > 0;
+
+    let moreHtml = '';
+    if (otherKeys.length > 0) {
+        moreHtml = `
+            <div style="margin-top: 6px;">
+                <button type="button" class="btn btn-sm btn-more-props" onclick="toggleMoreProperties(this)" data-count="${otherKeys.length}" style="font-size: 11px; padding: 3px 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">expand_more</span>
+                    <span class="more-btn-text">More (${otherKeys.length} properties)</span>
+                </button>
+                <div class="more-props-container" style="display: none; margin-top: 6px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.15);">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02); text-align: left;">
+                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">All Other Properties</th>
+                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 60%;">Value</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
+                        </thead>
+                        <tbody>
+                            ${otherRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    if (!hasPrimaryRows) {
+        return `
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Insert/Edit Variables:</div>
+            <div style="font-size: 12px; color: var(--text-muted); padding: 4px 0 6px 0;">No local or used variables in this test case.</div>
+            ${moreHtml}
+        `;
+    }
+
+    return `
+        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Insert/Edit Variables:</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.15);">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02); text-align: left;">
+                    <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Variable Name (click to insert)</th>
+                    <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 60%;">Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${localRows}
+                ${usedRows}
+            </tbody>
+        </table>
+        ${moreHtml}
+    `;
+}
+
+function toggleMoreProperties(btn) {
+    const parent = btn.parentElement;
+    const moreContainer = parent ? parent.querySelector('.more-props-container') : null;
+    if (moreContainer) {
+        const isHidden = moreContainer.style.display === 'none' || !moreContainer.style.display;
+        moreContainer.style.display = isHidden ? 'block' : 'none';
+        const icon = btn.querySelector('.material-symbols-outlined');
+        const textSpan = btn.querySelector('.more-btn-text');
+        const count = btn.getAttribute('data-count') || '';
+        if (icon) icon.innerText = isHidden ? 'expand_less' : 'expand_more';
+        if (textSpan) {
+            textSpan.innerText = isHidden ? 'Show Less' : `More (${count} properties)`;
+        }
+    }
 }
 
 function updateDataBinding(key, val) {
@@ -912,14 +1016,19 @@ function updateDataBinding(key, val) {
         // Also update top test data body if visible
         const topTestDataBody = document.getElementById('topTestDataBody');
         if (topTestDataBody) {
+            const usedKeysSet = getUsedVariableKeys(currentState);
             const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
-            const keys = Object.keys(currentState.dataBindings).filter(k => !excludedKeys.includes(k));
-            topTestDataBody.innerHTML = keys.map(k => `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
-                            <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(currentState.dataBindings[k])}</td>
-                        </tr>
-                    `).join('');
+            const keys = Object.keys(currentState.dataBindings).filter(k => !excludedKeys.includes(k) && usedKeysSet.has(k));
+            if (keys.length > 0) {
+                topTestDataBody.innerHTML = keys.map(k => `
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                                <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(currentState.dataBindings[k])}</td>
+                            </tr>
+                        `).join('');
+            } else {
+                topTestDataBody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data used in this test case.</td></tr>`;
+            }
         }
     }
 }
@@ -995,17 +1104,17 @@ function renderStepCard(step) {
     let statusIconMarkup = '';
 
     if (step.status === 'passed') {
-        statusIconMarkup = `<i class="fa-solid fa-circle-check" style="color:var(--accent-success)" aria-label="Passed"></i>`;
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-success)" aria-label="Passed">check_circle</span>`;
     } else if (step.status === 'failed') {
-        statusIconMarkup = `<i class="fa-solid fa-circle-xmark" style="color:var(--accent-danger)" aria-label="Failed"></i>`;
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-danger)" aria-label="Failed">cancel</span>`;
     } else if (step.status === 'skipped') {
-        statusIconMarkup = `<i class="fa-solid fa-circle-minus" style="color:var(--text-secondary)" aria-label="Skipped"></i>`;
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-secondary)" aria-label="Skipped">do_not_disturb_on</span>`;
     } else if (step.status === 'aborted') {
-        statusIconMarkup = `<i class="fa-solid fa-circle-stop" style="color:var(--text-muted)" aria-label="Aborted"></i>`;
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-muted)" aria-label="Aborted">stop_circle</span>`;
     } else if (step.status === 'running' && currentPauseId === null) {
-        statusIconMarkup = `<i class="fa-solid fa-circle-notch fa-spin" style="color:var(--accent-primary)" aria-label="Running"></i>`;
+        statusIconMarkup = `<span class="material-symbols-outlined spinner" style="color:var(--accent-primary)" aria-label="Running">progress_activity</span>`;
     } else if (step.status === 'running') {
-        statusIconMarkup = `<i class="fa-solid fa-circle" style="color:var(--accent-primary)" aria-label="Paused"></i>`;
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-primary)" aria-label="Paused">pause_circle</span>`;
     } else {
         // Pending, or Running but Paused/waiting for input
         if (bpActive) {
@@ -1017,7 +1126,7 @@ function renderStepCard(step) {
                     `;
         } else {
             statusIconMarkup = `
-                        <i class="fa-regular fa-circle pending-placeholder-icon" style="color:var(--text-muted)" aria-label="Step pending" title="Step Pending"></i>
+                        <span class="material-symbols-outlined pending-placeholder-icon" style="color:var(--text-muted)" aria-label="Step pending" title="Step Pending">radio_button_unchecked</span>
                         <svg class="bp-svg hover-only" viewBox="0 0 100 100" aria-label="Toggle breakpoint" title="Toggle Breakpoint">
                             <polygon points="30,5 70,5 95,30 95,70 70,95 30,95 5,70 5,30" />
                         </svg>
@@ -1025,18 +1134,18 @@ function renderStepCard(step) {
         }
     }
 
-    // Playbook steps: no type-tag in the card (shown as a note in reasoning area instead)
-    const isPlaybook = step.source === 'playbook' || Boolean(step.file);
-    const sourceTag = isPlaybook
-        ? ''
+    // Execution engine tags
+    const isRecordingStep = step.source === 'recording';
+    const sourceTag = isRecordingStep
+        ? `<div class="type-tag type-playbook"><span class="material-symbols-outlined" aria-hidden="true">album</span> Recording</div>`
         : step.source === 'healed'
-            ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
-            : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
+            ? `<div class="type-tag type-healed"><span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span> Healed</div>`
+            : `<div class="type-tag type-llm"><span class="material-symbols-outlined" aria-hidden="true">smart_toy</span> LLM Agent</div>`;
 
     // Thinking-time badge — always visible in the step card header so that the
     // CSS rule hiding accordions on wide screens does not obscure it.
     const thinkingBadge = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
-        ? `<span class="acc-thinking-time" title="AI thinking time" style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:var(--accent-purple);margin-left:4px;"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
+        ? `<span class="acc-thinking-time" title="AI thinking time" style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:var(--accent-purple);margin-left:4px;"><span class="material-symbols-outlined" aria-hidden="true">hourglass_empty</span> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
         : '';
 
     // Build breadcrumb string but do NOT put it in the tag-row;
@@ -1045,9 +1154,9 @@ function renderStepCard(step) {
     const includeChain = Array.isArray(step.includeChain) ? step.includeChain : [];
     if (includeChain.length > 0) {
         const chainText = includeChain.join(' > ');
-        includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(chainText)}</div>`;
+        includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(chainText)}</div>`;
     } else if (step.includeFile) {
-        includeBreadcrumb = `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
+        includeBreadcrumb = `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
     }
 
     const isPausedRunning = step.status === 'running' && currentPauseId !== null;
@@ -1056,13 +1165,13 @@ function renderStepCard(step) {
 
     const showEdit = step.status !== 'passed' && step.status !== 'skipped';
     const editBtnHtml = showEdit
-        ? `<button class="step-edit-btn" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>`
+        ? `<button class="step-edit-btn" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>`
         : '';
 
     // Rewind only makes sense for steps that have already been executed (passed/failed/skipped).
     // Showing it on future/active steps is confusing and not actionable.
     const rewindBtnHtml = (isPassed || isFailed || isSkipped) && !showEdit
-        ? `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>`
+        ? `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><span class="material-symbols-outlined" aria-hidden="true">undo</span></button>`
         : '';
 
     // Reorder system overhaul: Drag handle only in controls
@@ -1075,7 +1184,7 @@ function renderStepCard(step) {
                              ondragstart="handleDragStart(event, ${step.index})"
                              ondragend="handleDragEnd(event)"
                              title="Drag handle to reorder step" aria-label="Drag handle to reorder step">
-                             <i class="fa-solid fa-grip"></i>
+                             <span class="material-symbols-outlined">drag_indicator</span>
                         </div>
                     </div>`;
     }
@@ -1086,57 +1195,54 @@ function renderStepCard(step) {
     const detailsHtml = hasDetails ? buildStepDetailsHtml(step, isActive) : '';
     const accordionOpen = isActive ? ' open' : '';
 
-    const selectedArrowMarkup = isSelected ? `<div class="selected-arrow big-screen-only" style="margin-left: 8px; color: var(--accent-purple); display: flex; align-items: center;"><i class="fa-solid fa-chevron-right"></i></div>` : '';
+    const selectedArrowMarkup = isSelected ? `<div class="selected-arrow big-screen-only" style="margin-left: 8px; color: var(--accent-purple); display: flex; align-items: center;"><span class="material-symbols-outlined">chevron_right</span></div>` : '';
 
     const resolvedInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
 
     // Build inline reasoning / playbook note for active step
     let inlineReasoningHtml = '';
     if (isActive) {
-        if (isPlaybook) {
-            // Playbook steps: show a note instead of AI reasoning
-            inlineReasoningHtml = `<div class="inline-reasoning-bubble" style="background:rgba(99,102,241,0.07);border-left-color:rgba(99,102,241,0.5);">
-                        <div class="inline-reasoning-label" style="color:#818cf8;"><i class="fa-solid fa-compact-disc" aria-hidden="true"></i> From Playbook</div>
+        const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null && step.source !== 'recording';
+        if (isThinking) {
+            inlineReasoningHtml = `<div class="inline-reasoning-bubble inline-reasoning-thinking">
+                        <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">psychology</span> AI Thinking</div>
                         <div class="reasoning-body">
-                            <i class="fa-solid fa-book-open" style="color:#818cf8;" aria-hidden="true"></i>
-                            <span style="color:var(--text-secondary);">This step is defined in a playbook and will be executed as recorded.</span>
+                            <span class="material-symbols-outlined spinner" aria-hidden="true">progress_activity</span>
+                            <span>The AI is analyzing the current page state, reading visible elements, and deciding what action to take next. This may take a few seconds depending on page complexity and model response time.</span>
                         </div>
                     </div>`;
-        } else {
-            const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null;
-            if (isThinking) {
-                inlineReasoningHtml = `<div class="inline-reasoning-bubble inline-reasoning-thinking">
-                            <div class="inline-reasoning-label"><i class="fa-solid fa-brain" aria-hidden="true"></i> AI Thinking</div>
-                            <div class="reasoning-body">
-                                <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
-                                <span>The AI is analyzing the current page state, reading visible elements, and deciding what action to take next. This may take a few seconds depending on page complexity and model response time.</span>
-                            </div>
-                        </div>`;
-            } else if (step.reasoning) {
-                const reasoningId = `reasoning-${step.index}`;
-                const escaped = escHtml(step.reasoning);
-                const isLong = step.reasoning.length > 220;
-                const preview = isLong ? escHtml(step.reasoning.substring(0, 220)) + '…' : escaped;
-                inlineReasoningHtml = `<div class="inline-reasoning-bubble${isFailed ? ' failed' : ''}">
-                            <div class="inline-reasoning-label"><i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-brain'}" aria-hidden="true"></i> ${isFailed ? 'Failure Reason' : 'AI Reasoning'}</div>
-                            <div class="reasoning-body">
-                                <i class="fa-solid ${isFailed ? 'fa-triangle-exclamation' : 'fa-quote-left'}" aria-hidden="true"></i>
-                                <span>
-                                    <span id="${reasoningId}-preview">${preview}</span>
-                                    ${isLong ? `<span id="${reasoningId}-full" style="display:none;">${escaped}</span>
-                                    <button onclick="toggleTextExpand(event,'${reasoningId}')" class="step-more-details-btn" style="margin-top:4px;">
-                                        <i class="fa-solid fa-chevron-right" style="font-size:9px;"></i> Show more
-                                    </button>` : ''}
-                                </span>
-                            </div>
-                        </div>`;
-            }
+        } else if (step.reasoning) {
+            const reasoningId = `reasoning-${step.index}`;
+            const escaped = escHtml(step.reasoning);
+            const isLong = step.reasoning.length > 220;
+            const preview = isLong ? escHtml(step.reasoning.substring(0, 220)) + '…' : escaped;
+            inlineReasoningHtml = `<div class="inline-reasoning-bubble${isFailed ? ' failed' : ''}">
+                        <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">${isFailed ? 'warning' : 'psychology'}</span> ${isFailed ? 'Failure Reason' : 'AI Reasoning'}</div>
+                        <div class="reasoning-body">
+                            <span class="material-symbols-outlined" aria-hidden="true">${isFailed ? 'warning' : 'format_quote'}</span>
+                            <span>
+                                <span id="${reasoningId}-preview">${preview}</span>
+                                ${isLong ? `<span id="${reasoningId}-full" style="display:none;">${escaped}</span>
+                                <button onclick="toggleTextExpand(event,'${reasoningId}')" class="step-more-details-btn" style="margin-top:4px;">
+                                    <span class="material-symbols-outlined" style="font-size:14px;">chevron_right</span> Show more
+                                </button>` : ''}
+                            </span>
+                        </div>
+                    </div>`;
+        } else if (step.source === 'recording') {
+            inlineReasoningHtml = `<div class="inline-reasoning-bubble" style="background:rgba(99,102,241,0.07);border-left-color:rgba(99,102,241,0.5);">
+                        <div class="inline-reasoning-label" style="color:#818cf8;"><span class="material-symbols-outlined" aria-hidden="true">play_circle</span> Playbook Recording</div>
+                        <div class="reasoning-body">
+                            <span class="material-symbols-outlined" style="color:#818cf8;" aria-hidden="true">album</span>
+                            <span style="color:var(--text-secondary);">This step is replayed directly from the recorded companion file.</span>
+                        </div>
+                    </div>`;
         }
     }
 
     // "▶ CURRENT" / "✕ FAILED" badge for the active step
     const activeBadge = isActive
-        ? `<div class="active-step-badge">${isFailed ? '<i class="fa-solid fa-xmark"></i> FAILED' : '<i class="fa-solid fa-play"></i> CURRENT'}</div>`
+        ? `<div class="active-step-badge">${isFailed ? '<span class="material-symbols-outlined">close</span> FAILED' : '<span class="material-symbols-outlined">play_arrow</span> CURRENT'}</div>`
         : '';
 
     // Truncate long step instructions in the card; user can expand.
@@ -1148,7 +1254,7 @@ function renderStepCard(step) {
     const stepTextContent = isInstrLong
         ? `<span id="${instrId}-preview">${instrPreview}</span><span id="${instrId}-full" style="display:none;">${instrFull}</span>
                    <button onclick="toggleTextExpand(event,'${instrId}')" class="step-more-details-btn" style="margin-top:4px;padding:2px 7px;font-size:10px;">
-                       <i class="fa-solid fa-chevron-right" style="font-size:8px;"></i> Show more
+                       <span class="material-symbols-outlined" style="font-size:12px;">keyboard_arrow_right</span> Show more
                    </button>`
         : instrFull;
 
@@ -1179,7 +1285,7 @@ function renderStepCard(step) {
                     <div class="step-text-container">
                         <div class="tag-row">${sourceTag}${thinkingBadge}</div>
                         <div class="step-text">${stepTextContent}</div>
-                        ${isFailed ? `<div style="margin-top:6px;"><button class="btn-suggest-fix" onclick="requestFixSuggestion(event, ${step.index})" title="Get AI Instruction Fix Suggestion"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Suggest Fix</button></div>` : ''}
+                        ${isFailed ? `<div style="margin-top:6px;"><button class="btn-suggest-fix" onclick="requestFixSuggestion(event, ${step.index})" title="Get AI Instruction Fix Suggestion"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> Suggest Fix</button></div>` : ''}
                         <div class="step-edit-form">
                             <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${isEditing && window.currentEditText != null ? escHtml(window.currentEditText) : escHtml(step.rawInstruction || step.instruction)}</textarea>
                             <div class="inline-edit-actions">
@@ -1516,18 +1622,18 @@ function updateBigScreenDetails() {
         return;
     }
 
-    const sourceTag = step.source === 'playbook'
-        ? `<div class="type-tag type-playbook"><i class="fa-solid fa-compact-disc" aria-hidden="true"></i> Playbook</div>`
+    const sourceTag = step.source === 'recording'
+        ? `<div class="type-tag type-playbook"><span class="material-symbols-outlined" aria-hidden="true">album</span> Recording</div>`
         : step.source === 'healed'
-            ? `<div class="type-tag type-healed"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> Healed</div>`
-            : `<div class="type-tag type-llm"><i class="fa-solid fa-robot" aria-hidden="true"></i> LLM Agent</div>`;
+            ? `<div class="type-tag type-healed"><span class="material-symbols-outlined" aria-hidden="true">build</span> Healed</div>`
+            : `<div class="type-tag type-llm"><span class="material-symbols-outlined" aria-hidden="true">smart_toy</span> LLM Agent</div>`;
 
     let includeBreadcrumb = '';
     if (step.includeChain && step.includeChain.length > 0) {
         const chainText = step.includeChain.join(' > ');
-        includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(chainText)}</div>`;
+        includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(chainText)}</div>`;
     } else if (step.includeFile) {
-        includeBreadcrumb = `<div class="include-breadcrumb"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> ${escHtml(step.includeFile)}</div>`;
+        includeBreadcrumb = `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
     }
 
     const detailsHtml = buildStepDetailsHtml(step);
@@ -1807,7 +1913,7 @@ function updateToolbarControls(enabled) {
     if (isErrorMode) {
         if (runBtn) {
             runBtn.className = 'btn btn-heal';
-            runBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> <span>Heal</span>';
+            runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> <span>Heal</span>';
             runBtn.title = 'Heal step using AI (Alt+R)';
         }
         if (finishBtn) {
@@ -1818,7 +1924,7 @@ function updateToolbarControls(enabled) {
     } else {
         if (runBtn) {
             runBtn.className = 'btn btn-success';
-            runBtn.innerHTML = '<i class="fa-solid fa-play" aria-hidden="true"></i> <span>Run</span>';
+            runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> <span>Run</span>';
             runBtn.title = 'Run step (Alt+R / Ctrl+Enter)';
         }
         if (finishBtn) {
@@ -1892,13 +1998,13 @@ function syncAutoButton() {
     if (isAutoMode) {
         btn.classList.remove('btn-auto-blue');
         btn.classList.add('btn-pause-orange');
-        btn.innerHTML = '<i class="fa-solid fa-pause" aria-hidden="true"></i> Pause';
+        btn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">pause</span> Pause';
         btn.title = 'Pause Auto-run (Alt+S)';
         btn.setAttribute('aria-label', 'Pause Auto-run (Alt+S)');
     } else {
         btn.classList.remove('btn-pause-orange');
         btn.classList.add('btn-auto-blue');
-        btn.innerHTML = '<i class="fa-solid fa-forward-fast" aria-hidden="true"></i> Auto';
+        btn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">fast_forward</span> Auto';
         btn.title = 'Auto-run (Alt+S)';
         btn.setAttribute('aria-label', 'Toggle Auto-run (Alt+S)');
     }
@@ -2098,7 +2204,7 @@ function handleScreenshotError(imgElement) {
         if (container) {
             const header = container.querySelector('.screenshot-header');
             if (header) {
-                header.innerHTML = `<i class="fa-solid fa-image-slash" aria-hidden="true"></i> No screenshot taken`;
+                header.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">hide_image</span> No screenshot taken`;
                 header.style.color = 'var(--text-muted)';
             }
         }

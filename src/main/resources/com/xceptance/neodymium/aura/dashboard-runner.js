@@ -92,15 +92,15 @@ function renderLiveTestList() {
 
         if (isCurrent) {
             cardStyle = 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);';
-            iconHtml = `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent); margin-left: 6px; flex-shrink: 0;"></i>`;
+            iconHtml = `<span class="material-symbols-outlined spinner" style="color: var(--accent); margin-left: 6px; flex-shrink: 0; font-size: 14px;">progress_activity</span>`;
             onclick = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
         } else if (isDone) {
             cardStyle = 'opacity: 0.80;';
-            iconHtml = `<i class="fa-solid fa-circle-check" style="color: var(--success, #22c55e); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
+            iconHtml = `<span class="material-symbols-outlined" style="color: var(--success, #22c55e); margin-left: 6px; flex-shrink: 0; font-size: 14px;">check_circle</span>`;
             onclick = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
         } else {
             cardStyle = 'opacity: 0.40; pointer-events: none;';
-            iconHtml = `<i class="fa-regular fa-clock" style="color: var(--text-secondary); margin-left: 6px; flex-shrink: 0; font-size: 12px;"></i>`;
+            iconHtml = `<span class="material-symbols-outlined" style="color: var(--text-secondary); margin-left: 6px; flex-shrink: 0; font-size: 14px;">schedule</span>`;
             cursor = 'default';
         }
 
@@ -433,10 +433,10 @@ function copyTerminalOutput() {
 
     const showFeedback = () => {
         if (copyIcon && copyText) {
-            copyIcon.className = 'fa-solid fa-check';
+            copyIcon.textContent = 'check';
             copyText.textContent = 'Copied!';
             setTimeout(() => {
-                copyIcon.className = 'fa-regular fa-copy';
+                copyIcon.textContent = 'content_copy';
                 copyText.textContent = 'Copy';
             }, 2000);
         }
@@ -579,7 +579,7 @@ async function pollStatus() {
                         const sidebarBadge = document.getElementById('sidebarRunBadge');
                         if (sidebarBadge) {
                             sidebarBadge.style.display = 'flex';
-                            sidebarBadge.innerHTML = `<i class="fa-solid fa-circle-notch spinner"></i> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
+                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
                         }
                     } else {
                         if (runSpinner) runSpinner.style.display = 'none';
