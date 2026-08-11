@@ -19,7 +19,7 @@
 package org.neodymium.ai.executor.selenide.plugins;
 
 import org.neodymium.ai.action.Action;
-import com.codeborne.selenide.Selenide;
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.openqa.selenium.Keys;
 
 /**
@@ -65,13 +65,35 @@ public final class KeyPressAction implements BrowserActionPlugin
             // Ignore, not a standard Keys enum
         }
 
+        com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(target);
+        if ("body".equalsIgnoreCase(target.trim()) || "html".equalsIgnoreCase(target.trim()))
+        {
+            try
+            {
+                final org.openqa.selenium.WebElement active = com.codeborne.selenide.WebDriverRunner.getWebDriver().switchTo().activeElement();
+                if (active != null)
+                {
+                    element = com.codeborne.selenide.Selenide.$(active);
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
         if (keyToPress != null)
         {
-            Selenide.$(target).sendKeys(keyToPress);
+            if (keyToPress == Keys.ENTER || keyToPress == Keys.RETURN)
+            {
+                element.pressEnter();
+            }
+            else
+            {
+                element.sendKeys(keyToPress);
+            }
         }
         else
         {
-            Selenide.$(target).sendKeys(action.getValue());
+            element.sendKeys(action.getValue());
         }
     }
 }

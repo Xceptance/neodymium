@@ -773,6 +773,7 @@ public final class ExecuteActionsStep implements PipelineStep
             }
 
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, initialLevel);
+            step.setContextLevel(initialLevel.name());
             stats.getContextLevels().add(initialLevel.name());
 
             final int maxRetriesAtMaxLevel = org.neodymium.ai.config.AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
@@ -900,14 +901,18 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-
-
             final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
 
             if (isReplay)
             {
                 // Replay mode: Stamp live DOM with data-ai attributes before executing step actions
                 standardFlow.add(c -> {
+                    if (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT && (step.getActions() == null || step.getActions().isEmpty()))
+                    {
+                        throw new org.neodymium.ai.pipeline.ConclusiveFailureException(
+                            "No recorded actions found for step '" + step.getInstruction() + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
+                    }
+
                     if (step.getStatus() == org.neodymium.ai.model.PlaybookStepStatus.FAILED || step.isFailed())
                     {
                         final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
@@ -968,7 +973,6 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                 });
 
-
                 final LlmCapability capability = (initialLevel != null && initialLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                 final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
                 standardFlow.add(llmStep);
@@ -986,15 +990,32 @@ public final class ExecuteActionsStep implements PipelineStep
             // Register exception handlers based on execution mode
             final Map<Class<? extends PipelineException>, PipelineStep> handlers = new HashMap<>();
 
-            if (!step.isNoHealing() && (mode.isLive() || (!isReplay && mode.supportsHealing())))
+            if (!step.isNoHealing() && (mode.isLive() || mode.supportsHealing()))
             {
-                // Live Escalation: PrepareRetryStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
+                // Healing Escalation: PrepareRetryStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {
-                    final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
+                    org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
                         c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
                             ? cl
-                            : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
-                    final org.neodymium.ai.executor.selenide.ContextLevel escalatedLevel = activeLevel.escalate();
+                            : null;
+
+                    final boolean isFirstHealingAttempt = (activeLevel == null);
+                    if (activeLevel == null && step.getContextLevel() != null)
+                    {
+                        try
+                        {
+                            activeLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    if (activeLevel == null)
+                    {
+                        activeLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+                    }
+
+                    final org.neodymium.ai.executor.selenide.ContextLevel escalatedLevel = isFirstHealingAttempt ? activeLevel : activeLevel.escalate();
 
                     if (escalatedLevel == null)
                     {
@@ -1035,15 +1056,18 @@ public final class ExecuteActionsStep implements PipelineStep
                     final LlmCapability capability = escalatedLevel.includesScreenshot() ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                     final PrepareRetryStep prepareStep = new PrepareRetryStep();
                     final CallLlmStep<List<Action>> escalationLlmStep = new CallLlmStep<>(activePrompt, capability);
-                    
-                    c.pushStep(verifyStep);
-                    c.pushStep(executeStep);
-                    c.pushStep(escalationLlmStep);
+                    final List<PipelineStep> healFlow = new java.util.ArrayList<>();
+                    healFlow.add(prepareStep);
                     if (escalatedLevel.includesScreenshot())
                     {
-                        c.pushStep(new CaptureStateStep());
+                        healFlow.add(new CaptureStateStep());
                     }
-                    c.pushStep(prepareStep);
+                    healFlow.add(escalationLlmStep);
+                    healFlow.add(executeStep);
+                    healFlow.add(verifyStep);
+
+                    final TryCatchStep healTryCatch = new TryCatchStep(new SequenceStep(healFlow), handlers);
+                    c.pushStep(healTryCatch);
                 });
 
                 handlers.put(org.neodymium.ai.pipeline.ToLevelEscalationException.class, c -> {

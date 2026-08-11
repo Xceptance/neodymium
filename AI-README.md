@@ -227,7 +227,7 @@ The framework utilizes a dedicated taxonomy of prompts, each mapped to specific 
 | Prompt Class | Pipeline Step / Context | LLM Capability | Inputs | Purpose & Output |
 | :--- | :--- | :--- | :--- | :--- |
 | **`PesapPrompt`** | `BeforeStep` / pre-step analysis | `PESAP` | Current instruction, previous instruction, next instructions. | Analyzes instruction flow to predict interaction `ContextLevel`, split compound instructions into sub-steps, and check if custom Java reflection methods are required. Outputs a structured JSON. |
-| **`ActionExtractionPrompt`** | `CallLlmStep` / live action generation | `EXECUTION` | Current SUT DOM state, natural language instruction, step history. | Identifies the correct sequence of web automation actions (`CLICK`, `TYPE`, etc.), multi-candidate locators, and `selfCritique` evaluation to implement the instruction. Outputs structured JSON actions. |
+| **`ActionExtractionPrompt`** | `CallLlmStep` / live action generation | `EXECUTION` | Current SUT DOM state, natural language instruction, step history. | Identifies the correct sequence of web automation actions (`CLICK`, `TYPE`, etc.) to implement the instruction. Outputs structured JSON actions. |
 | **`QualityJudgePrompt`** | `QualityJudgeStep` / optional second-opinion evaluator | `JUDGE` / `EXECUTION` | Instruction, proposed primary action, candidate locators list, full DOM context. | Evaluates proposed locator and alternative candidates against full DOM tree for stability and uniqueness. Outputs structured judgment (`APPROVED`, `REFINED`, `REJECTED`), `chosenLocator`, and `chosenValue`. |
 | **`VerificationPrompt`** | `VerifyOutcomeStep` / post-action validation | `VERIFICATION` | Natural language instruction, executed actions, pre/post screenshots. | Acts as an objective AI judge, scoring the outcome on rubrics (`intentMatch`, `visualDelta`, `absenceOfErrors`). Outputs a structured `VerificationResult` JSON. |
 | **`SemanticDivergencePrompt`** | `SemanticDivergenceAnalysisStep` / replay healing | `TEXT_ONLY` | Baseline page source, current page source. | Compares expected vs actual SUT page states during a replay cache divergence to generate a plain-English diff summary (e.g. `ID changed from checkout to pay-now`). |
@@ -526,9 +526,9 @@ flowchart TD
 
 ---
 
-## 20. Multi-Candidate Locators, Single-Call Self-Critique & LLM Quality Judge
+## 20. Multi-Candidate Locators & LLM Quality Judge
 
-Neodymium AI features a **Dual-Layer Selector Quality & Verification Architecture** to guarantee maximum locator stability, eliminate dynamic framework hashes, and provide detailed call-type token telemetry.
+Neodymium AI features a **Selector Quality & Verification Architecture** to guarantee maximum locator stability, eliminate dynamic framework hashes, and provide detailed call-type token telemetry.
 
 ### A. Ranked Candidate Locators
 
@@ -537,41 +537,14 @@ For every extracted action, the primary LLM generates 2–3 candidate locators r
 * **Candidate 2 (Semantic Fallback)**: Clean semantic CSS class or standard attribute combination (e.g. `.btn-secondary[type='submit']`). `data-ai` attributes and dynamic CSS module hashes are **strictly forbidden**.
 * **Candidate 3 (Stability Fallback)**: `[data-ai='...']` selector attribute provided in the DOM dump (strategy `DATA_AI`).
 
-### B. Embedded Judging & Self-Critique (`neodymium.ai.action.embeddedJudging.enabled`)
+### B. External Quality Judge (`QualityJudgeStep` - Optional / Second Opinion)
 
-To evaluate selector quality **without making an extra API call or duplicating DOM payload tokens**, the primary LLM can perform internal self-judging:
-* **Configuration**: Controlled by `neodymium.ai.action.embeddedJudging.enabled=true|false` (default: `true`).
-  - **`true` (Enabled - Default):** Loads `action-extraction-prompt-judging.md`. For every extracted action, the primary LLM generates `candidateLocators`, evaluates them against stability rules, penalizes dynamic/mangled framework class hashes ($< 0.50$), and outputs `selfCritique` to select the winning `locator`.
-  - **`false` (Disabled):** Loads `action-extraction-prompt-non-judging.md`. Sends the lightweight non-judging system prompt template, omitting `candidateLocators` and `selfCritique` from the output JSON for ~40–60% lower token consumption and faster response times.
-* **Evaluation**: Evaluates `candidateLocators` against stability rules inside the primary HTTP request.
-* **Dynamic / Mangled Class Penalty**: Auto-generated dynamic framework IDs (e.g. `#v-btn-123`) and mangled CSS module hashes (e.g. `._app_child_level3_8392`, `.css-1x839a`) are assigned low scores ($< 0.50$).
-* **Self-Critique Rejection & Promotion**: If Candidate 1 contains dynamic framework hashes or `data-ai` attributes while Candidate 2 is a clean class/attribute selector, `selfCritique` explicitly rejects Candidate 1 and sets `locator` to Candidate 2.
-* **Performance**: Executed inside the **single primary LLM call** (0 extra API calls, 0 duplicated DOM tokens, 2x faster).
-
-```json
-{
-  "action": "CLICK",
-  "candidateLocators": [
-    { "locator": "#v-btn-42", "strategy": "ID", "score": 0.40, "reasoning": "Dynamic framework hash ID" },
-    { "locator": ".btn-primary[type='submit']", "strategy": "CLASS", "score": 0.95, "reasoning": "Clean semantic class and type" }
-  ],
-  "selfCritique": "Rejected Candidate 1 #v-btn-42 due to dynamic framework hash ID. Promoted Candidate 2 .btn-primary[type='submit'] for maximum stability.",
-  "locator": ".btn-primary[type='submit']"
-}
-```
-
-### C. External Quality Judge (`QualityJudgeStep` - Optional / Second Opinion)
-
-When an independent "second opinion" model is desired (e.g. using Llama to critique Gemini):
+When an independent "second opinion" model is desired:
 * **Execution**: Executes `QualityJudgePrompt` passing the proposed primary action, candidate locators, and full DOM tree context.
 * **Output**: Returns structured `QualityJudgeResult` JSON containing `judgment` (`APPROVED`, `REFINED`, `REJECTED`), `chosenLocator`, `chosenValue`, `isRegex`, `confidence`, and `reasoning`.
 * **Configuration**:
   ```properties
-  # Enables or disables embedded judging (candidateLocators & self-critique) inside action extraction prompt.
-  neodymium.ai.action.embeddedJudging.enabled=true
-
   # Enables or disables the external LLM Quality Judge ("second opinion") step.
-  # Default is false (using Single-Call Self-Critique instead for token conservation).
   neodymium.ai.judge.enabled=false
 
   # Execution mode for Quality Judge. Valid options: ON_AMBIGUITY (default), ALWAYS, ON_FAIL.

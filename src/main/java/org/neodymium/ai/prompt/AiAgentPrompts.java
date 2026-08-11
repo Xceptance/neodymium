@@ -82,25 +82,12 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the action extraction system prompt template based on global configuration.
+     * Loads the action extraction system prompt template.
      *
      * @return the action extraction system prompt
      */
     public static String getActionExtractionPrompt()
     {
-        return getActionExtractionPrompt(Neodymium.aiConfiguration().isEmbeddedJudgingEnabled());
-    }
-
-    /**
-     * Loads the action extraction system prompt template.
-     *
-     * @param embeddedJudgingEnabled true to load judging prompt, false to load non-judging prompt
-     * @return the action extraction system prompt
-     */
-    public static String getActionExtractionPrompt(final boolean embeddedJudgingEnabled)
-    {
-        return embeddedJudgingEnabled
-            ? getPrompt("action-extraction-prompt-judging.md")
-            : getPrompt("action-extraction-prompt-non-judging.md");
+        return getPrompt("action-extraction-prompt.md");
     }
 }

@@ -185,9 +185,10 @@ public final class SelenideElementFinder
                 try
                 {
                     final ElementsCollection els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-                    if (!els.isEmpty())
+                    final SelenideElement visible = findFirstVisible(els);
+                    if (visible != null)
                     {
-                        return els.first();
+                        return visible;
                     }
 
                     // Dynamically stamp data-ai attributes into live DOM if absent (throttled to at most 1 stamp per 2 seconds per URL)
@@ -204,9 +205,10 @@ public final class SelenideElementFinder
                     }
 
                     final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-                    if (!retryEls.isEmpty())
+                    final SelenideElement visibleRetry = findFirstVisible(retryEls);
+                    if (visibleRetry != null)
                     {
-                        return retryEls.first();
+                        return visibleRetry;
                     }
                 }
                 catch (final Exception ignored)
@@ -243,9 +245,10 @@ public final class SelenideElementFinder
                             escaped, escaped, escaped, escaped
                         );
                         final ElementsCollection els = Selenide.$$x(xpath);
-                        if (!els.isEmpty())
+                        final SelenideElement visible = findFirstVisible(els);
+                        if (visible != null)
                         {
-                            return els.first();
+                            return visible;
                         }
                     }
                     catch (final Exception ignored)
@@ -269,9 +272,10 @@ public final class SelenideElementFinder
                     {
                         final String xpath = String.format("//%s[contains(normalize-space(.), %s)]", tag, escapeXpath(text));
                         final ElementsCollection els = Selenide.$$x(xpath);
-                        if (!els.isEmpty())
+                        final SelenideElement visible = findFirstVisible(els);
+                        if (visible != null)
                         {
-                            return els.first();
+                            return visible;
                         }
                     }
                     catch (final Exception ignored)
@@ -289,9 +293,10 @@ public final class SelenideElementFinder
             try
             {
                 final ElementsCollection els = Selenide.$$(resolveLocator(clean));
-                if (!els.isEmpty())
+                final SelenideElement visible = findFirstVisible(els);
+                if (visible != null)
                 {
-                    return els.first();
+                    return visible;
                 }
             }
             catch (final Exception ignored)
@@ -309,9 +314,10 @@ public final class SelenideElementFinder
                 try
                 {
                     final ElementsCollection els = Selenide.$$x(clean);
-                    if (!els.isEmpty())
+                    final SelenideElement visible = findFirstVisible(els);
+                    if (visible != null)
                     {
-                        return els.first();
+                        return visible;
                     }
                 }
                 catch (final Exception ignored)
@@ -328,9 +334,10 @@ public final class SelenideElementFinder
             try
             {
                 final ElementsCollection els = Selenide.$$(By.linkText(clean));
-                if (!els.isEmpty())
+                final SelenideElement visible = findFirstVisible(els);
+                if (visible != null)
                 {
-                    return els.first();
+                    return visible;
                 }
             }
             catch (final Exception ignored)
@@ -351,9 +358,10 @@ public final class SelenideElementFinder
                     escaped, escaped, escaped
                 );
                 final ElementsCollection els = Selenide.$$x(xpath);
-                if (!els.isEmpty())
+                final SelenideElement visible = findFirstVisible(els);
+                if (visible != null)
                 {
-                    return els.first();
+                    return visible;
                 }
             }
             catch (final Exception ignored)
@@ -361,6 +369,34 @@ public final class SelenideElementFinder
             }
         }
 
+        return null;
+    }
+
+    /**
+     * Helper method to filter an {@link ElementsCollection} and return the first element that is currently displayed in the live DOM.
+     *
+     * @param els the collection of elements
+     * @return the first displayed element, or null if no element is displayed or collection is empty
+     */
+    private static SelenideElement findFirstVisible(final ElementsCollection els)
+    {
+        if (els == null || els.isEmpty())
+        {
+            return null;
+        }
+        for (final SelenideElement el : els)
+        {
+            try
+            {
+                if (el.isDisplayed())
+                {
+                    return el;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
         return null;
     }
 

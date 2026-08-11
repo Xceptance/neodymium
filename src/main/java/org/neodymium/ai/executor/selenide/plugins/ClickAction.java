@@ -50,6 +50,25 @@ public final class ClickAction implements BrowserActionPlugin
         if (action != null && action.getTarget() != null)
         {
             final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action.getTarget());
+            
+            // Safety net: If the element is an anchor and is visually hidden for accessibility, 
+            // native clicking it directly often bypasses the parent container's event listeners or navigates away.
+            // We simulate a click on its parent container instead to ensure proper bubbling.
+            try
+            {
+                final String preTagName = element.getTagName();
+                if ("a".equalsIgnoreCase(preTagName) && (element.has(com.codeborne.selenide.Condition.cssClass("screen-reader-text")) || element.has(com.codeborne.selenide.Condition.cssClass("sr-only"))))
+                {
+                    Selenide.executeJavaScript(
+                        "if (arguments[0] && arguments[0].parentElement) { arguments[0].parentElement.click(); }",
+                        element);
+                    return;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+
             try
             {
                 element.click();
@@ -66,9 +85,13 @@ public final class ClickAction implements BrowserActionPlugin
             }
             try
             {
-                Selenide.executeJavaScript(
+                final String tagName = element.getTagName();
+                if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                {
+                    Selenide.executeJavaScript(
                         "if (arguments[0] && typeof arguments[0].focus === 'function') { arguments[0].focus(); }",
                         element);
+                }
             }
             catch (final Throwable ignored)
             {

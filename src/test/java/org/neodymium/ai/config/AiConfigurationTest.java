@@ -48,7 +48,6 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.execution.mode");
         System.clearProperty("neodymium.ai.timeout.seconds");
         System.clearProperty("neodymium.ai.visualRca.enabled");
-        System.clearProperty("neodymium.ai.action.embeddedJudging.enabled");
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.managerActive");
     }
@@ -85,17 +84,6 @@ public class AiConfigurationTest
         assertFalse(AiConfiguration.getInstance().isVisualRcaEnabled(), "Visual RCA should be disabled when property is set to false.");
     }
 
-    @Test
-    public void testEmbeddedJudgingEnabledDefaultAndOverride()
-    {
-        System.setProperty("neodymium.ai.action.embeddedJudging.enabled", "true");
-        AiConfiguration.resetInstance();
-        assertTrue(AiConfiguration.getInstance().isEmbeddedJudgingEnabled(), "Embedded judging should be enabled when system property is set to true.");
-
-        System.setProperty("neodymium.ai.action.embeddedJudging.enabled", "false");
-        AiConfiguration.resetInstance();
-        assertFalse(AiConfiguration.getInstance().isEmbeddedJudgingEnabled(), "Embedded judging should be disabled when property is set to false.");
-    }
 
     @Test
     public void testGetInstanceCaching()

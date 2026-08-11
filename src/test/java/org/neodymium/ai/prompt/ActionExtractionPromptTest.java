@@ -153,31 +153,17 @@ public final class ActionExtractionPromptTest
     }
 
     /**
-     * Verifies system prompt compilation with embedded judging enabled vs disabled.
+     * Verifies system prompt compilation.
      */
     @Test
-    public void testCompileSystemMessageWithAndWithoutEmbeddedJudging()
+    public void testCompileSystemMessage()
     {
         final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
         final ExecutionContext context = new ExecutionContext(null);
 
-        // 1. Embedded judging enabled (default) -> loads action-extraction-prompt-judging.md
-        System.setProperty("neodymium.ai.action.embeddedJudging.enabled", "true");
-        org.neodymium.ai.config.AiConfiguration.resetInstance();
-        final String judgingSystemMsg = prompt.compileSystemMessage(context);
-        assertNotNull(judgingSystemMsg);
-        assertTrue(judgingSystemMsg.contains("candidateLocators"), "Judging prompt must contain candidateLocators instructions.");
-        assertTrue(judgingSystemMsg.contains("selfCritique"), "Judging prompt must contain selfCritique instructions.");
-
-        // 2. Embedded judging disabled -> loads action-extraction-prompt-non-judging.md
-        System.setProperty("neodymium.ai.action.embeddedJudging.enabled", "false");
-        org.neodymium.ai.config.AiConfiguration.resetInstance();
-        final String nonJudgingSystemMsg = prompt.compileSystemMessage(context);
-        assertNotNull(nonJudgingSystemMsg);
-        assertTrue(!nonJudgingSystemMsg.contains("candidateLocators"), "Non-judging prompt must not contain candidateLocators.");
-        // Clean up system property
-        System.clearProperty("neodymium.ai.action.embeddedJudging.enabled");
-        org.neodymium.ai.config.AiConfiguration.resetInstance();
+        final String systemMsg = prompt.compileSystemMessage(context);
+        assertNotNull(systemMsg);
+        assertTrue(systemMsg.contains("Analyze current DOM and visual state"), "System prompt must contain core instruction.");
     }
 
     /**

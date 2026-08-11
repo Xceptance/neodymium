@@ -130,6 +130,31 @@ public final class PlaybookStep
     private String schemaVersion = "2.0";
 
     /**
+     * The context level (e.g. VISUAL_LEAN, LEAN) recorded for this step during execution.
+     */
+    private String contextLevel;
+
+    /**
+     * Returns the recorded context level for this step.
+     *
+     * @return the context level name, or null if not recorded
+     */
+    public String getContextLevel()
+    {
+        return this.contextLevel;
+    }
+
+    /**
+     * Sets the recorded context level for this step.
+     *
+     * @param contextLevel the context level name to set
+     */
+    public void setContextLevel(final String contextLevel)
+    {
+        this.contextLevel = contextLevel;
+    }
+
+    /**
      * Returns the line number in the source file.
      *
      * @return the line number, or -1 if unknown

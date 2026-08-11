@@ -70,7 +70,6 @@ public final class VerlaProgrammaticDemoTest
     {
         System.setProperty("neodymium.ai.pesap.enabled", "false");
         System.setProperty("neodymium.ai.judge.enabled", "false");
-        System.setProperty("neodymium.ai.action.embeddedJudging.enabled", "false");
         System.setProperty("neodymium.ai.semanticVerification.enabled", "false");
         System.setProperty("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
