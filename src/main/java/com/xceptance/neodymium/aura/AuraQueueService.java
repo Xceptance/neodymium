@@ -513,13 +513,23 @@ public final class AuraQueueService
                     activeProcess.set(null);
                 }
 
-                if (!manuallyStopped.get() && req.allure)
+                if (!manuallyStopped.get())
                 {
-                    LOGGER.info("[Aura Server] Auto-generating report as requested.");
                     final List<String> uniqueFiles = new ArrayList<>(datasetsByFile.keySet());
-                    reportingService.generateReport(uniqueFiles, req, runStartTimeMs.get(), globalTestsRun.get(),
-                            globalPassed.get(), globalFailed.get(), globalSkipped.get(), manuallyStopped.get(),
-                            currentRunLogs, currentRunEvents);
+                    if (req.allure)
+                    {
+                        LOGGER.info("[Aura Server] Auto-generating report as requested.");
+                        reportingService.generateReport(uniqueFiles, req, runStartTimeMs.get(), globalTestsRun.get(),
+                                globalPassed.get(), globalFailed.get(), globalSkipped.get(), manuallyStopped.get(),
+                                currentRunLogs, currentRunEvents);
+                    }
+                    else
+                    {
+                        LOGGER.info("[Aura Server] Archiving execution run to history...");
+                        reportingService.copyReportToHistory(uniqueFiles, req, runStartTimeMs.get(), globalTestsRun.get(),
+                                globalPassed.get(), globalFailed.get(), globalSkipped.get(), manuallyStopped.get(),
+                                currentRunLogs, currentRunEvents);
+                    }
                 }
 
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}",

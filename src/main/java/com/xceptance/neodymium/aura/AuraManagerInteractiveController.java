@@ -184,6 +184,22 @@ public final class AuraManagerInteractiveController
             // ignore parsing error
         }
         engine.pushState(body);
+
+        try
+        {
+            final File resultsDir = new File("target/aura-sandbox/allure-results");
+            if (!resultsDir.exists())
+            {
+                resultsDir.mkdirs();
+            }
+            final File executionJson = new File(resultsDir, "console-execution-1.json");
+            Files.writeString(executionJson.toPath(), body, StandardCharsets.UTF_8);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("[Aura Server] Failed to save console execution snapshot: {}", e.getMessage());
+        }
+
         final String responseJson = queueService.isManuallyStopped()
                 ? "{\"status\":\"stopped\"}"
                 : "{\"status\":\"ok\"}";

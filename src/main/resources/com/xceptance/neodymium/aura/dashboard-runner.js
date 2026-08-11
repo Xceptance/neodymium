@@ -497,6 +497,8 @@ async function pollStatus() {
             if (data.events && data.events.length > 0) {
                 data.events.forEach(event => {
                     if (event.type === 'reportReady') {
+                        if (typeof loadHistory === 'function') loadHistory();
+                        if (typeof renderHistoryTable === 'function') renderHistoryTable();
                         if (typeof openReportView === 'function') openReportView(event.reportId);
                     }
                     if (event.type === 'interactiveConsoleReady') {
@@ -603,6 +605,7 @@ async function pollStatus() {
 
                         if (lastKnownRunning) {
                             if (typeof loadHistory === 'function') loadHistory();
+                            if (typeof renderHistoryTable === 'function') renderHistoryTable();
                             if (typeof updateCenterLayout === 'function') updateCenterLayout();
                         }
                     }

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -29,7 +30,6 @@ import org.neodymium.ai.session.AiSession;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 /**
@@ -253,7 +253,29 @@ public final class InteractiveStateBuilder
         obj.addProperty("instruction", step.getInstruction() != null ? step.getInstruction() : "");
         obj.addProperty("line", step.getLineNumber());
         obj.addProperty("file", step.getSourceFile() != null ? step.getSourceFile() : "");
-        obj.addProperty("source", source);
+
+        final ExecutionMode mode = context != null
+            ? (ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE)
+            : null;
+
+        String stepEngine = "llm";
+        if (step.getStatus() == PlaybookStepStatus.HEALED)
+        {
+            stepEngine = "healed";
+        }
+        else if (mode != null && mode.isReplay())
+        {
+            stepEngine = "recording";
+        }
+        else if (context != null && Boolean.TRUE.equals(context.getTransientData().get("isReplayRun")))
+        {
+            stepEngine = "recording";
+        }
+        else if (step.getSourceFile() != null && step.getSourceFile().endsWith(".json"))
+        {
+            stepEngine = "recording";
+        }
+        obj.addProperty("source", stepEngine);
 
         PlaybookStepStatus status = step.getStatus();
         if (status == null || status == PlaybookStepStatus.PENDING)

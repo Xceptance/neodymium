@@ -804,7 +804,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (playbookPath != null)
             {
                 executionContext.getTransientData().put("playbookFile", playbookPath);
-                executionContext.getTransientData().put("yamlSource", playbookPath);
             }
             if (this.datasetId != null)
             {

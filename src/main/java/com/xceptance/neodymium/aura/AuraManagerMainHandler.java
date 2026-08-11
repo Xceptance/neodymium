@@ -46,6 +46,7 @@ public final class AuraManagerMainHandler implements HttpHandler
         final AuraChatSessionService sessionService = new AuraChatSessionService();
         final AuraReportingService reportingService = new AuraReportingService();
         this.interactiveService = new AuraInteractiveService();
+        reportingService.setInteractiveService(this.interactiveService);
         this.queueService = new AuraQueueService(reportingService, interactiveService);
 
         // Instantiate standalone public controller classes injecting stateless/stateful singletons and manager

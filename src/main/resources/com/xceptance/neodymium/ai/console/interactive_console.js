@@ -94,7 +94,7 @@ function connectSSE() {
                         finalSaveButtons.innerHTML = editsMade
                             ? `<button class="btn btn-primary" onclick="sendAction('SAVE_EXIT', { saveScope: document.getElementById('saveScopeSelect')?.value || 'local' })">Save Changes</button>
                                <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>`
-                            : `<button class="btn btn-primary" onclick="sendAction('DISCARD')">Close Console</button>`;
+                            : `<button class="btn btn-primary" onclick="sendAction('DISCARD')">Close</button>`;
                     }
                     finalSaveOverlay.classList.add('active');
                 }

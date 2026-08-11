@@ -269,6 +269,9 @@ function showView(viewId) {
             if (typeof applyHistoryState === 'function') {
                 applyHistoryState(historyNavState);
             }
+            if (typeof renderHistoryTable === 'function') {
+                renderHistoryTable();
+            }
         });
     }
 
