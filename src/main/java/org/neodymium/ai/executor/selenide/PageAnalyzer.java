@@ -581,10 +581,15 @@ public class PageAnalyzer
 
                 // Recursive Structural DOM Tree Traversal
                 function buildNodeTree(el) {
-                    if (!el || !isVisible(el)) return null;
+                    if (!el) return null;
                     var tag = el.tagName ? el.tagName.toLowerCase() : '';
                     if (['script', 'style', 'svg', 'noscript', 'meta', 'link', 'head'].indexOf(tag) !== -1) return null;
                     if (el.closest && el.closest('.neodymium-ai-hud')) return null;
+
+                    var vis = isVisible(el);
+                    var inForm = !!(el.closest && el.closest('form'));
+                    var isFormInput = inForm && ['input','select','textarea','button'].indexOf(tag) !== -1;
+                    if (!vis && !isFormInput) return null;
 
                     var isInter = isInteractive(el);
                     var isHead = ['h1','h2','h3','h4','h5','h6'].indexOf(tag) !== -1;
@@ -613,6 +618,7 @@ public class PageAnalyzer
                             checked: isChecked(el) ? 'true' : null,
                             selected: (tag === 'option' ? (el.selected || el.hasAttribute('selected') ? 'true' : null) : null),
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
+                            hidden: (!vis ? 'true' : null),
                             focused: (document.activeElement === el) ? 'true' : null,
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
@@ -645,8 +651,14 @@ public class PageAnalyzer
                     var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup';
                     var allowContainer = !isMinimal || isFormContainer;
                     if (allowContainer && (isContainerTag || isDivContainer) && children.length > 0) {
+                        // Flatten single-child anonymous layout wrappers
+                        var isAnonymousWrapper = !el.id && !el.getAttribute('role') && !el.getAttribute('aria-label') && (!el.className || typeof el.className !== 'string' || el.className.trim().length === 0);
+                        if (isAnonymousWrapper && children.length === 1 && !Array.isArray(children[0])) {
+                            return children[0];
+                        }
                         var autoIdContainer = assignId(el);
                         return {
+                            nodeType: 'container',
                             nodeType: 'container',
                             tagName: tag,
                             id: el.id || null,
@@ -1263,6 +1275,7 @@ public class PageAnalyzer
         appendAttribute(dom, "required", el.get("required"));
         appendAttribute(dom, "readonly", el.get("readonly"));
         appendAttribute(dom, "disabled", el.get("disabled"));
+        appendAttribute(dom, "hidden", el.get("hidden"));
         appendAttribute(dom, "multiple", el.get("multiple"));
         appendAttribute(dom, "value", el.get("value"));
         appendAttribute(dom, "options", el.get("options"));
