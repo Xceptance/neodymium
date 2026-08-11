@@ -338,6 +338,31 @@ public final class ExecuteActionsStep implements PipelineStep
 
                 session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
                 context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+
+                if (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP")))
+                {
+                    context.getTransientData().put("KEY_IS_CONTINUATION_STEP", false);
+                    LOGGER.info("   🔄 Prelude action executed for instruction — initiating continuation LLM step with updated DOM context.");
+
+                    @SuppressWarnings("unchecked")
+                    final AiPrompt<List<Action>> activePrompt = (AiPrompt<List<Action>>) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_PROMPT);
+                    final org.neodymium.ai.executor.selenide.ContextLevel currentLevel =
+                        context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                            ? cl
+                            : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+
+                    final LlmCapability capability = currentLevel.includesScreenshot() ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
+                    final CallLlmStep<List<Action>> continuationLlmStep = new CallLlmStep<>(activePrompt, capability);
+
+                    context.pushStep(new VerifyOutcomeStep());
+                    context.pushStep(this);
+                    if (org.neodymium.ai.config.AiConfiguration.getInstance().isJudgeEnabled())
+                    {
+                        context.pushStep(new QualityJudgeStep());
+                    }
+                    context.pushStep(continuationLlmStep);
+                    context.pushStep(new CaptureStateStep());
+                }
             }
             catch (final Throwable t)
             {
@@ -750,6 +775,13 @@ public final class ExecuteActionsStep implements PipelineStep
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, initialLevel);
             stats.getContextLevels().add(initialLevel.name());
 
+            final int maxRetriesAtMaxLevel = org.neodymium.ai.config.AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
+            final int ladderDistance = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH.ordinal() - initialLevel.ordinal() + 1;
+            final int totalStepBudget = Math.max(1, ladderDistance) + Math.max(0, maxRetriesAtMaxLevel);
+
+            contextState.getTransientData().put("KEY_STEP_TOTAL_BUDGET", totalStepBudget);
+            contextState.getTransientData().put("KEY_STEP_ATTEMPTS_USED", 1);
+
             @SuppressWarnings("unchecked")
             final AiPrompt<List<Action>> activePrompt = (AiPrompt<List<Action>>) contextState.getTransientData()
                 .get(ExecutionContext.KEY_ACTIVE_PROMPT);
@@ -973,17 +1005,17 @@ public final class ExecuteActionsStep implements PipelineStep
 
                     if (activeLevel == escalatedLevel || escalatedLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH)
                     {
-                        final Integer maxLevelRetryCount = (Integer) c.getTransientData().getOrDefault("KEY_MAX_LEVEL_RETRY_COUNT", 0);
-                        final int maxRetriesAtMaxLevel = org.neodymium.ai.config.AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
-                        if (maxLevelRetryCount >= maxRetriesAtMaxLevel)
+                        final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
+                        final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
+                        if (attemptsUsed >= totalBudget && activeLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH)
                         {
                             org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error(
-                                "🛑 Circuit Breaker Tripped: Reached maximum allowed retries ({}) at highest context level ({}) for step. Aborting retry loop.",
-                                maxRetriesAtMaxLevel, escalatedLevel);
+                                "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at highest context level ({}) for step. Aborting retry loop.",
+                                attemptsUsed, totalBudget, activeLevel);
                             throw new ConclusiveFailureException(
-                                "Maximum context escalation retries (" + maxRetriesAtMaxLevel + ") at highest context level (" + escalatedLevel + ") exceeded. Aborting pipeline.");
+                                "Maximum step execution budget (" + totalBudget + " attempts) exceeded for step. Aborting pipeline.");
                         }
-                        c.getTransientData().put("KEY_MAX_LEVEL_RETRY_COUNT", maxLevelRetryCount + 1);
+                        c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
                     }
 
                     if (!com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
@@ -1015,8 +1047,9 @@ public final class ExecuteActionsStep implements PipelineStep
                 });
 
                 handlers.put(org.neodymium.ai.pipeline.ToLevelEscalationException.class, c -> {
-                    final org.neodymium.ai.pipeline.ToLevelEscalationException e = (org.neodymium.ai.pipeline.ToLevelEscalationException) c.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
-                    final String targetLevelStr = e.getTargetLevel();
+                    final Object errObj = c.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                    final org.neodymium.ai.pipeline.ToLevelEscalationException e = errObj instanceof org.neodymium.ai.pipeline.ToLevelEscalationException tle ? tle : null;
+                    final String targetLevelStr = e != null ? e.getTargetLevel() : "VISUAL_RICH";
                     org.neodymium.ai.executor.selenide.ContextLevel targetLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
                     try
                     {
@@ -1024,20 +1057,18 @@ public final class ExecuteActionsStep implements PipelineStep
                         final Object curLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                         final org.neodymium.ai.executor.selenide.ContextLevel currentLevel = curLevelObj instanceof org.neodymium.ai.executor.selenide.ContextLevel cl ? cl : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
 
-                        if (targetLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH || targetLevel == currentLevel)
+                        final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
+                        final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
+
+                        if (attemptsUsed >= totalBudget && (currentLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH || targetLevel == currentLevel))
                         {
-                            final Integer maxLevelRetryCount = (Integer) c.getTransientData().getOrDefault("KEY_MAX_LEVEL_RETRY_COUNT", 0);
-                            final int maxRetriesAtMaxLevel = org.neodymium.ai.config.AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
-                            if (maxLevelRetryCount >= maxRetriesAtMaxLevel)
-                            {
-                                org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error(
-                                    "🛑 Circuit Breaker Tripped: Reached maximum allowed retries ({}) at highest context level ({}) for step. Aborting retry loop.",
-                                    maxRetriesAtMaxLevel, targetLevel);
-                                throw new ConclusiveFailureException(
-                                    "Maximum context escalation retries (" + maxRetriesAtMaxLevel + ") at highest context level (" + targetLevel + ") exceeded. Aborting pipeline.");
-                            }
-                            c.getTransientData().put("KEY_MAX_LEVEL_RETRY_COUNT", maxLevelRetryCount + 1);
+                            org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error(
+                                "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at context level ({}) for step. Aborting retry loop.",
+                                attemptsUsed, totalBudget, targetLevel);
+                            throw new ConclusiveFailureException(
+                                "Maximum step execution budget (" + totalBudget + " attempts) exceeded for step. Aborting pipeline.");
                         }
+                        c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
 
                         c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, targetLevel);
                         org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("⚠️ Context escalated to: {}", targetLevel);

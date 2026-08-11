@@ -23,11 +23,12 @@ Analyze current DOM and visual state to fulfill the active instruction.
   * Candidate 3 (Stability Fallback): `[data-ai='...']` selector attribute provided in the DOM dump (strategy `DATA_AI`).
   * Self-Critique: Evaluate 'candidateLocators' against stability rules. If Candidate 1 contains dynamic framework hashes (e.g. `#v-btn-123`, `._app_child_8392`) OR contains `data-ai` attributes while Candidate 2 has a clean class/attribute selector, REJECT Candidate 1 in 'selfCritique' and promote Candidate 2. Set 'locator' to the winning self-judged candidate.
 - ESCALATE: Set 'status' to 'ESCALATE' when required elements/texts are missing or not visible in the current context. Set 'targetContextLevel' to the exact level value provided in '[NEXT_ESCALATION]' in the user prompt. Do NOT request a lower or equal level.
+- CONTINUE: Set 'status' to 'CONTINUE' when a prelude or trigger action (such as clicking a search toggle button, promo link, menu trigger, or modal button) must be executed first before hidden target input elements or controls required by the active instruction become visible in the SUT DOM.
 
 ## Response Format
 Return ONLY a raw JSON object (no conversational preambles, markdown blocks, or leading labels):
 {
-  "status": "SUCCESS|FAILED|ESCALATE",
+  "status": "SUCCESS|FAILED|ESCALATE|CONTINUE",
   "targetContextLevel": "level from [NEXT_ESCALATION] when status is ESCALATE, or highest level reached",
   "reasoning": "Concise explanation for actions or escalation",
   "actions": [

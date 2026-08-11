@@ -26,6 +26,7 @@ import com.codeborne.selenide.WebDriverRunner;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.neodymium.ai.util.SelectorSyntaxChecker;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 
@@ -338,9 +339,9 @@ public final class SelenideElementFinder
         }
 
         // -------------------------------------------------------------------------
-        // Strategy 6: Text Content Searching
+        // Strategy 6: Text Content Searching (ONLY for plain text queries, not structured CSS/XPath)
         // -------------------------------------------------------------------------
-        if (!forceCss && !forceXpath && !clean.contains("<") && !clean.contains(">"))
+        if (!forceCss && !forceXpath && SelectorSyntaxChecker.determineType(clean) == SelectorSyntaxChecker.SelectorType.TEXT && !clean.contains("<") && !clean.contains(">"))
         {
             try
             {

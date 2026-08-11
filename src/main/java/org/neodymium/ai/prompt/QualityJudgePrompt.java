@@ -127,6 +127,8 @@ public class QualityJudgePrompt
         final double temp = aiConfig != null ? aiConfig.getTemperature("judge") : 0.0;
         final int timeout = aiConfig != null ? aiConfig.getTimeoutSeconds("judge") : 30;
 
+        // Conditionally append the Selenide/Selenium W3C CSS locator constraint rule
+        // only when operating in Selenide mode, leaving REST or custom non-browser modes clean.
         final ExecutionContext activeContext = ExecutionContext.getActiveContext();
         final Object targetExecutor = activeContext != null ? activeContext.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
         final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;

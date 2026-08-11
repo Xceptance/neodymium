@@ -140,6 +140,15 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
+        if ("CONTINUE".equalsIgnoreCase(status))
+        {
+            context.getTransientData().put("KEY_IS_CONTINUATION_STEP", true);
+        }
+        else
+        {
+            context.getTransientData().put("KEY_IS_CONTINUATION_STEP", false);
+        }
+
         if ("ESCALATE".equalsIgnoreCase(status))
         {
             String targetLevelStr = root.hasNonNull("targetContextLevel") ? root.path("targetContextLevel").asText() : (root.hasNonNull("tc") ? root.path("tc").asText() : "STANDARD");

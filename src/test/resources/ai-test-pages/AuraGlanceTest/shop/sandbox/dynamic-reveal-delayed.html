@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic Reveal Random Delay - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Dynamic Reveal Random Delay Challenge</h1>
+                <p class="aura-desc">
+                    Clicking the link below triggers an asynchronous DOM insertion after an undisclosed, 
+                    random delay between 300ms and 900ms. The exact timing is not disclosed anywhere on the page.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin: 3rem 0; gap: 1.5rem;">
+                    <!-- Trigger link -->
+                    <a href="#" id="promo-toggle-delayed" style="color: #00ffcc; text-decoration: underline; font-weight: bold; font-size: 16px;">Have a promo code?</a>
+
+                    <!-- Dynamic container -->
+                    <div id="promo-container-delayed" style="display: flex; gap: 0.5rem; transition: opacity 0.3s ease; opacity: 0; min-height: 50px;">
+                        <!-- Content is injected dynamically via JS after random delay -->
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="promo-status-delayed" style="font-weight: bold; color: #ffcc00;">No code applied</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const toggle = document.getElementById('promo-toggle-delayed');
+        const container = document.getElementById('promo-container-delayed');
+        const status = document.getElementById('promo-status-delayed');
+
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Random delay between 300ms and 900ms, completely unlisted in page DOM
+            const randomDelayMs = Math.floor(Math.random() * 600) + 300;
+            
+            setTimeout(function() {
+                container.style.opacity = '1';
+                container.innerHTML = `
+                    <input type="text" id="coupon-field-delayed" placeholder="Enter coupon" style="padding: 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: white;">
+                    <button id="coupon-btn-delayed" class="aura-btn" style="padding: 10px 20px;">Apply</button>
+                `;
+
+                document.getElementById('coupon-btn-delayed').addEventListener('click', function() {
+                    const code = document.getElementById('coupon-field-delayed').value;
+                    if (code === 'DISCOUNT') {
+                        status.innerText = 'Coupon DISCOUNT applied successfully!';
+                        status.style.color = '#00ffcc';
+                    } else {
+                        status.innerText = `Invalid coupon code: ${code || 'empty'}`;
+                        status.style.color = '#ff3366';
+                    }
+                });
+            }, randomDelayMs);
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

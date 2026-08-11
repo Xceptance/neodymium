@@ -155,6 +155,16 @@ When an action step cannot be fulfilled at the initial context level, the framew
 3. **Escalation 2 (`STANDARD` $\rightarrow$ `RICH`)**: If custom `data-*` attributes or deeper 5-level parent context are required to build a unique locator, escalates to **`RICH`**.
 4. **Escalation 3 (`RICH` $\rightarrow$ `VISUAL`)**: If DOM elements are unrendered or hidden, escalates to **`VISUAL`** (screenshot).
 
+### 4.2 Dynamic Step Escalation Budget Model
+
+To prevent infinite escalation loops while ensuring that steps starting at higher context levels (such as `LEAN` or `VISUAL_LEAN`) are never blocked from reaching `VISUAL_RICH`, the framework enforces a **Dynamic Step Escalation Budget**:
+
+$$\text{Total Step Budget} = (\text{VISUAL\_RICH.ordinal()} - \text{initialLevel.ordinal()} + 1) + \text{maxRetriesAtMaxLevel}$$
+
+* **Unused Level Budget Preservation**: When PESAP or explicit configuration starts a step at a higher level (e.g. `LEAN` or `VISUAL_LEAN`), unused lower levels (e.g. `MINIMAL`) are preserved. This provides full attempt capacity for higher-level interactions and visual checks.
+* **Guaranteed Initial `VISUAL_RICH` Attempt**: Upward escalation into `VISUAL_RICH` for the first time is always permitted to run its initial attempt.
+* **Circuit Breaker Enforcement**: The circuit breaker trips only when `attemptsUsed >= totalStepBudget` AND `currentLevel == VISUAL_RICH`.
+
 ---
 
 ## 5. Post-Action AI Outcome Verification
@@ -871,6 +881,36 @@ session.execute(playbook)
 * **In `REPLAY_STRICT`:** Asserts `llmCalls == 0`, `healedSteps == 0`, `replayedSteps == stepCount`, and `softFailedSteps == 0`.
 * **In `FORCE_RECORDING` / `LLM_ONLY`:** Asserts `llmCalls > 0`, `replayedSteps == 0`, and `softFailedSteps == 0`.
 * **In `REPLAY_WITH_HEALING`:** Asserts that if any step was healed, `healedStepCount > 0` and `llmCalls > 0` (for healed steps only), otherwise `llmCalls == 0`.
+
+---
+
+## 14. Selector Syntax Classification & Element Finder Guards
+
+To prevent structured locator strategies from accidentally searching literal DOM text or code blocks when elements are absent, the framework integrates `SelectorSyntaxChecker`:
+
+### Combined Syntax Classifier (`SelectorSyntaxChecker`)
+* **XPath Validation:** Uses JDK native `javax.xml.xpath.XPathFactory` to validate expression syntax for candidates containing XPath indicators (`//`, `./`, `(/`, `xpath=`, `@`, `text()`, `contains(`).
+* **CSS Validation:** Validates explicit CSS prefixes (`#`, `.`, `[`, `css=`, `[data-ai=`) and structural CSS indicators, while distinguishing punctuation colons in text (e.g. `"Search Results for: neodymium"`) from CSS pseudo-classes.
+* **Element Finder Protection:** In `SelenideElementFinder`, Strategy 6 (Text Content Searching) is strictly guarded by `SelectorSyntaxChecker.determineType(clean) == SelectorType.TEXT`. Structured CSS or XPath locators will **never** fall through to literal DOM text or code block searches.
+
+### Mode-Scoped Selenide W3C Locator Constraints
+When `ExecutionContext.KEY_TARGET_EXECUTOR` is operating in Selenide/WebDriver mode (`SelenideTargetExecutor`), `ActionExtractionPrompt` and `QualityJudgePrompt` append `SELENIDE_LOCATOR_RULE`:
+* **W3C Standard CSS Compliance:** Forces the LLM to output standard W3C CSS selectors compatible with Selenium and Selenide.
+* **Playwright Pseudo-Selector Ban:** Strictly forbids Playwright-specific pseudo-selectors (e.g., `:has-text(...)`, `:text(...)`, `:text-is(...)`, `:has(...)`) that cause Selenium driver runtime syntax exceptions.
+
+---
+
+## 15. Language-Agnostic `CONTINUE` Step Status & Multi-Stage Prelude Protocol
+
+To support interactive instructions (such as clicking a search toggle button or expanding a dropdown menu to reveal hidden form inputs) **without relying on any hardcoded human language string matching in Java code**, the framework supports the `CONTINUE` step status protocol:
+
+### AI Signal Protocol (`status: "CONTINUE"`)
+* **Response Status Spectrum:** `SUCCESS` | `FAILED` | `ESCALATE` | `CONTINUE`
+* **Prelude Action Execution:** When the LLM outputs `status: "CONTINUE"`, the pipeline executes the prelude actions (e.g. `CLICK .search-toggle`), captures the updated post-click SUT DOM state (where hidden inputs like `<input id="search-field">` are now visible), and triggers a continuation LLM call for the same active step.
+* **100% Language Neutrality:** Because the LLM natively decodes instructions across all natural languages (English, German, French, Spanish, Japanese, etc.), Java code contains **zero** hardcoded human language string checks.
+* **Unified Replay Cache Storage:** All sequential actions (`CLICK` $\rightarrow$ `TYPE` $\rightarrow$ `KEY_PRESS`) extracted across continuation calls are appended into the single `step.getActions()` list in the companion JSON file. During offline replay (`REPLAY_STRICT`), all recorded actions execute sequentially in a single pass without making any LLM calls, with Selenide automatically handling element visibility wait transitions.
+
+
 
 
 

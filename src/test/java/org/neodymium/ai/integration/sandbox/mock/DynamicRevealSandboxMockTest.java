@@ -64,7 +64,7 @@ public class DynamicRevealSandboxMockTest extends BaseAiTest
     public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/dynamic-reveal.html", server.getPort());
-        session.data().putDynamic("reveal.test.url", pageUrl, false);
+        session.data().putDynamic("reveal_url", pageUrl, false);
 
         org.neodymium.ai.client.LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         if (!(provider instanceof MockLlmProvider))
@@ -157,7 +157,7 @@ public class DynamicRevealSandboxMockTest extends BaseAiTest
     {
         session.execute( """
             steps: |
-              Open ${reveal.test.url} in the browser
+              Open ${reveal_url} in the browser
               Click #promo-toggle
               Type DISCOUNT into #coupon-field
               Click #coupon-btn
@@ -165,5 +165,284 @@ public class DynamicRevealSandboxMockTest extends BaseAiTest
             """);
 
         $("#promo-status").shouldHave(text("Coupon DISCOUNT applied successfully!"));
+    }
+
+    /**
+     * Tests multi-stage prelude continuation protocol (status CONTINUE) where Step 2 combines CLICK #promo-toggle
+     * with continuation TYPE #coupon-field and CLICK #coupon-btn into a single step recording.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "continuation_dynamic_reveal_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testDynamicRevealContinuationProtocol(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        mock.clearResponses();
+
+        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/dynamic-reveal.html", server.getPort());
+
+        // 1. Open SUT
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to Dynamic Reveal page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // 2. Step 2 Call 1: Prelude CLICK with status CONTINUE
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "CONTINUE",
+              "reasoning": "Click promo link to reveal hidden coupon input",
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#promo-toggle",
+                  "value": "",
+                  "reasoning": "Click promo toggle link"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // 3. Step 2 Call 2: Continuation TYPE + CLICK with status SUCCESS
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "reasoning": "Enter DISCOUNT and click apply",
+              "actions": [
+                {
+                  "action": "TYPE",
+                  "locator": "#coupon-field",
+                  "value": "DISCOUNT",
+                  "reasoning": "Type DISCOUNT code"
+                },
+                {
+                  "action": "CLICK",
+                  "locator": "#coupon-btn",
+                  "value": "",
+                  "reasoning": "Click apply button"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // 4. Step 3: Verification
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "#promo-status",
+                  "value": "Coupon DISCOUNT applied successfully!",
+                  "reasoning": "Verify success status message"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            steps: |
+              Open ${reveal_url} in the browser
+              Apply promo code 'DISCOUNT'.
+              Verify that #promo-status shows "Coupon DISCOUNT applied successfully!"
+            """);
+
+        $("#promo-status").shouldHave(text("Coupon DISCOUNT applied successfully!"));
+    }
+
+    /**
+     * Tests random delay dynamic reveal variation where the element insertion delay (300-900ms) is undisclosed in page DOM.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "continuation_random_delay_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testDynamicRevealRandomDelay(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        mock.clearResponses();
+
+        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/dynamic-reveal-delayed.html", server.getPort());
+        session.data().putDynamic("reveal_delayed_url", pageUrl, false);
+
+        // 1. Open SUT
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to Dynamic Reveal Delayed page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // 2. Step 2 Call 1: Prelude CLICK with status CONTINUE
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "CONTINUE",
+              "reasoning": "Click promo link to reveal hidden coupon input after random delay",
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#promo-toggle-delayed",
+                  "value": "",
+                  "reasoning": "Click delayed promo toggle link"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // 3. Step 2 Call 2: Continuation TYPE + CLICK with status SUCCESS
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "reasoning": "Enter DISCOUNT into delayed field and click apply",
+              "actions": [
+                {
+                  "action": "TYPE",
+                  "locator": "#coupon-field-delayed",
+                  "value": "DISCOUNT",
+                  "reasoning": "Type DISCOUNT code into delayed field"
+                },
+                {
+                  "action": "CLICK",
+                  "locator": "#coupon-btn-delayed",
+                  "value": "",
+                  "reasoning": "Click delayed apply button"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // 4. Step 3: Verification
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "#promo-status-delayed",
+                  "value": "Coupon DISCOUNT applied successfully!",
+                  "reasoning": "Verify success status message"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            steps: |
+              Open ${reveal_delayed_url} in the browser
+              Apply promo code 'DISCOUNT'.
+              Verify that #promo-status-delayed shows "Coupon DISCOUNT applied successfully!"
+            """);
+
+        $("#promo-status-delayed").shouldHave(text("Coupon DISCOUNT applied successfully!"));
+    }
+
+    /**
+     * Tests external AJAX fragment insertion variation where the input element is fetched via HTTP GET request.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "continuation_ajax_fragment_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testDynamicRevealAjaxFragment(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        mock.clearResponses();
+
+        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/dynamic-reveal-ajax.html", server.getPort());
+        session.data().putDynamic("reveal_ajax_url", pageUrl, false);
+
+        // 1. Open SUT
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to Dynamic Reveal AJAX page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // 2. Step 2 Call 1: Prelude CLICK with status CONTINUE
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "CONTINUE",
+              "reasoning": "Click promo link to trigger AJAX fetch for coupon snippet",
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#promo-toggle-ajax",
+                  "value": "",
+                  "reasoning": "Click AJAX promo toggle link"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // 3. Step 2 Call 2: Continuation TYPE + CLICK with status SUCCESS
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "reasoning": "Enter DISCOUNT into fetched field and click apply",
+              "actions": [
+                {
+                  "action": "TYPE",
+                  "locator": "#ajax-coupon-field",
+                  "value": "DISCOUNT",
+                  "reasoning": "Type DISCOUNT code into fetched field"
+                },
+                {
+                  "action": "CLICK",
+                  "locator": "#ajax-coupon-btn",
+                  "value": "",
+                  "reasoning": "Click fetched apply button"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // 4. Step 3: Verification
+        mock.addResponse(new LlmResponse("""
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "#promo-status-ajax",
+                  "value": "Coupon DISCOUNT applied successfully!",
+                  "reasoning": "Verify success status message"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            steps: |
+              Open ${reveal_ajax_url} in the browser
+              Apply promo code 'DISCOUNT'.
+              Verify that #promo-status-ajax shows "Coupon DISCOUNT applied successfully!"
+            """);
+
+        $("#promo-status-ajax").shouldHave(text("Coupon DISCOUNT applied successfully!"));
     }
 }

@@ -678,9 +678,9 @@ public class PageAnalyzer
                         return c && (c.nodeType === 'leaf' || Array.isArray(c)) && ['span','b','strong','i','em','small','code','a'].indexOf(c.tagName || (c[0] && c[0].tagName)) !== -1;
                     });
                     if (!isMinimal && textContent.length > 0 && textContent.length <= MAX_TEXT && (children.length === 0 || isInlineWrapper)) {
-                        // In LEAN mode (!includesText), filter out massive paragraph copy (> 120 chars)
+                        // In LEAN mode (!includesText), exclude non-interactive static text nodes (copy text, list items, code blocks, spans)
                         if (!includesText) {
-                            if ((tag === 'p' || tag === 'blockquote') && textContent.length > 120) {
+                            if (!isInter && !isHead) {
                                 return null;
                             }
                         }
