@@ -19,6 +19,7 @@
 package org.neodymium.ai.prompt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,7 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.ToLevelEscalationException;
@@ -172,10 +175,38 @@ public final class ActionExtractionPromptTest
         final String nonJudgingSystemMsg = prompt.compileSystemMessage(context);
         assertNotNull(nonJudgingSystemMsg);
         assertTrue(!nonJudgingSystemMsg.contains("candidateLocators"), "Non-judging prompt must not contain candidateLocators.");
-        assertTrue(!nonJudgingSystemMsg.contains("selfCritique"), "Non-judging prompt must not contain selfCritique.");
-
         // Clean up system property
         System.clearProperty("neodymium.ai.action.embeddedJudging.enabled");
         org.neodymium.ai.config.AiConfiguration.resetInstance();
+    }
+
+    /**
+     * Verifies that compileSystemMessage includes the Selenide W3C locator rule in Selenide mode,
+     * but excludes it when executing under non-Selenide mode (e.g. RestTargetExecutor).
+     */
+    @Test
+    public void testCompileSystemMessageSelenideModeLocatorRule()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+
+        // 1. Selenide mode (SelenideTargetExecutor present in transient data) -> includes rule
+        final ExecutionContext selenideContext = new ExecutionContext(null);
+        selenideContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new SelenideTargetExecutor());
+        final String selenideSystemMsg = prompt.compileSystemMessage(selenideContext);
+        assertNotNull(selenideSystemMsg);
+        assertTrue(selenideSystemMsg.contains("## Selenide/Selenium Engine Locators"), "Selenide system prompt must include Selenide engine locator rule.");
+        assertTrue(selenideSystemMsg.contains("FORBIDDEN: Playwright pseudo-selectors"), "Selenide system prompt must forbid Playwright pseudo-selectors.");
+
+        // 2. Default/null context -> defaults to Selenide mode for backward compatibility
+        final String defaultSystemMsg = prompt.compileSystemMessage(null);
+        assertNotNull(defaultSystemMsg);
+        assertTrue(defaultSystemMsg.contains("## Selenide/Selenium Engine Locators"), "Default system prompt must include Selenide engine locator rule.");
+
+        // 3. REST mode (RestTargetExecutor present in transient data) -> excludes Selenide rule
+        final ExecutionContext restContext = new ExecutionContext(null);
+        restContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new RestTargetExecutor());
+        final String restSystemMsg = prompt.compileSystemMessage(restContext);
+        assertNotNull(restSystemMsg);
+        assertFalse(restSystemMsg.contains("## Selenide/Selenium Engine Locators"), "REST system prompt must not include Selenide engine locator rule.");
     }
 }

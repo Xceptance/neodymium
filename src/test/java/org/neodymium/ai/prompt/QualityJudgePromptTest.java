@@ -29,6 +29,9 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.executor.rest.RestTargetExecutor;
+import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.QualityJudgePrompt.QualityJudgeResult;
 
 /**
@@ -78,5 +81,38 @@ public class QualityJudgePromptTest
         assertFalse(result.isRegex());
         assertEquals(0.98, result.getConfidence(), 0.001);
         assertEquals("Class fallback is cleaner than dynamic ID", result.getReasoning());
+    }
+
+    @Test
+    public void testCompileRequestSelenideModeLocatorRule()
+    {
+        final QualityJudgePrompt prompt = new QualityJudgePrompt();
+        final Action action = new Action("CLICK", "#btn-submit", List.of(), "Click submit", "Submit form");
+
+        try
+        {
+            // 1. Selenide mode context -> includes Selenide locator rule
+            final ExecutionContext selenideContext = new ExecutionContext(null);
+            selenideContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new SelenideTargetExecutor());
+            ExecutionContext.setActiveContext(selenideContext);
+
+            final LlmRequest selenideReq = prompt.compileRequest("Click the submit button", "=== DOM Context ===", action, AiConfiguration.getInstance());
+            assertNotNull(selenideReq);
+            assertTrue(selenideReq.systemMessage().contains("## Selenide/Selenium Engine Locators"), "Judge system prompt must include Selenide engine locator rule in Selenide mode.");
+            assertTrue(selenideReq.systemMessage().contains("FORBIDDEN: Playwright pseudo-selectors"), "Judge system prompt must forbid Playwright pseudo-selectors.");
+
+            // 2. REST mode context -> excludes Selenide locator rule
+            final ExecutionContext restContext = new ExecutionContext(null);
+            restContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new RestTargetExecutor());
+            ExecutionContext.setActiveContext(restContext);
+
+            final LlmRequest restReq = prompt.compileRequest("Click the submit button", "=== DOM Context ===", action, AiConfiguration.getInstance());
+            assertNotNull(restReq);
+            assertFalse(restReq.systemMessage().contains("## Selenide/Selenium Engine Locators"), "Judge system prompt must not include Selenide engine locator rule in REST mode.");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 }

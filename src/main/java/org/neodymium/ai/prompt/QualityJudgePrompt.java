@@ -25,6 +25,8 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.pipeline.ExecutionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -122,10 +124,20 @@ public class QualityJudgePrompt
         userMsg.append("## Current DOM Context\n");
         userMsg.append(domContext != null ? domContext : "").append("\n");
 
-        final double temp = aiConfig.getTemperature("judge");
-        final int timeout = aiConfig.getTimeoutSeconds("judge");
+        final double temp = aiConfig != null ? aiConfig.getTemperature("judge") : 0.0;
+        final int timeout = aiConfig != null ? aiConfig.getTimeoutSeconds("judge") : 30;
 
-        return new LlmRequest(systemPrompt, userMsg.toString(), java.util.Collections.emptyList(), null, temp, timeout);
+        final ExecutionContext activeContext = ExecutionContext.getActiveContext();
+        final Object targetExecutor = activeContext != null ? activeContext.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
+        final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;
+
+        String compiledSystemPrompt = systemPrompt;
+        if (isSelenideMode)
+        {
+            compiledSystemPrompt = compiledSystemPrompt + ActionExtractionPrompt.SELENIDE_LOCATOR_RULE;
+        }
+
+        return new LlmRequest(compiledSystemPrompt, userMsg.toString(), java.util.Collections.emptyList(), null, temp, timeout);
     }
 
     /**

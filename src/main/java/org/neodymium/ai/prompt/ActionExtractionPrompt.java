@@ -27,6 +27,7 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.pipeline.ExecutionContext;
 
 /**
@@ -39,6 +40,14 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
 {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * Selenide/Selenium engine locator constraint rule appended dynamically when operating in Selenide mode.
+     */
+    public static final String SELENIDE_LOCATOR_RULE =
+        "\n\n## Selenide/Selenium Engine Locators\n"
+        + "- Locators MUST be standard W3C CSS selectors compatible with Selenium/WebDriver. "
+        + "FORBIDDEN: Playwright pseudo-selectors (such as ':has-text(...)', ':text(...)', ':text-is(...)', ':has(...)').";
 
     /**
      * Constructs the extraction prompt.
@@ -56,7 +65,16 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
-        final String basePrompt = AiAgentPrompts.getActionExtractionPrompt();
+        String basePrompt = AiAgentPrompts.getActionExtractionPrompt();
+
+        final Object targetExecutor = context != null ? context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
+        final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;
+
+        if (isSelenideMode)
+        {
+            basePrompt = basePrompt + SELENIDE_LOCATOR_RULE;
+        }
+
         return SystemPromptAddonHelper.appendAddon(basePrompt, "general", context);
     }
 
