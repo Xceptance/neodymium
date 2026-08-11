@@ -279,7 +279,7 @@ public class PageAnalyzer
                         return str;
                     }
 
-                    // Step 1: Check for unique immediate attributes (ID or Name) to keep selectors minimal
+                    // Step 1: Check for unique immediate attributes (ID or Name or data-testid) to keep selectors minimal
                     if (el.id) {
                         var idSel = '#' + escapeIdentifier(el.id);
                         if (isUnique(idSel)) {
@@ -287,8 +287,8 @@ public class PageAnalyzer
                         }
                     }
 
-                    var tag = el.tagName.toLowerCase();
-                    var name = el.getAttribute('name');
+                    var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                    var name = el.getAttribute ? el.getAttribute('name') : null;
                     if (name) {
                         var nameSel = tag + "[name='" + name.replaceAll("'", "\\\\'") + "']";
                         if (isUnique(nameSel)) {
@@ -296,15 +296,23 @@ public class PageAnalyzer
                         }
                     }
 
-                    // Step 2: Climb the DOM hierarchy to construct a highly specific unique path
+                    var testId = el.getAttribute ? (el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa')) : null;
+                    if (testId) {
+                        var testSel = tag + "[data-testid='" + testId.replaceAll("'", "\\\\'") + "']";
+                        if (isUnique(testSel)) {
+                            return testSel;
+                        }
+                    }
+
+                    // Step 2: Climb the DOM hierarchy to construct a deterministic unique path
                     var path = [];
                     var current = el;
 
-                    // Walk upwards until we hit the root/body element or null
+                    // Walk upwards until we hit body/html or an ancestor with a unique ID
                     while (current && current.nodeType === 1) { // 1 represents Node.ELEMENT_NODE
-                        var currentTag = current.tagName.toLowerCase();
+                        var currentTag = current.tagName ? current.tagName.toLowerCase() : '';
 
-                        // If we reach body or html, append and terminate the path climbing
+                        // If we reach body or html, append and terminate
                         if (currentTag === 'body' || currentTag === 'html') {
                             path.unshift(currentTag);
                             break;
@@ -325,7 +333,6 @@ public class PageAnalyzer
                         // Append class names to segment to increase specificity
                         var className = current.className;
                         if (typeof className === 'string' && className.trim()) {
-                            // Split by whitespace to extract individual class names
                             var classes = className.trim().split(new RegExp('\\s+')).filter(Boolean);
                             if (classes.length > 0) {
                                 segment += '.' + classes.map(escapeIdentifier).join('.');
@@ -333,7 +340,7 @@ public class PageAnalyzer
                         }
 
                         // Disambiguate among siblings sharing the same tag using :nth-of-type(index)
-                        if (current.parentNode) {
+                        if (current.parentNode && current.parentNode.children) {
                             var siblings = Array.from(current.parentNode.children);
                             var sameTagSiblings = siblings.filter(function(s) {
                                 return s.tagName === current.tagName;
@@ -346,12 +353,6 @@ public class PageAnalyzer
 
                         // Insert the computed segment at the beginning of the path
                         path.unshift(segment);
-
-                        // Check if the current accumulated path is already globally unique
-                        var currentPath = path.join(' > ');
-                        if (isUnique(currentPath)) {
-                            return currentPath;
-                        }
 
                         // Walk up to parent node
                         current = current.parentNode;
@@ -516,40 +517,28 @@ public class PageAnalyzer
 
                 var sections = [];
 
-                // Compile all standard target elements that represent interactive page actions
-                var interactiveElements = captureElements('a', 'link')
-                    .concat(captureElements('button', 'button'))
-                    .concat(captureElements('input', 'input'))
-                    .concat(captureElements('select', 'select'))
-                    .concat(captureElements('option', 'option'))
-                    .concat(captureElements('textarea', 'textarea'))
-                    .concat(captureClickableElements('div, span, tr, td, th, li, label, dialog, svg, img, canvas', 'clickable'));
-
-                // Helper to retrieve the most meaningful text label representation of an element
-                var getDisplayLabel = function(elObj) {
-                    return elObj.text || elObj.placeholder || elObj.value || elObj.ariaLabel || elObj.title || elObj.name || '';
-                };
-
-                // Compute element label frequency map to identify duplicate labels requiring parent text context
+                // Fast pre-pass: Stamp data-parent-text on elements sharing identical text labels to aid LLM disambiguation
+                var candidateEls = queryAllDeep('a, button, input, select, textarea, [role="button"], [role="link"]');
                 var textCounts = {};
-                for (var i = 0; i < interactiveElements.length; i++) {
-                    var lbl = getDisplayLabel(interactiveElements[i]);
-                    if (lbl) {
-                        textCounts[lbl] = (textCounts[lbl] || 0) + 1;
+                var elLabels = [];
+                for (var i = 0; i < candidateEls.length; i++) {
+                    var candidateEl = candidateEls[i];
+                    if (!isVisible(candidateEl)) continue;
+                    var txt = (candidateEl.innerText || candidateEl.placeholder || candidateEl.value || candidateEl.getAttribute('aria-label') || candidateEl.title || candidateEl.name || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
+                    if (txt) {
+                        textCounts[txt] = (textCounts[txt] || 0) + 1;
+                        elLabels.push({ el: candidateEl, txt: txt });
                     }
                 }
-
-                // Perform parent walk to disambiguate elements sharing the identical display label
-                for (var i = 0; i < interactiveElements.length; i++) {
-                    var elObj = interactiveElements[i];
-                    var lbl = getDisplayLabel(elObj);
-                    if (lbl && textCounts[lbl] > 1 && elObj.domElement) {
+                for (var i = 0; i < elLabels.length; i++) {
+                    var item = elLabels[i];
+                    if (textCounts[item.txt] > 1) {
                         var parentText = '';
-                        var p = elObj.domElement.parentElement;
+                        var p = item.el.parentElement;
                         var depth = 0;
                         while (p && p !== document.body && depth < 3) {
-                            var tag = p.tagName.toLowerCase();
-                            var role = p.getAttribute('role') || '';
+                            var tag = p.tagName ? p.tagName.toLowerCase() : '';
+                            var role = p.getAttribute ? (p.getAttribute('role') || '') : '';
                             var cls = (typeof p.className === 'string' ? p.className : '').toLowerCase();
                             var id = (p.id || '').toLowerCase();
                             if (tag === 'header' || tag === 'footer' || tag === 'nav' || tag === 'aside') break;
@@ -557,7 +546,7 @@ public class PageAnalyzer
                             if (cls.includes('navbar') || cls.includes('header') || cls.includes('footer') ||
                                 id.includes('navbar') || id.includes('header') || id.includes('footer')) break;
                             var pText = (p.innerText || '').trim();
-                            if (pText.length > lbl.length && pText.length < 300) {
+                            if (pText.length > item.txt.length && pText.length < 300) {
                                 parentText = pText;
                                 break;
                             }
@@ -565,22 +554,11 @@ public class PageAnalyzer
                             p = p.parentElement;
                             depth++;
                         }
-                        if (parentText) {
-                            elObj.parentText = truncate(parentText.replace(new RegExp('\\s*\\n\\s*', 'g'), ' | '), MAX_TEXT);
-                            if (elObj.domElement && typeof elObj.domElement.setAttribute === 'function') {
-                                elObj.domElement.setAttribute('data-parent-text', elObj.parentText);
-                            }
+                        if (parentText && typeof item.el.setAttribute === 'function') {
+                            item.el.setAttribute('data-parent-text', truncate(parentText.replace(new RegExp('\\s*\\n\\s*', 'g'), ' | '), MAX_TEXT));
                         }
                     }
-                    delete elObj.domElement;
                 }
-
-                // Pre-stamp headings and text content in exact original sequence
-                captureElements('h1', 'heading')
-                    .concat(captureElements('h2', 'heading'))
-                    .concat(captureElements('h3', 'heading'))
-                    .concat(captureElements('h4', 'heading'))
-                    .concat(captureElements('h5', 'heading'));
 
 
                 // Helper to test if element is interactive
@@ -766,6 +744,7 @@ public class PageAnalyzer
 
     public String captureScreenshot(final String title, final WebDriver explicitDriver) throws IOException
     {
+        final long startNanos = System.nanoTime();
         final WebDriver driver = resolveDriver(explicitDriver);
         if (!hasActiveWebDriver(driver))
         {
@@ -774,7 +753,10 @@ public class PageAnalyzer
         LOG.debug("   📸 Capturing screenshot for: {}", title);
         try
         {
-            return captureScreenshotInternal(title, driver);
+            final String result = captureScreenshotInternal(title, driver);
+            final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+            LOG.debug("   📸 Screenshot captured for '{}' in {} ms", title, elapsedMs);
+            return result;
         }
         catch (final Exception e)
         {
@@ -789,7 +771,10 @@ public class PageAnalyzer
                         final String fallback = activeHandles.iterator().next();
                         driver.switchTo().window(fallback);
                         driver.switchTo().defaultContent();
-                        return captureScreenshotInternal(title, driver);
+                        final String result = captureScreenshotInternal(title, driver);
+                        final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+                        LOG.debug("   📸 Screenshot captured for '{}' (fallback) in {} ms", title, elapsedMs);
+                        return result;
                     }
                 }
                 catch (final Exception ex)
@@ -812,68 +797,14 @@ public class PageAnalyzer
         {
             try
             {
-                final String script = """
-                        var callback = arguments[arguments.length - 1];
-                        if (!document.querySelector('link[href*="material-symbols"]')) {
-                            var ms = document.createElement('link');
-                            ms.rel = 'stylesheet';
-                            ms.href = '/material-symbols.css';
-                            document.head.appendChild(ms);
-                        }
-                        if (document.getElementById('neo-screenshot-flash-overlay')) {
-                            var hud0 = document.getElementById('neodymium-ai-hud-container');
-                            if (hud0 && hud0.style.display !== 'none') { hud0.style.display = 'none'; callback(true); } else { callback(false); }
-                            return;
-                        }
-                        var hud = document.getElementById('neodymium-ai-hud-container');
-                        var hasHud = !!(hud && hud.style.display !== 'none');
-                        var activeEl = document.activeElement;
-                        var overlay = document.createElement('div');
-                        overlay.id = 'neo-screenshot-flash-overlay';
-                        overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(255,255,255,0); z-index: 2147483646; display: flex; align-items: center; justify-content: center; pointer-events: none; transition: background-color 0.12s ease-out;';
-                        var badge = document.createElement('div');
-                        badge.style.cssText = 'background: rgba(30,30,46,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.12); border-radius: 50%; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 36px rgba(0,0,0,0.55); opacity: 0; transform: scale(0.75); transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.175,0.885,0.32,1.275);';
-                        var icon = document.createElement('span');
-                        icon.className = 'material-symbols-outlined';
-                        icon.textContent = 'photo_camera';
-                        icon.style.cssText = 'font-size: 46px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4);';
-                        badge.appendChild(icon);
-                        overlay.appendChild(badge);
-                        document.body.appendChild(overlay);
-                        void overlay.offsetWidth;
-                        overlay.style.backgroundColor = 'rgba(255,255,255,0.38)';
-                        setTimeout(function() {
-                            overlay.style.backgroundColor = 'rgba(255,255,255,0)';
-                            badge.style.opacity = '1';
-                            badge.style.transform = 'scale(1)';
-                        }, 55);
-                        setTimeout(function() {
-                            badge.style.opacity = '0';
-                            badge.style.transform = 'scale(1.08)';
-                            setTimeout(function() {
-                                if (document.body.contains(overlay)) { document.body.removeChild(overlay); }
-                                if (hasHud) { hud.style.display = 'none'; }
-                                if (activeEl && activeEl !== document.body && typeof activeEl.focus === 'function') { try { activeEl.focus(); } catch (e) {} }
-                                callback(hasHud);
-                            }, 180);
-                        }, 420);
-                        """;
-                final Object hudExists = js.executeAsyncScript(script);
+                final Object hudExists = js.executeScript(
+                        "var hud = document.getElementById('neodymium-ai-hud-container'); " +
+                        "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
+                        "return false;");
                 hidden = Boolean.TRUE.equals(hudExists);
             }
-            catch (final Exception e)
+            catch (final Exception ignored)
             {
-                try
-                {
-                    final Object hudExists = js.executeScript(
-                            "var hud = document.getElementById('neodymium-ai-hud-container'); " +
-                            "if (hud && hud.style.display !== 'none') { hud.style.display = 'none'; return true; } " +
-                            "return false;");
-                    hidden = Boolean.TRUE.equals(hudExists);
-                }
-                catch (final Exception ignored)
-                {
-                }
             }
         }
 
@@ -970,22 +901,47 @@ public class PageAnalyzer
      */
     @SuppressWarnings("unchecked")
     public String captureSimplifiedDom(final ContextLevel level, final WebDriver explicitDriver) {
+        final long startNanos = System.nanoTime();
         final WebDriver driver = resolveDriver(explicitDriver);
         if (!hasActiveWebDriver(driver)) {
             return "Page URL: <empty page>\nPage Title: \n\n";
         }
-        final String url;
-        final String title;
+
+        final long stage1Start = System.nanoTime();
+        String url;
+        String title;
         try {
             url = driver.getCurrentUrl();
             title = driver.getTitle();
         } catch (final Exception e) {
             return "Page URL: <empty page>\nPage Title: \n\n";
         }
-        final boolean isEmptyPage = "data:,".equals(url) || "about:blank".equals(url);
+        boolean isEmptyPage = "data:,".equals(url) || "about:blank".equals(url);
+        if (isEmptyPage) {
+            try {
+                final Set<String> handles = driver.getWindowHandles();
+                if (handles != null && handles.size() > 1) {
+                    for (final String handle : handles) {
+                        try {
+                            driver.switchTo().window(handle);
+                            final String candidateUrl = driver.getCurrentUrl();
+                            if (candidateUrl != null && !"data:,".equals(candidateUrl) && !"about:blank".equals(candidateUrl)) {
+                                url = candidateUrl;
+                                title = driver.getTitle();
+                                isEmptyPage = false;
+                                break;
+                            }
+                        } catch (final Exception ignored) {
+                        }
+                    }
+                }
+            } catch (final Exception ignored) {
+            }
+        }
+        final long stage1Ms = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - stage1Start);
 
         if (!isEmptyPage) {
-            LOG.debug("🔴 [DOM Capture: {}] URL: {}", level, url);
+            LOG.debug("🔴 [DOM Capture: {}] URL: {} (Stage 1 Window Resolution: {} ms)", level, url, stage1Ms);
         }
 
         final StringBuilder dom = new StringBuilder();
@@ -994,18 +950,21 @@ public class PageAnalyzer
 
         if (isEmptyPage || level == ContextLevel.VISUAL) {
             final String result = dom.toString();
+            final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             if (!isEmptyPage) {
-                LOG.debug("   📄 Simplified DOM size: {} chars (VISUAL mode)", result.length());
+                LOG.debug("   📄 DOM Capture Completed in {} ms | Mode: VISUAL | Size: {} chars", elapsedMs, result.length());
             }
             return result;
         }
 
         final String currentWindow = driver.getWindowHandle();
+        int totalElements = 0;
+        int windowCount = 0;
 
         boolean showFrameId = true;
         try {
             final java.util.Set<String> windowHandles = driver.getWindowHandles();
-            if (windowHandles.size() == 1 && com.codeborne.selenide.Selenide.$$("iframe, frame").isEmpty()) {
+            if (windowHandles.size() == 1 && driver.findElements(By.cssSelector("iframe, frame")).isEmpty()) {
                 showFrameId = false;
             }
         } catch (final Exception e) {
@@ -1015,21 +974,18 @@ public class PageAnalyzer
         try {
             final Set<String> windowHandles = driver.getWindowHandles();
             final List<String> windowList = new ArrayList<>(windowHandles);
+            windowCount = windowList.size();
             for (int i = 0; i < windowList.size(); i++) {
                 final String windowHandle = windowList.get(i);
                 final String logicalWindowName = "win_" + i;
                 driver.switchTo().window(windowHandle);
 
-                // Omit window context header and URL/Title info if there is only a single
-                // window
-                // and no frames/iframes to avoid redundant output matching the top-level Page
-                // URL and Title.
                 if (showFrameId || windowList.size() > 1) {
                     dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
                     dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
                     dom.append("Title: ").append(driver.getTitle()).append("\n\n");
                 }
-                captureFrameTree(dom, level, logicalWindowName, "main", showFrameId, driver);
+                totalElements += captureFrameTree(dom, level, logicalWindowName, "main", showFrameId, driver);
             }
         } catch (final Exception e) {
             LOG.warn("Error capturing full frame tree: {}", e.getMessage());
@@ -1041,25 +997,41 @@ public class PageAnalyzer
             }
         }
 
+        if (totalElements == 0 && driver instanceof final JavascriptExecutor js) {
+            try {
+                final Object readyState = js.executeScript("return document.readyState");
+                final Object childCount = js.executeScript("return document.body ? document.body.children.length : 0");
+                LOG.warn("   ⚠️ [DOM Extraction Failure Diagnostic] Captured 0 elements! URL: '{}' | Title: '{}' | ReadyState: '{}' | Body Children: {}",
+                        url, title, readyState, childCount);
+            } catch (final Exception ignored) {
+            }
+        }
+
         final String result = dom.toString();
+        final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
         if (!isEmptyPage) {
-            LOG.debug("   📄 Simplified DOM size: {} chars", result.length());
+            LOG.debug("   📄 DOM Capture Completed in {} ms | Level: {} | Size: {} chars | Elements: {} | Windows: {}",
+                    elapsedMs, level, result.length(), totalElements, windowCount);
         }
         return result;
     }
 
     @SuppressWarnings("unchecked")
-    private void captureFrameTree(final StringBuilder dom, final ContextLevel level, final String windowHandle,
+    private int captureFrameTree(final StringBuilder dom, final ContextLevel level, final String windowHandle,
             final String framePath, final boolean showFrameId, final WebDriver driver) {
         final String frameId = windowHandle + ":" + framePath;
         if (!(driver instanceof final JavascriptExecutor js)) {
-            return;
+            return 0;
         }
+        int elementCount = 0;
         try {
+            final long scriptStart = System.nanoTime();
             final Map<String, Object> data = (Map<String, Object>) js
                     .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(), level.includesRichMetadata(),
                             level == ContextLevel.MINIMAL,
                             this.volatileIdDetector.getPatterns().stream().map(java.util.regex.Pattern::pattern).toList());
+            final long scriptMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - scriptStart);
+
             // Render element tree
             final List<Map<String, Object>> tree = (List<Map<String, Object>>) data.get("tree");
             if (tree != null && !tree.isEmpty()) {
@@ -1069,19 +1041,41 @@ public class PageAnalyzer
                     dom.append("=== Structural DOM Tree ===\n");
                 }
                 for (final Map<String, Object> node : tree) {
-                    formatElementNode(dom, node, 0, showFrameId, frameId);
+                    elementCount += formatElementNode(dom, node, 0, showFrameId, frameId);
                 }
             }
-
-
+            LOG.debug("   ⚡ [Stage 2: JS Execution] Frame '{}' extracted {} nodes in {} ms", frameId, elementCount, scriptMs);
 
             // Now recursively process iframes in this frame
+            final long frameStart = System.nanoTime();
             final List<WebElement> frames = driver.findElements(By.cssSelector("iframe, frame"));
+            int skippedFrames = 0;
             for (int i = 0; i < frames.size(); i++) {
                 try {
                     // Generate a stable selector for this frame in the parent context
                     final String selector = (String) js.executeScript("""
                             var el = arguments[0];
+                            if (!el || !el.isConnected) return null;
+                            var style = window.getComputedStyle(el);
+                            if (style.display === 'none' || style.visibility === 'hidden') return null;
+                            var rect = el.getBoundingClientRect();
+                            if (rect.width <= 0 || rect.height <= 0) return null;
+                            var src = (el.getAttribute('src') || '').toLowerCase();
+                            if (src.indexOf('googlesyndication') !== -1 || src.indexOf('doubleclick') !== -1 ||
+                                src.indexOf('google-analytics') !== -1 || src.indexOf('facebook.com') !== -1 ||
+                                src.indexOf('adnxs') !== -1 || src.indexOf('adform') !== -1 || src.indexOf('amazon-adsystem') !== -1 ||
+                                src.indexOf('youtube') !== -1 || src.indexOf('vimeo') !== -1 || src.indexOf('soundcloud') !== -1 ||
+                                src.indexOf('spotify') !== -1 || src.indexOf('twitter') !== -1 || src.indexOf('instagram') !== -1 ||
+                                src.indexOf('maps.google') !== -1 || src.indexOf('codepen') !== -1) {
+                                return null;
+                            }
+                            try {
+                                if (el.contentWindow && el.contentWindow.location) {
+                                    var testLoc = el.contentWindow.location.href;
+                                }
+                            } catch (e) {
+                                return null;
+                            }
                             function escapeId(str) {
                               if (typeof CSS !== 'undefined' && CSS.escape) { return CSS.escape(str); }
                               return str;
@@ -1111,40 +1105,34 @@ public class PageAnalyzer
                             return path.join(' > ');
                             """,
                             frames.get(i));
+                    if (selector == null) {
+                        skippedFrames++;
+                        continue;
+                    }
                     driver.switchTo().frame(frames.get(i));
-                    captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId, driver);
+                    elementCount += captureFrameTree(dom, level, windowHandle, framePath + " >>> " + selector, showFrameId, driver);
                     driver.switchTo().parentFrame();
                 } catch (final Exception e) {
-                    LOG.debug("Could not switch to frame: {}", e.getMessage());
+                    LOG.debug("Could not switch to or process frame: {}", e.getMessage());
                     try {
-                        driver.switchTo().defaultContent();
-                        // Recover path
-                        if (!"main".equals(framePath)) {
-                            if (framePath.contains(" >>> ")) {
-                                final String[] selectors = framePath.split(" >>> ");
-                                for (final String sel : selectors) {
-                                    if (!sel.equals("main") && !sel.isBlank()) {
-                                        final WebElement iframeElement = driver.findElement(org.openqa.selenium.By.cssSelector(sel));
-                                        driver.switchTo().frame(iframeElement);
-                                    }
-                                }
-                            } else {
-                                final String[] indices = framePath.substring(5).split("\\."); // remove "main."
-                                for (final String indexStr : indices) {
-                                    if (!indexStr.equals("main") && !indexStr.isBlank()) {
-                                        driver.switchTo().frame(Integer.parseInt(indexStr));
-                                    }
-                                }
-                            }
+                        driver.switchTo().parentFrame();
+                    } catch (final Exception ignored) {
+                        try {
+                            driver.switchTo().defaultContent();
+                        } catch (final Exception ignored2) {
                         }
-                    } catch (final Exception ex) {
-                        LOG.warn("Failed to recover frame path context: {}", ex.getMessage());
                     }
                 }
+            }
+            if (!frames.isEmpty()) {
+                final long frameMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - frameStart);
+                LOG.debug("   🖼️ [Stage 3: Frame Traversal] Inspected {} frame candidates (skipped {} ad/hidden frames) in {} ms",
+                        frames.size(), skippedFrames, frameMs);
             }
         } catch (final Exception e) {
             LOG.warn("Failed to capture DOM for frame {}: {}", frameId, e.getMessage());
         }
+        return elementCount;
     }
 
     /**
@@ -1185,18 +1173,20 @@ public class PageAnalyzer
      * maintaining 2-space indentation depth and container tags (<header>, <main>, <article>, etc.).
      */
     @SuppressWarnings("unchecked")
-    private void formatElementNode(final StringBuilder dom, final Map<String, Object> node, final int depth, final boolean showFrameId, final String frameId)
+    private int formatElementNode(final StringBuilder dom, final Map<String, Object> node, final int depth, final boolean showFrameId, final String frameId)
     {
         if (node == null)
         {
-            return;
+            return 0;
         }
 
         final String indent = "  ".repeat(depth);
         final String nodeType = (String) node.get("nodeType");
+        int count = 0;
 
         if ("container".equals(nodeType))
         {
+            count = 1;
             final String tag = (String) node.get("tagName");
             dom.append(indent).append("<").append(tag);
             final Object rawId = node.get("id");
@@ -1216,7 +1206,7 @@ public class PageAnalyzer
             {
                 for (final Map<String, Object> child : children)
                 {
-                    formatElementNode(dom, child, depth + 1, showFrameId, frameId);
+                    count += formatElementNode(dom, child, depth + 1, showFrameId, frameId);
                 }
             }
 
@@ -1224,6 +1214,7 @@ public class PageAnalyzer
         }
         else if ("leaf".equals(nodeType))
         {
+            count = 1;
             if (showFrameId)
             {
                 node.put("frameId", frameId);
@@ -1231,6 +1222,7 @@ public class PageAnalyzer
             dom.append(indent);
             formatElement(dom, node);
         }
+        return count;
     }
 
     /**

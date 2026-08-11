@@ -971,6 +971,21 @@ public final class ExecuteActionsStep implements PipelineStep
                         throw new ConclusiveFailureException("Action execution failed after maximum context escalation (" + activeLevel + "): " + lastErr);
                     }
 
+                    if (activeLevel == escalatedLevel || escalatedLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH)
+                    {
+                        final Integer maxLevelRetryCount = (Integer) c.getTransientData().getOrDefault("KEY_MAX_LEVEL_RETRY_COUNT", 0);
+                        final int maxRetriesAtMaxLevel = org.neodymium.ai.config.AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
+                        if (maxLevelRetryCount >= maxRetriesAtMaxLevel)
+                        {
+                            org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error(
+                                "🛑 Circuit Breaker Tripped: Reached maximum allowed retries ({}) at highest context level ({}) for step. Aborting retry loop.",
+                                maxRetriesAtMaxLevel, escalatedLevel);
+                            throw new ConclusiveFailureException(
+                                "Maximum context escalation retries (" + maxRetriesAtMaxLevel + ") at highest context level (" + escalatedLevel + ") exceeded. Aborting pipeline.");
+                        }
+                        c.getTransientData().put("KEY_MAX_LEVEL_RETRY_COUNT", maxLevelRetryCount + 1);
+                    }
+
                     if (!com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
                     {
                         throw new ConclusiveFailureException("Browser/WebDriver has not started yet. Ensure the playbook starts with a NAVIGATE step or browser is initialized in setup.");
@@ -1006,6 +1021,24 @@ public final class ExecuteActionsStep implements PipelineStep
                     try
                     {
                         targetLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(targetLevelStr.toUpperCase());
+                        final Object curLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                        final org.neodymium.ai.executor.selenide.ContextLevel currentLevel = curLevelObj instanceof org.neodymium.ai.executor.selenide.ContextLevel cl ? cl : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+
+                        if (targetLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH || targetLevel == currentLevel)
+                        {
+                            final Integer maxLevelRetryCount = (Integer) c.getTransientData().getOrDefault("KEY_MAX_LEVEL_RETRY_COUNT", 0);
+                            final int maxRetriesAtMaxLevel = org.neodymium.ai.config.AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
+                            if (maxLevelRetryCount >= maxRetriesAtMaxLevel)
+                            {
+                                org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error(
+                                    "🛑 Circuit Breaker Tripped: Reached maximum allowed retries ({}) at highest context level ({}) for step. Aborting retry loop.",
+                                    maxRetriesAtMaxLevel, targetLevel);
+                                throw new ConclusiveFailureException(
+                                    "Maximum context escalation retries (" + maxRetriesAtMaxLevel + ") at highest context level (" + targetLevel + ") exceeded. Aborting pipeline.");
+                            }
+                            c.getTransientData().put("KEY_MAX_LEVEL_RETRY_COUNT", maxLevelRetryCount + 1);
+                        }
+
                         c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, targetLevel);
                         org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("⚠️ Context escalated to: {}", targetLevel);
 
@@ -1014,6 +1047,10 @@ public final class ExecuteActionsStep implements PipelineStep
                         {
                             stepStats.getContextLevels().add(targetLevel.name());
                         }
+                    }
+                    catch (final ConclusiveFailureException cfe)
+                    {
+                        throw cfe;
                     }
                     catch (final Exception ex)
                     {
