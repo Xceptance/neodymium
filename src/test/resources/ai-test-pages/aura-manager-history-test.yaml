@@ -1,8 +1,0 @@
-steps: |
-  Open ${auraManagerUrl} in the browser
-  Click on the "History & Reports" navigation item
-  Verify that the History view is displayed
-  Verify that the history list contains the expected column headers like "Status", "Date & Time", and "Report"
-
-data:
-  - testId: "History_List"

@@ -190,7 +190,11 @@ public final class AuraManagerRunQueueEdgeCasesUiTest
         final var runQueueBtn = $("#runQueueBtn");
         runQueueBtn.shouldBe(Condition.visible).shouldNotBe(Condition.disabled).click();
 
-        // Wait for run queue button to be restored
-        $("#runQueueBtn").shouldBe(Condition.visible, Duration.ofSeconds(120));
+        // Verify Stop Execution button appears when execution starts, then click it to stop
+        final var stopQueueBtn = $("#stopQueueBtn");
+        stopQueueBtn.shouldBe(Condition.visible, Duration.ofSeconds(10)).click();
+
+        // Wait for run queue button to be restored after stopping
+        $("#runQueueBtn").shouldBe(Condition.visible, Duration.ofSeconds(10));
     }
 }

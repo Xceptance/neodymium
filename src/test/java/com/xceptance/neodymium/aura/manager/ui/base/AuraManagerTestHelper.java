@@ -25,6 +25,7 @@ import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import com.xceptance.neodymium.util.Neodymium;
 import org.junit.jupiter.api.Assertions;
+import org.neodymium.ai.executor.selenide.plugins.AiMethod;
 import java.io.File;
 import java.io.IOException;
 
@@ -190,31 +191,37 @@ public final class AuraManagerTestHelper
         }
     }
 
+    @AiMethod("Confirms and accepts any active browser alert prompt")
     public static void acceptAlert()
     {
         Selenide.confirm();
     }
 
+    @AiMethod("Verifies that the checkbox element targeted by the selector is checked")
     public static void verifyCheckboxChecked(final String selector)
     {
         Assertions.assertTrue(Selenide.$(selector).isSelected());
     }
 
+    @AiMethod("Verifies that the checkbox element targeted by the selector is unchecked")
     public static void verifyCheckboxUnchecked(final String selector)
     {
         Assertions.assertFalse(Selenide.$(selector).isSelected());
     }
 
+    @AiMethod("Verifies that the automated-workspace-test.yaml file is present in the workspace file list")
     public static void verifyAutomatedWorkspaceTestPresent()
     {
         Selenide.$("#yamlFileList").shouldHave(Condition.text("automated-workspace-test.yaml"));
     }
 
+    @AiMethod("Verifies that the automated-workspace-test.yaml file is not present in the workspace file list")
     public static void verifyAutomatedWorkspaceTestNotPresent()
     {
         Selenide.$("#yamlFileList").shouldNot(Condition.text("automated-workspace-test.yaml"));
     }
 
+    @AiMethod("Deletes the test file automated-workspace-test.yaml from disk")
     public static void deleteWorkspaceTestFile() throws IOException
     {
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
