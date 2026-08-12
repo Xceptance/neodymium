@@ -218,6 +218,7 @@ public class Action
         copy.stepLine = this.stepLine;
         copy.stepFile = this.stepFile;
         copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.parameters.putAll(this.parameters);
         return copy;
@@ -244,6 +245,7 @@ public class Action
         copy.stepLine = this.stepLine;
         copy.stepFile = this.stepFile;
         copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.parameters.putAll(this.parameters);
         return copy;
@@ -267,6 +269,7 @@ public class Action
         copy.stepLine = this.stepLine;
         copy.stepFile = this.stepFile;
         copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.parameters.putAll(this.parameters);
         return copy;

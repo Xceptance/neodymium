@@ -1487,7 +1487,7 @@ public final class EmbeddedHtmlServer
                         model.put("err_cardNumber", trans.getOrDefault("error", "Error") + ": Card declined by provider.");
                         hasErrors = true;
                     }
-                    else if (!cardNumber.matches("\\d+"))
+                    else if (!cardNumber.replaceAll("\\s+", "").matches("\\d+"))
                     {
                         model.put("err_cardNumber", "Card number must contain digits only.");
                         hasErrors = true;

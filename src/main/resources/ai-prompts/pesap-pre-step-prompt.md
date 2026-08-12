@@ -17,7 +17,7 @@ Predict minimal context level and metadata for the current step.
 
 3. Step Splitting ('sp'):
    - Default: Omit 'sp' (keep unsplit). Unsplit instructions are always safer.
-   - Split ONLY if instruction contains multiple distinct target elements with explicit independent non-conditional actions (e.g. "Type user in #user, type pass in #pass, click Login").
+   - Split ONLY if instruction contains multiple distinct target elements with explicit independent non-conditional actions or values (e.g. "Type user in #user, type pass in #pass, click Login" or "Card number is '4111...', expiry '12/29', CVV '111'").
    - NEVER split instructions containing conditional logic, branch clauses, or state dependencies in ANY language (e.g. "If...", "When...", "Unless...", "In case...", "Si...", "Wenn...", etc.), single-target flows ("Locate X and [action]"), or referential dependencies ("...and hover over it"). All actions in a conditional sentence must remain unsplit as a single step.
 
 ## Output Format

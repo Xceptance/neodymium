@@ -20,6 +20,8 @@ package org.neodymium.ai.executor.selenide.plugins;
 
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.Selenide;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 
@@ -32,6 +34,8 @@ import org.neodymium.ai.executor.selenide.SelenideElementFinder;
  */
 public final class ScrollAction implements BrowserActionPlugin
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ScrollAction.class);
+
     /**
      * Constructs a ScrollAction.
      */
@@ -54,25 +58,38 @@ public final class ScrollAction implements BrowserActionPlugin
         }
 
         final String target = action.getTarget();
-        final String value = action.getValue() != null ? action.getValue().toLowerCase().trim() : "";
-        if (target == null || target.trim().isEmpty() || "body".equalsIgnoreCase(target.trim()) || "html".equalsIgnoreCase(target.trim()) || "top".equals(value) || "bottom".equals(value))
+        final String value = action.getValue() != null ? action.getValue().toUpperCase().trim() : "";
+        final String normalizedValue = value.replace(" ", "");
+
+        if ("UP".equals(value) || "TOP".equals(value))
         {
-            if ("bottom".equals(value))
-            {
-                Selenide.executeJavaScript("window.scrollTo(0, document.body.scrollHeight)");
-            }
-            else if ("top".equals(value))
-            {
-                Selenide.executeJavaScript("window.scrollTo(0, 0)");
-            }
-            else
-            {
-                Selenide.executeJavaScript("window.scrollBy(0, 500)");
-            }
+            LOGGER.debug("Scroll to top of window.");
+            Selenide.executeJavaScript("window.scrollTo(0, 0)");
+        }
+        else if ("DOWN".equals(value) || "BOTTOM".equals(value))
+        {
+            LOGGER.debug("Scroll to bottom of window.");
+            Selenide.executeJavaScript("window.scrollTo(0, document.body.scrollHeight)");
+        }
+        else if (normalizedValue.matches("^[+-]?\\d+,[+-]?\\d+$"))
+        {
+            String[] parts = normalizedValue.split(",");
+            LOGGER.debug("Scroll to coordinates: x={}, y={}", parts[0], parts[1]);
+            Selenide.executeJavaScript("window.scrollTo(" + parts[0] + ", " + parts[1] + ")");
+        }
+        else if (target != null && !target.trim().isEmpty() && 
+                 !"body".equalsIgnoreCase(target.trim()) && 
+                 !"html".equalsIgnoreCase(target.trim()) &&
+                 !"window".equalsIgnoreCase(target.trim()) &&
+                 !"document".equalsIgnoreCase(target.trim()))
+        {
+            LOGGER.debug("Scroll element into view: {}", target);
+            SelenideElementFinder.findElement(target).scrollIntoView("{behavior: 'instant', block: 'start', inline: 'nearest'}");
         }
         else
         {
-            SelenideElementFinder.findElement(target).scrollIntoView(true);
+            LOGGER.debug("Scroll down by generic offset (500px).");
+            Selenide.executeJavaScript("window.scrollBy(0, 500)");
         }
     }
 }

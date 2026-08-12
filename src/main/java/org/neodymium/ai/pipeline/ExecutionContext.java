@@ -103,6 +103,8 @@ public final class ExecutionContext
     public static final String KEY_YAML_MISMATCH_WARNING = "yamlMismatchWarning";
     public static final String KEY_IS_HEALED_STEP = "isHealedStep";
     public static final String KEY_INTERNAL_CACHE_HITS = "internalCacheHits";
+    public static final String KEY_TOKEN_BUDGET_INPUT = "tokenBudgetInput";
+    public static final String KEY_TOKEN_BUDGET_OUTPUT = "tokenBudgetOutput";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.

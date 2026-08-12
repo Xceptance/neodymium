@@ -810,6 +810,39 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
             }
 
+            final AiContext methodContextAnnot = method != null ? method.getAnnotation(AiContext.class) : null;
+            final AiContext classContextAnnot = testClass != null ? testClass.getAnnotation(AiContext.class) : null;
+
+            int resolvedInputBudget = -1;
+            int resolvedOutputBudget = -1;
+
+            if (methodContextAnnot != null && methodContextAnnot.tokenBudgetInput() > 0)
+            {
+                resolvedInputBudget = methodContextAnnot.tokenBudgetInput();
+            }
+            else if (classContextAnnot != null && classContextAnnot.tokenBudgetInput() > 0)
+            {
+                resolvedInputBudget = classContextAnnot.tokenBudgetInput();
+            }
+
+            if (methodContextAnnot != null && methodContextAnnot.tokenBudgetOutput() > 0)
+            {
+                resolvedOutputBudget = methodContextAnnot.tokenBudgetOutput();
+            }
+            else if (classContextAnnot != null && classContextAnnot.tokenBudgetOutput() > 0)
+            {
+                resolvedOutputBudget = classContextAnnot.tokenBudgetOutput();
+            }
+
+            if (resolvedInputBudget > 0)
+            {
+                executionContext.getTransientData().put(ExecutionContext.KEY_TOKEN_BUDGET_INPUT, resolvedInputBudget);
+            }
+            if (resolvedOutputBudget > 0)
+            {
+                executionContext.getTransientData().put(ExecutionContext.KEY_TOKEN_BUDGET_OUTPUT, resolvedOutputBudget);
+            }
+
             String recMethod = null;
             String recFileName = null;
             final AiPlaybook methodPb = method.getAnnotation(AiPlaybook.class);
@@ -969,7 +1002,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 playbook = parser.parse(resolvedPlaybookPath, manager);
             }
 
-            final String companionYamlPath = resolvedPlaybookPath;
+            final String companionYamlPath = (playbookPath != null && !playbookPath.isEmpty()) ? playbookPath : resolvedPlaybookPath;
             String yamlHash = null;
             if (this.mode.isReplay())
             {

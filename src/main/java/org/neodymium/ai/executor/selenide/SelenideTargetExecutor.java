@@ -298,7 +298,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("FORWARD", "Navigate forward in history", Collections.emptyMap()),
             new ActionDefinition("REFRESH", "Refresh page", Collections.emptyMap()),
             new ActionDefinition("CLEAR_COOKIES", "Clear all browser cookies", Collections.emptyMap()),
-            new ActionDefinition("SCROLL", "Scroll element or page", Collections.emptyMap()),
+            new ActionDefinition("SCROLL", "Scroll element into view or scroll page (value: 'UP'|'TOP'|'DOWN'|'BOTTOM')", Collections.emptyMap()),
             new ActionDefinition("SELECT", "Select option in dropdown", Collections.emptyMap()),
             new ActionDefinition("WAIT", "Wait for element state or pause", Collections.emptyMap()),
             new ActionDefinition("KEY_PRESS", "Send key press events", Collections.emptyMap()),
@@ -377,21 +377,15 @@ public final class SelenideTargetExecutor implements TargetExecutor
             return action;
         }
 
-        final List<String> newValues = new ArrayList<>();
-        if (resolvedValue != null)
+        Action resolved = action;
+        if (!Objects.equals(origTarget, resolvedTarget))
         {
-            newValues.add(resolvedValue);
+            resolved = resolved.withTarget(resolvedTarget);
         }
-
-        final Action resolved = new Action(action.getType(), resolvedTarget, newValues, action.getDescription(), action.getReasoning());
-        resolved.setStepInstruction(action.getStepInstruction());
-        resolved.setStepLine(action.getStepLine());
-        resolved.setStepFile(action.getStepFile());
-        resolved.setStepScreenshotHash(action.getStepScreenshotHash());
-        resolved.setCondition(action.getCondition());
-        resolved.setThen(action.getThen());
-        resolved.setElseActions(action.getElseActions());
-        resolved.setAdjust(action.getAdjust());
+        if (!Objects.equals(origValue, resolvedValue))
+        {
+            resolved = resolved.withValue(resolvedValue);
+        }
         return resolved;
     }
 

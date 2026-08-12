@@ -144,6 +144,15 @@ public final class StateMachineRunner
                         throw (Error) t;
                     }
 
+                    if (t instanceof org.neodymium.ai.pipeline.TokenBudgetExceededException tokenErr)
+                    {
+                        throw tokenErr;
+                    }
+                    if (t.getCause() instanceof org.neodymium.ai.pipeline.TokenBudgetExceededException tokenCauseErr)
+                    {
+                        throw tokenCauseErr;
+                    }
+
                     final PipelineException e;
                     if (t instanceof PipelineException)
                     {

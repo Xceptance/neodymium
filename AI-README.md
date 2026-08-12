@@ -823,6 +823,9 @@ asserter
     .hasPesapCalls(0, 12)            // PESAP pre-step analysis calls
     .hasVerificationCalls(0)         // post-action verification calls
     .hasJudgeCalls(0)                // quality judge calls
+    .hasInputTokens(1000, 5000)      // input tokens between 1000 and 5000
+    .hasOutputTokens(200, 800)       // output tokens between 200 and 800
+    .hasTotalTokens(1200, 5800)      // total tokens between 1200 and 5800
     .hasNoEscalations()              // asserts 0 context level escalations occurred
     .hasContextLevelCount(ContextLevel.MINIMAL, 12); // asserts ContextLevel.MINIMAL was used 12 times
 ```
@@ -854,6 +857,57 @@ session.execute(playbook)
 * **In `REPLAY_STRICT`:** Asserts `llmCalls == 0`, `healedSteps == 0`, `replayedSteps == stepCount`, and `softFailedSteps == 0`.
 * **In `FORCE_RECORDING` / `LLM_ONLY`:** Asserts `llmCalls > 0`, `replayedSteps == 0`, and `softFailedSteps == 0`.
 * **In `REPLAY_WITH_HEALING`:** Asserts that if any step was healed, `healedStepCount > 0` and `llmCalls > 0` (for healed steps only), otherwise `llmCalls == 0`.
+
+---
+
+## 24. Token Budget Guard & Real-Time Limits
+
+Neodymium AI supports real-time input (prompt) and output (completion) token budget limits per test run to prevent runaway LLM costs or infinite self-healing retry loops.
+
+### A. Configuration Properties
+
+Token budgets can be configured globally in `neodymium.properties`:
+
+```properties
+# Maximum input (prompt) token budget per test run (-1 = unlimited, default: -1)
+neodymium.ai.tokenBudget.input=50000
+
+# Maximum output (completion) token budget per test run (-1 = unlimited, default: -1)
+neodymium.ai.tokenBudget.output=10000
+```
+
+### B. Annotation-Driven Token Budgets (`@AiContext`)
+
+Token budgets can also be declared directly on test methods or test classes using the `@AiContext` annotation:
+
+```java
+@Test
+@AiMode(ExecutionMode.LLM_ONLY)
+@AiContext(tokenBudgetInput = 10000, tokenBudgetOutput = 2000)
+public void testWithStrictTokenLimits()
+{
+    // Execution aborts immediately with TokenBudgetExceededException if token usage exceeds limits
+}
+```
+
+### C. Real-Time Enforcement & Abort Behavior
+
+- **`TokenBudgetGuard`**: An `ExecutionListener` registered automatically on every `AiSession`.
+- **Event Monitoring**: Listens to `LlmResponseReceivedEvent` dispatches after each LLM provider call and tracks cumulative input and output tokens consumed during the test run.
+- **Immediate Abort**: When cumulative input tokens exceed `neodymium.ai.tokenBudget.input` (or output tokens exceed `neodymium.ai.tokenBudget.output`), `TokenBudgetGuard` throws a `TokenBudgetExceededException`.
+- **Bypasses Healing Loops**: `TokenBudgetExceededException` is treated as an unrecoverable failure by `StateMachineRunner`, immediately aborting the test without triggering retry loops or soft healing attempts.
+
+### D. Token Verification Asserters (`verifyMetrics()`)
+
+`MetricsAsserter` provides fluent assertion methods to validate input, output, and total token consumption during test runs:
+
+```java
+session.execute(playbook)
+    .verifyMetrics()
+    .hasInputTokens(1000, 5000)   // asserts input tokens fall within [1000, 5000]
+    .hasOutputTokens(200, 800)    // asserts output tokens fall within [200, 800]
+    .hasTotalTokens(1200, 5800);  // asserts total tokens fall within [1200, 5800]
+```
 
 ---
 

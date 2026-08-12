@@ -153,6 +153,30 @@ public final class ActionExtractionPromptTest
     }
 
     /**
+     * Verifies that parseResponse escalates context level when status is FAILED, actions are empty,
+     * and targetContextLevel specifies a level higher than the active context level.
+     */
+    @Test
+    public void testParseResponseFailedStatusEscalatesWhenTargetContextLevelHigher()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_LEAN);
+
+        final String rawJson = """
+            {
+              "status": "FAILED",
+              "targetContextLevel": "VISUAL_RICH",
+              "reasoning": "The green checkmark is missing in the current text DOM.",
+              "actions": []
+            }
+            """;
+
+        final ToLevelEscalationException ex = assertThrows(ToLevelEscalationException.class, () -> prompt.parseResponse(rawJson, context));
+        assertEquals("VISUAL_RICH", ex.getTargetLevel());
+    }
+
+    /**
      * Verifies system prompt compilation.
      */
     @Test

@@ -684,4 +684,94 @@ public final class MetricsAsserter
         }
         return this;
     }
+
+    /**
+     * Asserts that total input (prompt) tokens match the exact expected count.
+     *
+     * @param expected expected input token count
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasInputTokens(final int expected)
+    {
+        final int actual = this.metrics.getTotalTokenUsage() != null ? this.metrics.getTotalTokenUsage().inputTokenCount() : 0;
+        Assertions.assertEquals(expected, actual, "Expected input tokens: " + expected + ", but was: " + actual);
+        return this;
+    }
+
+    /**
+     * Asserts that total input (prompt) tokens fall within the inclusive [min, max] range.
+     *
+     * @param min minimum allowed input tokens
+     * @param max maximum allowed input tokens
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasInputTokens(final int min, final int max)
+    {
+        final int actual = this.metrics.getTotalTokenUsage() != null ? this.metrics.getTotalTokenUsage().inputTokenCount() : 0;
+        Assertions.assertTrue(
+            actual >= min && actual <= max,
+            String.format("Expected input tokens between [%d, %d], but was: %d", min, max, actual)
+        );
+        return this;
+    }
+
+    /**
+     * Asserts that total output (completion) tokens match the exact expected count.
+     *
+     * @param expected expected output token count
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasOutputTokens(final int expected)
+    {
+        final int actual = this.metrics.getTotalTokenUsage() != null ? this.metrics.getTotalTokenUsage().outputTokenCount() : 0;
+        Assertions.assertEquals(expected, actual, "Expected output tokens: " + expected + ", but was: " + actual);
+        return this;
+    }
+
+    /**
+     * Asserts that total output (completion) tokens fall within the inclusive [min, max] range.
+     *
+     * @param min minimum allowed output tokens
+     * @param max maximum allowed output tokens
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasOutputTokens(final int min, final int max)
+    {
+        final int actual = this.metrics.getTotalTokenUsage() != null ? this.metrics.getTotalTokenUsage().outputTokenCount() : 0;
+        Assertions.assertTrue(
+            actual >= min && actual <= max,
+            String.format("Expected output tokens between [%d, %d], but was: %d", min, max, actual)
+        );
+        return this;
+    }
+
+    /**
+     * Asserts that total tokens (input + output) match the exact expected count.
+     *
+     * @param expected expected total token count
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasTotalTokens(final int expected)
+    {
+        final int actual = this.metrics.getTotalTokenUsage() != null ? this.metrics.getTotalTokenUsage().totalTokenCount() : 0;
+        Assertions.assertEquals(expected, actual, "Expected total tokens: " + expected + ", but was: " + actual);
+        return this;
+    }
+
+    /**
+     * Asserts that total tokens (input + output) fall within the inclusive [min, max] range.
+     *
+     * @param min minimum allowed total tokens
+     * @param max maximum allowed total tokens
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasTotalTokens(final int min, final int max)
+    {
+        final int actual = this.metrics.getTotalTokenUsage() != null ? this.metrics.getTotalTokenUsage().totalTokenCount() : 0;
+        Assertions.assertTrue(
+            actual >= min && actual <= max,
+            String.format("Expected total tokens between [%d, %d], but was: %d", min, max, actual)
+        );
+        return this;
+    }
 }

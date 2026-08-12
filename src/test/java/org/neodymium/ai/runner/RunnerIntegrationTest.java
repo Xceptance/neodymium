@@ -718,6 +718,9 @@ public final class RunnerIntegrationTest
     @Test
     public void testVisualRcaOnConclusiveFailure()
     {
+        System.setProperty("neodymium.ai.visualRca.enabled", "true");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
+
         final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final MockTargetExecutor executor = new MockTargetExecutor();

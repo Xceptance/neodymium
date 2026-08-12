@@ -631,4 +631,26 @@ public final class AiConfiguration
     {
         return getInt("neodymium.ai.auraManagerShutdownDelay", 5);
     }
+
+    /**
+     * Resolves the maximum input (prompt) token budget limit per test run.
+     * Default fallback is -1 (unlimited).
+     *
+     * @return maximum input token limit
+     */
+    public int getTokenBudgetInput()
+    {
+        return getInt("neodymium.ai.tokenBudget.input", -1);
+    }
+
+    /**
+     * Resolves the maximum output (completion) token budget limit per test run.
+     * Default fallback is -1 (unlimited).
+     *
+     * @return maximum output token limit
+     */
+    public int getTokenBudgetOutput()
+    {
+        return getInt("neodymium.ai.tokenBudget.output", -1);
+    }
 }

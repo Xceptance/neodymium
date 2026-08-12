@@ -167,6 +167,7 @@ public class AiSessionTest
         try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
         {
             final PlaybookStep step = new PlaybookStep("Verify user ${user}");
+            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
             final Playbook playbook = new Playbook(List.of(step), Collections.emptyList());
 
             final PlaybookRecording recording = session.execute(playbook, customData);
@@ -216,7 +217,10 @@ public class AiSessionTest
     {
         try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
         {
-            final PlaybookRecording recording = session.execute("Open homepage");
+            final PlaybookStep step = new PlaybookStep("Open homepage");
+            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
+            final Playbook playbook = new Playbook(List.of(step), Collections.emptyList());
+            final PlaybookRecording recording = session.execute(playbook);
             Assertions.assertNotNull(recording);
             Assertions.assertEquals(ExecutionMode.REPLAY_STRICT, recording.getExecutionMode());
             Assertions.assertTrue(recording.isStrictReplay());

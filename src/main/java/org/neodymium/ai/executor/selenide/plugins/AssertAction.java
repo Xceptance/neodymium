@@ -219,7 +219,7 @@ public final class AssertAction implements BrowserActionPlugin
             else
             {
                 final WebElementCondition cond;
-                if (action.isRegex() || isRegexPattern(expected))
+                if (action.isRegex())
                 {
                     cond = new RegexMatch(expected);
                 }
@@ -368,19 +368,6 @@ public final class AssertAction implements BrowserActionPlugin
         throw new AssertionError(msg, e);
     }
 
-    private boolean isRegexPattern(final String str)
-    {
-        if (str == null)
-        {
-            return false;
-        }
-        if (str.startsWith("/") && str.endsWith("/") && str.length() > 2)
-        {
-            return true;
-        }
-        return str.contains("\\") || str.contains("[") || str.contains("]") || str.contains("{") || str.contains("}")
-                || str.contains(".*") || str.contains(".+") || str.contains("|") || str.startsWith("^") || str.endsWith("$");
-    }
 
     private static final class RegexMatch extends WebElementCondition
     {
@@ -389,12 +376,18 @@ public final class AssertAction implements BrowserActionPlugin
         public RegexMatch(final String regex)
         {
             super("RegexMatch");
-            String cleanRegex = regex;
+            String cleanRegex = regex != null ? regex : "";
             if (cleanRegex.startsWith("/") && cleanRegex.endsWith("/") && cleanRegex.length() > 2)
             {
                 cleanRegex = cleanRegex.substring(1, cleanRegex.length() - 1);
             }
-            this.pattern = Pattern.compile(cleanRegex);
+            if (cleanRegex.contains("\\\\$"))
+            {
+                cleanRegex = cleanRegex.replace("\\\\$", "\\$");
+            }
+            // Escape unescaped currency dollar signs (e.g. $27.58) so regex matching handles literal amounts
+            cleanRegex = cleanRegex.replaceAll("(?<!\\\\)\\$(\\d)", "\\\\\\$$1");
+            this.pattern = Pattern.compile(cleanRegex, Pattern.DOTALL | Pattern.MULTILINE);
         }
 
         @Override

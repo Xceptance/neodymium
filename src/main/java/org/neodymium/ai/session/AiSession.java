@@ -135,6 +135,7 @@ public abstract class AiSession implements AutoCloseable
         this.eventBus = eventBus;
         this.targetExecutor = targetExecutor;
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_ONLY;
+        this.eventBus.registerListener(new org.neodymium.ai.telemetry.TokenBudgetGuard());
     }
 
     /**
@@ -472,7 +473,7 @@ public abstract class AiSession implements AutoCloseable
             {
                 final PlaybookStep parsed = playbookSteps.get(i);
                 final PlaybookStep recorded = sessionSteps.get(i);
-                if (recorded.getActions() != null && !recorded.getActions().isEmpty())
+                if (recorded.getActions() != null)
                 {
                     parsed.setActions(recorded.getActions());
                 }

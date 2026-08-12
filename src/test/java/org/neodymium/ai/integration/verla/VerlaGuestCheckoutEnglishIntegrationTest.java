@@ -21,11 +21,14 @@ package org.neodymium.ai.integration.verla;
 import static com.codeborne.selenide.Condition.text;
 import static com.codeborne.selenide.Selenide.$;
 
+import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
@@ -44,28 +47,41 @@ import org.neodymium.util.Neodymium;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
+public class VerlaGuestCheckoutEnglishIntegrationTest extends BaseAiTest
 {
     /**
-     * Constructs a default VerlaGuestCheckoutIntegrationTest.
+     * Constructs a default VerlaGuestCheckoutEnglishIntegrationTest.
      */
-    public VerlaGuestCheckoutIntegrationTest()
+    public VerlaGuestCheckoutEnglishIntegrationTest()
     {
     }
 
     /**
-     * Set up dynamic test parameters before each run.
+     * Set up dynamic test parameters and judge configuration before each run.
+     *
+     * @param testInfo the JUnit TestInfo context
      */
     @BeforeEach
-    public void setup()
+    public void setup(final TestInfo testInfo)
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+
+        final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
+        if (methodName.contains("WithJudge"))
+        {
+            System.setProperty("neodymium.ai.judge.enabled", "true");
+        }
+        else
+        {
+            System.setProperty("neodymium.ai.judge.enabled", "false");
+        }
+        AiConfiguration.resetInstance();
     }
 
     /**
@@ -74,7 +90,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
-    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla-en.yaml")
     public void testCheckoutLivePerfect()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -86,7 +102,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLivePerfect")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLivePerfect")
     public void testCheckoutReplayPerfect()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -98,7 +114,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiDataSet("perfect")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLivePerfect")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLivePerfect")
     public void testCheckoutHealPerfect()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -110,7 +126,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
-    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla-en.yaml")
     public void testCheckoutLiveNormal()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -122,7 +138,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(5)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveNormal")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveNormal")
     public void testCheckoutReplayNormal()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -134,7 +150,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(6)
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiDataSet("normal")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveNormal")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveNormal")
     public void testCheckoutHealNormal()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -146,7 +162,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(7)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
-    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla-en.yaml")
     public void testCheckoutLiveBad()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -158,7 +174,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveBad")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveBad")
     public void testCheckoutReplayBad()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -170,7 +186,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(9)
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiDataSet("bad")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveBad")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveBad")
     public void testCheckoutHealBad()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -182,7 +198,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(10)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("modern-bad")
-    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla-en.yaml")
     public void testCheckoutLiveModernBad()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -194,7 +210,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(11)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("modern-bad")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBad")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveModernBad")
     public void testCheckoutReplayModernBad()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -206,7 +222,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(12)
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiDataSet("modern-bad")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBad")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveModernBad")
     public void testCheckoutHealModernBad()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -218,7 +234,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(13)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("modern-bad-nowcag")
-    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla-en.yaml")
     public void testCheckoutLiveModernBadNoWcag()
     {
         $("body").shouldHave(text("Thank you for your purchase!"));
@@ -230,7 +246,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(14)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("modern-bad-nowcag")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
     public void testCheckoutReplayModernBadNoWcag()
     {
         $("body").shouldHave(text("Thank you for your purchase!"));
@@ -242,7 +258,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     @Order(15)
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiDataSet("modern-bad-nowcag")
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
     public void testCheckoutHealModernBadNoWcag()
     {
         $("body").shouldHave(text("Thank you for your purchase!"));
@@ -253,7 +269,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
      */
     @Order(16)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("/playbooks/integration/guest-checkout-verla.yaml")
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla-en.yaml")
     public void testCheckoutLiveAllDataSets()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -264,7 +280,7 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
      */
     @Order(17)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
     public void testCheckoutReplayAllDataSets()
     {
         $("h2").shouldHave(text("Thank you for your purchase!"));
@@ -273,11 +289,48 @@ public class VerlaGuestCheckoutIntegrationTest extends BaseAiTest
     /**
      * Healing replay mode execution running with all datasets defined in the playbook.
      */
-    @Order(17)
+    @Order(18)
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
-    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
     public void testCheckoutHealAllDataSets()
     {
         $("body").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    // =========================================================================
+    // Quality Judge Mode Variants (neodymium.ai.judge.enabled=true)
+    // =========================================================================
+
+    /**
+     * Live mode execution running with all datasets defined in the playbook with Quality Judge enabled.
+     */
+    @Order(22)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiPlaybook("/playbooks/integration/guest-checkout-verla-en.yaml")
+    public void testCheckoutLiveAllDataSetsWithJudge()
+    {
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+    /**
+     * Strict replay mode execution running with all datasets defined in the playbook with Quality Judge enabled.
+     */
+    @Order(23)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveAllDataSetsWithJudge")
+    public void testCheckoutReplayAllDataSetsWithJudge()
+    {
+        $("h2").shouldHave(text("Thank you for your purchase!"));
+    }
+
+        /**
+     * Strict replay mode execution running with all datasets defined in the playbook with Quality Judge enabled.
+     */
+    @Order(23)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-en.yaml", recordingMethod = "testCheckoutLiveAllDataSetsWithJudge")
+    public void testCheckoutHealAllDataSetsWithJudge()
+    {
+        $("h2").shouldHave(text("Thank you for your purchase!"));
     }
 }
