@@ -17,6 +17,7 @@ import org.aeonbits.owner.Mutable;
   "file:config/credentials.properties",
   "file:config/neodymium.properties"
 })
+@Deprecated
 public interface NeodymiumConfiguration extends Mutable, Accessible
 {
     @Key("neodymium.debugUtils.highlight")

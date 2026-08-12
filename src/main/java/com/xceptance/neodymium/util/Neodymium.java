@@ -199,7 +199,7 @@ public class Neodymium
      */
     public static TestData getData()
     {
-        return getContext().data;
+        return (TestData) org.neodymium.util.Neodymium.getData();
     }
 
     /**

@@ -29,15 +29,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiInlinePlaybook;
 import org.neodymium.ai.junit.AiLlmCache;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.Playbook;
-import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.util.EmbeddedHtmlServer;
@@ -45,10 +44,10 @@ import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
 /**
- * Integration demo demonstrating 8 distinct programmatic prompt execution, annotation-driven,
- * and debugging approaches without extending {@code BaseAiTest}.
+ * Integration demo demonstrating modular playbook includes ({@code _include: ...}) combined with normal natural language
+ * prompt steps across 6 distinct programmatic execution, annotation-driven, and debugging approaches without extending {@code BaseAiTest}.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000_headless")
@@ -56,9 +55,16 @@ import org.neodymium.util.Neodymium;
 @Tag("verla")
 @AiLlmCache
 @NeodymiumAiTest
-public final class VerlaProgrammaticDemoTest
+public final class VerlaProgrammaticIncludesDemoTest
 {
     private static EmbeddedHtmlServer server;
+
+    /**
+     * Constructs a default VerlaProgrammaticIncludesDemoTest.
+     */
+    public VerlaProgrammaticIncludesDemoTest()
+    {
+    }
 
     /**
      * Starts the embedded Verla server before tests run and configures lightweight execution.
@@ -98,16 +104,18 @@ public final class VerlaProgrammaticDemoTest
     }
 
     /**
-     * Concept 1: Fully Programmatic Java Object API using {@link PlaybookStep} and {@link Playbook}.
+     * Concept 1: Fully Programmatic Java Object API using {@link Playbook.Builder#include(String)} combining an included sub-playbook step with normal prompt steps.
+     *
+     * @throws Exception if execution fails
      */
     @Test
     @AiLlmCache
-    public void test1_FullyProgrammaticObjects() throws Exception
+    public void test1_FullyProgrammaticObjectsWithIncludes() throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
         final Playbook playbook = Playbook.builder()
-            .step("Open ${verla.url}/verla-perfect/index.html in the browser")
+            .include("playbooks/integration/includes/verla_open_homepage.yaml")
             .step("Locate the search input field and type '${searchTerm}' into it")
             .step("Press enter to submit search")
             .build();
@@ -119,33 +127,37 @@ public final class VerlaProgrammaticDemoTest
     }
 
     /**
-     * Concept 2a: Programmatic Text Block string execution with embedded YAML steps and data sections.
+     * Concept 2a: Programmatic Text Block string execution combining an {@code _include:} step with normal YAML prompt steps and data sections.
+     *
+     * @throws Exception if execution fails
      */
     @Test
     @AiLlmCache
-    public void test2a_ProgrammaticTextBlockWithEmbeddedYamlData() throws Exception
+    public void test2a_ProgrammaticTextBlockWithIncludesAndEmbeddedYamlData() throws Exception
     {
         try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
         {
             session.execute("""
                 steps: |
-                  Open ${verla.url}/verla-perfect/index.html in the browser
+                  _include: playbooks/integration/includes/verla_open_homepage.yaml
                   Locate the search input field and type '${searchTerm}' into it
                   Press enter to submit search
 
                 data:
-                  - testId: "any"
+                  - testId: "default"
                     searchTerm: "Minimalist"
                 """);
         }
     }
 
     /**
-     * Concept 2b: Programmatic Text Block string execution seeded with SessionData container.
+     * Concept 2b: Programmatic Text Block string execution combining an {@code _include:} step with normal prompt steps seeded with SessionData container.
+     *
+     * @throws Exception if execution fails
      */
     @Test
     @AiLlmCache
-    public void test2b_ProgrammaticTextBlockWithSessionData() throws Exception
+    public void test2b_ProgrammaticTextBlockWithIncludesAndSessionData() throws Exception
     {
         final SessionData sessionData = new SessionData();
         sessionData.set("searchTerm", "Minimalist");
@@ -153,15 +165,16 @@ public final class VerlaProgrammaticDemoTest
         try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
         {
             session.execute("""
-                Open ${verla.url}/verla-perfect/index.html in the browser
-                Locate the search input field and type '${searchTerm}' into it
-                Press enter to submit search
+                steps: |
+                  _include: playbooks/integration/includes/verla_open_homepage.yaml
+                  Locate the search input field and type '${searchTerm}' into it
+                  Press enter to submit search
                 """, sessionData);
         }
     }
 
     /**
-     * Concept 3: Annotation-driven inline playbook using Java text blocks with {@link AiInlinePlaybook}.
+     * Concept 3: Annotation-driven inline playbook combining an {@code _include:} step with normal YAML prompt steps via {@link AiInlinePlaybook}.
      *
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
@@ -169,42 +182,46 @@ public final class VerlaProgrammaticDemoTest
     @AiLlmCache
     @AiInlinePlaybook("""
         steps: |
-          Open ${verla.url}/verla-perfect/index.html in the browser
+          _include: playbooks/integration/includes/verla_open_homepage.yaml
           Locate the search input field and type '${searchTerm}' into it
           Press enter to submit search
         data:
           - testId: "default"
             searchTerm: "Minimalist"
         """)
-    public void test3_AnnotationDrivenInlinePlaybookTextBlocks(final AiSession session)
+    public void test3_AnnotationDrivenInlinePlaybookWithIncludes(final AiSession session)
     {
         // Executed automatically by NeodymiumAiRunner using the inline text block annotation above
     }
 
     /**
-     * Concept 4: Pure Step-by-Step Java Debugging without Selenide calls.
-     * Allows setting breakpoints on individual Java statements to step through prompt execution.
+     * Concept 4: Pure Step-by-Step Java Debugging combining an {@code _include:} sub-playbook step with individual normal step executions.
+     * Allows setting breakpoints on individual Java statements to step through prompt executions.
+     *
+     * @throws Exception if execution fails
      */
     @Test
     @AiLlmCache
-    public void test4_StepByStepJavaDebugging() throws Exception
+    public void test4_StepByStepJavaDebuggingWithIncludes() throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
         try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
         {
-            session.execute("Open ${verla.url}/verla-perfect/index.html in the browser");
+            session.execute("_include: playbooks/integration/includes/verla_open_homepage.yaml");
             session.execute("Locate the search input field and type '${searchTerm}' into it");
             session.execute("Press enter to submit search");
         }
     }
 
     /**
-     * Concept 5: Mixing direct Java Selenide commands with AI prompt step executions.
+     * Concept 5: Mixing direct Java Selenide commands with an {@code _include:} sub-playbook step execution.
+     *
+     * @throws Exception if execution fails
      */
     @Test
     @AiLlmCache
-    public void test5_MixStepsAndSelenideCommands() throws Exception
+    public void test5_MixStepsAndSelenideCommandsWithIncludes() throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
@@ -213,35 +230,22 @@ public final class VerlaProgrammaticDemoTest
 
         try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
         {
-            session.execute("Locate the search input field and type '${searchTerm}' into it");
+            session.execute("_include: playbooks/integration/includes/verla_search_product.yaml");
         }
 
         $("#search-input").pressEnter();
     }
 
     /**
-     * Concept 6: Annotation-driven external YAML playbook with explicit path via {@code @AiPlaybook}.
+     * Concept 6: Annotation-driven external master YAML playbook composing an {@code _include:} step with normal prompt steps via {@link AiPlaybook}.
      *
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    @AiPlaybook("/playbooks/integration/verla-search-demo.yaml")
-    public void test6_AnnotationDrivenExternalPlaybookExplicit(final AiSession session)
+    @AiPlaybook("/playbooks/integration/verla-search-includes-demo.yaml")
+    public void test6_AnnotationDrivenExternalMasterPlaybookWithIncludes(final AiSession session)
     {
-        // Executed automatically by NeodymiumAiRunner using the explicit external YAML playbook above
-    }
-
-    /**
-     * Concept 7: Annotation-driven external YAML playbook by naming convention via {@code @AiPlaybook}.
-     *
-     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
-     */
-    @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
-    @AiPlaybook
-    public void test7_AnnotationDrivenExternalPlaybookConvention(final AiSession session)
-    {
-        // Executed automatically by NeodymiumAiRunner using the convention-mapped YAML playbook above
+        // Executed automatically by NeodymiumAiRunner using the explicit external master YAML playbook above
     }
 }
