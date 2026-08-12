@@ -57,9 +57,10 @@ A standalone tag that disables all self-healing mechanisms for a specific step.
 
 ### `(visual)` / `(visual: full)` / `(visual:full)`
 Triggers visual execution mode with a page screenshot payload.
-* **`(visual)`**: Triggers standard visual execution (`ContextLevel.VISUAL`), capturing a standard viewport screenshot matching the active browser window size on the initial attempt.
-* **`(visual: full)` / `(visual:full)`**: Triggers visual execution and immediately forces full-page screenshot capture (capturing full document height beyond the fold with a visual viewport border overlay) on the very first attempt without requiring prior context escalation.
-* **Visual Escalation Rule**: Whenever execution escalates visually (from `VISUAL` to `VISUAL_LEAN` or `VISUAL_RICH`), screenshot capture **always switches to full-page mode**.
+* **`(visual)`**: Triggers standard visual execution at `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes), capturing a standard viewport screenshot matching the active browser window size on the initial attempt (~2,800 tokens).
+* **`(visual: full)` / `(visual:full)`**: Triggers visual execution starting at ultra-lean `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes) while forcing full-page screenshot capture (capturing full scrollable document height beyond the fold with a visual viewport border overlay) immediately on the initial attempt (~5,000–8,000 tokens).
+* **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. If visual evaluation fails or requires element interaction, escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**. It will **never** revert to a small viewport screenshot during escalations.
+* **Author Tag Protection**: Explicit `(visual)` and `(visual: full)` tags set by the test author are protected from being overwritten or downgraded by PESAP pre-step predictions.
 * **Syntax Examples**: `(visual)`, `(visual: full)`, `(visual:full)`, `(visual-full)`, `(visual_full)`
 
 ---
@@ -109,8 +110,8 @@ $$\text{HINT} \longrightarrow \mathbf{LEAN} \longrightarrow \mathbf{STANDARD} \l
 
 > **Screenshot Capture Scope Strategy**:
 > - **Viewport Screenshot**: Initial `VISUAL` steps (tagged `(visual)`) capture a standard viewport screenshot matching the active browser window size.
-> - **Visual Escalation Always Full Screen**: Once context escalates visually (to `VISUAL_LEAN` or `VISUAL_RICH`), screenshot capture **always switches to full-page mode** (capturing full document height beyond the fold, overlaid with a visual viewport border).
-> - **Immediate Full-Page Trigger**: Steps tagged with `(visual: full)` or `(visual:full)` capture a full-page screenshot immediately on the initial attempt.
+> - **Immediate Full-Page Trigger**: Steps tagged with `(visual: full)` or `(visual:full)` capture a full-page screenshot immediately on the initial attempt while using ultra-lean `ContextLevel.VISUAL` (0 DOM element nodes).
+> - **Persistent Full-Page Escalation**: Once a step escalates visually (to `VISUAL_LEAN` or `VISUAL_RICH`) or starts with `(visual: full)`, screenshot capture **continuously preserves full-page mode** (capturing full document height beyond the fold, overlaid with a visual viewport border). It will never revert to a small viewport screenshot during retry escalations.
 
 ### DOM Serialization Differences: `LEAN` vs `STANDARD` vs `RICH`
 
