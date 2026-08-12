@@ -448,9 +448,26 @@ public abstract class AiSession implements AutoCloseable
             throw new IllegalArgumentException("Playbook must not be null.");
         }
 
-        if (sessionData != null)
+        if (sessionData != null && !sessionData.getAllRawDataMap().isEmpty())
         {
             sessionData.getAllRawDataMap().forEach((k, v) -> this.executionContext.getSessionData().set(k, v));
+        }
+        else if (playbook.getDataSets() != null && !playbook.getDataSets().isEmpty())
+        {
+            final Map<String, SessionData.DataEntry> firstDataSet = playbook.getDataSets().get(0);
+            if (firstDataSet != null)
+            {
+                firstDataSet.forEach((k, v) -> {
+                    if (v != null)
+                    {
+                        this.executionContext.getSessionData().putDynamic(k, v.value(), v.sensitive());
+                    }
+                });
+                final String dsId = firstDataSet.containsKey("testId") ? String.valueOf(firstDataSet.get("testId").value())
+                    : firstDataSet.containsKey("id") ? String.valueOf(firstDataSet.get("id").value())
+                    : "default";
+                this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, dsId);
+            }
         }
 
         this.executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.executionMode);

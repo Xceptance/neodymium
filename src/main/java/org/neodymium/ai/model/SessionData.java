@@ -314,7 +314,9 @@ public final class SessionData
             final Object value = this.get(placeholderKey);
             if (value == null)
             {
-                sb.append(matcher.group(0));
+                throw new IllegalArgumentException(
+                    "Unresolvable variable placeholder '${" + placeholderKey + "}' in template: \"" + template + "\""
+                );
             }
             else
             {

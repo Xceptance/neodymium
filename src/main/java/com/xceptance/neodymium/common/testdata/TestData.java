@@ -31,7 +31,8 @@ import io.qameta.allure.Allure;
  * TestData class to store the test data in a {@link HashMap}. It provides utility methods to access the data and can convert it automatically to most of the
  * primitive data types. Furthermore, the test data will be attached to the Allure report if it was used.
  */
-public class TestData extends HashMap<String, String>
+@Deprecated
+public class TestData extends org.neodymium.common.testdata.TestData
 {
     @Serial
     private static final long serialVersionUID = 715832694087529134L;

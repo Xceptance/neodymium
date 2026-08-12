@@ -6,11 +6,11 @@ The redesigned v2 Neodymium AI framework (contained in `org.neodymium.ai.*`) del
 
 ## 1. Execution Playbooks & Replay Cache
 Instead of executing LLM calls dynamically on every run, the v2 framework uses **Structured Playbooks**:
-* **YAML Playbook**: Contains natural language steps written either as a plain-text multiline block (`steps: |`) or a YAML list of step strings. Test scenarios support variables (`${username}`) and modular inclusions (`include: ...`):
+* **YAML Playbook**: Contains natural language steps written either as a plain-text multiline block (`steps: |`) or a YAML list of step strings. Test scenarios support variables (`${username}`) and modular inclusions (`_include: ...`):
   - **Multiline Block**:
     ```yaml
     steps: |
-      include: common/setup.yaml
+      _include: common/setup.yaml
       Open ${verla.url}/verla-${quality}/index.html
       Click login button
     ```
