@@ -63,7 +63,7 @@
                     <label for="sort-select" style="font-size: 13px; color: var(--color-text-secondary); white-space: nowrap;">${lang_sort}:</label>
                     <select name="sort" id="sort-select" style="padding: 8px 16px; border: 1px solid var(--color-border); border-radius: var(--border-radius); background: var(--color-bg-primary); font-size: 13px; outline: none; cursor: pointer;"
                             hx-get="${filter_url}" hx-target="#plp-product-grid" hx-include="#refinement-form, #sort-select">
-                        <option value="default" ${sort_default_selected}>Default</option>
+                        <option value="default" ${sort_default_selected}>${lang_sortDefault}</option>
                         <option value="price-asc" ${sort_asc_selected}>${lang_priceLowHigh}</option>
                         <option value="price-desc" ${sort_desc_selected}>${lang_priceHighLow}</option>
                     </select>

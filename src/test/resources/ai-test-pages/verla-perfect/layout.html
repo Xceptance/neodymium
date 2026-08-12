@@ -1136,7 +1136,7 @@
 <body>
     <!-- Announcement Bar -->
     <div class="announcement-bar">
-        Free worldwide shipping on orders over $150 USD
+        ${lang_promoBanner}
     </div>
 
     <!-- Header Navigation -->
@@ -1189,10 +1189,10 @@
             <div class="footer-grid">
                 <div>
                     <div class="footer-logo">VÉRLA</div>
-                    <p style="margin-bottom: 20px; line-height: 1.7;">A design studio specializing in premium essential apparel. Grounded in minimal aesthetics, organic materials, and perfect cuts.</p>
+                    <p style="margin-bottom: 20px; line-height: 1.7;">${lang_footerDesc}</p>
                 </div>
                 <div>
-                    <div class="footer-heading">Shop</div>
+                    <div class="footer-heading">${lang_shop}</div>
                     <ul class="footer-links">
                         <li><a href="c/tops.html" class="footer-link">${lang_tops}</a></li>
                         <li><a href="c/bottoms.html" class="footer-link">${lang_bottoms}</a></li>
@@ -1202,28 +1202,28 @@
                     </ul>
                 </div>
                 <div>
-                    <div class="footer-heading">Support</div>
+                    <div class="footer-heading">${lang_support}</div>
                     <ul class="footer-links">
                         <li><a href="faq.html" class="footer-link">FAQ</a></li>
-                        <li><a href="shipping.html" class="footer-link">Shipping & Returns</a></li>
-                        <li><a href="track-orders.html" class="footer-link">Track Orders</a></li>
-                        <li><a href="about.html" class="footer-link">About Us</a></li>
+                        <li><a href="shipping.html" class="footer-link">${lang_shippingReturns}</a></li>
+                        <li><a href="track-orders.html" class="footer-link">${lang_trackOrders}</a></li>
+                        <li><a href="about.html" class="footer-link">${lang_aboutUs}</a></li>
                     </ul>
                 </div>
                 <div>
-                    <div class="footer-heading">Contact</div>
+                    <div class="footer-heading">${lang_contact}</div>
                     <ul class="footer-links">
-                        <li><a href="stores.html" class="footer-link">Our Stores</a></li>
-                        <li><a href="careers.html" class="footer-link">Careers</a></li>
-                        <li><a href="about.html#contact" class="footer-link">Get in Touch</a></li>
+                        <li><a href="stores.html" class="footer-link">${lang_ourStores}</a></li>
+                        <li><a href="careers.html" class="footer-link">${lang_careers}</a></li>
+                        <li><a href="about.html#contact" class="footer-link">${lang_getInTouch}</a></li>
                     </ul>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2026 VÉRLA Apparel. All rights reserved.</p>
+                <p>&copy; 2026 VÉRLA Apparel. ${lang_allRightsReserved}</p>
                 <div style="display: flex; gap: 24px;">
-                    <a href="about.html" class="footer-link">Privacy Policy</a>
-                    <a href="about.html" class="footer-link">Terms of Service</a>
+                    <a href="about.html" class="footer-link">${lang_privacyPolicy}</a>
+                    <a href="about.html" class="footer-link">${lang_termsOfService}</a>
                 </div>
             </div>
         </div>
@@ -1233,9 +1233,9 @@
     <div class="modal-overlay" id="country-modal-overlay">
         <div class="modal">
             <button class="modal-close-btn" id="country-modal-close">&times;</button>
-            <h3 class="modal-title">Select Region</h3>
+            <h3 class="modal-title">${lang_selectRegion}</h3>
             <!-- HTMX-powered type-as-you-search -->
-            <input type="text" class="country-search-input" id="country-search" placeholder="Search country..."
+            <input type="text" class="country-search-input" id="country-search" placeholder="${lang_searchCountry}"
                    hx-get="api/countries" hx-target="#country-list-container" hx-trigger="keyup">
             <ul class="country-list" id="country-list-container">
                 ${country_items_list}
@@ -1355,7 +1355,7 @@
                         setTimeout(() => {
                             btn.classList.remove('adding');
                             btn.classList.add('added');
-                            btn.textContent = 'Added!';
+                            btn.textContent = '${lang_added}';
                             
                             setTimeout(() => {
                                 btn.classList.remove('added');
@@ -1380,7 +1380,7 @@
                     if (!quickBtn || quickBtn.disabled || quickBtn.classList.contains('adding')) return;
                     
                     const originalText = quickBtn.textContent;
-                    quickBtn.textContent = 'Adding...';
+                    quickBtn.textContent = '${lang_adding}';
                     quickBtn.classList.add('adding');
                     dropdown.classList.remove('active');
 
@@ -1394,7 +1394,7 @@
                     setTimeout(() => {
                         quickBtn.classList.remove('adding');
                         quickBtn.classList.add('added');
-                        quickBtn.textContent = 'Added!';
+                        quickBtn.textContent = '${lang_added}';
                         
                         setTimeout(() => {
                             quickBtn.classList.remove('added');
@@ -1430,12 +1430,12 @@
                         
                         btn.classList.add('adding');
                         const originalHtml = btn.innerHTML;
-                        btn.innerHTML = 'Adding...';
+                        btn.innerHTML = '${lang_adding}';
                         
                         setTimeout(() => {
                             btn.classList.remove('adding');
                             btn.classList.add('added');
-                            btn.innerHTML = 'Added!';
+                            btn.innerHTML = '${lang_added}';
                             
                             setTimeout(() => {
                                 btn.classList.remove('added');

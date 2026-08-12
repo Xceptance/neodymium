@@ -7,21 +7,21 @@
             <div class="checkout-main">
                 <!-- Personal details -->
                 <div style="margin-bottom: 30px; border-bottom: 1px solid var(--color-border); padding-bottom: 24px;">
-                    <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;">Contact Information</h3>
+                    <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;">${lang_contactInfo}</h3>
                     <div class="form-grid-2" style="margin-bottom: 16px;">
                         <div class="form-group">
-                            <label for="firstName" class="form-label">First Name</label>
+                            <label for="firstName" class="form-label">${lang_firstName}</label>
                             <input type="text" id="firstName" name="firstName" class="form-control" required value="${input_firstName}">
                             <div class="error-message" id="err-firstName">${err_firstName}</div>
                         </div>
                         <div class="form-group">
-                            <label for="lastName" class="form-label">Last Name</label>
+                            <label for="lastName" class="form-label">${lang_lastName}</label>
                             <input type="text" id="lastName" name="lastName" class="form-control" required value="${input_lastName}">
                             <div class="error-message" id="err-lastName">${err_lastName}</div>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="email" class="form-label">Email Address</label>
+                        <label for="email" class="form-label">${lang_emailAddress}</label>
                         <input type="email" id="email" name="email" class="form-control" required value="${input_email}">
                         <div class="error-message" id="err-email">${err_email}</div>
                     </div>
@@ -29,7 +29,7 @@
 
                 <!-- Shipping Details -->
                 <div style="margin-bottom: 30px; border-bottom: 1px solid var(--color-border); padding-bottom: 24px;">
-                    <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;">Shipping Address</h3>
+                    <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;">${lang_shippingAddress}</h3>
                     <div class="form-group">
                         <label for="shipping-country" class="form-label">${lang_country}</label>
                         <select id="shipping-country" name="country" class="form-control" required
@@ -46,7 +46,7 @@
 
                 <!-- Payment Details -->
                 <div style="margin-bottom: 30px; padding-bottom: 24px;">
-                    <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;">Payment Details</h3>
+                    <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;">${lang_paymentDetails}</h3>
                     <div class="form-group">
                         <label for="cardType" class="form-label">${lang_cardType}</label>
                         <select id="cardType" name="cardType" class="form-control" required>
@@ -59,7 +59,7 @@
                         <label for="cardNumber" class="form-label">${lang_cardNum}</label>
                         <input type="text" id="cardNumber" name="cardNumber" class="form-control" placeholder="1234 5678 1234 5100" required value="${input_cardNumber}">
                         <div class="error-message" id="err-cardNumber">${err_cardNumber}</div>
-                        <p style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">For testing: numbers ending in 100 succeed, 200 decline.</p>
+                        <p style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">${lang_testingNote}</p>
                     </div>
                     <div class="form-grid-2">
                         <div class="form-group">
@@ -78,7 +78,7 @@
 
             <!-- Right Panel: Order Summary -->
             <div class="checkout-sidebar">
-                <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">Order Summary</h3>
+                <h3 style="font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">${lang_orderSummary}</h3>
                 
                 <!-- Items list -->
                 <div style="max-height: 180px; overflow-y: auto; margin-bottom: 20px;">

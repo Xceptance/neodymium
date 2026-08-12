@@ -751,10 +751,25 @@ public class PageAnalyzer
      */
     public String captureScreenshot(final String title) throws IOException
     {
-        return captureScreenshot(title, null);
+        return captureScreenshot(title, null, false, null);
+    }
+
+    public String captureScreenshot(final String title, final ContextLevel level) throws IOException
+    {
+        return captureScreenshot(title, level, false, null);
+    }
+
+    public String captureScreenshot(final String title, final boolean isFullPage) throws IOException
+    {
+        return captureScreenshot(title, null, isFullPage, null);
     }
 
     public String captureScreenshot(final String title, final WebDriver explicitDriver) throws IOException
+    {
+        return captureScreenshot(title, null, false, explicitDriver);
+    }
+
+    public String captureScreenshot(final String title, final ContextLevel level, final boolean isFullPage, final WebDriver explicitDriver) throws IOException
     {
         final long startNanos = System.nanoTime();
         final WebDriver driver = resolveDriver(explicitDriver);
@@ -762,12 +777,14 @@ public class PageAnalyzer
         {
             return null;
         }
-        LOG.debug("   📸 Capturing screenshot for: {}", title);
+        LOG.debug("   📸 Capturing screenshot for: {} (level: {}, fullPage: {})", title, level, isFullPage);
         try
         {
-            final String result = captureScreenshotInternal(title, driver);
+            final String result = captureScreenshotInternal(title, level, isFullPage, driver);
             final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-            LOG.debug("   📸 Screenshot captured for '{}' in {} ms", title, elapsedMs);
+            final String dimsStr = formatImageDimensions(result);
+            final int sizeKb = result != null ? (result.length() * 3 / 4 / 1024) : 0;
+            LOG.debug("   📸 Screenshot captured for '{}' in {} ms | Dimensions: {} | Size: {} chars (~{} KB)", title, elapsedMs, dimsStr, result != null ? result.length() : 0, sizeKb);
             return result;
         }
         catch (final Exception e)
@@ -783,9 +800,11 @@ public class PageAnalyzer
                         final String fallback = activeHandles.iterator().next();
                         driver.switchTo().window(fallback);
                         driver.switchTo().defaultContent();
-                        final String result = captureScreenshotInternal(title, driver);
+                        final String result = captureScreenshotInternal(title, level, isFullPage, driver);
                         final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-                        LOG.debug("   📸 Screenshot captured for '{}' (fallback) in {} ms", title, elapsedMs);
+                        final String dimsStr = formatImageDimensions(result);
+                        final int sizeKb = result != null ? (result.length() * 3 / 4 / 1024) : 0;
+                        LOG.debug("   📸 Screenshot captured for '{}' (fallback) in {} ms | Dimensions: {} | Size: {} chars (~{} KB)", title, elapsedMs, dimsStr, result != null ? result.length() : 0, sizeKb);
                         return result;
                     }
                 }
@@ -802,7 +821,7 @@ public class PageAnalyzer
         return null;
     }
 
-    private String captureScreenshotInternal(final String title, final WebDriver driver) throws Exception
+    private String captureScreenshotInternal(final String title, final ContextLevel level, final boolean isFullPage, final WebDriver driver) throws Exception
     {
         boolean hidden = false;
         if (driver instanceof final JavascriptExecutor js)
@@ -822,9 +841,10 @@ public class PageAnalyzer
 
         try
         {
+            final boolean forceFullPage = isFullPage || (level != null && level.isFullPageScreenshot());
             return ScreenshotWriter.doScreenshot(
                     title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
-                    ScreenshotWriter.getFormatedReportsPath(), false, false);
+                    ScreenshotWriter.getFormatedReportsPath(), false, false, forceFullPage);
         }
         finally
         {
@@ -856,6 +876,27 @@ public class PageAnalyzer
             return lower.contains("no such window") || lower.contains("window already closed") || lower.contains("target window already closed");
         }
         return false;
+    }
+
+    private static String formatImageDimensions(final String base64Data)
+    {
+        if (base64Data == null || base64Data.isEmpty())
+        {
+            return "unknown";
+        }
+        try
+        {
+            final byte[] bytes = java.util.Base64.getDecoder().decode(base64Data);
+            final java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            if (img != null)
+            {
+                return img.getWidth() + "x" + img.getHeight() + " px";
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+        return "unknown";
     }
 
     /**

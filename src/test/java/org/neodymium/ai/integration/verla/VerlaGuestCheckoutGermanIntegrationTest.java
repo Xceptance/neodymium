@@ -45,10 +45,10 @@ import org.neodymium.util.Neodymium;
  * all single-dataset execution modes (FORCE_RECORDING, REPLAY_STRICT, REPLAY_WITH_HEALING),
  * both with and without Quality Judge enabled.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_1500x1000_headless")
+@Browser("Chrome_1500x1000")
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
@@ -95,7 +95,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/guest-checkout-verla-de.yaml")
     public void testCheckoutLivePerfect()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(2)
@@ -104,7 +104,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLivePerfect")
     public void testCheckoutReplayPerfect()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(3)
@@ -113,7 +113,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLivePerfect")
     public void testCheckoutHealPerfect()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     // =========================================================================
@@ -126,7 +126,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/guest-checkout-verla-de.yaml")
     public void testCheckoutLiveNormal()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(5)
@@ -135,7 +135,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveNormal")
     public void testCheckoutReplayNormal()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(6)
@@ -144,7 +144,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveNormal")
     public void testCheckoutHealNormal()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     // =========================================================================
@@ -157,7 +157,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/guest-checkout-verla-de.yaml")
     public void testCheckoutLiveBad()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(8)
@@ -166,7 +166,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveBad")
     public void testCheckoutReplayBad()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(9)
@@ -175,7 +175,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveBad")
     public void testCheckoutHealBad()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     // =========================================================================
@@ -188,7 +188,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/guest-checkout-verla-de.yaml")
     public void testCheckoutLiveModernBad()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(11)
@@ -197,7 +197,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveModernBad")
     public void testCheckoutReplayModernBad()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(12)
@@ -206,7 +206,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveModernBad")
     public void testCheckoutHealModernBad()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     // =========================================================================
@@ -219,7 +219,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/guest-checkout-verla-de.yaml")
     public void testCheckoutLiveModernBadNoWcag()
     {
-        $("body").shouldHave(text("Thank you for your purchase!"));
+        $("body").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(14)
@@ -228,7 +228,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
     public void testCheckoutReplayModernBadNoWcag()
     {
-        $("body").shouldHave(text("Thank you for your purchase!"));
+        $("body").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(15)
@@ -237,7 +237,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLiveModernBadNoWcag")
     public void testCheckoutHealModernBadNoWcag()
     {
-        $("body").shouldHave(text("Thank you for your purchase!"));
+        $("body").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     // =========================================================================
@@ -250,7 +250,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook("/playbooks/integration/guest-checkout-verla-de.yaml")
     public void testCheckoutLivePerfectWithJudge()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(17)
@@ -259,7 +259,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLivePerfectWithJudge")
     public void testCheckoutReplayPerfectWithJudge()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 
     @Order(18)
@@ -268,6 +268,6 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     @AiPlaybook(value = "/playbooks/integration/guest-checkout-verla-de.yaml", recordingMethod = "testCheckoutLivePerfectWithJudge")
     public void testCheckoutHealPerfectWithJudge()
     {
-        $("h2").shouldHave(text("Thank you for your purchase!"));
+        $("h2").shouldHave(text("Vielen Dank für Ihren Einkauf!"));
     }
 }
