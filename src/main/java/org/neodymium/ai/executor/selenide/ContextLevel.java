@@ -112,6 +112,17 @@ public enum ContextLevel
     }
 
     /**
+     * Whether this context level requires capturing a full-page screenshot
+     * instead of a standard viewport screenshot when escalated.
+     *
+     * @return {@code true} if visual escalation triggers full-page screenshot capture
+     */
+    public boolean isFullPageScreenshot()
+    {
+        return this == VISUAL_LEAN || this == VISUAL_RICH;
+    }
+
+    /**
      * Whether this context level includes standard static text content
      * (paragraphs, spans, list items, table cells, divs with text).
      *
@@ -146,12 +157,21 @@ public enum ContextLevel
         {
             return fallback;
         }
+        final String normalized = name.trim().toUpperCase().replace("-", "_");
         try
         {
-            return ContextLevel.valueOf(name.trim().toUpperCase());
+            return ContextLevel.valueOf(normalized);
         }
         catch (final Exception ignored)
         {
+            final String stripped = normalized.replace("_", "");
+            for (final ContextLevel level : values())
+            {
+                if (level.name().replace("_", "").equals(stripped))
+                {
+                    return level;
+                }
+            }
             return fallback;
         }
     }

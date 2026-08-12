@@ -55,6 +55,13 @@ A standalone tag that disables all self-healing mechanisms for a specific step.
 * **Behavior**: If the step fails during live or replay execution, the framework does not attempt LLM escalations or semantic self-healing. The failure is immediately propagated (which will either fail the test, trigger bug negation, or trigger optional soft-failure warnings, depending on the other tags present).
 * **Syntax Examples**: `(no-healing)`, `(NO-HEALING)`, `( no-healing )`
 
+### `(visual)` / `(visual: full)` / `(visual:full)`
+Triggers visual execution mode with a page screenshot payload.
+* **`(visual)`**: Triggers standard visual execution (`ContextLevel.VISUAL`), capturing a standard viewport screenshot matching the active browser window size on the initial attempt.
+* **`(visual: full)` / `(visual:full)`**: Triggers visual execution and immediately forces full-page screenshot capture (capturing full document height beyond the fold with a visual viewport border overlay) on the very first attempt without requiring prior context escalation.
+* **Visual Escalation Rule**: Whenever execution escalates visually (from `VISUAL` to `VISUAL_LEAN` or `VISUAL_RICH`), screenshot capture **always switches to full-page mode**.
+* **Syntax Examples**: `(visual)`, `(visual: full)`, `(visual:full)`, `(visual-full)`, `(visual_full)`
+
 ---
 
 ## 3. Runtime Instruction Preparation
@@ -65,6 +72,7 @@ Before compiling prompts or sending request payloads to the LLM, the framework r
 * `(no-healing)`
 * `(optional)` / `(soft)`
 * `(timeout: ...)`
+* `(visual)` / `(visual: full)` / `(visual:full)`
 
 This prevents internal execution instructions from polluting the natural language prompts sent to the LLM.
 
@@ -95,9 +103,14 @@ $$\text{HINT} \longrightarrow \mathbf{LEAN} \longrightarrow \mathbf{STANDARD} \l
 | **`LEAN`** | Text | **Interactive Elements + Headings + Container Skeleton + Concise Text Labels.** Filters out massive paragraph copy (`<p>`/`blockquote` > 120 chars). | Default mode for standard clicks, types, selects, and form interactions. |
 | **`STANDARD`** | Text | **`LEAN` + Standard Static Text.** Includes full static body `<p>` paragraph copy of any length, text spans, badges, and order totals. | Selected for text assertions, paragraph matching, or when `LEAN` escalates. |
 | **`RICH`** | Text | **`STANDARD` + Full HTML Metadata.** Includes all `data-*`, `title`, `aria-describedby` attributes, un-truncated URLs, and 5-level parent context. | Selected for SKU/data-attribute targeting, table sorting, or deep card disambiguation. |
-| **`VISUAL`** | Visual | **Page Screenshot + 0 DOM Element Nodes.** Pure visual assertion/check. | Triggered by `(visual)` check/assertion without element interaction. |
-| **`VISUAL_LEAN`** | Visual | **Page Screenshot + `LEAN` DOM.** Visual element interaction. | Triggered when screenshot is required alongside compact element locators. |
-| **`VISUAL_RICH`** | Visual | **Page Screenshot + `RICH` DOM.** Maximum multimodal context. | Triggered by `(layout)` checks or complex visual layout debugging. |
+| **`VISUAL`** | Visual | **Viewport Screenshot + 0 DOM Element Nodes.** Pure visual assertion/check at standard screen size. | Triggered by `(visual)` check/assertion without element interaction. Uses viewport screenshot. |
+| **`VISUAL_LEAN`** | Visual | **Full-Page Screenshot + `LEAN` DOM.** Visual element interaction. | Triggered upon visual escalation; uses full-page screenshot. |
+| **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. | Triggered by `(layout)` checks or final visual escalation; uses full-page screenshot. |
+
+> **Screenshot Capture Scope Strategy**:
+> - **Viewport Screenshot**: Initial `VISUAL` steps (tagged `(visual)`) capture a standard viewport screenshot matching the active browser window size.
+> - **Visual Escalation Always Full Screen**: Once context escalates visually (to `VISUAL_LEAN` or `VISUAL_RICH`), screenshot capture **always switches to full-page mode** (capturing full document height beyond the fold, overlaid with a visual viewport border).
+> - **Immediate Full-Page Trigger**: Steps tagged with `(visual: full)` or `(visual:full)` capture a full-page screenshot immediately on the initial attempt.
 
 ### DOM Serialization Differences: `LEAN` vs `STANDARD` vs `RICH`
 

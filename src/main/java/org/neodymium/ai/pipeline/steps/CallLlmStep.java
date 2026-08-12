@@ -111,12 +111,14 @@ public final class CallLlmStep<T> implements PipelineStep
         if (lastState != null && lastState.getAttachments() != null)
         {
             attachments = lastState.getAttachments();
-            if (LOGGER.isTraceEnabled())
+            if (LOGGER.isDebugEnabled() && !attachments.isEmpty())
             {
-                LOGGER.trace("Attachments count: {} (Target Provider Capability: {})", attachments.size(), this.capability);
+                LOGGER.debug("   📸 Attachments count: {} (Target Provider Capability: {})", attachments.size(), this.capability);
                 for (final SutAttachment attachment : attachments)
                 {
-                    LOGGER.trace("  - MimeType: {}, Path: {}", attachment.mediaType(), attachment.filePath());
+                    final int sizeKb = attachment.base64Data() != null ? (attachment.base64Data().length() * 3 / 4 / 1024) : 0;
+                    LOGGER.debug("     - MimeType: {}, Base64 size: {} chars (~{} KB)",
+                        attachment.mediaType(), attachment.base64Data() != null ? attachment.base64Data().length() : 0, sizeKb);
                 }
             }
         }

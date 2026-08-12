@@ -534,7 +534,23 @@ public final class PlaybookStep
             return false;
         }
         final String lower = this.instruction.toLowerCase();
-        return lower.contains("(visual)") || lower.contains("(layout)");
+        return lower.contains("(visual") || lower.contains("(layout)");
+    }
+
+    /**
+     * Checks if this step explicitly requests full-page visual context.
+     *
+     * @return true if the instruction contains (visual: full), (visual:full), (visual-full), or (visual_full), false otherwise
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isFullPageVisualStep()
+    {
+        if (this.instruction == null)
+        {
+            return false;
+        }
+        final String lower = this.instruction.toLowerCase();
+        return lower.contains("(visual: full)") || lower.contains("(visual:full)") || lower.contains("(visual-full)") || lower.contains("(visual_full)");
     }
 
     /**

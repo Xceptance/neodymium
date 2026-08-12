@@ -130,4 +130,30 @@ public class PageAnalyzerTest extends BaseAiTest
             com.codeborne.selenide.Selenide.closeWebDriver();
         }
     }
+
+    @Test
+    public void testCaptureScreenshotWithContextLevel() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/AssertActionTest/SelectOptionTest.html");
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+
+            final String viewportBase64 = analyzer.captureScreenshot("test_viewport", ContextLevel.VISUAL);
+            assertNotNull(viewportBase64, "Viewport screenshot base64 should not be null");
+
+            final String fullPageBase64 = analyzer.captureScreenshot("test_full_page", true);
+            assertNotNull(fullPageBase64, "Full page screenshot base64 should not be null");
+
+            final String escalatedBase64 = analyzer.captureScreenshot("test_escalated", ContextLevel.VISUAL_LEAN);
+            assertNotNull(escalatedBase64, "Escalated full page screenshot base64 should not be null");
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
+    }
 }
