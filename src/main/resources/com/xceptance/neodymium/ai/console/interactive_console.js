@@ -884,11 +884,11 @@ function getUsedVariableKeys(state) {
 
     // 2. Scan all step instructions across before, steps, and after blocks for ${varName}
     if (state.blocks) {
-        const varRegex = /\$\{([^}]+)\}/g;
         ['before', 'steps', 'after'].forEach(blockName => {
             const steps = state.blocks[blockName] || [];
             steps.forEach(step => {
                 const text = (step.rawInstruction || step.instruction || '');
+                const varRegex = /\$\{([^}]+)\}/g;
                 let match;
                 while ((match = varRegex.exec(text)) !== null) {
                     const varName = match[1].trim();

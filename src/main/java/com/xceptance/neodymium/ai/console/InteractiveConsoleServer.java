@@ -806,7 +806,7 @@ public final class InteractiveConsoleServer
                     bindings.add(entry.getKey(), entry.getValue());
                 }
                 activeState.add("dataBindings", bindings);
-                activeState.add("localDataBindings", bindings);
+                activeState.add("localDataBindings", bindings.deepCopy());
             }
         }
 

@@ -68,8 +68,6 @@ public final class InteractiveViewDataBindingsFilterTest extends BaseInteractive
     @Test
     public final void testDataOverviewAndInlineEditorFiltering() throws Exception
     {
-        Configuration.headless = false;
-
         // Load base test resources
         final String yamlContent;
         final String jsonContent;
@@ -120,8 +118,8 @@ public final class InteractiveViewDataBindingsFilterTest extends BaseInteractive
         $("#topTestDataBody").shouldNotHave(Condition.text("unusedGlobalProp1"));
         $("#topTestDataBody").shouldNotHave(Condition.text("unusedGlobalProp2"));
 
-        // 2. Verify Step 2 Inline Editor badges and Show More toggle
-        final SelenideElement step2 = $(".step-card[data-step-idx='2']");
+        // 2. Verify Step 8 (3rd step in steps block) Inline Editor badges and Show More toggle
+        final SelenideElement step2 = $(".step-card[data-step-idx='8']");
         step2.should(Condition.exist);
 
         jsClick(step2.$(".step-edit-btn"));
