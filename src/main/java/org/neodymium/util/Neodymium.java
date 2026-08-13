@@ -69,7 +69,7 @@ public class Neodymium
     private final NeodymiumLocalization localization;
 
     // our data for anywhere access
-    private final TestData data = new TestData();
+    private final org.neodymium.common.testdata.TestData data = new com.xceptance.neodymium.common.testdata.TestData();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
 

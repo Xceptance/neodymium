@@ -161,7 +161,9 @@ public final class VertexAiLlamaProvider implements LlmProvider
             {
                 if (attachment.base64Data() != null)
                 {
-                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/"))
+                    final boolean isImage = attachment.mediaType() != null &&
+                        (attachment.mediaType().startsWith("image/") || "screenshot".equalsIgnoreCase(attachment.mediaType()));
+                    if (isImage)
                     {
                         // Ignore image attachments to avoid the Vertex AI openapi proxy "media_resolution parameter not supported" error
                         LOGGER.warn("Ignoring image attachment for Vertex AI Llama provider to avoid media_resolution error.");

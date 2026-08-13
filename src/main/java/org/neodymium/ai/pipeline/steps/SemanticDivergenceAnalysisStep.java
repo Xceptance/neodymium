@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Pipeline step executing the first stage of self-healing: Semantic Divergence Diffing.
  * Compares the baseline state of the failed step with the current page state to identify
- * layout, ID, or element changes, storing the plain-English summary in context.
+ * layout, ID, or element changes, storing the natural language summary in context.
  *
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
@@ -126,7 +126,7 @@ public final class SemanticDivergenceAnalysisStep implements PipelineStep
                 final long durationMs = System.currentTimeMillis() - startTime;
                 LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
                 
-                // 8. Parse plain-English diff summary and store in transient context map
+                // 8. Parse natural language diff summary and store in transient context map
                 final String diffSummary = diffPrompt.parseResponse(response.content(), context);
                 context.getTransientData().put(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY, diffSummary);
             }

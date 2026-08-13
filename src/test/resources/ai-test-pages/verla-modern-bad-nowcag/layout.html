@@ -297,7 +297,7 @@
 
     <!-- Announcement Bar -->
     <div id="announcement-bar-10293" class="announcement-bar">
-        <span><span>FREE WORLDWIDE SHIPPING ON ORDERS OVER $150 USD</span></span>
+        <span><span>${lang_promoBanner}</span></span>
     </div>
 
     <!-- Header Navigation (Non-Accessible / Div Soup for noWCAG) -->
@@ -408,9 +408,9 @@
     <div class="modal-overlay" id="country-modal-overlay">
         <div class="modal">
             <div class="modal-close-btn cursor-pointer" id="country-modal-close">&times;</div>
-            <div style="font-family: var(--font-family-serif); font-size: 20px; font-weight: 600; margin-bottom: 20px;"><span>Select Region</span></div>
-            <div class="form-label"><span>Search country</span></div>
-            <input type="text" class="country-search-input" id="country-search" placeholder="Search country..."
+            <div style="font-family: var(--font-family-serif); font-size: 20px; font-weight: 600; margin-bottom: 20px;"><span>${lang_selectRegion}</span></div>
+            <div class="form-label"><span>${lang_searchCountry}</span></div>
+            <input type="text" class="country-search-input" id="country-search" placeholder="${lang_searchCountry}"
                    hx-get="api/countries" hx-target="#country-list-container" hx-trigger="keyup">
             <div class="country-list" id="country-list-container">
                 ${country_items_list}

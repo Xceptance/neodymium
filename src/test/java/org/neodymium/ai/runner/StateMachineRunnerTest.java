@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.runner;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -31,6 +32,7 @@ import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -102,5 +104,26 @@ public class StateMachineRunnerTest
         assertThrows(ConclusiveFailureException.class, () -> runner.run());
 
         assertSame(this.outerContext, ExecutionContext.getActiveContext(), "StateMachineRunner must restore previous ThreadLocal ExecutionContext on failure");
+    }
+
+    @Test
+    public void testReplayStrictAllowsEmptyActionsForRecordedStep() throws PipelineException
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), new MockTargetExecutor());
+
+        final PlaybookStep recordedStep = new PlaybookStep("When string A is not equal A, click button");
+        recordedStep.setActions(new ArrayList<>());
+
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new MockTargetExecutor());
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, recordedStep);
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+
+        final org.neodymium.ai.pipeline.steps.ExecuteActionsStep step = new org.neodymium.ai.pipeline.steps.ExecuteActionsStep();
+        assertDoesNotThrow(() -> step.execute(session.getExecutionContext()));
     }
 }

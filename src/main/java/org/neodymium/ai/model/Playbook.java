@@ -156,6 +156,47 @@ public final class Playbook
         }
 
         /**
+         * Adds an included sub-playbook by relative path.
+         *
+         * @param includeRelativePath the relative path to the included playbook file
+         * @return this builder instance
+         */
+        public Builder include(final String includeRelativePath)
+        {
+            if (includeRelativePath != null && !includeRelativePath.isBlank())
+            {
+                final String rawPath = includeRelativePath.startsWith("_include:") || includeRelativePath.startsWith("include:")
+                    ? includeRelativePath.substring(includeRelativePath.indexOf(':') + 1).trim()
+                    : includeRelativePath.trim();
+                final String formattedStep = "_include: " + rawPath;
+                final PlaybookStep includeStep = new PlaybookStep(formattedStep);
+                try
+                {
+                    org.neodymium.ai.resources.PlaybookResourceManager manager = new org.neodymium.ai.resources.ClasspathResourceManager();
+                    try (final java.io.InputStream in = manager.read(rawPath))
+                    {
+                        // Classpath resource found
+                    }
+                    catch (final java.io.IOException ioe)
+                    {
+                        manager = new org.neodymium.ai.resources.LocalFileResourceManager(java.nio.file.Path.of("."));
+                    }
+                    final Playbook subPlaybook = new org.neodymium.ai.playbook.YamlPlaybookParser().parse(rawPath, manager);
+                    if (subPlaybook != null && subPlaybook.getSteps() != null)
+                    {
+                        includeStep.getSubSteps().addAll(subPlaybook.getSteps());
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // Fall back to unexpanded step if path is resolved dynamically at runtime
+                }
+                this.steps.add(includeStep);
+            }
+            return this;
+        }
+
+        /**
          * Adds a {@link PlaybookStep}.
          *
          * @param step the playbook step

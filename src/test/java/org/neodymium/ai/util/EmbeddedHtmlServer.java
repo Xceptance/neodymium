@@ -96,6 +96,29 @@ public final class EmbeddedHtmlServer
     {
         public String id;
         public Map<String, String> names;
+        public String en;
+        public String fr;
+        public String de;
+        public String pl;
+        public String se;
+        public String fi;
+        public String ja;
+
+        public String getSubName(final String locale)
+        {
+            if (names != null && names.containsKey(locale))
+            {
+                return names.get(locale);
+            }
+            if ("de".equals(locale) && de != null) return de;
+            if ("fr".equals(locale) && fr != null) return fr;
+            if ("pl".equals(locale) && pl != null) return pl;
+            if ("se".equals(locale) && se != null) return se;
+            if ("fi".equals(locale) && fi != null) return fi;
+            if ("ja".equals(locale) && ja != null) return ja;
+            if (en != null) return en;
+            return id;
+        }
     }
 
     public static final class GenerationConfig
@@ -310,15 +333,31 @@ public final class EmbeddedHtmlServer
      */
     private static void loadCatalogData()
     {
-        try (final InputStream is = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream("ai-test-pages/verla-catalog.json"))
+        try
         {
-            if (is == null)
+            String json = null;
+            final java.nio.file.Path fsPath = java.nio.file.Path.of("src/test/resources/ai-test-pages/verla-catalog.json");
+            if (java.nio.file.Files.exists(fsPath))
             {
-                LOG.error("verla-catalog.json not found in classpath resources");
+                json = java.nio.file.Files.readString(fsPath, StandardCharsets.UTF_8);
+            }
+            else
+            {
+                try (final InputStream is = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream("ai-test-pages/verla-catalog.json"))
+                {
+                    if (is != null)
+                    {
+                        json = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
+                            .lines().collect(Collectors.joining("\n"));
+                    }
+                }
+            }
+
+            if (json == null)
+            {
+                LOG.error("verla-catalog.json not found in filesystem or classpath resources");
                 return;
             }
-            final String json = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
-                .lines().collect(Collectors.joining("\n"));
 
             final Gson gson = new Gson();
             catalogConfig = gson.fromJson(json, CatalogConfig.class);
@@ -328,42 +367,20 @@ public final class EmbeddedHtmlServer
                 countriesMap.put(c.code, c);
             }
 
-            try (final InputStream prodIs = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream("ai-test-pages/verla-products.json"))
+            final List<Product> generated = generateCatalogProducts(catalogConfig);
+            catalogProducts.clear();
+            catalogProducts.addAll(generated);
+
+            productInventory.clear();
+            for (final Product p : catalogProducts)
             {
-                if (prodIs != null)
-                {
-                    final String prodJson = new BufferedReader(new InputStreamReader(prodIs, StandardCharsets.UTF_8))
-                        .lines().collect(Collectors.joining("\n"));
-                    final Type listType = new TypeToken<List<Product>>(){}.getType();
-                    final List<Product> loadedProducts = gson.fromJson(prodJson, listType);
-                    catalogProducts.clear();
-                    catalogProducts.addAll(loadedProducts);
-
-                    productInventory.clear();
-                    for (final Product p : catalogProducts)
-                    {
-                        productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
-                    }
-                    LOG.info("VÉRLA Static catalog loaded. Loaded {} products from verla-products.json.", catalogProducts.size());
-                }
-                else
-                {
-                    LOG.warn("verla-products.json not found. Falling back to dynamic programmatic catalog generation.");
-                    final List<Product> generated = generateCatalogProducts(catalogConfig);
-                    catalogProducts.clear();
-                    catalogProducts.addAll(generated);
-
-                    productInventory.clear();
-                    for (final Product p : catalogProducts)
-                    {
-                        productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
-                    }
-                    LOG.info("VÉRLA Dynamic catalog loaded. Generated {} products.", catalogProducts.size());
-                }
+                productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
             }
+            LOG.info("VÉRLA Dynamic catalog loaded. Generated {} localized products.", catalogProducts.size());
         }
         catch (final Exception e)
         {
+            e.printStackTrace();
             LOG.error("Failed to parse and generate catalog data", e);
         }
     }
@@ -413,7 +430,7 @@ public final class EmbeddedHtmlServer
                     final String adj = (adjList != null) ? adjList.get((i * 3) % adjList.size()) : adjEn;
                     final String col = (colList != null) ? colList.get((i * 7) % colList.size()) : colEn;
                     
-                    final String subName = (sub.names != null && sub.names.containsKey(locale)) ? sub.names.get(locale) : sub.id;
+                    final String subName = sub.getSubName(locale);
 
                     final String name;
                     if ("ja".equals(locale))
@@ -510,7 +527,7 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    private static String getProductSizesSelectHtml(final String productId, final String category)
+    private static String getProductSizesSelectHtml(final String productId, final String category, final Map<String, String> trans)
     {
         if ("accessories".equals(category))
         {
@@ -520,9 +537,12 @@ public final class EmbeddedHtmlServer
         final Map<String, Integer> stockMap = productInventory.getOrDefault(productId, Map.of());
         final List<String> sizes = getSizesForCategory(category);
 
+        final String sizeLabel = trans != null ? trans.getOrDefault("size", "Size") : "Size";
+        final String outOfStockText = trans != null ? trans.getOrDefault("outOfStock", "Out of stock") : "Out of stock";
+
         final StringBuilder sb = new StringBuilder();
         sb.append("<div style=\"display: flex; gap: 12px; align-items: center;\">");
-        sb.append("<label for=\"size\" style=\"font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;\">Size:</label>");
+        sb.append("<label for=\"size\" style=\"font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;\">").append(sizeLabel).append(":</label>");
         sb.append("<select name=\"size\" id=\"size\" style=\"padding: 10px 16px; border: 1px solid var(--color-border); border-radius: var(--border-radius); background: var(--color-bg-primary); outline: none; cursor: pointer;\" required>");
 
         String defaultSel = "";
@@ -567,12 +587,12 @@ public final class EmbeddedHtmlServer
             final String disabledAttr;
             if (stock <= 0)
             {
-                label = sz + " (Out of stock)";
+                label = sz + " (" + outOfStockText + ")";
                 disabledAttr = " disabled";
             }
             else if (stock <= 5)
             {
-                label = sz + " (" + stock + " left)";
+                label = sz + " (" + stock + ")";
                 disabledAttr = "";
             }
             else
@@ -1472,29 +1492,29 @@ public final class EmbeddedHtmlServer
                     model.put("input_cardCvv", escapeHtml(cardCvv));
 
                     boolean hasErrors = false;
-                    if (firstName.isEmpty()) { model.put("err_firstName", "First name is required."); hasErrors = true; }
-                    if (lastName.isEmpty()) { model.put("err_lastName", "Last name is required."); hasErrors = true; }
-                    if (email.isEmpty() || !email.contains("@")) { model.put("err_email", "Valid email is required."); hasErrors = true; }
+                    if (firstName.isEmpty()) { model.put("err_firstName", trans.getOrDefault("errFirstNameRequired", "First name is required.")); hasErrors = true; }
+                    if (lastName.isEmpty()) { model.put("err_lastName", trans.getOrDefault("errLastNameRequired", "Last name is required.")); hasErrors = true; }
+                    if (email.isEmpty() || !email.contains("@")) { model.put("err_email", trans.getOrDefault("errEmailRequired", "Valid email is required.")); hasErrors = true; }
                     
                     // Card payment validation
                     if (cardNumber.isEmpty())
                     {
-                        model.put("err_cardNumber", "Card number is required.");
+                        model.put("err_cardNumber", trans.getOrDefault("errCardNumberRequired", "Card number is required."));
                         hasErrors = true;
                     }
                     else if (cardNumber.endsWith("200"))
                     {
-                        model.put("err_cardNumber", trans.getOrDefault("error", "Error") + ": Card declined by provider.");
+                        model.put("err_cardNumber", trans.getOrDefault("errCardDeclined", "Payment declined for testing purposes."));
                         hasErrors = true;
                     }
-                    else if (!cardNumber.matches("\\d+"))
+                    else if (!cardNumber.replaceAll("\\s+", "").matches("\\d+"))
                     {
-                        model.put("err_cardNumber", "Card number must contain digits only.");
+                        model.put("err_cardNumber", trans.getOrDefault("errCardNumberRequired", "Card number must contain digits only."));
                         hasErrors = true;
                     }
 
-                    if (cardExpiry.isEmpty()) { model.put("err_cardExpiry", "Expiry date is required."); hasErrors = true; }
-                    if (cardCvv.isEmpty() || !cardCvv.matches("\\d{3,4}")) { model.put("err_cardCvv", "CVV is invalid."); hasErrors = true; }
+                    if (cardExpiry.isEmpty()) { model.put("err_cardExpiry", trans.getOrDefault("errCardExpiryRequired", "Expiry date is required.")); hasErrors = true; }
+                    if (cardCvv.isEmpty() || !cardCvv.matches("\\d{3,4}")) { model.put("err_cardCvv", trans.getOrDefault("errCardCvvRequired", "CVV is required.")); hasErrors = true; }
 
                     if (hasErrors)
                     {
@@ -1564,20 +1584,28 @@ public final class EmbeddedHtmlServer
                     cart.coupon = null;
 
                     // Display confirmation fragment
+                    final String thankYouMsg = trans.getOrDefault("thankYou", "Thank you for your purchase!");
+                    final String orderPlacedMsg = trans.getOrDefault("orderPlaced", "Your order has been placed successfully.");
+                    final String orderNumLabel = trans.getOrDefault("orderNumber", "Order Number");
+                    final String zipCodeLabel = trans.getOrDefault("shippingZipCode", "Shipping Zip Code");
+                    final String totalPaidLabel = trans.getOrDefault("totalPaid", "Total Paid");
+                    final String trackMsg = trans.getOrDefault("trackInstructions", "Use the Order Number and Shipping Zip Code to track your package on the <a href=\"track-orders.html\" style=\"color: var(--color-accent); font-weight: 600;\">Track Orders</a> page.");
+                    final String continueShoppingMsg = trans.getOrDefault("continueShopping", "Continue Shopping");
+
                     final String successHtml = "<div style=\"text-align:center; padding: 40px 20px;\">" +
                                                "  <svg class=\"success-icon\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" style=\"margin: 0 auto 20px auto; display: block;\">" +
                                                "    <circle cx=\"32\" cy=\"32\" r=\"30\" fill=\"#5F8766\" />" +
                                                "    <path d=\"M20 32L28 40L44 24\" stroke=\"white\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-linejoin=\"round\" />" +
                                                "  </svg>" +
-                                               "  <h2 id=\"success-message\" style=\"font-family: var(--font-family-serif); font-size: 28px; margin-bottom: 12px;\">Thank you for your purchase!</h2>" +
-                                               "  <p style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">Your order has been placed successfully.</p>" +
+                                               "  <h2 id=\"success-message\" style=\"font-family: var(--font-family-serif); font-size: 28px; margin-bottom: 12px;\">" + thankYouMsg + "</h2>" +
+                                               "  <p style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
                                                "  <div style=\"background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +
-                                               "    <div style=\"margin-bottom:10px;\"><strong>Order Number:</strong> <span id=\"order-number-value\">" + orderNum + "</span></div>" +
-                                               "    <div style=\"margin-bottom:10px;\"><strong>Shipping Zip Code:</strong> <span id=\"zip-code-value\">" + postcode + "</span></div>" +
-                                               "    <div style=\"margin-bottom:10px;\"><strong>Total Paid:</strong> " + formatPrice(total, activeCountry) + "</div>" +
-                                               "    <div style=\"font-size: 12px; color: var(--color-text-secondary); margin-top: 16px;\">Use the Order Number and Shipping Zip Code to track your package on the <a href=\"track-orders.html\" style=\"color: var(--color-accent); font-weight: 600;\">Track Orders</a> page.</div>" +
+                                               "    <div style=\"margin-bottom:10px;\"><strong>" + orderNumLabel + ":</strong> <span id=\"order-number-value\">" + orderNum + "</span></div>" +
+                                               "    <div style=\"margin-bottom:10px;\"><strong>" + zipCodeLabel + ":</strong> <span id=\"zip-code-value\">" + postcode + "</span></div>" +
+                                               "    <div style=\"margin-bottom:10px;\"><strong>" + totalPaidLabel + ":</strong> " + formatPrice(total, activeCountry) + "</div>" +
+                                               "    <div style=\"font-size: 12px; color: var(--color-text-secondary); margin-top: 16px;\">" + trackMsg + "</div>" +
                                                "  </div>" +
-                                               "  <a href=\"index.html\" class=\"btn-primary\" style=\"display:inline-block;\">Continue Shopping</a>" +
+                                               "  <a href=\"index.html\" class=\"btn-primary\" style=\"display:inline-block;\">" + continueShoppingMsg + "</a>" +
                                                "</div>";
                     sendResponse(exchange, 200, "text/html", successHtml);
                     return;
@@ -1587,15 +1615,21 @@ public final class EmbeddedHtmlServer
                     final String orderNumber = params.getOrDefault("orderNumber", "").trim();
                     final String zipCode = params.getOrDefault("zipCode", "").trim();
                     
+                    final String statusLabel = trans.getOrDefault("status", "Status");
+                    final String recipientLabel = trans.getOrDefault("recipient", "Recipient");
+                    final String itemsLabel = trans.getOrDefault("items", "Items");
+                    final String freeGiftLabel = trans.getOrDefault("freeGift", "Free Gift");
+                    final String totalLabel = trans.getOrDefault("total", "Total");
+
                     final Order order = ordersDb.get(orderNumber);
                     if (order != null && order.shippingAddress.postcode.equalsIgnoreCase(zipCode))
                     {
                         final StringBuilder sb = new StringBuilder();
                         sb.append("<div style=\"background-color: var(--color-bg-primary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); margin-top: 20px;\">")
                           .append("  <h4 style=\"font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;\">Order ").append(order.orderNumber).append("</h4>")
-                          .append("  <div style=\"margin-bottom: 12px;\"><strong>Status:</strong> <span style=\"color: var(--color-success); font-weight: 600;\">").append(order.status).append("</span></div>")
-                          .append("  <div style=\"margin-bottom: 12px;\"><strong>Recipient:</strong> ").append(order.shippingAddress.street).append(", ").append(order.shippingAddress.city).append("</div>")
-                          .append("  <h5 style=\"font-size: 13px; font-weight: 600; text-transform: uppercase; margin-bottom: 10px;\">Items</h5>")
+                          .append("  <div style=\"margin-bottom: 12px;\"><strong>").append(statusLabel).append(":</strong> <span style=\"color: var(--color-success); font-weight: 600;\">").append(order.status).append("</span></div>")
+                          .append("  <div style=\"margin-bottom: 12px;\"><strong>").append(recipientLabel).append(":</strong> ").append(order.shippingAddress.street).append(", ").append(order.shippingAddress.city).append("</div>")
+                          .append("  <h5 style=\"font-size: 13px; font-weight: 600; text-transform: uppercase; margin-bottom: 10px;\">").append(itemsLabel).append("</h5>")
                           .append("  <ul style=\"list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;\">");
                         
                         for (final OrderItem item : order.items)
@@ -1609,12 +1643,12 @@ public final class EmbeddedHtmlServer
                         {
                             sb.append("    <li style=\"display:flex; justify-content: space-between; font-size: 13px; color: var(--color-success); font-weight: 500;\">")
                               .append("      <span>VÉRLA Signature Tote Bag &times; 1</span>")
-                              .append("      <span>Free Gift</span>")
+                              .append("      <span>").append(freeGiftLabel).append("</span>")
                               .append("    </li>");
                         }
                         sb.append("  </ul>")
                           .append("  <div style=\"display: flex; justify-content: space-between; font-weight: 600; border-top: 1px solid var(--color-border); padding-top: 12px;\">")
-                          .append("    <span>Total</span>")
+                          .append("    <span>").append(totalLabel).append("</span>")
                           .append("    <span>").append(formatPrice(order.total, activeCountry)).append("</span>")
                           .append("  </div>")
                           .append("</div>");
@@ -1714,13 +1748,19 @@ public final class EmbeddedHtmlServer
                 model.put("lang_" + entry.getKey(), resolvedVal);
             }
 
+            model.putIfAbsent("lang_sortDefault", trans.getOrDefault("sortDefault", "de".equals(country.locale) ? "Standard" : "Default"));
+            model.putIfAbsent("lang_promoBanner", trans.getOrDefault("promoBanner", "de".equals(country.locale) ? "Kostenloser weltweiter Versand ab 150 €" : "Free worldwide shipping on orders over $150 USD"));
+            model.putIfAbsent("lang_adding", trans.getOrDefault("adding", "de".equals(country.locale) ? "Wird hinzugefügt..." : "Adding..."));
+            model.putIfAbsent("lang_added", trans.getOrDefault("added", "de".equals(country.locale) ? "Hinzugefügt!" : "Added!"));
+
             model.put("country_name", country.name);
             model.put("country_symbol", country.symbol);
             model.put("country_flag", getCountryFlag(country.code));
             model.put("cart_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
             model.put("cart_badge_html", getCartBadgeWrapperHtml(cart, trans, country, quality));
 
-            // User navigation status HTML snippet
+            final String loginText = trans.getOrDefault("login", "Login");
+            final String accountText = trans.getOrDefault("account", "Account");
             if (user != null)
             {
                 // Perfect vs normal/bad style
@@ -1730,18 +1770,18 @@ public final class EmbeddedHtmlServer
                 }
                 else
                 {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> Account</a>");
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + accountText + "</a>");
                 }
             }
             else
             {
                 if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
-                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/login.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> Login</div>");
+                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/login.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + loginText + "</div>");
                 }
                 else
                 {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> Login</a>");
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + loginText + "</a>");
                 }
             }
 
@@ -1970,7 +2010,7 @@ public final class EmbeddedHtmlServer
                     model.put("product_desc", prod.descriptions.getOrDefault(country.locale, prod.descriptions.get("en")));
                     model.put("product_svg_content", prod.svgPath);
                     model.put("product_badge_html", prod.badge.isEmpty() ? "" : "<span class=\"product-badge\">" + prod.badge.toUpperCase() + "</span>");
-                    model.put("product_sizes_html", getProductSizesSelectHtml(prod.id, prod.category));
+                    model.put("product_sizes_html", getProductSizesSelectHtml(prod.id, prod.category, trans));
                 }
                 else
                 {
@@ -2467,10 +2507,10 @@ public final class EmbeddedHtmlServer
     sb.append("  </div>")
               .append("  <div class=\"cart-dropdown-footer\">")
               .append("    <div class=\"cart-dropdown-subtotal\">")
-              .append("      <span>Subtotal</span>")
+              .append("      <span>").append(trans != null ? trans.getOrDefault("subtotal", "Subtotal") : "Subtotal").append("</span>")
               .append("      <span>").append(formatPrice(subtotal, country)).append("</span>")
               .append("    </div>")
-              .append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"cart-dropdown-checkout-btn\">View Cart & Checkout</a>")
+              .append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"cart-dropdown-checkout-btn\">").append(trans != null ? trans.getOrDefault("viewCartCheckout", "View Cart & Checkout") : "View Cart & Checkout").append("</a>")
               .append("  </div>");
         }
         sb.append("</div>");
@@ -2504,9 +2544,9 @@ public final class EmbeddedHtmlServer
           .append("        <table class=\"cart-table\">")
           .append("          <thead>")
           .append("            <tr style=\"border-bottom: 1px solid var(--color-border); padding-bottom: 12px;\">")
-          .append("              <th style=\"padding-bottom:12px;\">Product</th>")
-          .append("              <th style=\"padding-bottom:12px;text-align:center;\">Quantity</th>")
-          .append("              <th style=\"padding-bottom:12px;text-align:right;\">Total</th>")
+          .append("              <th style=\"padding-bottom:12px;\">").append(trans.getOrDefault("product", "Product")).append("</th>")
+          .append("              <th style=\"padding-bottom:12px;text-align:center;\">").append(trans.getOrDefault("quantity", "Quantity")).append("</th>")
+          .append("              <th style=\"padding-bottom:12px;text-align:right;\">").append(trans.getOrDefault("total", "Total")).append("</th>")
           .append("            </tr>")
           .append("          </thead>")
           .append("          <tbody>");
@@ -2561,7 +2601,7 @@ public final class EmbeddedHtmlServer
               .append("              <button style=\"padding: 6px 12px;\" hx-post=\"api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() + 1).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">&plus;</button>")
               .append("            </div>")
               .append("            <div style=\"margin-top: 6px;\">")
-              .append("              <button hx-post=\"api/cart/remove?productId=").append(encKey).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" style=\"color: var(--color-error); font-size: 11px;\">Remove</button>")
+              .append("              <button hx-post=\"api/cart/remove?productId=").append(encKey).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" style=\"color: var(--color-error); font-size: 11px;\">").append(trans.getOrDefault("remove", "Remove")).append("</button>")
               .append("            </div>")
               .append("          </td>")
               .append("          <td style=\"padding: 20px 0; text-align: right; font-weight: 600;\">").append(formatPrice(rowTotal, country)).append("</td>")
@@ -2575,7 +2615,7 @@ public final class EmbeddedHtmlServer
           .append("    </div>")
           .append("  </div>")
           .append("  <div class=\"cart-sidebar\">")
-          .append("    <h3 style=\"font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;\">Order Summary</h3>")
+          .append("    <h3 style=\"font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;\">").append(trans.getOrDefault("orderSummary", "Order Summary")).append("</h3>")
           .append("    <form hx-post=\"api/cart/coupon\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" style=\"margin-bottom: 24px;\">")
           .append("      <label for=\"couponCode\" class=\"form-label\" style=\"font-size:11px;\">").append(trans.getOrDefault("promoCode", "Promo Code")).append("</label>")
           .append("      <div style=\"display:flex; gap:8px;\">")
@@ -2605,7 +2645,7 @@ public final class EmbeddedHtmlServer
         if (discount > 0)
         {
             sb.append("      <div style=\"display: flex; justify-content: space-between; color: var(--color-success); font-weight: 500;\">")
-              .append("        <span>Discount (").append(cart.coupon.toUpperCase()).append(")</span>")
+              .append("        <span>").append(trans.getOrDefault("discount", "Discount")).append(" (").append(cart.coupon.toUpperCase()).append(")</span>")
               .append("        <span>-").append(formatPrice(discount, country)).append("</span>")
               .append("      </div>");
         }
@@ -2956,6 +2996,15 @@ public final class EmbeddedHtmlServer
     {
         try
         {
+            loadCatalogData();
+            if (args.length > 0 && "generate".equals(args[0]))
+            {
+                final String jsonStr = new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(catalogProducts);
+                java.nio.file.Files.writeString(java.nio.file.Path.of("src/test/resources/ai-test-pages/verla-products.json"), jsonStr, StandardCharsets.UTF_8);
+                System.out.println("Successfully regenerated verla-products.json with " + catalogProducts.size() + " products.");
+                return;
+            }
+
             final EmbeddedHtmlServer server = new EmbeddedHtmlServer();
             server.start();
 

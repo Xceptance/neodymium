@@ -135,6 +135,12 @@ public final class SelenideTargetExecutor implements TargetExecutor
     @Override
     public SutState captureState(final ContextLevel level) throws IOException
     {
+        return captureState(level, false);
+    }
+
+    @Override
+    public SutState captureState(final ContextLevel level, final boolean isFullPage) throws IOException
+    {
         if (!WebDriverRunner.hasWebDriverStarted())
         {
             org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).warn("⚠️ Browser/WebDriver has not started yet. No active page loaded.");
@@ -148,61 +154,80 @@ public final class SelenideTargetExecutor implements TargetExecutor
         final List<SutAttachment> attachments = new ArrayList<>();
         if (activeLevel.includesScreenshot())
         {
-            final String screenshotFile = Selenide.screenshot("capture_" + System.currentTimeMillis());
-            if (screenshotFile != null)
+            String base64Data = null;
+            try
             {
-                String base64Data = null;
-                String mediaType = "image/png";
-                try
+                final boolean forceFullPage = isFullPage || activeLevel.isFullPageScreenshot();
+                base64Data = new PageAnalyzer(WebDriverRunner.getWebDriver())
+                        .captureScreenshot("capture_" + System.currentTimeMillis(), activeLevel, forceFullPage, null);
+            }
+            catch (final Exception e)
+            {
+                org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class)
+                        .debug("PageAnalyzer captureScreenshot failed, falling back to Selenide: {}", e.getMessage());
+            }
+
+            if (base64Data != null)
+            {
+                attachments.add(new SutAttachment("image/png", "screenshot", base64Data));
+            }
+            else
+            {
+                final String screenshotFile = Selenide.screenshot("capture_" + System.currentTimeMillis());
+                if (screenshotFile != null)
                 {
-                    final java.nio.file.Path path;
-                    if (screenshotFile.startsWith("file:"))
-                    {
-                        path = java.nio.file.Path.of(new java.net.URI(screenshotFile));
-                    }
-                    else
-                    {
-                        path = java.nio.file.Path.of(screenshotFile);
-                    }
-                    final byte[] bytes = java.nio.file.Files.readAllBytes(path);
-                    
-                    byte[] compressedBytes = bytes;
+                    String mediaType = "image/png";
                     try
                     {
-                        final BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
-                        if (img != null)
+                        final java.nio.file.Path path;
+                        if (screenshotFile.startsWith("file:"))
                         {
-                            final ByteArrayOutputStream os = new ByteArrayOutputStream();
-                            final Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
-                            if (writers.hasNext())
+                            path = java.nio.file.Path.of(new java.net.URI(screenshotFile));
+                        }
+                        else
+                        {
+                            path = java.nio.file.Path.of(screenshotFile);
+                        }
+                        final byte[] bytes = java.nio.file.Files.readAllBytes(path);
+                    
+                        byte[] compressedBytes = bytes;
+                        try
+                        {
+                            final BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+                            if (img != null)
                             {
-                                final ImageWriter writer = writers.next();
-                                final ImageWriteParam param = writer.getDefaultWriteParam();
-                                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-                                param.setCompressionQuality(0.6f);
-                                try (final ImageOutputStream ios = ImageIO.createImageOutputStream(os))
+                                final ByteArrayOutputStream os = new ByteArrayOutputStream();
+                                final Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+                                if (writers.hasNext())
                                 {
-                                    writer.setOutput(ios);
-                                    writer.write(null, new IIOImage(img, null, null), param);
+                                    final ImageWriter writer = writers.next();
+                                    final ImageWriteParam param = writer.getDefaultWriteParam();
+                                    param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                                    param.setCompressionQuality(0.85f);
+                                    try (final ImageOutputStream ios = ImageIO.createImageOutputStream(os))
+                                    {
+                                        writer.setOutput(ios);
+                                        writer.write(null, new IIOImage(img, null, null), param);
+                                    }
+                                    writer.dispose();
+                                    compressedBytes = os.toByteArray();
+                                    mediaType = "image/jpeg";
                                 }
-                                writer.dispose();
-                                compressedBytes = os.toByteArray();
-                                mediaType = "image/jpeg";
                             }
                         }
-                    }
-                    catch (final Exception compressEx)
-                    {
-                        // ignore and fallback to uncompressed png
-                    }
+                        catch (final Exception compressEx)
+                        {
+                            // ignore and fallback to uncompressed png
+                        }
                     
-                    base64Data = java.util.Base64.getEncoder().encodeToString(compressedBytes);
+                        base64Data = java.util.Base64.getEncoder().encodeToString(compressedBytes);
+                    }
+                    catch (final Exception e)
+                    {
+                        org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).error("Failed to read screenshot file: " + screenshotFile, e);
+                    }
+                    attachments.add(new SutAttachment(mediaType, screenshotFile, base64Data));
                 }
-                catch (final Exception e)
-                {
-                    org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).error("Failed to read screenshot file: " + screenshotFile, e);
-                }
-                attachments.add(new SutAttachment(mediaType, screenshotFile, base64Data));
             }
         }
 
@@ -298,7 +323,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("FORWARD", "Navigate forward in history", Collections.emptyMap()),
             new ActionDefinition("REFRESH", "Refresh page", Collections.emptyMap()),
             new ActionDefinition("CLEAR_COOKIES", "Clear all browser cookies", Collections.emptyMap()),
-            new ActionDefinition("SCROLL", "Scroll element or page", Collections.emptyMap()),
+            new ActionDefinition("SCROLL", "Scroll element into view or scroll page (value: 'UP'|'TOP'|'DOWN'|'BOTTOM')", Collections.emptyMap()),
             new ActionDefinition("SELECT", "Select option in dropdown", Collections.emptyMap()),
             new ActionDefinition("WAIT", "Wait for element state or pause", Collections.emptyMap()),
             new ActionDefinition("KEY_PRESS", "Send key press events", Collections.emptyMap()),
@@ -377,21 +402,15 @@ public final class SelenideTargetExecutor implements TargetExecutor
             return action;
         }
 
-        final List<String> newValues = new ArrayList<>();
-        if (resolvedValue != null)
+        Action resolved = action;
+        if (!Objects.equals(origTarget, resolvedTarget))
         {
-            newValues.add(resolvedValue);
+            resolved = resolved.withTarget(resolvedTarget);
         }
-
-        final Action resolved = new Action(action.getType(), resolvedTarget, newValues, action.getDescription(), action.getReasoning());
-        resolved.setStepInstruction(action.getStepInstruction());
-        resolved.setStepLine(action.getStepLine());
-        resolved.setStepFile(action.getStepFile());
-        resolved.setStepScreenshotHash(action.getStepScreenshotHash());
-        resolved.setCondition(action.getCondition());
-        resolved.setThen(action.getThen());
-        resolved.setElseActions(action.getElseActions());
-        resolved.setAdjust(action.getAdjust());
+        if (!Objects.equals(origValue, resolvedValue))
+        {
+            resolved = resolved.withValue(resolvedValue);
+        }
         return resolved;
     }
 

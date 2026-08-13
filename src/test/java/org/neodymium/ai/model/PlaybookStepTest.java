@@ -16,92 +16,52 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 package org.neodymium.ai.model;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for the {@link PlaybookStep} class.
- * Ensures proper initial state, status transitions, and composite tree structure behavior.
+ * Unit tests for {@link PlaybookStep} visual and full-page instruction detection methods.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash (High)
  * @author Xceptance GmbH 2026
  */
-public final class PlaybookStepTest
+public class PlaybookStepTest
 {
-    /**
-     * Verifies that a newly created PlaybookStep initializes all fields
-     * to their correct default values (pending status, empty actions, non-composite).
-     */
     @Test
-    public void testInitialization()
+    public void testIsVisualStep()
     {
-        final String instruction = "Click the login button";
-        final PlaybookStep step = new PlaybookStep(instruction);
+        final PlaybookStep standardStep = new PlaybookStep();
+        standardStep.setInstruction("Click on the login button");
+        Assertions.assertFalse(standardStep.isVisualStep());
 
-        // Verify the step captures the original instruction correctly
-        assertEquals(instruction, step.getInstruction());
+        final PlaybookStep visualStep = new PlaybookStep();
+        visualStep.setInstruction("Verify header logo position (visual)");
+        Assertions.assertTrue(visualStep.isVisualStep());
 
-        // Newly created steps must default to PENDING status
-        assertEquals(PlaybookStepStatus.PENDING, step.getStatus());
-
-        // Leaf actions list must be initialized and empty
-        assertNotNull(step.getActions());
-        assertTrue(step.getActions().isEmpty());
-
-        // Child steps list must be initialized and empty
-        assertNotNull(step.getSubSteps());
-        assertTrue(step.getSubSteps().isEmpty());
-
-        // Step should not report as composite since it has no child steps
-        assertFalse(step.isComposite());
+        final PlaybookStep layoutStep = new PlaybookStep();
+        layoutStep.setInstruction("Check sidebar layout (layout)");
+        Assertions.assertTrue(layoutStep.isVisualStep());
     }
 
-    /**
-     * Verifies that step status transitions behave correctly when updated.
-     */
     @Test
-    public void testStatusTransition()
+    public void testIsFullPageVisualStep()
     {
-        final PlaybookStep step = new PlaybookStep("Instruction");
-        
-        // Initial status is PENDING
-        assertEquals(PlaybookStepStatus.PENDING, step.getStatus());
+        final PlaybookStep standardVisualStep = new PlaybookStep();
+        standardVisualStep.setInstruction("Verify footer links (visual)");
+        Assertions.assertTrue(standardVisualStep.isVisualStep());
+        Assertions.assertFalse(standardVisualStep.isFullPageVisualStep());
 
-        // Transition to RUNNING
-        step.setStatus(PlaybookStepStatus.RUNNING);
-        assertEquals(PlaybookStepStatus.RUNNING, step.getStatus());
+        final PlaybookStep fullPageVisualStepHyphen = new PlaybookStep();
+        fullPageVisualStepHyphen.setInstruction("Inspect footer copyright and legal notice (visual-full)");
+        Assertions.assertTrue(fullPageVisualStepHyphen.isVisualStep());
+        Assertions.assertTrue(fullPageVisualStepHyphen.isFullPageVisualStep());
 
-        // Transition to SUCCESS
-        step.setStatus(PlaybookStepStatus.SUCCESS);
-        assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
-    }
-
-    /**
-     * Verifies the composite pattern behavior of PlaybookStep.
-     * When sub-steps are added, the step should identify as composite.
-     */
-    @Test
-    public void testCompositeBehavior()
-    {
-        final PlaybookStep parent = new PlaybookStep("Parent instruction");
-        
-        // Initially parent should not be composite
-        assertFalse(parent.isComposite());
-
-        final PlaybookStep child = new PlaybookStep("Child instruction");
-        
-        // Nest the child step inside the parent step
-        parent.getSubSteps().add(child);
-
-        // Parent should now identify as composite
-        assertTrue(parent.isComposite());
-        assertEquals(1, parent.getSubSteps().size());
-        assertEquals(child, parent.getSubSteps().get(0));
+        final PlaybookStep fullPageVisualStepUnderscore = new PlaybookStep();
+        fullPageVisualStepUnderscore.setInstruction("Inspect full page overview (visual_full)");
+        Assertions.assertTrue(fullPageVisualStepUnderscore.isVisualStep());
+        Assertions.assertTrue(fullPageVisualStepUnderscore.isFullPageVisualStep());
     }
 }

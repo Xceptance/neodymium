@@ -6,11 +6,11 @@ The redesigned v2 Neodymium AI framework (contained in `org.neodymium.ai.*`) del
 
 ## 1. Execution Playbooks & Replay Cache
 Instead of executing LLM calls dynamically on every run, the v2 framework uses **Structured Playbooks**:
-* **YAML Playbook**: Contains natural language steps written either as a plain-text multiline block (`steps: |`) or a YAML list of step strings. Test scenarios support variables (`${username}`) and modular inclusions (`include: ...`):
+* **YAML Playbook**: Contains natural language steps written either as a plain-text multiline block (`steps: |`) or a YAML list of step strings. Test scenarios support variables (`${username}`) and modular inclusions (`_include: ...`):
   - **Multiline Block**:
     ```yaml
     steps: |
-      include: common/setup.yaml
+      _include: common/setup.yaml
       Open ${verla.url}/verla-${quality}/index.html
       Click login button
     ```
@@ -22,6 +22,11 @@ Instead of executing LLM calls dynamically on every run, the v2 framework uses *
     ```
 * **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
+* **Recording Directory Configuration**: Companion `.json` recording output locations can be configured at the test class/method level or globally:
+  - **Annotation-driven (`@AiPlaybook`)**: `@AiPlaybook(recordingDirectory = "target/playbooks/integration")` directs generated companion recordings to build output target directories to keep `src/` clean.
+  - **Property-driven (`neodymium.ai.playbook.recordingDirectory`)**: Configured in `ai.properties` or JVM arguments (`-Dneodymium.ai.playbook.recordingDirectory=...`).
+  - **Default**: When omitted, companion recordings are saved in the same parent directory as the source `.yaml` playbook (e.g. `src/test/resources/playbooks/...`).
+  - **Strict Replay Error Handling**: If a test runs in replay mode (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) and no recorded companion `.json` file is found, execution fails immediately by throwing `FileNotFoundException`. No silent fallback to YAML playbooks occurs.
 
 ---
 
@@ -55,6 +60,14 @@ A standalone tag that disables all self-healing mechanisms for a specific step.
 * **Behavior**: If the step fails during live or replay execution, the framework does not attempt LLM escalations or semantic self-healing. The failure is immediately propagated (which will either fail the test, trigger bug negation, or trigger optional soft-failure warnings, depending on the other tags present).
 * **Syntax Examples**: `(no-healing)`, `(NO-HEALING)`, `( no-healing )`
 
+### `(visual)` / `(visual: full)` / `(visual:full)`
+Triggers visual execution mode with a page screenshot payload.
+* **`(visual)`**: Triggers standard visual execution at `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes), capturing a standard viewport screenshot matching the active browser window size on the initial attempt (~2,800 tokens).
+* **`(visual: full)` / `(visual:full)`**: Triggers visual execution starting at ultra-lean `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes) while forcing full-page screenshot capture (capturing full scrollable document height beyond the fold with a visual viewport border overlay) immediately on the initial attempt (~5,000–8,000 tokens).
+* **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. If visual evaluation fails or requires element interaction, escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**. It will **never** revert to a small viewport screenshot during escalations.
+* **Author Tag Protection**: Explicit `(visual)` and `(visual: full)` tags set by the test author are protected from being overwritten or downgraded by PESAP pre-step predictions.
+* **Syntax Examples**: `(visual)`, `(visual: full)`, `(visual:full)`, `(visual-full)`, `(visual_full)`
+
 ---
 
 ## 3. Runtime Instruction Preparation
@@ -65,6 +78,7 @@ Before compiling prompts or sending request payloads to the LLM, the framework r
 * `(no-healing)`
 * `(optional)` / `(soft)`
 * `(timeout: ...)`
+* `(visual)` / `(visual: full)` / `(visual:full)`
 
 This prevents internal execution instructions from polluting the natural language prompts sent to the LLM.
 
@@ -95,9 +109,14 @@ $$\text{HINT} \longrightarrow \mathbf{LEAN} \longrightarrow \mathbf{STANDARD} \l
 | **`LEAN`** | Text | **Interactive Elements + Headings + Container Skeleton + Concise Text Labels.** Filters out massive paragraph copy (`<p>`/`blockquote` > 120 chars). | Default mode for standard clicks, types, selects, and form interactions. |
 | **`STANDARD`** | Text | **`LEAN` + Standard Static Text.** Includes full static body `<p>` paragraph copy of any length, text spans, badges, and order totals. | Selected for text assertions, paragraph matching, or when `LEAN` escalates. |
 | **`RICH`** | Text | **`STANDARD` + Full HTML Metadata.** Includes all `data-*`, `title`, `aria-describedby` attributes, un-truncated URLs, and 5-level parent context. | Selected for SKU/data-attribute targeting, table sorting, or deep card disambiguation. |
-| **`VISUAL`** | Visual | **Page Screenshot + 0 DOM Element Nodes.** Pure visual assertion/check. | Triggered by `(visual)` check/assertion without element interaction. |
-| **`VISUAL_LEAN`** | Visual | **Page Screenshot + `LEAN` DOM.** Visual element interaction. | Triggered when screenshot is required alongside compact element locators. |
-| **`VISUAL_RICH`** | Visual | **Page Screenshot + `RICH` DOM.** Maximum multimodal context. | Triggered by `(layout)` checks or complex visual layout debugging. |
+| **`VISUAL`** | Visual | **Viewport Screenshot + 0 DOM Element Nodes.** Pure visual assertion/check at standard screen size. | Triggered by `(visual)` check/assertion without element interaction. Uses viewport screenshot. |
+| **`VISUAL_LEAN`** | Visual | **Full-Page Screenshot + `LEAN` DOM.** Visual element interaction. | Triggered upon visual escalation; uses full-page screenshot. |
+| **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. | Triggered by `(layout)` checks or final visual escalation; uses full-page screenshot. |
+
+> **Screenshot Capture Scope Strategy**:
+> - **Viewport Screenshot**: Initial `VISUAL` steps (tagged `(visual)`) capture a standard viewport screenshot matching the active browser window size.
+> - **Immediate Full-Page Trigger**: Steps tagged with `(visual: full)` or `(visual:full)` capture a full-page screenshot immediately on the initial attempt while using ultra-lean `ContextLevel.VISUAL` (0 DOM element nodes).
+> - **Persistent Full-Page Escalation**: Once a step escalates visually (to `VISUAL_LEAN` or `VISUAL_RICH`) or starts with `(visual: full)`, screenshot capture **continuously preserves full-page mode** (capturing full document height beyond the fold, overlaid with a visual viewport border). It will never revert to a small viewport screenshot during retry escalations.
 
 ### DOM Serialization Differences: `LEAN` vs `STANDARD` vs `RICH`
 
@@ -823,6 +842,9 @@ asserter
     .hasPesapCalls(0, 12)            // PESAP pre-step analysis calls
     .hasVerificationCalls(0)         // post-action verification calls
     .hasJudgeCalls(0)                // quality judge calls
+    .hasInputTokens(1000, 5000)      // input tokens between 1000 and 5000
+    .hasOutputTokens(200, 800)       // output tokens between 200 and 800
+    .hasTotalTokens(1200, 5800)      // total tokens between 1200 and 5800
     .hasNoEscalations()              // asserts 0 context level escalations occurred
     .hasContextLevelCount(ContextLevel.MINIMAL, 12); // asserts ContextLevel.MINIMAL was used 12 times
 ```
@@ -854,6 +876,57 @@ session.execute(playbook)
 * **In `REPLAY_STRICT`:** Asserts `llmCalls == 0`, `healedSteps == 0`, `replayedSteps == stepCount`, and `softFailedSteps == 0`.
 * **In `FORCE_RECORDING` / `LLM_ONLY`:** Asserts `llmCalls > 0`, `replayedSteps == 0`, and `softFailedSteps == 0`.
 * **In `REPLAY_WITH_HEALING`:** Asserts that if any step was healed, `healedStepCount > 0` and `llmCalls > 0` (for healed steps only), otherwise `llmCalls == 0`.
+
+---
+
+## 24. Token Budget Guard & Real-Time Limits
+
+Neodymium AI supports real-time input (prompt) and output (completion) token budget limits per test run to prevent runaway LLM costs or infinite self-healing retry loops.
+
+### A. Configuration Properties
+
+Token budgets can be configured globally in `neodymium.properties`:
+
+```properties
+# Maximum input (prompt) token budget per test run (-1 = unlimited, default: -1)
+neodymium.ai.tokenBudget.input=50000
+
+# Maximum output (completion) token budget per test run (-1 = unlimited, default: -1)
+neodymium.ai.tokenBudget.output=10000
+```
+
+### B. Annotation-Driven Token Budgets (`@AiContext`)
+
+Token budgets can also be declared directly on test methods or test classes using the `@AiContext` annotation:
+
+```java
+@Test
+@AiMode(ExecutionMode.LLM_ONLY)
+@AiContext(tokenBudgetInput = 10000, tokenBudgetOutput = 2000)
+public void testWithStrictTokenLimits()
+{
+    // Execution aborts immediately with TokenBudgetExceededException if token usage exceeds limits
+}
+```
+
+### C. Real-Time Enforcement & Abort Behavior
+
+- **`TokenBudgetGuard`**: An `ExecutionListener` registered automatically on every `AiSession`.
+- **Event Monitoring**: Listens to `LlmResponseReceivedEvent` dispatches after each LLM provider call and tracks cumulative input and output tokens consumed during the test run.
+- **Immediate Abort**: When cumulative input tokens exceed `neodymium.ai.tokenBudget.input` (or output tokens exceed `neodymium.ai.tokenBudget.output`), `TokenBudgetGuard` throws a `TokenBudgetExceededException`.
+- **Bypasses Healing Loops**: `TokenBudgetExceededException` is treated as an unrecoverable failure by `StateMachineRunner`, immediately aborting the test without triggering retry loops or soft healing attempts.
+
+### D. Token Verification Asserters (`verifyMetrics()`)
+
+`MetricsAsserter` provides fluent assertion methods to validate input, output, and total token consumption during test runs:
+
+```java
+session.execute(playbook)
+    .verifyMetrics()
+    .hasInputTokens(1000, 5000)   // asserts input tokens fall within [1000, 5000]
+    .hasOutputTokens(200, 800)    // asserts output tokens fall within [200, 800]
+    .hasTotalTokens(1200, 5800);  // asserts total tokens fall within [1200, 5800]
+```
 
 ---
 

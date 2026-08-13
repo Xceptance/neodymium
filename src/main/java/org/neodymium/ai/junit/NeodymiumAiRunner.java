@@ -810,8 +810,42 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
             }
 
+            final AiContext methodContextAnnot = method != null ? method.getAnnotation(AiContext.class) : null;
+            final AiContext classContextAnnot = testClass != null ? testClass.getAnnotation(AiContext.class) : null;
+
+            int resolvedInputBudget = -1;
+            int resolvedOutputBudget = -1;
+
+            if (methodContextAnnot != null && methodContextAnnot.tokenBudgetInput() > 0)
+            {
+                resolvedInputBudget = methodContextAnnot.tokenBudgetInput();
+            }
+            else if (classContextAnnot != null && classContextAnnot.tokenBudgetInput() > 0)
+            {
+                resolvedInputBudget = classContextAnnot.tokenBudgetInput();
+            }
+
+            if (methodContextAnnot != null && methodContextAnnot.tokenBudgetOutput() > 0)
+            {
+                resolvedOutputBudget = methodContextAnnot.tokenBudgetOutput();
+            }
+            else if (classContextAnnot != null && classContextAnnot.tokenBudgetOutput() > 0)
+            {
+                resolvedOutputBudget = classContextAnnot.tokenBudgetOutput();
+            }
+
+            if (resolvedInputBudget > 0)
+            {
+                executionContext.getTransientData().put(ExecutionContext.KEY_TOKEN_BUDGET_INPUT, resolvedInputBudget);
+            }
+            if (resolvedOutputBudget > 0)
+            {
+                executionContext.getTransientData().put(ExecutionContext.KEY_TOKEN_BUDGET_OUTPUT, resolvedOutputBudget);
+            }
+
             String recMethod = null;
             String recFileName = null;
+            String recDir = null;
             final AiPlaybook methodPb = method.getAnnotation(AiPlaybook.class);
             final AiPlaybook classPb = testClass != null ? testClass.getAnnotation(AiPlaybook.class) : null;
             if (methodPb != null && !methodPb.recordingMethod().isEmpty())
@@ -839,15 +873,24 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 recFileName = classPb.name();
             }
 
+            if (methodPb != null && !methodPb.recordingDirectory().isEmpty())
+            {
+                recDir = methodPb.recordingDirectory();
+            }
+            else if (classPb != null && !classPb.recordingDirectory().isEmpty())
+            {
+                recDir = classPb.recordingDirectory();
+            }
+
             String resolvedPlaybookPath = playbookPath;
             if (this.mode.isReplay())
             {
                 // Replay modes: try candidate paths using recordingMethod / recordingFileName, then method defaults
                 final List<String> candidatePaths = new ArrayList<>();
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName));
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, null, recMethod, recFileName));
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, browserProfile, null, recFileName));
-                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, null, null, recFileName));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName, recDir));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, null, recMethod, recFileName, recDir));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, browserProfile, null, recFileName, recDir));
+                candidatePaths.add(computeRecordingPath(playbookPath, testClass, null, this.datasetId, null, null, recFileName, recDir));
                 candidatePaths.add(computeLegacyRecordingPath(playbookPath, this.datasetId));
 
                 String companionJsonPath = null;
@@ -877,41 +920,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    boolean yamlExists = false;
-                    try (final java.io.InputStream in = manager.read(playbookPath))
-                    {
-                        if (in != null)
-                        {
-                            yamlExists = true;
-                        }
-                    }
-                    catch (final Exception ignored)
-                    {
-                    }
-
-                    if (yamlExists)
-                    {
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn(
-                            "⚠️ [Mode Fallback] Replay mode '{}' requested for test '{}.{}', but no recorded companion JSON file was found. Falling back to original YAML playbook '{}'.",
-                            this.mode,
-                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
-                            method != null ? method.getName() : "unknownMethod",
-                            playbookPath
-                        );
-                        resolvedPlaybookPath = playbookPath;
-                    }
-                    else
-                    {
-                        final String msg = String.format(
-                            "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
-                            this.mode,
-                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
-                            method != null ? method.getName() : "unknownMethod",
-                            String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
-                        );
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
-                        throw new java.io.FileNotFoundException(msg);
-                    }
+                    final String msg = String.format(
+                        "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
+                        this.mode,
+                        testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                        method != null ? method.getName() : "unknownMethod",
+                        String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
+                    );
+                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
+                    throw new java.io.FileNotFoundException(msg);
                 }
             }
             else if (this.mode.isLive())
@@ -969,7 +986,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 playbook = parser.parse(resolvedPlaybookPath, manager);
             }
 
-            final String companionYamlPath = resolvedPlaybookPath;
+            final String companionYamlPath = (playbookPath != null && !playbookPath.isEmpty()) ? playbookPath : resolvedPlaybookPath;
             String yamlHash = null;
             if (this.mode.isReplay())
             {
@@ -1101,7 +1118,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 executionContext.getTransientData().put("playbook.programmatic", true);
             }
 
-            this.recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName);
+            this.recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName, recDir);
             if (this.recordingPath != null)
             {
                 final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.mode);
@@ -1459,7 +1476,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         final String browserProfile
     )
     {
-        return computeRecordingPath(playbookPath, testClass, method, datasetId, browserProfile, null, null);
+        return computeRecordingPath(playbookPath, testClass, method, datasetId, browserProfile, null, null, null);
     }
 
     private static String computeRecordingPath(
@@ -1469,9 +1486,14 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         final String datasetId,
         final String browserProfile,
         final String recordingMethod,
-        final String recordingFileName
+        final String recordingFileName,
+        final String recordingDirectory
     )
     {
+        final String recDir = (recordingDirectory != null && !recordingDirectory.trim().isEmpty())
+            ? recordingDirectory.trim()
+            : org.neodymium.ai.config.AiConfiguration.getInstance().playbookRecordingDirectory();
+
         if (recordingFileName != null && !recordingFileName.trim().isEmpty())
         {
             String name = recordingFileName.trim();
@@ -1487,7 +1509,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             else
             {
-                final String parentDir = extractParentDir(playbookPath);
+                final String parentDir = recDir != null
+                    ? (recDir.endsWith("/") ? recDir : recDir + "/")
+                    : extractParentDir(playbookPath);
                 sb.append(parentDir).append(name);
             }
 
@@ -1505,7 +1529,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             return sb.toString();
         }
 
-        final String parentDir = extractParentDir(playbookPath);
+        final String parentDir = recDir != null
+            ? (recDir.endsWith("/") ? recDir : recDir + "/")
+            : extractParentDir(playbookPath);
         final StringBuilder sb = new StringBuilder();
         sb.append(parentDir);
 

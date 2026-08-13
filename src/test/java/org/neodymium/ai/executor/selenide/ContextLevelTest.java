@@ -58,6 +58,22 @@ public class ContextLevelTest
     }
 
     @Test
+    public void testIsFullPageScreenshot()
+    {
+        Assertions.assertFalse(ContextLevel.VISUAL.isFullPageScreenshot());
+        Assertions.assertTrue(ContextLevel.VISUAL_LEAN.isFullPageScreenshot());
+        Assertions.assertTrue(ContextLevel.VISUAL_RICH.isFullPageScreenshot());
+    }
+
+    @Test
+    public void testFromStringParsing()
+    {
+        Assertions.assertEquals(ContextLevel.VISUAL, ContextLevel.fromString("VISUAL", null));
+        Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.fromString("visual-lean", null));
+        Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.fromString("VISUAL_RICH", null));
+    }
+
+    @Test
     public void testIncludesTextContent()
     {
         Assertions.assertFalse(ContextLevel.HINT.includesTextContent());

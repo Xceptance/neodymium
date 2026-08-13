@@ -76,11 +76,16 @@ public class ScreenshotWriter {
 
     public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot, boolean attach)
             throws IOException {
+        return doScreenshot(filename, pathname, didSelenideScreenshot, attach, false);
+    }
+
+    public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot, boolean attach, boolean forceFullPage)
+            throws IOException {
         String base64Image = null;
 
         // do viewport first otherwise the screen may be moved
         // viewport: !didSelenideScreenshot && enableViewportScreenshot
-        if (!didSelenideScreenshot && Neodymium.configuration().enableViewportScreenshot()) {
+        if (!forceFullPage && !didSelenideScreenshot && Neodymium.configuration().enableViewportScreenshot()) {
             String vpBase64 = takeScreenshot(filename, pathname, Capture.VIEWPORT, attach);
             if (vpBase64 != null) {
                 base64Image = vpBase64;
@@ -88,8 +93,8 @@ public class ScreenshotWriter {
         }
 
         // full page logic block
-        if (Neodymium.configuration().enableAdvancedScreenShots()
-                && Neodymium.configuration().enableFullPageCapture()) {
+        if (forceFullPage || (Neodymium.configuration().enableAdvancedScreenShots()
+                && Neodymium.configuration().enableFullPageCapture())) {
             String fpBase64 = takeScreenshot(filename, pathname, Capture.FULL, attach);
             if (fpBase64 != null) {
                 base64Image = fpBase64;

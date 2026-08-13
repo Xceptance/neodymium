@@ -149,13 +149,26 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             context.getTransientData().put("KEY_IS_CONTINUATION_STEP", false);
         }
 
-        if ("ESCALATE".equalsIgnoreCase(status))
+        boolean isEscalationRequested = "ESCALATE".equalsIgnoreCase(status);
+        final String targetLevelCandidate = root.hasNonNull("targetContextLevel") ? root.path("targetContextLevel").asText() : (root.hasNonNull("tc") ? root.path("tc").asText() : null);
+        final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
+            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                ? cl
+                : null;
+
+        if (!isEscalationRequested && targetLevelCandidate != null && actions.isEmpty())
         {
-            String targetLevelStr = root.hasNonNull("targetContextLevel") ? root.path("targetContextLevel").asText() : (root.hasNonNull("tc") ? root.path("tc").asText() : "STANDARD");
-            final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
-                context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
-                    ? cl
-                    : null;
+            final org.neodymium.ai.executor.selenide.ContextLevel candidateLevel =
+                org.neodymium.ai.executor.selenide.ContextLevel.fromString(targetLevelCandidate, null);
+            if (candidateLevel != null && activeLevel != null && candidateLevel.ordinal() > activeLevel.ordinal())
+            {
+                isEscalationRequested = true;
+            }
+        }
+
+        if (isEscalationRequested)
+        {
+            String targetLevelStr = targetLevelCandidate != null ? targetLevelCandidate : "STANDARD";
             if (activeLevel != null)
             {
                 final org.neodymium.ai.executor.selenide.ContextLevel reqLevel =
@@ -186,11 +199,8 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 final String idVal = target.substring(target.indexOf('#') + 1);
                 if (volatileDetector.isVolatile(idVal))
                 {
-                    final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
-                        context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
-                            ? cl
-                            : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
-                    final String nextLevelStr = activeLevel.escalate().name();
+                    final org.neodymium.ai.executor.selenide.ContextLevel currentLevel = activeLevel != null ? activeLevel : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+                    final String nextLevelStr = currentLevel.escalate() != null ? currentLevel.escalate().name() : currentLevel.name();
                     throw new org.neodymium.ai.pipeline.ToLevelEscalationException(
                         "Extracted target selector '" + target + "' uses an invalid volatile ID. Escalating context level.",
                         nextLevelStr

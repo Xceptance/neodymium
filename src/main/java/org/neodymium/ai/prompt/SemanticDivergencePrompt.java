@@ -55,7 +55,7 @@ public final class SemanticDivergencePrompt implements AiPrompt<String>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
-        return SystemPromptAddonHelper.appendAddon("You are an expert QA automation assistant. Your job is to compare a baseline web page source (the expected state) with the current web page source (the actual state) to identify semantic differences, such as elements being renamed, ID changes, or layout updates. Output only a concise, plain-English summary of the changes detected. Do not write HTML, code, or generic descriptions.", "divergence", context);
+        return SystemPromptAddonHelper.appendAddon("You are an expert QA automation assistant. Your job is to compare a baseline web page source (the expected state) with the current web page source (the actual state) to identify semantic differences, such as elements being renamed, ID changes, or layout updates. Output only a concise, natural language summary of the changes detected. Do not write HTML, code, or generic descriptions.", "divergence", context);
     }
 
     @Override

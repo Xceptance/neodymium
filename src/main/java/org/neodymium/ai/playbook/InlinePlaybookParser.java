@@ -70,9 +70,11 @@ public final class InlinePlaybookParser implements PlaybookParser
         }
 
         final String trimmed = this.content.trim();
-        if (trimmed.startsWith("steps:") || trimmed.startsWith("inline:") || trimmed.startsWith("---") || trimmed.contains("\nsteps:") || trimmed.contains("\ndata:"))
+        if (trimmed.startsWith("steps:") || trimmed.startsWith("inline:") || trimmed.startsWith("---") || trimmed.startsWith("_include:") || trimmed.startsWith("include:") || trimmed.contains("\nsteps:") || trimmed.contains("\ndata:") || trimmed.contains("\n_include:") || trimmed.contains("\ninclude:"))
         {
-            final InMemoryResourceManager stringManager = new InMemoryResourceManager();
+            final InMemoryResourceManager stringManager = (manager != null)
+                ? new InMemoryResourceManager(manager)
+                : new InMemoryResourceManager();
             stringManager.write("inline.yaml", content);
             return new YamlPlaybookParser().parse("inline.yaml", stringManager);
         }

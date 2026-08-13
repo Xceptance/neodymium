@@ -59,6 +59,16 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     public InputStream read(final String identifier) throws IOException
     {
         final String normalized = identifier != null && identifier.startsWith("/") ? identifier.substring(1) : identifier;
+        // First check direct filesystem path if specified
+        if (identifier != null)
+        {
+            final Path directPath = Path.of(identifier);
+            if (Files.exists(directPath) && !Files.isDirectory(directPath))
+            {
+                return Files.newInputStream(directPath);
+            }
+        }
+
         InputStream in = classLoader.getResourceAsStream(normalized);
         if (in == null && !normalized.startsWith("ai-playbooks/"))
         {
@@ -100,6 +110,10 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
                     {
                         candidatePaths.add(srcRoot.getParent().resolve(normalized));
                         candidatePaths.add(srcRoot.getParent().resolve("ai-playbooks/" + normalized));
+                        if (srcRoot.getParent().getParent() != null)
+                        {
+                            candidatePaths.add(srcRoot.getParent().getParent().resolve(normalized));
+                        }
                     }
                 }
 
@@ -132,19 +146,22 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
                 Files.createDirectories(targetPath.getParent());
                 Files.writeString(targetPath, content);
 
-                // Also write to src/test/resources if running in local development mode
-                final Path srcRoot = getSourceResourcesRoot();
-                if (srcRoot != null)
+                // Also write to src/test/resources if running in local development mode and not targeting a target directory
+                if (identifier != null && !identifier.startsWith("target/"))
                 {
-                    final Path srcTargetPath = srcRoot.resolve(identifier);
-                    Files.createDirectories(srcTargetPath.getParent());
-                    Files.writeString(srcTargetPath, content);
+                    final Path srcRoot = getSourceResourcesRoot();
+                    if (srcRoot != null)
+                    {
+                        final Path srcTargetPath = srcRoot.resolve(identifier);
+                        Files.createDirectories(srcTargetPath.getParent());
+                        Files.writeString(srcTargetPath, content);
+                    }
                 }
                 return;
             }
             catch (final Exception e)
             {
-                throw new IOException("Failed to write resource to classpath output directory", e);
+                throw new IOException("Failed to write resource to output directory", e);
             }
         }
         throw new UnsupportedOperationException("ClasspathResourceManager is read-only when not running from local file system");

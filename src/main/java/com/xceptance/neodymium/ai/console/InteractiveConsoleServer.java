@@ -670,7 +670,6 @@ public final class InteractiveConsoleServer
     {
         try
         {
-            final Gson gson = new Gson();
             final JsonObject template = JsonParser.parseString(jsonContent).getAsJsonObject();
             runSimulationInternal(engine, template, template);
         }

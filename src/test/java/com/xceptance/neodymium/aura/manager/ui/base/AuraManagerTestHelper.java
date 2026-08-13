@@ -65,48 +65,50 @@ public final class AuraManagerTestHelper
         {
             reportDir.mkdirs();
 
-            final String metadataJson = "{\n"
-                + "  \"status\": \"Passed\",\n"
-                + "  \"timestamp\": \"2026-08-03T12:00:00Z\",\n"
-                + "  \"total\": 1,\n"
-                + "  \"passed\": 1,\n"
-                + "  \"failed\": 0,\n"
-                + "  \"durationMs\": 15000,\n"
-                + "  \"headless\": true,\n"
-                + "  \"allureEnabled\": true,\n"
-                + "  \"videoEnabled\": false\n"
-                + "}";
+            final String metadataJson = """
+                {
+                  "status": "Passed",
+                  "timestamp": "2026-08-03T12:00:00Z",
+                  "total": 1,
+                  "passed": 1,
+                  "failed": 0,
+                  "durationMs": 15000,
+                  "headless": true,
+                  "allureEnabled": true,
+                  "videoEnabled": false
+                }""";
             Files.writeString(new File(reportDir, "metadata.json").toPath(), metadataJson, StandardCharsets.UTF_8);
 
-            final String executionJson = "{\n"
-                + "  \"testId\": \"T101\",\n"
-                + "  \"testName\": \"Layout Blueprint Verification Test\",\n"
-                + "  \"status\": \"Passed\",\n"
-                + "  \"browser\": \"Chrome\",\n"
-                + "  \"stats\": {\n"
-                + "    \"durationMs\": 15000\n"
-                + "  },\n"
-                + "  \"yamlSource\": \"tests/layout_test.yaml\",\n"
-                + "  \"playbookMode\": \"false\",\n"
-                + "  \"steps\": [\n"
-                + "    {\n"
-                + "      \"index\": 0,\n"
-                + "      \"step\": \"Open homepage and verify header\",\n"
-                + "      \"status\": \"passed\",\n"
-                + "      \"action\": \"open\",\n"
-                + "      \"target\": \"http://localhost\",\n"
-                + "      \"durationMs\": 1200\n"
-                + "    },\n"
-                + "    {\n"
-                + "      \"index\": 1,\n"
-                + "      \"step\": \"Click navigation menu item\",\n"
-                + "      \"status\": \"passed\",\n"
-                + "      \"action\": \"click\",\n"
-                + "      \"target\": \"#navReports\",\n"
-                + "      \"durationMs\": 850\n"
-                + "    }\n"
-                + "  ]\n"
-                + "}";
+            final String executionJson = """
+                {
+                  "testId": "T101",
+                  "testName": "Layout Blueprint Verification Test",
+                  "status": "Passed",
+                  "browser": "Chrome",
+                  "stats": {
+                    "durationMs": 15000
+                  },
+                  "yamlSource": "tests/layout_test.yaml",
+                  "playbookMode": "false",
+                  "steps": [
+                    {
+                      "index": 0,
+                      "step": "Open homepage and verify header",
+                      "status": "passed",
+                      "action": "open",
+                      "target": "http://localhost",
+                      "durationMs": 1200
+                    },
+                    {
+                      "index": 1,
+                      "step": "Click navigation menu item",
+                      "status": "passed",
+                      "action": "click",
+                      "target": "#navReports",
+                      "durationMs": 850
+                    }
+                  ]
+                }""";
             Files.writeString(new File(reportDir, "console-execution-layout.json").toPath(), executionJson, StandardCharsets.UTF_8);
         }
     }
@@ -136,19 +138,21 @@ public final class AuraManagerTestHelper
             {
                 if (targetFile.exists())
                 {
-                    java.nio.file.Files.delete(targetFile.toPath());
+                    Files.delete(targetFile.toPath());
                 }
             }
             else if (testName.contains("testDeleteTest") || testName.contains("Delete_Test"))
             {
                 if (!targetFile.exists())
                 {
-                    final String boilerplate = "# Neodymium YAML Test Data File\n" +
-                                               "steps: |\n" +
-                                               "  Open browser\n" +
-                                               "data:\n" +
-                                               "  - testId: \"Automated Workspace Test\"\n";
-                    java.nio.file.Files.writeString(targetFile.toPath(), boilerplate, java.nio.charset.StandardCharsets.UTF_8);
+                    final String boilerplate = """
+                        # Neodymium YAML Test Data File
+                        steps: |
+                          Open browser
+                        data:
+                          - testId: "Automated Workspace Test"
+                        """;
+                    Files.writeString(targetFile.toPath(), boilerplate, StandardCharsets.UTF_8);
                 }
             }
         }
@@ -157,7 +161,6 @@ public final class AuraManagerTestHelper
         auraServer = NeodymiumAuraManager.startServer(startPort, true);
         auraPort = auraServer.getAddress().getPort();
         Neodymium.getData().put("auraManagerUrl", "http://127.0.0.1:" + auraPort);
-        org.neodymium.util.Neodymium.getData().put("auraManagerUrl", "http://127.0.0.1:" + auraPort);
         System.out.println("Started AuraManager on http://127.0.0.1:" + auraPort);
         try
         {
@@ -227,7 +230,7 @@ public final class AuraManagerTestHelper
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
         if (targetFile.exists())
         {
-            java.nio.file.Files.delete(targetFile.toPath());
+            Files.delete(targetFile.toPath());
         }
     }
 
@@ -236,12 +239,14 @@ public final class AuraManagerTestHelper
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
         if (!targetFile.exists())
         {
-            final String boilerplate = "# Neodymium YAML Test Data File\n" +
-                                       "steps: |\n" +
-                                       "  Open browser\n" +
-                                       "data:\n" +
-                                       "  - testId: \"Automated Workspace Test\"\n";
-            java.nio.file.Files.writeString(targetFile.toPath(), boilerplate, java.nio.charset.StandardCharsets.UTF_8);
+            final String boilerplate = """
+                # Neodymium YAML Test Data File
+                steps: |
+                  Open browser
+                data:
+                  - testId: "Automated Workspace Test"
+                """;
+            Files.writeString(targetFile.toPath(), boilerplate, StandardCharsets.UTF_8);
         }
     }
 }

@@ -134,7 +134,7 @@ public final class VerlaProgrammaticDemoTest
                   Press enter to submit search
 
                 data:
-                  - testId: "default"
+                  - testId: "any"
                     searchTerm: "Minimalist"
                 """);
         }

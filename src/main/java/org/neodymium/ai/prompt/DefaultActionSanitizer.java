@@ -182,6 +182,15 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             sanitizedReasoning
         );
 
+        sanitizedAction.setIsRegex(rawAction.isRegex());
+        sanitizedAction.setStepInstruction(rawAction.getStepInstruction());
+        sanitizedAction.setStepLine(rawAction.getStepLine());
+        sanitizedAction.setStepFile(rawAction.getStepFile());
+        sanitizedAction.setStepScreenshotHash(rawAction.getStepScreenshotHash());
+        sanitizedAction.setAdjust(rawAction.getAdjust());
+        sanitizedAction.setSelfCritique(rawAction.getSelfCritique());
+        sanitizedAction.setCandidateLocators(new ArrayList<>(rawAction.getCandidateLocators()));
+
         // Copy dynamic parameters map
         sanitizedAction.getParameters().putAll(rawAction.getParameters());
 

@@ -125,9 +125,13 @@ public final class GeminiLlmProvider implements LlmProvider
             {
                 if (attachment.base64Data() != null)
                 {
-                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/"))
+                    final boolean isImage = attachment.mediaType() != null &&
+                        (attachment.mediaType().startsWith("image/") || "screenshot".equalsIgnoreCase(attachment.mediaType()));
+                    if (isImage)
                     {
-                        contents.add(ImageContent.from(attachment.base64Data(), attachment.mediaType()));
+                        final String mimeType = (attachment.mediaType() != null && attachment.mediaType().startsWith("image/"))
+                            ? attachment.mediaType() : "image/png";
+                        contents.add(ImageContent.from(attachment.base64Data(), mimeType));
                     }
                     else
                     {

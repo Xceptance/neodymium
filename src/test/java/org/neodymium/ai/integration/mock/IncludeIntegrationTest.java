@@ -43,7 +43,7 @@ import org.neodymium.common.browser.Browser;
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", name = "custom_include_playbook")
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_include_playbook")
 public class IncludeIntegrationTest extends BaseAiTest
 {
 
@@ -98,7 +98,7 @@ public class IncludeIntegrationTest extends BaseAiTest
         session.execute( """
             steps: |
               Open ${include.test.url} in the browser
-              include: playbooks/integration/includes/accept_cookies.yaml
+              _include: playbooks/integration/includes/accept_cookies.yaml
             """);
 
         $("#result").shouldHave(exactText("Cookies Accepted!"));
@@ -146,7 +146,7 @@ public class IncludeIntegrationTest extends BaseAiTest
         session.execute( """
             steps: |
               Open ${include.test.url} in the browser
-              include: playbooks/integration/includes/nested_parent.yaml
+              _include: playbooks/integration/includes/nested_parent.yaml
             """);
 
         $("#result").shouldHave(exactText("Cookies Accepted!"));

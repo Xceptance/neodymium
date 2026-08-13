@@ -20,10 +20,12 @@ package org.neodymium.ai.session;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
@@ -167,6 +169,7 @@ public class AiSessionTest
         try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
         {
             final PlaybookStep step = new PlaybookStep("Verify user ${user}");
+            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
             final Playbook playbook = new Playbook(List.of(step), Collections.emptyList());
 
             final PlaybookRecording recording = session.execute(playbook, customData);
@@ -216,7 +219,10 @@ public class AiSessionTest
     {
         try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
         {
-            final PlaybookRecording recording = session.execute("Open homepage");
+            final PlaybookStep step = new PlaybookStep("Open homepage");
+            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
+            final Playbook playbook = new Playbook(List.of(step), Collections.emptyList());
+            final PlaybookRecording recording = session.execute(playbook);
             Assertions.assertNotNull(recording);
             Assertions.assertEquals(ExecutionMode.REPLAY_STRICT, recording.getExecutionMode());
             Assertions.assertTrue(recording.isStrictReplay());
@@ -233,6 +239,56 @@ public class AiSessionTest
                 });
 
             Assertions.assertTrue(strictLambdaCalled.get(), "onStrictReplay lambda should have been triggered");
+        }
+    }
+
+    @Test
+    @DisplayName("execute(Playbook) automatically selects first dataset when sessionData is null/unspecified")
+    public void testExecutePlaybookAutoSelectsFirstDataSet() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookStep step = new PlaybookStep("Search for ${searchTerm}");
+            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
+
+            final Map<String, SessionData.DataEntry> ds1 = Map.of(
+                "testId", new SessionData.DataEntry("first_ds", false),
+                "searchTerm", new SessionData.DataEntry("FirstSearch", false)
+            );
+            final Map<String, SessionData.DataEntry> ds2 = Map.of(
+                "testId", new SessionData.DataEntry("second_ds", false),
+                "searchTerm", new SessionData.DataEntry("SecondSearch", false)
+            );
+
+            final Playbook playbook = new Playbook(List.of(step), List.of(ds1, ds2));
+
+            final PlaybookRecording recording = session.execute(playbook);
+            Assertions.assertNotNull(recording);
+            Assertions.assertEquals("FirstSearch", session.data().get("searchTerm"));
+            Assertions.assertEquals("first_ds", session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL));
+        }
+    }
+
+    @Test
+    @DisplayName("execute(String) with embedded datasets automatically seeds the first dataset when no sessionData is specified")
+    public void testExecuteInlineYamlAutoSelectsFirstDataSet() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookRecording recording = session.execute("""
+                steps: |
+                  Open ${url} in the browser
+
+                data:
+                  - testId: "ds_primary"
+                    url: "http://localhost/primary"
+                  - testId: "ds_secondary"
+                    url: "http://localhost/secondary"
+                """);
+
+            Assertions.assertNotNull(recording);
+            Assertions.assertEquals("http://localhost/primary", session.data().get("url"));
+            Assertions.assertEquals("ds_primary", session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL));
         }
     }
 }

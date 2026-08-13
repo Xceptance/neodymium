@@ -101,8 +101,13 @@ public final class VerifyOutcomeStep implements PipelineStep
                     }
                     else
                     {
-                        final org.neodymium.ai.executor.selenide.ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) ? activeLevel : (step.isVisualStep() ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
-                        capturedState = executor.captureState(level);
+                        final org.neodymium.ai.executor.selenide.ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
+                            ? activeLevel 
+                            : ((step != null && step.isVisualStep()) 
+                                ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL 
+                                : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
+                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                        capturedState = executor.captureState(level, isFullPageReq);
                     }
                 }
                 if (capturedState != null && capturedState.getAttachments() != null)

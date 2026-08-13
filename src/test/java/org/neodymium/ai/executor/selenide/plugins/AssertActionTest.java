@@ -78,4 +78,16 @@ public class AssertActionTest extends BaseAiTest
         plugin.execute(new Action("ASSERT", "#opt-user", "selected=true", "check selected=true", "reasoning", false));
         plugin.execute(new Action("ASSERT", "#readonly-input", "readonly=true", "check readonly=true", "reasoning", false));
     }
+
+    @Test
+    @DisplayName("AssertAction with isRegex=false matches literal text containing dollar signs cleanly")
+    public void testAssertActionLiteralWithDollarSignPasses() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        // #welcome-message contains text: "Welcome to our web store!"
+        plugin.execute(new Action("ASSERT", "#welcome-message", "Welcome", "check literal Welcome", "reasoning", false));
+    }
 }

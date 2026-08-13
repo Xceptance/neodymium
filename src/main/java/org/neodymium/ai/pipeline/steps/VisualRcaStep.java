@@ -145,7 +145,7 @@ public final class VisualRcaStep implements PipelineStep
 
         try
         {
-            // 7. Dispatch diagnosis call and parse plain-English RCA diagnosis summary
+            // 7. Dispatch diagnosis call and parse natural language RCA diagnosis summary
             LOGGER.debug("Executing Visual RCA via LLM provider '{}'", provider.getClass().getSimpleName());
             final LlmResponse response = provider.chat(request);
             LOGGER.trace("Raw response content:\n{}", response.content());

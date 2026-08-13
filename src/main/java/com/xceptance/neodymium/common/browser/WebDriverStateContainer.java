@@ -4,7 +4,8 @@ import org.openqa.selenium.WebDriver;
 
 import com.browserup.bup.BrowserUpProxy;
 
-public class WebDriverStateContainer
+@Deprecated
+public class WebDriverStateContainer extends org.neodymium.common.browser.WebDriverStateContainer
 {
     private int usedCount = 0;
 

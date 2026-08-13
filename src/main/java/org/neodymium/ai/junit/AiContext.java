@@ -41,4 +41,18 @@ public @interface AiContext
      * @return the context level
      */
     ContextLevel value() default ContextLevel.MINIMAL;
+
+    /**
+     * Maximum allowed input (prompt) token budget for the test run (-1 for no limit).
+     *
+     * @return maximum input token limit
+     */
+    int tokenBudgetInput() default -1;
+
+    /**
+     * Maximum allowed output (completion) token budget for the test run (-1 for no limit).
+     *
+     * @return maximum output token limit
+     */
+    int tokenBudgetOutput() default -1;
 }

@@ -41,6 +41,19 @@ public interface TargetExecutor
     SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException;
 
     /**
+     * Captures the current state of the SUT with optional full-page screenshot override.
+     *
+     * @param level the active context level to capture
+     * @param isFullPage true to force full-page screenshot capture
+     * @return the captured SUT state
+     * @throws IOException if state capture fails
+     */
+    default SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level, final boolean isFullPage) throws IOException
+    {
+        return captureState(level);
+    }
+
+    /**
      * Captures the current state of the SUT using the default LEAN context level.
      *
      * @return the captured SUT state

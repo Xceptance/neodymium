@@ -82,4 +82,14 @@ public @interface AiPlaybook
      * @return the custom companion recording file base name or path
      */
     String recordingFileName() default "";
+
+    /**
+     * Custom directory path where recorded companion playbook JSON files are saved.
+     * <p>
+     * Overrides default parent directory resolution.
+     * Useful for directing generated companion recordings to build output target folders (e.g. {@code "target/playbooks/integration"}).
+     *
+     * @return the custom companion recording output directory path
+     */
+    String recordingDirectory() default "";
 }

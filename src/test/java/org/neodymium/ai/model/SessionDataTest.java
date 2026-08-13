@@ -136,4 +136,35 @@ public final class SessionDataTest
         assertEquals("[SENSITIVE_VALUE]", guardedMap.get("password"));
         assertEquals("[SENSITIVE_VALUE]", guardedMap.get("token"));
     }
+
+    /**
+     * Verifies that resolveVariables falls back to Neodymium.getData() when not in SessionData.
+     */
+    @Test
+    public void testResolveVariablesFallbackToNeodymiumData()
+    {
+        com.xceptance.neodymium.util.Neodymium.getData().put("globalUrl", "http://localhost:8080");
+        final SessionData session = new SessionData();
+
+        final String resolved = session.resolveVariables("Open ${globalUrl}/home");
+        assertEquals("Open http://localhost:8080/home", resolved);
+    }
+
+    /**
+     * Verifies that resolveVariables fails hard with IllegalArgumentException when a placeholder cannot be resolved.
+     */
+    @Test
+    public void testResolveVariablesFailsHardOnUnresolvablePlaceholder()
+    {
+        final SessionData session = new SessionData();
+        final IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> session.resolveVariables("Open ${unresolvableVariable}/home")
+        );
+
+        org.junit.jupiter.api.Assertions.assertTrue(
+            ex.getMessage().contains("Unresolvable variable placeholder '${unresolvableVariable}'"),
+            "Exception message should mention the missing variable name"
+        );
+    }
 }

@@ -574,7 +574,14 @@ public final class ExecuteActionsStep implements PipelineStep
 
             org.neodymium.ai.executor.selenide.ContextLevel initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
             final String lower = resolvedInstruction.toLowerCase();
-            if (lower.contains("(visual)"))
+            final boolean isFullPageTag = lower.contains("(visual: full)") || lower.contains("(layout)");
+            contextState.getTransientData().put("KEY_IS_FULL_PAGE_SCREENSHOT", isFullPageTag);
+
+            if (lower.contains("(visual: full)"))
+            {
+                initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
+            }
+            else if (lower.contains("(visual)"))
             {
                 initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
             }
@@ -758,7 +765,17 @@ public final class ExecuteActionsStep implements PipelineStep
                     {
                         try
                         {
-                            initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(pesapResult.contextLevel().toUpperCase().trim());
+                            final org.neodymium.ai.executor.selenide.ContextLevel predicted =
+                                org.neodymium.ai.executor.selenide.ContextLevel.valueOf(pesapResult.contextLevel().toUpperCase().trim());
+                            // Preserve explicit (visual) tag unless (visual: full) or (layout) was explicitly specified
+                            if (initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL && predicted == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH)
+                            {
+                                LOGGER.debug("   🛡️ Preserving explicit (visual) tag level VISUAL over PESAP predicted VISUAL_RICH");
+                            }
+                            else
+                            {
+                                initialLevel = predicted;
+                            }
                         }
                         catch (final Exception e)
                         {
@@ -907,7 +924,7 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 // Replay mode: Stamp live DOM with data-ai attributes before executing step actions
                 standardFlow.add(c -> {
-                    if (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT && (step.getActions() == null || step.getActions().isEmpty()))
+                    if (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT && step.getActions() == null)
                     {
                         throw new org.neodymium.ai.pipeline.ConclusiveFailureException(
                             "No recorded actions found for step '" + step.getInstruction() + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
@@ -956,7 +973,8 @@ public final class ExecuteActionsStep implements PipelineStep
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     try
                     {
-                        final SutState state = executor.captureState(captureLevel);
+                        final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                        final SutState state = executor.captureState(captureLevel, isFullPageReq);
                         c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
                         if (state != null && state.getTextContent() != null)
                         {
@@ -1039,7 +1057,8 @@ public final class ExecuteActionsStep implements PipelineStep
                         c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
                     }
 
-                    if (!com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                    final TargetExecutor currentExecutor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (!com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted() && currentExecutor == null)
                     {
                         throw new ConclusiveFailureException("Browser/WebDriver has not started yet. Ensure the playbook starts with a NAVIGATE step or browser is initialized in setup.");
                     }
@@ -1259,6 +1278,15 @@ public final class ExecuteActionsStep implements PipelineStep
             rawAction.getReasoning()
         );
 
+        resolvedAction.setIsRegex(rawAction.isRegex());
+        resolvedAction.setStepInstruction(rawAction.getStepInstruction());
+        resolvedAction.setStepLine(rawAction.getStepLine());
+        resolvedAction.setStepFile(rawAction.getStepFile());
+        resolvedAction.setStepScreenshotHash(rawAction.getStepScreenshotHash());
+        resolvedAction.setAdjust(rawAction.getAdjust());
+        resolvedAction.setSelfCritique(rawAction.getSelfCritique());
+        resolvedAction.setCandidateLocators(new ArrayList<>(rawAction.getCandidateLocators()));
+
         // Copy dynamic parameters map
         resolvedAction.getParameters().putAll(rawAction.getParameters());
 
@@ -1315,6 +1343,7 @@ public final class ExecuteActionsStep implements PipelineStep
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)\\s*", " ");
         return prepared.replaceAll("\\s+", " ").trim();
     }
 }

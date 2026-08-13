@@ -25,6 +25,7 @@ import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiInlinePlaybook;
 import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.Browser;
@@ -38,6 +39,7 @@ import org.neodymium.common.browser.Browser;
  * @author Xceptance GmbH 2026
  */
 @NeodymiumAiTest
+@AiPlaybook(recordingDirectory = "target/playbooks/external")
 @Browser("Chrome_1500x1000_headless")
 public class BlogTest
 {
