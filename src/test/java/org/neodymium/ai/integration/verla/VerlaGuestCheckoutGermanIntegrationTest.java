@@ -52,6 +52,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
+@AiPlaybook(recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
 {
@@ -72,7 +73,6 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
-        System.setProperty("neodymium.ai.playbook.recordingDirectory", "target/playbooks/integration");
 
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
         if (methodName.contains("WithJudge"))
