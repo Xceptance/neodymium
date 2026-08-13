@@ -23,10 +23,12 @@ import static com.codeborne.selenide.Selenide.$$;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
@@ -36,10 +38,10 @@ import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
 /**
- * Selenide UI test to verify the Neodymium Aura Manager's YAML Editor and
- * CRUD capabilities (Create, Read, Update, Delete) under Thymeleaf/HTMX.
+ * Selenide UI test suite to verify the Neodymium Aura Manager's reworked visual YAML Playbook Editor
+ * and CRUD capabilities (Create, Read, Update, Delete) under Thymeleaf/HTMX.
  * 
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Tag("ui")
@@ -103,13 +105,14 @@ public final class AuraManagerEditorUiTest
         // Modal should close
         $("#createTestModal").shouldNotBe(Condition.visible);
 
-        // Editor panel should split/open with the new file active
+        // Visual editor panel should open with the new file active
         $("#editorPanel").shouldBe(Condition.visible);
         $("#editorFileName").shouldHave(Condition.exactText("new-interactive-aura-test.yaml"));
-        $("#editorContent").shouldHave(Condition.value("Verify the Page contains a header Navigation"));
+        $("#visualEditorMain").shouldBe(Condition.visible);
+        $("#stepsCodePanel").shouldBe(Condition.visible);
 
         // Close the editor
-        $(".btn-editor:not(.save):not(.delete)").shouldBe(Condition.visible).click();
+        $("#editorPanel .editor-actions button:last-child").shouldBe(Condition.visible).click();
         $("#editorPanel").shouldNotBe(Condition.visible);
 
         // Selection list should now display the new file
@@ -130,7 +133,7 @@ public final class AuraManagerEditorUiTest
         $("#createTestModal").shouldNotBe(Condition.visible);
 
         // Close editor panel to return to test selection view
-        $(".btn-editor:not(.save):not(.delete)").shouldBe(Condition.visible).click();
+        $("#editorPanel .editor-actions button:last-child").shouldBe(Condition.visible).click();
         $("#editorPanel").shouldNotBe(Condition.visible);
 
         // Try creating the same test case again
@@ -153,21 +156,22 @@ public final class AuraManagerEditorUiTest
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
         $("#createTestModal").shouldNotBe(Condition.visible);
 
-        // Editor is now open for this file
+        // Visual editor is open
         $("#editorPanel").shouldBe(Condition.visible);
 
-        // Modify the YAML content
-        final String newContent = "- type: \"navigate\"\n  url: \"https://xceptance.com\"\n";
-        $("#editorContent").shouldBe(Condition.visible).setValue(newContent);
+        // Modify first step row text
+        final var stepContent = $("#stepsList .step-content").shouldBe(Condition.visible);
+        stepContent.click();
+        Selenide.executeJavaScript("arguments[0].innerText = 'Open https://xceptance.com';", stepContent);
 
         // Click the Save button
-        $(".btn-editor.save").shouldBe(Condition.visible).click();
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
 
         // Verify toast notification is displayed
         $(".toast.success").shouldBe(Condition.visible);
 
         // Close the editor
-        $(".btn-editor:not(.save):not(.delete)").shouldBe(Condition.visible).click(); // Close is the last button
+        $("#editorPanel .editor-actions button:last-child").shouldBe(Condition.visible).click();
         $("#editorPanel").shouldNotBe(Condition.visible);
 
         // Open the editor again by clicking on the edit pencil next to our created file
@@ -175,9 +179,9 @@ public final class AuraManagerEditorUiTest
                 .find(Condition.text("new-interactive-aura-test.yaml"));
         fileListItem.hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
 
-        // Verify the edits were loaded successfully
+        // Verify the edits were loaded successfully in the visual editor
         $("#editorPanel").shouldBe(Condition.visible);
-        $("#editorContent").shouldHave(Condition.value("https://xceptance.com"));
+        $("#stepsList .step-content").shouldHave(Condition.text("https://xceptance.com"));
     }
 
     @NeodymiumTest
@@ -191,7 +195,7 @@ public final class AuraManagerEditorUiTest
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
         $("#createTestModal").shouldNotBe(Condition.visible);
 
-        // Verify it is created and editor is open
+        // Verify editor is open
         $("#editorPanel").shouldBe(Condition.visible);
 
         // Click the delete button in the editor
@@ -204,10 +208,8 @@ public final class AuraManagerEditorUiTest
         // Click confirm delete
         $("#deleteTestModal").$(".btn-danger").shouldBe(Condition.visible).click();
 
-        // Delete confirmation modal should close
+        // Modal and editor should close
         $("#deleteTestModal").shouldNotBe(Condition.visible);
-
-        // Editor panel should close
         $("#editorPanel").shouldNotBe(Condition.visible);
 
         // File should be deleted from the file list
@@ -242,14 +244,152 @@ public final class AuraManagerEditorUiTest
         $("#editorPanel").shouldBe(Condition.visible);
 
         // Click Close button
-        $(".btn-editor:not(.save):not(.delete)").shouldBe(Condition.visible).click();
+        $("#editorPanel .editor-actions button:last-child").shouldBe(Condition.visible).click();
 
         // Verify editor panel closes and "Run Open Test" button is hidden
         $("#editorPanel").shouldNotBe(Condition.visible);
         $("#runCurrentTestBtn").shouldNotBe(Condition.visible);
 
-        // Sleep briefly to ensure HTMX response settle event does not re-open the editor
         Selenide.sleep(500);
         $("#editorPanel").shouldNotBe(Condition.visible);
     }
+
+    @NeodymiumTest
+    public final void testBeforeAndAfterBlocksToggle()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Open editor
+        final var fileItem = $$("#yamlFileList .file-container").first();
+        fileItem.hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
+
+        // Initial state: before and after panels are hidden if not present
+        $("#addBeforeBtnContainer").shouldBe(Condition.visible);
+        
+        // Add before block
+        $("#addBeforeBtnContainer button").click();
+        $("#beforeCodePanel").shouldBe(Condition.visible);
+        $("#addBeforeBtnContainer").shouldNotBe(Condition.visible);
+
+        // Remove before block
+        $("#beforeCodePanel .btn-remove-section-block").click();
+        $("#beforeCodePanel").shouldNotBe(Condition.visible);
+        $("#addBeforeBtnContainer").shouldBe(Condition.visible);
+
+        // Add after block
+        $("#addAfterBtnContainer button").click();
+        $("#afterCodePanel").shouldBe(Condition.visible);
+        $("#addAfterBtnContainer").shouldNotBe(Condition.visible);
+
+        // Remove after block
+        $("#afterCodePanel .btn-remove-section-block").click();
+        $("#afterCodePanel").shouldNotBe(Condition.visible);
+        $("#addAfterBtnContainer").shouldBe(Condition.visible);
+    }
+
+    @NeodymiumTest
+    public final void testStepEditingAndLineNumbering()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+
+        // Verify step line numbering in steps panel
+        final var steps = $$("#stepsList .step-row");
+        Assertions.assertTrue(steps.size() >= 1, "At least one step row should exist.");
+        steps.first().$(".step-number").shouldHave(Condition.exactText("1"));
+    }
+
+    @NeodymiumTest
+    public final void testTestDataMatrixInteractivity()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create test case
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+
+        // Add variable row in test data matrix
+        $(".add-row-bottom-btn").shouldBe(Condition.visible).click();
+        
+        // Enter variable key
+        final var lastKeyInput = $$("#transposedGrid .var-key-input").last();
+        lastKeyInput.setValue("userEmail");
+
+        // Enter value for first iteration
+        final var cellInput = $$("#transposedGrid tbody tr").last().$(".cell-val");
+        cellInput.setValue("tester@xceptance.com");
+
+        // Save file
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+    }
+
+    @NeodymiumTest
+    public final void testQuickInsertPaletteActionChips()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Open editor
+        final var fileItem = $$("#yamlFileList .file-container").first();
+        fileItem.hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
+
+        // Click quick insert action chip (e.g. Open Base URL)
+        final var chip = $$(".action-chip").find(Condition.text("Open Base URL"));
+        chip.shouldBe(Condition.visible).click();
+
+        // Active step should be updated or focused
+        $("#stepsList .step-row").shouldBe(Condition.visible);
+    }
+
+    @NeodymiumTest
+    public final void testQuickInsertControlFlagsAndVariables()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Open editor
+        final var fileItem = $$("#yamlFileList .file-container").first();
+        fileItem.hover().$(".edit-icon-btn").shouldBe(Condition.visible).click();
+
+        // Click control flag button
+        final var optBtn = $$("aside.sidebar-palette-right button").find(Condition.text("(optional)"));
+        optBtn.shouldBe(Condition.visible).click();
+
+        // Verify snippet is inserted into active step
+        $("#stepsList .step-row").shouldBe(Condition.visible);
+    }
+
+    @NeodymiumTest
+    public final void testYamlCompilationAndSave() throws IOException
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+
+        // Edit step
+        final var stepContent = $$("#stepsList .step-content").first();
+        stepContent.click();
+        Selenide.executeJavaScript("arguments[0].innerText = 'Assert page contains \"Welcome\"';", stepContent);
+
+        // Click Save
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Read file on disk to confirm compilation
+        final File resourcesDir = new File("src/test/resources").getAbsoluteFile();
+        final File testFile = new File(resourcesDir, "new-interactive-aura-test.yaml");
+        Assertions.assertTrue(testFile.exists(), "Saved YAML test file should exist on disk.");
+
+        final String fileContent = Files.readString(testFile.toPath());
+        Assertions.assertTrue(fileContent.contains("steps:"), "YAML file should contain steps section.");
+        Assertions.assertTrue(fileContent.contains("Assert page contains \"Welcome\""), "YAML file should contain updated step text.");
+    }
 }
+

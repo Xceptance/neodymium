@@ -98,18 +98,20 @@ public final class AuraManagerEditorEdgeCasesUiTest
         final File testFile = new File(this.resourcesDir, "editor-syntax-error-test.yaml");
         Assertions.assertTrue(testFile.exists(), "Test file was not created on disk.");
 
-        // Modify editor content with malformed string
-        final String malformedYaml = "steps: [\n - unclosed array item without bracket";
-        $("#editorContent").shouldBe(Condition.visible).setValue(malformedYaml);
+        // Modify visual step row
+        final var stepContent = $("#stepsList .step-content").shouldBe(Condition.visible);
+        stepContent.click();
+        final String rawText = "Unclosed quote \" step text";
+        Selenide.executeJavaScript("arguments[0].innerText = arguments[1];", stepContent, rawText);
 
         // Click Save
-        $(".btn-editor.save").shouldBe(Condition.visible).click();
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
 
         // Editor panel remains open
         $("#editorPanel").shouldBe(Condition.visible);
 
-        // Verify toast or confirmation is handled and editor content is retained
-        $("#editorContent").shouldHave(Condition.value(malformedYaml));
+        // Verify editor content retained in visual step
+        $("#stepsList .step-content").shouldHave(Condition.text("Unclosed quote"));
     }
 
     @NeodymiumTest

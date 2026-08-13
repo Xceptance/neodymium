@@ -1,0 +1,7 @@
+# Neodymium YAML Test Data File
+steps: |
+  Open http://google.com
+  Verify the Page contains a header Navigation
+
+data:
+  - testId: "use goolge"

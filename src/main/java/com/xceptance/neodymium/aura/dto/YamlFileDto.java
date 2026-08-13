@@ -36,4 +36,21 @@ public final class YamlFileDto
         this.file = file;
         this.datasets = datasets;
     }
+
+    public String getFileName()
+    {
+        if (file == null)
+        {
+            return "";
+        }
+        final int lastSlash = file.lastIndexOf('/');
+        return lastSlash >= 0 ? file.substring(lastSlash + 1) : file;
+    }
+
+    public String getFileNameWithoutExtension()
+    {
+        final String name = getFileName();
+        final int lastDot = name.lastIndexOf('.');
+        return lastDot > 0 ? name.substring(0, lastDot) : name;
+    }
 }

@@ -76,6 +76,7 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.POST("/api/files/toggle", fileController::handleToggleFileExpansion);
 
         router.GET("/api/editor", editorController::handleEditorPanel);
+        router.GET("/api/editor/include-tree", editorController::handleGetIncludeTree);
         router.GET("/api/read", editorController::handleReadFile);
         router.POST("/api/save", editorController::handleSaveFile);
         router.POST("/api/delete", editorController::handleDeleteFile);
@@ -83,6 +84,7 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.GET("/api/modals/create", editorController::handleGetCreateModal);
         router.GET("/api/modals/delete", editorController::handleGetDeleteModal);
         router.POST("/api/editor/close", editorController::handleCloseEditor);
+        router.POST("/api/editor/review-steps", editorController::handleReviewSteps);
 
         router.POST("/api/queue/toggle", queueController::handleToggleQueue);
         router.POST("/api/queue/toggleAll", queueController::handleToggleAllQueue);
