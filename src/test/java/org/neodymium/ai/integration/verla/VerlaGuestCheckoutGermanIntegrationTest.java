@@ -72,6 +72,7 @@ public class VerlaGuestCheckoutGermanIntegrationTest extends BaseAiTest
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", "target/playbooks/integration");
 
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
         if (methodName.contains("WithJudge"))

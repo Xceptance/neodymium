@@ -12,7 +12,8 @@
     "target" : "${demo.url}",
     "value" : null,
     "description" : "Extracted NAVIGATE action",
-    "reasoning" : "Opening the requested test page in the browser.",
+    "reasoning" : "Open the requested URL in the browser.",
+    "isRegex" : false,
     "condition" : null,
     "then" : null,
     "adjust" : false,
@@ -21,7 +22,16 @@
     "stepFile" : "store-click-demo.yaml",
     "stepScreenshotHash" : "",
     "parameters" : { },
+    "regex" : false,
+    "bestCandidateLocator" : "http://localhost:8542/ClickActionTest/testClickStandardButton.html",
     "else" : null,
+    "selfCritique" : "",
+    "candidateLocators" : [ {
+      "locator" : "http://localhost:8542/ClickActionTest/testClickStandardButton.html",
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
+    } ],
     "values" : [ ]
   } ],
   "status" : "SUCCESS",
@@ -33,6 +43,7 @@
   "sourceFile" : "store-click-demo.yaml",
   "sourceYamlHash" : "15704995d3f28b40ef47908352d20e69271499be4dd011e9aa24b36c9060aaf6",
   "schemaVersion" : "2.0",
+  "contextLevel" : "LEAN",
   "composite" : false
 }, {
   "instruction" : "Click the '${lang_button}' button",
@@ -49,6 +60,7 @@
     "value" : null,
     "description" : "Extracted CLICK action",
     "reasoning" : "Click the ${lang_button} button",
+    "isRegex" : false,
     "condition" : null,
     "then" : null,
     "adjust" : false,
@@ -57,17 +69,27 @@
     "stepFile" : "store-click-demo.yaml",
     "stepScreenshotHash" : "",
     "parameters" : { },
+    "regex" : false,
+    "bestCandidateLocator" : "#btn-submit",
     "else" : null,
+    "selfCritique" : "",
+    "candidateLocators" : [ {
+      "locator" : "#btn-submit",
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
+    } ],
     "values" : [ ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
   "failureReason" : null,
-  "baselineState" : "Page URL: ${demo.url}\nPage Title: Click Action Test - Standard Button\n\n=== Accessibility Tree (AXTree) ===\n<h1 data-ai=\"xccxfhgu\">Click Action Test</h1>\n<button data-ai=\"xckxqqeu\" id=\"btn-submit\" aria-label=\"${lang_button}\"/>\n",
+  "baselineState" : "Page URL: ${demo.url}\nPage Title: Click Action Test - Standard Button\n\n=== Structural DOM Tree ===\n<h1 data-ai=\"xccxfhgu\">Click Action Test</h1>\n<button id=\"btn-submit\" data-ai=\"xckxqqeu\">${lang_button}</button>\n",
   "screenshotHash" : null,
   "lineNumber" : 6,
   "sourceFile" : "store-click-demo.yaml",
   "sourceYamlHash" : "15704995d3f28b40ef47908352d20e69271499be4dd011e9aa24b36c9060aaf6",
   "schemaVersion" : "2.0",
+  "contextLevel" : "LEAN",
   "composite" : false
 } ]

@@ -456,6 +456,26 @@ public final class AiConfiguration
     }
 
     /**
+     * Resolves the target directory for recorded companion playbook JSON files.
+     *
+     * @return the recording directory path, or {@code null} if default parent path should be used
+     */
+    public String playbookRecordingDirectory()
+    {
+        final String primary = getProperty("neodymium.ai.playbook.recordingDirectory", null);
+        if (primary != null && !primary.trim().isEmpty())
+        {
+            return primary.trim();
+        }
+        final String fallback = getProperty("neodymium.ai.playbook.recordingDir", null);
+        if (fallback != null && !fallback.trim().isEmpty())
+        {
+            return fallback.trim();
+        }
+        return null;
+    }
+
+    /**
      * Resolves provider identifier for a specific role, falling back to global default.
      *
      * @param role the execution role

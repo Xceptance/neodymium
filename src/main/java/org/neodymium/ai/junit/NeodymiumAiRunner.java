@@ -1520,7 +1520,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             else
             {
-                final String parentDir = extractParentDir(playbookPath);
+                final String overrideDir = org.neodymium.ai.config.AiConfiguration.getInstance().playbookRecordingDirectory();
+                final String parentDir = overrideDir != null
+                    ? (overrideDir.endsWith("/") ? overrideDir : overrideDir + "/")
+                    : extractParentDir(playbookPath);
                 sb.append(parentDir).append(name);
             }
 
@@ -1538,7 +1541,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             return sb.toString();
         }
 
-        final String parentDir = extractParentDir(playbookPath);
+        final String overrideDir = org.neodymium.ai.config.AiConfiguration.getInstance().playbookRecordingDirectory();
+        final String parentDir = overrideDir != null
+            ? (overrideDir.endsWith("/") ? overrideDir : overrideDir + "/")
+            : extractParentDir(playbookPath);
         final StringBuilder sb = new StringBuilder();
         sb.append(parentDir);
 

@@ -22,6 +22,9 @@ Instead of executing LLM calls dynamically on every run, the v2 framework uses *
     ```
 * **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
+* **Recording Directory Configuration (`neodymium.ai.playbook.recordingDirectory`)**: Controls where recorded companion `.json` files are stored:
+  - **Default**: Stored in the same parent directory as the source `.yaml` playbook (e.g., `src/test/resources/playbooks/...`).
+  - **Target Directory**: Set `neodymium.ai.playbook.recordingDirectory = target/playbooks/integration` (via `ai.properties`, `-Dneodymium.ai.playbook.recordingDirectory=...`, or `System.setProperty`) to direct generated companion recordings to build output target folders and keep `src/` clean.
 
 ---
 
