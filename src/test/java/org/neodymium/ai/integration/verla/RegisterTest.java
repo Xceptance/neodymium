@@ -40,7 +40,7 @@ import org.neodymium.util.Neodymium;
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 @Tag("integration")
 @Tag("verla")
 @Tag("AuraIntegration")
