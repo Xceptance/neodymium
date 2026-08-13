@@ -1,0 +1,36 @@
+# AI-generated: Gemini 3.6 Flash
+# @author AI-generated: Gemini 3.6 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  Otwórz stronę ${verla.url}/verla-${quality}/index.html
+  Otwórz menu wyboru kraju.
+  Kliknij Poland.
+  Sprawdź, czy wyświetla się flaga Polski.
+
+  Znajdź pierwszą kartę produktu i kliknij przycisk 'Add to Cart'
+  Jeśli ciąg '${quality}' nie jest równy 'bad', kliknij przycisk rozmiaru 'L'
+  Liczba produktów w koszyku wynosi teraz 1.
+  Przejdź do koszyka z poziomu podglądu koszyka.
+  Kliknij przycisk 'Kasa' lub 'Przejdź do kasy'
+
+  Nagłówek strony brzmi 'Kasa' lub 'Checkout'
+  Wypełnij formularz dostawy po lewej stronie.
+  Wybierz 'Poland' jako kraj dostawy.
+  Wpisz 'Jan' jako imię, 'Kowalski' jako nazwisko oraz adres e-mail 'foo@varmail.net'.
+  Wpisz 'ul. Marszałkowska 10' jako ulicę, 'Warszawa' jako miasto i '00-001' jako kod pocztowy.
+  Numer karty to '4111 1111 1111 1111', data ważności '12/29' i kod CVV '111'.
+  Kliknij 'Kupuję i płacę' lub 'Purchase'.
+  Poczekaj, aż pojawi się tekst "Dziękujemy za zakup!".
+  Wyświetla się numer zamówienia w formacie 'V-[0-9]+-PL', łączna kwota jest w PLN (zł), kod pocztowy to '00-001' oraz pojawia się tekst podziękowania.
+  Na środku ekranu znajduje się zielony znacznik wyboru (visual: full).
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+    email: "user-perfect@example.com"
+    guestEmail: "guest-perfect@example.com"
+  - testId: "normal"
+    quality: "normal"
+    email: "user-normal@example.com"
+    guestEmail: "guest-normal@example.com"

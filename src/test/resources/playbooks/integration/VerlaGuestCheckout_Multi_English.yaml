@@ -1,0 +1,84 @@
+# AI-generated: Gemini 3.6 Flash
+# @author AI-generated: Gemini 3.6 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  Open ${verla.url}/verla-perfect/index.html
+  Open country region selection modal.
+  Select country '${countryName}'.
+  Verify country flag for '${countryName}' is displayed.
+
+  Locate the first product card and click 'Add to Cart'
+  Click size button 'L'
+  Verify mini cart quantity is 1.
+  Navigate to cart page.
+  Click checkout button.
+
+  Verify checkout page headline.
+  Select '${countryName}' in checkout shipping country dropdown.
+  Enter first name '${firstName}', last name '${lastName}', and email '${email}'.
+  Enter street address '${street}', city '${city}', state '${state}', and postcode '${postcode}'.
+  Enter card number '4111 1111 1111 1111', expiry '12/29', and CVV '111'.
+  Click purchase submit button.
+  Wait for confirmation text "${expectedSuccessText}" to appear.
+  An order number matching regex '${expectedOrderPattern}' is displayed.
+  The total amount is displayed in currency '${currencySymbol}'.
+  The postal code '${postcode}' and confirmation message "${expectedSuccessText}" are displayed.
+  A green checkmark icon is visible on screen (visual: full).
+
+data:
+  - testId: "germany"
+    countryName: "Germany"
+    countryCode: "DE"
+    firstName: "Mario"
+    lastName: "Meier"
+    email: "mario-de@example.com"
+    street: "Volksbadstr. 18"
+    city: "Heilbad Heiligenstadt"
+    state: ""
+    postcode: "37308"
+    expectedSuccessText: "Vielen Dank für Ihren Einkauf!"
+    expectedOrderPattern: "V-[0-9]+-DE"
+    currencySymbol: "€"
+
+  - testId: "united-states"
+    countryName: "United States"
+    countryCode: "US"
+    firstName: "John"
+    lastName: "Doe"
+    email: "john-us@example.com"
+    street: "123 Main St"
+    city: "Manchester"
+    state: "MA"
+    postcode: "12345"
+    expectedSuccessText: "Thank you for your purchase!"
+    expectedOrderPattern: "V-[0-9]+-US"
+    currencySymbol: "$"
+
+  - testId: "france"
+    countryName: "Canada (FR)"
+    countryCode: "CA_FR"
+    firstName: "Jean"
+    lastName: "Dupont"
+    email: "jean-fr@example.com"
+    street: "100 Rue Saint-Denis"
+    city: "Montréal"
+    state: "QC"
+    postcode: "H2X 3K4"
+    expectedSuccessText: "Merci pour votre achat!"
+    expectedOrderPattern: "V-[0-9]+-CA_FR"
+    currencySymbol: "CAD $"
+
+  - testId: "japan"
+    countryName: "Japan"
+    countryCode: "JP"
+    firstName: "Taro"
+    lastName: "Tanaka"
+    email: "taro-jp@example.com"
+    street: "1-1 Chiyoda"
+    city: "Tokyo"
+    state: ""
+    postcode: "100-0001"
+    expectedSuccessText: "ご購入ありがとうございます！"
+    expectedOrderPattern: "V-[0-9]+-JP"
+    currencySymbol: "¥"

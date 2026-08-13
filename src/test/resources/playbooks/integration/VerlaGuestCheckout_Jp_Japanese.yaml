@@ -1,0 +1,36 @@
+# AI-generated: Gemini 3.6 Flash
+# @author AI-generated: Gemini 3.6 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  ${verla.url}/verla-${quality}/index.html を開く
+  国選択モーダルを開く
+  Japan をクリック
+  日本の国旗が表示されていることを確認する
+
+  最初の商品カードを見つけて 'Add to Cart' をクリックする
+  '${quality}' が 'bad' でない場合、サイズ 'L' をクリックする
+  ミニカートの数量が 1 になっていることを確認する
+  ミニカートからカート画面へ移動する
+  レジに進むボタンをクリックする
+
+  タイトルの確認
+  配送先住所フォームに情報を入力する
+  国選択で 'Japan' を選択する
+  名前に 'Taro'、姓に 'Tanaka'、メールアドレスに 'foo@varmail.net' を入力する
+  住所に '1-1 Chiyoda'、市区町村に 'Tokyo'、郵便番号に '100-0001' を入力する
+  カード番号 '4111 1111 1111 1111'、有効期限 '12/29'、CVV '111' を入力する
+  購入ボタンをクリックする
+  「ご購入ありがとうございます！」というメッセージが表示されるまで待機する
+  'V-[0-9]+-JP' 形式の注文番号が表示され、金額が日本円表記で表示され、郵便番号 '100-0001' が表示されていること
+  画面中央に緑色のチェックマークが表示されていること (visual: full)
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+    email: "user-perfect@example.com"
+    guestEmail: "guest-perfect@example.com"
+  - testId: "normal"
+    quality: "normal"
+    email: "user-normal@example.com"
+    guestEmail: "guest-normal@example.com"
