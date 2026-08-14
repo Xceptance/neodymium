@@ -141,4 +141,28 @@ public class YamlPlaybookParserTest
 
         assertEquals("Playbook cannot be empty: empty-recording.json parsed to 0 executable steps.", ex.getMessage());
     }
+
+    @Test
+    public void testParsePlaybookWithBeforeAndSteps() throws IOException
+    {
+        final String yamlContent = """
+            before: |
+              Open https://www.example.com
+              Select English
+            steps: |
+              Click button
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("before-steps.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("before-steps.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size());
+        assertEquals("Open https://www.example.com", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Select English", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Click button", playbook.getSteps().get(2).getInstruction());
+    }
 }

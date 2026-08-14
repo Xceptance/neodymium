@@ -421,6 +421,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         final String legacyDsIdFilter = (neoDataSet != null && !neoDataSet.id().isEmpty()) ? neoDataSet.id()
                 : (legacyDataSet != null && !legacyDataSet.id().isEmpty()) ? legacyDataSet.id() : null;
 
+        final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
         final List<String> resolvedPaths = new ArrayList<>();
         for (final String path : playbookPaths)
         {
@@ -445,7 +446,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    // Relative path from test class package unless it contains path separators
+                    // Relative path from test class package unless it contains path separators or exists at root
                     final String packagePath = testClass.getPackageName().replace('.', '/');
                     if (path.startsWith(packagePath + "/") || path.contains("/"))
                     {
@@ -453,7 +454,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     }
                     else
                     {
-                        resolvedPaths.add(packagePath + "/" + path);
+                        boolean existsAtRoot = false;
+                        try (final java.io.InputStream in = manager.read(path))
+                        {
+                            if (in != null)
+                            {
+                                existsAtRoot = true;
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+
+                        if (existsAtRoot)
+                        {
+                            resolvedPaths.add(path);
+                        }
+                        else
+                        {
+                            resolvedPaths.add(packagePath + "/" + path);
+                        }
                     }
                 }
             }
@@ -461,7 +481,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
         final List<TestTemplateInvocationContext> invocationContexts = new ArrayList<>();
         final PlaybookParser parser = new YamlPlaybookParser();
-        final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
 
         for (final String playbookPath : resolvedPaths)
         {
@@ -920,15 +939,40 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    final String msg = String.format(
-                        "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
-                        this.mode,
-                        testClass != null ? testClass.getSimpleName() : "UnknownClass",
-                        method != null ? method.getName() : "unknownMethod",
-                        String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
-                    );
-                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
-                    throw new java.io.FileNotFoundException(msg);
+                    boolean yamlExists = false;
+                    if (playbookPath != null)
+                    {
+                        try (final java.io.InputStream in = manager.read(playbookPath))
+                        {
+                            if (in != null)
+                            {
+                                yamlExists = true;
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+
+                    if (yamlExists)
+                    {
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn(
+                            "⚠️ No companion recorded JSON file found for '{}'. Falling back to YAML playbook '{}'.",
+                            playbookPath, playbookPath);
+                        resolvedPlaybookPath = playbookPath;
+                    }
+                    else
+                    {
+                        final String msg = String.format(
+                            "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
+                            this.mode,
+                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                            method != null ? method.getName() : "unknownMethod",
+                            String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
+                        );
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
+                        throw new java.io.FileNotFoundException(msg);
+                    }
                 }
             }
             else if (this.mode.isLive())

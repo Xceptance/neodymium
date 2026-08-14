@@ -379,107 +379,26 @@ public final class YamlPlaybookParser implements PlaybookParser
                 }
             }
 
-            // 3. Parse steps ('steps')
-            final Object rawSteps = loadedMap.get("steps");
-            if (rawSteps instanceof List)
+            // 3. Parse before, steps, and after blocks
+            final String[] beforeKeys = {"before", "beforeEach", "_beforeEach", "_beforeAll"};
+            for (final String key : beforeKeys)
             {
-                for (final Object stepItem : (List<?>) rawSteps)
-                {
-                    if (stepItem instanceof String)
-                    {
-                        final PlaybookStep step = new PlaybookStep((String) stepItem);
-                        initStepLocation(step, fileName, fileContent, (String) stepItem);
-                        outSteps.add(step);
-                    }
-                    else if (stepItem instanceof Map)
-                    {
-                        final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
-                        if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
-                        {
-                            final String includeRelativePath = mapStep.containsKey("_include") 
-                                ? String.valueOf(mapStep.get("_include")) 
-                                : String.valueOf(mapStep.get("include"));
-                            final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
-
-                            // Construct the composite parent inclusion step
-                            final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
-                            initStepLocation(includeStep, fileName, fileContent, "_include: " + includeRelativePath);
-                            
-                            // Recursively parse the included file, writing output sub-steps into this composite parent
-                            parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
-
-                            outSteps.add(includeStep);
-                        }
-                        else if (mapStep.containsKey("instruction"))
-                        {
-                            final String instruction = String.valueOf(mapStep.get("instruction"));
-                            final PlaybookStep step = new PlaybookStep(instruction);
-                            initStepLocation(step, fileName, fileContent, instruction);
-
-                            final Object rawActions = mapStep.get("actions");
-                            if (rawActions instanceof List)
-                            {
-                                for (final Object actObj : (List<?>) rawActions)
-                                {
-                                    if (actObj instanceof Map)
-                                    {
-                                        try
-                                        {
-                                            final Action action = MAPPER.convertValue(actObj, Action.class);
-                                            step.getActions().add(action);
-                                        }
-                                        catch (final Exception e)
-                                        {
-                                            throw new IllegalArgumentException("Failed to parse action in step: " + instruction, e);
-                                        }
-                                    }
-                                }
-                            }
-                            outSteps.add(step);
-                        }
-                        else
-                        {
-                            throw new IllegalArgumentException("Invalid playbook step format in file: " + fileName 
-                                + ". Expected string step, 'include' map, or 'instruction' map, but found map keys: " + mapStep.keySet());
-                        }
-                    }
-                    else
-                    {
-                        throw new IllegalArgumentException("Invalid playbook step item type in file: " + fileName 
-                            + ". Expected string or map, but found: " + (stepItem != null ? stepItem.getClass().getName() : "null"));
-                    }
-                }
+                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
             }
-            else if (rawSteps instanceof String)
+
+            final String[] stepKeys = {"steps", "_steps"};
+            for (final String key : stepKeys)
             {
-                final String[] lines = ((String) rawSteps).split("\\r?\\n");
-                for (final String line : lines)
-                {
-                    final String trimmed = line.trim();
-                    if (trimmed.isEmpty() || trimmed.startsWith("#"))
-                    {
-                        continue;
-                    }
-                    if (trimmed.startsWith("_include:") || trimmed.startsWith("include:"))
-                    {
-                        final int colonIdx = trimmed.indexOf(':');
-                        final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
-                        final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
-                        
-                        final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
-                        initStepLocation(includeStep, fileName, fileContent, line);
-                        parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
-                        outSteps.add(includeStep);
-                    }
-                    else
-                    {
-                        final PlaybookStep step = new PlaybookStep(trimmed);
-                        initStepLocation(step, fileName, fileContent, line);
-                        outSteps.add(step);
-                    }
-                }
+                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
             }
-            else if (rawSteps == null && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
+
+            final String[] afterKeys = {"after", "afterEach", "_afterEach", "_afterAll"};
+            for (final String key : afterKeys)
+            {
+                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+            }
+
+            if (outSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
             {
                 final String includeRelativePath = loadedMap.containsKey("_include")
                     ? String.valueOf(loadedMap.get("_include"))
@@ -496,6 +415,115 @@ public final class YamlPlaybookParser implements PlaybookParser
         {
             // Pop the identifier off the stack once its children are fully parsed
             activeStack.remove(identifier);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void parseStepBlock(
+        final Object rawSteps,
+        final String identifier,
+        final String fileName,
+        final String fileContent,
+        final PlaybookResourceManager manager,
+        final LinkedHashSet<String> activeStack,
+        final List<PlaybookStep> outSteps,
+        final List<Map<String, SessionData.DataEntry>> outDataSets) throws IOException
+    {
+        if (rawSteps instanceof List)
+        {
+            for (final Object stepItem : (List<?>) rawSteps)
+            {
+                if (stepItem instanceof String)
+                {
+                    final PlaybookStep step = new PlaybookStep((String) stepItem);
+                    initStepLocation(step, fileName, fileContent, (String) stepItem);
+                    outSteps.add(step);
+                }
+                else if (stepItem instanceof Map)
+                {
+                    final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
+                    if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
+                    {
+                        final String includeRelativePath = mapStep.containsKey("_include") 
+                            ? String.valueOf(mapStep.get("_include")) 
+                            : String.valueOf(mapStep.get("include"));
+                        final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+
+                        final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
+                        initStepLocation(includeStep, fileName, fileContent, "_include: " + includeRelativePath);
+                        
+                        parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
+
+                        outSteps.add(includeStep);
+                    }
+                    else if (mapStep.containsKey("instruction"))
+                    {
+                        final String instruction = String.valueOf(mapStep.get("instruction"));
+                        final PlaybookStep step = new PlaybookStep(instruction);
+                        initStepLocation(step, fileName, fileContent, instruction);
+
+                        final Object rawActions = mapStep.get("actions");
+                        if (rawActions instanceof List)
+                        {
+                            for (final Object actObj : (List<?>) rawActions)
+                            {
+                                if (actObj instanceof Map)
+                                {
+                                    try
+                                    {
+                                        final Action action = MAPPER.convertValue(actObj, Action.class);
+                                        step.getActions().add(action);
+                                    }
+                                    catch (final Exception e)
+                                    {
+                                        throw new IllegalArgumentException("Failed to parse action in step: " + instruction, e);
+                                    }
+                                }
+                            }
+                        }
+                        outSteps.add(step);
+                    }
+                    else
+                    {
+                        throw new IllegalArgumentException("Invalid playbook step format in file: " + fileName 
+                            + ". Expected string step, 'include' map, or 'instruction' map, but found map keys: " + mapStep.keySet());
+                    }
+                }
+                else
+                {
+                    throw new IllegalArgumentException("Invalid playbook step item type in file: " + fileName 
+                        + ". Expected string or map, but found: " + (stepItem != null ? stepItem.getClass().getName() : "null"));
+                }
+            }
+        }
+        else if (rawSteps instanceof String)
+        {
+            final String[] lines = ((String) rawSteps).split("\\r?\\n");
+            for (final String line : lines)
+            {
+                final String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#"))
+                {
+                    continue;
+                }
+                if (trimmed.startsWith("_include:") || trimmed.startsWith("include:"))
+                {
+                    final int colonIdx = trimmed.indexOf(':');
+                    final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
+                    final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+                    
+                    final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
+                    initStepLocation(includeStep, fileName, fileContent, line);
+                    parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
+                    outSteps.add(includeStep);
+                }
+                else
+                {
+                    final PlaybookStep step = new PlaybookStep(trimmed);
+                    initStepLocation(step, fileName, fileContent, line);
+                    outSteps.add(step);
+                }
+            }
         }
     }
 

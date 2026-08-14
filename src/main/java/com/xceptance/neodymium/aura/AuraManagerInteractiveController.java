@@ -164,17 +164,19 @@ public final class AuraManagerInteractiveController
             interactiveService.setCurrentConsoleEngine(engine);
         }
         final String body = AuraHttpUtils.readBody(exchange);
+        JsonObject json = null;
         try
         {
-            final JsonObject json = AuraHttpUtils.gson.fromJson(body, JsonObject.class);
+            json = AuraHttpUtils.gson.fromJson(body, JsonObject.class);
             if (json != null && json.has("runId"))
             {
                 final String incomingRunId = json.get("runId").getAsString();
                 final String lastId = interactiveService.getLastProcessedRunIdReference().getAndSet(incomingRunId);
                 if (incomingRunId != null && !incomingRunId.equals(lastId))
                 {
-                    LOGGER.info("[Aura Server] New runId detected: {}. Resetting manuallyStopped flag.", incomingRunId);
+                    LOGGER.info("[Aura Server] New runId detected: {}. Resetting manuallyStopped flag and execution indexes.", incomingRunId);
                     queueService.setManuallyStopped(false);
+                    interactiveService.resetExecutionIndexes();
                 }
                 engine.setRunId(incomingRunId);
             }
@@ -192,7 +194,9 @@ public final class AuraManagerInteractiveController
             {
                 resultsDir.mkdirs();
             }
-            final File executionJson = new File(resultsDir, "console-execution-1.json");
+            final String executionKey = extractExecutionKey(json);
+            final int index = interactiveService.getExecutionIndex(executionKey);
+            final File executionJson = new File(resultsDir, "console-execution-" + index + ".json");
             Files.writeString(executionJson.toPath(), body, StandardCharsets.UTF_8);
         }
         catch (final Exception e)
@@ -204,6 +208,36 @@ public final class AuraManagerInteractiveController
                 ? "{\"status\":\"stopped\"}"
                 : "{\"status\":\"ok\"}";
         AuraHttpUtils.sendResponse(exchange, 200, "application/json", responseJson.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String extractExecutionKey(final JsonObject json)
+    {
+        if (json == null)
+        {
+            return "default";
+        }
+        if (json.has("testName") && !json.get("testName").isJsonNull())
+        {
+            final String testName = json.get("testName").getAsString();
+            if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
+            {
+                return testName;
+            }
+        }
+        String key = "";
+        if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
+        {
+            key += json.get("playbookFile").getAsString();
+        }
+        else if (json.has("testFile") && !json.get("testFile").isJsonNull())
+        {
+            key += json.get("testFile").getAsString();
+        }
+        if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
+        {
+            key += "::" + json.get("datasetId").getAsString();
+        }
+        return key.isEmpty() ? "default" : key;
     }
 
     public void handleBroadcast(final HttpExchange exchange) throws IOException

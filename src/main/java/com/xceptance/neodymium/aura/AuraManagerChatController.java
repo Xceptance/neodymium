@@ -111,7 +111,7 @@ public final class AuraManagerChatController
     }
 
     /**
-     * POST /api/chat/rename?id=...&name=...
+     * POST /api/chat/rename?id=...&amp;name=...
      * Renames a session and returns the full chat container fragment.
      */
     public void handleRenameSession(final HttpExchange exchange) throws IOException

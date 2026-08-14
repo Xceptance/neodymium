@@ -19,6 +19,9 @@
 package com.xceptance.neodymium.aura;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -32,6 +35,8 @@ public final class AuraInteractiveService
     private final AtomicReference<InteractiveConsoleEngine> currentConsoleEngine = new AtomicReference<>(null);
     private final AtomicReference<String> lastProcessedRunId = new AtomicReference<>(null);
     private final AtomicReference<String> activeTheme = new AtomicReference<>("system");
+    private final Map<String, Integer> executionIndexMap = new ConcurrentHashMap<>();
+    private final AtomicInteger executionIndexCounter = new AtomicInteger(0);
 
     public AuraInteractiveService()
     {
@@ -87,4 +92,20 @@ public final class AuraInteractiveService
     {
         activeTheme.set(theme);
     }
+
+    public int getExecutionIndex(final String executionKey)
+    {
+        if (executionKey == null || executionKey.isEmpty())
+        {
+            return 1;
+        }
+        return executionIndexMap.computeIfAbsent(executionKey, k -> executionIndexCounter.incrementAndGet());
+    }
+
+    public void resetExecutionIndexes()
+    {
+        executionIndexMap.clear();
+        executionIndexCounter.set(0);
+    }
 }
+
