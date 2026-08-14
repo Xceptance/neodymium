@@ -272,6 +272,7 @@ public final class AuraQueueService
                 currentRunLogs.clear();
                 currentRunEvents.clear();
                 completedFiles.clear();
+                interactiveService.resetExecutionIndexes();
 
                 runStartTimeMs.set(System.currentTimeMillis());
                 lastRunRequest.set(req);
@@ -363,17 +364,7 @@ public final class AuraQueueService
                         command.add("mvn");
                     }
                     command.add("test");
-                    command.add("-Dmaven.compiler.skip=true");
-                    command.add("-Dcompiler.skip=true");
-                    final File compiledClassFile = new File("target/test-classes/com/xceptance/neodymium/aura/sandbox/" + className + ".class");
-                    if (compiledClassFile.exists())
-                    {
-                        command.add("-Dtest=com.xceptance.neodymium.aura.sandbox." + className);
-                    }
-                    else
-                    {
-                        command.add("-Dtest=com.xceptance.neodymium.aura.AuraYamlRunnerTest");
-                    }
+                    command.add("-Dtest=com.xceptance.neodymium.aura.sandbox." + className);
                     command.add("-Dneodymium.testFileFilter=" + file.replace(".", "\\."));
                     command.add("-Dallure.results.directory=" + new File("target/aura-sandbox/allure-results").getAbsolutePath());
                     command.add("-Dneodymium.ai.console.screenshotsDir=" + new File("target/aura-sandbox/ai-console-screenshots").getAbsolutePath());
