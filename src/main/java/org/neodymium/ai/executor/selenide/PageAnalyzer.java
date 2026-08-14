@@ -203,6 +203,13 @@ public class PageAnalyzer
                         if (label && isVisible(label)) return true;
                     }
 
+                    // Fallback for interactive elements or elements with text content that are not explicitly hidden by CSS
+                    var isInteractiveTag = ['a', 'button', 'input', 'select', 'textarea'].indexOf(tagName) !== -1 || el.hasAttribute('href');
+                    var hasText = (el.innerText || '').trim().length > 0;
+                    if ((isInteractiveTag || hasText) && style.display !== 'none' && style.visibility !== 'hidden') {
+                        return true;
+                    }
+
                     return false;
                 }
 
@@ -588,8 +595,9 @@ public class PageAnalyzer
 
                     var vis = isVisible(el);
                     var inForm = !!(el.closest && el.closest('form'));
+                    var isFormContainer = inForm && ['fieldset','div','span','p','table','tbody','tr','td'].indexOf(tag) !== -1;
                     var isFormInput = inForm && ['input','select','textarea','button'].indexOf(tag) !== -1;
-                    if (!vis && !isFormInput) return null;
+                    if (!vis && !isFormInput && !isFormContainer) return null;
 
                     var isInter = isInteractive(el);
                     var isHead = ['h1','h2','h3','h4','h5','h6'].indexOf(tag) !== -1;

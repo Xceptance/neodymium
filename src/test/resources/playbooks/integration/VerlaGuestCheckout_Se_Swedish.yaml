@@ -1,0 +1,36 @@
+# AI-generated: Gemini 3.6 Flash
+# @author AI-generated: Gemini 3.6 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  Öppna ${verla.url}/verla-${quality}/index.html
+  Öppna regionväljaren.
+  Klicka på Sweden.
+  Kontrollera att Sveriges flagga visas.
+
+  Hitta den första produktkorts-knappen och klicka på 'Add to Cart'
+  När strängen '${quality}' inte är lika med 'bad', klicka på storleksknappen 'L'
+  Antalet i minivarukorgen är nu 1.
+  Gå till varukorgen från minivarukorgen.
+  Klicka på 'Kassa' eller 'Till kassan'
+
+  Rubriken visar nu 'Kassa' eller 'Checkout'
+  Fyll i leveransformuläret till vänster.
+  Välj 'Sweden' som land.
+  Ange 'Sven' som förnamn, 'Svensson' som efternamn och e-postadressen 'foo@varmail.net'.
+  Ange 'Storgatan 1' som gatuadress, 'Stockholm' som ort och '111 22' som postnummer.
+  Kortnummer är '4111 1111 1111 1111', utgångsdatum '12/29' och CVV är '111'.
+  Klicka på 'Genomför köp' eller 'Purchase'.
+  Vänta tills texten "Tack för ditt köp!" visas.
+  Ett ordernummer i formatet 'V-[0-9]+-SE' visas, totalbeloppet är i SEK (kr), postnumret är '111 22' och bekräftelsetexten visas.
+  Det finns en grön bock i mitten av skärmen (visual: full).
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+    email: "user-perfect@example.com"
+    guestEmail: "guest-perfect@example.com"
+  - testId: "normal"
+    quality: "normal"
+    email: "user-normal@example.com"
+    guestEmail: "guest-normal@example.com"

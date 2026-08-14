@@ -75,7 +75,7 @@ public final class VerlaProgrammaticIncludesDemoTest
     public static void startServer() throws IOException
     {
         System.setProperty("neodymium.ai.pesap.enabled", "false");
-        System.setProperty("neodymium.ai.judge.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
         System.setProperty("neodymium.ai.semanticVerification.enabled", "false");
         System.setProperty("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();

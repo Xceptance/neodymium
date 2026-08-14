@@ -90,8 +90,15 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                     final String rawVal = entry.getValue();
                     if (rawVal != null && !rawVal.isEmpty())
                     {
+                        // Skip internal system/framework properties to prevent corrupting placeholders (e.g. neodymium.junit.viewmode)
+                        if (varKey.startsWith("neodymium.junit.") || varKey.startsWith("neodymium.report.")
+                            || varKey.startsWith("java.") || varKey.startsWith("sun."))
+                        {
+                            continue;
+                        }
+
                         final boolean isSensitive = sensitiveMap.containsKey(varKey);
-                        if (isSensitive || rawVal.length() >= 4)
+                        if ((isSensitive || rawVal.length() >= 4) && !cleanVal.contains("${" + varKey + "}"))
                         {
                             cleanVal = cleanVal.replace(rawVal, "${" + varKey + "}");
                         }
