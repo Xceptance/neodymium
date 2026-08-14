@@ -252,40 +252,58 @@ The framework utilizes a dedicated taxonomy of prompts, each mapped to specific 
 | **`SemanticDivergencePrompt`** | `SemanticDivergenceAnalysisStep` / replay healing | `TEXT_ONLY` | Baseline page source, current page source. | Compares expected vs actual SUT page states during a replay cache divergence to generate a plain-English diff summary (e.g. `ID changed from checkout to pay-now`). |
 | **`VisualRcaPrompt`** | `StateMachineRunner.runVisualRca` / final error debug | `VISION` | Failed instruction, error details, current page screenshot. | Diagnoses visual root causes on conclusive execution failures (e.g., overlapping elements, cookie popups). Publishes a `DiagnosticErrorEvent`. |
 
-### B. Custom System Add-on Prompts
+### B. Custom Prompt Add-ons (`promptAddon`)
 
-To tune the LLM's system instructions for specific environments, applications, or testing scenarios, custom system prompt add-ons can be declared dynamically:
+To tune the LLM's behavioral instructions for specific environments, applications, or testing scenarios, custom prompt add-ons can be declared dynamically in YAML playbooks, datasets, or model override files:
 
-1. **Resolution Precedence**:
-   System prompt add-ons are resolved with the following priority (first match wins):
-   1. **Test Dataset Layer**: Defined inside a dataset entry (e.g. `systemPromptAddon.general: "Prefer CSS selectors"`).
-   2. **YAML Playbook Layer**: Defined at the top level of the YAML playbook file.
-   3. **System/Environment Properties**: Defined in system properties or configuration files (e.g., `neodymium.properties`).
+1. **Canonical Keyword (`promptAddon`)**:
+   Playbooks and datasets standardize on the single canonical keyword `promptAddon` (supporting both scalar strings and nested capability maps):
+   - **Scalar string (General)**:
+     ```yaml
+     promptAddon: "Always look for button text first and wait for spinners."
+     ```
+   - **Nested Map (Capability-Targeted)**:
+     ```yaml
+     promptAddon:
+       general: "Always look for button text first"
+       pesap: "Predict shorter execution timeouts"
+       verification: "Be extremely strict about price format changes"
+       rca: "Check if modal dialogs obscured the click target"
+     ```
+   - **Flat Dot Notation (Datasets & Playbooks)**:
+     ```yaml
+     promptAddon: "General rule for this dataset row"
+     promptAddon.pesap: "Specialized pre-step check for this dataset row"
+     promptAddon.verification: "Specialized outcome check for this dataset row"
+     ```
 
 2. **Per-Capability Customization Keys**:
    Add-on keys can target a specific type of LLM prompt or apply generally to all prompts:
-   - `systemPromptAddon` (or `systemPromptAddon.default`): Appends to all system prompts.
-   - `systemPromptAddon.pesap`: Appends specifically to the `PesapPrompt`.
-   - `systemPromptAddon.general`: Appends specifically to the `ActionExtractionPrompt`.
-   - `systemPromptAddon.verification`: Appends specifically to the `VerificationPrompt`.
-   - `systemPromptAddon.rca`: Appends specifically to the `VisualRcaPrompt`.
-   - `systemPromptAddon.divergence`: Appends specifically to the `SemanticDivergencePrompt`.
+   - `promptAddon` (or `promptAddon.general` / `promptAddon.default`): Applies to all prompts.
+   - `promptAddon.pesap`: Appends specifically to the `PesapPrompt`.
+   - `promptAddon.general`: Appends specifically to the `ActionExtractionPrompt`.
+   - `promptAddon.verification`: Appends specifically to the `VerificationPrompt`.
+   - `promptAddon.rca`: Appends specifically to the `VisualRcaPrompt`.
+   - `promptAddon.divergence`: Appends specifically to the `SemanticDivergencePrompt`.
 
-3. **YAML Playbook Declaration Examples**:
-   Add-ons can be specified at the top level of a YAML playbook in flat key format, nested map format, or plural map format:
+3. **Multi-Layer Accumulation (Stacking)**:
+   Instead of an exclusive fallback, prompt add-ons **accumulate across all active layers** in order of specificity:
+   0. **Multilingual Guidance Layer**: Dynamic language universality and localized DOM guidance (injected when `neodymium.ai.multilingual=true`).
+   1. **Model / Disk Layer**: Global model-specific rules (`addon.md`, `addon-<type>.md`).
+   2. **YAML Playbook Layer**: Playbook general add-on + capability-targeted add-on.
+   3. **Test Dataset Layer**: Dataset general add-on + capability-targeted add-on (closest to data).
+   
+   All active layers are combined seamlessly, ensuring general playbook guidelines are preserved while dataset rows supply specific context.
+
+4. **Dynamic Variable Interpolation (`${variableName}`)**:
+   Prompt add-on strings support dynamic `${variable}` placeholders that are automatically resolved against runtime session data, dataset parameters, and configuration properties:
    ```yaml
-   # Flat key format
-   systemPromptAddon.general: "Always look for button text first"
-
-   # Nested map format
-   systemPromptAddon:
-     pesap: "Predict shorter execution timeouts"
-     verification: "Be extremely strict about price format changes"
+   promptAddon: "The application is running in ${locale}. Ensure currency displays as ${currency}."
    ```
 
-4. **Safety Limits & Adherence Enforcement**:
+5. **Safety Limits & Adherence Enforcement**:
    To prevent custom prompt add-ons from diluting or overriding essential prompt instructions (such as JSON output schemas and capability rules), the following safety controls are enforced:
-   * **Length Limit**: Any custom prompt add-on value must not exceed **2000 characters**. If it does, a validation check throws an `IllegalArgumentException` early.
+   * **Length Limit**: Any custom prompt add-on combined value must not exceed **2000 characters**. If it does, a validation check throws an `IllegalArgumentException` early.
    * **Adherence Enforcement Suffix**: When appending the custom add-on prompt, the compiler automatically appends a strict reminder suffix:
      `"CRITICAL REMINDER: The above rules are custom extensions for this test step. You MUST still strictly follow all JSON schema formatting rules, action capabilities, and output guidelines specified in the main system prompt above."`
      This prevents the LLM from generating invalid text/HTML outputs when guided by custom user rules.
@@ -303,10 +321,8 @@ To handle model-specific quirks (such as `gemini-3-5-flash-lite` requiring expli
 
    Where `<cleanModel>` is the active model name sanitized to lowercase alphanumeric kebab-case (e.g., `gemini-3.5-flash-lite` $\rightarrow$ `gemini-3-5-flash-lite`).
 
-2. **Resolution Precedence**:
-   1. **Test Dataset Layer**: Defined inside dataset entry (e.g. `systemPromptAddon.general`)
-   2. **YAML Playbook Layer**: Defined at playbook top level (`systemPromptAddon: { ... }`)
-   3. **Disk/Classpath Model Add-on**: Loaded dynamically from `ai-prompts/models/<cleanModel>/addon-<type>.md` or `config/ai-prompts/models/...`
+2. **Accumulation Flow**:
+   Model add-ons serve as the foundational base layer (Layer 1), onto which playbook-level (Layer 2) and dataset-level (Layer 3) add-ons are appended.
 
 3. **Example (`gemini-3-5-flash-lite`)**:
    File: `src/main/resources/ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`
@@ -317,6 +333,41 @@ To handle model-specific quirks (such as `gemini-3-5-flash-lite` requiring expli
    If a target element lacks a direct class or id attribute, select its parent 
    element (e.g., 'div:has(...)') or set 'status' to 'ESCALATE' to request visual context.
    ```
+
+### D. Multilingual Testing & Language Universality (`neodymium.ai.multilingual`)
+
+When automated tests target localized applications (e.g. French, German, Japanese, Polish, Swedish, Spanish) or playbooks written in non-English natural languages, Neodymium AI provides a dedicated **Multilingual Testing Mode**.
+
+1. **Token Cost Optimization**:
+   Standard English test suites keep system prompts ultra-compact (saving ~50–80 tokens per step across CI runs). When multilingual mode is enabled, the prompt compiler dynamically injects **Language Universality** guidance into the relevant prompt pipelines without requiring separate translated system prompt files.
+
+2. **Configuration (`neodymium.ai.multilingual`)**:
+   - **Default**: `false`
+   - **Configuration Methods**:
+     - **Global Property**: In `neodymium.properties` or `ai.properties`:
+       ```properties
+       neodymium.ai.multilingual=true
+       ```
+     - **JVM Argument**: Passed dynamically at execution time:
+       ```bash
+       mvn test -Dneodymium.ai.multilingual=true
+       ```
+     - **Per-Test Setup**: Programmatically enabled in test setup:
+       ```java
+       Neodymium.getData().put("neodymium.ai.multilingual", "true");
+       ```
+     - **Per-Dataset Row**: Declared in JSON/CSV dataset files for specific localized rows:
+       ```json
+       {
+         "locale": "ca_fr",
+         "neodymium.ai.multilingual": "true"
+       }
+       ```
+
+3. **Dynamic Prompt Injections by Capability**:
+   - **PESAP (`pesap`)**: Instructs the pre-step analyzer that English splitting examples are illustrative only, applying identical splitting, context escalation, and non-splitting rules to equivalent phrasing in the target language while preserving the original natural language in generated sub-steps.
+   - **Action Extraction (`general`)**: Directs the LLM to target localized button text, forms, labels, and links in the SUT DOM according to the active locale.
+   - **Outcome Verification (`verification`)**: Verifies post-action outcomes against localized page content and currency/date formatting.
 
 ---
 
@@ -431,14 +482,25 @@ Rather than using lossy 17×16 perceptual bit-hashes, visual steps capture struc
 2. **8-bit Luminance Matrix**: Calculates a 4,096-byte luminance matrix (0..255 brightness per grid cell), serialized as a Base64 string in `step.setScreenshotHash()`.
 3. **In-Memory SSIM Comparison**: During replay, Neodymium computes Mean SSIM ($0.0 \rightarrow 1.0$) across $8 \times 8$ local blocks in $< 0.05\text{ ms}$.
 4. **Visual Match Gate**: Checks `ssimScore >= neodymium.ai.ssim.minScore` (default: `0.99`). If visual score passes, execution bypasses unnecessary LLM verification calls while staying immune to font anti-aliasing and subpixel noise.
-5. **Post-Action Visual Settling**: Controlled by `neodymium.ai.visual.postActionSettleMs` (default: `1000` ms). Pauses execution for the configured duration after interactive actions complete in both recording and replay modes, allowing CSS transitions, modal fade-outs, and DOM animations to fully settle before post-action state capture.
+5. **Temporal Inter-Frame Visual Stability Detection**:
+   Rather than relying on arbitrary blind sleeps or premature frame comparisons against the baseline, Neodymium dynamically evaluates whether the live SUT has finished animating and reflowing by comparing consecutive frames against each other ($\text{SSIM}(\text{Frame}_t, \text{Frame}_{t-1})$):
+   - **1-Second Frame Spacing**: Consecutive frame captures are spaced by at least $1000\text{ms}$ (`neodymium.ai.visual.stabilityIntervalMs`).
+   - **Stability Quiescence Threshold**: When $\text{SSIM}(\text{Frame}_t, \text{Frame}_{t-1}) \ge 0.999$ (`neodymium.ai.visual.stabilityThreshold`), the DOM is considered visually quiescent and settled.
+   - **5-Attempt Safety Cutoff**: Polling is capped at a maximum of 5 attempts (`neodymium.ai.visual.stabilityMaxAttempts`) to prevent infinite blocking on perpetual animations (such as looping spinners or video hero banners).
+   - **Baseline & Replay Symmetry**: Used in both live recording (to record baselines from quiescent layouts) and replay playback (to settle before baseline evaluation).
 
 ```properties
-# Minimum SSIM score (0.0 to 1.0) required for visual match gate approval
+# Minimum SSIM score (0.0 to 1.0) required for visual match gate approval against recorded baseline
 neodymium.ai.ssim.minScore=0.99
 
-# Post-action UI settling delay in milliseconds (default: 1000ms) before capturing visual state/screenshots
-neodymium.ai.visual.postActionSettleMs=1000
+# Polling interval in milliseconds between consecutive frame captures during visual stability detection (minimum: 1000ms)
+neodymium.ai.visual.stabilityIntervalMs=1000
+
+# Maximum number of attempts allowed for temporal inter-frame visual stability settling before proceeding
+neodymium.ai.visual.stabilityMaxAttempts=5
+
+# Minimum inter-frame SSIM threshold required to consider the SUT visually quiescent/settled
+neodymium.ai.visual.stabilityThreshold=0.999
 ```
 
 
@@ -955,6 +1017,27 @@ To support interactive instructions (such as clicking a search toggle button or 
 * **Prelude Action Execution:** When the LLM outputs `status: "CONTINUE"`, the pipeline executes the prelude actions (e.g. `CLICK .search-toggle`), captures the updated post-click SUT DOM state (where hidden inputs like `<input id="search-field">` are now visible), and triggers a continuation LLM call for the same active step.
 * **100% Language Neutrality:** Because the LLM natively decodes instructions across all natural languages (English, German, French, Spanish, Japanese, etc.), Java code contains **zero** hardcoded human language string checks.
 * **Unified Replay Cache Storage:** All sequential actions (`CLICK` $\rightarrow$ `TYPE` $\rightarrow$ `KEY_PRESS`) extracted across continuation calls are appended into the single `step.getActions()` list in the companion JSON file. During offline replay (`REPLAY_STRICT`), all recorded actions execute sequentially in a single pass without making any LLM calls, with Selenide automatically handling element visibility wait transitions.
+
+---
+
+## 16. Execution Timing Recording & Paced Replay Playback
+
+To ensure faithful replay execution for asynchronous Single Page Applications (SPAs), HTMX/AJAX partial page updates, CSS micro-animations, and visual SSIM assertions, Neodymium AI records execution durations and delays into companion JSON recordings.
+
+### A. Recorded Timing Fields in Companion JSON
+* **`durationMs` (Action & Step Level):** Wall-clock duration in milliseconds spent executing the specific action or playbook step in the browser.
+* **`delayMs` (Action & Step Level):** Inter-action or inter-step elapsed pause in milliseconds prior to execution during the recording phase.
+
+### B. Configuration Options
+
+| Property | Default | Description |
+| :--- | :--- | :--- |
+| `neodymium.ai.replay.useRecordedDelays` | `false` | When `true`, replay pauses proportionally to recorded delays between actions/steps. |
+| `neodymium.ai.replay.delayScale` | `1.0` | Multiplier for recorded delays (e.g. `0.5` for 2x replay speed, `1.0` for real-time pacing). |
+| `neodymium.ai.visual.postActionSettleMs` | `1000` | Minimum settling pause in milliseconds before capturing visual screenshots for SSIM baseline checks. |
+
+### C. Adaptive Visual Settle in Replay
+When executing visual verification steps (`(visual: full)` / SSIM comparison), replay honors `neodymium.ai.visual.postActionSettleMs` (and any recorded step delay) prior to capturing the screenshot. If transient repaint or dynamic animation occurs, a settle retry is automatically performed to guarantee stable visual comparisons.
 
 
 

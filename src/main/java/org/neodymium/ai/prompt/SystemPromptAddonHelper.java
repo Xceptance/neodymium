@@ -48,20 +48,28 @@ public final class SystemPromptAddonHelper
         // utility class
     }
 
+    private static final String MULTILINGUAL_PESAP_ADDON =
+        "Language Universality: Instructions may be written in any natural language. Apply all semantic splitting, context level, and non-splitting rules to equivalent phrasing in the given language. Always preserve the original language in generated sub-steps.";
+
+    private static final String MULTILINGUAL_GENERAL_ADDON =
+        "Language Universality: The System Under Test and test step instructions may be localized in any language. When evaluating button texts, labels, links, and assertions, apply all action and assertion rules to the localized equivalents in the page DOM.";
+
+    private static final String MULTILINGUAL_VERIFICATION_ADDON =
+        "Language Universality: The System Under Test and test step instructions may be localized in any language. Verify outcomes against localized content and labels accordingly.";
+
     /**
-     * Resolves the custom system prompt add-on value based on precedence rules.
-     * Precedence:
-     * 1. Test Dataset Layer (via SessionData):
-     *    - Specific key: "systemPromptAddon.<type>"
-     *    - General key: "systemPromptAddon"
-     * 2. YAML Playbook Layer:
-     *    - Specific key: "<type>"
-     *    - General key: "default"
+     * Resolves and accumulates custom prompt add-ons across all active layers:
+     * 1. Multilingual layer (if enabled via neodymium.ai.multilingual)
+     * 2. Model / Disk layer (model-specific general + capability-targeted)
+     * 3. YAML Playbook layer (general + capability-targeted)
+     * 4. Test Dataset layer (general + capability-targeted)
+     *
+     * Resolves dynamic variable placeholders (${variableName}) against active session data.
      *
      * @param type the type of prompt/LLM query (e.g., pesap, general, verification)
      * @param context the active execution context
-     * @return the resolved add-on string, or null if none
-     * @throws IllegalArgumentException if the resolved add-on exceeds the 2000-character length limit
+     * @return the combined resolved add-on string, or null if none
+     * @throws IllegalArgumentException if the combined resolved add-on exceeds the 2000-character length limit
      */
     @SuppressWarnings("unchecked")
     public static String getAddon(final String type, final ExecutionContext context)
@@ -71,77 +79,219 @@ public final class SystemPromptAddonHelper
             return null;
         }
 
-        // 1. Resolve from dataset/SessionData
+        final List<String> segments = new ArrayList<>();
         final SessionData sessionData = context.getSessionData();
+
+        // 0. Multilingual layer
+        if (isMultilingualEnabled(context, sessionData))
+        {
+            final String multiAddon = getMultilingualAddon(type);
+            if (multiAddon != null && !multiAddon.isBlank())
+            {
+                segments.add(multiAddon);
+            }
+        }
+
+        // 1. Model / Disk layer
+        collectModelAddons(type, context, sessionData, segments);
+
+        // 2. YAML Playbook layer
+        final Map<String, String> yamlAddons = (Map<String, String>) context.getTransientData().get("playbook.promptAddons");
+        collectPlaybookAddons(type, yamlAddons, sessionData, segments);
+
+        // 3. Dataset layer
+        collectDatasetAddons(type, sessionData, segments);
+
+        if (segments.isEmpty())
+        {
+            return null;
+        }
+
+        final String combined = String.join("\n\n", segments);
+        validateLength(combined);
+        return combined;
+    }
+
+    private static boolean isMultilingualEnabled(final ExecutionContext context, final SessionData sessionData)
+    {
         if (sessionData != null)
         {
-            // Check specific key first: systemPromptAddon.<type>
-            final SessionData.DataEntry specificEntry = sessionData.getEntry("systemPromptAddon." + type);
-            if (specificEntry != null && specificEntry.value() != null)
+            final Object sessionProp = sessionData.get("neodymium.ai.multilingual");
+            if (sessionProp != null)
             {
-                final String val = String.valueOf(specificEntry.value());
-                validateLength(val);
-                return val;
-            }
-            // Fallback to general key: systemPromptAddon
-            final SessionData.DataEntry generalEntry = sessionData.getEntry("systemPromptAddon");
-            if (generalEntry != null && generalEntry.value() != null)
-            {
-                final String val = String.valueOf(generalEntry.value());
-                validateLength(val);
-                return val;
+                return Boolean.parseBoolean(sessionProp.toString().trim());
             }
         }
+        return org.neodymium.ai.config.AiConfiguration.getInstance().isMultilingual();
+    }
 
-        // 2. Resolve from YAML file/Playbook
-        final Map<String, String> yamlAddons = (Map<String, String>) context.getTransientData().get("playbook.systemPromptAddons");
-        if (yamlAddons != null)
+    private static String getMultilingualAddon(final String type)
+    {
+        if (type == null || "general".equalsIgnoreCase(type) || "default".equalsIgnoreCase(type))
         {
-            // Check specific key first
-            final String specific = yamlAddons.get(type);
-            if (specific != null && !specific.trim().isEmpty())
-            {
-                final String val = specific.trim();
-                validateLength(val);
-                return val;
-            }
-            // Fallback to general key
-            final String general = yamlAddons.get("default");
-            if (general != null && !general.trim().isEmpty())
-            {
-                final String val = general.trim();
-                validateLength(val);
-                return val;
-            }
+            return MULTILINGUAL_GENERAL_ADDON;
         }
+        if ("pesap".equalsIgnoreCase(type))
+        {
+            return MULTILINGUAL_PESAP_ADDON;
+        }
+        if ("verification".equalsIgnoreCase(type))
+        {
+            return MULTILINGUAL_VERIFICATION_ADDON;
+        }
+        return null;
+    }
 
-        // 3. Resolve model-specific add-on from disk/classpath
+    private static void collectModelAddons(
+        final String type,
+        final ExecutionContext context,
+        final SessionData sessionData,
+        final List<String> segments)
+    {
         final String activeModel = resolveActiveModel(context);
-        if (activeModel != null && !activeModel.trim().isEmpty())
+        if (activeModel == null || activeModel.isBlank())
         {
-            final String cleanModel = activeModel.trim().toLowerCase().replaceAll("[^a-z0-9_\\-]", "-");
-            final String modelAddon = loadModelAddon(cleanModel, type);
-            if (modelAddon != null && !modelAddon.trim().isEmpty())
-            {
-                final String val = modelAddon.trim();
-                validateLength(val);
-                return val;
-            }
+            return;
         }
 
+        final String cleanModel = activeModel.trim().toLowerCase().replaceAll("[^a-z0-9_\\-]", "-");
+
+        // General model add-on
+        final String modelGeneral = loadModelAddon(cleanModel, null);
+        if (modelGeneral != null && !modelGeneral.isBlank())
+        {
+            addSegment(modelGeneral, sessionData, segments);
+        }
+
+        // Specific model add-on (if type is specified and not general/default)
+        if (type != null && !type.equalsIgnoreCase("general") && !type.equalsIgnoreCase("default"))
+        {
+            final String modelSpecific = loadModelAddon(cleanModel, type);
+            if (modelSpecific != null && !modelSpecific.isBlank())
+            {
+                addSegment(modelSpecific, sessionData, segments);
+            }
+        }
+    }
+
+    private static void collectPlaybookAddons(
+        final String type,
+        final Map<String, String> yamlAddons,
+        final SessionData sessionData,
+        final List<String> segments)
+    {
+        if (yamlAddons == null || yamlAddons.isEmpty())
+        {
+            return;
+        }
+
+        // 1. Playbook general
+        String general = yamlAddons.get("default");
+        if (general == null || general.isBlank())
+        {
+            general = yamlAddons.get("general");
+        }
+        if (general != null && !general.isBlank())
+        {
+            addSegment(general, sessionData, segments);
+        }
+
+        // 2. Playbook targeted (if type is not general/default)
+        if (type != null && !type.equalsIgnoreCase("general") && !type.equalsIgnoreCase("default"))
+        {
+            final String specific = yamlAddons.get(type);
+            if (specific != null && !specific.isBlank())
+            {
+                addSegment(specific, sessionData, segments);
+            }
+        }
+    }
+
+    private static void collectDatasetAddons(
+        final String type,
+        final SessionData sessionData,
+        final List<String> segments)
+    {
+        if (sessionData == null)
+        {
+            return;
+        }
+
+        // 1. Dataset general
+        final String generalVal = resolveDatasetEntry(
+            sessionData,
+            "promptAddon",
+            "promptAddon.general");
+        if (generalVal != null && !generalVal.isBlank())
+        {
+            addSegment(generalVal, sessionData, segments);
+        }
+
+        // 2. Dataset targeted (if type is not general/default)
+        if (type != null && !type.equalsIgnoreCase("general") && !type.equalsIgnoreCase("default"))
+        {
+            final String specificVal = resolveDatasetEntry(
+                sessionData,
+                "promptAddon." + type);
+            if (specificVal != null && !specificVal.isBlank())
+            {
+                addSegment(specificVal, sessionData, segments);
+            }
+        }
+    }
+
+    private static void addSegment(
+        final String rawText,
+        final SessionData sessionData,
+        final List<String> segments)
+    {
+        if (rawText == null || rawText.isBlank())
+        {
+            return;
+        }
+
+        String resolved = rawText.trim();
+        if (sessionData != null && resolved.contains("${"))
+        {
+            resolved = sessionData.resolveVariables(resolved).trim();
+        }
+
+        if (!resolved.isBlank() && !segments.contains(resolved))
+        {
+            segments.add(resolved);
+        }
+    }
+
+    private static String resolveDatasetEntry(final SessionData sessionData, final String... keys)
+    {
+        for (final String key : keys)
+        {
+            final SessionData.DataEntry entry = sessionData.getEntry(key);
+            if (entry != null && entry.value() != null)
+            {
+                final String val = String.valueOf(entry.value()).trim();
+                if (!val.isEmpty())
+                {
+                    return val;
+                }
+            }
+        }
         return null;
     }
 
     private static String loadModelAddon(final String cleanModel, final String type)
     {
         final List<String> candidatePaths = new ArrayList<>();
-        // Filesystem overrides
-        candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
-        candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon.md");
-
-        // Classpath resources
-        candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
-        candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon.md");
+        if (type != null && !type.isBlank())
+        {
+            candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
+            candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
+        }
+        else
+        {
+            candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon.md");
+            candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon.md");
+        }
 
         for (final String path : candidatePaths)
         {
@@ -216,7 +366,6 @@ public final class SystemPromptAddonHelper
         }
         return base + "\n\n### Custom System Add-on Prompt\n\n" + addon.trim() + ENFORCEMENT_SUFFIX;
     }
-
 
     private static void validateLength(final String value)
     {

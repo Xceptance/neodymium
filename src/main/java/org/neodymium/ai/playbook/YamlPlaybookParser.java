@@ -152,7 +152,7 @@ public final class YamlPlaybookParser implements PlaybookParser
             }
         }
 
-        Map<String, String> systemPromptAddons = new HashMap<>();
+        Map<String, String> promptAddons = new HashMap<>();
         if (!identifier.endsWith(".json"))
         {
             try (final InputStream in = manager.read(identifier))
@@ -163,7 +163,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final String fileContent = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
                     final Yaml yaml = new Yaml();
                     final Map<String, Object> loadedMap = yaml.load(fileContent);
-                    systemPromptAddons = parseSystemPromptAddons(loadedMap);
+                    promptAddons = parsePromptAddons(loadedMap);
                 }
             }
             catch (final Exception e)
@@ -192,7 +192,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         {
                             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
                         }
-                        return new Playbook(parsedSteps, dataSets, systemPromptAddons);
+                        return new Playbook(parsedSteps, dataSets, promptAddons);
                     }
                 }
                 catch (final IllegalArgumentException e)
@@ -250,7 +250,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         }
                     }
                 }
-                return new Playbook(steps, dataSets, systemPromptAddons);
+                return new Playbook(steps, dataSets, promptAddons);
             }
         }
 
@@ -261,10 +261,10 @@ public final class YamlPlaybookParser implements PlaybookParser
             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
         }
 
-        return new Playbook(steps, dataSets, systemPromptAddons);
+        return new Playbook(steps, dataSets, promptAddons);
     }
 
-    private Map<String, String> parseSystemPromptAddons(final Map<String, Object> loadedMap)
+    private Map<String, String> parsePromptAddons(final Map<String, Object> loadedMap)
     {
         final Map<String, String> addons = new HashMap<>();
         if (loadedMap == null)
@@ -275,27 +275,21 @@ public final class YamlPlaybookParser implements PlaybookParser
         for (final Map.Entry<String, Object> entry : loadedMap.entrySet())
         {
             final String key = entry.getKey();
-            if (key.startsWith("systemPromptAddon.") && entry.getValue() instanceof String)
+            if (key.startsWith("promptAddon.") && entry.getValue() instanceof String)
             {
-                final String type = key.substring("systemPromptAddon.".length());
+                final String type = key.substring("promptAddon.".length());
                 addons.put(type, (String) entry.getValue());
             }
-            else if (key.equals("systemPromptAddon") && entry.getValue() instanceof String)
+            else if (key.equals("promptAddon") && entry.getValue() instanceof String)
             {
                 addons.put("default", (String) entry.getValue());
             }
         }
 
-        final Object addonObj = loadedMap.get("systemPromptAddon");
-        if (addonObj instanceof Map)
+        final Object promptAddonObj = loadedMap.get("promptAddon");
+        if (promptAddonObj instanceof Map)
         {
-            parseAddonMap((Map<?, ?>) addonObj, addons);
-        }
-
-        final Object addonsObj = loadedMap.get("systemPromptAddons");
-        if (addonsObj instanceof Map)
-        {
-            parseAddonMap((Map<?, ?>) addonsObj, addons);
+            parseAddonMap((Map<?, ?>) promptAddonObj, addons);
         }
 
         return addons;
@@ -596,7 +590,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 try
                 {
                     final List<PlaybookStep> jsonSteps = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
-                        return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getSystemPromptAddons());
+                    return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons());
                 }
                 catch (final Exception e)
                 {

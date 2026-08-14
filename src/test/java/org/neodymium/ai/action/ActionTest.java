@@ -67,4 +67,28 @@ public class ActionTest
         assertEquals("V-[0-9]+-US", action.getValue());
         assertTrue(action.isRegex());
     }
+
+    @Test
+    public void testDurationAndDelayFields() throws Exception
+    {
+        final Action action = new Action("CLICK", "#submit", "Click submit");
+        action.setDurationMs(250L);
+        action.setDelayMs(500L);
+
+        assertEquals(250L, action.getDurationMs());
+        assertEquals(500L, action.getDelayMs());
+
+        final Action copied = action.withTarget("#submit-btn");
+        assertEquals("#submit-btn", copied.getTarget());
+        assertEquals(250L, copied.getDurationMs());
+        assertEquals(500L, copied.getDelayMs());
+
+        final String json = this.mapper.writeValueAsString(action);
+        assertTrue(json.contains("\"durationMs\":250") || json.contains("\"durationMs\" : 250"));
+        assertTrue(json.contains("\"delayMs\":500") || json.contains("\"delayMs\" : 500"));
+
+        final Action deserialized = this.mapper.readValue(json, Action.class);
+        assertEquals(250L, deserialized.getDurationMs());
+        assertEquals(500L, deserialized.getDelayMs());
+    }
 }

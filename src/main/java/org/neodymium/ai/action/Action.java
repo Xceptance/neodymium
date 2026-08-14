@@ -25,6 +25,7 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -75,6 +76,20 @@ public class Action
     private int stepLine = -1;
     private String stepFile = "";
     private String stepScreenshotHash = "";
+
+    /**
+     * Optional execution duration in milliseconds recorded during live run.
+     */
+    @JsonProperty("durationMs")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Long durationMs;
+
+    /**
+     * Optional inter-action delay in milliseconds recorded prior to executing this action.
+     */
+    @JsonProperty("delayMs")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Long delayMs;
 
     /**
      * Self-judging critique evaluating candidates against stability rules.
@@ -220,6 +235,8 @@ public class Action
         copy.stepScreenshotHash = this.stepScreenshotHash;
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -472,5 +489,45 @@ public class Action
     public final void setAdjust(final boolean adjust)
     {
         this.adjust = adjust;
+    }
+
+    /**
+     * Gets the recorded execution duration of this action in milliseconds.
+     *
+     * @return the execution duration in milliseconds, or {@code null} if not set
+     */
+    public final Long getDurationMs()
+    {
+        return this.durationMs;
+    }
+
+    /**
+     * Sets the recorded execution duration of this action in milliseconds.
+     *
+     * @param durationMs the execution duration in milliseconds
+     */
+    public final void setDurationMs(final Long durationMs)
+    {
+        this.durationMs = durationMs;
+    }
+
+    /**
+     * Gets the recorded delay in milliseconds before this action was executed.
+     *
+     * @return the pre-action delay in milliseconds, or {@code null} if not set
+     */
+    public final Long getDelayMs()
+    {
+        return this.delayMs;
+    }
+
+    /**
+     * Sets the recorded delay in milliseconds before this action was executed.
+     *
+     * @param delayMs the pre-action delay in milliseconds
+     */
+    public final void setDelayMs(final Long delayMs)
+    {
+        this.delayMs = delayMs;
     }
 }

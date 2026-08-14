@@ -1140,9 +1140,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            if (playbook.getSystemPromptAddons() != null)
+            if (playbook.getPromptAddons() != null)
             {
-                executionContext.getTransientData().put("playbook.systemPromptAddons", playbook.getSystemPromptAddons());
+                executionContext.getTransientData().put("playbook.promptAddons", playbook.getPromptAddons());
             }
 
             executionContext.getTransientData().put("playbook.resolvedPath", resolvedPlaybookPath);

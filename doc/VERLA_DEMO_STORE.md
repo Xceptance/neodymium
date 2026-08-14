@@ -15,6 +15,9 @@ graph TD
     A[VÉRLA Storefront] --> B["Perfect (/verla-perfect/)"]
     A --> C["Normal (/verla-normal/)"]
     A --> D["Bad (/verla-bad/)"]
+    A --> E["Modern Bad - WCAG (/verla-modern-bad/)"]
+    A --> F["Modern Bad - No WCAG (/verla-modern-bad-nowcag/)"]
+    A --> G["PWA Chaos (/verla-pwa-chaos/)"]
 ```
 
 ### 1.1. Perfect Quality (`/verla-perfect/`)
@@ -31,6 +34,17 @@ graph TD
 - **DOM Structure**: No semantic tags or standard form structures are used. Buttons and interactive inputs are constructed via styled generic tags (e.g. `div` or `span`) equipped with inline JS `onclick` attributes.
 - **Locators & Selectors**: Missing standard IDs, duplicate IDs across page sections (e.g., multiple `id="prod-info"`), or randomized/obfuscated class names (e.g. `class="c-772x9"`), forcing brittle, deep-relative XPath lookups.
 - **Accessibility (a11y)**: Total absence of labels, placeholder attributes, roles, and alternative image descriptions (`alt` tags).
+
+### 1.4. Modern Bad - WCAG (`/verla-modern-bad/`)
+- **Modern CSS Framework Noise**: Heavy Tailwind CSS utility classes and deep wrapper trees simulating modern Single Page App architectures.
+- **Accessibility (a11y)**: Retains full WCAG semantic elements (`<button>`, `<a href>`, `aria-label`, `<label>`).
+
+### 1.5. Modern Bad - No WCAG (`/verla-modern-bad-nowcag/`)
+- **React Div Soup**: Massive Tailwind utility classes, randomized React-style dynamic IDs (`react-div-719x`, `v-btn-992a`), and styled clickable divs replacing buttons/links with zero accessibility semantics.
+
+### 1.6. PWA Chaos (`/verla-pwa-chaos/`)
+- **Bath & Body Works Architecture**: Replicates complex real-world headless PWA anti-patterns.
+- **DOM & Styling**: Chakra UI / Emotion CSS-in-JS class hashes (`emotion-jvwy60`, `emotion-1ss52ls`), Wick Design System components (`wick-linkbox`, `wick-stack`, `wick-marquee__root`), Zag.js state machines (`data-scope="marquee"`), rotating reveal search prompt, VideoJS `MEDIA_ERR_DECODE` error modal dialog, OneTrust cookie banner, delayed 20% discount marketing popup, and slide-over mini-cart drawer.
 
 ---
 

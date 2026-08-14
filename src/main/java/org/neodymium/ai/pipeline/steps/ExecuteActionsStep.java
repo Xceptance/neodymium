@@ -50,12 +50,15 @@ import org.neodymium.ai.pipeline.structural.SequenceStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.prompt.ActionSanitizer;
 import org.neodymium.ai.prompt.AiPrompt;
 import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.ScreenshotHasher;
+import org.neodymium.ai.util.VisualStabilityDetector;
 
 /**
  * Concrete pipeline step executing actions parsed from LLM responses, sanitizing/parameterizing
@@ -288,15 +291,45 @@ public final class ExecuteActionsStep implements PipelineStep
                     com.codeborne.selenide.Configuration.timeout = customTimeoutMs;
                 }
 
+                if (isReplayingStep && org.neodymium.ai.config.AiConfiguration.getInstance().isUseRecordedDelays())
+                {
+                    final Long recDelay = sanitized.getDelayMs();
+                    if (recDelay != null && recDelay > 0)
+                    {
+                        final double scale = org.neodymium.ai.config.AiConfiguration.getInstance().getReplayDelayScale();
+                        final long sleepTime = Math.max(0L, (long) (recDelay * scale));
+                        if (sleepTime > 0)
+                        {
+                            try
+                            {
+                                Thread.sleep(sleepTime);
+                            }
+                            catch (final InterruptedException e)
+                            {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                    }
+                }
+
+                final long actionStartTime = System.currentTimeMillis();
+                if (!isReplayingStep)
+                {
+                    final Long lastActionEndTime = (Long) context.getTransientData().get("KEY_LAST_ACTION_END_TIME");
+                    if (lastActionEndTime != null && sanitized.getDelayMs() == null)
+                    {
+                        sanitized.setDelayMs(Math.max(0L, actionStartTime - lastActionEndTime));
+                    }
+                }
+
                 try
                 {
                     if (executor instanceof org.neodymium.ai.executor.selenide.SelenideTargetExecutor ste)
                     {
                         ste.setExecutionContext(context);
                     }
-                    context.getTransientData().put("currentAction", resolvedAction);
-                    executor.execute(resolvedAction);
 
+                    Action actionToExecute = resolvedAction;
                     if (!isReplayingStep
                         && executor != null
                         && executor.supportsLocatorImprovement()
@@ -314,6 +347,7 @@ public final class ExecuteActionsStep implements PipelineStep
                                 final String improvedLocator = org.neodymium.ai.util.LocatorImprover.improveLocator(driver, found.toWebElement(), resolvedAction.getTarget());
                                 if (improvedLocator != null && !improvedLocator.equals(resolvedAction.getTarget()))
                                 {
+                                    actionToExecute = actionToExecute.withTarget(improvedLocator);
                                     final Action upgraded = sanitized.withTarget(improvedLocator);
                                     if (step.getActions() != null && !step.getActions().isEmpty())
                                     {
@@ -347,6 +381,16 @@ public final class ExecuteActionsStep implements PipelineStep
                         {
                         }
                     }
+
+                    context.getTransientData().put("currentAction", actionToExecute);
+                    executor.execute(actionToExecute);
+
+                    final long actionDuration = System.currentTimeMillis() - actionStartTime;
+                    if (!isReplayingStep)
+                    {
+                        sanitized.setDurationMs(actionDuration);
+                        context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis());
+                    }
                 }
                 finally
                 {
@@ -375,7 +419,8 @@ public final class ExecuteActionsStep implements PipelineStep
                         final org.neodymium.ai.executor.selenide.ContextLevel cl = (step != null && step.isVisualStep())
                             ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL
                             : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
-                        final SutState postActionState = executor.captureState(cl);
+                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                        final SutState postActionState = executor.captureState(cl, isFullPageReq);
                         if (postActionState != null)
                         {
                             context.getTransientData().put("KEY_POST_ACTION_STATE", postActionState);
@@ -615,8 +660,19 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final org.neodymium.ai.config.ExecutionMode executionMode = (org.neodymium.ai.config.ExecutionMode) contextState.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
             final boolean isReplayStats = executionMode != null && executionMode.isReplay() && !stepNoReplay;
+            final long stepStartTime = System.currentTimeMillis();
+            contextState.getTransientData().put("KEY_STEP_START_TIME", stepStartTime);
 
-            final org.neodymium.ai.pipeline.StepStats stats = getOrCreateStatsForStep(step, System.currentTimeMillis(), isReplayStats, stepStatsMap, allStats);
+            if (executionMode != null && !executionMode.isReplay())
+            {
+                final Long lastStepEndTime = (Long) contextState.getTransientData().get("KEY_LAST_STEP_END_TIME");
+                if (lastStepEndTime != null && step.getDelayMs() == null)
+                {
+                    step.setDelayMs(Math.max(0L, stepStartTime - lastStepEndTime));
+                }
+            }
+
+            final org.neodymium.ai.pipeline.StepStats stats = getOrCreateStatsForStep(step, stepStartTime, isReplayStats, stepStatsMap, allStats, contextState);
             contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
 
             @SuppressWarnings("unchecked")
@@ -871,21 +927,32 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     try
                     {
-                        final SutState currentState = executor.captureState(org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
-                        contextState.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
-
-                        String currentSsimMatrix = null;
-                        if (currentState != null && currentState.getAttachments() != null)
+                        if (org.neodymium.ai.config.AiConfiguration.getInstance().isUseRecordedDelays())
                         {
-                            for (final SutAttachment attachment : currentState.getAttachments())
+                            final Long recStepDelay = step.getDelayMs();
+                            if (recStepDelay != null && recStepDelay > 0)
                             {
-                                if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                                final double scale = org.neodymium.ai.config.AiConfiguration.getInstance().getReplayDelayScale();
+                                final long sleepTime = Math.max(0L, (long) (recStepDelay * scale));
+                                if (sleepTime > 0)
                                 {
-                                    currentSsimMatrix = org.neodymium.ai.util.ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
-                                    break;
+                                    try
+                                    {
+                                        Thread.sleep(sleepTime);
+                                    }
+                                    catch (final InterruptedException e)
+                                    {
+                                        Thread.currentThread().interrupt();
+                                    }
                                 }
                             }
                         }
+
+                        final boolean isFullPageReq = Boolean.TRUE.equals(contextState.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                        final SutState currentState = VisualStabilityDetector.captureSettledState(executor, isFullPageReq);
+                        contextState.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
+
+                        final String currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(currentState);
 
                         if (step.getScreenshotHash() != null)
                         {
@@ -893,8 +960,9 @@ public final class ExecuteActionsStep implements PipelineStep
                             final String recordedHash = step.getScreenshotHash();
                             if (currentSsimMatrix != null)
                             {
-                                final double ssimScore = org.neodymium.ai.util.ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
-                                final double minScore = org.neodymium.ai.config.AiConfiguration.getInstance().getDouble("neodymium.ai.ssim.minScore", 0.99);
+                                final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
+                                final double minScore = AiConfiguration.getInstance().getVisualSsimMinScore();
+
                                 LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | SSIM Score: {} | Required Min Score: {}",
                                     resolvedInstruction, String.format("%.4f", ssimScore), minScore);
 
@@ -977,8 +1045,11 @@ public final class ExecuteActionsStep implements PipelineStep
                 standardFlow.add(c -> {
                     if (mode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT && step.getActions() == null)
                     {
+                        final String resolvedStrictStep = c.getSessionData() != null
+                            ? c.getSessionData().resolveVariables(step.getInstruction())
+                            : step.getInstruction();
                         throw new org.neodymium.ai.pipeline.ConclusiveFailureException(
-                            "No recorded actions found for step '" + step.getInstruction() + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
+                            "No recorded actions found for step '" + resolvedStrictStep + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
                     }
 
                     if (step.getStatus() == org.neodymium.ai.model.PlaybookStepStatus.FAILED || step.isFailed())
@@ -1249,8 +1320,11 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     final String bugComment = step.getBugDetails();
                     final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
+                    final String resolvedBugInstruction = c.getSessionData() != null
+                        ? c.getSessionData().resolveVariables(step.getInstruction())
+                        : step.getInstruction();
                     final String msg = String.format("Expected bug%s but step succeeded: %s:%d (%s)",
-                        bugStr, step.getSourceFile(), step.getLineNumber(), step.getInstruction());
+                        bugStr, step.getSourceFile(), step.getLineNumber(), resolvedBugInstruction);
                     org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error("   ❌ {}", msg);
 
                     if (!step.isContinueOnError())
@@ -1276,20 +1350,25 @@ public final class ExecuteActionsStep implements PipelineStep
         final long startTime,
         final boolean replayed,
         final Map<PlaybookStep, org.neodymium.ai.pipeline.StepStats> stepStatsMap,
-        final List<org.neodymium.ai.pipeline.StepStats> allStats
+        final List<org.neodymium.ai.pipeline.StepStats> allStats,
+        final ExecutionContext contextState
     )
     {
         org.neodymium.ai.pipeline.StepStats stats = stepStatsMap.get(step);
         if (stats == null)
         {
-            stats = new org.neodymium.ai.pipeline.StepStats(step.getInstruction(), startTime);
+            final String raw = step.getInstruction();
+            final String resolved = (contextState != null && contextState.getSessionData() != null)
+                ? contextState.getSessionData().resolveVariables(raw)
+                : raw;
+            stats = new org.neodymium.ai.pipeline.StepStats(resolved, startTime);
             stats.setReplayed(replayed);
             stepStatsMap.put(step, stats);
 
             final PlaybookStep parentStep = step.getParent();
             if (parentStep != null)
             {
-                final org.neodymium.ai.pipeline.StepStats parentStats = getOrCreateStatsForStep(parentStep, startTime, replayed, stepStatsMap, allStats);
+                final org.neodymium.ai.pipeline.StepStats parentStats = getOrCreateStatsForStep(parentStep, startTime, replayed, stepStatsMap, allStats, contextState);
                 parentStats.getSubStats().add(stats);
             }
             else

@@ -78,11 +78,21 @@ public final class EmbeddedHtmlServer
     {
         public String code;
         public String name;
+        public Map<String, String> names;
         public String locale;
         public String currency;
         public String symbol;
         public double rate;
         public String format;
+
+        public String getLocalizedName(final String targetLocale)
+        {
+            if (names != null && names.containsKey(targetLocale))
+            {
+                return names.get(targetLocale);
+            }
+            return name;
+        }
     }
 
     public static final class CategoryTemplate
@@ -792,6 +802,7 @@ public final class EmbeddedHtmlServer
         this.server.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
         this.server.setExecutor(Executors.newCachedThreadPool());
 
         this.httpsServer = createHttpsServerWithFallback(httpsPort);
@@ -822,6 +833,7 @@ public final class EmbeddedHtmlServer
             this.httpsServer.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
             this.httpsServer.setExecutor(Executors.newCachedThreadPool());
         }
         catch (final Exception e)
@@ -1056,6 +1068,10 @@ public final class EmbeddedHtmlServer
             {
                 qualitySuffix = "modern-bad";
             }
+            else if (fullPath.startsWith("/verla-pwa-chaos/"))
+            {
+                qualitySuffix = "pwa-chaos";
+            }
             else
             {
                 sendResponse(exchange, 400, "text/plain", "Bad Request: Invalid SUT suffix");
@@ -1107,13 +1123,16 @@ public final class EmbeddedHtmlServer
             // Parse request body parameters
             final Map<String, String> params = parseRequestBody(exchange);
 
-            // HTMX request header
-            final boolean isHtmx = "true".equalsIgnoreCase(exchange.getRequestHeaders().getFirst("HX-Request"));
+            // HTMX request header or PWA micro-router
+            final boolean isPwaRouter = "true".equalsIgnoreCase(exchange.getRequestHeaders().getFirst("X-PWA-Router"));
+            final String hxTarget = exchange.getRequestHeaders().getFirst("HX-Target");
+            final boolean isHtmx = "true".equalsIgnoreCase(exchange.getRequestHeaders().getFirst("HX-Request"))
+                                || isPwaRouter;
 
             if (LOG.isDebugEnabled())
             {
                 LOG.debug("Parsed Parameters: {}", params);
-                LOG.debug("Is HTMX Request: {}", isHtmx);
+                LOG.debug("Is HTMX / PWA Router Request: {}", isHtmx);
             }
 
             // --- API Endpoint Routing ---
@@ -1121,7 +1140,76 @@ public final class EmbeddedHtmlServer
             {
                 final String apiMethod = pagePath.substring(4);
                 
-                if ("country/select".equals(apiMethod))
+                if ("snippets/products".equals(apiMethod))
+                {
+                    final String reqUri = exchange.getRequestURI().toString();
+                    final String cat = getQueryParam(reqUri, "category");
+                    final String sort = getQueryParam(reqUri, "sort");
+                    final String bopis = getQueryParam(reqUri, "bopis");
+                    final List<String> activeColors = getQueryParamValues(reqUri, "color");
+                    final List<String> activePrices = getQueryParamValues(reqUri, "price");
+                    final List<String> activeSales = getQueryParamValues(reqUri, "sale");
+
+                    final List<Product> filtered = catalogProducts.stream().filter(p -> {
+                        if (!cat.isEmpty() && !"all".equalsIgnoreCase(cat) && !p.category.equalsIgnoreCase(cat)) return false;
+                        if ("true".equalsIgnoreCase(bopis) && productInventory.getOrDefault(p.id, Map.of()).values().stream().mapToInt(Integer::intValue).sum() <= 0) return false;
+                        
+                        // Color filter
+                        if (!activeColors.isEmpty())
+                        {
+                            boolean colorMatch = false;
+                            for (final String col : activeColors)
+                            {
+                                if (p.color != null && p.color.equalsIgnoreCase(col))
+                                {
+                                    colorMatch = true;
+                                    break;
+                                }
+                            }
+                            if (!colorMatch) return false;
+                        }
+
+                        // Price filter
+                        if (!activePrices.isEmpty())
+                        {
+                            final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                            boolean priceMatch = false;
+                            for (final String pr : activePrices)
+                            {
+                                if ("0-50".equals(pr) && price < 50.0) priceMatch = true;
+                                else if ("50-100".equals(pr) && price >= 50.0 && price <= 100.0) priceMatch = true;
+                                else if ("100-200".equals(pr) && price > 100.0) priceMatch = true;
+                            }
+                            if (!priceMatch) return false;
+                        }
+
+                        // Sale filter
+                        if (!activeSales.isEmpty() && activeSales.contains("true"))
+                        {
+                            if (p.salePrice == null) return false;
+                        }
+
+                        return true;
+                    }).collect(Collectors.toList());
+
+                    if ("price-asc".equals(sort))
+                    {
+                        filtered.sort((p1, p2) -> Double.compare(p1.salePrice != null ? p1.salePrice : p1.basePrice, p2.salePrice != null ? p2.salePrice : p2.basePrice));
+                    }
+                    else if ("price-desc".equals(sort))
+                    {
+                        filtered.sort((p1, p2) -> Double.compare(p2.salePrice != null ? p2.salePrice : p2.basePrice, p1.salePrice != null ? p1.salePrice : p1.basePrice));
+                    }
+
+                    final StringBuilder sb = new StringBuilder();
+                    for (final Product p : filtered)
+                    {
+                        sb.append(renderProductCard(p, activeCountry, trans, qualitySuffix));
+                    }
+                    sendResponse(exchange, 200, "text/html", sb.toString());
+                    return;
+                }
+                else if ("country/select".equals(apiMethod))
                 {
                     final String selectCode = params.getOrDefault("code", "US");
                     exchange.getResponseHeaders().add("Set-Cookie", "verla_country=" + selectCode + "; Path=/");
@@ -1206,7 +1294,6 @@ public final class EmbeddedHtmlServer
                     {
                         cart.items.remove(productId);
                     }
-                    final String hxTarget = exchange.getRequestHeaders().getFirst("HX-Target");
                     if ("cart-btn-wrapper".equals(hxTarget))
                     {
                         sendResponse(exchange, 200, "text/html", getCartBadgeWrapperHtml(cart, trans, activeCountry, qualitySuffix));
@@ -1238,6 +1325,11 @@ public final class EmbeddedHtmlServer
                         final String errorMsg = trans.getOrDefault("error", "Error") + ": This promo code is expired or invalid.";
                         sendResponse(exchange, 200, "text/html", getCartContentHtml(cart, activeCountry, trans, qualitySuffix, errorMsg));
                     }
+                    return;
+                }
+                else if ("cart/dropdown".equals(apiMethod))
+                {
+                    sendResponse(exchange, 200, "text/html", getCartDropdownHtml(cart, trans, activeCountry, qualitySuffix));
                     return;
                 }
                 else if ("search/suggest".equals(apiMethod))
@@ -1598,7 +1690,7 @@ public final class EmbeddedHtmlServer
                                                "    <path d=\"M20 32L28 40L44 24\" stroke=\"white\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-linejoin=\"round\" />" +
                                                "  </svg>" +
                                                "  <h2 id=\"success-message\" style=\"font-family: var(--font-family-serif); font-size: 28px; margin-bottom: 12px;\">" + thankYouMsg + "</h2>" +
-                                               "  <p style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
+                                               "  <p id=\"order-placed-message\" style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
                                                "  <div style=\"background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +
                                                "    <div style=\"margin-bottom:10px;\"><strong>" + orderNumLabel + ":</strong> <span id=\"order-number-value\">" + orderNum + "</span></div>" +
                                                "    <div style=\"margin-bottom:10px;\"><strong>" + zipCodeLabel + ":</strong> <span id=\"zip-code-value\">" + postcode + "</span></div>" +
@@ -1695,7 +1787,7 @@ public final class EmbeddedHtmlServer
                 pageResource = pagePath;
             }
 
-            final String templateHtml = renderTemplate(qualitySuffix, pageResource, new HashMap<>(), activeCountry, trans, currentUser, cart, exchange.getRequestURI().toString(), isHtmx);
+            final String templateHtml = renderTemplate(qualitySuffix, pageResource, new HashMap<>(), activeCountry, trans, currentUser, cart, exchange.getRequestURI().toString(), isHtmx, hxTarget, isPwaRouter);
             if (templateHtml == null)
             {
                 // Try serving it as a standard static resource from SUT folders
@@ -1710,6 +1802,14 @@ public final class EmbeddedHtmlServer
     private static String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
                                          final Country country, final Map<String, String> trans, final User user,
                                          final Cart cart, final String requestUri, final boolean isHtmx)
+    {
+        return renderTemplate(quality, pageName, customModel, country, trans, user, cart, requestUri, isHtmx, null, false);
+    }
+
+    private static String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
+                                         final Country country, final Map<String, String> trans, final User user,
+                                         final Cart cart, final String requestUri, final boolean isHtmx,
+                                         final String hxTarget, final boolean isPwaRouter)
     {
         try
         {
@@ -1757,14 +1857,19 @@ public final class EmbeddedHtmlServer
             model.put("country_symbol", country.symbol);
             model.put("country_flag", getCountryFlag(country.code));
             model.put("cart_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
+            model.put("cart_items_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
             model.put("cart_badge_html", getCartBadgeWrapperHtml(cart, trans, country, quality));
+            model.put("cart_dropdown_items_html", getCartDropdownHtml(cart, trans, country, quality));
 
             final String loginText = trans.getOrDefault("login", "Login");
             final String accountText = trans.getOrDefault("account", "Account");
             if (user != null)
             {
-                // Perfect vs normal/bad style
-                if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
+                if ("pwa-chaos".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"My account\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + user.email.split("@")[0] + "</span></a>");
+                }
+                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
                     model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/account.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + user.email.split("@")[0] + "</div>");
                 }
@@ -1775,7 +1880,11 @@ public final class EmbeddedHtmlServer
             }
             else
             {
-                if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
+                if ("pwa-chaos".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"Sign In\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + loginText + "</span></a>");
+                }
+                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
                     model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/login.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + loginText + "</div>");
                 }
@@ -2029,8 +2138,9 @@ public final class EmbeddedHtmlServer
                 for (final Country c : catalogConfig.countries)
                 {
                     final String sel = c.code.equals(country.code) ? "selected" : "";
+                    final String displayName = c.getLocalizedName(country.locale);
                     options.append("<option value=\"").append(c.code).append("\" ").append(sel).append(">")
-                           .append(c.name).append(" (").append(c.symbol).append(")</option>");
+                           .append(displayName).append(" (").append(c.symbol).append(")</option>");
                 }
                 model.put("country_options_html", options.toString());
 
@@ -2188,8 +2298,9 @@ public final class EmbeddedHtmlServer
                 for (final Country c : catalogConfig.countries)
                 {
                     final String sel = c.code.equals(country.code) ? "selected" : "";
+                    final String displayName = c.getLocalizedName(country.locale);
                     options.append("<option value=\"").append(c.code).append("\" ").append(sel).append(">")
-                           .append(c.name).append(" (").append(c.symbol).append(")</option>");
+                           .append(displayName).append(" (").append(c.symbol).append(")</option>");
                 }
                 model.put("country_options_html", options.toString());
 
@@ -2220,11 +2331,11 @@ public final class EmbeddedHtmlServer
 
             if (isHtmx)
             {
-                if ("plp.html".equals(pageName))
+                if ("plp.html".equals(pageName) && !isPwaRouter && hxTarget != null && (hxTarget.contains("product-grid") || hxTarget.contains("plp-product-grid")))
                 {
                     return model.getOrDefault("plp_products", "");
                 }
-                // HTMX requests only require the body fragment
+                // HTMX requests / PWA router only require the body fragment
                 return bodyHtml;
             }
 
@@ -2381,6 +2492,72 @@ public final class EmbeddedHtmlServer
                    "  </div>" +
                    "</div>";
         }
+        else if ("pwa-chaos".equals(quality))
+        {
+            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
+            final String stepperId = getDynamicId("number-input::r" + UUID.randomUUID().toString().substring(0, 4) + ":");
+            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
+            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
+            final String categoryTitle = trans.getOrDefault(p.category, p.category);
+
+            return "<div data-dan-component=\"product-tile\" data-testid=\"product-tile-" + p.id + "\" data-pid=\"" + p.id + "\" data-shipping-method=\"shipping\" id=\"product-tile--" + p.id + "\" data-cnstrc-item-id=\"" + p.id + "\" data-cnstrc-item-name=\"" + escapeHtml(localeName) + "\" data-cnstrc-item-price=\"" + (salePrice != null ? salePrice : basePrice) + "\" class=\"emotion-1s86rl4\">" +
+                   "  <span role=\"status\" aria-live=\"polite\" class=\"emotion-lnntmy\"></span>" +
+                   "  <div class=\"wick-linkbox emotion-164b4e4\">" +
+                   "    <div class=\"wick-card__root emotion-1bfi37c\">" +
+                   "      <div class=\"emotion-brx7u0\">" +
+                   "        <div class=\"emotion-ci36qi\">" +
+                   "          <a class=\"wick-linkbox__overlay emotion-1q4f12p\" href=\"" + pdpLink + "\" data-discover=\"true\" aria-label=\"View " + escapeHtml(localeName) + "\">" +
+                   "            <div class=\"emotion-167ekqp\">" +
+                   "              <div class=\"emotion-hzkzo2\">" +
+                   "                <div class=\"emotion-5mrfce\">" +
+                   "                  <svg viewBox=\"0 0 100 100\" class=\"wick-image emotion-n45is0\">" + p.svgPath + "</svg>" +
+                   "                </div>" +
+                   "              </div>" +
+                   "            </div>" +
+                   "          </a>" +
+                   "        </div>" +
+                   (badgeHtml.isEmpty() ? "" : "        <span data-dan-component=\"product-tile--badge\" data-testid=\"product-tile--badge\" class=\"wick-badge emotion-2b9vae\">" + (!p.badge.isEmpty() ? escapeHtml(p.badge) : "Sale") + "</span>") +
+                   "      </div>" +
+                   "      <div class=\"wick-card__body emotion-ebdcim\">" +
+                   "        <div class=\"wick-stack emotion-9vvgc2\">" +
+                   "          <p data-dan-component=\"product-tile--social-proofing\" class=\"emotion-e2von4\">Trending</p>" +
+                   "          <h3 data-dan-component=\"product-tile--name\" class=\"GlobalLinkNoTx wick-card__title emotion-14lzra7\">" +
+                   "            <a class=\"wick-link emotion-kasbrq\" href=\"" + pdpLink + "\" data-discover=\"true\">" + escapeHtml(localeName) + "</a>" +
+                   "          </h3>" +
+                   "          <p data-dan-component=\"product-tile--type\" class=\"wick-card__description emotion-ht9fx4\">" + escapeHtml(categoryTitle) + "</p>" +
+                   "        </div>" +
+                   "        <div class=\"wick-stack emotion-9vvgc2\">" +
+                   "          <div class=\"wick-skeleton emotion-10nilez\">" +
+                   "            <div class=\"wick-stack emotion-15kf031\" data-dan-component=\"product-price\">" +
+                   "              <b data-dan-component=\"product-price--now-price\" class=\"emotion-1rkvoei\">" + nowPrice + "</b>" +
+                   (salePrice != null ? "              <s data-dan-component=\"product-price--sale-price\" class=\"emotion-bxysmo\">" + wasPrice + "</s>" : "") +
+                   "            </div>" +
+                   "          </div>" +
+                   "        </div>" +
+                   "        <div data-dan-component=\"product-tile--rating\" class=\"emotion-c7yo1x\">" +
+                   "          <div data-bv-show=\"inline_rating\" data-bv-productid=\"" + p.id + "\"></div>" +
+                   "        </div>" +
+                   "      </div>" +
+                   "      <div class=\"wick-card__footer emotion-1nht3qk\">" +
+                   "        <div id=\"" + stepperId + "\" data-scope=\"number-input\" data-part=\"root\" dir=\"ltr\" data-cnstrc-btn=\"add_to_cart\" data-initial-affordance-visible=\"true\" class=\"wick-number-stepper__root emotion-1bd2lri\">" +
+                   "          <label data-scope=\"number-input\" data-part=\"label\" dir=\"ltr\" id=\"" + stepperId + "::label\" for=\"" + stepperId + "::input\" class=\"wick-number-stepper__label emotion-1z119ai\">Quantity in bag</label>" +
+                   "          <div style=\"position: absolute; inset: 0px; display: flex; align-items: stretch;\">" +
+                   "            <button type=\"button\" data-dan-component=\"product-tile--add-to-bag-button\" data-rec-id=\"" + p.id + "\" data-rec-name=\"" + escapeHtml(localeName) + "\" data-rec-type=\"" + escapeHtml(categoryTitle) + "\" aria-label=\"Add " + escapeHtml(localeName) + " to Bag\" class=\"wick-button emotion-wasmr0 product-quick-add\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\">" +
+                   "              " + trans.getOrDefault("addToCart", "Add to bag") +
+                   "            </button>" +
+                   "          </div>" +
+                   "          <input data-scope=\"number-input\" data-part=\"input\" dir=\"ltr\" id=\"" + stepperId + "::input\" role=\"spinbutton\" pattern=\"-?[0-9]*(.[0-9]+)?\" inputmode=\"decimal\" autocomplete=\"off\" autocorrect=\"off\" spellcheck=\"false\" type=\"text\" aria-roledescription=\"numberfield\" aria-valuemin=\"0\" aria-valuemax=\"9\" aria-valuenow=\"0\" tabindex=\"-1\" class=\"wick-number-stepper__input emotion-ds87jz\" value=\"0\">" +
+                   "        </div>" +
+                   "      </div>" +
+                   "      <div class=\"wick-card__footer emotion-1nht3qk\">" +
+                   "        <div class=\"wick-stack emotion-1wv6ypd\" data-dan-component=\"grid-fulfillment-methods\">" +
+                   "          <p><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-e1qt4e\"><path fill=\"currentColor\" d=\"M12 2.38a9.62 9.62 0 1 1 0 19.24 9.62 9.62 0 0 1 0-19.24m0 1.24a8.38 8.38 0 1 0 0 16.76 8.38 8.38 0 0 0 0-16.76m3.312 5.692a.62.62 0 0 1 .877.877l-5.25 5.25a.62.62 0 0 1-.877 0l-2.25-2.25a.62.62 0 0 1 .876-.877l1.812 1.811z\"></path></svg>Shipping</p>" +
+                   "        </div>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "</div>";
+        }
         else
         {
             // Perfect and Normal layout structure
@@ -2424,6 +2601,14 @@ public final class EmbeddedHtmlServer
     {
         final int count = cart.items.values().stream().mapToInt(Integer::intValue).sum();
         final String dropdownHtml = getCartDropdownHtml(cart, trans, country, quality, showTemp);
+
+        if ("pwa-chaos".equals(quality))
+        {
+            return "<button type=\"button\" aria-label=\"Cart\" data-cart-qty=\"" + count + "\" data-dan-component=\"mini-cart--icon-btn\" class=\"wick-button emotion-s28hge\" id=\"cart-btn-anchor\" onclick=\"openMiniCartDrawer()\">" +
+                   "  <svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-tn3ltr\"><path fill=\"currentColor\" d=\"M12 1.375c1.103 0 2.156.458 2.927 1.264a4.36 4.36 0 0 1 1.188 2.736h4.01v16.417H3.875V5.375h4.01a4.35 4.35 0 0 1 1.188-2.736A4.05 4.05 0 0 1 12 1.375M5.125 20.542h13.75V6.625H5.125zM12 2.625a2.8 2.8 0 0 0-2.023.878 3.1 3.1 0 0 0-.838 1.872h5.722a3.1 3.1 0 0 0-.838-1.872A2.8 2.8 0 0 0 12 2.625\"></path></svg>" +
+                   "  <div class=\"emotion-1db0yyd\"><div class=\"emotion-16mjpn3 cart-badge\">" + count + "</div></div>" +
+                   "</button>";
+        }
 
         if ("modern-bad".equals(quality))
         {
@@ -2473,8 +2658,9 @@ public final class EmbeddedHtmlServer
         }
         if (cart.items.isEmpty())
         {
-            sb.append("  <div class=\"cart-dropdown-empty\">")
-              .append("    <p>").append(trans.getOrDefault("cartIsEmpty", "Cart is Empty.")).append("</p>")
+            sb.append("  <div class=\"cart-dropdown-empty\" style=\"text-align:center; padding: 30px 20px;\">")
+              .append("    <p style=\"color: var(--color-text-secondary); margin-bottom: 16px;\">").append(trans.getOrDefault("cartIsEmpty", "Your bag is empty.")).append("</p>")
+              .append("    <button type=\"button\" class=\"wick-button\" style=\"background:#005699;color:#fff;padding:8px 16px;border-radius:4px;font-size:12px;cursor:pointer;\" onclick=\"closeMiniCartDrawer(); window.pwaRouter ? window.pwaRouter.navigate('plp.html') : location.href='plp.html'\">Shop Now</button>")
               .append("  </div>");
         }
         else
@@ -2494,24 +2680,28 @@ public final class EmbeddedHtmlServer
                 final double rowTotal = price * entry.getValue();
                 subtotal += rowTotal;
 
-                sb.append("    <div class=\"cart-dropdown-item\">")
-                  .append("      <div class=\"cart-dropdown-item-img\">")
-                  .append("        <svg viewBox=\"0 0 100 100\">").append(p.svgPath).append("</svg>")
+                sb.append("    <div class=\"cart-dropdown-item\" style=\"display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--color-border); align-items:center;\">")
+                  .append("      <div class=\"cart-dropdown-item-img\" style=\"width:50px; height:50px; background:#FAF9F6; border-radius:4px; display:flex; align-items:center; justify-content:center; flex-shrink:0;\">")
+                  .append("        <svg viewBox=\"0 0 100 100\" style=\"width:36px; height:36px;\">").append(p.svgPath).append("</svg>")
                   .append("      </div>")
-                  .append("      <div class=\"cart-dropdown-item-details\">")
-                  .append("        <div class=\"cart-dropdown-item-title\">").append(p.names.getOrDefault(country.locale, p.names.get("en"))).append(size).append("</div>")
-                  .append("        <div class=\"cart-dropdown-item-price\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
+                  .append("      <div class=\"cart-dropdown-item-details\" style=\"flex:1; min-width:0;\">")
+                  .append("        <div class=\"cart-dropdown-item-title\" style=\"font-size:13px; font-weight:600; color:#1A1A1A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;\">").append(escapeHtml(p.names.getOrDefault(country.locale, p.names.get("en")))).append(size).append("</div>")
+                  .append("        <div class=\"cart-dropdown-item-price\" style=\"font-size:12px; color:#666;\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
                   .append("      </div>")
+                  .append("      <button type=\"button\" onclick=\"window.pwaCart.remove('").append(p.id).append("')\" style=\"background:none; border:none; color:#999; cursor:pointer; font-size:18px; padding:4px;\">&times;</button>")
                   .append("    </div>");
             }
-    sb.append("  </div>")
-              .append("  <div class=\"cart-dropdown-footer\">")
-              .append("    <div class=\"cart-dropdown-subtotal\">")
+            sb.append("  </div>")
+              .append("  <div class=\"cart-dropdown-footer\" style=\"margin-top:16px;\">")
+              .append("    <div class=\"cart-dropdown-subtotal\" style=\"display:flex; justify-content:space-between; font-weight:700; font-size:15px; margin-bottom:14px; color:#005699;\">")
               .append("      <span>").append(trans != null ? trans.getOrDefault("subtotal", "Subtotal") : "Subtotal").append("</span>")
               .append("      <span>").append(formatPrice(subtotal, country)).append("</span>")
-              .append("    </div>")
-              .append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"cart-dropdown-checkout-btn\">").append(trans != null ? trans.getOrDefault("viewCartCheckout", "View Cart & Checkout") : "View Cart & Checkout").append("</a>")
-              .append("  </div>");
+              .append("    </div>");
+            if (!"pwa-chaos".equals(quality))
+            {
+                sb.append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"wick-button\" style=\"display:flex; width:100%; justify-content:center; background:#E80070; color:#fff; font-weight:700; font-size:13px; text-transform:uppercase; padding:12px; border-radius:4px; text-align:center; text-decoration:none;\" onclick=\"closeMiniCartDrawer(); if(window.pwaRouter){event.preventDefault(); window.pwaRouter.navigate('cart.html');}\">").append(trans != null ? trans.getOrDefault("viewCartCheckout", "View Bag & Checkout") : "View Bag & Checkout").append("</a>");
+            }
+            sb.append("  </div>");
         }
         sb.append("</div>");
         return sb.toString();
@@ -2524,6 +2714,149 @@ public final class EmbeddedHtmlServer
 
     private static String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality, final String couponError)
     {
+        if ("pwa-chaos".equals(quality))
+        {
+            if (cart.items.isEmpty())
+            {
+                return "<div id=\"cart-content-wrapper\" data-testid=\"sf-cart-container\" data-dan-page=\"cart\" class=\"emotion-1bqnmih\">" +
+                       "  <div class=\"emotion-ccf7si\"><button type=\"button\" class=\"chakra-button emotion-1dhlla0\" role=\"link\" data-dan-component=\"cart--button--continue-shopping\" onclick=\"window.pwaRouter ? window.pwaRouter.navigate('plp.html') : location.href='plp.html'\"><span data-dan-component=\"icon\" data-dan-display=\"ChevronLeftIcon\" aria-hidden=\"true\" class=\"emotion-caw46r\"><svg viewBox=\"0 0 24 24\" focusable=\"false\" class=\"chakra-icon emotion-aqwqy8\" role=\"presentation\"><path fill=\"currentColor\" d=\"M14.947 21 7 12l7.947-9L16 3.896 8.854 12 16 20.104z\"></path></svg></span>Continue Shopping</button></div>" +
+                       "  <div class=\"chakra-container emotion-1sntv1k\" style=\"text-align:center; padding: 60px 0;\">" +
+                       "    <h2 data-dan-display=\"cart--title\" class=\"wick-heading emotion-1cf4hnz\" style=\"margin-bottom:16px;\">Your bag is empty</h2>" +
+                       "    <p style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">Browse our latest collections and find your new favorites.</p>" +
+                       "    <button type=\"button\" class=\"wick-button emotion-168g49t\" style=\"max-width:240px; margin:0 auto;\" onclick=\"window.pwaRouter ? window.pwaRouter.navigate('plp.html') : location.href='plp.html'\">Shop All Scents</button>" +
+                       "  </div>" +
+                       "</div>";
+            }
+
+            final int totalItems = cart.items.values().stream().mapToInt(Integer::intValue).sum();
+            final double subtotal = calculateSubtotal(cart);
+            final double discount = calculateDiscount(cart, subtotal);
+            final double shipping = calculateShipping(cart, subtotal);
+            final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
+            final double total = subtotal - discount + shipping + tax;
+
+            final StringBuilder sb = new StringBuilder();
+            sb.append("<div id=\"cart-content-wrapper\" data-testid=\"sf-cart-container\" data-dan-page=\"cart\" class=\"emotion-1bqnmih\">");
+            sb.append("  <div class=\"emotion-ccf7si\"><button type=\"button\" class=\"chakra-button emotion-1dhlla0\" role=\"link\" data-dan-component=\"cart--button--continue-shopping\" onclick=\"window.pwaRouter ? window.pwaRouter.navigate('plp.html') : location.href='plp.html'\"><span data-dan-component=\"icon\" data-dan-display=\"ChevronLeftIcon\" aria-hidden=\"true\" class=\"emotion-caw46r\"><svg viewBox=\"0 0 24 24\" focusable=\"false\" class=\"chakra-icon emotion-aqwqy8\" role=\"presentation\"><path fill=\"currentColor\" d=\"M14.947 21 7 12l7.947-9L16 3.896 8.854 12 16 20.104z\"></path></svg></span>Continue Shopping</button></div>");
+            sb.append("  <div class=\"chakra-container emotion-1sntv1k\">");
+            sb.append("    <div class=\"cart-layout-grid\">");
+            sb.append("      <div class=\"cart-main-col\">");
+            sb.append("        <div class=\"chakra-stack emotion-1811skr\">");
+            sb.append("          <h2 data-dan-display=\"cart--title\" class=\"wick-heading emotion-1cf4hnz\">Your bag</h2>");
+            sb.append("          <div data-dan-component=\"cart--alert\" class=\"wick-alert__root emotion-1byj8ca\"><span class=\"emotion-fhmeqd\"><svg viewBox=\"0 0 24 24\" class=\"emotion-54dvsu\"><path fill=\"currentColor\" d=\"M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM11 7H13V9H11V7ZM11 11H13V17H11V11Z\"></path></svg></span><div class=\"emotion-8ylhee\"><div class=\"wick-alert__title emotion-vtcx65\"><span>Purchase $2.10 more and receive Free Shipping on $50 Orders</span></div></div></div>");
+            sb.append("          <div data-dan-component=\"cart--alert\" class=\"wick-alert__root emotion-1byj8ca\"><span class=\"emotion-fhmeqd\"><svg viewBox=\"0 0 24 24\" class=\"emotion-54dvsu\"><path fill=\"currentColor\" d=\"M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM11 7H13V9H11V7ZM11 11H13V17H11V11Z\"></path></svg></span><div class=\"emotion-8ylhee\"><div class=\"wick-alert__title emotion-vtcx65\"><span>Need it ASAP? Choose Pick Up In Store, and we'll typically have it ready for pickup within 4 hours.</span></div></div></div>");
+            sb.append("        </div>");
+
+            sb.append("        <div class=\"emotion-4lw04n\"><div class=\"wick-stack emotion-1xzmffc\" spacing=\"4\">");
+            sb.append("          <div class=\"emotion-1sel7uw\"><div class=\"emotion-coux86\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-1kxg72c\"><path fill=\"currentColor\" d=\"M12 1.502a1.5 1.5 0 0 1 .72.184l8.25 4.517a1.5 1.5 0 0 1 .57.55l.033.067.019.03a1 1 0 0 1 .06.146c.062.166.098.341.098.52v8.967a1.5 1.5 0 0 1-.78 1.317l-8.25 4.516a1.5 1.5 0 0 1-1.44 0L3.03 17.8a1.5 1.5 0 0 1-.78-1.313V7.516l.014-.2a1.5 1.5 0 0 1 .143-.466l.013-.021.04-.076c.138-.231.335-.421.57-.55l4.248-2.326.04-.022 3.962-2.169a1.5 1.5 0 0 1 .72-.184M3.75 16.483l7.5 4.107v-8.045L3.75 8.44zm13.5-6.401v4.168a.75.75 0 0 1-1.5 0v-3.348l-3 1.643v8.044l7.5-4.106V8.44zM4.47 7.124 12 11.246l3.178-1.74-7.532-4.121zm4.739-2.595 7.53 4.122 2.79-1.527L12 3.002z\"></path></svg></div><div class=\"emotion-a1uy14\"><p data-dan-display=\"cart--fulfillment-summary--shipping-items\" class=\"emotion-1unwl8y\">").append(totalItems).append(" Items for Shipping</p></div></div>");
+            sb.append("          <div class=\"emotion-f7stei\"></div>");
+            sb.append("          <div class=\"emotion-1sel7uw\"><div class=\"emotion-12zn5c\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-1kxg72c\"><path fill=\"currentColor\" d=\"M18.938 3a1.5 1.5 0 0 1 1.403.971l.04.117 1.34 4.706a.8.8 0 0 1 .028.199L21.75 9v1.5a3.75 3.75 0 0 1-1.5 2.998v6.752a.75.75 0 0 1-.75.75h-15a.75.75 0 0 1-.75-.75v-6.752a3.75 3.75 0 0 1-1.5-2.998V9l.001-.023.001-.024a1 1 0 0 1 .02-.126q.002-.016.008-.033l1.343-4.706A1.504 1.504 0 0 1 5.06 3zM15 12.747a3.75 3.75 0 0 1-5.651.404A4 4 0 0 1 9 12.747a3.75 3.75 0 0 1-3.75 1.426V19.5h13.5v-5.327A3.75 3.75 0 0 1 15 12.747M3.75 10.5a2.25 2.25 0 0 0 1.04 1.894.8.8 0 0 1 .156.092A2.248 2.248 0 0 0 8.25 10.5v-.75h-4.5zm6 0a2.25 2.25 0 0 0 4.5 0v-.75h-4.5zm6 0a2.25 2.25 0 0 0 3.304 1.986.8.8 0 0 1 .155-.092q.207-.13.382-.303a2.25 2.25 0 0 0 .66-1.591v-.75h-4.5zM3.994 8.25h16.012L18.938 4.5H5.066z\"></path></svg></div><div class=\"emotion-asln8t\"><p data-dan-display=\"cart--fulfillment-summary--bopis-items\" class=\"emotion-1unwl8y\">0 Items for Pickup</p></div><div class=\"emotion-1c2o3xc\"><p class=\"emotion-1unwl8y\">Get it ASAP! It's easy, fast & free.</p><button type=\"button\" data-dan-component=\"cart--fulfillment-summary--change-store-link\" data-dan-display=\"set-store--cart\" class=\"wick-button emotion-z94qvk\"><p class=\"emotion-1unwl8y\">Set Store</p></button></div></div>");
+            sb.append("        </div></div>");
+
+            sb.append("        <div class=\"emotion-zv7ju9\"><div class=\"emotion-0\"><div class=\"chakra-stack emotion-165casq\">");
+
+            for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+            {
+                final String cartKey = entry.getKey();
+                final Product p = lookupProductById(cartKey);
+                if (p == null) continue;
+
+                final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                final double rowTotal = price * entry.getValue();
+                final String displayName = p.names.getOrDefault(country.locale, p.names.get("en"));
+                final String categoryTitle = trans.getOrDefault(p.category, p.category);
+                final String radioId = getDynamicId("radio-group::r" + UUID.randomUUID().toString().substring(0, 4) + ":");
+
+                sb.append("<div class=\"emotion-1ej17q9\">");
+                sb.append("  <div data-cart-product-row=\"true\" data-testid=\"sf-cart-item-").append(p.id).append("\" data-product-id=\"").append(p.id).append("\" class=\"emotion-14m478p\">");
+                sb.append("    <div class=\"chakra-stack emotion-13sc4bo\">");
+                sb.append("      <div class=\"chakra-stack emotion-3a4b3m\">");
+                sb.append("        <a to=\"/p/").append(p.slug).append("\" class=\"wick-link emotion-vb3kc0\" href=\"p/").append(p.slug).append(".html\">");
+                sb.append("          <div class=\"emotion-4b2j91\"><div class=\"chakra-aspect-ratio emotion-rioh04\"><div class=\"emotion-u9wmlp\">");
+                sb.append("            <svg viewBox=\"0 0 100 100\" class=\"chakra-image emotion-son7hv\" data-dan-display=\"cart--line-item--product-image\">").append(p.svgPath).append("</svg>");
+                sb.append("          </div></div></div>");
+                sb.append("        </a>");
+                sb.append("        <div class=\"chakra-stack emotion-mwrbhd\">");
+                sb.append("          <p data-dan-component=\"cart--social-proof--badge\" class=\"emotion-70cgun\">Trending</p>");
+                sb.append("          <div class=\"GlobalLinkNoTx\"><a class=\"wick-link emotion-11yo3di\" data-dan-display=\"cart--line-item--product-name\" href=\"p/").append(p.slug).append(".html\">").append(escapeHtml(displayName)).append("</a></div>");
+                sb.append("          <div class=\"wick-stack emotion-yuwgv7\" spacing=\"1.5\"><p data-dan-display=\"cart--line-item--subtitle\" class=\"emotion-nil7ry\">").append(escapeHtml(categoryTitle)).append("</p></div>");
+                sb.append("          <div><div class=\"emotion-1yb9i2z\"><div class=\"chakra-stack emotion-14lt884\"><button type=\"button\" class=\"chakra-button emotion-1gfvj26\" aria-label=\"Toggle Item In Love-It List\" role=\"button\" data-dan-component=\"cart-primary-button--favorite-button\">Add to Love-It List</button></div></div></div>");
+                sb.append("        </div>");
+                sb.append("        <div class=\"emotion-1lkc10l\"><div class=\"chakra-stack emotion-58gjhl\"><div role=\"group\" class=\"chakra-button__group emotion-8z6n3j\" data-orientation=\"horizontal\">");
+                sb.append("          <button type=\"button\" class=\"chakra-button emotion-momggs\" data-dan-component=\"cart-remove-item\" aria-label=\"Remove\" onclick=\"window.pwaCart ? window.pwaCart.remove('").append(p.id).append("') : htmx.ajax('POST', 'api/cart/remove?productId=").append(p.id).append("', '#cart-content-wrapper')\"><span data-dan-component=\"icon\" data-dan-display=\"CloseIcon\" aria-hidden=\"true\" class=\"emotion-87bdn4\"><svg viewBox=\"0 0 24 24\" focusable=\"false\" class=\"chakra-icon emotion-aqwqy8\" role=\"presentation\"><path fill=\"currentColor\" d=\"m4.47 5.53 1.06-1.06L12 10.94l6.47-6.47 1.061 1.06-6.47 6.47 6.47 6.47-1.06 1.06L12 13.06l-6.47 6.47-1.061-1.06L10.94 12z\"></path></svg></span></button>");
+                sb.append("        </div></div></div>");
+                sb.append("      </div>");
+
+                sb.append("      <div class=\"emotion-1n86e98\">");
+                sb.append("        <div class=\"emotion-1uk17kq\"><div class=\"emotion-ypx4ne\">");
+                sb.append("          <div class=\"emotion-pv8b0v\"><div class=\"wick-stack emotion-1vdz00m\" spacing=\"0\"><span data-dan-display=\"cart--line-item--discounted-base-price\" class=\"emotion-1lolq8\">").append(formatPrice(price, country)).append("</span>").append(p.salePrice != null ? " <span data-dan-display=\"cart--line-item--base-price\" class=\"emotion-1gi7eky\">" + formatPrice(p.basePrice, country) + "</span>" : "").append("<span data-dan-display=\"cart--line-item--unit-price\" class=\"emotion-1cs13xl\">each</span></div></div>");
+                sb.append("          <div class=\"emotion-f39xo\"><div class=\"wick-stack emotion-1en055y\" data-dan-component=\"quantity-picker\">");
+                sb.append("            <button type=\"button\" role=\"button\" tabindex=\"0\" aria-label=\"Decrement Quantity\" data-dan-component=\"quantity-picker--decrement-button\" data-testid=\"quantity-decrement\" data-stepdirection=\"dec\" class=\"wick-button emotion-1r0ic55\" onclick=\"window.pwaCart ? window.pwaCart.update('").append(p.id).append("', ").append(entry.getValue() - 1).append(") : htmx.ajax('POST', 'api/cart/update?productId=").append(p.id).append("&quantity=").append(entry.getValue() - 1).append("', '#cart-content-wrapper')\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" label=\"subtract\" class=\"wick-icon emotion-ahtlur\"><path fill=\"currentColor\" d=\"M20.251 11.375a.626.626 0 0 1 0 1.25h-16.5a.626.626 0 1 1 0-1.25z\"></path></svg></button>");
+                sb.append("            <input inputmode=\"decimal\" type=\"text\" pattern=\"[0-9]*(.[0-9]+)?\" aria-label=\"Quantity Value\" readonly=\"\" aria-readonly=\"true\" role=\"spinbutton\" aria-valuemin=\"0\" aria-valuemax=\"9\" aria-valuenow=\"").append(entry.getValue()).append("\" aria-valuetext=\"").append(entry.getValue()).append("\" autocomplete=\"off\" autocorrect=\"off\" data-dan-component=\"quantity-picker--input\" class=\"wick-input emotion-1gmt8fm cart-qty-input\" value=\"").append(entry.getValue()).append("\">");
+                sb.append("            <button type=\"button\" role=\"button\" tabindex=\"0\" aria-label=\"Increment Quantity\" data-dan-component=\"quantity-picker--increment-button\" data-testid=\"quantity-increment\" data-stepdirection=\"inc\" class=\"wick-button emotion-vsashv\" onclick=\"window.pwaCart ? window.pwaCart.update('").append(p.id).append("', ").append(entry.getValue() + 1).append(") : htmx.ajax('POST', 'api/cart/update?productId=").append(p.id).append("&quantity=").append(entry.getValue() + 1).append("', '#cart-content-wrapper')\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" label=\"add\" class=\"wick-icon emotion-ahtlur\"><path fill=\"currentColor\" d=\"M12.001 3.125c.345 0 .625.28.625.625v7.625h7.625a.626.626 0 0 1 0 1.25h-7.625v7.625a.625.625 0 0 1-1.25 0v-7.625H3.751a.626.626 0 1 1 0-1.25h7.625V3.75c0-.345.28-.625.625-.625\"></path></svg></button>");
+                sb.append("          </div></div>");
+                sb.append("          <div class=\"emotion-i0biay\"><div class=\"wick-stack emotion-12ub6xs\" spacing=\"0\"><p data-dan-display=\"cart--line-item--total-price\" class=\"emotion-17zaex6\"><span class=\"emotion-1q1l6ct\">Total Price:</span> <span>").append(formatPrice(rowTotal, country)).append("</span></p></div></div>");
+                sb.append("        </div>");
+                sb.append("        <div data-dan-component=\"cart--line-item--remove\" class=\"emotion-17xa3kp\"><div class=\"chakra-stack emotion-58gjhl\"><div role=\"group\" class=\"chakra-button__group emotion-8z6n3j\" data-orientation=\"horizontal\">");
+                sb.append("          <button type=\"button\" class=\"chakra-button emotion-momggs\" data-dan-component=\"cart-remove-item\" aria-label=\"Remove\" onclick=\"window.pwaCart ? window.pwaCart.remove('").append(p.id).append("') : htmx.ajax('POST', 'api/cart/remove?productId=").append(p.id).append("', '#cart-content-wrapper')\"><span data-dan-component=\"icon\" data-dan-display=\"CloseIcon\" aria-hidden=\"true\" class=\"emotion-87bdn4\"><svg viewBox=\"0 0 24 24\" focusable=\"false\" class=\"chakra-icon emotion-aqwqy8\" role=\"presentation\"><path fill=\"currentColor\" d=\"m4.47 5.53 1.06-1.06L12 10.94l6.47-6.47 1.061 1.06-6.47 6.47 6.47 6.47-1.06 1.06L12 13.06l-6.47 6.47-1.061-1.06L10.94 12z\"></path></svg></span></button>");
+                sb.append("        </div></div></div>");
+                sb.append("      </div>");
+
+                sb.append("      <div class=\"emotion-1jckwfz\"><div class=\"emotion-1mv7dni\"><div data-scope=\"radio-group\" data-part=\"root\" role=\"radiogroup\" id=\"").append(radioId).append("\" data-orientation=\"vertical\" dir=\"ltr\" data-dan-component=\"select-shipping\" class=\"wick-radio-group__root emotion-3oceqp\" style=\"position: relative;\"><div class=\"wick-stack emotion-ua4556\">");
+                sb.append("        <label data-scope=\"radio-group\" data-part=\"item\" dir=\"ltr\" data-state=\"checked\" data-orientation=\"vertical\" data-dan-component=\"select-shipping--shipping-option\" class=\"wick-radio-group__item emotion-2ao40p\"><input id=\"").append(radioId).append("::input:shipping\" type=\"radio\" name=\"").append(radioId).append("\" value=\"shipping\" checked=\"\" style=\"border:0;clip:rect(0,0,0,0);height:1px;margin:-1px;overflow:hidden;padding:0;position:absolute;width:1px;\"><span data-checked=\"\" data-scope=\"radio-group\" data-part=\"item-control\" dir=\"ltr\" class=\"emotion-14o94mz\"><span class=\"dot\"></span></span><span data-scope=\"radio-group\" data-part=\"item-text\" dir=\"ltr\" class=\"wick-radio-group__itemText\"><div class=\"wick-stack emotion-12o9cz6\"><div><p data-dan-display=\"select-shipping--shipping-option--label\" class=\"emotion-6z50h5\">Shipping</p><p data-dan-display=\"select-shipping--shipping-option--availability\" class=\"emotion-q5l1h4\"><div><p class=\"emotion-i3nb58\">Available</p></div></p></div></div></span></label>");
+                sb.append("        <div class=\"wick-stack emotion-1i88dk\"><label data-scope=\"radio-group\" data-part=\"item\" dir=\"ltr\" data-disabled=\"\" data-state=\"unchecked\" data-orientation=\"vertical\" data-dan-component=\"select-shipping--pickup-option\" class=\"wick-radio-group__item emotion-2ao40p\"><input type=\"radio\" name=\"").append(radioId).append("\" disabled=\"\" value=\"pickup\" style=\"border:0;clip:rect(0,0,0,0);height:1px;margin:-1px;overflow:hidden;padding:0;position:absolute;width:1px;\"><span data-disabled=\"\" data-scope=\"radio-group\" data-part=\"item-control\" dir=\"ltr\" class=\"emotion-14o94mz\"></span><span data-scope=\"radio-group\" data-part=\"item-text\" dir=\"ltr\" class=\"wick-radio-group__itemText\"><div class=\"wick-stack emotion-12o9cz6\"><div><span data-dan-display=\"select-shipping--pickup-option--label\" class=\"emotion-etjba6\">Pick up at&nbsp;<a tabindex=\"0\" class=\"wick-link emotion-vb3kc0\"><p data-dan-display=\"select-shipping--store-name\" class=\"emotion-10iahqc\">Set store</p></a></span></div></div></span></label></div>");
+                sb.append("      </div></div></div></div>");
+                sb.append("    </div>");
+                sb.append("  </div>");
+                sb.append("</div></div>");
+            }
+
+            sb.append("        </div></div></div>");
+            sb.append("        <div class=\"wick-stack emotion-120khze\" data-dan-display=\"cart--gift-messaging\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-1xj7d2j\"><path fill=\"currentColor\" d=\"M12.939 2.512c1.09-1.234 2.983-1.12 4.077-.028 1.093 1.094 1.206 2.988-.028 4.08q-.19.168-.397.31h3.659c.76.001 1.375.617 1.375 1.376v3c0 .76-.616 1.375-1.375 1.375h-.125v6.125a1.376 1.376 0 0 1-1.375 1.375H5.25a1.376 1.376 0 0 1-1.375-1.375v-6.125H3.75c-.76 0-1.375-.616-1.375-1.375v-3c0-.76.616-1.375 1.375-1.375h3.658q-.207-.144-.396-.31c-1.234-1.093-1.122-2.987-.028-4.08 1.094-1.094 2.987-1.207 4.078.027l.148.176c.341.431.596.927.789 1.426.22-.569.523-1.132.94-1.602M5.124 18.75q0 .051.036.089a.13.13 0 0 0 .089.036h6.125v-6.25h-6.25zm7.5.125h6.125a.13.13 0 0 0 .089-.036.13.13 0 0 0 .036-.09v-6.124h-6.25zM3.75 8.125a.125.125 0 0 0-.125.125v3c0 .069.056.125.125.125h7.625v-3.25zm8.875 3.25h7.625a.125.125 0 0 0 .125-.125v-3a.125.125 0 0 0-.125-.125h-7.625zM10.017 3.23c-.569-.509-1.532-.48-2.149.137-.657.657-.648 1.71-.027 2.26l.128.108c.66.52 1.598.815 2.453.974.34.063.654.099.911.123-.024-.257-.06-.572-.123-.911-.17-.912-.496-1.918-1.084-2.581zm6.115.137c-.617-.617-1.58-.646-2.149-.137l-.109.11c-.588.663-.914 1.67-1.084 2.58-.063.34-.1.655-.124.912.258-.024.572-.06.912-.123.912-.17 1.918-.494 2.581-1.081.62-.55.63-1.604-.027-2.261\"></path></svg><div><span class=\"emotion-17zaex6\">Shipping a gift?</span> Add a gift receipt and message at checkout.</div></div>");
+            sb.append("      </div>"); // End .cart-main-col
+
+            sb.append("      <div class=\"cart-sidebar-col\">");
+            sb.append("        <div class=\"emotion-2qrmgs\"><div class=\"wick-stack emotion-xhikg2\" data-testid=\"sf-order-summary\">");
+            sb.append("          <div class=\"wick-stack emotion-z8dtte\" spacing=\"4\">");
+            sb.append("            <div class=\"emotion-15zoh09\"><div class=\"wick-stack emotion-8g8ihq\">");
+            sb.append("              <form id=\"promo-code-form\" onsubmit=\"event.preventDefault(); window.pwaCart ? window.pwaCart.applyCoupon(this.code.value) : htmx.ajax('POST', 'api/cart/coupon?couponCode=' + encodeURIComponent(this.code.value), '#cart-content-wrapper');\"><div class=\"emotion-akpjce\"><div data-scope=\"field\" data-part=\"root\" id=\"field::code\" role=\"group\" data-dan-component=\"code-field\" class=\"wick-field__root emotion-1s1x1fk\"><label data-scope=\"field\" data-part=\"label\" id=\"field::code::label\" for=\"code\" data-dan-component=\"code-field--label\" class=\"wick-field__label emotion-1g8bq9m\"><div class=\"emotion-70qvj9\">Promo Code </div></label><div class=\"wick-group emotion-mkrjjj\"><input id=\"promo-code-input\" data-scope=\"field\" data-part=\"input\" name=\"code\" aria-label=\"Promo Code\" type=\"text\" data-dan-component=\"promo-field--input\" class=\"wick-input emotion-1y4qxzj\" value=\"").append(cart.coupon != null ? cart.coupon : "").append("\"><div data-group-item=\"\" data-last=\"\" class=\"emotion-17z4bwr\"><button type=\"submit\" data-dan-component=\"promo-field--btn\" name=\"promo-code-submit-btn\" class=\"wick-button emotion-1pprvi8\">Apply</button></div></div><span id=\"field::code::helper-text\" data-scope=\"field\" data-part=\"helper-text\" class=\"wick-field__helperText emotion-150unkc\">Limit 1 code per order</span></div></div></form>");
+            if (couponError != null && !couponError.isEmpty())
+            {
+                sb.append("<div class=\"error-message\" style=\"color: var(--color-error); font-size: 12px; margin-top: -10px; margin-bottom: 12px;\">").append(escapeHtml(couponError)).append("</div>");
+            }
+            sb.append("            </div></div>");
+            sb.append("            <div class=\"chakra-stack emotion-lxtbew\" data-dan-component=\"cart-rewards-sign-in\"><h3 class=\"chakra-heading emotion-w31ykh\" role=\"heading\" tabindex=\"0\" data-dan-display=\"cart-rewards-sign-in--header\"><p class=\"chakra-text emotion-v3o3tt\">Have a Rewards account?</p></h3><p class=\"chakra-text emotion-0\" role=\"note\" tabindex=\"0\">Sign in for a faster checkout and to get rewarded for your purchase!</p><button type=\"button\" class=\"chakra-button emotion-w51mf2\" data-dan-component=\"cart-rewards-sign-in--button\"><p class=\"chakra-text emotion-16lxs69\">Sign In</p></button></div>");
+            sb.append("          </div>");
+
+            sb.append("          <div class=\"wick-stack emotion-1bc6q4\"><div class=\"wick-stack emotion-1xx9n5\"><div class=\"wick-stack emotion-1mu15gg\">");
+            sb.append("            <h3 data-dan-display=\"cart--order-summary--title\" class=\"wick-heading emotion-fwh00l\">Order Summary</h3>");
+            sb.append("            <div class=\"wick-stack emotion-s2dn69\" spacing=\"4\">");
+            sb.append("              <div class=\"emotion-gg4vpm\"><p data-dan-display=\"cart--order-summary--merchandise-subtotal-label\" class=\"emotion-vvhybj\">Merchandise Subtotal</p><p data-dan-display=\"cart--order-summary--merchandise-subtotal\" class=\"emotion-1u1qmfi\">").append(formatPrice(subtotal, country)).append("</p></div>");
+            if (discount > 0)
+            {
+                sb.append("              <div class=\"emotion-gg4vpm\" style=\"color:var(--color-success);\"><p class=\"emotion-vvhybj\">Discount (").append(cart.coupon != null ? cart.coupon.toUpperCase() : "").append(")</p><p class=\"emotion-1u1qmfi\">-").append(formatPrice(discount, country)).append("</p></div>");
+            }
+            sb.append("              <div class=\"emotion-esfqlg\"><div class=\"emotion-70qvj9\"><p data-dan-display=\"cart--order-summary--shipping-total-label\" class=\"emotion-1jsjhdz\">Estimated Shipping - <span data-dan-display=\"cart--order-summary--shipping-total-type\" class=\"emotion-1jsjhdz\">Standard</span></p></div><p data-dan-display=\"cart--order-summary--shipping-total\" class=\"emotion-1u1qmfi\">").append(formatPrice(shipping, country)).append("</p></div>");
+            sb.append("              <div class=\"emotion-14ehbns\"><div class=\"emotion-1v4itgc\"><p data-dan-display=\"cart--order-summary--estimated-tax-label\" class=\"emotion-1jsjhdz\">Estimated Tax</p><p data-dan-display=\"cart--order-summary--estimated-tax\" class=\"emotion-1u1qmfi\">").append(formatPrice(tax, country)).append("</p></div><p class=\"emotion-q1rail\">Taxes will be calculated when your order is processed.</p></div>");
+            sb.append("            </div>");
+            sb.append("            <span role=\"separator\" aria-orientation=\"horizontal\" class=\"wick-separator emotion-sk2zcy\"></span>");
+            sb.append("            <div class=\"wick-stack emotion-tl58rn\" spacing=\"4\"><div class=\"emotion-1v4itgc\"><p data-dan-display=\"cart--order-summary--order-total-label\" class=\"emotion-1cxzevn\">Order total <span class=\"GlobalLinkNoTx\">(USD)</span></p><p data-dan-display=\"cart--order-summary--order-total\" class=\"emotion-1cxzevn\">").append(formatPrice(total, country)).append("</p></div></div>");
+            sb.append("          </div></div></div>");
+
+            sb.append("          <div class=\"wick-stack emotion-2wqm0p\" spacing=\"4\"><div class=\"wick-stack emotion-8g8ihq\" spacing=\"4\">");
+            sb.append("            <button type=\"button\" data-dan-display=\"cart--checkout-button\" data-dan-component=\"cart-checkout-button\" class=\"wick-button emotion-168g49t\" onclick=\"window.pwaRouter ? window.pwaRouter.navigate('checkout.html') : location.href='checkout.html'\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-1yq2hjp\"><path fill=\"currentColor\" d=\"M12 .75a4.5 4.5 0 0 1 4.5 4.5V7.5h3A1.5 1.5 0 0 1 21 9v10.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5V9a1.5 1.5 0 0 1 1.5-1.5h3V5.25A4.5 4.5 0 0 1 12 .75M4.5 19.5h15V9h-15zm7.5-9a2.625 2.625 0 0 1 .75 5.139v1.611a.75.75 0 0 1-1.5 0v-1.61A2.624 2.624 0 0 1 12 10.5m0 1.5a1.125 1.125 0 1 0 0 2.251 1.125 1.125 0 0 0 0-2.25m0-9.75a3 3 0 0 0-3 3V7.5h6V5.25a3 3 0 0 0-3-3\"></path></svg>Checkout</button>");
+            sb.append("          </div></div>");
+
+            sb.append("          <div class=\"wick-stack emotion-p4b27s\"><p data-dan-component=\"cart--order-summary--legal-disclaimer\" class=\"emotion-10txwal\">By completing my order, I confirm that (1) I have read and agree to the <span class=\"GlobalLinkNoTx\">VÉRLA</span> <a href=\"about.html\" id=\"terms-of-use-link\" class=\"wick-link emotion-vvb98k\">Terms of Use</a> and <a href=\"about.html\" id=\"privacy-policy-link\" class=\"wick-link emotion-vvb98k\">Privacy Policy</a>.</p></div>");
+            sb.append("        </div></div>");
+            sb.append("      </div>"); // End .cart-sidebar-col
+            sb.append("    </div>"); // End .cart-layout-grid
+            sb.append("  </div>"); // End .chakra-container.emotion-1sntv1k
+            sb.append("</div>"); // End #cart-content-wrapper
+
+            return sb.toString();
+        }
+
         if (cart.items.isEmpty())
         {
             return "<div id=\"cart-content-wrapper\">" +
@@ -2805,9 +3138,10 @@ public final class EmbeddedHtmlServer
         }
         else
         {
+            final String streetPlaceholder = "DE".equals(countryCode) ? " placeholder=\"Hauptstraße 12\"" : "";
             return "<div class=\"form-group\">" +
                    "  <label class=\"form-label\" for=\"" + prefix + "street\">" + labelStreet + "</label>" +
-                   "  <input type=\"text\" id=\"" + prefix + "street\" name=\"street\" class=\"form-control\" placeholder=\"Hauptstraße 12\" required>" +
+                   "  <input type=\"text\" id=\"" + prefix + "street\" name=\"street\" class=\"form-control\"" + streetPlaceholder + " required>" +
                    "</div>" +
                    "<div class=\"form-grid-1-2\">" +
                    "  <div class=\"form-group\">" +
@@ -3025,6 +3359,7 @@ public final class EmbeddedHtmlServer
             System.out.println("    - VÉRLA Bad Store:          http://localhost:" + server.getPort() + "/verla-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (WCAG):  http://localhost:" + server.getPort() + "/verla-modern-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (No WCAG): http://localhost:" + server.getPort() + "/verla-modern-bad-nowcag/index.html");
+            System.out.println("    - VÉRLA PWA Chaos Store:    http://localhost:" + server.getPort() + "/verla-pwa-chaos/index.html");
             System.out.println();
             System.out.println("  [HTTPS Secure Contexts]");
             System.out.println("    - Starter Hub Portal:       https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/index.html");
@@ -3038,6 +3373,7 @@ public final class EmbeddedHtmlServer
             System.out.println("    - VÉRLA Bad Store:          https://localhost:" + server.getHttpsPort() + "/verla-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (WCAG):  https://localhost:" + server.getHttpsPort() + "/verla-modern-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (No WCAG): https://localhost:" + server.getHttpsPort() + "/verla-modern-bad-nowcag/index.html");
+            System.out.println("    - VÉRLA PWA Chaos Store:    https://localhost:" + server.getHttpsPort() + "/verla-pwa-chaos/index.html");
             System.out.println();
             System.out.println("  NOTE: For HTTPS, you will get a self-signed certificate warning.");
             System.out.println("        You can safely bypass this or run with Chrome's '--ignore-certificate-errors' flag.");

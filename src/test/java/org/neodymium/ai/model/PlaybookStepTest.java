@@ -64,4 +64,25 @@ public class PlaybookStepTest
         Assertions.assertTrue(fullPageVisualStepUnderscore.isVisualStep());
         Assertions.assertTrue(fullPageVisualStepUnderscore.isFullPageVisualStep());
     }
+
+    @Test
+    public void testDurationAndDelayFields() throws Exception
+    {
+        final PlaybookStep step = new PlaybookStep();
+        step.setInstruction("Click submit");
+        step.setDurationMs(350L);
+        step.setDelayMs(700L);
+
+        Assertions.assertEquals(350L, step.getDurationMs());
+        Assertions.assertEquals(700L, step.getDelayMs());
+
+        final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        final String json = mapper.writeValueAsString(step);
+        Assertions.assertTrue(json.contains("\"durationMs\":350") || json.contains("\"durationMs\" : 350"));
+        Assertions.assertTrue(json.contains("\"delayMs\":700") || json.contains("\"delayMs\" : 700"));
+
+        final PlaybookStep deserialized = mapper.readValue(json, PlaybookStep.class);
+        Assertions.assertEquals(350L, deserialized.getDurationMs());
+        Assertions.assertEquals(700L, deserialized.getDelayMs());
+    }
 }

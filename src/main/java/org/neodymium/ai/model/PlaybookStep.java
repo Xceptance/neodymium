@@ -135,11 +135,6 @@ public final class PlaybookStep
     private String contextLevel;
 
     /**
-     * AI reasoning explanation generated for this step.
-     */
-    private String reasoning;
-
-    /**
      * Returns the recorded context level for this step.
      *
      * @return the context level name, or null if not recorded
@@ -706,25 +701,5 @@ public final class PlaybookStep
     public void setSchemaVersion(final String schemaVersion)
     {
         this.schemaVersion = schemaVersion;
-    }
-
-    /**
-     * Returns the AI reasoning associated with this step.
-     *
-     * @return the reasoning string, or null if not set
-     */
-    public String getReasoning()
-    {
-        return this.reasoning;
-    }
-
-    /**
-     * Sets the AI reasoning for this step.
-     *
-     * @param reasoning the reasoning string to set
-     */
-    public void setReasoning(final String reasoning)
-    {
-        this.reasoning = reasoning;
     }
 }

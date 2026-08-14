@@ -98,6 +98,13 @@ public final class LocatorImprover
             return 8;
         }
 
+        // Semantic data attributes (data-country, data-value, data-code, data-lang, data-qa, data-id)
+        if (trimmed.contains("[data-country=") || trimmed.contains("[data-value=") || trimmed.contains("[data-code=")
+            || trimmed.contains("[data-lang=") || trimmed.contains("[data-qa=") || trimmed.contains("[data-id="))
+        {
+            return 9;
+        }
+
         // Single clean CSS class (.btn-primary)
         if (trimmed.startsWith(".") && !trimmed.contains(" ") && !trimmed.contains(">") && !trimmed.contains(":"))
         {
@@ -156,7 +163,19 @@ public final class LocatorImprover
                 candidates.add("[data-test='" + escapeAttributeValue(testAttr) + "']");
             }
 
-            // Candidate 3: name
+            // Candidate 3: Semantic domain data attributes
+            for (final String attr : new String[] {"data-country", "data-value", "data-code", "data-lang", "data-qa", "data-id"})
+            {
+                final String val = element.getAttribute(attr);
+                if (val != null && !val.isBlank() && !VOLATILE_ID_DETECTOR.isVolatile(val))
+                {
+                    final String tagPrefix = !tagName.isBlank() ? tagName : "";
+                    candidates.add(tagPrefix + "[" + attr + "='" + escapeAttributeValue(val) + "']");
+                    candidates.add("[" + attr + "='" + escapeAttributeValue(val) + "']");
+                }
+            }
+
+            // Candidate 4: name
             final String name = element.getAttribute("name");
             if (name != null && !name.isBlank())
             {
@@ -164,14 +183,14 @@ public final class LocatorImprover
                 candidates.add(tagPrefix + "[name='" + escapeAttributeValue(name) + "']");
             }
 
-            // Candidate 4: aria-label
+            // Candidate 5: aria-label
             final String ariaLabel = element.getAttribute("aria-label");
             if (ariaLabel != null && !ariaLabel.isBlank())
             {
                 candidates.add("[aria-label='" + escapeAttributeValue(ariaLabel) + "']");
             }
 
-            // Candidate 5: placeholder
+            // Candidate 6: placeholder
             final String placeholder = element.getAttribute("placeholder");
             if (placeholder != null && !placeholder.isBlank())
             {

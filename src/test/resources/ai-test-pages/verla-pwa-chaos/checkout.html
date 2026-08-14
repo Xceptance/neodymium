@@ -1,0 +1,156 @@
+<div id="checkout-form-container" data-testid="sf-checkout-page" data-dan-page="checkout" class="emotion-1jecged">
+    <!-- 3-Step Progress Bar -->
+    <div class="emotion-18s5kfr" data-dan-component="checkout--progress-bar">
+        <ul class="emotion-1od5tx1">
+            <li class="emotion-79elbk" data-testid="progress-item-0" data-active="true">
+                <span class="step-label">Shipping</span>
+            </li>
+            <li class="emotion-79elbk" data-testid="progress-item-1">
+                <span class="step-label">Payment</span>
+            </li>
+            <li class="emotion-79elbk" data-testid="progress-item-2">
+                <span class="step-label">Review</span>
+            </li>
+        </ul>
+    </div>
+
+    <form hx-post="api/checkout/purchase" hx-target="#checkout-form-container" hx-swap="innerHTML">
+        <div class="checkout-grid">
+            <!-- Left Column: Step Accordion Cards -->
+            <div class="checkout-left">
+                <!-- Step 1: Shipping Address Accordion Card -->
+                <div class="checkout-card" data-dan-component="sf-toggle-card-step-1" id="step-shipping-card">
+                    <h3 data-dan-display="shipping-step--header">1. Shipping Address</h3>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div data-scope="field" data-part="root" id="field::shipping-firstName" role="group" data-dan-component="shipping-address--first-name" class="wick-field__root">
+                            <label data-scope="field" data-part="label" for="firstName" class="wick-field__label" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">First Name</label>
+                            <input type="text" id="firstName" name="firstName" class="wick-input" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required value="${input_firstName}">
+                            <div style="color:var(--color-error); font-size:12px; margin-top:4px;" id="err-firstName">${err_firstName}</div>
+                        </div>
+                        <div data-scope="field" data-part="root" id="field::shipping-lastName" role="group" data-dan-component="shipping-address--last-name" class="wick-field__root">
+                            <label data-scope="field" data-part="label" for="lastName" class="wick-field__label" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">Last Name</label>
+                            <input type="text" id="lastName" name="lastName" class="wick-input" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required value="${input_lastName}">
+                            <div style="color:var(--color-error); font-size:12px; margin-top:4px;" id="err-lastName">${err_lastName}</div>
+                        </div>
+                    </div>
+
+                    <div data-scope="field" data-part="root" id="field::shipping-email" role="group" data-dan-component="shipping-address--email" class="wick-field__root" style="margin-bottom: 16px;">
+                        <label data-scope="field" data-part="label" for="email" class="wick-field__label" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">Email Address</label>
+                        <input type="email" id="email" name="email" class="wick-input" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required value="${input_email}">
+                        <div style="color:var(--color-error); font-size:12px; margin-top:4px;" id="err-email">${err_email}</div>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label for="shipping-country" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">Country / Region</label>
+                        <select id="shipping-country" name="country" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required
+                                hx-get="api/address-form" hx-target="#shipping-address-fields" hx-trigger="change">
+                            ${country_options_html}
+                        </select>
+                    </div>
+
+                    <div id="shipping-address-fields" style="margin-bottom: 16px;">
+                        ${address_fields_html}
+                    </div>
+
+                    <div style="margin-top: 16px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; cursor: pointer;">
+                            <input type="checkbox" name="billingSameAsShipping" checked="checked" data-dan-component="shipping-address--billing-same-as-shipping">
+                            Billing address same as shipping address
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step 2: Shipping Method Card -->
+                <div class="checkout-card" data-dan-component="sf-toggle-card-step-2" id="step-shipping-method-card">
+                    <h3 data-dan-display="shipping-method--header">2. Shipping Method</h3>
+                    <div data-scope="radio-group" data-part="root" role="radiogroup" class="wick-radio-group__root" style="display: flex; flex-direction: column; gap: 12px;">
+                        <label style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid var(--color-accent); border-radius: 4px; background: #F0F6FA; cursor: pointer;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="radio" name="shippingMethod" value="standard" checked="checked">
+                                <span style="font-weight: 600; font-size: 14px;">Standard Ground (3-5 business days)</span>
+                            </div>
+                            <span style="font-weight: 700; font-size: 14px; color: #005699;">$6.99</span>
+                        </label>
+                        <label style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 4px; background: #fff; cursor: pointer;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="radio" name="shippingMethod" value="expedited">
+                                <span style="font-weight: 600; font-size: 14px;">Expedited Air (2 business days)</span>
+                            </div>
+                            <span style="font-weight: 700; font-size: 14px; color: #333;">$14.99</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step 3: Payment Details Card -->
+                <div class="checkout-card" data-dan-component="sf-toggle-card-step-3" id="step-payment-card">
+                    <h3 data-dan-display="payment-step--header">3. Payment Details</h3>
+                    <div style="margin-bottom: 16px;">
+                        <label for="cardType" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">Card Type</label>
+                        <select id="cardType" name="cardType" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required>
+                            <option value="Visa" ${card_visa_selected}>Visa</option>
+                            <option value="Mastercard" ${card_mastercard_selected}>Mastercard</option>
+                            <option value="American Express" ${card_amex_selected}>American Express</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label for="cardNumber" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">Card Number</label>
+                        <input type="text" id="cardNumber" name="cardNumber" placeholder="1234 5678 1234 5100" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required value="${input_cardNumber}">
+                        <div style="color:var(--color-error); font-size:12px; margin-top:4px;" id="err-cardNumber">${err_cardNumber}</div>
+                        <p style="font-size: 11px; color: #888; margin-top: 4px;">Use any dummy card number ending in valid digits for testing.</p>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <label for="cardExpiry" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">Expiration (MM/YY)</label>
+                            <input type="text" id="cardExpiry" name="cardExpiry" placeholder="12/28" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required value="${input_cardExpiry}">
+                            <div style="color:var(--color-error); font-size:12px; margin-top:4px;" id="err-cardExpiry">${err_cardExpiry}</div>
+                        </div>
+                        <div>
+                            <label for="cardCvv" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">CVV / Security Code</label>
+                            <input type="text" id="cardCvv" name="cardCvv" placeholder="123" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required value="${input_cardCvv}">
+                            <div style="color:var(--color-error); font-size:12px; margin-top:4px;" id="err-cardCvv">${err_cardCvv}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Order Summary Sidebar -->
+            <div class="checkout-right" data-testid="sf-order-summary" data-dan-component="checkout--order-summary">
+                <h3 data-dan-display="checkout--order-summary--title" style="font-family: var(--font-family-serif); font-size: 20px; margin-bottom: 16px; border-bottom: 2px solid #005699; padding-bottom: 10px; color: #005699; font-weight: 700;">Order Summary</h3>
+                
+                <!-- Line Items Preview -->
+                <div style="max-height: 200px; overflow-y: auto; margin-bottom: 16px;">
+                    ${checkout_items_summary}
+                </div>
+
+                <!-- Financial Breakdown -->
+                <div style="font-size: 13px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--color-border); padding-top: 14px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Merchandise Subtotal</span>
+                        <span style="font-weight: 600;">${checkout_subtotal}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Estimated Shipping</span>
+                        <span style="font-weight: 600;">${checkout_shipping}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Estimated Tax</span>
+                        <span style="font-weight: 600;">${checkout_tax}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; border-top: 1px solid var(--color-border); padding-top: 10px; color: #005699;">
+                        <span>Order Total (USD)</span>
+                        <span>${checkout_total}</span>
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-place-order" data-dan-component="checkout--place-order-btn" class="btn-primary" style="width: 100%; justify-content: center; padding: 14px; margin-top: 20px; background: #E80070;">
+                    Place Order
+                </button>
+
+                <p style="font-size: 11px; color: #888; margin-top: 14px; line-height: 1.5; text-align: center;">
+                    By clicking Place Order, you agree to VÉRLA's <a href="about.html" style="text-decoration: underline;">Terms of Use</a> and <a href="about.html" style="text-decoration: underline;">Privacy Policy</a>.
+                </p>
+            </div>
+        </div>
+    </form>
+</div>

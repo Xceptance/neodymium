@@ -203,11 +203,14 @@ public final class StateMachineRunner
 
                         final String bugComment = playbookStep.getBugDetails();
                         final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
+                        final String resolvedBugInstruction = context.getSessionData() != null
+                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                            : playbookStep.getInstruction();
                         LOGGER.info("   🐞 Expected bug hit{} on step: {}:{} ({}) - Error: {}",
                             bugStr,
                             playbookStep.getSourceFile(),
                             playbookStep.getLineNumber(),
-                            playbookStep.getInstruction(),
+                            resolvedBugInstruction,
                             e.getMessage());
 
                         if (playbookStep.isContinueOnError())
@@ -237,10 +240,13 @@ public final class StateMachineRunner
                         final List<String> warnings = (List<String>) context.getTransientData()
                             .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
 
+                        final String resolvedOptInstruction = context.getSessionData() != null
+                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                            : playbookStep.getInstruction();
                         final String stepStr = String.format("%s:%d (%s)",
                             playbookStep.getSourceFile(),
                             playbookStep.getLineNumber(),
-                            playbookStep.getInstruction());
+                            resolvedOptInstruction);
 
                         warnings.add(String.format("Step: %s. Optional step execution failed: %s", stepStr, e.getMessage()));
                         LOGGER.warn("   ⚠️ Optional step execution FAILED: {}", stepStr);

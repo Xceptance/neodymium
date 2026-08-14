@@ -17,8 +17,10 @@ Predict minimal context level and metadata for the current step.
 
 3. Step Splitting ('sp'):
    - Default: Omit 'sp' (keep unsplit). Unsplit instructions are always safer.
-   - Split ONLY if instruction contains multiple distinct target elements with explicit independent non-conditional actions or values (e.g. "Type user in #user, type pass in #pass, click Login" or "Card number is '4111...', expiry '12/29', CVV '111'").
-   - NEVER split instructions containing conditional logic, branch clauses, or state dependencies in ANY language (e.g. "If...", "When...", "Unless...", "In case...", "Si...", "Wenn...", etc.), single-target flows ("Locate X and [action]"), or referential dependencies ("...and hover over it"). All actions in a conditional sentence must remain unsplit as a single step.
+   - Split ONLY in these two cases:
+     1. Multiple distinct target elements with explicit independent non-conditional actions or values (e.g. "Type user in #user, type pass in #pass, click Login" or "Card number is '4111...', expiry '12/29', CVV '111'").
+     2. Sequential multi-action interaction chains requiring intermediate UI state changes before the next action can occur (e.g. "Locate a product card, click translate('Add to Cart'), and choose an available size" -> ["Locate a product card and click translate('Add to Cart')", "Choose an available size"]).
+   - NEVER split instructions containing conditional logic, branch clauses, or state dependencies in ANY language (e.g. "If...", "When...", "Unless...", "In case...", "Si...", "Wenn...", etc.), simple single-action element targeting or locating ("Locate X and click it", "Localiser X et cliquer sur Y", "Finde X und klicke Y"), or referential dependencies ("...and hover over it"). All actions in a conditional sentence or target-and-action sentence must remain unsplit as a single step.
 
 ## Output Format
 Return ONLY minified JSON:

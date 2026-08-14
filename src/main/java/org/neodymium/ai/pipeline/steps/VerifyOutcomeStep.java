@@ -38,6 +38,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.prompt.VerificationPrompt;
 import org.neodymium.ai.prompt.VerificationResult;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.VisualStabilityDetector;
 
 /**
  * Pipeline step executed after ExecuteActionsStep. Evaluates step execution
@@ -120,7 +121,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                             if (ssimMatrix != null)
                             {
                                 step.setScreenshotHash(ssimMatrix);
-                                LOGGER.debug("📸 [Visual Hashing] Computed SSIM matrix for instruction: \"{}\"", step.getInstruction());
+                                final String resolvedInstr = context.getSessionData() != null
+                                    ? context.getSessionData().resolveVariables(step.getInstruction())
+                                    : step.getInstruction();
+                                LOGGER.debug("📸 [Visual Hashing] Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
 
                                 if (step.getActions().isEmpty())
                                 {
@@ -148,7 +152,10 @@ public final class VerifyOutcomeStep implements PipelineStep
             }
             catch (final Exception e)
             {
-                LOGGER.warn("⚠️ Failed to capture visual baseline hash for instruction: \"{}\": {}", step.getInstruction(), e.getMessage());
+                final String resolvedInstr = (step != null && context.getSessionData() != null)
+                    ? context.getSessionData().resolveVariables(step.getInstruction())
+                    : (step != null ? step.getInstruction() : "Unknown");
+                LOGGER.warn("⚠️ Failed to capture visual baseline hash for instruction: \"{}\": {}", resolvedInstr, e.getMessage());
             }
         }
 
@@ -184,15 +191,28 @@ public final class VerifyOutcomeStep implements PipelineStep
 
         LOGGER.debug("================================================================================");
         LOGGER.debug("🔍 [Optional AI Outcome Verification]");
-        LOGGER.debug("       Instruction: \"{}\"", step != null ? step.getInstruction() : "Unknown");
+        final String resolvedHeaderInstr = (step != null && context.getSessionData() != null)
+            ? context.getSessionData().resolveVariables(step.getInstruction())
+            : (step != null ? step.getInstruction() : "Unknown");
+        LOGGER.debug("       Instruction: \"{}\"", resolvedHeaderInstr);
         LOGGER.debug("================================================================================");
 
         try
         {
-            // 4. Capture the post-execution SUT state (always VISUAL level to capture post-action screenshots)
-            final org.neodymium.ai.executor.selenide.ContextLevel verificationLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
-            LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) AFTER executing actions", verificationLevel);
-            final SutState finalState = executor.captureState(verificationLevel);
+            // 4. Capture the post-execution SUT state (with temporal visual stability settling for visual assertions)
+            final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+            final SutState finalState;
+            if (step != null && (step.isVisualStep() || isFullPageReq))
+            {
+                LOGGER.debug("📸 [Capture] Capturing settled SUT state with temporal stability detection (fullPage: {}) AFTER executing actions", isFullPageReq);
+                finalState = VisualStabilityDetector.captureSettledState(executor, isFullPageReq);
+            }
+            else
+            {
+                final org.neodymium.ai.executor.selenide.ContextLevel verificationLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
+                LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}, fullPage: {}) AFTER executing actions", verificationLevel, isFullPageReq);
+                finalState = executor.captureState(verificationLevel, isFullPageReq);
+            }
             context.getTransientData().put("finalState", finalState);
 
             // 5. Build system and user prompt messages using VerificationPrompt template
@@ -299,7 +319,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                     final List<Object> warnings = (List<Object>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<Object>());
                     
                     final String stepLoc = step != null ? String.format("%s:%d", step.getSourceFile(), step.getLineNumber()) : "Unknown Location";
-                    final String instruction = step != null ? step.getInstruction() : "";
+                    final String rawInstr = step != null ? step.getInstruction() : "";
+                    final String instruction = (context.getSessionData() != null)
+                        ? context.getSessionData().resolveVariables(rawInstr)
+                        : rawInstr;
                     final String summary = result.getOverallVerdict() != null ? result.getOverallVerdict().summary() : "";
 
                     String intentScore = "FAIL";
@@ -345,7 +368,11 @@ public final class VerifyOutcomeStep implements PipelineStep
                 // Soft-handle parsing errors without failing the whole test pipeline
                 @SuppressWarnings("unchecked")
                 final List<Object> warnings = (List<Object>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<Object>());
-                final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
+                final String rawInstr = step != null ? step.getInstruction() : "";
+                final String resolvedInstr = (context.getSessionData() != null)
+                    ? context.getSessionData().resolveVariables(rawInstr)
+                    : rawInstr;
+                final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), resolvedInstr) : "Unknown Step";
                 warnings.add(String.format("Step: %s. Parse error: %s", stepStr, e.getMessage()));
                 LOGGER.warn("   ⚠️ Semantic outcome verification response parsing FAILED for step: {}", stepStr, e);
             }
@@ -368,7 +395,10 @@ public final class VerifyOutcomeStep implements PipelineStep
 
                 if (dHash != null)
                 {
-                    LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", step.getInstruction());
+                    final String resolvedInstr = context.getSessionData() != null
+                        ? context.getSessionData().resolveVariables(step.getInstruction())
+                        : step.getInstruction();
+                    LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
                     step.setScreenshotHash(dHash);
 
 
@@ -394,11 +424,21 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
                 else
                 {
-                    LOGGER.warn("   ⚠️ No image attachment found or base64 data was empty to compute dHash for instruction: \"{}\"", step.getInstruction());
+                    final String resolvedInstr = context.getSessionData() != null
+                        ? context.getSessionData().resolveVariables(step.getInstruction())
+                        : step.getInstruction();
+                    LOGGER.warn("   ⚠️ No image attachment found or base64 data was empty to compute dHash for instruction: \"{}\"", resolvedInstr);
                 }
             }
             if (step != null)
             {
+                final Long stepStartTime = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
+                if (stepStartTime != null)
+                {
+                    step.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                }
+                context.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
+
                 step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
                 if (session != null && session.getEventBus() != null)
                 {
@@ -411,11 +451,22 @@ public final class VerifyOutcomeStep implements PipelineStep
             // Catch unexpected runtime errors during verification and record as verification warnings
             @SuppressWarnings("unchecked")
             final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
-            final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), step.getInstruction()) : "Unknown Step";
+            final String rawInstr = step != null ? step.getInstruction() : "";
+            final String resolvedInstr = (context.getSessionData() != null)
+                ? context.getSessionData().resolveVariables(rawInstr)
+                : rawInstr;
+            final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), resolvedInstr) : "Unknown Step";
             warnings.add(String.format("Step: %s. Execution error: %s", stepStr, e.getMessage()));
             LOGGER.warn("   ⚠️ Semantic outcome verification execution FAILED for step: {}", stepStr, e);
             if (step != null)
             {
+                final Long stepStartTime = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
+                if (stepStartTime != null)
+                {
+                    step.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                }
+                context.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
+
                 step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
                 if (session != null && session.getEventBus() != null)
                 {

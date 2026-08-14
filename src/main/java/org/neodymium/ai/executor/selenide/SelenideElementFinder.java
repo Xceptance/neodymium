@@ -174,9 +174,9 @@ public final class SelenideElementFinder
         }
 
         // -------------------------------------------------------------------------
-        // Strategy 1: Neodymium Automation ID (data-ai=...) extraction
+        // Strategy 1: Neodymium Automation ID (data-ai=... or #xc...) extraction
         // -------------------------------------------------------------------------
-        if (!forceXpath && (clean.contains("data-ai=") || clean.startsWith("[data-ai=")))
+        if (!forceXpath && (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*")))
         {
             final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
             if (matcher.find())
@@ -184,8 +184,16 @@ public final class SelenideElementFinder
                 final String neoId = matcher.group(1);
                 try
                 {
-                    final ElementsCollection els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-                    final SelenideElement visible = findFirstVisible(els);
+                    final String transformedCss = clean.replaceAll("#" + java.util.regex.Pattern.quote(neoId), "[data-ai='" + neoId + "']");
+                    ElementsCollection els = Selenide.$$(By.cssSelector(transformedCss));
+                    SelenideElement visible = findFirstVisible(els);
+                    if (visible != null)
+                    {
+                        return visible;
+                    }
+
+                    els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
+                    visible = findFirstVisible(els);
                     if (visible != null)
                     {
                         return visible;
@@ -198,6 +206,18 @@ public final class SelenideElementFinder
                         try
                         {
                             new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.LEAN);
+                            els = Selenide.$$(By.cssSelector(transformedCss));
+                            visible = findFirstVisible(els);
+                            if (visible != null)
+                            {
+                                return visible;
+                            }
+                            els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
+                            visible = findFirstVisible(els);
+                            if (visible != null)
+                            {
+                                return visible;
+                            }
                         }
                         catch (final Exception ignored)
                         {

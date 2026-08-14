@@ -1,0 +1,59 @@
+# AI-generated: Gemini 3.7 Flash
+# @author AI-generated: Gemini 3.7 Flash
+# @author Xceptance GmbH 2026
+
+promptAddon: |
+  The store under test is localized in ${targetLocale}.
+  Whenever a step instruction references translate('<text>'), you MUST automatically translate <text> to ${targetLocale} (e.g. French for Canada FR, German for Germany DE) when locating buttons, links, form labels, or verifying confirmation text.
+
+steps: |
+  Open ${verla.url}/verla-${quality}/index.html
+  Open the region selector.
+  Click on '${regionModalName}'.
+
+  Locate a product card, click translate('Add to Cart'), and choose an available size.
+  The quantity in mini-cart is now 1.
+
+  Locate another product card, click translate('Add to Cart'), and choose an available size.
+  The quantity in mini-cart is now 2.
+
+  Go to cart from mini-cart.
+  Click translate('Checkout').
+
+  Select '${countryName}' as country.
+  Enter '${firstName}' as first name, '${lastName}' as last name, and '${email}' as email.
+  Enter '${street}' as street, '${city}' as city, and '${postalCode}' as postal code.
+  When this string '${state}' is not empty, enter '${state}' as state.
+  Card number is '4111 1111 1111 1111', expiration date '12/29', and CVV is '111'.
+  Click translate('Purchase').
+  Wait until the confirmation text is displayed.
+  An order number matching '${orderFormat}' is displayed, postal code is '${postalCode}', and translate('Thank you for your purchase!') is shown.
+  There is a green checkmark in the center of the screen (visual: full).
+
+data:
+  - testId: "ca_fr"
+    quality: "normal"
+    regionModalName: "Canada (FR)"
+    countryName: "Canada (FR)"
+    targetLocale: "French (Canada)"
+    firstName: "Jean"
+    lastName: "Dupont"
+    email: "jean.dupont@example.ca"
+    street: "100 Rue Saint-Denis"
+    city: "Montréal"
+    state: "QC"
+    postalCode: "H2X 3K4"
+    orderFormat: "V-[0-9]+-CA_FR"
+  - testId: "de"
+    quality: "normal"
+    regionModalName: "Germany"
+    countryName: "Deutschland"
+    targetLocale: "German (Germany)"
+    firstName: "Mario"
+    lastName: "Meier"
+    email: "mario.meier@example.de"
+    street: "Volksbadstr. 18"
+    city: "Heilbad Heiligenstadt"
+    state: ""
+    postalCode: "37308"
+    orderFormat: "V-[0-9]+-DE"

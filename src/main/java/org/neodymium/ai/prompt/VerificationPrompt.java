@@ -65,11 +65,12 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
 
             1. Intent Match ("intentMatch"):
                - Did the interactive steps (e.g., clicks, text inputs, form selections) logically, correctly, and completely implement the intent of the instruction?
+               - Note on Multilingual / Localized Pages: If the natural language instruction uses common English phrasing (e.g. 'Add to Cart', 'Checkout', 'Buy') or another language, clicking the localized button (e.g. 'AJOUTER AU PANIER', 'In den Warenkorb', 'Commander', 'Kasse') or opening an intermediate step (e.g. size selector) fully matches the intent.
                - Provide a detailed analysis and a score: "PASS" (actions correctly implement intent) or "FAIL" (actions did not match or did not target correct elements).
 
             2. Visual State Delta ("visualDelta"):
                - Compare the "Initial State Screenshot" and "Final State Screenshot".
-               - Does the final page state visually confirm that the instruction was completed (e.g., successful page transition, values updated, search results shown)?
+               - Does the final page state visually confirm that the instruction was completed (e.g., successful page transition, values updated, search results shown, size selector or modal opened)?
                - Provide a detailed analysis and a score: "PASS" (visual confirmation of state transition) or "FAIL" (no change or unexpected state).
 
             3. Absence of Errors ("absenceOfErrors"):

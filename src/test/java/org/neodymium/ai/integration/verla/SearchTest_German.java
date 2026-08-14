@@ -51,6 +51,7 @@ public final class SearchTest_German extends BaseAiTest
     public void setup()
     {
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 
     /**

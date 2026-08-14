@@ -232,9 +232,9 @@ public class ScreenshotWriter {
         devTools.createSessionIfThereIsNotOne(devtoolsDriver.getWindowHandle());
 
         long fullWidth = (long) devtoolsDriver.executeScript(
-                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, document.body.offsetWidth, document.documentElement.offsetWidth, document.body.clientWidth, document.documentElement.clientWidth)");
+                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, window.innerWidth, window.outerWidth)");
         long fullHeight = (long) devtoolsDriver.executeScript(
-                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight, document.body.clientHeight, document.documentElement.clientHeight)");
+                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight)");
 
         long viewWidth = (long) devtoolsDriver.executeScript("return window.innerWidth");
         long viewHeight = (long) devtoolsDriver.executeScript("return window.innerHeight");
@@ -257,9 +257,9 @@ public class ScreenshotWriter {
             WD cdpDriver,
             OutputType<ResultType> outputType) {
         long fullWidth = (long) cdpDriver.executeScript(
-                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, document.body.offsetWidth, document.documentElement.offsetWidth, document.body.clientWidth, document.documentElement.clientWidth)");
+                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, window.innerWidth, window.outerWidth)");
         long fullHeight = (long) cdpDriver.executeScript(
-                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight, document.body.clientHeight, document.documentElement.clientHeight)");
+                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight)");
 
         long viewWidth = (long) cdpDriver.executeScript("return window.innerWidth");
         long viewHeight = (long) cdpDriver.executeScript("return window.innerHeight");
