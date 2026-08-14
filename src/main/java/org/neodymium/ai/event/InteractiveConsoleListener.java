@@ -368,9 +368,17 @@ public final class InteractiveConsoleListener implements ExecutionListener
             case "EDIT":
             case "UPDATE_STEP":
             case "SAVE_STEP":
-                if (currentStep != null && userAction.has("newInstruction"))
+                if (currentStep != null)
                 {
-                    final String newInst = userAction.get("newInstruction").getAsString();
+                    String newInst = null;
+                    if (userAction.has("newInstruction"))
+                    {
+                        newInst = userAction.get("newInstruction").getAsString();
+                    }
+                    else if (userAction.has("instruction"))
+                    {
+                        newInst = userAction.get("instruction").getAsString();
+                    }
                     if (newInst != null && !newInst.isBlank())
                     {
                         currentStep.setInstruction(newInst);
@@ -379,6 +387,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             currentStep.getActions().clear();
                         }
                         currentStep.setReasoning(null);
+                        if (context != null)
+                        {
+                            context.getTransientData().put("KEY_STEP_EDITED", true);
+                        }
                         LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
                     }
                 }

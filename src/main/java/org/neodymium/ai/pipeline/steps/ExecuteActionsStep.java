@@ -149,6 +149,19 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 throw new ConclusiveFailureException("Interactive test execution aborted by user");
             }
+
+            final boolean stepWasEdited = Boolean.TRUE.equals(context.getTransientData().remove("KEY_STEP_EDITED"))
+                || "EDIT".equalsIgnoreCase(userAction)
+                || "UPDATE_STEP".equalsIgnoreCase(userAction)
+                || "SAVE_STEP".equalsIgnoreCase(userAction);
+
+            if (stepWasEdited && currentStep != null)
+            {
+                LOGGER.info("[ExecuteActionsStep] Step instruction was edited during pause. Re-triggering LLM reasoning for: \"{}\"", currentStep.getInstruction());
+                context.getTransientData().remove(ExecutionContext.KEY_LAST_LLM_RESULT);
+                context.pushStep(mapPlaybookStepToPipelineStep(currentStep, session, context));
+                return;
+            }
         }
 
         // Initialize or fetch the concurrent recording collection tracking all executed playbooks actions

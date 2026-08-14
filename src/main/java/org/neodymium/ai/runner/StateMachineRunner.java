@@ -130,7 +130,7 @@ public final class StateMachineRunner
         try
         {
             ExecutionContext.setActiveContext(context);
-            while (context.hasSteps())
+            mainLoop: while (context.hasSteps())
             {
                 final PipelineStep step = context.popStep();
                 try
@@ -278,7 +278,8 @@ public final class StateMachineRunner
                             {
                                 continue;
                             }
-                            else if ("RUN".equalsIgnoreCase(userAction) || "EXECUTE".equalsIgnoreCase(userAction))
+                            else if ("RUN".equalsIgnoreCase(userAction) || "EXECUTE".equalsIgnoreCase(userAction)
+                                || "EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction))
                             {
                                 if (playbookStep != null)
                                 {
@@ -287,7 +288,7 @@ public final class StateMachineRunner
                                     playbookStep.setFailureReason(null);
                                     context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
-                                break;
+                                continue mainLoop;
                             }
                             else if ("HEAL".equalsIgnoreCase(userAction))
                             {
@@ -297,7 +298,7 @@ public final class StateMachineRunner
                                     context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.VISUAL);
                                     context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
-                                break;
+                                continue mainLoop;
                             }
                             else if ("SKIP".equalsIgnoreCase(userAction))
                             {
@@ -305,7 +306,7 @@ public final class StateMachineRunner
                                 {
                                     playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
                                 }
-                                break;
+                                continue mainLoop;
                             }
                             else if ("FINISH".equalsIgnoreCase(userAction) || "ACCEPT_FINISH".equalsIgnoreCase(userAction))
                             {

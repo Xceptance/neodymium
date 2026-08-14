@@ -213,6 +213,28 @@ public class InteractiveConsoleListenerTest
         assertEquals("FINISH", resultAction);
     }
 
+    @Test
+    public void testPauseOnStepFailureReturnsEditActionAndUpdatesInstruction()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Original instruction");
+        step.setLineNumber(12);
+        step.setSourceFile("test.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final JsonObject editAction = new JsonObject();
+        editAction.addProperty("action", "EDIT");
+        editAction.addProperty("instruction", "Updated instruction via edit");
+        submitActionAsynchronously(editAction);
+
+        final String resultAction = listener.pauseOnStepFailure(session.getExecutionContext(), step, new RuntimeException("Element not found"));
+        assertEquals("EDIT", resultAction);
+        assertEquals("Updated instruction via edit", step.getInstruction());
+        assertTrue(Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get("KEY_STEP_EDITED")));
+    }
+
     private void submitActionAsynchronously(final JsonObject actionObj)
     {
         final Thread t = new Thread(() -> {
