@@ -85,7 +85,7 @@ public final class AuraManagerRunQueueEdgeCasesUiTest
             + "  \"datasets\": [{\"file\": \"non_existent_file_123.yaml\", \"datasetId\": \"1\"}],"
             + "  \"headless\": true,"
             + "  \"video\": false,"
-            + "  \"keepOpen\": false"
+            + "  \"executionMode\": \"REPLAY_WITH_HEALING\""
             + "}"
             + "}";
         Files.writeString(new File(this.reportDir, "metadata.json").toPath(), metadataJson, StandardCharsets.UTF_8);

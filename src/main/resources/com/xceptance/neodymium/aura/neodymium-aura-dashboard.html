@@ -151,14 +151,6 @@
 </div>
 <div class="config-row-wrapper neo-u-30">
 <div class="config-row neo-u-31">
-<span class="neo-u-2">Keep Browser Open</span>
-<label class="switch" for="optKeepOpen"><input id="optKeepOpen" type="checkbox"/><span class="slider"></span></label>
-</div>
-<span class="neo-u-32">Leaves the browser window
-                                    open after execution finishes.</span>
-</div>
-<div class="config-row-wrapper neo-u-30">
-<div class="config-row neo-u-31">
 <span class="neo-u-2">Interactive Mode</span>
 <label class="switch" for="optInteractive"><input id="optInteractive" type="checkbox"/><span class="slider"></span></label>
 </div>
@@ -172,6 +164,19 @@
 </div>
 <span class="neo-u-32">Compiles and opens the
                                     visual test report after execution completes.</span>
+</div>
+<div class="config-row-wrapper neo-u-30">
+<div class="config-row neo-u-31">
+<span class="neo-u-2">Execution Mode</span>
+<select id="optExecutionMode" class="neo-select">
+<option value="REPLAY_WITH_HEALING" selected="selected">Replay with Healing</option>
+<option value="REPLAY_STRICT">Replay Strict</option>
+<option value="LLM_RECORDING">LLM Recording</option>
+<option value="FORCE_RECORDING">Force Recording</option>
+<option value="LLM_ONLY">LLM Only</option>
+</select>
+</div>
+<span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
 </div>
 <button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><span class="material-symbols-outlined">play_arrow</span> Run Queue</button>
 <button class="btn-primary neo-u-33" id="runCurrentTestBtn" onclick="runCurrentFile()"><span class="material-symbols-outlined">play_arrow</span> Run

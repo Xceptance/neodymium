@@ -46,6 +46,7 @@
                     <label class="custom-checkbox" onclick="event.stopPropagation();">
                         <input type="checkbox" class="file-select-cb" th:data-file="${item.file}" 
                                th:checked="${selectedFileKeys != null and selectedFileKeys.contains(item.file)}"
+                               th:data-indeterminate="${partiallySelectedFileKeys != null and partiallySelectedFileKeys.contains(item.file)}"
                                onchange="if(typeof toggleFileCheckboxesInstant==='function') toggleFileCheckboxesInstant(this);"
                                hx-post="/api/queue/toggleAll" th:hx-vals="${'{\&quot;file\&quot;:\&quot;' + item.file + '\&quot;}'}"
                                hx-target="#queueListContainer" hx-swap="innerHTML">

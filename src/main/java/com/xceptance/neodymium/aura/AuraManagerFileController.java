@@ -100,6 +100,7 @@ public final class AuraManagerFileController
         context.setVariable("queue", queueController.getSelectedQueue());
         context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
         context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(responseList));
+        context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(responseList));
         return "fragments/test-selection :: yamlFileList";
     }
 
@@ -120,6 +121,7 @@ public final class AuraManagerFileController
         context.setVariable("queue", queueController.getSelectedQueue());
         context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
         context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filteredList));
+        context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(filteredList));
 
         final String html = manager.getTemplateEngine().process("fragments/test-selection", Set.of("yamlFileList"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));

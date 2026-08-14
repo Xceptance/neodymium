@@ -33,20 +33,20 @@ public final class RunRequest
     public boolean interactive;
     public boolean allure;
     public boolean video;
-    public boolean keepOpen;
+    public String executionMode = "REPLAY_WITH_HEALING";
 
     public RunRequest()
     {
     }
 
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
-            final boolean allure, final boolean video, final boolean keepOpen)
+            final boolean allure, final boolean video, final String executionMode)
     {
         this.datasets = datasets;
         this.headless = headless;
         this.interactive = interactive;
         this.allure = allure;
         this.video = video;
-        this.keepOpen = keepOpen;
+        this.executionMode = executionMode != null ? executionMode : "REPLAY_WITH_HEALING";
     }
 }

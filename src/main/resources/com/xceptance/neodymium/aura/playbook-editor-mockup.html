@@ -1725,12 +1725,87 @@ data:
             }
         }
 
-        // Force Plain Text Pasting
-        document.addEventListener('paste', function(e) {
-            if (e.target.classList.contains('step-content') || e.target.getAttribute('contenteditable') === 'true') {
-                e.preventDefault();
-                const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-                document.execCommand('insertText', false, text);
+        // Plain Text & Multi-Line Step Paste Handler
+        document.addEventListener('paste', function(evt) {
+            const stepContent = evt.target.closest ? evt.target.closest('.step-content') : null;
+            if (stepContent) {
+                evt.preventDefault();
+
+                const rawPastedText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
+                if (!rawPastedText) return;
+
+                const normalizedText = rawPastedText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                const lines = normalizedText.split('\n');
+
+                const stepRow = stepContent.closest('.step-row');
+                if (!stepRow) return;
+                const lineNum = parseInt(stepRow.getAttribute('data-line'), 10);
+
+                const currentOffset = getCaretOffset(stepContent);
+                const existingRaw = stepContent.getAttribute('data-raw') || stepContent.innerText || '';
+
+                const headText = existingRaw.substring(0, currentOffset);
+                const tailText = existingRaw.substring(currentOffset);
+
+                if (lines.length === 1) {
+                    const combined = headText + lines[0] + tailText;
+                    stepContent.setAttribute('data-raw', combined);
+                    stepContent.innerText = combined;
+
+                    formatStepToTokens(lineNum);
+
+                    const newCaretOffset = headText.length + lines[0].length;
+                    setCaretOffset(stepContent, newCaretOffset);
+                    lastCaretOffset = newCaretOffset;
+                } else {
+                    const firstLineText = headText + lines[0];
+                    stepContent.setAttribute('data-raw', firstLineText);
+                    stepContent.innerText = firstLineText;
+                    formatStepToTokens(lineNum);
+
+                    let currentRefLine = lineNum;
+                    let lastInsertedContent = null;
+
+                    for (let i = 1; i < lines.length; i++) {
+                        let lineText = lines[i];
+                        if (i === lines.length - 1) {
+                            lineText = lineText + tailText;
+                        }
+
+                        const insertedRow = insertStepBelow(currentRefLine, lineText);
+                        if (insertedRow) {
+                            currentRefLine = parseInt(insertedRow.getAttribute('data-line'), 10) || (currentRefLine + 1);
+                            formatStepToTokens(currentRefLine);
+                            lastInsertedContent = insertedRow.querySelector('.step-content');
+                        }
+                    }
+
+                    if (lastInsertedContent) {
+                        lastInsertedContent.focus();
+                        const targetCaret = lines[lines.length - 1].length;
+                        setCaretOffset(lastInsertedContent, targetCaret);
+                        lastCaretOffset = targetCaret;
+                    }
+                }
+
+                if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+            } else if (evt.target.getAttribute && (evt.target.getAttribute('contenteditable') === 'true' || evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
+                evt.preventDefault();
+                const plainText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
+                const singleLineText = plainText.replace(/[\r\n]+/g, ' ');
+
+                if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+                    document.execCommand('insertText', false, singleLineText);
+                } else {
+                    const sel = window.getSelection();
+                    if (sel && sel.rangeCount) {
+                        const range = sel.getRangeAt(0);
+                        range.deleteContents();
+                        range.insertNode(document.createTextNode(singleLineText));
+                    }
+                }
+
+                if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
             }
         });
 
@@ -1882,19 +1957,20 @@ data:
             }
         }
 
-        function insertStepBelow(lineNum) {
+        function insertStepBelow(lineNum, initialText = '') {
             const targetRow = document.querySelector(`.step-row[data-line="${lineNum}"]`);
-            if (!targetRow) return;
+            if (!targetRow) return null;
 
             currentLineCount++;
             const newRow = document.createElement('div');
             newRow.className = 'step-row';
             newRow.setAttribute('data-line', currentLineCount);
 
+            const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+
             newRow.innerHTML = `
                 <span class="step-number">${currentLineCount}</span>
-                <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">
-                </div>
+                <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">${safeInitial}</div>
                 <div class="step-actions">
                     <button class="icon-btn danger" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
                 </div>
@@ -1905,6 +1981,7 @@ data:
 
             const newContent = newRow.querySelector('.step-content');
             if (newContent) newContent.focus();
+            return newRow;
         }
 
         function deleteStep(lineNum) {

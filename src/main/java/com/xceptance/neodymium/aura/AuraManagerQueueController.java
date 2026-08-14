@@ -59,7 +59,7 @@ public final class AuraManagerQueueController
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
     private boolean headless = true;
     private boolean video = false;
-    private boolean keepOpen = false;
+    private String executionMode = "REPLAY_WITH_HEALING";
     private boolean interactive = false;
     private boolean allure = true;
 
@@ -121,6 +121,34 @@ public final class AuraManagerQueueController
         return fullFiles;
     }
 
+    public Set<String> getPartiallySelectedFileKeys(final List<YamlFileDto> files)
+    {
+        final Set<String> partialFiles = new HashSet<>();
+        final Set<String> keys = getSelectedQueueKeys();
+        if (files != null)
+        {
+            for (final YamlFileDto f : files)
+            {
+                if (f.datasets != null && !f.datasets.isEmpty())
+                {
+                    int selectedCount = 0;
+                    for (final DatasetDto d : f.datasets)
+                    {
+                        if (keys.contains(f.file + "::" + d.id))
+                        {
+                            selectedCount++;
+                        }
+                    }
+                    if (selectedCount > 0 && selectedCount < f.datasets.size())
+                    {
+                        partialFiles.add(f.file);
+                    }
+                }
+            }
+        }
+        return partialFiles;
+    }
+
     public final boolean isHeadless()
     {
         return this.headless;
@@ -131,9 +159,9 @@ public final class AuraManagerQueueController
         return this.video;
     }
 
-    public final boolean isKeepOpen()
+    public final String getExecutionMode()
     {
-        return this.keepOpen;
+        return this.executionMode;
     }
 
     public final boolean isInteractive()
@@ -400,6 +428,7 @@ public final class AuraManagerQueueController
     {
         final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
         final String key = params.get("key");
+        final String modeParam = params.get("mode") != null ? params.get("mode") : params.get("value");
 
         if (key != null)
         {
@@ -407,16 +436,25 @@ public final class AuraManagerQueueController
             {
                 case "headless" -> headless = !headless;
                 case "video" -> video = !video;
-                case "keepOpen" -> keepOpen = !keepOpen;
+                case "executionMode", "mode" -> {
+                    if (modeParam != null && !modeParam.isBlank())
+                    {
+                        executionMode = modeParam.trim();
+                    }
+                }
                 case "interactive" -> interactive = !interactive;
                 case "allure" -> allure = !allure;
             }
+        }
+        else if (modeParam != null && !modeParam.isBlank())
+        {
+            executionMode = modeParam.trim();
         }
 
         final Context context = new Context();
         context.setVariable("headless", headless);
         context.setVariable("video", video);
-        context.setVariable("keepOpen", keepOpen);
+        context.setVariable("executionMode", executionMode);
         context.setVariable("interactive", interactive);
         context.setVariable("allure", allure);
         context.setVariable("queue", getSelectedQueue());
@@ -457,6 +495,7 @@ public final class AuraManagerQueueController
                 req.datasets = List.of(sel);
                 req.headless = headless;
                 req.video = video;
+                req.executionMode = executionMode;
                 req.interactive = interactive;
                 req.allure = allure;
             }
@@ -477,6 +516,7 @@ public final class AuraManagerQueueController
             req.datasets = new ArrayList<>(selectedQueue);
             req.headless = headless;
             req.video = video;
+            req.executionMode = executionMode;
             req.interactive = interactive;
             req.allure = allure;
         }

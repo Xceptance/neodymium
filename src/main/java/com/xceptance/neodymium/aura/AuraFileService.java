@@ -335,6 +335,10 @@ public final class AuraFileService
     public void saveYamlFileContent(final String file, final String content) throws IOException
     {
         final File yamlFile = resolveCanonicalFile(file);
+        if (yamlFile.getParentFile() != null && !yamlFile.getParentFile().exists())
+        {
+            yamlFile.getParentFile().mkdirs();
+        }
         Files.writeString(yamlFile.toPath(), content, StandardCharsets.UTF_8);
     }
 

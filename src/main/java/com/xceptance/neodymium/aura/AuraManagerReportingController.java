@@ -611,7 +611,7 @@ public final class AuraManagerReportingController
                                 singlePayload.put("interactive", rc.get("interactive"));
                                 singlePayload.put("allure", rc.get("allure"));
                                 singlePayload.put("video", rc.get("video"));
-                                singlePayload.put("keepOpen", rc.get("keepOpen"));
+                                singlePayload.put("executionMode", rc.get("executionMode"));
 
                                 final String payloadStr = AuraHttpUtils.gson.toJson(singlePayload).replace("'", "\\'");
                                 testMap.put("rerunPayload", payloadStr);

@@ -92,6 +92,7 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.POST("/api/queue/remove", queueController::handleRemoveQueue);
         router.POST("/api/queue/clear", queueController::handleClearQueue);
         router.POST("/api/config/toggle", queueController::handleToggleConfig);
+        router.POST("/api/config/mode", queueController::handleToggleConfig);
 
         router.POST("/api/run", queueController::handleRunQueue);
         router.GET("/api/status", queueController::handleStatusStream);

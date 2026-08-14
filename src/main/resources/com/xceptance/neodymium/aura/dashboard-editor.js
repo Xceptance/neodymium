@@ -28,6 +28,7 @@ window.toggleSelectAllDatasets = toggleSelectAllDatasets;
 
 function toggleFileCheckboxesInstant(fileCb) {
     if (!fileCb) return;
+    fileCb.indeterminate = false;
     const container = fileCb.closest('.file-container');
     if (!container) return;
     const datasetCbs = container.querySelectorAll('.dataset-select-cb');
@@ -131,17 +132,37 @@ function syncCheckboxesFromState() {
             const datasetCbs = container.querySelectorAll('.dataset-select-cb');
             if (datasetCbs.length > 0) {
                 let allChecked = true;
+                let anyChecked = false;
                 datasetCbs.forEach(cb => {
                     const id = cb.getAttribute('data-id');
                     const selected = isDatasetSelected(file, id);
                     cb.checked = selected;
-                    if (!selected) allChecked = false;
+                    if (selected) anyChecked = true;
+                    else allChecked = false;
                 });
                 fileCb.checked = allChecked;
+                fileCb.indeterminate = (!allChecked && anyChecked);
             } else {
-                // If dataset list is collapsed/not rendered in DOM, check if any dataset for file is in queue
-                const isFileInQueue = selectedDatasets.some(d => String(d.file) === String(file));
-                fileCb.checked = isFileInQueue;
+                const selectedForFile = selectedDatasets.filter(d => String(d.file) === String(file));
+                const cachedFile = (window.currentFilesListCached || []).find(f => String(f.file) === String(file));
+                const totalDatasets = (cachedFile && cachedFile.datasets) ? cachedFile.datasets.length : 0;
+
+                if (totalDatasets > 0) {
+                    const isAll = (selectedForFile.length === totalDatasets);
+                    const isSome = (selectedForFile.length > 0 && !isAll);
+                    fileCb.checked = isAll;
+                    fileCb.indeterminate = isSome;
+                } else {
+                    const isIndeterminateAttr = fileCb.getAttribute('data-indeterminate') === 'true';
+                    if (isIndeterminateAttr) {
+                        fileCb.checked = false;
+                        fileCb.indeterminate = true;
+                    } else {
+                        const isFileInQueue = selectedForFile.length > 0;
+                        fileCb.indeterminate = false;
+                        fileCb.checked = isFileInQueue;
+                    }
+                }
             }
         });
     } else {
@@ -153,7 +174,14 @@ function syncCheckboxesFromState() {
         });
         document.querySelectorAll('.file-select-cb').forEach(cb => {
             const file = cb.getAttribute('data-file');
-            cb.checked = selectedDatasets.some(d => String(d.file) === String(file));
+            const isIndeterminateAttr = cb.getAttribute('data-indeterminate') === 'true';
+            if (isIndeterminateAttr) {
+                cb.checked = false;
+                cb.indeterminate = true;
+            } else {
+                cb.indeterminate = false;
+                cb.checked = selectedDatasets.some(d => String(d.file) === String(file));
+            }
         });
     }
 }
@@ -954,14 +982,12 @@ function handleKeyDown(event, lineNum) {
         contentEl.innerText = headText;
         formatStepToTokens(lineNum);
 
-        insertStepBelow(lineNum);
-        const newRow = document.querySelector(`.step-row[data-line="${lineNum + 1}"]`);
+        const newRow = insertStepBelow(lineNum, tailText);
         if (newRow) {
+            const reindexedLine = parseInt(newRow.getAttribute('data-line'), 10) || (lineNum + 1);
+            formatStepToTokens(reindexedLine);
             const newContent = newRow.querySelector('.step-content');
             if (newContent) {
-                newContent.setAttribute('data-raw', tailText);
-                newContent.innerText = tailText;
-                formatStepToTokens(lineNum + 1);
                 newContent.focus();
                 setCaretOffset(newContent, 0);
             }
@@ -1026,19 +1052,20 @@ function focusLine(lineNum, targetOffset = -1) {
 }
 window.focusLine = focusLine;
 
-function insertStepBelow(lineNum) {
+function insertStepBelow(lineNum, initialText = '') {
     const targetRow = document.querySelector(`.step-row[data-line="${lineNum}"]`);
-    if (!targetRow) return;
+    if (!targetRow) return null;
 
     currentLineCount++;
     const newRow = document.createElement('div');
     newRow.className = 'step-row';
     newRow.setAttribute('data-line', currentLineCount);
 
+    const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+
     newRow.innerHTML = `
         <span class="step-number">${currentLineCount}</span>
-        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">
-        </div>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">${safeInitial}</div>
         <div class="step-actions">
             <button class="icon-btn danger" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
         </div>
@@ -1049,6 +1076,7 @@ function insertStepBelow(lineNum) {
 
     const newContent = newRow.querySelector('.step-content');
     if (newContent) newContent.focus();
+    return newRow;
 }
 window.insertStepBelow = insertStepBelow;
 
@@ -1125,6 +1153,11 @@ function handleArrowMouseDown(event, cardId, filePath) {
     
     let tree = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
 
+    if (tree && tree.getAttribute('data-include-file') !== filePath) {
+        tree.remove();
+        tree = null;
+    }
+
     if (!tree) {
         // HTMX fetch or dynamic card fallback
         htmx.ajax('GET', `/api/editor/include-tree?file=${encodeURIComponent(filePath)}&cardId=${encodeURIComponent(cardId)}`, {
@@ -1165,8 +1198,11 @@ function formatIncludeTreeCardTokens(treeCard) {
 }
 window.formatIncludeTreeCardTokens = formatIncludeTreeCardTokens;
 
+let activeNestedStep = null;
+
 function handleNestedFocus(el) {
     if (!el) return;
+    activeNestedStep = el;
     el.setAttribute('contenteditable', 'true');
     const text = el.getAttribute('data-original') || el.innerText;
     const lineNum = el.querySelector('.sub-line-num') ? el.querySelector('.sub-line-num').innerText : '-';
@@ -1329,6 +1365,25 @@ function insertVariableFromInput(varName) {
 window.insertVariableFromInput = insertVariableFromInput;
 
 function insertSnippetWithCaret(templateText, caretOffset = -1) {
+    const activeEl = document.activeElement;
+    const nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
+
+    if (nestedStep && document.contains(nestedStep)) {
+        const rawSpan = nestedStep.querySelector('.raw-nested-text') || nestedStep.querySelector('span:last-child') || nestedStep;
+        let text = rawSpan.innerText || '';
+        text += (text.length > 0 ? ' ' : '') + templateText;
+        if (rawSpan !== nestedStep) rawSpan.innerText = text;
+        else nestedStep.innerText = text;
+        nestedStep.setAttribute('data-original', text);
+        const card = nestedStep.closest('.include-tree-card');
+        if (card) {
+            formatIncludeTreeCardTokens(card);
+            const cardId = card.getAttribute('data-card-id') || card.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
+            markIncludeUnsaved(cardId);
+        }
+        return;
+    }
+
     let activeRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
     if (!activeRow) {
         activeRow = document.querySelector(`.step-row[data-line="1"]`);
@@ -1362,6 +1417,31 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
 window.insertSnippetWithCaret = insertSnippetWithCaret;
 
 function insertIncludePill(filePath) {
+    const activeEl = document.activeElement;
+    const nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
+
+    if (nestedStep && document.contains(nestedStep)) {
+        const treeCard = nestedStep.closest('.include-tree-card');
+        const rawSpan = nestedStep.querySelector('.raw-nested-text') || nestedStep.querySelector('span:last-child') || nestedStep;
+        let text = rawSpan.innerText ? rawSpan.innerText.trim() : '';
+
+        if (!text) {
+            text = `_include: ${filePath}`;
+        } else {
+            text += ` _include: ${filePath}`;
+        }
+        if (rawSpan !== nestedStep) rawSpan.innerText = text;
+        else nestedStep.innerText = text;
+        nestedStep.setAttribute('data-original', text);
+
+        if (treeCard) {
+            formatIncludeTreeCardTokens(treeCard);
+            const cardId = treeCard.getAttribute('data-card-id') || treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
+            markIncludeUnsaved(cardId);
+        }
+        return;
+    }
+
     let targetLine = activeLineNum || 1;
     let targetRow = document.querySelector(`.step-row[data-line="${targetLine}"]`);
 
@@ -1372,25 +1452,21 @@ function insertIncludePill(filePath) {
 
     if (targetRow) {
         const content = targetRow.querySelector('.step-content');
-        const currentRaw = content ? (content.getAttribute('data-raw') || content.innerText.trim()) : '';
+        const currentRaw = content ? (content.getAttribute('data-raw') || content.innerText || '').trim() : '';
 
-        if (!currentRaw || currentRaw.length === 0) {
+        if (!currentRaw) {
             if (content) {
                 content.setAttribute('data-raw', `_include: ${filePath}`);
                 formatStepToTokens(targetLine);
                 content.focus();
             }
         } else {
-            insertStepBelow(targetLine);
-            const nextLineNum = targetLine + 1;
-            const newRow = document.querySelector(`.step-row[data-line="${nextLineNum}"]`);
+            const newRow = insertStepBelow(targetLine, `_include: ${filePath}`);
             if (newRow) {
+                const reindexedLine = parseInt(newRow.getAttribute('data-line'), 10) || (targetLine + 1);
+                formatStepToTokens(reindexedLine);
                 const newContent = newRow.querySelector('.step-content');
-                if (newContent) {
-                    newContent.setAttribute('data-raw', `_include: ${filePath}`);
-                    formatStepToTokens(nextLineNum);
-                    newContent.focus();
-                }
+                if (newContent) newContent.focus();
             }
         }
         compilePlaybookToYaml();
@@ -1684,6 +1760,98 @@ document.addEventListener('keydown', function(evt) {
         evt.preventDefault();
         editorRedo();
         return;
+    }
+});
+
+// Plain Text & Multi-Line Step Paste Handler
+document.addEventListener('paste', function(evt) {
+    if (!window.activeEditingFile || !document.getElementById('visualEditorMain')) return;
+
+    const stepContent = evt.target.closest ? evt.target.closest('.step-content') : null;
+    if (stepContent) {
+        evt.preventDefault();
+
+        const rawPastedText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
+        if (!rawPastedText) return;
+
+        const normalizedText = rawPastedText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const lines = normalizedText.split('\n');
+
+        const stepRow = stepContent.closest('.step-row');
+        if (!stepRow) return;
+        const lineNum = parseInt(stepRow.getAttribute('data-line'), 10);
+
+        const currentOffset = getCaretOffset(stepContent);
+        const existingRaw = stepContent.getAttribute('data-raw') || stepContent.innerText || '';
+
+        const headText = existingRaw.substring(0, currentOffset);
+        const tailText = existingRaw.substring(currentOffset);
+
+        if (lines.length === 1) {
+            const combined = headText + lines[0] + tailText;
+            stepContent.setAttribute('data-raw', combined);
+            stepContent.innerText = combined;
+
+            formatStepToTokens(lineNum);
+
+            const newCaretOffset = headText.length + lines[0].length;
+            setCaretOffset(stepContent, newCaretOffset);
+            lastCaretOffset = newCaretOffset;
+        } else {
+            const firstLineText = headText + lines[0];
+            stepContent.setAttribute('data-raw', firstLineText);
+            stepContent.innerText = firstLineText;
+            formatStepToTokens(lineNum);
+
+            let currentRefLine = lineNum;
+            let lastInsertedContent = null;
+
+            for (let i = 1; i < lines.length; i++) {
+                let lineText = lines[i];
+                if (i === lines.length - 1) {
+                    lineText = lineText + tailText;
+                }
+
+                const insertedRow = insertStepBelow(currentRefLine, lineText);
+                if (insertedRow) {
+                    currentRefLine = parseInt(insertedRow.getAttribute('data-line'), 10) || (currentRefLine + 1);
+                    formatStepToTokens(currentRefLine);
+                    lastInsertedContent = insertedRow.querySelector('.step-content');
+                }
+            }
+
+            if (lastInsertedContent) {
+                lastInsertedContent.focus();
+                const targetCaret = lines[lines.length - 1].length;
+                setCaretOffset(lastInsertedContent, targetCaret);
+                lastCaretOffset = targetCaret;
+            }
+        }
+
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+    } else if (evt.target.getAttribute && (evt.target.getAttribute('contenteditable') === 'true' || evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
+        evt.preventDefault();
+        const plainText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
+        const singleLineText = plainText.replace(/[\r\n]+/g, ' ');
+
+        if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+            document.execCommand('insertText', false, singleLineText);
+        } else {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount) {
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(document.createTextNode(singleLineText));
+            }
+        }
+
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
     }
 });
 

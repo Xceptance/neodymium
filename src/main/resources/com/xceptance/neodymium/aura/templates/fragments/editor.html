@@ -357,6 +357,10 @@
                 </button>
             </div>
         </div>
+        <div th:if="${fileExists == false}" class="include-warning-banner" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">warning</span>
+            <span>Included file does not exist on disk. Edit steps below and save to create it.</span>
+        </div>
         <div th:id="'includeInnerSteps_' + ${cardId}" style="display: flex; flex-direction: column; gap: 4px;">
             <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this)" onblur="handleNestedBlur(this)" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
                 <span class="sub-line-num">-</span>

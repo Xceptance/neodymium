@@ -404,6 +404,22 @@
             transform: translate(-50%, -50%) rotate(45deg);
         }
 
+        .custom-checkbox input[type="checkbox"]:indeterminate {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .custom-checkbox input[type="checkbox"]:indeterminate::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 2px;
+            background-color: white;
+            transform: translate(-50%, -50%);
+        }
+
         /* Empty State Utilities */
         .empty-state-card {
             display: flex;
@@ -952,6 +968,23 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+
+        .neo-select {
+            background-color: var(--bg-surface-2, #1e293b);
+            color: var(--fg-main, #f8fafc);
+            border: 1px solid var(--border-color, #334155);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-family: inherit;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .neo-select:hover, .neo-select:focus {
+            border-color: var(--accent, #6366f1);
         }
 
         .switch {

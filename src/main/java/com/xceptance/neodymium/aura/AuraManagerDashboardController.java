@@ -69,9 +69,10 @@ public final class AuraManagerDashboardController
         context.setVariable("queue", queueController.getSelectedQueue());
         context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
         context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filesList));
+        context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(filesList));
         context.setVariable("headless", queueController.isHeadless());
         context.setVariable("video", queueController.isVideo());
-        context.setVariable("keepOpen", queueController.isKeepOpen());
+        context.setVariable("executionMode", queueController.getExecutionMode());
         context.setVariable("interactive", queueController.isInteractive());
         context.setVariable("allure", queueController.isAllure());
 

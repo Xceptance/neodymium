@@ -212,16 +212,16 @@ public final class AuraManagerRunQueueUiTest
     {
         Selenide.open("http://localhost:" + this.port + "/");
 
-        // 1. Check/toggle multiple configuration checkboxes
+        // 1. Check/toggle multiple configuration checkboxes and select box
         final var headlessCb = $("#optHeadless");
         final var videoCb = $("#optVideo");
-        final var keepOpenCb = $("#optKeepOpen");
+        final var executionModeSelect = $("#optExecutionMode");
 
         headlessCb.should(Condition.exist);
+        executionModeSelect.should(Condition.exist);
         
         final boolean initialHeadless = headlessCb.isSelected();
         final boolean initialVideo = videoCb.isSelected();
-        final boolean initialKeepOpen = keepOpenCb.isSelected();
 
         // Toggle each of them via JS and verify state inversion sequentially
         Selenide.executeJavaScript("document.getElementById('optHeadless').click();");
@@ -230,8 +230,8 @@ public final class AuraManagerRunQueueUiTest
         Selenide.executeJavaScript("document.getElementById('optVideo').click();");
         videoCb.shouldHave(initialVideo ? Condition.not(Condition.selected) : Condition.selected);
 
-        Selenide.executeJavaScript("document.getElementById('optKeepOpen').click();");
-        keepOpenCb.shouldHave(initialKeepOpen ? Condition.not(Condition.selected) : Condition.selected);
+        executionModeSelect.selectOptionByValue("LLM_RECORDING");
+        executionModeSelect.shouldHave(Condition.value("LLM_RECORDING"));
     }
 
     @NeodymiumTest

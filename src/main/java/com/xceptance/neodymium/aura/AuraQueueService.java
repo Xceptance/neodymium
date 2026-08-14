@@ -385,7 +385,7 @@ public final class AuraQueueService
                     command.add("-Dselenide.headless=" + req.headless);
                     command.add("-Dneodymium.ai.interactive=" + req.interactive);
                     command.add("-Dvideo.enableFilming=" + req.video);
-                    command.add("-Dneodymium.webDriver.keepBrowserOpen=" + req.keepOpen);
+                    command.add("-Dneodymium.ai.executionMode=" + (req.executionMode != null ? req.executionMode : "REPLAY_WITH_HEALING"));
                     command.add("-Dneodymium.managerActive=true");
                     command.add("-Dneodymium.aura.test=" + System.getProperty("neodymium.aura.test", "false"));
                     command.add("-Dneodymium.managerRunId=" + runId);

@@ -78,22 +78,6 @@
 
     <div class="config-row-wrapper neo-u-30">
         <div class="config-row neo-u-31">
-            <span class="neo-u-2">Keep Browser Open</span>
-            <label class="switch" for="optKeepOpen">
-                <input type="checkbox" id="optKeepOpen" 
-                       th:checked="${keepOpen != null ? keepOpen : false}" 
-                       hx-post="/api/config/toggle?key=keepOpen" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
-        </div>
-        <span class="neo-u-32">Leaves the browser window open after execution finishes.</span>
-    </div>
-
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
             <span class="neo-u-2">Interactive Mode</span>
             <label class="switch" for="optInteractive">
                 <input type="checkbox" id="optInteractive" 
@@ -122,6 +106,24 @@
             </label>
         </div>
         <span class="neo-u-32">Compiles and opens the visual test report after execution completes.</span>
+    </div>
+
+    <div class="config-row-wrapper neo-u-30">
+        <div class="config-row neo-u-31">
+            <span class="neo-u-2">Execution Mode</span>
+            <select id="optExecutionMode" name="mode" class="neo-select" 
+                    hx-post="/api/config/mode" 
+                    hx-target="#configPanel" 
+                    hx-swap="outerHTML" 
+                    onclick="event.stopPropagation()">
+                <option value="REPLAY_WITH_HEALING" th:selected="${executionMode == null or executionMode == 'REPLAY_WITH_HEALING'}">Replay with Healing</option>
+                <option value="REPLAY_STRICT" th:selected="${executionMode == 'REPLAY_STRICT'}">Replay Strict</option>
+                <option value="LLM_RECORDING" th:selected="${executionMode == 'LLM_RECORDING'}">LLM Recording</option>
+                <option value="FORCE_RECORDING" th:selected="${executionMode == 'FORCE_RECORDING'}">Force Recording</option>
+                <option value="LLM_ONLY" th:selected="${executionMode == 'LLM_ONLY'}">LLM Only</option>
+            </select>
+        </div>
+        <span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
     </div>
 </th:block>
 

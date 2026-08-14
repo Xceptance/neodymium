@@ -179,4 +179,46 @@ public final class AuraManagerTestSelectionPanelUiTest
         reloadedContainer.$(".list-item").click();
         reloadedContainer.$(".dataset-list").$(".dataset-select-cb").shouldBe(Condition.selected);
     }
+
+    @NeodymiumTest
+    public final void testPartialDatasetSelectionIndeterminateState()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Find a file container with multiple datasets
+        final var firstContainer = $$("#yamlFileList .file-container").first();
+        firstContainer.$(".list-item").click();
+        final var datasetList = firstContainer.$(".dataset-list");
+        datasetList.shouldBe(Condition.visible);
+
+        final var datasetCheckboxes = datasetList.$$(".dataset-select-cb");
+        datasetCheckboxes.shouldHave(CollectionCondition.sizeGreaterThan(1));
+
+        final var fileCheckbox = firstContainer.$(".file-select-cb");
+
+        // Clear any selection first
+        if (fileCheckbox.isSelected())
+        {
+            fileCheckbox.click();
+        }
+
+        // Select only the first dataset
+        datasetCheckboxes.first().click();
+
+        // Verify file checkbox is not fully checked, but is indeterminate
+        fileCheckbox.shouldNotBe(Condition.selected);
+        final Boolean isIndeterminate = Selenide.executeJavaScript("return arguments[0].indeterminate;", fileCheckbox);
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.TRUE, isIndeterminate);
+
+        // Reload page to verify server-side state persistence of partial selection
+        Selenide.refresh();
+
+        final var reloadedContainer = $$("#yamlFileList .file-container").first();
+        final var reloadedFileCb = reloadedContainer.$(".file-select-cb");
+        reloadedFileCb.shouldNotBe(Condition.selected);
+        reloadedFileCb.shouldHave(Condition.attribute("data-indeterminate", "true"));
+
+        final Boolean isReloadedIndeterminate = Selenide.executeJavaScript("return arguments[0].indeterminate;", reloadedFileCb);
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.TRUE, isReloadedIndeterminate);
+    }
 }

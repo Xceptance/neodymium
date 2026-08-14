@@ -35,6 +35,7 @@ import org.thymeleaf.context.Context;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.xceptance.neodymium.aura.dto.SaveRequest;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 
 /**
  * Controller handling Yaml editor rendering, file reading, saving, creating, and deleting operations.
@@ -242,9 +243,17 @@ public final class AuraManagerEditorController
             if (isHtmxRequest(exchange))
             {
                 final Context context = new Context();
-                context.setVariable("files", fileService.getYamlFilesList());
+                final List<YamlFileDto> filesList = fileService.getYamlFilesList();
+                context.setVariable("files", filesList);
                 context.setVariable("expandedFiles", fileService.getExpandedFiles());
                 context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+                if (queueController != null)
+                {
+                    context.setVariable("queue", queueController.getSelectedQueue());
+                    context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
+                    context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filesList));
+                    context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(filesList));
+                }
 
                 final String deleteModalHtml = manager.getTemplateEngine().process("fragments/modals", Set.of("deleteTestModal"), context);
                 final String yamlTreeHtml = manager.getTemplateEngine().process("fragments/test-selection", Set.of("yamlFileList"), context);
@@ -325,10 +334,18 @@ public final class AuraManagerEditorController
             {
                 fileService.setActiveEditingFile(filename);
                 final Context context = new Context();
-                context.setVariable("files", fileService.getYamlFilesList());
+                final List<YamlFileDto> filesList = fileService.getYamlFilesList();
+                context.setVariable("files", filesList);
                 context.setVariable("expandedFiles", fileService.getExpandedFiles());
                 context.setVariable("activeEditingFile", filename);
                 context.setVariable("editorContent", boilerplate);
+                if (queueController != null)
+                {
+                    context.setVariable("queue", queueController.getSelectedQueue());
+                    context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
+                    context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filesList));
+                    context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(filesList));
+                }
 
                 final String createModalHtml = manager.getTemplateEngine().process("fragments/modals", Set.of("createTestModal"), context);
                 final String yamlTreeHtml = manager.getTemplateEngine().process("fragments/test-selection", Set.of("yamlFileList"), context);
@@ -421,6 +438,7 @@ public final class AuraManagerEditorController
         try
         {
             final String content = fileService.readYamlFileContent(file);
+            final boolean fileExists = (content != null);
             final List<String> steps = new ArrayList<>();
             if (content != null)
             {
@@ -432,11 +450,16 @@ public final class AuraManagerEditorController
                     steps.addAll(mainSteps);
                 }
             }
+            else
+            {
+                steps.add("action: Enter step details here");
+            }
 
             final Context context = new Context();
             context.setVariable("cardId", cardId);
             context.setVariable("includeFile", file);
             context.setVariable("includeSteps", steps);
+            context.setVariable("fileExists", fileExists);
 
             final String html = manager.getTemplateEngine().process("fragments/editor", Set.of("includeTreeCardFragment"), context);
             AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
