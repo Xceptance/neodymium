@@ -1,0 +1,76 @@
+{
+  "id": "row-auth-3",
+  "title": "PasswordResetTest [Token Expiry Check]",
+  "testClass": "PasswordResetTest",
+  "classContainer": "classContainerPasswordReset",
+  "areaGroup": "areaGroupAuth",
+  "variationKey": "tb-auth-ds3",
+  "status": "passed-clean",
+  "bugs": [],
+  "location": "UNKNOWN",
+  "browser": "Chrome",
+  "engine": "Java",
+  "isRetried": false,
+  "retriedChip": "",
+  "comment": "",
+  "failure": "NONE",
+  "steps": {
+    "retried": false,
+    "totalTries": 1,
+    "tries": {
+      "1": {
+        "engineOrigin": "Java",
+        "error": "",
+        "beforeSteps": [
+          {
+            "num": 1,
+            "title": "Initialize Web Driver",
+            "engine": "Java",
+            "duration": "750ms",
+            "timestamp": "14:22:10.005",
+            "passed": true,
+            "actions": [
+              {
+                "name": "NAVIGATE",
+                "target": "url=\"https://demo.xceptance.com/reset\""
+              }
+            ]
+          }
+        ],
+        "coreSteps": [
+          {
+            "num": 2,
+            "title": "Validate Password Reset Token Expiry Time",
+            "engine": "Java",
+            "duration": "600ms",
+            "timestamp": "14:22:10.755",
+            "passed": true,
+            "actions": [
+              {
+                "name": "ASSERT",
+                "target": "TokenExpiry < 3600"
+              }
+            ]
+          }
+        ],
+        "afterSteps": [
+          {
+            "num": 3,
+            "title": "Teardown Driver",
+            "engine": "Java",
+            "duration": "150ms",
+            "timestamp": "14:22:11.355",
+            "passed": true,
+            "actions": [
+              {
+                "name": "CLEAR_COOKIES",
+                "target": "ClearCookiesAction.java"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "areaName": "Authentication"
+}

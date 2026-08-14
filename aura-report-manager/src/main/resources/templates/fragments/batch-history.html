@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Batch History Fragment -->
+<div th:fragment="batchHistory" class="d-flex flex-column gap-4" id="pageBatchHistoryOverview">
+
+    <!-- BATCH ENVIRONMENT & CONTAINED METADATA BANNER -->
+    <div class="batch-env-card">
+        <div class="env-meta-item">
+            <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">dns</span>
+            <div>
+                <div class="env-meta-label">Assigned Environment (Single)</div>
+                <div style="color: #2563eb; font-weight: 700;" th:text="${batchName == 'EU Smoke Suite' ? 'Production Pre-flight' : 'Staging (us-west-2.shop.xceptance.com)'}">Staging (us-west-2.shop.xceptance.com)</div>
+            </div>
+        </div>
+        <div class="env-meta-item">
+            <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">public</span>
+            <div>
+                <div class="env-meta-label">Locales Contained in Batch</div>
+                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem;">
+                    <span class="tag-chip" th:if="${batchName != 'EU Smoke Suite'}">US</span>
+                    <span class="tag-chip">EU</span>
+                    <span class="tag-chip">DE</span>
+                    <span class="tag-chip" th:if="${batchName != 'EU Smoke Suite'}">Unknown</span>
+                </div>
+            </div>
+        </div>
+        <div class="env-meta-item">
+            <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">web</span>
+            <div>
+                <div class="env-meta-label">Browsers Contained in Batch</div>
+                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem;">
+                    <span class="tag-chip"><span class="material-symbols-outlined">language</span> Chrome</span>
+                    <span class="tag-chip"><span class="material-symbols-outlined">language</span> Firefox</span>
+                    <span class="tag-chip" th:if="${batchName != 'EU Smoke Suite'}"><span class="material-symbols-outlined">language</span> Edge</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HISTORY TREND CHART CARD -->
+    <div class="allure-trend-card">
+        <div class="trend-chart-header">
+            <div>
+                <span class="material-symbols-outlined text-accent">trending_up</span> HISTORY TREND FOR WHOLE BATCH: <span id="batchOverviewTitle" th:text="${batchName ?: 'US NIGHTLY REGRESSION'}">US NIGHTLY REGRESSION</span>
+                <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 400; margin-top: 0.25rem;">
+                    Stacked area trend for the whole batch. <strong style="color: var(--status-fixed);"><span class="material-symbols-outlined">touch_app</span> On click on any history trend point below, the corresponding report for the batch will open.</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="allure-legend">
+            <div class="legend-item"><div class="legend-box" style="background: #6ee7b7; border: 1px solid #34d399;"></div> Passed Clean</div>
+            <div class="legend-item"><div class="legend-box" style="background: #93c5fd; border: 1px solid #60a5fa;"></div> Succeeded with Known Bug</div>
+            <div class="legend-item"><div class="legend-box" style="background: #fdba74; border: 1px solid #fb923c;"></div> Failed due to Known Bug</div>
+            <div class="legend-item"><div class="legend-box" style="background: #fca5a5; border: 1px solid #f87171;"></div> Failed without Issue Info</div>
+            <div class="legend-item"><div class="legend-box" style="background: #cbd5e1; border: 1px solid #94a3b8;"></div> Ignored / Skipped</div>
+        </div>
+
+        <div class="allure-stacked-svg-container" style="position: relative;">
+            <svg width="100%" height="100%" viewBox="0 0 800 220" preserveAspectRatio="none" id="mainTrendSvg" onmousemove="handleTrendChartHover(event)" onmouseleave="hideTrendChartHover()">
+                <defs>
+                    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2563eb" flood-opacity="0.4"/>
+                    </filter>
+                </defs>
+
+                <!-- Y-AXIS GRID LINES & TICKS -->
+                <line x1="50" y1="30" x2="800" y2="30" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="34" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">8 Tests</text>
+
+                <line x1="50" y1="70" x2="800" y2="70" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="74" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">6 Tests</text>
+
+                <line x1="50" y1="110" x2="800" y2="110" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="114" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">4 Tests</text>
+
+                <line x1="50" y1="150" x2="800" y2="150" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="154" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">2 Tests</text>
+
+                <line x1="50" y1="10" x2="50" y2="190" stroke="#cbd5e1" stroke-width="1.5"/>
+                <line x1="45" y1="190" x2="800" y2="190" stroke="#cbd5e1" stroke-width="1.5"/>
+                <text x="42" y="194" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">0 Tests</text>
+
+                <!-- STACKED LAYERS -->
+                <path id="trendLayerIgnored" d="M 50 170 C 140 170, 140 170, 230 170 C 325 170, 325 170, 420 170 C 515 170, 515 170, 610 170 C 705 170, 705 170, 800 170 L 800 190 L 50 190 Z" fill="#cbd5e1" />
+                <path d="M 50 170 C 140 170, 140 170, 230 170 C 325 170, 325 170, 420 170 C 515 170, 515 170, 610 170 C 705 170, 705 170, 800 170" fill="none" stroke="#94a3b8" stroke-width="2" />
+
+                <path id="trendLayerUnknown" d="M 50 150 C 140 150, 140 150, 230 150 C 325 150, 325 150, 420 150 C 515 150, 515 170, 610 170 C 705 170, 705 150, 800 150 L 800 170 C 705 170, 705 170, 610 170 C 515 170, 515 170, 420 170 C 325 170, 325 170, 230 170 C 140 170, 140 170, 50 170 Z" fill="#fca5a5" />
+                <path d="M 50 150 C 140 150, 140 150, 230 150 C 325 150, 325 150, 420 150 C 515 150, 515 170, 610 170 C 705 170, 705 150, 800 150" fill="none" stroke="#f87171" stroke-width="2.5" />
+
+                <path id="trendLayerKnown" d="M 50 110 C 140 110, 140 130, 230 130 C 325 130, 325 130, 420 130 C 515 130, 515 150, 610 150 C 705 150, 705 130, 800 130 L 800 150 C 705 150, 705 170, 610 170 C 515 170, 515 150, 420 150 C 325 150, 325 150, 230 150 C 140 150, 140 150, 50 150 Z" fill="#fdba74" />
+                <path d="M 50 110 C 140 110, 140 130, 230 130 C 325 130, 325 130, 420 130 C 515 130, 515 150, 610 150 C 705 150, 705 130, 800 130" fill="none" stroke="#fb923c" stroke-width="2.5" />
+
+                <path id="trendLayerFixed" d="M 50 90 C 140 90, 140 110, 230 110 C 325 110, 325 90, 420 90 C 515 90, 515 110, 610 110 C 705 110, 705 90, 800 90 L 800 130 C 705 130, 705 150, 610 150 C 515 150, 515 130, 420 130 C 325 130, 325 130, 230 130 C 140 130, 140 110, 50 110 Z" fill="#93c5fd" />
+                <path d="M 50 90 C 140 90, 140 110, 230 110 C 325 110, 325 90, 420 90 C 515 90, 515 110, 610 110 C 705 110, 705 90, 800 90" fill="none" stroke="#60a5fa" stroke-width="2.5" />
+
+                <path id="trendLayerPass" d="M 50 70 C 140 70, 140 50, 230 50 C 325 50, 325 50, 420 50 C 515 50, 515 30, 610 30 C 705 30, 705 30, 800 30 L 800 90 C 705 90, 705 110, 610 110 C 515 110, 515 90, 420 90 C 325 90, 325 110, 230 110 C 140 110, 140 90, 50 90 Z" fill="#6ee7b7" />
+                <path id="trendTopStroke" d="M 50 70 C 140 70, 140 50, 230 50 C 325 50, 325 50, 420 50 C 515 50, 515 30, 610 30 C 705 30, 705 30, 800 30" fill="none" stroke="#34d399" stroke-width="3" />
+
+                <line id="trendHoverGuide" x1="-100" y1="10" x2="-100" y2="190" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3 3" style="display: none;" />
+
+                <!-- CLICKABLE RUN DATA POINTS -->
+                <g class="trend-click-col" id="trendPoint-1045" 
+                   hx-get="/run-report?runId=1045" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                    <circle cx="50" cy="70" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                </g>
+                <g class="trend-click-col" id="trendPoint-1046"
+                   hx-get="/run-report?runId=1046" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                    <circle cx="230" cy="50" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                </g>
+                <g class="trend-click-col" id="trendPoint-1047"
+                   hx-get="/run-report?runId=1047" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                    <circle cx="420" cy="50" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                </g>
+                <g class="trend-click-col" id="trendPoint-1048"
+                   hx-get="/run-report?runId=1048" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                    <circle cx="610" cy="30" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                </g>
+                <g class="trend-click-col" id="trendPoint-1049"
+                   hx-get="/run-report?runId=1049" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                    <circle cx="800" cy="30" r="7" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                </g>
+
+                <text x="50" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1045</text>
+                <text x="230" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1046</text>
+                <text x="420" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1047</text>
+                <text x="610" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1048</text>
+                <text x="800" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1049 (Latest)</text>
+            </svg>
+
+            <div id="trendHoverTooltip" style="display: none; position: absolute; top: 10px; left: 10px; background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 0.9rem; box-shadow: 0 10px 25px rgba(0,0,0,0.15); pointer-events: none; z-index: 40; font-size: 0.78rem; width: 210px; flex-direction: column; gap: 0.35rem;">
+                <div class="flex-between" style="border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin-bottom: 0.25rem;">
+                    <strong style="color: var(--text-main); font-size: 0.85rem;" id="ttRunTitle">Run #1049</strong>
+                    <span class="tag-chip" id="ttPassRate" style="background: #ecfdf5; color: var(--status-pass); font-weight: 700;">62.5% Pass</span>
+                </div>
+                <div class="flex-between"><span><span class="material-symbols-outlined text-accent">fact_check</span> Total Executed:</span><strong class="text-mono" id="ttTotalVal">8 Tests</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#6ee7b7;"></div> Passed Clean:</span><strong class="text-mono" style="color:var(--status-pass)" id="ttPassVal">3</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#93c5fd;"></div> Succeeded (Bug):</span><strong class="text-mono" style="color:var(--status-fixed)" id="ttFixedVal">2</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fdba74;"></div> Failed (Bug):</span><strong class="text-mono" style="color:var(--status-known-fail)" id="ttKnownVal">1</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fca5a5;"></div> Failed (Unknown):</span><strong class="text-mono" style="color:var(--status-unknown-fail)" id="ttUnknownVal">1</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#cbd5e1;"></div> Ignored / Skipped:</span><strong class="text-mono" style="color:var(--status-ignored)" id="ttIgnoredVal">1</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- INCLUDED AREA TRENDS GRID -->
+    <div class="panel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title"><span class="material-symbols-outlined text-accent">layers</span> History Trends for Included Areas</div>
+                <div class="panel-subtitle">Click any area below to open list of tests belonging to it in this batch</div>
+            </div>
+        </div>
+
+        <div class="area-trend-grid">
+            <div class="area-trend-card">
+                <div class="area-trend-header">
+                    <div class="area-trend-title"><span class="material-symbols-outlined text-accent">shopping_cart</span> Area: @Checkout</div>
+                    <span class="badge-status badge-known-fail" id="areaTrendCountCheckout">5 Executions in Last Run</span>
+                </div>
+                <div class="area-stacked-svg-container">
+                    <svg width="100%" height="100%" viewBox="0 0 300 90" preserveAspectRatio="none">
+                        <line x1="20" y1="80" x2="280" y2="80" stroke="#cbd5e1" stroke-width="1"/>
+                        <path d="M 20 80 C 52.5 80, 52.5 80, 85 80 C 117.5 80, 117.5 80, 150 80 C 182.5 80, 182.5 80, 215 80 C 247.5 80, 247.5 70, 280 70 L 280 80 L 20 80 Z" fill="#cbd5e1" />
+                        <path d="M 20 70 C 52.5 70, 52.5 80, 85 80 C 117.5 80, 117.5 70, 150 70 C 182.5 70, 182.5 80, 215 80 C 247.5 80, 247.5 60, 280 60 L 280 70 C 247.5 70, 247.5 80, 215 80 C 182.5 80, 182.5 80, 150 80 C 117.5 80, 117.5 80, 85 80 C 52.5 80, 52.5 80, 20 80 Z" fill="#fca5a5" />
+                        <path d="M 20 60 C 52.5 60, 52.5 70, 85 70 C 117.5 70, 117.5 60, 150 60 C 182.5 60, 182.5 70, 215 70 C 247.5 70, 247.5 50, 280 50 L 280 60 C 247.5 60, 247.5 80, 215 80 C 182.5 80, 182.5 70, 150 70 C 117.5 70, 117.5 80, 85 80 C 52.5 80, 52.5 70, 20 70 Z" fill="#fdba74" />
+                        <path d="M 20 50 C 52.5 50, 52.5 60, 85 60 C 117.5 60, 117.5 50, 150 50 C 182.5 50, 182.5 50, 215 50 C 247.5 50, 247.5 40, 280 40 L 280 50 C 247.5 50, 247.5 70, 215 70 C 182.5 70, 182.5 60, 150 60 C 117.5 60, 117.5 70, 85 70 C 52.5 70, 52.5 60, 20 60 Z" fill="#93c5fd" />
+                        <path d="M 20 40 C 52.5 40, 52.5 40, 85 40 C 117.5 40, 117.5 40, 150 40 C 182.5 40, 182.5 30, 215 30 C 247.5 30, 247.5 30, 280 30 L 280 40 C 247.5 40, 247.5 50, 215 50 C 182.5 50, 182.5 50, 150 50 C 117.5 50, 117.5 60, 85 60 C 52.5 60, 52.5 50, 20 50 Z" fill="#6ee7b7" />
+                        <path d="M 20 40 C 52.5 40, 52.5 40, 85 40 C 117.5 40, 117.5 40, 150 40 C 182.5 40, 182.5 30, 215 30 C 247.5 30, 247.5 30, 280 30" fill="none" stroke="#34d399" stroke-width="2" />
+                        <circle cx="280" cy="30" r="3.5" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="area-trend-card">
+                <div class="area-trend-header">
+                    <div class="area-trend-title"><span class="material-symbols-outlined text-accent">shield</span> Area: @Authentication</div>
+                    <span class="badge-status badge-pass" id="areaTrendCountAuth">3 Executions in Last Run</span>
+                </div>
+                <div class="area-stacked-svg-container">
+                    <svg width="100%" height="100%" viewBox="0 0 300 90" preserveAspectRatio="none">
+                        <line x1="20" y1="80" x2="280" y2="80" stroke="#cbd5e1" stroke-width="1"/>
+                        <path d="M 20 80 C 52.5 80, 52.5 65, 85 65 C 117.5 65, 117.5 80, 150 80 C 182.5 80, 182.5 65, 215 65 C 247.5 65, 247.5 80, 280 80 L 280 80 L 20 80 Z" fill="#cbd5e1" />
+                        <path d="M 20 65 C 52.5 65, 52.5 50, 85 50 C 117.5 50, 117.5 80, 150 80 C 182.5 80, 182.5 65, 215 65 C 247.5 65, 247.5 80, 280 80 L 280 80 C 247.5 80, 247.5 65, 215 65 C 182.5 65, 182.5 80, 150 80 C 117.5 80, 117.5 65, 85 65 C 52.5 65, 52.5 80, 20 80 Z" fill="#fca5a5" />
+                        <path d="M 20 50 C 52.5 50, 52.5 50, 85 50 C 117.5 50, 117.5 65, 150 65 C 182.5 65, 182.5 65, 215 65 C 247.5 65, 247.5 80, 280 80 L 280 80 C 247.5 80, 247.5 65, 215 65 C 182.5 65, 182.5 80, 150 80 C 117.5 80, 117.5 50, 85 50 C 52.5 50, 52.5 65, 20 65 Z" fill="#fdba74" />
+                        <path d="M 20 50 C 52.5 50, 52.5 50, 85 50 C 117.5 50, 117.5 50, 150 50 C 182.5 50, 182.5 65, 215 65 C 247.5 65, 247.5 65, 280 65 L 280 80 C 247.5 80, 247.5 65, 215 65 C 182.5 65, 182.5 65, 150 65 C 117.5 65, 117.5 50, 85 50 C 52.5 50, 52.5 50, 20 50 Z" fill="#93c5fd" />
+                        <path d="M 20 50 C 52.5 50, 52.5 35, 85 35 C 117.5 35, 117.5 35, 150 35 C 182.5 35, 182.5 35, 215 35 C 247.5 35, 247.5 35, 280 35 L 280 65 C 247.5 65, 247.5 65, 215 65 C 182.5 65, 182.5 50, 150 50 C 117.5 50, 117.5 50, 85 50 C 52.5 50, 52.5 50, 20 50 Z" fill="#6ee7b7" />
+                        <path d="M 20 50 C 52.5 50, 52.5 35, 85 35 C 117.5 35, 117.5 35, 150 35 C 182.5 35, 182.5 35, 215 35 C 247.5 35, 247.5 35, 280 35" fill="none" stroke="#34d399" stroke-width="2" />
+                        <circle cx="280" cy="35" r="3.5" fill="#059669" stroke="#ffffff" stroke-width="1.5"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIST OF ALL RUNS FOR THIS BATCH -->
+    <div class="panel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title"><span class="material-symbols-outlined text-accent">history</span> List of All Runs for this Batch</div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="aura-table">
+                <thead>
+                    <tr>
+                        <th>Run ID</th>
+                        <th>Batch Name</th>
+                        <th>Timestamp</th>
+                        <th>Trigger Source</th>
+                        <th>Total Tests</th>
+                        <th style="min-width: 220px;">Status Breakdown</th>
+                        <th>Pass Rate</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="batchSpecificRunsTableBody">
+                    <tr th:each="run, iterStat : ${runs}" class="clickable-row" 
+                        th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML">
+                        <td>
+                            <strong class="text-mono text-accent" style="font-size: 0.95rem;" th:text="'#' + ${run.id}">#1049</strong> 
+                            <span class="tag-chip" style="background: #ecfdf5; color: var(--status-pass); border-color: var(--status-pass-border);" th:if="${iterStat.first}">LATEST</span>
+                        </td>
+                        <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">US Nightly Regression</span></span></td>
+                        <td th:text="${run.timestampLabel}">Today, 14:22:10</td>
+                        <td><span class="material-symbols-outlined">smart_toy</span> <span th:text="${run.triggerSource}">Jenkins CI</span></td>
+                        <td><strong class="text-mono" th:text="${run.totalTests != null ? run.totalTests + ' Tests' : '0 Tests'}">8 Tests</strong></td>
+                        <td style="min-width: 220px; vertical-align: middle;">
+                            <div class="status-stacked-bar">
+                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 2)} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
+                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 2)} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
+                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 2)} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
+                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 2)} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
+                                <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 2)} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
+                            </div>
+                        </td>
+                        <td><span class="badge-status badge-pass" th:text="${run.passRate + '% Pass'}">37.5% Pass</span></td>
+                        <td>
+                            <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;"
+                                    th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML">
+                                <span class="material-symbols-outlined">trending_up</span> Open Run Report
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

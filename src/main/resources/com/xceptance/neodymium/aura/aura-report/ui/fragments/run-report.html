@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Run Report Fragment -->
+<div th:fragment="runReport" class="d-flex flex-column gap-4">
+    <!-- Header Banner -->
+    <div class="card card-custom p-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <div class="h5 mb-1 font-size-lg fw-bold d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-vial text-primary"></i>
+                    <span>Run Report <strong class="font-mono text-primary" th:text="${runId ?: '#1049'}">#1049</strong></span>
+                    <span class="badge bg-primary-subtle text-primary border font-size-sm">NA Integration STG</span>
+                </div>
+                <div class="font-size-sm text-muted">Detailed execution results, area pie charts, and interactive test step inspection.</div>
+            </div>
+
+            <!-- Global Status Filter Badges Toolbar -->
+            <div class="d-flex align-items-center gap-2 flex-wrap" id="wholeExecutionSummaryBadges">
+                <span class="badge badge-status-pass badge-clickable js-filter-badge" data-status-key="passed-clean">5 Passed Clean</span>
+                <span class="badge badge-status-fixed badge-clickable js-filter-badge" data-status-key="succeeded-fixed">1 Succeeded (Fixed)</span>
+                <span class="badge badge-status-known badge-clickable js-filter-badge" data-status-key="failed-known">1 Failed (Known Bug)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Filters Toolbar for All Tests -->
+    <div class="card card-custom p-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fw-bold font-size-sm text-muted"><i class="fa-solid fa-filter text-primary"></i> Execution Filters:</span>
+
+                <!-- Locations Multiselect -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle js-multiselect-toggle" type="button" data-menu-id="locationMultiselectMenu">
+                        <span>Location: <strong class="js-selected-text">All Selected</strong></span>
+                    </button>
+                    <div class="dropdown-menu multiselect-menu p-2" id="locationMultiselectMenu">
+                        <label class="dropdown-item font-size-sm d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input js-chk-all" data-menu-id="locationMultiselectMenu" checked>
+                            <strong>Select All Locations</strong>
+                        </label>
+                        <div class="dropdown-divider"></div>
+                        <label class="dropdown-item font-size-sm d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input js-chk-option" data-menu-id="locationMultiselectMenu" value="US" checked> US
+                        </label>
+                        <label class="dropdown-item font-size-sm d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input js-chk-option" data-menu-id="locationMultiselectMenu" value="EU" checked> EU
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Browsers Multiselect -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle js-multiselect-toggle" type="button" data-menu-id="browserMultiselectMenu">
+                        <span>Browser: <strong class="js-selected-text">All Selected</strong></span>
+                    </button>
+                    <div class="dropdown-menu multiselect-menu p-2" id="browserMultiselectMenu">
+                        <label class="dropdown-item font-size-sm d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input js-chk-all" data-menu-id="browserMultiselectMenu" checked>
+                            <strong>Select All Browsers</strong>
+                        </label>
+                        <div class="dropdown-divider"></div>
+                        <label class="dropdown-item font-size-sm d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input js-chk-option" data-menu-id="browserMultiselectMenu" value="Chrome" checked> Chrome
+                        </label>
+                        <label class="dropdown-item font-size-sm d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input js-chk-option" data-menu-id="browserMultiselectMenu" value="Firefox" checked> Firefox
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Bug Tickets Multiselect -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle js-multiselect-toggle" type="button" data-menu-id="bugMultiselectMenu">
+                        <span>Bugs: <strong class="js-selected-text">All Selected</strong></span>
+                    </button>
+                    <div class="dropdown-menu multiselect-menu p-2" id="bugMultiselectMenu">
+                        <label class="dropdown-item font-size-sm d-flex align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input js-chk-all" data-menu-id="bugMultiselectMenu" checked>
+                            <strong>Select All Bug Tickets</strong>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Tests Execution Table -->
+    <div class="card card-custom p-3" id="runReportSubTabAllTests">
+        <div class="card-header bg-transparent fw-bold font-size-lg border-0 px-0 d-flex align-items-center justify-content-between">
+            <span><i class="fa-solid fa-list-check text-primary me-2"></i> All Executed Test Variations</span>
+            <span class="badge bg-secondary-subtle text-secondary font-size-sm" id="wholeExecutionTotalCountChip">7 Executions</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle table-custom mb-0">
+                <thead>
+                    <tr>
+                        <th>Data Set / Variation</th>
+                        <th>Engine Origin</th>
+                        <th>Browser</th>
+                        <th>Status</th>
+                        <th>Bug Issue / Info</th>
+                    </tr>
+                </thead>
+                <tbody id="allTestsTableBody">
+                    <tr class="test-row js-open-side-panel" data-row-id="row-ds-1" data-test-name="CheckoutProcessTest" data-dataset="[Data Set 1: US CreditCard]" data-status="failed-known" data-location="US" data-browser="Chrome" data-bugs="BUG-4821">
+                        <td>
+                            <span class="badge bg-light text-dark border me-1">US</span>
+                            <strong class="font-mono text-dark">CheckoutProcessTest [US CreditCard]</strong>
+                        </td>
+                        <td><span class="badge badge-engine-java"><i class="fa-brands fa-java me-1"></i> Java</span></td>
+                        <td><i class="fa-brands fa-chrome text-primary me-1"></i> Chrome</td>
+                        <td><span class="badge badge-status-known">Failed (Known Issue)</span></td>
+                        <td><span class="badge badge-status-known"><i class="fa-solid fa-bug me-1"></i> BUG-4821</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

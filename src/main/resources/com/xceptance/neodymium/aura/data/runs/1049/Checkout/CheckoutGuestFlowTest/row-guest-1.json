@@ -1,0 +1,94 @@
+{
+  "id": "row-guest-1",
+  "title": "CheckoutGuestFlowTest [Guest User US]",
+  "testClass": "CheckoutGuestFlowTest",
+  "classContainer": "classContainerCheckoutGuest",
+  "areaGroup": "areaGroupCheckout",
+  "variationKey": "tb-checkout-guest",
+  "status": "passed-clean",
+  "bugs": [],
+  "location": "US",
+  "browser": "Chrome_iPhone14",
+  "engine": "Java",
+  "isRetried": false,
+  "retriedChip": "",
+  "comment": "",
+  "failure": "NONE",
+  "steps": {
+    "retried": false,
+    "totalTries": 1,
+    "tries": {
+      "1": {
+        "engineOrigin": "Java",
+        "error": "",
+        "beforeSteps": [
+          {
+            "num": 1,
+            "title": "Initialize Web Driver & Open Store Homepage",
+            "engine": "Java",
+            "duration": "950ms",
+            "timestamp": "14:22:10.050",
+            "passed": true,
+            "actions": [
+              {
+                "name": "NAVIGATE",
+                "target": "url=\"https://demo.xceptance.com/shop\""
+              }
+            ]
+          }
+        ],
+        "coreSteps": [
+          {
+            "num": 2,
+            "title": "Add Item to Cart as Guest User",
+            "engine": "Java",
+            "duration": "1.2s",
+            "timestamp": "14:22:11.000",
+            "passed": true,
+            "actions": [
+              {
+                "name": "CLICK",
+                "target": ".add-to-cart-guest"
+              }
+            ]
+          },
+          {
+            "num": 3,
+            "title": "Submit Guest Checkout Form with US Address",
+            "engine": "Java",
+            "duration": "1.8s",
+            "timestamp": "14:22:12.200",
+            "passed": true,
+            "actions": [
+              {
+                "name": "TYPE",
+                "target": "#guest-email = guest@xceptance.com"
+              },
+              {
+                "name": "CLICK",
+                "target": "#submit-guest-btn"
+              }
+            ]
+          }
+        ],
+        "afterSteps": [
+          {
+            "num": 4,
+            "title": "Teardown Driver Session",
+            "engine": "Java",
+            "duration": "200ms",
+            "timestamp": "14:22:14.000",
+            "passed": true,
+            "actions": [
+              {
+                "name": "CLEAR_COOKIES",
+                "target": "ClearCookiesAction.java"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "areaName": "Checkout"
+}

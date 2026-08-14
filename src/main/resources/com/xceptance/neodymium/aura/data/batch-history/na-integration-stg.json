@@ -1,0 +1,60 @@
+{
+  "batchId": "na-integration-stg",
+  "batchName": "NA Integration STG",
+  "environment": "Staging",
+  "maxTests": 8,
+  "trendStats": {
+    "1045": { "x": 50, "title": "Run #1045 (3 days ago)", "pass": 1, "fixed": 1, "known": 2, "unknown": 1, "ignored": 1 },
+    "1046": { "x": 230, "title": "Run #1046 (2 days ago)", "pass": 3, "fixed": 1, "known": 1, "unknown": 1, "ignored": 1 },
+    "1047": { "x": 420, "title": "Run #1047 (Yesterday)", "pass": 2, "fixed": 2, "known": 1, "unknown": 1, "ignored": 1 },
+    "1048": { "x": 610, "title": "Run #1048 (Today 11:15)", "pass": 4, "fixed": 2, "known": 1, "unknown": 0, "ignored": 1 },
+    "1049": { "x": 800, "title": "Run #1049 (Latest)", "pass": 3, "fixed": 2, "known": 1, "unknown": 1, "ignored": 1 }
+  },
+  "runs": [
+    {
+      "runId": "1049",
+      "timestamp": "Today, 14:22:10",
+      "duration": "1m 42s",
+      "trigger": "Scheduled Cron",
+      "environment": "Staging (us-west-2.shop.xceptance.com)",
+      "locales": ["US"],
+      "browsers": ["Chrome"],
+      "pass": 3,
+      "fixed": 2,
+      "known": 1,
+      "unknown": 1,
+      "ignored": 1,
+      "jsonFilePath": "data/runs/1049.json"
+    },
+    {
+      "runId": "1048",
+      "timestamp": "Today, 11:15:00",
+      "duration": "1m 38s",
+      "trigger": "Manual Trigger",
+      "environment": "Staging (us-west-2.shop.xceptance.com)",
+      "locales": ["US"],
+      "browsers": ["Chrome"],
+      "pass": 4,
+      "fixed": 2,
+      "known": 1,
+      "unknown": 0,
+      "ignored": 1,
+      "jsonFilePath": "data/runs/1048.json"
+    },
+    {
+      "runId": "1047",
+      "timestamp": "Yesterday, 18:30:00",
+      "duration": "1m 45s",
+      "trigger": "Scheduled Cron",
+      "environment": "Staging (us-west-2.shop.xceptance.com)",
+      "locales": ["US"],
+      "browsers": ["Chrome"],
+      "pass": 2,
+      "fixed": 2,
+      "known": 1,
+      "unknown": 1,
+      "ignored": 1,
+      "jsonFilePath": "data/runs/1047.json"
+    }
+  ]
+}

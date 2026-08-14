@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Batch Details Fragment -->
+<div th:fragment="batchDetails" class="d-flex flex-column gap-4">
+    <!-- Batch Header Banner -->
+    <div class="card card-custom p-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <div class="h5 mb-1 font-size-lg fw-bold d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-primary"></i>
+                    <span th:text="${batchName ?: 'NA Integration STG'}">NA Integration STG</span>
+                </div>
+                <div class="font-size-sm text-muted">Batch execution history, pass rate trends, and run comparisons.</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge badge-status-pass font-size-sm p-2"><i class="fa-solid fa-circle-check"></i> Latest Pass: 92%</span>
+                <span class="badge badge-status-known font-size-sm p-2"><i class="fa-solid fa-bug"></i> 1 Active Bug</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Trend Chart Card -->
+    <div class="card card-custom p-3">
+        <div class="card-header bg-transparent fw-bold font-size-lg border-0 px-0 d-flex align-items-center justify-content-between">
+            <span><i class="fa-solid fa-chart-line text-primary me-2"></i> Stacked Pass Rate Trend Across Runs</span>
+            <span class="font-size-sm text-muted">Click any data node on trend line to jump directly to run report.</span>
+        </div>
+        <div class="p-2 border rounded bg-light d-flex align-items-center justify-content-center" style="min-height: 220px;" id="batchTrendChartContainer">
+            <!-- SVG Stacked Trend Chart Rendered via JS -->
+            <div class="text-muted font-size-sm"><i class="fa-solid fa-chart-area text-primary me-2"></i> Trend chart dynamically rendered via SVG / JS</div>
+        </div>
+    </div>
+
+    <!-- Batch Specific Runs Table -->
+    <div class="card card-custom p-3">
+        <div class="card-header bg-transparent fw-bold font-size-lg border-0 px-0">
+            <i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Executed Runs in Batch History
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle table-custom mb-0">
+                <thead>
+                    <tr>
+                        <th>Run ID</th>
+                        <th>Timestamp</th>
+                        <th>Total Tests</th>
+                        <th>Status Breakdown</th>
+                        <th>Duration</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="batchSpecificRunsTableBody">
+                    <tr>
+                        <td class="font-mono fw-bold text-primary">#1049</td>
+                        <td class="font-size-sm text-muted">2026-08-07 14:20:00</td>
+                        <td class="font-mono fw-bold">7</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <span class="badge badge-status-pass"><i class="fa-solid fa-circle-check"></i> 5</span>
+                                <span class="badge badge-status-fixed"><i class="fa-solid fa-wrench"></i> 1</span>
+                                <span class="badge badge-status-known"><i class="fa-solid fa-bug"></i> 1</span>
+                            </div>
+                        </td>
+                        <td class="font-size-sm text-muted">1m 42s</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm font-size-sm" 
+                                    hx-get="/fragments/run-report.html" 
+                                    hx-target="#mainViewContainer" 
+                                    hx-swap="innerHTML">
+                                <i class="fa-solid fa-chart-line me-1"></i> Open Report
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

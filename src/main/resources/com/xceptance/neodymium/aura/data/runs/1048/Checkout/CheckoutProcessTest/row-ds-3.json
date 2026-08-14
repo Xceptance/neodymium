@@ -1,0 +1,79 @@
+{
+  "id": "row-ds-3",
+  "title": "CheckoutProcessTest [DE ExpressCheckout]",
+  "testClass": "CheckoutProcessTest",
+  "classContainer": "classContainerCheckoutProcess",
+  "areaGroup": "areaGroupCheckout",
+  "variationKey": "tb-checkout-ds3",
+  "status": "succeeded-fixed",
+  "bugs": [
+    "#BUG-4821"
+  ],
+  "location": "DE",
+  "browser": "Edge",
+  "engine": "Playbook",
+  "isRetried": false,
+  "retriedChip": "",
+  "comment": "",
+  "failure": "NONE",
+  "steps": {
+    "retried": false,
+    "totalTries": 1,
+    "tries": {
+      "1": {
+        "engineOrigin": "Playbook",
+        "error": "",
+        "beforeSteps": [
+          {
+            "num": 1,
+            "title": "Initialize Web Driver & Open Store Homepage",
+            "engine": "Java",
+            "duration": "1.0s",
+            "timestamp": "11:15:00.100",
+            "passed": true,
+            "actions": [
+              {
+                "name": "NAVIGATE",
+                "target": "url=\"https://demo.xceptance.com/shop\""
+              }
+            ]
+          }
+        ],
+        "coreSteps": [
+          {
+            "num": 2,
+            "title": "Execute Express Checkout Fast Path",
+            "engine": "Playbook",
+            "duration": "1.5s",
+            "timestamp": "11:15:01.100",
+            "passed": true,
+            "reasoning": "Playbook block Express_Checkout_FastPath executed without errors.",
+            "actions": [
+              {
+                "name": "CLICK",
+                "target": "#express-btn"
+              }
+            ]
+          }
+        ],
+        "afterSteps": [
+          {
+            "num": 3,
+            "title": "Teardown Driver",
+            "engine": "Java",
+            "duration": "280ms",
+            "timestamp": "11:15:02.950",
+            "passed": true,
+            "actions": [
+              {
+                "name": "CLEAR_COOKIES",
+                "target": "ClearCookiesAction.java"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "areaName": "Checkout"
+}

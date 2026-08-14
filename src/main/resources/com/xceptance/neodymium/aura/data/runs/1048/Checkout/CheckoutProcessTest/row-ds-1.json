@@ -1,0 +1,38 @@
+{
+  "id": "row-ds-1",
+  "title": "CheckoutProcessTest [US CreditCard]",
+  "testClass": "CheckoutProcessTest",
+  "classContainer": "classContainerCheckoutProcess",
+  "areaGroup": "areaGroupCheckout",
+  "variationKey": "tb-checkout-ds1",
+  "status": "failed-known",
+  "bugs": [],
+  "location": "US",
+  "browser": "Chrome",
+  "engine": "Java",
+  "isRetried": false,
+  "retriedChip": "",
+  "comment": "",
+  "failure": "",
+  "steps": {
+    "retried": false,
+    "totalTries": 1,
+    "tries": {
+      "1": {
+        "engineOrigin": "Java",
+        "error": "ZipCodeInvalidException: Provided ZIP '90210' failed verification API under tracking #BUG-4821.",
+        "beforeSteps": [],
+        "coreSteps": [
+          {
+            "stepNum": 1,
+            "name": "Validate Shipping ZIP Code",
+            "passed": false,
+            "error": "ZipCodeInvalidException: Provided ZIP '90210' failed verification API under tracking #BUG-4821."
+          }
+        ],
+        "afterSteps": []
+      }
+    }
+  },
+  "areaName": "Checkout"
+}

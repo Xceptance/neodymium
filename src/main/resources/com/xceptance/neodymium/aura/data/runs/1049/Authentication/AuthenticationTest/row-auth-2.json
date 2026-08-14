@@ -1,0 +1,86 @@
+{
+  "id": "row-auth-2",
+  "title": "AuthenticationTest [Standard Email Login]",
+  "testClass": "AuthenticationTest",
+  "classContainer": "classContainerAuthProcess",
+  "areaGroup": "areaGroupAuth",
+  "variationKey": "tb-auth-ds2",
+  "status": "succeeded-fixed",
+  "bugs": [
+    "#BUG-3012"
+  ],
+  "location": "UNKNOWN",
+  "browser": "Firefox",
+  "engine": "Java",
+  "isRetried": false,
+  "retriedChip": "",
+  "comment": "",
+  "failure": "NONE",
+  "steps": {
+    "retried": false,
+    "totalTries": 1,
+    "tries": {
+      "1": {
+        "engineOrigin": "Java",
+        "error": "",
+        "beforeSteps": [
+          {
+            "num": 1,
+            "title": "Initialize Web Driver & Navigate to Login",
+            "engine": "Java",
+            "duration": "880ms",
+            "timestamp": "14:22:10.010",
+            "passed": true,
+            "actions": [
+              {
+                "name": "NAVIGATE",
+                "target": "url=\"https://demo.xceptance.com/login\""
+              }
+            ]
+          }
+        ],
+        "coreSteps": [
+          {
+            "num": 2,
+            "title": "Enter Email & Password Credentials",
+            "engine": "Java",
+            "duration": "1.4s",
+            "timestamp": "14:22:10.890",
+            "passed": true,
+            "actions": [
+              {
+                "name": "TYPE",
+                "target": "#email = user@xceptance.com"
+              },
+              {
+                "name": "TYPE",
+                "target": "#password = secret"
+              },
+              {
+                "name": "CLICK",
+                "target": "#btn-login"
+              }
+            ]
+          }
+        ],
+        "afterSteps": [
+          {
+            "num": 3,
+            "title": "Teardown Driver",
+            "engine": "Java",
+            "duration": "180ms",
+            "timestamp": "14:22:12.290",
+            "passed": true,
+            "actions": [
+              {
+                "name": "CLEAR_COOKIES",
+                "target": "ClearCookiesAction.java"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "areaName": "Authentication"
+}

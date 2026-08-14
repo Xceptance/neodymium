@@ -1,0 +1,90 @@
+{
+  "id": "row-ds-1",
+  "title": "CheckoutProcessTest [US CreditCard]",
+  "testClass": "CheckoutProcessTest",
+  "classContainer": "classContainerCheckoutProcess",
+  "areaGroup": "areaGroupCheckout",
+  "variationKey": "tb-checkout-ds1",
+  "status": "failed-known",
+  "bugs": ["BUG-4821"],
+  "location": "US",
+  "browser": "Chrome",
+  "engine": "Java",
+  "isRetried": false,
+  "retriedChip": "",
+  "comment": "",
+  "failure": "",
+  "steps": {
+    "retried": false,
+    "totalTries": 2,
+    "tries": {
+      "1": {
+        "engineOrigin": "Java",
+        "error": "ZipCodeInvalidException: Provided ZIP '90210' failed verification API under tracking #BUG-4821.",
+        "beforeSteps": [
+          {
+            "stepNum": 1,
+            "name": "Initialize ChromeDriver & Window Viewport",
+            "passed": true,
+            "actions": [
+              {
+                "name": "LAUNCH_BROWSER",
+                "target": "Chrome (120.0.6099.109)"
+              }
+            ]
+          }
+        ],
+        "coreSteps": [
+          {
+            "stepNum": 1,
+            "name": "Open Storefront & Add CreditCard Item to Cart",
+            "passed": true,
+            "actions": [
+              {
+                "name": "OPEN",
+                "target": "https://staging.shop.xceptance.com"
+              },
+              {
+                "name": "CLICK",
+                "target": "#btnAddToCartPrimary"
+              }
+            ]
+          },
+          {
+            "stepNum": 2,
+            "name": "Enter Address & Validate ZIP Code Formatting",
+            "passed": false,
+            "error": "ZipCodeInvalidException: Provided ZIP '90210' failed verification API under tracking #BUG-4821.",
+            "actions": [
+              {
+                "name": "TYPE",
+                "target": "#addressZip, '90210'"
+              },
+              {
+                "name": "CLICK",
+                "target": "#btnProceedToPayment"
+              }
+            ],
+            "reasoning": "Aura AI Healer evaluated ZipCodeInvalidException against Jira #BUG-4821 baseline and classified as Known Issue."
+          }
+        ],
+        "afterSteps": []
+      },
+      "2": {
+        "engineOrigin": "Java",
+        "error": "ZipCodeInvalidException: Provided ZIP '90210' failed verification API under tracking #BUG-4821.",
+        "beforeSteps": [],
+        "coreSteps": [
+          {
+            "stepNum": 1,
+            "name": "Retry Payment Validation with Formatted ZIP",
+            "passed": false,
+            "error": "ZipCodeInvalidException: Provided ZIP '90210' failed verification API under tracking #BUG-4821."
+          }
+        ],
+        "afterSteps": []
+      }
+    }
+  },
+  "areaName": "Checkout"
+}

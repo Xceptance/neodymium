@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Header Fragment -->
+<header th:fragment="header" class="app-header d-flex align-items-center justify-content-between shadow-sm">
+    <div class="d-flex align-items-center gap-3">
+        <button class="btn btn-outline-secondary btn-sm d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="h5 mb-0 font-size-lg fw-bold d-flex align-items-center gap-2">
+            <i class="fa-solid fa-database text-primary"></i>
+            <span id="pageTitle" th:text="${pageTitle ?: 'Neodymium Report Manager'}">Neodymium Report Manager</span>
+        </div>
+        <nav aria-label="breadcrumb" id="headerBreadcrumb" class="d-none d-sm-flex align-items-center">
+            <ol class="breadcrumb mb-0 font-size-sm" id="breadcrumbTrail">
+                <li class="breadcrumb-item"><a href="#" class="text-decoration-none">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page" th:text="${activeTab ?: 'Directory'}">Directory</li>
+            </ol>
+        </nav>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge badge-status-pass p-2 font-size-sm">
+            <i class="fa-solid fa-circle-dot text-success me-1"></i> Live System
+        </span>
+        <button class="btn btn-outline-secondary btn-sm" type="button" title="Refresh Data">
+            <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+    </div>
+</header>
+
+</body>
+</html>

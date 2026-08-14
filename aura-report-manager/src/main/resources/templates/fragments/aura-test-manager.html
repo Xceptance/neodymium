@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Native Neodymium Aura Test Manager Fragment -->
+<div th:fragment="auraTestManager" class="d-flex flex-column gap-3">
+
+    <!-- PAGE SUB-TABS HEADER BAR -->
+    <div class="sub-tab-bar">
+        <button class="sub-tab-btn active" id="tabBtnQueue" onclick="switchAuraManagerTab('tabQueue', this)">
+            <span class="material-symbols-outlined">play_circle</span> Queue & Live Execution
+        </button>
+        <button class="sub-tab-btn" id="tabBtnEditor" onclick="switchAuraManagerTab('tabEditor', this)">
+            <span class="material-symbols-outlined">edit_document</span> Test Data Editor
+        </button>
+        <button class="sub-tab-btn" id="tabBtnSettings" onclick="switchAuraManagerTab('tabSettings', this)">
+            <span class="material-symbols-outlined">settings</span> Runner Settings
+        </button>
+    </div>
+
+    <!-- TAB 1: QUEUE & LIVE EXECUTION -->
+    <div id="tabQueue" class="view-state active d-flex flex-column gap-3">
+        
+        <!-- HEADER STATS & CONTROL TOOLBAR -->
+        <div class="panel" style="padding: 1rem 1.25rem;">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                
+                <!-- LEFT TITLE & STATUS BADGE -->
+                <div class="d-flex align-items-center gap-3">
+                    <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 1.5rem;">play_circle</span>
+                        <span>Active Target: <strong th:text="${queueData['activeSuite']}">ALL</strong></span>
+                    </div>
+
+                    <div>
+                        <span class="badge-status badge-pass" th:if="${queueData['running'] == true}" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                            <span class="pulse-dot" style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
+                            <span>Executing Tests...</span>
+                        </span>
+                        <span class="badge-status badge-ignored" th:if="${queueData['running'] == false}" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                            <span style="width: 8px; height: 8px; background: #64748b; border-radius: 50%;"></span>
+                            <span>Queue Idle</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- RIGHT CONTROLS & TEST CLASS SELECTOR FORM -->
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <form hx-post="/aura-test-manager/queue/run" hx-target="#mainViewContainer" hx-swap="innerHTML" class="d-flex align-items-center gap-2">
+                        <div style="min-width: 280px; max-width: 380px;">
+                            <select name="suiteName" class="form-select" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border-radius: 6px;" title="Select a test class or suite from src/test/java">
+                                <option value="ALL">All Test Classes (*Test)</option>
+                                <option value="EU Smoke Suite">EU Smoke Suite</option>
+                                <optgroup label="Detected Test Classes in src/test/java">
+                                    <option th:each="cls : ${detectedTestClasses}" 
+                                            th:value="${cls.fullyQualifiedName}" 
+                                            th:text="${cls.simpleName + ' (' + cls.packageName + ')'}"
+                                            th:selected="${cls.fullyQualifiedName == queueData['activeSuite']}">
+                                        CheckoutProcessTest
+                                    </option>
+                                </optgroup>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn-primary" style="padding: 0.45rem 1rem; font-size: 0.85rem;" 
+                                th:disabled="${queueData['running'] == true}">
+                            <span class="material-symbols-outlined">play_arrow</span> Start Execution
+                        </button>
+                    </form>
+
+                    <button class="btn-secondary" style="padding: 0.45rem 1rem; font-size: 0.85rem;" 
+                            th:disabled="${queueData['running'] == false}"
+                            hx-post="/aura-test-manager/queue/stop" 
+                            hx-target="#mainViewContainer" 
+                            hx-swap="innerHTML">
+                        <span class="material-symbols-outlined">stop</span> Stop
+                    </button>
+
+                    <button class="btn-secondary" style="padding: 0.45rem 0.8rem; font-size: 0.85rem;" 
+                            hx-post="/aura-test-manager/queue/clear-logs" 
+                            hx-target="#mainViewContainer" 
+                            hx-swap="innerHTML">
+                        <span class="material-symbols-outlined">delete_sweep</span> Clear Logs
+                    </button>
+                </div>
+            </div>
+
+            <!-- METRICS CARDS ROW -->
+            <div class="metrics-grid" style="margin-top: 1rem;">
+                <div class="metric-card" style="--card-accent: var(--accent-primary)">
+                    <div class="metric-label">Total Tests Run</div>
+                    <div class="metric-val" style="color: var(--accent-primary);" th:text="${queueData['testsRun']}">0</div>
+                </div>
+                <div class="metric-card" style="--card-accent: var(--status-pass)">
+                    <div class="metric-label">Passed</div>
+                    <div class="metric-val" style="color: var(--status-pass);" th:text="${queueData['passed']}">0</div>
+                </div>
+                <div class="metric-card" style="--card-accent: var(--status-unknown-fail)">
+                    <div class="metric-label">Failed / Errors</div>
+                    <div class="metric-val" style="color: var(--status-unknown-fail);" th:text="${queueData['failed']}">0</div>
+                </div>
+                <div class="metric-card" style="--card-accent: var(--status-ignored)">
+                    <div class="metric-label">Skipped</div>
+                    <div class="metric-val" style="color: var(--status-ignored);" th:text="${queueData['skipped']}">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LIVE TERMINAL CONSOLE -->
+        <div class="panel d-flex flex-column" style="padding: 0; overflow: hidden;">
+            <div class="panel-header" style="padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border-color);">
+                <div class="panel-title" style="font-size: 0.95rem;">
+                    <span class="material-symbols-outlined text-accent">terminal</span> Live Stdout Console Output
+                </div>
+                <div class="panel-subtitle">Auto-updates every second during execution.</div>
+            </div>
+
+            <div id="liveConsoleContainer" 
+                 th:attr="hx-get=${queueData['running'] == true ? '/aura-test-manager/queue/live-data' : null}, hx-trigger=${queueData['running'] == true ? 'every 1s' : null}"
+                 hx-target="#liveConsoleContainer"
+                 hx-swap="innerHTML"
+                 style="background: #0f172a; color: #f8fafc; font-family: 'JetBrains Mono', monospace, Courier; font-size: 0.825rem; padding: 1.25rem; height: 420px; overflow-y: auto; line-height: 1.6;">
+                
+                <div th:fragment="liveConsolePartial">
+                    <div th:each="log : ${queueData['logs']}" th:text="${log}" style="white-space: pre-wrap; word-break: break-all;"></div>
+                    <div th:if="${#lists.isEmpty(queueData['logs'])}" style="color: #64748b; font-style: italic;">
+                        No logs recorded yet. Select a test class and click "Start Execution" to run tests and view live stdout console logs.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: TEST DATA EDITOR -->
+    <div id="tabEditor" class="view-state d-flex flex-column gap-3">
+        <div class="panel" id="editorContainer" style="padding: 1.25rem;">
+            <div th:fragment="editorPartial" class="d-flex flex-column gap-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div style="font-weight: 700; color: var(--text-main); font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="material-symbols-outlined text-accent">edit_document</span>
+                        <span>YAML Test Dataset Editor</span>
+                    </div>
+
+                    <!-- FILE SELECTOR DROPDOWN -->
+                    <div class="d-flex align-items-center gap-2">
+                        <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Select Test Data File:</label>
+                        <select class="form-select" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; width: auto; border-radius: 6px;" 
+                                name="filePath" 
+                                hx-get="/aura-test-manager/editor/file" 
+                                hx-target="#editorContainer" 
+                                hx-swap="innerHTML">
+                            <option th:each="f : ${testFiles}" 
+                                    th:value="${f}" 
+                                    th:text="${f}" 
+                                    th:selected="${f == selectedFilePath}">
+                                sample.yaml
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div th:if="${saveSuccess == true}" class="alert alert-success" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;">
+                    ✓ Test dataset file saved successfully!
+                </div>
+
+                <!-- TEXTAREA CODE EDITOR -->
+                <form hx-post="/aura-test-manager/editor/save" hx-target="#editorContainer" hx-swap="innerHTML" class="d-flex flex-column gap-3">
+                    <input type="hidden" name="filePath" th:value="${selectedFilePath}">
+                    <textarea name="content" 
+                              style="width: 100%; height: 380px; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; padding: 1rem; background: var(--bg-main, #f8fafc); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); resize: vertical; line-height: 1.5;" 
+                              th:text="${fileContent}">
+                    </textarea>
+
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn-primary" style="padding: 0.5rem 1.25rem; font-size: 0.85rem;">
+                            <span class="material-symbols-outlined">save</span> Save YAML Dataset
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: RUNNER SETTINGS -->
+    <div id="tabSettings" class="view-state d-flex flex-column gap-3">
+        <div class="panel" style="padding: 1.5rem; max-width: 720px;">
+            <div style="font-weight: 700; color: var(--text-main); font-size: 1.05rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+                <span class="material-symbols-outlined text-accent">settings</span>
+                <span>Test Execution & Profile Settings</span>
+            </div>
+
+            <div th:if="${settingsSuccess == true}" class="alert alert-success" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; margin-bottom: 1rem;">
+                ✓ Settings updated successfully!
+            </div>
+
+            <form hx-post="/aura-test-manager/settings/save" hx-target="#mainViewContainer" hx-swap="innerHTML" class="d-flex flex-column gap-3">
+                <div>
+                    <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.35rem; display: block;">Target Environment Profile</label>
+                    <select name="environment" class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem; border-radius: 6px; width: 100%;">
+                        <option th:each="env : ${settings['availableEnvironments']}" 
+                                th:value="${env}" 
+                                th:text="${env}" 
+                                th:selected="${env == settings['selectedEnvironment']}">
+                            Environment
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.35rem; display: block;">Default Execution Browser</label>
+                    <select name="browser" class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem; border-radius: 6px; width: 100%;">
+                        <option th:each="b : ${settings['availableBrowsers']}" 
+                                th:value="${b}" 
+                                th:text="${b}" 
+                                th:selected="${b == settings['selectedBrowser']}">
+                            Chrome
+                        </option>
+                    </select>
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                    <input type="checkbox" name="headless" value="true" id="chkHeadless" th:checked="${settings['headless']}">
+                    <label for="chkHeadless" style="font-size: 0.85rem; color: var(--text-main); font-weight: 500;">Run Browser Headless Mode</label>
+                </div>
+
+                <div>
+                    <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.35rem; display: block;">Parallel Execution Threads</label>
+                    <input type="number" name="threads" class="form-control" style="padding: 0.45rem 0.75rem; font-size: 0.85rem; border-radius: 6px; width: 180px;" th:value="${settings['threadCount']}">
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <button type="submit" class="btn-primary" style="padding: 0.5rem 1.25rem; font-size: 0.85rem;">
+                        <span class="material-symbols-outlined">save</span> Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function switchAuraManagerTab(tabId, btn) {
+    document.querySelectorAll('#tabQueue, #tabEditor, #tabSettings').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.sub-tab-bar .sub-tab-btn').forEach(el => el.classList.remove('active'));
+    
+    const target = document.getElementById(tabId);
+    if (target) {
+        target.classList.add('active');
+    }
+    if (btn) {
+        btn.classList.add('active');
+    }
+}
+</script>
+
+</body>
+</html>

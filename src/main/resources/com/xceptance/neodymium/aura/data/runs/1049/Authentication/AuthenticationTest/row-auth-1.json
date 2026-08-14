@@ -1,0 +1,78 @@
+{
+  "id": "row-auth-1",
+  "title": "AuthenticationTest [OAuth2 Google Login]",
+  "testClass": "AuthenticationTest",
+  "classContainer": "classContainerAuthProcess",
+  "areaGroup": "areaGroupAuth",
+  "variationKey": "tb-auth-ds1",
+  "status": "passed-clean",
+  "bugs": [],
+  "location": "UNKNOWN",
+  "browser": "Chrome",
+  "engine": "AI",
+  "isRetried": false,
+  "retriedChip": "",
+  "comment": "",
+  "failure": "NONE",
+  "steps": {
+    "retried": false,
+    "totalTries": 1,
+    "tries": {
+      "1": {
+        "engineOrigin": "AI",
+        "error": "",
+        "beforeSteps": [
+          {
+            "num": 1,
+            "title": "Initialize Web Driver & Navigate to Login Page",
+            "engine": "Java",
+            "duration": "1.0s",
+            "timestamp": "14:22:10.020",
+            "passed": true,
+            "actions": [
+              {
+                "name": "NAVIGATE",
+                "target": "url=\"https://demo.xceptance.com/login\""
+              }
+            ]
+          }
+        ],
+        "coreSteps": [
+          {
+            "num": 2,
+            "title": "Perform OAuth2 Google Authentication Handshake",
+            "engine": "AI",
+            "duration": "2.1s",
+            "tokens": "2900 in / 84 out",
+            "timestamp": "14:22:11.020",
+            "passed": true,
+            "reasoning": "AI Agent identified OAuth2 consent dialog and automatically clicked 'Continue with Google'.",
+            "actions": [
+              {
+                "name": "CLICK",
+                "target": "#btn-google-oauth"
+              }
+            ]
+          }
+        ],
+        "afterSteps": [
+          {
+            "num": 3,
+            "title": "Verify User Token & Teardown Driver",
+            "engine": "Java",
+            "duration": "220ms",
+            "timestamp": "14:22:13.120",
+            "passed": true,
+            "actions": [
+              {
+                "name": "CLEAR_COOKIES",
+                "target": "ClearCookiesAction.java"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "areaName": "Authentication"
+}

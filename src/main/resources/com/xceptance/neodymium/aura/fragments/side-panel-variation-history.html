@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Test Base Variation History Drawer Side Panel Fragment -->
+<div th:fragment="variationHistoryPanel" class="side-panel-drawer" id="variationHistoryDrawer">
+    <div class="side-panel-resizer" id="variationHistoryResizer"></div>
+    
+    <!-- Drawer Header -->
+    <div class="p-3 border-bottom bg-light d-flex align-items-start justify-content-between">
+        <div>
+            <div class="h6 mb-1 fw-bold font-size-lg" id="tbHistSidePanelTitle">CheckoutProcessTest</div>
+            <div class="font-size-sm text-muted" id="tbHistSidePanelSubtitle">[Data Set 1: US CreditCard]</div>
+        </div>
+        <button type="button" class="btn-close js-close-side-panel" aria-label="Close"></button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="p-3 overflow-auto flex-grow-1 d-flex flex-column gap-3">
+        <!-- Execution History Across All Batches Box -->
+        <div class="card card-custom p-3">
+            <div class="card-header bg-transparent fw-bold font-size-lg border-0 px-0 d-flex align-items-center justify-content-between">
+                <span><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Execution History Across All Batches</span>
+            </div>
+
+            <!-- History Table -->
+            <div class="table-responsive">
+                <table class="table table-hover align-middle table-custom mb-0">
+                    <thead>
+                        <tr>
+                            <th>Run ID</th>
+                            <th>Batch Name</th>
+                            <th>Timestamp</th>
+                            <th>Engine Origin</th>
+                            <th>Status / Bugs</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbVariationHistoryTableBody">
+                        <tr>
+                            <td class="font-mono fw-bold text-primary">#1049</td>
+                            <td><span class="badge bg-primary-subtle text-primary border">NA Integration STG</span></td>
+                            <td class="font-size-sm text-muted">2026-08-07 14:20:00</td>
+                            <td><span class="badge badge-engine-java"><i class="fa-brands fa-java me-1"></i> Java</span></td>
+                            <td><span class="badge badge-status-known">Failed (Known Issue)</span> <span class="badge badge-status-known"><i class="fa-solid fa-bug"></i> BUG-4821</span></td>
+                            <td>
+                                <button class="btn btn-primary btn-sm font-size-sm" 
+                                        hx-get="/fragments/run-report.html" 
+                                        hx-target="#mainViewContainer" 
+                                        hx-swap="innerHTML">
+                                    <i class="fa-solid fa-arrow-right me-1"></i> Open Report
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
