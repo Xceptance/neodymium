@@ -113,6 +113,44 @@ public final class ExecuteActionsStep implements PipelineStep
             return;
         }
 
+        final PlaybookStep currentStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        if (currentStep != null)
+        {
+            currentStep.getActions().clear();
+            currentStep.getActions().addAll(actions);
+        }
+
+        // Check if InteractiveConsoleListener is attached to the session
+        org.neodymium.ai.event.InteractiveConsoleListener interactiveListener = null;
+        if (session.getEventBus() != null)
+        {
+            for (final org.neodymium.ai.event.ExecutionListener listener : session.getEventBus().getListeners())
+            {
+                if (listener instanceof org.neodymium.ai.event.InteractiveConsoleListener icl && icl.isInteractive())
+                {
+                    interactiveListener = icl;
+                    break;
+                }
+            }
+        }
+
+        if (interactiveListener != null)
+        {
+            final String userAction = interactiveListener.pauseBeforeActionExecution(context, currentStep);
+            if ("SKIP".equalsIgnoreCase(userAction))
+            {
+                if (currentStep != null)
+                {
+                    currentStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
+                }
+                return;
+            }
+            else if ("ABORT".equalsIgnoreCase(userAction) || "STOP".equalsIgnoreCase(userAction))
+            {
+                throw new ConclusiveFailureException("Interactive test execution aborted by user");
+            }
+        }
+
         // Initialize or fetch the concurrent recording collection tracking all executed playbooks actions
         @SuppressWarnings("unchecked")
         final List<Action> recordedActions = (List<Action>) context.getTransientData()

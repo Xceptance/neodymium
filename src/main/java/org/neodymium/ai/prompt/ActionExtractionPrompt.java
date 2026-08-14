@@ -140,6 +140,39 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
+        if (context != null)
+        {
+            final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            if (currentStepObj instanceof org.neodymium.ai.model.PlaybookStep step)
+            {
+                if (statusReasoning != null && !statusReasoning.isBlank())
+                {
+                    step.setReasoning(statusReasoning.trim());
+                }
+                else if (!actions.isEmpty())
+                {
+                    final StringBuilder sb = new StringBuilder();
+                    for (final Action action : actions)
+                    {
+                        if (action != null && action.getReasoning() != null && !action.getReasoning().isBlank())
+                        {
+                            if (!sb.isEmpty())
+                            {
+                                sb.append(" ");
+                            }
+                            sb.append(action.getReasoning().trim());
+                        }
+                    }
+                    if (!sb.isEmpty())
+                    {
+                        step.setReasoning(sb.toString());
+                    }
+                }
+                step.getActions().clear();
+                step.getActions().addAll(actions);
+            }
+        }
+
         if ("CONTINUE".equalsIgnoreCase(status))
         {
             context.getTransientData().put("KEY_IS_CONTINUATION_STEP", true);

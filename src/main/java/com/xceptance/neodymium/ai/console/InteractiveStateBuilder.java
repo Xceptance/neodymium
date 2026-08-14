@@ -240,6 +240,37 @@ public final class InteractiveStateBuilder
         blocks.add("after", afterArray);
         state.add("blocks", blocks);
 
+        // Top-level reasoning property for the active step
+        String topReasoning = null;
+        if (context != null)
+        {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (flatSteps != null && activeStepIndex >= 0 && activeStepIndex < flatSteps.size())
+            {
+                final PlaybookStep activeStep = flatSteps.get(activeStepIndex);
+                if (activeStep != null && activeStep.getReasoning() != null && !activeStep.getReasoning().isBlank())
+                {
+                    topReasoning = activeStep.getReasoning();
+                }
+            }
+        }
+        if (topReasoning == null)
+        {
+            if ("running".equalsIgnoreCase(runnerStatus))
+            {
+                topReasoning = "AI is thinking...";
+            }
+            else if ("paused".equalsIgnoreCase(runnerStatus))
+            {
+                topReasoning = "AI planned action(s). Please review and approve.";
+            }
+        }
+        if (topReasoning != null)
+        {
+            state.addProperty("reasoning", topReasoning);
+        }
+
         return GSON.toJson(state);
     }
 
@@ -342,11 +373,36 @@ public final class InteractiveStateBuilder
                     actObj.addProperty("target", action.getTarget() != null ? action.getTarget() : "");
                     actObj.addProperty("value", action.getValue() != null ? action.getValue() : "");
                     actObj.addProperty("description", action.getDescription() != null ? action.getDescription() : "");
+                    actObj.addProperty("reasoning", action.getReasoning() != null ? action.getReasoning() : "");
                     actionsArray.add(actObj);
                 }
             }
         }
         obj.add("actions", actionsArray);
+
+        if (step.getReasoning() != null && !step.getReasoning().isBlank())
+        {
+            obj.addProperty("reasoning", step.getReasoning());
+        }
+        else if (step.getActions() != null && !step.getActions().isEmpty())
+        {
+            final StringBuilder sb = new StringBuilder();
+            for (final Action action : step.getActions())
+            {
+                if (action != null && action.getReasoning() != null && !action.getReasoning().isBlank())
+                {
+                    if (!sb.isEmpty())
+                    {
+                        sb.append(" ");
+                    }
+                    sb.append(action.getReasoning().trim());
+                }
+            }
+            if (!sb.isEmpty())
+            {
+                obj.addProperty("reasoning", sb.toString());
+            }
+        }
 
         return obj;
     }

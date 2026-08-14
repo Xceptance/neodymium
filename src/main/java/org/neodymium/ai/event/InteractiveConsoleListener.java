@@ -146,35 +146,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 }
             }
 
-            if (this.interactive && !this.autoRun)
-            {
-                final String pauseId = java.util.UUID.randomUUID().toString();
-                this.consoleEngine.registerPauseId(pauseId);
+            final String stateJson = InteractiveStateBuilder.buildStateJson(
+                this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null);
 
-                final String stateJson = InteractiveStateBuilder.buildStateJson(
-                    this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId);
-
-                this.consoleEngine.pushState(stateJson);
-
-                LOG.info("[InteractiveConsoleListener] Pausing for user action at step {} (pauseId={})", stepIndex, pauseId);
-                try
-                {
-                    final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
-                    handleUserAction(userAction, currentStep, context);
-                }
-                catch (final InterruptedException e)
-                {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Interactive execution interrupted", e);
-                }
-            }
-            else
-            {
-                final String stateJson = InteractiveStateBuilder.buildStateJson(
-                    this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null);
-
-                this.consoleEngine.pushState(stateJson);
-            }
+            this.consoleEngine.pushState(stateJson);
         }
         else if (event instanceof StepFinishedEvent stepFinished)
         {
@@ -297,6 +272,72 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
     }
 
+    /**
+     * Pauses test execution for user review and approval of planned actions and AI reasoning.
+     *
+     * @param context the current execution context
+     * @param step the current playbook step
+     * @return the action string requested by the user ("RUN", "SKIP", "ABORT", etc.)
+     */
+    public String pauseBeforeActionExecution(final ExecutionContext context, final PlaybookStep step)
+    {
+        if (!this.interactive || this.autoRun || this.consoleEngine == null)
+        {
+            return "RUN";
+        }
+
+        int stepIndex = 0;
+        if (context != null && step != null)
+        {
+            @SuppressWarnings("unchecked")
+            final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (flatSteps != null && flatSteps.contains(step))
+            {
+                stepIndex = flatSteps.indexOf(step);
+            }
+        }
+
+        if (context != null)
+        {
+            try
+            {
+                if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                {
+                    final String base64 = com.codeborne.selenide.Selenide.screenshot(org.openqa.selenium.OutputType.BASE64);
+                    if (base64 != null && !base64.isEmpty())
+                    {
+                        context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
+                    }
+                }
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        final String pauseId = java.util.UUID.randomUUID().toString();
+        this.consoleEngine.registerPauseId(pauseId);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(
+            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId);
+
+        this.consoleEngine.pushState(stateJson);
+
+        LOG.info("[InteractiveConsoleListener] Pausing for user action review at step {} (pauseId={})", stepIndex, pauseId);
+        try
+        {
+            final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
+            final String action = userAction != null && userAction.has("action") ? userAction.get("action").getAsString().toUpperCase() : "RUN";
+            handleUserAction(userAction, step, context);
+            return action;
+        }
+        catch (final InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+            return "ABORT";
+        }
+    }
+
     private void handleUserAction(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
     {
         if (userAction == null)
@@ -321,6 +362,25 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 {
                     currentStep.setStatus(PlaybookStepStatus.SKIPPED);
                     LOG.info("[InteractiveConsoleListener] Step marked as SKIPPED per user request");
+                }
+                break;
+
+            case "EDIT":
+            case "UPDATE_STEP":
+            case "SAVE_STEP":
+                if (currentStep != null && userAction.has("newInstruction"))
+                {
+                    final String newInst = userAction.get("newInstruction").getAsString();
+                    if (newInst != null && !newInst.isBlank())
+                    {
+                        currentStep.setInstruction(newInst);
+                        if (currentStep.getActions() != null)
+                        {
+                            currentStep.getActions().clear();
+                        }
+                        currentStep.setReasoning(null);
+                        LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
+                    }
                 }
                 break;
 
