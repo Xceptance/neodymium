@@ -135,6 +135,21 @@ public final class PlaybookStep
     private String contextLevel;
 
     /**
+     * AI reasoning explanation generated for this step.
+     */
+    private String reasoning;
+
+    /**
+     * The recorded execution duration in milliseconds.
+     */
+    private Long durationMs;
+
+    /**
+     * The recorded pre-step delay in milliseconds.
+     */
+    private Long delayMs;
+
+    /**
      * Returns the recorded context level for this step.
      *
      * @return the context level name, or null if not recorded
@@ -701,5 +716,85 @@ public final class PlaybookStep
     public void setSchemaVersion(final String schemaVersion)
     {
         this.schemaVersion = schemaVersion;
+    }
+
+    /**
+     * Returns the AI reasoning associated with this step.
+     *
+     * @return the reasoning string, or null if not set
+     */
+    public String getReasoning()
+    {
+        return this.reasoning;
+    }
+
+    /**
+     * Sets the AI reasoning for this step.
+     *
+     * @param reasoning the reasoning string to set
+     */
+    public void setReasoning(final String reasoning)
+    {
+        this.reasoning = reasoning;
+    }
+
+    /**
+     * Returns the recorded execution duration in milliseconds.
+     *
+     * @return the execution duration in milliseconds, or {@code null} if not recorded
+     */
+    public Long getDurationMs()
+    {
+        return this.durationMs;
+    }
+
+    /**
+     * Sets the recorded execution duration in milliseconds.
+     *
+     * @param durationMs the execution duration in milliseconds
+     */
+    public void setDurationMs(final Long durationMs)
+    {
+        this.durationMs = durationMs;
+    }
+
+    /**
+     * Sets the recorded execution duration in milliseconds.
+     *
+     * @param durationMs the execution duration in milliseconds
+     */
+    public void setDurationMs(final long durationMs)
+    {
+        this.durationMs = durationMs;
+    }
+
+    /**
+     * Returns the recorded pre-step delay in milliseconds.
+     *
+     * @return the delay in milliseconds, or {@code null} if not recorded
+     */
+    public Long getDelayMs()
+    {
+        return this.delayMs;
+    }
+
+    /**
+     * Sets the recorded pre-step delay in milliseconds.
+     *
+     * @param delayMs the delay in milliseconds
+     */
+    public void setDelayMs(final Long delayMs)
+    {
+        this.delayMs = delayMs;
+    }
+
+    /**
+     * Sets the recorded pre-step delay in milliseconds.
+     *
+     * @param delayMs the delay in milliseconds
+     */
+    public void setDelayMs(final long delayMs)
+    {
+        this.delayMs = delayMs;
     }
 }
