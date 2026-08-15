@@ -83,6 +83,23 @@ public class SelectorSyntaxCheckerTest
         assertTrue(SelectorSyntaxChecker.isCssSelector("header > div.logo"));
         assertFalse(SelectorSyntaxChecker.isCssSelector("Plain text string"));
         assertFalse(SelectorSyntaxChecker.isCssSelector("//div[@id='foo']"));
+
+        // Standard attribute presence selectors
+        assertTrue(SelectorSyntaxChecker.isCssSelector("input.form-control[required]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".btn[disabled]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("a.link[href]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("button.btn-primary[disabled]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("form.checkout-form[novalidate]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("div.card[data-theme]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("span.author[itemprop]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("details[open]"));
+
+        // Standard pseudo-classes and state classes
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".active:hover"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".disabled:focus"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".active:nth-child(2)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".active:not(.hidden)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("button.btn.active:focus-visible"));
     }
 
     @Test

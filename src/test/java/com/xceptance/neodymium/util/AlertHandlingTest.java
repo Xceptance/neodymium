@@ -17,7 +17,7 @@ import java.util.Map;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 public class AlertHandlingTest extends AbstractNeodymiumTest
 {
     @BeforeAll

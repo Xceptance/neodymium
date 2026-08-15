@@ -43,7 +43,7 @@ public final class SelectorSyntaxChecker
     private static final Pattern CLASS_DOT_PATTERN = Pattern.compile("\\.[a-zA-Z_][a-zA-Z0-9_\\-]*");
     private static final Pattern DECIMAL_NUMBER_PATTERN = Pattern.compile("(^|\\s)\\d+\\.\\d+");
     private static final Pattern COMPOUND_SELECTOR_PATTERN = Pattern.compile(
-        "^([a-zA-Z*][a-zA-Z0-9_\\-]*|\\*)?(#[a-zA-Z0-9_\\-]+|\\.[a-zA-Z0-9_\\-\\\\/:]+|\\[[^\\]]+\\]|:[a-zA-Z0-9_\\-]+(\\([^)]*\\))?)*$"
+        "^([a-zA-Z*][a-zA-Z0-9_\\-]*|\\*)?(#[a-zA-Z0-9_\\-]+|\\.[a-zA-Z0-9_\\-]+|\\[[^\\]]+\\]|:{1,2}[a-zA-Z0-9_\\-]+(\\([^)]*\\))?)*$"
     );
 
     /**
@@ -155,9 +155,8 @@ public final class SelectorSyntaxChecker
         {
             toValidate = toValidate.substring(4).trim();
         }
-        final String sanitized = CssSelectorSanitizer.sanitize(toValidate);
 
-        return validateSelectorStructure(sanitized);
+        return validateSelectorStructure(toValidate);
     }
 
     /**
