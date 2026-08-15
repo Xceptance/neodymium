@@ -360,6 +360,34 @@ public class Action
     }
 
     /**
+     * Resolves all unique candidate locator strings ordered by confidence score descending,
+     * prepended with the primary target locator.
+     *
+     * @return ordered list of unique locator strings
+     */
+    public final List<String> getAllCandidateLocators()
+    {
+        final java.util.Set<String> set = new java.util.LinkedHashSet<>();
+        if (this.target != null && !this.target.isBlank())
+        {
+            set.add(this.target.trim());
+        }
+        if (this.candidateLocators != null)
+        {
+            final List<LocatorCandidate> sorted = new ArrayList<>(this.candidateLocators);
+            sorted.sort((a, b) -> Double.compare(b.getScore(), a.getScore()));
+            for (final LocatorCandidate candidate : sorted)
+            {
+                if (candidate != null && candidate.getLocator() != null && !candidate.getLocator().isBlank())
+                {
+                    set.add(candidate.getLocator().trim());
+                }
+            }
+        }
+        return new ArrayList<>(set);
+    }
+
+    /**
      * Returns the primary value of this action, or null if no values exist.
      *
      * @return the first value in the values list, or null

@@ -91,4 +91,29 @@ public class ActionTest
         assertEquals(250L, deserialized.getDurationMs());
         assertEquals(500L, deserialized.getDelayMs());
     }
+
+    @Test
+    public void testCandidateLocatorsResolution()
+    {
+        final Action action = new Action("CLICK", "#primary-btn", "Click primary");
+        assertEquals("#primary-btn", action.getBestCandidateLocator());
+        assertEquals(List.of("#primary-btn"), action.getAllCandidateLocators());
+
+        action.setCandidateLocators(List.of(
+            new LocatorCandidate("button.fallback-btn", "CSS", 0.6, "Class selector fallback"),
+            new LocatorCandidate("button[data-testid='order-submit']", "TEST_ID", 0.95, "Gold standard test ID"),
+            new LocatorCandidate("button.low-score", "CSS", 0.3, "Low score fallback")
+        ));
+
+        // Best candidate locator should resolve to the highest score
+        assertEquals("button[data-testid='order-submit']", action.getBestCandidateLocator());
+
+        // All candidate locators should start with primary target, followed by sorted candidates
+        final List<String> all = action.getAllCandidateLocators();
+        assertEquals(4, all.size());
+        assertEquals("#primary-btn", all.get(0));
+        assertEquals("button[data-testid='order-submit']", all.get(1));
+        assertEquals("button.fallback-btn", all.get(2));
+        assertEquals("button.low-score", all.get(3));
+    }
 }

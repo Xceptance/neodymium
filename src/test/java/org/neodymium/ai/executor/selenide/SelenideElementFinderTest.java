@@ -59,5 +59,53 @@ public class SelenideElementFinderTest
         final List<String> candidates4 = (List<String>) method.invoke(null, "text=Total Paid: $27.58");
         Assertions.assertEquals(1, candidates4.size());
         Assertions.assertEquals("text=Total Paid: $27.58", candidates4.get(0));
+
+        // Functional pseudo-classes with commas inside parentheses
+        @SuppressWarnings("unchecked")
+        final List<String> candidatesNot = (List<String>) method.invoke(null, "button:not(.a, .b)");
+        Assertions.assertEquals(1, candidatesNot.size());
+        Assertions.assertEquals("button:not(.a, .b)", candidatesNot.get(0));
+
+        @SuppressWarnings("unchecked")
+        final List<String> candidatesIs = (List<String>) method.invoke(null, ".card:is(.x, .y)");
+        Assertions.assertEquals(1, candidatesIs.size());
+        Assertions.assertEquals(".card:is(.x, .y)", candidatesIs.get(0));
+
+        @SuppressWarnings("unchecked")
+        final List<String> candidatesNth = (List<String>) method.invoke(null, "li:nth-child(2n, 3)");
+        Assertions.assertEquals(1, candidatesNth.size());
+        Assertions.assertEquals("li:nth-child(2n, 3)", candidatesNth.get(0));
+
+        @SuppressWarnings("unchecked")
+        final List<String> candidatesHas = (List<String>) method.invoke(null, "div:has(> span, > em)");
+        Assertions.assertEquals(1, candidatesHas.size());
+        Assertions.assertEquals("div:has(> span, > em)", candidatesHas.get(0));
+
+        @SuppressWarnings("unchecked")
+        final List<String> candidatesMulti = (List<String>) method.invoke(null, "#a, #b");
+        Assertions.assertEquals(2, candidatesMulti.size());
+        Assertions.assertEquals("#a", candidatesMulti.get(0));
+        Assertions.assertEquals("#b", candidatesMulti.get(1));
+    }
+
+    @Test
+    public void testNullAndEmptyTargetHandling()
+    {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement((String) null));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement("   "));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement((org.neodymium.ai.action.Action) null));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement("", List.of()));
+    }
+
+    @Test
+    public void testActionCandidateFallbackResolution()
+    {
+        final org.neodymium.ai.action.Action action = new org.neodymium.ai.action.Action("CLICK", "", "Click button");
+        action.setCandidateLocators(List.of(new org.neodymium.ai.action.LocatorCandidate("#valid-fallback-button", 0.9)));
+
+        // Even though target is empty, candidate locator is extracted and attempt does not throw IllegalArgumentException for empty target
+        // (will attempt resolution on fallback candidate)
+        final String firstCandidate = action.getAllCandidateLocators().get(0);
+        Assertions.assertEquals("#valid-fallback-button", firstCandidate);
     }
 }

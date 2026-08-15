@@ -114,24 +114,24 @@ public final class WaitAction implements BrowserActionPlugin
                     final String val = value.toLowerCase().trim();
                     if (val.contains("exist") || val.contains("present"))
                     {
-                        SelenideElementFinder.findElement(target).shouldBe(Condition.exist, Duration.ofSeconds(10));
+                        SelenideElementFinder.findElement(action).shouldBe(Condition.exist, Duration.ofSeconds(10));
                     }
                     else if (val.contains("hidden") || val.contains("invisible") || val.contains("absent"))
                     {
-                        SelenideElementFinder.findElement(target).shouldBe(Condition.hidden, Duration.ofSeconds(10));
+                        SelenideElementFinder.findElement(action).shouldBe(Condition.hidden, Duration.ofSeconds(10));
                     }
                     else if (val.contains("visible"))
                     {
-                        SelenideElementFinder.findElement(target).shouldBe(Condition.visible, Duration.ofSeconds(10));
+                        SelenideElementFinder.findElement(action).shouldBe(Condition.visible, Duration.ofSeconds(10));
                     }
                     else
                     {
-                        SelenideElementFinder.findElement(target).shouldHave(Condition.text(value), Duration.ofSeconds(10));
+                        SelenideElementFinder.findElement(action).shouldHave(Condition.text(value), Duration.ofSeconds(10));
                     }
                 }
                 else
                 {
-                    SelenideElementFinder.findElement(target).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
+                    SelenideElementFinder.findElement(action).shouldBe(Condition.visible, Duration.ofMillis(timeoutMs));
                 }
             }
         }

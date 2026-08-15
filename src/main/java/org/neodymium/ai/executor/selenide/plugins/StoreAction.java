@@ -87,7 +87,7 @@ public final class StoreAction implements BrowserActionPlugin
         }
         else
         {
-            final SelenideElement element = SelenideElementFinder.findElement(action.getTarget());
+            final SelenideElement element = SelenideElementFinder.findElement(action);
             final String text = element.getText();
             
             if (text != null)

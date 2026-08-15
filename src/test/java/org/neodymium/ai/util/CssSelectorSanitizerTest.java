@@ -99,5 +99,28 @@ public class CssSelectorSanitizerTest
         final String rawDataAi = "a.nav-link[data-ai=\"xc123\"]";
         final String expectedDataAi = "a.nav-link[data-ai=\"xc123\"]";
         Assertions.assertEquals(expectedDataAi, CssSelectorSanitizer.sanitize(rawDataAi));
+
+        // Attribute presence selectors (without equals sign)
+        final String rawRequired = "input.form-control[required]";
+        Assertions.assertEquals("input.form-control[required]", CssSelectorSanitizer.sanitize(rawRequired));
+
+        final String rawDisabled = ".btn[disabled]";
+        Assertions.assertEquals(".btn[disabled]", CssSelectorSanitizer.sanitize(rawDisabled));
+
+        final String rawHref = "a.link[href]";
+        Assertions.assertEquals("a.link[href]", CssSelectorSanitizer.sanitize(rawHref));
+    }
+
+    @Test
+    public void testSanitizePseudoClassesOnStateClasses()
+    {
+        final String rawActiveHover = ".active:hover";
+        Assertions.assertEquals(".active:hover", CssSelectorSanitizer.sanitize(rawActiveHover));
+
+        final String rawDisabledFocus = ".disabled:focus";
+        Assertions.assertEquals(".disabled:focus", CssSelectorSanitizer.sanitize(rawDisabledFocus));
+
+        final String rawFocusWithin = ".form-group.focus:focus-within";
+        Assertions.assertEquals(".form-group.focus:focus-within", CssSelectorSanitizer.sanitize(rawFocusWithin));
     }
 }

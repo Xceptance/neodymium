@@ -65,7 +65,7 @@ public final class KeyPressAction implements BrowserActionPlugin
             // Ignore, not a standard Keys enum
         }
 
-        com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(target);
+        com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action);
         if ("body".equalsIgnoreCase(target.trim()) || "html".equalsIgnoreCase(target.trim()))
         {
             try

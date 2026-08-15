@@ -341,7 +341,7 @@ public final class ExecuteActionsStep implements PipelineStep
                         try
                         {
                             final org.openqa.selenium.WebDriver driver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-                            final com.codeborne.selenide.SelenideElement found = org.neodymium.ai.executor.selenide.SelenideElementFinder.findElement(resolvedAction.getTarget());
+                            final com.codeborne.selenide.SelenideElement found = org.neodymium.ai.executor.selenide.SelenideElementFinder.findElement(resolvedAction);
                             if (found != null && found.toWebElement() != null)
                             {
                                 final String improvedLocator = org.neodymium.ai.util.LocatorImprover.improveLocator(driver, found.toWebElement(), resolvedAction.getTarget());

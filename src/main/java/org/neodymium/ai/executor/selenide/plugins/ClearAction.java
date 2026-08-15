@@ -49,7 +49,7 @@ public final class ClearAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            SelenideElementFinder.findElement(action.getTarget()).clear();
+            SelenideElementFinder.findElement(action).clear();
         }
     }
 }

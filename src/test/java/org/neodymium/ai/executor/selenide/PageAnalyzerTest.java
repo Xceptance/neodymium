@@ -156,4 +156,27 @@ public class PageAnalyzerTest extends BaseAiTest
             com.codeborne.selenide.Selenide.closeWebDriver();
         }
     }
+
+    @Test
+    public void testCleanDomStructureWithoutSel() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/AssertActionTest/SelectOptionTest.html");
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+
+            final String leanDom = analyzer.captureSimplifiedDom(ContextLevel.LEAN);
+            assertNotNull(leanDom);
+            org.junit.jupiter.api.Assertions.assertFalse(leanDom.contains("sel="), "LEAN DOM should NOT contain 'sel=' attributes");
+            assertTrue(leanDom.contains("<select id=\"country-select\""), "LEAN DOM should contain select element with standard id");
+            assertTrue(leanDom.contains("data-ai="), "LEAN DOM should contain data-ai attributes");
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
+    }
 }

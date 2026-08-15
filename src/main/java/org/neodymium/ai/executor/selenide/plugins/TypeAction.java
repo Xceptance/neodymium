@@ -49,7 +49,7 @@ public final class TypeAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            SelenideElementFinder.findElement(action.getTarget()).val(action.getValue());
+            SelenideElementFinder.findElement(action).val(action.getValue());
         }
     }
 }

@@ -63,6 +63,16 @@ public class SelectorSyntaxCheckerTest
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Thank you for your purchase!"));
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType(null));
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("  "));
+
+        // Plain text containing periods, numbers, abbreviations, and currencies
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Dr. Oetker Pizza"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Total 1.234,00 EUR"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Vielen Dank. Ihre Bestellung"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Order No. 12345"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("26.99 CAD $"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Canada (FR)"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Art.-Nr. 123"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("z.B. Test"));
     }
 
     @Test

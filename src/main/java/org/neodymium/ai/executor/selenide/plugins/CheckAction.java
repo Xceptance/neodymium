@@ -47,7 +47,7 @@ public final class CheckAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null && !action.getTarget().isBlank())
         {
-            final SelenideElement element = SelenideElementFinder.findElement(action.getTarget());
+            final SelenideElement element = SelenideElementFinder.findElement(action);
             if (!element.isSelected())
             {
                 element.click();

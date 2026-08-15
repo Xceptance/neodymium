@@ -49,7 +49,7 @@ public final class ClickAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action.getTarget());
+            final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action);
             
             // Safety net: If the element is an anchor and is visually hidden for accessibility, 
             // native clicking it directly often bypasses the parent container's event listeners or navigates away.

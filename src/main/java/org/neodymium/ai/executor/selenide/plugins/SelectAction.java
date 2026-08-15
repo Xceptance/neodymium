@@ -50,9 +50,8 @@ public final class SelectAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null && action.getValue() != null)
         {
-            final String target = action.getTarget();
             final String value = action.getValue();
-            final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(target);
+            final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action);
             try
             {
                 final int index = Integer.parseInt(value);

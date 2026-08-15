@@ -267,108 +267,6 @@ public class PageAnalyzer
                     return results;
                 }
 
-                // Builds a highly unique, compact CSS selector for the element to serve as alternative locator
-                function generateSelector(el) {
-                    // Helper to check if a selector matches exactly one element in the current DOM scope
-                    function isUnique(sel) {
-                        try {
-                            return document.querySelectorAll(sel).length === 1;
-                        } catch (e) {
-                            return false;
-                        }
-                    }
-
-                    // Helper to safely escape special CSS characters (such as dots or colons in IDs or class names)
-                    function escapeIdentifier(str) {
-                        if (typeof CSS !== 'undefined' && CSS.escape) {
-                            return CSS.escape(str);
-                        }
-                        return str;
-                    }
-
-                    // Step 1: Check for unique immediate attributes (ID or Name or data-testid) to keep selectors minimal
-                    if (el.id) {
-                        var idSel = '#' + escapeIdentifier(el.id);
-                        if (isUnique(idSel)) {
-                            return idSel;
-                        }
-                    }
-
-                    var tag = el.tagName ? el.tagName.toLowerCase() : '';
-                    var name = el.getAttribute ? el.getAttribute('name') : null;
-                    if (name) {
-                        var nameSel = tag + "[name='" + name.replaceAll("'", "\\\\'") + "']";
-                        if (isUnique(nameSel)) {
-                            return nameSel;
-                        }
-                    }
-
-                    var testId = el.getAttribute ? (el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa')) : null;
-                    if (testId) {
-                        var testSel = tag + "[data-testid='" + testId.replaceAll("'", "\\\\'") + "']";
-                        if (isUnique(testSel)) {
-                            return testSel;
-                        }
-                    }
-
-                    // Step 2: Climb the DOM hierarchy to construct a deterministic unique path
-                    var path = [];
-                    var current = el;
-
-                    // Walk upwards until we hit body/html or an ancestor with a unique ID
-                    while (current && current.nodeType === 1) { // 1 represents Node.ELEMENT_NODE
-                        var currentTag = current.tagName ? current.tagName.toLowerCase() : '';
-
-                        // If we reach body or html, append and terminate
-                        if (currentTag === 'body' || currentTag === 'html') {
-                            path.unshift(currentTag);
-                            break;
-                        }
-
-                        // Terminate early if the ancestor has a globally unique ID
-                        if (current.id) {
-                            var idSel = '#' + escapeIdentifier(current.id);
-                            if (isUnique(idSel)) {
-                                path.unshift(idSel);
-                                break;
-                            }
-                        }
-
-                        // Construct current path segment starting with tag name
-                        var segment = currentTag;
-
-                        // Append class names to segment to increase specificity
-                        var className = current.className;
-                        if (typeof className === 'string' && className.trim()) {
-                            var classes = className.trim().split(new RegExp('\\s+')).filter(Boolean);
-                            if (classes.length > 0) {
-                                segment += '.' + classes.map(escapeIdentifier).join('.');
-                            }
-                        }
-
-                        // Disambiguate among siblings sharing the same tag using :nth-of-type(index)
-                        if (current.parentNode && current.parentNode.children) {
-                            var siblings = Array.from(current.parentNode.children);
-                            var sameTagSiblings = siblings.filter(function(s) {
-                                return s.tagName === current.tagName;
-                            });
-                            if (sameTagSiblings.length > 1) {
-                                var index = sameTagSiblings.indexOf(current) + 1;
-                                segment += ':nth-of-type(' + index + ')';
-                            }
-                        }
-
-                        // Insert the computed segment at the beginning of the path
-                        path.unshift(segment);
-
-                        // Walk up to parent node
-                        current = current.parentNode;
-                    }
-
-                    // Return final constructed path
-                    return path.join(' > ');
-                }
-
                 // Captures structured information for matched DOM elements (inputs, links, buttons, etc.)
                 function captureElements(cssSelector, label) {
                     var results = [];
@@ -415,7 +313,6 @@ public class PageAnalyzer
                                 multiple: el.hasAttribute('multiple') ? 'true' : null,
                                 value: getElementValue(el, label),
                                 options: options,
-                                selector: generateSelector(el),
                                 automationId: autoId,
                                 domElement: el
                             });
@@ -472,7 +369,6 @@ public class PageAnalyzer
                                 multiple: el.hasAttribute('multiple') ? 'true' : null,
                                 value: getElementValue(el, label),
                                 options: options,
-                                selector: generateSelector(el),
                                 automationId: autoId,
                                 domElement: el
                             });
@@ -632,7 +528,6 @@ public class PageAnalyzer
                             ariaLabel: el.getAttribute('aria-label'),
                             value: getElementValue(el, tag),
                             options: options,
-                            selector: generateSelector(el),
                             automationId: autoId,
                             parentText: el.getAttribute('data-parent-text') || null
                         };
@@ -667,7 +562,6 @@ public class PageAnalyzer
                         var autoIdContainer = assignId(el);
                         return {
                             nodeType: 'container',
-                            nodeType: 'container',
                             tagName: tag,
                             id: el.id || null,
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
@@ -699,7 +593,6 @@ public class PageAnalyzer
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
                             text: textContent,
                             id: el.id || null,
-                            selector: generateSelector(el),
                             automationId: autoId
                         };
                         if (includesRich) {
@@ -1338,14 +1231,6 @@ public class PageAnalyzer
         } else {
             dom.append("/>\n");
         }
-    }
-
-    /**
-     * Escapes special CSS characters in an identifier to match the CSS.escape
-     * specification.
-     */
-    private String escapeCssIdentifier(final String str) {
-        return str.replaceAll("([!\"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])", "\\\\$1");
     }
 
     /**

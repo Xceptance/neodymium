@@ -27,8 +27,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Utility class for syntax classification of target locator candidates into CSS, XPath, or Plain Text.
  * <p>
- * Combines structural CSS pattern analysis and JDK {@link XPathFactory} (for XPath syntax validation)
- * to prevent structured CSS/XPath locators from falling back to literal text content searching in element finders.
+ * Combines structural CSS grammar validation and JDK {@link XPathFactory} (for XPath syntax validation)
+ * to accurately categorize locators and prevent structured CSS/XPath locators from falling back
+ * to literal text content searching in element finders.
  * </p>
  *
  * @author AI-generated: Gemini 3.5 Pro
@@ -38,8 +39,12 @@ public final class SelectorSyntaxChecker
 {
     private static final Logger LOG = LoggerFactory.getLogger(SelectorSyntaxChecker.class);
 
-    private static final Pattern STRUCTURAL_CSS_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-\\*\n\r\t ]*([#\\.\\[\\:>]).*$");
     private static final Pattern PSEUDO_CLASS_PATTERN = Pattern.compile(":[a-zA-Z\\-]+\\b");
+    private static final Pattern CLASS_DOT_PATTERN = Pattern.compile("\\.[a-zA-Z_][a-zA-Z0-9_\\-]*");
+    private static final Pattern DECIMAL_NUMBER_PATTERN = Pattern.compile("(^|\\s)\\d+\\.\\d+");
+    private static final Pattern COMPOUND_SELECTOR_PATTERN = Pattern.compile(
+        "^([a-zA-Z*][a-zA-Z0-9_\\-]*|\\*)?(#[a-zA-Z0-9_\\-]+|\\.[a-zA-Z0-9_\\-\\\\/:]+|\\[[^\\]]+\\]|:[a-zA-Z0-9_\\-]+(\\([^)]*\\))?)*$"
+    );
 
     /**
      * Enumeration of candidate target locator types.
@@ -82,7 +87,7 @@ public final class SelectorSyntaxChecker
             return SelectorType.CSS;
         }
 
-        // 2. CSS Syntax Validation via structural indicators
+        // 2. CSS Syntax Validation
         if (isCssSelector(clean))
         {
             return SelectorType.CSS;
@@ -98,7 +103,7 @@ public final class SelectorSyntaxChecker
     }
 
     /**
-     * Checks whether a candidate string is syntactically a CSS selector using structural checks.
+     * Checks whether a candidate string is syntactically a valid CSS selector.
      *
      * @param candidate the cleaned string candidate
      * @return true if candidate is a CSS selector; false otherwise
@@ -112,29 +117,92 @@ public final class SelectorSyntaxChecker
 
         final String clean = candidate.trim();
 
-        // Explicit CSS indicators (ID, class, attribute, prefix)
-        if (clean.startsWith("#") || clean.startsWith(".") || clean.startsWith("[") || clean.startsWith("css=") || clean.startsWith("[data-ai="))
+        // Explicit CSS prefixes
+        if (clean.startsWith("css=") || clean.startsWith("[data-ai="))
         {
             return true;
         }
 
-        // Plain text with colon punctuation (e.g., "Search Results for: neodymium")
-        if (clean.contains(": ") && !clean.startsWith(":") && !clean.contains(">") && !clean.contains("#") && !clean.contains("."))
+        // Plain text heuristics (sentences, prices, punctuation, abbreviations)
+        if (clean.contains(": ") || clean.contains(". ") || clean.endsWith(".")
+            || clean.contains("$") || clean.contains("€") || clean.contains("£") || clean.contains("¥") || clean.contains("zł")
+            || clean.contains("!") || clean.contains("?"))
         {
             return false;
         }
 
-        // Must contain structural CSS tokens (#, ., [, >, or pseudo-class :[a-z])
-        if (!clean.contains("#") && !clean.contains(".") && !clean.contains("[") && !clean.contains(">"))
+        // Must contain structural CSS tokens (#, ., [, >, ~, +, or pseudo-class :[a-z])
+        final boolean hasId = clean.contains("#");
+        final boolean hasBracket = clean.contains("[") && clean.contains("]");
+        final boolean hasCombinator = clean.contains(">") || clean.contains("~") || clean.contains("+");
+        final boolean hasClassDot = CLASS_DOT_PATTERN.matcher(clean).find();
+        final boolean hasPseudoClass = PSEUDO_CLASS_PATTERN.matcher(clean).find();
+
+        if (!hasId && !hasBracket && !hasCombinator && !hasClassDot && !hasPseudoClass)
         {
-            final boolean hasPseudoClass = PSEUDO_CLASS_PATTERN.matcher(clean).find() && !clean.contains(": ");
-            if (!hasPseudoClass)
+            return false;
+        }
+
+        // Check for plain decimal numbers (e.g. "Total 1.234,00 EUR" or "26.99 CAD")
+        if (DECIMAL_NUMBER_PATTERN.matcher(clean).find())
+        {
+            return false;
+        }
+
+        // Validate structure segment by segment
+        String toValidate = clean;
+        if (toValidate.toLowerCase().startsWith("css="))
+        {
+            toValidate = toValidate.substring(4).trim();
+        }
+        final String sanitized = CssSelectorSanitizer.sanitize(toValidate);
+
+        return validateSelectorStructure(sanitized);
+    }
+
+    /**
+     * Validates that all tokens and combinators within a CSS selector string adhere to CSS grammar.
+     */
+    private static boolean validateSelectorStructure(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return false;
+        }
+
+        // Split on top-level commas to validate selector lists (e.g. "#a, #b")
+        final String[] listParts = selector.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)(?=(?:[^']*'[^']*')*[^']*$)");
+        for (final String part : listParts)
+        {
+            final String trimmedPart = part.trim();
+            if (trimmedPart.isEmpty())
             {
                 return false;
             }
+
+            // Split on combinators and whitespace
+            // Normalize combinators: " > ", " + ", " ~ " -> " "
+            final String normalized = trimmedPart
+                .replaceAll("\\s*[>+~]\\s*", " ")
+                .trim();
+
+            if (normalized.isEmpty())
+            {
+                return false;
+            }
+
+            // Split into individual compound selectors
+            final String[] compoundSelectors = normalized.split("\\s+");
+            for (final String compound : compoundSelectors)
+            {
+                if (compound.isEmpty() || !COMPOUND_SELECTOR_PATTERN.matcher(compound).matches())
+                {
+                    return false;
+                }
+            }
         }
 
-        return STRUCTURAL_CSS_PATTERN.matcher(clean).matches();
+        return true;
     }
 
     /**
