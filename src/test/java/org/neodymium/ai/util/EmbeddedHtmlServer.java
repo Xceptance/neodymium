@@ -1163,6 +1163,7 @@ public final class EmbeddedHtmlServer
                 
                 if ("snippets/products".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateProductFilter();
                     final String reqUri = exchange.getRequestURI().toString();
                     final String cat = getQueryParam(reqUri, "category");
                     final String sort = getQueryParam(reqUri, "sort");
@@ -1280,6 +1281,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/add".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartAdd();
                     String productId = params.get("productId");
                     final String size = params.get("size");
                     if (productId != null)
@@ -1297,6 +1299,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/update".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartUpdate();
                     final String productId = params.get("productId");
                     final int qty = Integer.parseInt(params.getOrDefault("quantity", "0"));
                     if (productId != null)
@@ -1315,6 +1318,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/remove".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartRemove();
                     final String productId = params.get("productId");
                     if (productId != null)
                     {
@@ -1332,6 +1336,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/coupon".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartCoupon();
                     final String coupon = params.getOrDefault("couponCode", "").trim();
                     if (coupon.isEmpty())
                     {
@@ -1355,11 +1360,13 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/dropdown".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartDropdown();
                     sendResponse(exchange, 200, "text/html", getCartDropdownHtml(cart, trans, activeCountry, qualitySuffix));
                     return;
                 }
                 else if ("search/suggest".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateSearchSuggest();
                     final String query = params.getOrDefault("q", "").trim().toLowerCase();
                     if (query.isEmpty())
                     {
@@ -1428,6 +1435,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("auth/login".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateAuthLogin();
                     final String email = params.getOrDefault("email", "").trim();
                     final String password = params.getOrDefault("password", "");
                     
@@ -1457,6 +1465,7 @@ public final class EmbeddedHtmlServer
                         sendResponse(exchange, 405, "text/plain", "Method Not Allowed: Registration requires PUT");
                         return;
                     }
+                    VerlaConfiguration.getInstance().simulateAuthRegister();
                     if (LOG.isDebugEnabled())
                     {
                         LOG.debug("Processing registration: email={}", params.get("email"));
@@ -1594,15 +1603,8 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("checkout/purchase".equals(apiMethod))
                 {
-                    // Simulate server response time deterministically
-                    try
-                    {
-                        Thread.sleep(50L);
-                    }
-                    catch (final InterruptedException e)
-                    {
-                        Thread.currentThread().interrupt();
-                    }
+                    // Simulate payment gateway and order processing latency
+                    VerlaConfiguration.getInstance().simulatePurchase();
 
                     // Checkout processing logic
                     final String firstName = params.getOrDefault("firstName", "").trim();
@@ -1748,6 +1750,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("order/lookup".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateOrderLookup();
                     final String orderNumber = params.getOrDefault("orderNumber", "").trim();
                     final String zipCode = params.getOrDefault("zipCode", "").trim();
                     
@@ -1829,6 +1832,11 @@ public final class EmbeddedHtmlServer
             else
             {
                 pageResource = pagePath;
+            }
+
+            if ("plp.html".equals(pageResource) && exchange.getRequestURI().getQuery() != null && exchange.getRequestURI().getQuery().contains("q="))
+            {
+                VerlaConfiguration.getInstance().simulateSearchQuery();
             }
 
             final String templateHtml = renderTemplate(qualitySuffix, pageResource, new HashMap<>(), activeCountry, trans, currentUser, cart, exchange.getRequestURI().toString(), isHtmx, hxTarget, isPwaRouter);

@@ -28,7 +28,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 
 import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.ai.util.VerlaConfiguration;
 import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 /**
  * Endpoint integration test class testing the VÉRLA e-commerce backend APIs.
@@ -406,5 +408,85 @@ public class EndpointsTest extends BaseAiTest
         final HttpResponse<String> checkoutResp = client.send(checkoutReq, HttpResponse.BodyHandlers.ofString());
         Assertions.assertEquals(200, checkoutResp.statusCode());
         Assertions.assertTrue(checkoutResp.body().contains("checkout-form-container"));
+    }
+
+    /**
+     * Test runtime latency simulation on Add to Cart, Search Suggest, and Checkout Purchase endpoints.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testRuntimeLatencySimulation() throws IOException, InterruptedException
+    {
+        final int port = server.getPort();
+        VerlaConfiguration.resetInstance();
+
+        // 1. Measure Add to Cart latency (configured 150-300ms)
+        final long startAdd = System.currentTimeMillis();
+        final HttpRequest addReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-perfect/api/cart/add"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .POST(HttpRequest.BodyPublishers.ofString("productId=SKU-TOP-1000&quantity=1"))
+            .build();
+        final HttpResponse<String> addResp = client.send(addReq, HttpResponse.BodyHandlers.ofString());
+        final long durationAdd = System.currentTimeMillis() - startAdd;
+        Assertions.assertEquals(200, addResp.statusCode());
+        Assertions.assertTrue(durationAdd >= 120L, "Add to cart should take >= 120ms, was " + durationAdd + "ms");
+
+        // 2. Measure Search Suggest latency (configured 100-220ms)
+        final long startSearch = System.currentTimeMillis();
+        final HttpRequest searchReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-perfect/api/search/suggest?q=shirt"))
+            .GET()
+            .build();
+        final HttpResponse<String> searchResp = client.send(searchReq, HttpResponse.BodyHandlers.ofString());
+        final long durationSearch = System.currentTimeMillis() - startSearch;
+        Assertions.assertEquals(200, searchResp.statusCode());
+        Assertions.assertTrue(durationSearch >= 80L, "Search suggest should take >= 80ms, was " + durationSearch + "ms");
+
+        // 3. Measure Checkout Purchase latency (configured 500-900ms)
+        final long startPurchase = System.currentTimeMillis();
+        final HttpRequest purchaseReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-perfect/api/checkout/purchase"))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .POST(HttpRequest.BodyPublishers.ofString("firstName=Jane&lastName=Doe&email=jane@example.com&country=US&street=123+St&city=Boston&state=MA&postcode=02108&cardType=Visa&cardNumber=1111222233334100&cardExpiry=12/29&cardCvv=123"))
+            .build();
+        final HttpResponse<String> purchaseResp = client.send(purchaseReq, HttpResponse.BodyHandlers.ofString());
+        final long durationPurchase = System.currentTimeMillis() - startPurchase;
+        Assertions.assertEquals(200, purchaseResp.statusCode());
+        Assertions.assertTrue(durationPurchase >= 450L, "Purchase should take >= 450ms, was " + durationPurchase + "ms");
+    }
+
+    /**
+     * Test that runtime latency can be quickly scaled or disabled per test run via VerlaConfiguration.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testRuntimeLatencyScalingOverride() throws IOException, InterruptedException
+    {
+        final int port = server.getPort();
+
+        // 1. Test scale 0.0 (instant execution) via VerlaConfiguration programmatic override
+        VerlaConfiguration.getInstance().setLatencyScale(0.0);
+        try
+        {
+            final long startInstant = System.currentTimeMillis();
+            final HttpRequest addReq = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/verla-perfect/api/cart/add"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("productId=SKU-TOP-1000&quantity=1"))
+                .build();
+            final HttpResponse<String> addResp = client.send(addReq, HttpResponse.BodyHandlers.ofString());
+            final long durationInstant = System.currentTimeMillis() - startInstant;
+            Assertions.assertEquals(200, addResp.statusCode());
+            Assertions.assertTrue(durationInstant < 100L, "Scaled to 0.0 should execute rapidly, was " + durationInstant + "ms");
+        }
+        finally
+        {
+            VerlaConfiguration.resetInstance();
+        }
     }
 }
