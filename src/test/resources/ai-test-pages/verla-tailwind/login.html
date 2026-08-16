@@ -1,0 +1,28 @@
+<div id="login-wrapper" class="auth-card">
+    <h2 class="font-serif text-2xl md:text-3xl font-semibold text-center mb-6 text-neutral-900">${lang_login}</h2>
+    
+    <!-- Inline login error display -->
+    <div class="error-message mb-4 text-center font-semibold">${auth_error}</div>
+
+    <form hx-post="api/auth/login" hx-target="#login-wrapper" hx-swap="outerHTML">
+        <div class="form-group">
+            <label for="email" class="form-label">${lang_email}</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="johndoe@example.com" required value="${input_email}">
+            <div class="error-message">${err_email}</div>
+        </div>
+        
+        <div class="form-group mb-6">
+            <label for="password" class="form-label">${lang_password}</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" required>
+            <div class="error-message">${err_password}</div>
+        </div>
+
+        <button type="submit" class="btn-primary w-full justify-center py-3 text-xs uppercase tracking-wider mb-5">
+            ${lang_login}
+        </button>
+
+        <p class="text-center text-xs text-neutral-500">
+            ${lang_noAccount} <a href="register.html" class="text-terracotta-500 font-semibold hover:text-terracotta-700">${lang_register}</a>
+        </p>
+    </form>
+</div>

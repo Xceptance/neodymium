@@ -1,0 +1,26 @@
+<section class="mx-auto max-w-[800px] py-5">
+    <h1 class="mb-6 font-serif text-4xl font-semibold">Contact Us</h1>
+    <p class="mb-7.5 text-base leading-[1.8] text-muted">
+        If you have any questions regarding your order, shipping, returns, or simply want to chat, we are here for you. Fill out the details below or email hello@verla-apparel.com.
+    </p>
+
+    <div class="rounded-lg border border-sand-200 bg-sand-50 p-8">
+        <form action="#" method="POST" onsubmit="event.preventDefault(); alert('Message sent successfully!');">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class="mb-5">
+                    <label class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]" for="contact-name">Name</label>
+                    <input type="text" id="contact-name" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" required placeholder="John Doe">
+                </div>
+                <div class="mb-5">
+                    <label class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]" for="contact-email">Email Address</label>
+                    <input type="email" id="contact-email" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" required placeholder="john@example.com">
+                </div>
+            </div>
+            <div class="mb-6">
+                <label class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]" for="contact-message">Message</label>
+                <textarea id="contact-message" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" rows="5" required placeholder="How can we help?"></textarea>
+            </div>
+            <button type="submit" class="rounded-lg bg-terracotta-500 px-6 py-3 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700">Send Message</button>
+        </form>
+    </div>
+</section>

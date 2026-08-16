@@ -89,7 +89,7 @@ To handle complex, compound, or ambiguous instructions, the pipeline executes a 
 * **Contextual Inputs**: The analysis receives the current step, the previously executed step's instruction (for flow context), and up to two subsequent steps' instructions.
 * **JIT Upfront Step Splitting**: If a compound step (e.g. `"Search for shirt, select size L, and click Checkout"`) is identified, the LLM splits the instruction into distinct leaf sub-steps. These are instantiated dynamically as child `PlaybookStep` instances and pushed onto the execution stack.
 * **Conservative Non-Splitting Invariants**: Single-target instructions with multiple descriptive clauses (e.g. `"Select standard shipping option (5-7 business days) for $5.00"`) or referential verification instructions (e.g. `"Verify order total matches previous summary"`) are strictly preserved as single steps.
-* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal initial interaction mode (Context Level) required for the step across the 7-tier context escalation ladder.
+* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal initial interaction mode (Context Level) required for the step across the 8-tier context escalation ladder.
 * **Prompt Optimization**: `pesap-pre-step-prompt.md` features a 56% token footprint reduction (~500 tokens $\rightarrow$ ~220 tokens), significantly lowering prompt overhead across test execution.
 * **Bypassing on Replay**: PESAP runs during live recording mode; replay runs skip this analysis and execute the already-split steps directly from the JSON companion.
 
@@ -97,30 +97,40 @@ To handle complex, compound, or ambiguous instructions, the pipeline executes a 
 
 ## 4.1 Tiered Context Escalation Ladder & Payload Modes
 
-Neodymium AI uses a **7-tier context level escalation ladder** that progresses deterministically when higher DOM fidelity or visual context is needed:
+Neodymium AI uses an **8-tier context level escalation hierarchy** organized into **Two Strictly Monotonic Escalation Tracks** ($L_i \subset L_{i+1}$) that ensure the model never loses DOM context when escalating:
 
-$$\text{HINT} \longrightarrow \mathbf{LEAN} \longrightarrow \mathbf{STANDARD} \longrightarrow \mathbf{RICH} \longrightarrow \mathbf{VISUAL} \longrightarrow \mathbf{VISUAL\_LEAN} \longrightarrow \mathbf{VISUAL\_RICH}$$
+$$\textbf{Track A (DOM Track): } \text{HINT} \longrightarrow \mathbf{MINIMAL} \longrightarrow \mathbf{LEAN} \longrightarrow \mathbf{STANDARD} \longrightarrow \mathbf{RICH} \longrightarrow \mathbf{VISUAL\_RICH}$$
+$$\textbf{Track B (Visual Track): } \mathbf{VISUAL} \longrightarrow \mathbf{VISUAL\_LEAN} \longrightarrow \mathbf{VISUAL\_RICH}$$
 
 ### Context Level Spectrum & Meaning
 
 | Context Level | Mode Type | Payload Content Description | Trigger Conditions / Use Cases |
 | :--- | :--- | :--- | :--- |
 | **`HINT`** | Text | **0 DOM Nodes.** Explicit selector hint provided (e.g. `(hint: #id)`). Saves 100% of DOM tokens. | When explicit CSS selector hint is provided in playbook step. |
-| **`LEAN`** | Text | **Interactive Elements + Headings + Container Skeleton + Concise Text Labels.** Filters out massive paragraph copy (`<p>`/`blockquote` > 120 chars). | Default mode for standard clicks, types, selects, and form interactions. |
+| **`MINIMAL`** | Text | **Interactive Form Controls Only.** Extracts inputs, textareas, selects, and form buttons without page chrome or paragraph copy (~300–800 tokens). | Ultra-lean default for form filling, sequential typing, and field entry. |
+| **`LEAN`** | Text | **Interactive Elements + Headings + Container Skeleton + Concise Text Labels.** Filters out massive paragraph copy (`<p>`/`blockquote` > 120 chars). | Standard mode for navigation links, buttons, and card triggers. |
 | **`STANDARD`** | Text | **`LEAN` + Standard Static Text.** Includes full static body `<p>` paragraph copy of any length, text spans, badges, and order totals. | Selected for text assertions, paragraph matching, or when `LEAN` escalates. |
 | **`RICH`** | Text | **`STANDARD` + Full HTML Metadata.** Includes all `data-*`, `title`, `aria-describedby` attributes, un-truncated URLs, and 5-level parent context. | Selected for SKU/data-attribute targeting, table sorting, or deep card disambiguation. |
-| **`VISUAL`** | Visual | **Viewport Screenshot + 0 DOM Element Nodes.** Pure visual assertion/check at standard screen size. | Triggered by `(visual)` check/assertion without element interaction. Uses viewport screenshot. |
+| **`VISUAL`** | Visual | **Viewport Screenshot + 0 DOM Element Nodes.** Pure visual assertion/check at standard screen size (~800–1,200 tokens). | Triggered by `(visual)` check/assertion without element interaction. Uses viewport screenshot. |
 | **`VISUAL_LEAN`** | Visual | **Full-Page Screenshot + `LEAN` DOM.** Visual element interaction. | Triggered upon visual escalation; uses full-page screenshot. |
-| **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. | Triggered by `(layout)` checks or final visual escalation; uses full-page screenshot. |
+| **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. Strictly preserves all DOM text and attributes. | Triggered by `(layout)` checks or cross-track escalation from `RICH`; uses full-page screenshot. |
 
 > **Screenshot Capture Scope Strategy**:
 > - **Viewport Screenshot**: Initial `VISUAL` steps (tagged `(visual)`) capture a standard viewport screenshot matching the active browser window size.
 > - **Immediate Full-Page Trigger**: Steps tagged with `(visual: full)` or `(visual:full)` capture a full-page screenshot immediately on the initial attempt while using ultra-lean `ContextLevel.VISUAL` (0 DOM element nodes).
 > - **Persistent Full-Page Escalation**: Once a step escalates visually (to `VISUAL_LEAN` or `VISUAL_RICH`) or starts with `(visual: full)`, screenshot capture **continuously preserves full-page mode** (capturing full document height beyond the fold, overlaid with a visual viewport border). It will never revert to a small viewport screenshot during retry escalations.
 
-### DOM Serialization Differences: `LEAN` vs `STANDARD` vs `RICH`
+### DOM Serialization Differences: `MINIMAL` vs `LEAN` vs `STANDARD` vs `RICH`
 
-To understand how `LEAN`, `STANDARD`, and `RICH` differ at runtime:
+To understand how `MINIMAL`, `LEAN`, `STANDARD`, and `RICH` differ at runtime:
+
+```html
+<!-- MINIMAL DOM Capture (Form Inputs & Action Buttons Only; Zero Surrounding Page Layout) -->
+<form id="quick-order-form" data-ai="xc81920a">
+  <input name="size" type="hidden" value="M" data-ai="xc93012b" />
+  <button class="btn-quick-add" type="submit" data-ai="xce624f1">ADD TO BAG</button>
+</form>
+```
 
 ```html
 <!-- LEAN DOM Capture (Interactive Elements + Headings + Concise Labels; Excludes Long Paragraph Copy) -->
@@ -166,13 +176,14 @@ To understand how `LEAN`, `STANDARD`, and `RICH` differ at runtime:
 </div>
 ```
 
-### Automatic Escalation Flow Example
+### Automatic Monotonic Escalation Flow Example
 
 When an action step cannot be fulfilled at the initial context level, the framework automatically escalates to the next level:
-1. **Initial Step**: `"Click 'Add to Cart'"` $\rightarrow$ Starts at **`LEAN`**.
-2. **Escalation 1 (`LEAN` $\rightarrow$ `STANDARD`)**: If text content or paragraph copy is missing from `LEAN`, LLM requests escalation to **`STANDARD`**.
-3. **Escalation 2 (`STANDARD` $\rightarrow$ `RICH`)**: If custom `data-*` attributes or deeper 5-level parent context are required to build a unique locator, escalates to **`RICH`**.
-4. **Escalation 3 (`RICH` $\rightarrow$ `VISUAL`)**: If DOM elements are unrendered or hidden, escalates to **`VISUAL`** (screenshot).
+1. **Initial Step**: Starts at **`MINIMAL`** (or `LEAN` / `VISUAL` based on PESAP prediction or explicit tags).
+2. **Escalation 1 (`MINIMAL` $\rightarrow$ `LEAN`)**: Expands to all interactive elements, navigation links, and section headings.
+3. **Escalation 2 (`LEAN` $\rightarrow$ `STANDARD`)**: Expands to static text, paragraphs, and order summary totals.
+4. **Escalation 3 (`STANDARD` $\rightarrow$ `RICH`)**: Expands to all `data-*` attributes, ARIA descriptions, tables, and deep parent ancestry.
+5. **Escalation 4 (`RICH` $\rightarrow$ `VISUAL_RICH`)**: Cross-track escalation attaches full-page screenshot while **strictly preserving all rich DOM text and attributes** (never regressing to 0 DOM nodes).
 
 ### 4.2 Dynamic Step Escalation Budget Model
 
@@ -578,7 +589,7 @@ flowchart TD
     B -->|"Illegal #xc... Selector / Volatile ID"| C["Throw ToLevelEscalationException"]
     B -->|"Valid Selector"| D["Execute Action against SUT"]
     
-    C --> E["Escalate Context Level (LEAN -> STANDARD -> VISUAL)"]
+    C --> E["Escalate Context Level (MINIMAL -> LEAN -> STANDARD -> RICH -> VISUAL_RICH)"]
     E --> F["Capture Higher Context State"]
     F --> G["Re-prompt LLM with Higher Context"]
     
@@ -591,15 +602,15 @@ flowchart TD
 1. **Early Volatile ID Rejection (`ActionExtractionPrompt`):**
    - When the LLM parses an action, target locators are evaluated against `VolatileIdDetector` rules (including configured `neodymium.ai.dom.volatileIdPatterns` and framework invariant `^xc[a-z0-9_]+$`).
    - If an action returns an illegal `#xc...` ID selector or a volatile ID, `ActionExtractionPrompt` throws `ToLevelEscalationException` directly during response parsing.
-   - **Result:** Context immediately escalates from `LEAN` to `STANDARD` (or `VISUAL`), capturing higher context and re-prompting the LLM with richer state before an execution attempt is made.
+   - **Result:** Context immediately escalates along the monotonic ladder (`MINIMAL` $\to$ `LEAN` $\to$ `STANDARD` $\to$ `RICH` $\to$ `VISUAL_RICH`), capturing higher context and re-prompting the LLM with richer state before an execution attempt is made.
 
 2. **No Magic Selection Fallbacks (`SelenideElementFinder`):**
    - `SelenideElementFinder` restricts `data-ai` attribute matching strictly to explicit `[data-ai=...]` or `data-ai=` selectors.
    - If the LLM returns an invalid ID selector like `#xck520w4`, `SelenideElementFinder` queries `id="xck520w4"` directly on the HTML DOM, failing cleanly instead of silently rewriting the selector under the hood.
 
 3. **Action Retry Context Escalation (`ExecuteActionsStep`):**
-   - When an action execution fails on SUT (e.g. `Element not found`), `ExecuteActionsStep` catches `HealingRequiredException` and automatically escalates `KEY_CURRENT_CONTEXT_LEVEL` to the next level (`LEAN` -> `STANDARD` -> `VISUAL`), capturing state before re-querying the LLM.
-   - **Result:** Eliminates retry loops at `LEAN` and ensures the LLM receives visual screenshot context to fix broken locators.
+   - When an action execution fails on SUT (e.g. `Element not found`), `ExecuteActionsStep` catches the failure and automatically escalates `KEY_CURRENT_CONTEXT_LEVEL` to the next level (`MINIMAL` $\to$ `LEAN` $\to$ `STANDARD` $\to$ `RICH` $\to$ `VISUAL_RICH`), capturing state before re-querying the LLM.
+   - **Result:** Monotonically escalates context with state re-capture at each level, ensuring the LLM receives full multimodal context to fix broken locators.
 
 4. **Extensible TargetExecutor Capability Abstraction:**
    - Decoupled from specific driver implementations via `TargetExecutor.supportsLocatorImprovement()`.
@@ -635,6 +646,21 @@ When an independent "second opinion" model is desired:
   neodymium.ai.judge.provider=ollama
   neodymium.ai.judge.model=llama3
   ```
+
+### C. Dynamic Candidate Prompt Injection & Detailed Judge Logging
+
+1. **Dynamic Schema Injection**:
+   To conserve tokens during standard execution, `ActionExtractionPrompt` appends the candidate locators generation rule (`CANDIDATE_LOCATORS_RULE`) **dynamically only when `neodymium.ai.judge.enabled=true`**. When the Quality Judge is disabled, the LLM prompt requests only the primary locator, keeping prompt and response tokens minimal.
+
+2. **Ambiguity Triggering (`ON_AMBIGUITY`)**:
+   Under `ON_AMBIGUITY` mode, the Quality Judge triggers when top candidate confidence scores are within $0.15$ of each other ($\text{Score}_1 - \text{Score}_2 < 0.15$), resolving locator ambiguity before executing on the browser.
+
+3. **Transparent Debug Logging**:
+   When `DEBUG` logging is enabled, `QualityJudgeStep` outputs:
+   - Input candidate locators with their strategies and confidence scores.
+   - The query instruction and target being evaluated.
+   - The formatted, pretty-printed raw JSON response received from the Quality Judge model.
+   - Trace-level logging for full compiled system and user prompts.
 
 ### D. Detailed Per-Call-Type Telemetry Breakdown
 
@@ -992,14 +1018,24 @@ session.execute(playbook)
 
 ---
 
-## 14. Selector Syntax Classification & Element Finder Guards
+## 25. Selector Syntax Classification & Element Finder Pipeline
 
-To prevent structured locator strategies from accidentally searching literal DOM text or code blocks when elements are absent, the framework integrates `SelectorSyntaxChecker`:
+To prevent structured locator strategies from accidentally searching literal DOM text or code blocks when elements are absent, the framework integrates `SelectorSyntaxChecker` and a streamlined 7-step resolution pipeline:
 
-### Combined Syntax Classifier (`SelectorSyntaxChecker`)
-* **XPath Validation:** Uses JDK native `javax.xml.xpath.XPathFactory` to validate expression syntax for candidates containing XPath indicators (`//`, `./`, `(/`, `xpath=`, `@`, `text()`, `contains(`).
-* **CSS Validation:** Validates explicit CSS prefixes (`#`, `.`, `[`, `css=`, `[data-ai=`) and structural CSS indicators, while distinguishing punctuation colons in text (e.g. `"Search Results for: neodymium"`) from CSS pseudo-classes.
-* **Element Finder Protection:** In `SelenideElementFinder`, Strategy 6 (Text Content Searching) is strictly guarded by `SelectorSyntaxChecker.determineType(clean) == SelectorType.TEXT`. Structured CSS or XPath locators will **never** fall through to literal DOM text or code block searches.
+### Fast Offline Syntax Classifier (`SelectorSyntaxChecker`)
+* **XPath Validation:** Uses JDK native `javax.xml.xpath.XPathFactory` to validate expression syntax for XPath expressions (`//...`, `xpath=...`).
+* **CSS Validation:** Uses jsoup `QueryParser.parse` with UI state pseudo-class normalization (`:hover`, `:focus`, `:focus-visible`, `:active`) and combinator validation to reliably identify valid W3C CSS selectors.
+* **Element Finder Protection:** In `SelenideElementFinder`, Strategy 6 (Text Content Searching) is strictly guarded by `SelectorSyntaxChecker.isCssSelector(clean)` and `SelectorSyntaxChecker.isXpathExpression(clean)`. Structured CSS or XPath locators will **never** fall through to literal DOM text or code block searches.
+
+### Streamlined 7-Step Runtime Resolution Pipeline (`SelenideElementFinder`)
+`SelenideElementFinder` executes a streamlined, deterministic 7-step dispatch without brittle Java-level regex pre-flight gates:
+1. **Automation Reference ID:** Direct check for unique `[data-ai="..."]` or `#xc...` identifiers.
+2. **Playwright Pseudo Translation:** Translates `:has-text(...)` and `text=...` via `LocatorResolver` into Selenide-compatible locators.
+3. **XPath Expression:** Direct execution of XPath expressions (`//...`).
+4. **W3C CSS Selector:** Resolution of standard CSS selectors via `LocatorResolver.resolve`.
+5. **Link Text Matching:** Exact anchor tag link text matching (`By.linkText`).
+6. **Semantic Text & ARIA Search:** Case-insensitive text and accessible name searching across interactive candidates.
+7. **Bare Tag Name Fallback:** Direct fallback to HTML tag names (`button`, `input`).
 
 ### Mode-Scoped Selenide W3C Locator Constraints
 When `ExecutionContext.KEY_TARGET_EXECUTOR` is operating in Selenide/WebDriver mode (`SelenideTargetExecutor`), `ActionExtractionPrompt` and `QualityJudgePrompt` append `SELENIDE_LOCATOR_RULE`:
@@ -1008,7 +1044,7 @@ When `ExecutionContext.KEY_TARGET_EXECUTOR` is operating in Selenide/WebDriver m
 
 ---
 
-## 15. Language-Agnostic `CONTINUE` Step Status & Multi-Stage Prelude Protocol
+## 26. Language-Agnostic `CONTINUE` Step Status & Multi-Stage Prelude Protocol
 
 To support interactive instructions (such as clicking a search toggle button or expanding a dropdown menu to reveal hidden form inputs) **without relying on any hardcoded human language string matching in Java code**, the framework supports the `CONTINUE` step status protocol:
 
@@ -1020,7 +1056,7 @@ To support interactive instructions (such as clicking a search toggle button or 
 
 ---
 
-## 16. Execution Timing Recording & Paced Replay Playback
+## 27. Execution Timing Recording & Paced Replay Playback
 
 To ensure faithful replay execution for asynchronous Single Page Applications (SPAs), HTMX/AJAX partial page updates, CSS micro-animations, and visual SSIM assertions, Neodymium AI records execution durations and delays into companion JSON recordings.
 
@@ -1038,14 +1074,3 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 
 ### C. Adaptive Visual Settle in Replay
 When executing visual verification steps (`(visual: full)` / SSIM comparison), replay honors `neodymium.ai.visual.postActionSettleMs` (and any recorded step delay) prior to capturing the screenshot. If transient repaint or dynamic animation occurs, a settle retry is automatically performed to guarantee stable visual comparisons.
-
-
-
-
-
-
-
-
-
-
-

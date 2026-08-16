@@ -537,7 +537,7 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    private static String getProductSizesSelectHtml(final String productId, final String category, final Map<String, String> trans)
+    private static String getProductSizesSelectHtml(final String productId, final String category, final Map<String, String> trans, final String quality)
     {
         if ("accessories".equals(category))
         {
@@ -551,9 +551,18 @@ public final class EmbeddedHtmlServer
         final String outOfStockText = trans != null ? trans.getOrDefault("outOfStock", "Out of stock") : "Out of stock";
 
         final StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"display: flex; gap: 12px; align-items: center;\">");
-        sb.append("<label for=\"size\" style=\"font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;\">").append(sizeLabel).append(":</label>");
-        sb.append("<select name=\"size\" id=\"size\" style=\"padding: 10px 16px; border: 1px solid var(--color-border); border-radius: var(--border-radius); background: var(--color-bg-primary); outline: none; cursor: pointer;\" required>");
+        if (isTailwindByClaude(quality))
+        {
+            sb.append("<div class=\"flex items-center gap-3\">");
+            sb.append("<label for=\"size\" class=\"text-[13px] font-semibold uppercase tracking-[0.05em]\">").append(sizeLabel).append(":</label>");
+            sb.append("<select name=\"size\" id=\"size\" class=\"cursor-pointer rounded-lg border border-sand-200 bg-white px-4 py-2.5 outline-none focus:border-terracotta-500\" required>");
+        }
+        else
+        {
+            sb.append("<div style=\"display: flex; gap: 12px; align-items: center;\">");
+            sb.append("<label for=\"size\" style=\"font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;\">").append(sizeLabel).append(":</label>");
+            sb.append("<select name=\"size\" id=\"size\" style=\"padding: 10px 16px; border: 1px solid var(--color-border); border-radius: var(--border-radius); background: var(--color-bg-primary); outline: none; cursor: pointer;\" required>");
+        }
 
         String defaultSel = "";
         if ("bottoms".equals(category))
@@ -797,6 +806,8 @@ public final class EmbeddedHtmlServer
         final VerlaHandler verlaHandler = new VerlaHandler();
 
         this.server.createContext("/", new LoggingHandler(resourceHandler));
+        this.server.createContext("/verla-tailwind-by-claude/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-tailwind/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
@@ -828,6 +839,8 @@ public final class EmbeddedHtmlServer
 
             this.httpsServer.setHttpsConfigurator(new HttpsConfigurator(sslContext));
             this.httpsServer.createContext("/", new LoggingHandler(resourceHandler));
+            this.httpsServer.createContext("/verla-tailwind-by-claude/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-tailwind/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
@@ -1048,7 +1061,15 @@ public final class EmbeddedHtmlServer
             
             // Extract the SUT Quality Suffix (perfect, normal, bad, modern-bad-wcag, modern-bad)
             final String qualitySuffix;
-            if (fullPath.startsWith("/verla-perfect/"))
+            if (fullPath.startsWith("/verla-tailwind-by-claude/"))
+            {
+                qualitySuffix = "tailwind-by-claude";
+            }
+            else if (fullPath.startsWith("/verla-tailwind/"))
+            {
+                qualitySuffix = "tailwind";
+            }
+            else if (fullPath.startsWith("/verla-perfect/"))
             {
                 qualitySuffix = "perfect";
             }
@@ -1230,7 +1251,12 @@ public final class EmbeddedHtmlServer
                             final String selectedClass = c.code.equals(activeCountry.code) ? "selected" : "";
                             final String flag = getCountryFlag(c.code);
                             // Perfect vs Normal/Bad styling
-                            if ("bad".equals(qualitySuffix))
+                            if (isTailwindByClaude(qualitySuffix))
+                            {
+                                sb.append("<li data-selected=\"").append(c.code.equals(activeCountry.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
+                                  .append(c.name).append(" ").append(flag).append("</li>");
+                            }
+                            else if ("bad".equals(qualitySuffix))
                             {
                                 sb.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
                                   .append(c.name).append(" ").append(flag).append("</div>");
@@ -1249,7 +1275,7 @@ public final class EmbeddedHtmlServer
                 {
                     final String country = exchange.getRequestURI().getQuery() != null ? getQueryParam(exchange.getRequestURI().getQuery(), "country") : activeCountry.code;
                     final String prefix = params.getOrDefault("prefix", "shipping-");
-                    sendResponse(exchange, 200, "text/html", getAddressFieldsHtml(country, locale, trans, prefix));
+                    sendResponse(exchange, 200, "text/html", getAddressFieldsHtml(country, locale, trans, prefix, qualitySuffix));
                     return;
                 }
                 else if ("cart/add".equals(apiMethod))
@@ -1359,22 +1385,40 @@ public final class EmbeddedHtmlServer
                         final Product p = matches.get(i);
                         final double price = p.salePrice != null ? p.salePrice : p.basePrice;
                         final String name = p.names.getOrDefault(locale, p.names.get("en"));
-                        sb.append("<a href=\"p/").append(p.slug).append(".html\" class=\"search-suggestion-item\">")
-                          .append("  <div class=\"search-suggestion-thumb\">")
-                          .append("    <svg viewBox=\"0 0 100 100\">").append(p.svgPath).append("</svg>")
-                          .append("  </div>")
-                          .append("  <div class=\"search-suggestion-info\">")
-                          .append("    <span class=\"search-suggestion-name\">").append(escapeHtml(name)).append("</span>")
-                          .append("    <span class=\"search-suggestion-price\">").append(formatPrice(price, activeCountry)).append("</span>")
-                          .append("  </div>")
-                          .append("</a>");
+                        if (isTailwindByClaude(qualitySuffix))
+                        {
+                            sb.append("<a href=\"p/").append(p.slug).append(".html\" class=\"flex items-center gap-3 border-b border-sand-200 px-4 py-2.5 text-ink transition-colors last:border-b-0 hover:bg-sand-50\">")
+                              .append("  <div class=\"flex h-9 w-9 shrink-0 items-center justify-center rounded border border-sand-200 bg-sand-50\">")
+                              .append("    <svg viewBox=\"0 0 100 100\" class=\"h-[70%] w-[70%] text-terracotta-500\">").append(p.svgPath).append("</svg>")
+                              .append("  </div>")
+                              .append("  <div class=\"flex flex-col text-left\">")
+                              .append("    <span class=\"text-[13px] font-medium\">").append(escapeHtml(name)).append("</span>")
+                              .append("    <span class=\"text-[11px] text-muted\">").append(formatPrice(price, activeCountry)).append("</span>")
+                              .append("  </div>")
+                              .append("</a>");
+                        }
+                        else
+                        {
+                            sb.append("<a href=\"p/").append(p.slug).append(".html\" class=\"search-suggestion-item\">")
+                              .append("  <div class=\"search-suggestion-thumb\">")
+                              .append("    <svg viewBox=\"0 0 100 100\">").append(p.svgPath).append("</svg>")
+                              .append("  </div>")
+                              .append("  <div class=\"search-suggestion-info\">")
+                              .append("    <span class=\"search-suggestion-name\">").append(escapeHtml(name)).append("</span>")
+                              .append("    <span class=\"search-suggestion-price\">").append(formatPrice(price, activeCountry)).append("</span>")
+                              .append("  </div>")
+                              .append("</a>");
+                        }
                     }
 
                     if (matches.size() > 6)
                     {
                         final int extra = matches.size() - 6;
                         final String viewAllUrl = "plp.html?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8.name());
-                        sb.append("<a href=\"").append(viewAllUrl).append("\" class=\"search-more-link\">")
+                        final String moreLinkClass = isTailwindByClaude(qualitySuffix)
+                            ? "block bg-sand-50 p-2.5 text-center text-xs font-medium text-terracotta-500 transition-colors hover:text-terracotta-700"
+                            : "search-more-link";
+                        sb.append("<a href=\"").append(viewAllUrl).append("\" class=\"").append(moreLinkClass).append("\">")
                           .append("+ ").append(extra).append(" more products. View all.")
                           .append("</a>");
                     }
@@ -1863,9 +1907,15 @@ public final class EmbeddedHtmlServer
 
             final String loginText = trans.getOrDefault("login", "Login");
             final String accountText = trans.getOrDefault("account", "Account");
+            final String twUtilityBtn = "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors hover:bg-sand-50 hover:text-terracotta-500 focus:bg-sand-50 focus:text-terracotta-500";
+            final String twUserIcon = "<svg class=\"h-4 w-4 shrink-0\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg>";
             if (user != null)
             {
-                if ("pwa-chaos".equals(quality))
+                if (isTailwindByClaude(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + accountText + "</a>");
+                }
+                else if ("pwa-chaos".equals(quality))
                 {
                     model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"My account\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + user.email.split("@")[0] + "</span></a>");
                 }
@@ -1880,7 +1930,11 @@ public final class EmbeddedHtmlServer
             }
             else
             {
-                if ("pwa-chaos".equals(quality))
+                if (isTailwindByClaude(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + loginText + "</a>");
+                }
+                else if ("pwa-chaos".equals(quality))
                 {
                     model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"Sign In\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + loginText + "</span></a>");
                 }
@@ -2027,6 +2081,17 @@ public final class EmbeddedHtmlServer
                 model.put("accessories_active_weight", "accessories".equals(category) ? "600" : "400");
                 model.put("accessories_active_color", "accessories".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
 
+                // Class-based variant of the same highlight, used by the utility-first
+                // Tailwind SUT so the sidebar needs no inline style attributes.
+                final String activeCls = "font-semibold text-terracotta-500";
+                final String inactiveCls = "font-normal text-muted";
+                model.put("all_active_class", category.isEmpty() ? activeCls : inactiveCls);
+                model.put("tops_active_class", "tops".equals(category) ? activeCls : inactiveCls);
+                model.put("bottoms_active_class", "bottoms".equals(category) ? activeCls : inactiveCls);
+                model.put("outerwear_active_class", "outerwear".equals(category) ? activeCls : inactiveCls);
+                model.put("footwear_active_class", "footwear".equals(category) ? activeCls : inactiveCls);
+                model.put("accessories_active_class", "accessories".equals(category) ? activeCls : inactiveCls);
+
                 model.put("sort_default_selected", sort.isEmpty() || "default".equals(sort) ? "selected" : "");
                 model.put("sort_asc_selected", "price-asc".equals(sort) ? "selected" : "");
                 model.put("sort_desc_selected", "price-desc".equals(sort) ? "selected" : "");
@@ -2118,8 +2183,8 @@ public final class EmbeddedHtmlServer
                     model.put("product_price_html", formatPrice(price, country));
                     model.put("product_desc", prod.descriptions.getOrDefault(country.locale, prod.descriptions.get("en")));
                     model.put("product_svg_content", prod.svgPath);
-                    model.put("product_badge_html", prod.badge.isEmpty() ? "" : "<span class=\"product-badge\">" + prod.badge.toUpperCase() + "</span>");
-                    model.put("product_sizes_html", getProductSizesSelectHtml(prod.id, prod.category, trans));
+                    model.put("product_badge_html", prod.badge.isEmpty() ? "" : "<span class=\"" + (isTailwindByClaude(quality) ? "absolute left-4 top-4 z-[5] rounded-sm bg-terracotta-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white" : "product-badge") + "\">" + prod.badge.toUpperCase() + "</span>");
+                    model.put("product_sizes_html", getProductSizesSelectHtml(prod.id, prod.category, trans, quality));
                 }
                 else
                 {
@@ -2132,7 +2197,7 @@ public final class EmbeddedHtmlServer
             }
             else if ("checkout.html".equals(pageName))
             {
-                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "shipping-"));
+                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "shipping-", quality));
                 
                 final StringBuilder options = new StringBuilder();
                 for (final Country c : catalogConfig.countries)
@@ -2158,7 +2223,7 @@ public final class EmbeddedHtmlServer
 
                 if (discount > 0)
                 {
-                    model.put("checkout_discount_row", "<div style=\"display:flex;justify-content:space-between;color:var(--color-success);\">" +
+                    model.put("checkout_discount_row", "<div " + (isTailwindByClaude(quality) ? "class=\"flex justify-between text-success\"" : "style=\"display:flex;justify-content:space-between;color:var(--color-success);\"") + ">" +
                               "  <span>Discount (" + cart.coupon.toUpperCase() + ")</span>" +
                               "  <span>-" + formatPrice(discount, country) + "</span>" +
                               "</div>");
@@ -2177,7 +2242,7 @@ public final class EmbeddedHtmlServer
                         final String[] parts = entry.getKey().split(":");
                         final String size = parts.length > 1 ? " (" + parts[1] + ")" : "";
                         final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                        itemsSum.append("<div style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;\">")
+                        itemsSum.append("<div " + (isTailwindByClaude(quality) ? "class=\"mb-2 flex justify-between text-[13px]\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;\"") + ">")
                                 .append("  <span>").append(p.names.getOrDefault(country.locale, p.names.get("en"))).append(size).append(" &times; ").append(entry.getValue()).append("</span>")
                                 .append("  <span>").append(formatPrice(price * entry.getValue(), country)).append("</span>")
                                 .append("</div>");
@@ -2185,7 +2250,7 @@ public final class EmbeddedHtmlServer
                 }
                 if ("freegift".equals(cart.coupon))
                 {
-                    itemsSum.append("<div style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;color:var(--color-success);\">")
+                    itemsSum.append("<div " + (isTailwindByClaude(quality) ? "class=\"mb-2 flex justify-between text-[13px] text-success\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;color:var(--color-success);\"") + ">")
                             .append("  <span>VÉRLA Signature Tote Bag &times; 1</span>")
                             .append("  <span>Free Gift</span>")
                             .append("</div>");
@@ -2292,7 +2357,7 @@ public final class EmbeddedHtmlServer
                 }
                 model.put("account_cards_html", cardList.toString());
 
-                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "account-"));
+                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "account-", quality));
 
                 final StringBuilder options = new StringBuilder();
                 for (final Country c : catalogConfig.countries)
@@ -2349,7 +2414,12 @@ public final class EmbeddedHtmlServer
             for (final Country c : catalogConfig.countries)
             {
                 final String selectedClass = c.code.equals(country.code) ? "selected" : "";
-                if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
+                if (isTailwindByClaude(quality))
+                {
+                    countriesList.append("<li data-selected=\"").append(c.code.equals(country.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
+                                 .append(c.name).append(" (").append(c.symbol).append(")</li>");
+                }
+                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
                     countriesList.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
                                  .append(c.name).append(" (").append(c.symbol).append(")</div>");
@@ -2387,15 +2457,46 @@ public final class EmbeddedHtmlServer
         return "flex flex-col min-w-0 break-words bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-4 m-1";
     }
 
+    /**
+     * True for the utility-first Tailwind SUT served at /verla-tailwind-by-claude/.
+     * That variant carries no semantic class names at all: every fragment rendered
+     * here emits Tailwind utilities, and every state is expressed as a data
+     * attribute so the styling stays in the class list.
+     */
+    private static boolean isTailwindByClaude(final String quality)
+    {
+        return "tailwind-by-claude".equals(quality);
+    }
+
+    /** Shared utility strings for the Tailwind SUT, kept here so the class lists stay in one place. */
+    private static final String TW_FORM_LABEL = "mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]";
+
+    private static final String TW_FORM_CONTROL = "w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white";
+
+    private static final String TW_ERROR = "mt-1 text-xs font-medium text-danger";
+
+    private static final String TW_BTN_PRIMARY = "inline-block rounded-lg bg-terracotta-500 px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700";
+
+    private static final String TW_COUNTRY_ITEM = "flex cursor-pointer items-center justify-between px-4 py-3 text-sm transition-colors [&:not(:last-child)]:border-b [&:not(:last-child)]:border-sand-200 hover:bg-sand-50 hover:font-medium hover:text-terracotta-500 data-[selected=true]:bg-sand-50 data-[selected=true]:font-medium data-[selected=true]:text-terracotta-500";
+
     private static String renderProductCard(final Product p, final Country country, final Map<String, String> trans, final String quality)
     {
         final double basePrice = p.basePrice;
         final Double salePrice = p.salePrice;
-        
+        final boolean tw = isTailwindByClaude(quality);
+
         final String badgeHtml;
         if (!p.badge.isEmpty())
         {
-            badgeHtml = "<span class=\"product-badge " + ("sold-out".equalsIgnoreCase(p.badge) ? "sold-out" : "") + "\">" + p.badge.toUpperCase() + "</span>";
+            if (tw)
+            {
+                final String badgeTone = "sold-out".equalsIgnoreCase(p.badge) ? "bg-muted" : "bg-terracotta-500";
+                badgeHtml = "<span class=\"absolute left-4 top-4 z-[5] rounded-sm px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white " + badgeTone + "\">" + p.badge.toUpperCase() + "</span>";
+            }
+            else
+            {
+                badgeHtml = "<span class=\"product-badge " + ("sold-out".equalsIgnoreCase(p.badge) ? "sold-out" : "") + "\">" + p.badge.toUpperCase() + "</span>";
+            }
         }
         else
         {
@@ -2405,8 +2506,16 @@ public final class EmbeddedHtmlServer
         final String priceHtml;
         if (salePrice != null)
         {
-            priceHtml = "<span class=\"original\">" + formatPrice(basePrice, country) + "</span>" +
-                        "<span class=\"sale\">" + formatPrice(salePrice, country) + "</span>";
+            if (tw)
+            {
+                priceHtml = "<span class=\"text-muted line-through\">" + formatPrice(basePrice, country) + "</span>" +
+                            "<span class=\"font-semibold text-terracotta-500\">" + formatPrice(salePrice, country) + "</span>";
+            }
+            else
+            {
+                priceHtml = "<span class=\"original\">" + formatPrice(basePrice, country) + "</span>" +
+                            "<span class=\"sale\">" + formatPrice(salePrice, country) + "</span>";
+            }
         }
         else
         {
@@ -2417,6 +2526,28 @@ public final class EmbeddedHtmlServer
         final String pdpLink = "/verla-" + quality + "/p/" + p.slug + ".html";
 
         // Generate card layout based on perfect/normal/bad/modern-bad-wcag/modern-bad rules
+        if (tw)
+        {
+            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
+
+            return "<article class=\"group relative flex flex-col overflow-hidden rounded-lg bg-white\">" +
+                   "  <div class=\"relative flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-sand-200 bg-sand-50\">" +
+                   "    " + badgeHtml +
+                   "    <a href=\"" + pdpLink + "\" aria-label=\"View details of " + escapeHtml(localeName) + "\" class=\"contents\">" +
+                   "      <svg viewBox=\"0 0 100 100\" class=\"h-[70%] w-[70%] text-terracotta-500 transition-transform duration-300 group-hover:scale-105\">" + p.svgPath + "</svg>" +
+                   "    </a>" +
+                   "    <button data-quick-add data-state=\"idle\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + escapeHtml(localeName) + " to shopping cart\"" +
+                   "            class=\"absolute inset-x-0 bottom-0 w-full translate-y-full cursor-pointer bg-ink/95 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.05em] text-white transition-transform duration-300 group-hover:translate-y-0 group-focus-within:translate-y-0 data-[state=adding]:translate-y-0 data-[state=adding]:cursor-not-allowed data-[state=adding]:bg-muted data-[state=added]:translate-y-0 data-[state=added]:bg-success\">" +
+                   "      " + trans.getOrDefault("addToCart", "Add to Cart") +
+                   "    </button>" +
+                   "  </div>" +
+                   "  <div class=\"pt-4\">" +
+                   "    <h3 class=\"mb-2 text-sm font-medium\"><a href=\"" + pdpLink + "\" class=\"transition-colors hover:text-terracotta-500\">" + localeName + "</a></h3>" +
+                   "    <div class=\"flex gap-3 text-sm\">" + priceHtml + "</div>" +
+                   "  </div>" +
+                   "</article>";
+        }
+
         if ("bad".equals(quality))
         {
             return "<div class=\"product-card-bad\" style=\"border:1px solid #ccc;padding:10px;\" id=\"prod-info\">" +
@@ -2632,6 +2763,18 @@ public final class EmbeddedHtmlServer
                    "</div>";
         }
 
+        if (isTailwindByClaude(quality))
+        {
+            // "group" lets the dropdown open on hover purely through group-hover utilities.
+            return "<div class=\"group relative inline-block\" id=\"cart-btn-wrapper\">" +
+                   "  <a href=\"cart.html\" class=\"flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors hover:bg-sand-50 hover:text-terracotta-500 focus:bg-sand-50 focus:text-terracotta-500\" id=\"cart-btn-anchor\" aria-label=\"Shopping Cart with " + count + " items\">" +
+                   "    <svg class=\"h-4 w-4 shrink-0\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg> " + trans.getOrDefault("cart", "Cart") +
+                   "    <span class=\"inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-terracotta-500 text-[10px] font-bold text-white\">" + count + "</span>" +
+                   "  </a>" +
+                   dropdownHtml +
+                   "</div>";
+        }
+
         return "<div style=\"position: relative; display: inline-block;\" id=\"cart-btn-wrapper\">" +
                "  <a href=\"cart.html\" class=\"utility-btn\" id=\"cart-btn-anchor\">" +
                "    <svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg> " + trans.getOrDefault("cart", "Cart") + " <span class=\"cart-badge\">" + count + "</span>" +
@@ -2647,6 +2790,11 @@ public final class EmbeddedHtmlServer
 
     private static String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
+        if (isTailwindByClaude(quality))
+        {
+            return getCartDropdownHtmlTailwind(cart, trans, country, showTemp);
+        }
+
         final StringBuilder sb = new StringBuilder();
         if (showTemp)
         {
@@ -2707,6 +2855,66 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
+    /**
+     * Mini-cart panel for the Tailwind SUT. Visibility is driven by the wrapper's
+     * group-hover plus a data-show attribute that the layout script flips after an
+     * add-to-cart swap, so no stateful CSS class is needed.
+     */
+    private static String getCartDropdownHtmlTailwind(final Cart cart, final Map<String, String> trans, final Country country, final boolean showTemp)
+    {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("<div data-cart-dropdown data-show=\"").append(showTemp ? "true" : "false").append("\" id=\"cart-dropdown-panel\"")
+          .append(" class=\"invisible absolute right-0 top-full z-[1000] w-80 translate-y-2.5 rounded-lg border border-sand-200 bg-white p-5 opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition-[opacity,transform,visibility] duration-300")
+          .append(" group-hover:visible group-hover:translate-y-0 group-hover:opacity-100")
+          .append(" data-[show=true]:visible data-[show=true]:translate-y-0 data-[show=true]:opacity-100\">");
+
+        if (cart.items.isEmpty())
+        {
+            sb.append("  <div class=\"py-5 text-center text-sm text-muted\">")
+              .append(trans.getOrDefault("cartIsEmpty", "Your bag is empty."))
+              .append("  </div>");
+        }
+        else
+        {
+            sb.append("  <div class=\"mb-4 max-h-60 overflow-y-auto\">");
+            double subtotal = 0;
+            for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+            {
+                final Product p = lookupProductById(entry.getKey());
+                if (p == null)
+                {
+                    continue;
+                }
+                final String[] parts = entry.getKey().split(":");
+                final String size = parts.length > 1 ? " (" + parts[1] + ")" : "";
+                final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                subtotal += price * entry.getValue();
+
+                sb.append("    <div class=\"flex items-center gap-3 border-b border-sand-200 py-2.5 last:border-b-0\">")
+                  .append("      <div class=\"flex h-12 w-12 shrink-0 items-center justify-center rounded border border-sand-200 bg-sand-50\">")
+                  .append("        <svg viewBox=\"0 0 100 100\" class=\"h-[70%] w-[70%] text-terracotta-500\">").append(p.svgPath).append("</svg>")
+                  .append("      </div>")
+                  .append("      <div class=\"min-w-0 grow\">")
+                  .append("        <div class=\"mb-0.5 truncate text-[13px] font-medium text-ink\">").append(escapeHtml(p.names.getOrDefault(country.locale, p.names.get("en")))).append(size).append("</div>")
+                  .append("        <div class=\"text-xs text-muted\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
+                  .append("      </div>")
+                  .append("    </div>");
+            }
+            sb.append("  </div>")
+              .append("  <div class=\"border-t border-sand-200 pt-4\">")
+              .append("    <div class=\"mb-3 flex justify-between text-sm font-semibold text-ink\">")
+              .append("      <span>").append(trans != null ? trans.getOrDefault("subtotal", "Subtotal") : "Subtotal").append("</span>")
+              .append("      <span>").append(formatPrice(subtotal, country)).append("</span>")
+              .append("    </div>")
+              .append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"block rounded-lg bg-terracotta-500 p-2.5 text-center text-[13px] font-medium text-white transition-colors hover:bg-terracotta-700\">")
+              .append(trans != null ? trans.getOrDefault("viewCartCheckout", "View Bag & Checkout") : "View Bag & Checkout")
+              .append("</a>")
+              .append("  </div>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
     private static String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality)
     {
         return getCartContentHtml(cart, country, trans, quality, null);
@@ -2714,6 +2922,11 @@ public final class EmbeddedHtmlServer
 
     private static String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality, final String couponError)
     {
+        if (isTailwindByClaude(quality))
+        {
+            return getCartContentHtmlTailwind(cart, country, trans, couponError);
+        }
+
         if ("pwa-chaos".equals(quality))
         {
             if (cart.items.isEmpty())
@@ -3079,8 +3292,158 @@ public final class EmbeddedHtmlServer
         return String.format(Locale.US, country.format, String.format(Locale.US, "%,.2f", localPrice));
     }
 
-    private static String getAddressFieldsHtml(final String countryCode, final String locale, final Map<String, String> trans, final String prefix)
+    /** Cart page for the Tailwind SUT: utility classes only, no inline styles. */
+    private static String getCartContentHtmlTailwind(final Cart cart, final Country country, final Map<String, String> trans, final String couponError)
     {
+        if (cart.items.isEmpty())
+        {
+            return "<div id=\"cart-content-wrapper\">" +
+                   "  <h1 class=\"mb-7.5 font-serif text-[32px] font-semibold\">" + trans.getOrDefault("cart", "Cart") + "</h1>" +
+                   "  <div class=\"py-10 text-center\">" +
+                   "    <p class=\"mb-6 text-muted\">" + trans.getOrDefault("cartIsEmpty", "Cart is Empty.") + "</p>" +
+                   "    <a href=\"index.html\" class=\"" + TW_BTN_PRIMARY + "\">" + trans.getOrDefault("home", "Go Home") + "</a>" +
+                   "  </div>" +
+                   "</div>";
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        sb.append("<div id=\"cart-content-wrapper\">")
+          .append("  <h1 class=\"mb-7.5 font-serif text-[32px] font-semibold\">").append(trans.getOrDefault("cart", "Cart")).append("</h1>")
+          .append("  <div class=\"flex flex-col flex-wrap items-stretch gap-10 lg:flex-row lg:items-start\">")
+          .append("    <div class=\"min-w-80 flex-[2]\">")
+          .append("      <div class=\"mb-6 overflow-x-auto\">")
+          .append("        <table class=\"w-full min-w-[500px] border-collapse text-left\">")
+          .append("          <thead>")
+          .append("            <tr class=\"border-b border-sand-200\">")
+          .append("              <th class=\"pb-3\">").append(trans.getOrDefault("product", "Product")).append("</th>")
+          .append("              <th class=\"pb-3 text-center\">").append(trans.getOrDefault("quantity", "Quantity")).append("</th>")
+          .append("              <th class=\"pb-3 text-right\">").append(trans.getOrDefault("total", "Total")).append("</th>")
+          .append("            </tr>")
+          .append("          </thead>")
+          .append("          <tbody>");
+
+        for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+        {
+            final String cartKey = entry.getKey();
+            final String size = cartKey.contains(":") ? cartKey.split(":")[1] : "";
+
+            final Product p = lookupProductById(cartKey);
+            if (p == null)
+            {
+                continue;
+            }
+
+            final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+            final double rowTotal = price * entry.getValue();
+            final String displayName = p.names.getOrDefault(country.locale, p.names.get("en")) + (size.isEmpty() ? "" : " (" + size + ")");
+            String tempKey;
+            try
+            {
+                tempKey = URLEncoder.encode(cartKey, StandardCharsets.UTF_8.name());
+            }
+            catch (final Exception e)
+            {
+                tempKey = cartKey;
+            }
+            final String encKey = tempKey;
+
+            sb.append("        <tr class=\"border-b border-sand-200\">")
+              .append("          <td class=\"flex items-center gap-4 py-5\">")
+              .append("            <div class=\"flex h-15 w-15 shrink-0 items-center justify-center border border-sand-200 bg-sand-50\">")
+              .append("              <svg viewBox=\"0 0 100 100\" class=\"h-[70%] w-[70%] text-terracotta-500\">").append(p.svgPath).append("</svg>")
+              .append("            </div>")
+              .append("            <div>")
+              .append("              <h4 class=\"text-[15px] font-medium\">").append(displayName).append("</h4>")
+              .append("              <div class=\"text-[13px] text-muted\">").append(formatPrice(price, country)).append("</div>")
+              .append("            </div>")
+              .append("          </td>")
+              .append("          <td class=\"py-5 text-center\">")
+              .append("            <div class=\"inline-flex items-center rounded-lg border border-sand-200\">")
+              .append("              <button type=\"button\" class=\"cursor-pointer px-3 py-1.5 transition-colors hover:text-terracotta-500\" aria-label=\"Decrease quantity\" hx-post=\"api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() - 1).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">&minus;</button>")
+              .append("              <span class=\"px-3 font-semibold\">").append(entry.getValue()).append("</span>")
+              .append("              <button type=\"button\" class=\"cursor-pointer px-3 py-1.5 transition-colors hover:text-terracotta-500\" aria-label=\"Increase quantity\" hx-post=\"api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() + 1).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">&plus;</button>")
+              .append("            </div>")
+              .append("            <div class=\"mt-1.5\">")
+              .append("              <button type=\"button\" class=\"cursor-pointer text-[11px] text-danger transition-opacity hover:opacity-80\" hx-post=\"api/cart/remove?productId=").append(encKey).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">").append(trans.getOrDefault("remove", "Remove")).append("</button>")
+              .append("            </div>")
+              .append("          </td>")
+              .append("          <td class=\"py-5 text-right font-semibold\">").append(formatPrice(rowTotal, country)).append("</td>")
+              .append("        </tr>");
+        }
+
+        final double subtotal = calculateSubtotal(cart);
+
+        sb.append("        </tbody>")
+          .append("      </table>")
+          .append("    </div>")
+          .append("  </div>")
+          .append("  <div class=\"min-w-70 flex-1 rounded-lg border border-sand-200 bg-sand-50 p-6\">")
+          .append("    <h3 class=\"mb-5 border-b border-sand-200 pb-3 font-serif text-lg font-semibold\">").append(trans.getOrDefault("orderSummary", "Order Summary")).append("</h3>")
+          .append("    <form hx-post=\"api/cart/coupon\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" class=\"mb-6\">")
+          .append("      <label for=\"couponCode\" class=\"mb-2 block text-[11px] font-semibold uppercase tracking-[0.05em]\">").append(trans.getOrDefault("promoCode", "Promo Code")).append("</label>")
+          .append("      <div class=\"flex gap-2\">")
+          .append("        <input type=\"text\" id=\"couponCode\" name=\"couponCode\" class=\"w-full rounded-lg border border-sand-200 bg-white px-3 py-2 outline-none transition-colors focus:border-terracotta-500\" placeholder=\"10p-off\" value=\"").append(cart.coupon != null ? cart.coupon : "").append("\">")
+          .append("        <button type=\"submit\" class=\"shrink-0 rounded-lg border border-sand-200 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] transition-colors hover:bg-white\">").append(trans.getOrDefault("apply", "Apply")).append("</button>")
+          .append("      </div>")
+          .append("    </form>");
+
+        if (couponError != null && !couponError.isEmpty())
+        {
+            sb.append("<div class=\"-mt-4 mb-4 text-xs font-medium text-danger\">").append(escapeHtml(couponError)).append("</div>");
+        }
+
+        final double discount = calculateDiscount(cart, subtotal);
+        final double shipping = calculateShipping(cart, subtotal);
+        final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
+        final double total = subtotal - discount + shipping + tax;
+
+        sb.append("    <div class=\"flex flex-col gap-2.5 text-sm\">")
+          .append("      <div class=\"flex justify-between\">")
+          .append("        <span>").append(trans.getOrDefault("subtotal", "Subtotal")).append("</span>")
+          .append("        <span>").append(formatPrice(subtotal, country)).append("</span>")
+          .append("      </div>");
+
+        if (discount > 0)
+        {
+            sb.append("      <div class=\"flex justify-between font-medium text-success\">")
+              .append("        <span>").append(trans.getOrDefault("discount", "Discount")).append(" (").append(cart.coupon.toUpperCase()).append(")</span>")
+              .append("        <span>-").append(formatPrice(discount, country)).append("</span>")
+              .append("      </div>");
+        }
+
+        sb.append("      <div class=\"flex justify-between\">")
+          .append("        <span>").append(trans.getOrDefault("shipping", "Shipping")).append("</span>")
+          .append("        <span>").append(formatPrice(shipping, country)).append("</span>")
+          .append("      </div>")
+          .append("      <div class=\"flex justify-between\">")
+          .append("        <span>").append(trans.getOrDefault("tax", "Tax")).append("</span>")
+          .append("        <span>").append(formatPrice(tax, country)).append("</span>")
+          .append("      </div>")
+          .append("      <div class=\"mt-1 flex justify-between border-t border-sand-200 pt-3 text-base font-semibold text-ink\">")
+          .append("        <span>").append(trans.getOrDefault("total", "Total")).append("</span>")
+          .append("        <span>").append(formatPrice(total, country)).append("</span>")
+          .append("      </div>")
+          .append("    </div>")
+          .append("    <a href=\"checkout.html\" id=\"checkout-btn\" class=\"mt-6 block rounded-lg bg-terracotta-500 p-3 text-center text-xs font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700\">")
+          .append(trans.getOrDefault("checkout", "Checkout"))
+          .append("    </a>")
+          .append("  </div>")
+          .append("</div>")
+          .append("</div>");
+
+        return sb.toString();
+    }
+
+    private static String getAddressFieldsHtml(final String countryCode, final String locale, final Map<String, String> trans, final String prefix, final String quality)
+    {
+        // The Tailwind SUT swaps every semantic form class for its utility equivalent;
+        // the field structure itself is identical across variants.
+        final boolean tw = isTailwindByClaude(quality);
+        final String cGroup = tw ? "mb-5" : "form-group";
+        final String cLabel = tw ? TW_FORM_LABEL : "form-label";
+        final String cControl = tw ? TW_FORM_CONTROL : "form-control";
+        final String cGrid2 = tw ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : "form-grid-2";
+        final String cGrid12 = tw ? "grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]" : "form-grid-1-2";
         final String labelStreet = trans.getOrDefault("street", "Street Address");
         final String labelCity = trans.getOrDefault("city", "City");
         final String labelState = trans.getOrDefault("state", "State/Province");
@@ -3092,65 +3455,65 @@ public final class EmbeddedHtmlServer
 
         if ("US".equals(countryCode) || "CA".equals(countryCode) || "CA_EN".equals(countryCode) || "CA_FR".equals(countryCode))
         {
-            return "<div class=\"form-group\">" +
-                   "  <label class=\"form-label\" for=\"" + prefix + "street\">" + labelStreet + "</label>" +
-                   "  <input type=\"text\" id=\"" + prefix + "street\" name=\"street\" class=\"form-control\" required>" +
+            return "<div class=\"" + cGroup + "\">" +
+                   "  <label class=\"" + cLabel + "\" for=\"" + prefix + "street\">" + labelStreet + "</label>" +
+                   "  <input type=\"text\" id=\"" + prefix + "street\" name=\"street\" class=\"" + cControl + "\" required>" +
                    "</div>" +
-                   "<div class=\"form-grid-2\">" +
-                   "  <div class=\"form-group\">" +
-                   "    <label class=\"form-label\" for=\"" + prefix + "city\">" + labelCity + "</label>" +
-                   "    <input type=\"text\" id=\"" + prefix + "city\" name=\"city\" class=\"form-control\" required>" +
+                   "<div class=\"" + cGrid2 + "\">" +
+                   "  <div class=\"" + cGroup + "\">" +
+                   "    <label class=\"" + cLabel + "\" for=\"" + prefix + "city\">" + labelCity + "</label>" +
+                   "    <input type=\"text\" id=\"" + prefix + "city\" name=\"city\" class=\"" + cControl + "\" required>" +
                    "  </div>" +
-                   "  <div class=\"form-group\">" +
-                   "    <label class=\"form-label\" for=\"" + prefix + "state\">" + labelState + "</label>" +
-                   "    <input type=\"text\" id=\"" + prefix + "state\" name=\"state\" class=\"form-control\" required>" +
+                   "  <div class=\"" + cGroup + "\">" +
+                   "    <label class=\"" + cLabel + "\" for=\"" + prefix + "state\">" + labelState + "</label>" +
+                   "    <input type=\"text\" id=\"" + prefix + "state\" name=\"state\" class=\"" + cControl + "\" required>" +
                    "  </div>" +
                    "</div>" +
-                   "<div class=\"form-group\">" +
-                   "  <label class=\"form-label\" for=\"" + prefix + "postcode\">" + labelPostcode + "</label>" +
-                   "  <input type=\"text\" id=\"" + prefix + "postcode\" name=\"postcode\" class=\"form-control\" required>" +
+                   "<div class=\"" + cGroup + "\">" +
+                   "  <label class=\"" + cLabel + "\" for=\"" + prefix + "postcode\">" + labelPostcode + "</label>" +
+                   "  <input type=\"text\" id=\"" + prefix + "postcode\" name=\"postcode\" class=\"" + cControl + "\" required>" +
                    "</div>";
         }
         else if ("JP".equals(countryCode))
         {
-            return "<div class=\"form-group\">" +
-                   "  <label class=\"form-label\" for=\"" + prefix + "postcode\">" + labelPostcode + "</label>" +
-                   "  <input type=\"text\" id=\"" + prefix + "postcode\" name=\"postcode\" class=\"form-control\" placeholder=\"123-4567\" required>" +
+            return "<div class=\"" + cGroup + "\">" +
+                   "  <label class=\"" + cLabel + "\" for=\"" + prefix + "postcode\">" + labelPostcode + "</label>" +
+                   "  <input type=\"text\" id=\"" + prefix + "postcode\" name=\"postcode\" class=\"" + cControl + "\" placeholder=\"123-4567\" required>" +
                    "</div>" +
-                   "<div class=\"form-grid-2\">" +
-                   "  <div class=\"form-group\">" +
-                   "    <label class=\"form-label\" for=\"" + prefix + "prefecture\">" + labelPrefecture + "</label>" +
-                   "    <input type=\"text\" id=\"" + prefix + "prefecture\" name=\"prefecture\" class=\"form-control\" required>" +
+                   "<div class=\"" + cGrid2 + "\">" +
+                   "  <div class=\"" + cGroup + "\">" +
+                   "    <label class=\"" + cLabel + "\" for=\"" + prefix + "prefecture\">" + labelPrefecture + "</label>" +
+                   "    <input type=\"text\" id=\"" + prefix + "prefecture\" name=\"prefecture\" class=\"" + cControl + "\" required>" +
                    "  </div>" +
-                   "  <div class=\"form-group\">" +
-                   "    <label class=\"form-label\" for=\"" + prefix + "ward\">" + labelWard + "</label>" +
-                   "    <input type=\"text\" id=\"" + prefix + "ward\" name=\"ward\" class=\"form-control\" required>" +
+                   "  <div class=\"" + cGroup + "\">" +
+                   "    <label class=\"" + cLabel + "\" for=\"" + prefix + "ward\">" + labelWard + "</label>" +
+                   "    <input type=\"text\" id=\"" + prefix + "ward\" name=\"ward\" class=\"" + cControl + "\" required>" +
                    "  </div>" +
                    "</div>" +
-                   "<div class=\"form-group\">" +
-                   "  <label class=\"form-label\" for=\"" + prefix + "subarea\">" + labelSubarea + "</label>" +
-                   "  <input type=\"text\" id=\"" + prefix + "subarea\" name=\"subarea\" class=\"form-control\" required>" +
+                   "<div class=\"" + cGroup + "\">" +
+                   "  <label class=\"" + cLabel + "\" for=\"" + prefix + "subarea\">" + labelSubarea + "</label>" +
+                   "  <input type=\"text\" id=\"" + prefix + "subarea\" name=\"subarea\" class=\"" + cControl + "\" required>" +
                    "</div>" +
-                   "<div class=\"form-group\">" +
-                   "  <label class=\"form-label\" for=\"" + prefix + "building\">" + labelBuilding + "</label>" +
-                   "  <input type=\"text\" id=\"" + prefix + "building\" name=\"building\" class=\"form-control\">" +
+                   "<div class=\"" + cGroup + "\">" +
+                   "  <label class=\"" + cLabel + "\" for=\"" + prefix + "building\">" + labelBuilding + "</label>" +
+                   "  <input type=\"text\" id=\"" + prefix + "building\" name=\"building\" class=\"" + cControl + "\">" +
                    "</div>";
         }
         else
         {
             final String streetPlaceholder = "DE".equals(countryCode) ? " placeholder=\"Hauptstraße 12\"" : "";
-            return "<div class=\"form-group\">" +
-                   "  <label class=\"form-label\" for=\"" + prefix + "street\">" + labelStreet + "</label>" +
-                   "  <input type=\"text\" id=\"" + prefix + "street\" name=\"street\" class=\"form-control\"" + streetPlaceholder + " required>" +
+            return "<div class=\"" + cGroup + "\">" +
+                   "  <label class=\"" + cLabel + "\" for=\"" + prefix + "street\">" + labelStreet + "</label>" +
+                   "  <input type=\"text\" id=\"" + prefix + "street\" name=\"street\" class=\"" + cControl + "\"" + streetPlaceholder + " required>" +
                    "</div>" +
-                   "<div class=\"form-grid-1-2\">" +
-                   "  <div class=\"form-group\">" +
-                   "    <label class=\"form-label\" for=\"" + prefix + "postcode\">" + labelPostcode + "</label>" +
-                   "    <input type=\"text\" id=\"" + prefix + "postcode\" name=\"postcode\" class=\"form-control\" required>" +
+                   "<div class=\"" + cGrid12 + "\">" +
+                   "  <div class=\"" + cGroup + "\">" +
+                   "    <label class=\"" + cLabel + "\" for=\"" + prefix + "postcode\">" + labelPostcode + "</label>" +
+                   "    <input type=\"text\" id=\"" + prefix + "postcode\" name=\"postcode\" class=\"" + cControl + "\" required>" +
                    "  </div>" +
-                   "  <div class=\"form-group\">" +
-                   "    <label class=\"form-label\" for=\"" + prefix + "city\">" + labelCity + "</label>" +
-                   "    <input type=\"text\" id=\"" + prefix + "city\" name=\"city\" class=\"form-control\" required>" +
+                   "  <div class=\"" + cGroup + "\">" +
+                   "    <label class=\"" + cLabel + "\" for=\"" + prefix + "city\">" + labelCity + "</label>" +
+                   "    <input type=\"text\" id=\"" + prefix + "city\" name=\"city\" class=\"" + cControl + "\" required>" +
                    "  </div>" +
                    "</div>";
         }
@@ -3354,6 +3717,8 @@ public final class EmbeddedHtmlServer
             System.out.println("    - Dashboard:            http://localhost:" + server.getPort() + "/AuraGlanceTest/dashboard/index.html");
             System.out.println("    - Accessibility:        http://localhost:" + server.getPort() + "/AuraGlanceTest/a11y/index.html");
             System.out.println("    - React SPA:            http://localhost:" + server.getPort() + "/AuraGlanceTest/spa/index.html");
+            System.out.println("    - VÉRLA Tailwind Store:     http://localhost:" + server.getPort() + "/verla-tailwind/index.html");
+            System.out.println("    - VÉRLA Tailwind (by Claude): http://localhost:" + server.getPort() + "/verla-tailwind-by-claude/index.html");
             System.out.println("    - VÉRLA Perfect Store:      http://localhost:" + server.getPort() + "/verla-perfect/index.html");
             System.out.println("    - VÉRLA Normal Store:       http://localhost:" + server.getPort() + "/verla-normal/index.html");
             System.out.println("    - VÉRLA Bad Store:          http://localhost:" + server.getPort() + "/verla-bad/index.html");
@@ -3368,6 +3733,8 @@ public final class EmbeddedHtmlServer
             System.out.println("    - Dashboard:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/dashboard/index.html");
             System.out.println("    - Accessibility:            https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/a11y/index.html");
             System.out.println("    - React SPA:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/spa/index.html");
+            System.out.println("    - VÉRLA Tailwind Store:     https://localhost:" + server.getHttpsPort() + "/verla-tailwind/index.html");
+            System.out.println("    - VÉRLA Tailwind (by Claude): https://localhost:" + server.getHttpsPort() + "/verla-tailwind-by-claude/index.html");
             System.out.println("    - VÉRLA Perfect Store:      https://localhost:" + server.getHttpsPort() + "/verla-perfect/index.html");
             System.out.println("    - VÉRLA Normal Store:       https://localhost:" + server.getHttpsPort() + "/verla-normal/index.html");
             System.out.println("    - VÉRLA Bad Store:          https://localhost:" + server.getHttpsPort() + "/verla-bad/index.html");

@@ -1,0 +1,115 @@
+<div id="checkout-form-container" class="max-w-4xl mx-auto">
+    <h1 class="font-serif text-3xl font-semibold mb-8 text-neutral-900">${lang_checkout}</h1>
+    
+    <form hx-post="api/checkout/purchase" hx-target="#checkout-form-container" hx-swap="innerHTML show:window:top">
+        <div class="checkout-container">
+            <!-- Left Panel: Forms -->
+            <div class="checkout-main">
+                <!-- Personal details -->
+                <div class="mb-8 border-b border-sand-200 pb-6">
+                    <h3 class="font-serif text-lg mb-4 font-semibold text-neutral-900">${lang_contactInfo}</h3>
+                    <div class="form-grid-2 mb-4">
+                        <div class="form-group">
+                            <label for="firstName" class="form-label">${lang_firstName}</label>
+                            <input type="text" id="firstName" name="firstName" class="form-control" required value="${input_firstName}">
+                            <div class="error-message" id="err-firstName">${err_firstName}</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="lastName" class="form-label">${lang_lastName}</label>
+                            <input type="text" id="lastName" name="lastName" class="form-control" required value="${input_lastName}">
+                            <div class="error-message" id="err-lastName">${err_lastName}</div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="email" class="form-label">${lang_emailAddress}</label>
+                        <input type="email" id="email" name="email" class="form-control" required value="${input_email}">
+                        <div class="error-message" id="err-email">${err_email}</div>
+                    </div>
+                </div>
+
+                <!-- Shipping Details -->
+                <div class="mb-8 border-b border-sand-200 pb-6">
+                    <h3 class="font-serif text-lg mb-4 font-semibold text-neutral-900">${lang_shippingAddress}</h3>
+                    <div class="form-group">
+                        <label for="shipping-country" class="form-label">${lang_country}</label>
+                        <select id="shipping-country" name="country" class="form-control" required
+                                hx-get="api/address-form" hx-target="#shipping-address-fields" hx-trigger="change">
+                            ${country_options_html}
+                        </select>
+                    </div>
+
+                    <!-- Dynamic country address fields -->
+                    <div id="shipping-address-fields">
+                        ${address_fields_html}
+                    </div>
+                </div>
+
+                <!-- Payment Details -->
+                <div class="mb-8 pb-6">
+                    <h3 class="font-serif text-lg mb-4 font-semibold text-neutral-900">${lang_paymentDetails}</h3>
+                    <div class="form-group">
+                        <label for="cardType" class="form-label">${lang_cardType}</label>
+                        <select id="cardType" name="cardType" class="form-control" required>
+                            <option value="Visa" ${card_visa_selected}>Visa</option>
+                            <option value="Mastercard" ${card_mastercard_selected}>Mastercard</option>
+                            <option value="American Express" ${card_amex_selected}>American Express</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cardNumber" class="form-label">${lang_cardNum}</label>
+                        <input type="text" id="cardNumber" name="cardNumber" class="form-control" placeholder="1234 5678 1234 5100" required value="${input_cardNumber}">
+                        <div class="error-message" id="err-cardNumber">${err_cardNumber}</div>
+                        <p class="text-[11px] text-neutral-500 mt-1">${lang_testingNote}</p>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="cardExpiry" class="form-label">${lang_expiry}</label>
+                            <input type="text" id="cardExpiry" name="cardExpiry" class="form-control" placeholder="12/28" required value="${input_cardExpiry}">
+                            <div class="error-message" id="err-cardExpiry">${err_cardExpiry}</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="cardCvv" class="form-label">${lang_cvv}</label>
+                            <input type="text" id="cardCvv" name="cardCvv" class="form-control" placeholder="123" required value="${input_cardCvv}">
+                            <div class="error-message" id="err-cardCvv">${err_cardCvv}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Order Summary -->
+            <div class="checkout-sidebar">
+                <h3 class="font-serif text-lg mb-5 border-b border-sand-200 pb-3 font-semibold text-neutral-900">${lang_orderSummary}</h3>
+                
+                <!-- Items list -->
+                <div class="max-h-48 overflow-y-auto mb-5">
+                    ${checkout_items_summary}
+                </div>
+
+                <!-- Totals summary -->
+                <div class="text-sm flex flex-col gap-2.5 border-t border-sand-200 pt-4 text-neutral-700">
+                    <div class="flex justify-between">
+                        <span>${lang_subtotal}</span>
+                        <span class="font-medium text-neutral-900">${checkout_subtotal}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>${lang_shipping}</span>
+                        <span class="font-medium text-neutral-900">${checkout_shipping}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>${lang_tax}</span>
+                        <span class="font-medium text-neutral-900">${checkout_tax}</span>
+                    </div>
+                    ${checkout_discount_row}
+                    <div class="flex justify-between font-semibold text-base border-t border-sand-200 pt-3 mt-1 text-neutral-900">
+                        <span>${lang_total}</span>
+                        <span>${checkout_total}</span>
+                    </div>
+                </div>
+
+                <button type="submit" id="purchase-btn" class="btn-primary w-full justify-center py-3.5 text-xs uppercase tracking-wider mt-6">
+                    ${lang_purchase}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>

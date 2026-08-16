@@ -359,4 +359,52 @@ public class EndpointsTest extends BaseAiTest
         Assertions.assertTrue(jpResp.body().contains("入念にセレクトされた日常の快適さ。"));
         Assertions.assertTrue(jpResp.body().contains("サマー・エッセンシャル"));
     }
+
+    /**
+     * Test routing and rendering for the VÉRLA Tailwind CSS storefront.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testTailwindStorefrontEndpoints() throws IOException, InterruptedException
+    {
+        final int port = server.getPort();
+
+        // 1. Test Tailwind home page
+        final HttpRequest homeReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-tailwind/index.html"))
+            .GET()
+            .build();
+        final HttpResponse<String> homeResp = client.send(homeReq, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, homeResp.statusCode());
+        Assertions.assertTrue(homeResp.body().contains("VÉRLA"));
+        Assertions.assertTrue(homeResp.body().contains("tailwindcss.com"));
+
+        // 2. Test Tailwind category PLP
+        final HttpRequest plpReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-tailwind/c/tops.html"))
+            .GET()
+            .build();
+        final HttpResponse<String> plpResp = client.send(plpReq, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, plpResp.statusCode());
+        Assertions.assertTrue(plpResp.body().contains("plp-sidebar"));
+
+        // 3. Test Tailwind Cart page
+        final HttpRequest cartReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-tailwind/cart.html"))
+            .GET()
+            .build();
+        final HttpResponse<String> cartResp = client.send(cartReq, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, cartResp.statusCode());
+
+        // 4. Test Tailwind Checkout page
+        final HttpRequest checkoutReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/verla-tailwind/checkout.html"))
+            .GET()
+            .build();
+        final HttpResponse<String> checkoutResp = client.send(checkoutReq, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, checkoutResp.statusCode());
+        Assertions.assertTrue(checkoutResp.body().contains("checkout-form-container"));
+    }
 }

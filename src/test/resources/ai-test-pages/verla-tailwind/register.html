@@ -1,0 +1,34 @@
+<div id="register-wrapper" class="auth-card">
+    <h2 class="font-serif text-2xl md:text-3xl font-semibold text-center mb-6 text-neutral-900">${lang_register}</h2>
+
+    <!-- Inline registration error display -->
+    <div class="error-message mb-4 text-center font-semibold">${auth_error}</div>
+
+    <form hx-put="api/auth/register" hx-target="#register-wrapper" hx-swap="outerHTML">
+        <div class="form-group">
+            <label for="email" class="form-label">${lang_email}</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="newuser@example.com" required value="${input_email}">
+            <div class="error-message">${err_email}</div>
+        </div>
+
+        <div class="form-group">
+            <label for="password" class="form-label">${lang_password}</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" required minlength="6">
+            <div class="error-message">${err_password}</div>
+        </div>
+
+        <div class="form-group mb-6">
+            <label for="confirmPassword" class="form-label">Confirm Password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" required minlength="6">
+            <div class="error-message">${err_confirmPassword}</div>
+        </div>
+
+        <button type="submit" class="btn-primary w-full justify-center py-3 text-xs uppercase tracking-wider mb-5">
+            ${lang_register}
+        </button>
+
+        <p class="text-center text-xs text-neutral-500">
+            Already have an account? <a href="login.html" class="text-terracotta-500 font-semibold hover:text-terracotta-700">${lang_login}</a>
+        </p>
+    </form>
+</div>
