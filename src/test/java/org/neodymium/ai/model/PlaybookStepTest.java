@@ -85,4 +85,58 @@ public class PlaybookStepTest
         Assertions.assertEquals(350L, deserialized.getDurationMs());
         Assertions.assertEquals(700L, deserialized.getDelayMs());
     }
+
+    @Test
+    public void testTargetFrameworkAndDomFeatureVectorSerialization() throws Exception
+    {
+        final PlaybookStep step = new PlaybookStep();
+        step.setInstruction("Click submit button");
+        step.setTargetFramework("SELENIUM_SELENIDE");
+        step.setSemanticContext("Primary checkout purchase button");
+        step.setDomFeatureVector(new DomFeatureVector(
+            "button",
+            "Place Order",
+            java.util.Set.of("btn", "btn-primary"),
+            java.util.Map.of("type", "submit", "id", "btn-order"),
+            "button",
+            "Place Order",
+            "form",
+            3
+        ));
+
+        final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        final String json = mapper.writeValueAsString(step);
+
+        Assertions.assertTrue(json.contains("\"targetFramework\" : \"SELENIUM_SELENIDE\"") || json.contains("\"targetFramework\":\"SELENIUM_SELENIDE\""));
+        Assertions.assertTrue(json.contains("\"schemaVersion\" : \"3.0\"") || json.contains("\"schemaVersion\":\"3.0\""));
+        Assertions.assertTrue(json.contains("\"semanticContext\" : \"Primary checkout purchase button\"") || json.contains("\"semanticContext\":\"Primary checkout purchase button\""));
+        Assertions.assertTrue(json.contains("\"domFeatureVector\""));
+
+        final PlaybookStep deserialized = mapper.readValue(json, PlaybookStep.class);
+        Assertions.assertEquals("SELENIUM_SELENIDE", deserialized.getTargetFramework());
+        Assertions.assertEquals("3.0", deserialized.getSchemaVersion());
+        Assertions.assertEquals("Primary checkout purchase button", deserialized.getSemanticContext());
+        Assertions.assertNotNull(deserialized.getDomFeatureVector());
+        Assertions.assertEquals("button", deserialized.getDomFeatureVector().getTag());
+        Assertions.assertEquals("Place Order", deserialized.getDomFeatureVector().getText());
+    }
+
+    @Test
+    public void testIncompatibleFrameworkThrowsException() throws Exception
+    {
+        final String json = """
+            [
+              {
+                "instruction": "Click on cart",
+                "targetFramework": "PLAYWRIGHT",
+                "schemaVersion": "3.0"
+              }
+            ]
+            """;
+        final org.neodymium.ai.resources.InMemoryResourceManager manager = new org.neodymium.ai.resources.InMemoryResourceManager();
+        manager.write("mock_playbook.json", json);
+
+        final org.neodymium.ai.playbook.YamlPlaybookParser parser = new org.neodymium.ai.playbook.YamlPlaybookParser();
+        Assertions.assertThrows(IncompatibleFrameworkException.class, () -> parser.parse("mock_playbook.json", manager));
+    }
 }

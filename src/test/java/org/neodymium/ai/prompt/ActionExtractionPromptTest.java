@@ -28,7 +28,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;

@@ -144,4 +144,35 @@ public class ExecuteActionsStepTest
 
         assertTrue(ex.getMessage().contains("No recorded actions found for step"));
     }
+
+    @Test
+    public void testExecuteActionsInscribesTargetFramework() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING);
+
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep();
+        step.setInstruction("Click submit");
+        context.getTransientData().put("KEY_CURRENT_PLAYBOOK_STEP", step);
+
+        final List<Action> actions = List.of(
+            new Action("CLICK", "#submit-btn", null, "Click submit", "Reason")
+        );
+        context.getTransientData().put("KEY_CURRENT_STEP_ACTIONS", actions);
+
+        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
+        executeStep.execute(context);
+
+        assertEquals("SELENIUM_SELENIDE", step.getTargetFramework());
+    }
 }

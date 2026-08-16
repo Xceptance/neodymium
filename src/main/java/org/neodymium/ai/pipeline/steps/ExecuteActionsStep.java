@@ -36,6 +36,7 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
@@ -333,11 +334,18 @@ public final class ExecuteActionsStep implements PipelineStep
                         ste.setExecutionContext(context);
                     }
 
+                    if (step != null && executor != null && !isReplayingStep)
+                    {
+                        step.setTargetFramework(executor.getFrameworkName());
+                    }
+
                     Action actionToExecute = resolvedAction;
+                    if (step != null && step.getDomFeatureVector() != null && actionToExecute.getDomFeatureVector() == null)
+                    {
+                        actionToExecute = actionToExecute.withDomFeatureVector(step.getDomFeatureVector());
+                    }
                     if (!isReplayingStep
                         && executor != null
-                        && executor.supportsLocatorImprovement()
-                        && org.neodymium.ai.config.AiConfiguration.getInstance().isLocatorImproverEnabled()
                         && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted()
                         && resolvedAction.getTarget() != null
                         && !resolvedAction.getTarget().isBlank())
@@ -348,36 +356,55 @@ public final class ExecuteActionsStep implements PipelineStep
                             final com.codeborne.selenide.SelenideElement found = org.neodymium.ai.executor.selenide.SelenideElementFinder.findElement(resolvedAction);
                             if (found != null && found.toWebElement() != null)
                             {
-                                final String improvedLocator = org.neodymium.ai.util.LocatorImprover.improveLocator(driver, found.toWebElement(), resolvedAction.getTarget());
-                                if (improvedLocator != null && !improvedLocator.equals(resolvedAction.getTarget()))
+                                final org.neodymium.ai.model.DomFeatureVector vector = new org.neodymium.ai.executor.selenide.PageAnalyzer(driver).extractFeatureVector(found.toWebElement());
+                                if (vector != null)
                                 {
-                                    actionToExecute = actionToExecute.withTarget(improvedLocator);
-                                    final Action upgraded = sanitized.withTarget(improvedLocator);
-                                    if (step.getActions() != null && !step.getActions().isEmpty())
+                                    actionToExecute = actionToExecute.withDomFeatureVector(vector);
+                                    sanitized.setDomFeatureVector(vector);
+                                    if (step != null && step.getDomFeatureVector() == null)
                                     {
-                                        final int idx = step.getActions().indexOf(sanitized);
-                                        if (idx != -1)
-                                        {
-                                            step.getActions().set(idx, upgraded);
-                                        }
+                                        step.setDomFeatureVector(vector);
                                     }
-                                    if (recordedActions != null && !recordedActions.isEmpty())
+                                }
+
+                                if (executor.supportsLocatorImprovement()
+                                    && org.neodymium.ai.config.AiConfiguration.getInstance().isLocatorImproverEnabled())
+                                {
+                                    final String improvedLocator = org.neodymium.ai.util.LocatorImprover.improveLocator(driver, found.toWebElement(), resolvedAction.getTarget());
+                                    if (improvedLocator != null && !improvedLocator.equals(resolvedAction.getTarget()))
                                     {
-                                        final int idx = recordedActions.indexOf(sanitized);
-                                        if (idx != -1)
+                                        actionToExecute = actionToExecute.withTarget(improvedLocator);
+                                        final Action upgraded = sanitized.withTarget(improvedLocator);
+                                        if (vector != null)
                                         {
-                                            recordedActions.set(idx, upgraded);
+                                            upgraded.setDomFeatureVector(vector);
                                         }
-                                    }
-                                    if (stepActions != null && !stepActions.isEmpty())
-                                    {
-                                        final int idx = stepActions.indexOf(sanitized);
-                                        if (idx != -1)
+                                        if (step != null && step.getActions() != null && !step.getActions().isEmpty())
                                         {
-                                            stepActions.set(idx, upgraded);
+                                            final int idx = step.getActions().indexOf(sanitized);
+                                            if (idx != -1)
+                                            {
+                                                step.getActions().set(idx, upgraded);
+                                            }
                                         }
+                                        if (recordedActions != null && !recordedActions.isEmpty())
+                                        {
+                                            final int idx = recordedActions.indexOf(sanitized);
+                                            if (idx != -1)
+                                            {
+                                                recordedActions.set(idx, upgraded);
+                                            }
+                                        }
+                                        if (stepActions != null && !stepActions.isEmpty())
+                                        {
+                                            final int idx = stepActions.indexOf(sanitized);
+                                            if (idx != -1)
+                                            {
+                                                stepActions.set(idx, upgraded);
+                                            }
+                                        }
+                                        sanitized = upgraded;
                                     }
-                                    sanitized = upgraded;
                                 }
                             }
                         }
@@ -420,9 +447,9 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     try
                     {
-                        final org.neodymium.ai.executor.selenide.ContextLevel cl = (step != null && step.isVisualStep())
-                            ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL
-                            : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
+                        final org.neodymium.ai.model.ContextLevel cl = (step != null && step.isVisualStep())
+                            ? org.neodymium.ai.model.ContextLevel.VISUAL
+                            : org.neodymium.ai.model.ContextLevel.VISUAL_LEAN;
                         final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
                         final SutState postActionState = executor.captureState(cl, isFullPageReq);
                         if (postActionState != null)
@@ -446,10 +473,10 @@ public final class ExecuteActionsStep implements PipelineStep
 
                     @SuppressWarnings("unchecked")
                     final AiPrompt<List<Action>> activePrompt = (AiPrompt<List<Action>>) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_PROMPT);
-                    final org.neodymium.ai.executor.selenide.ContextLevel currentLevel =
-                        context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                    final org.neodymium.ai.model.ContextLevel currentLevel =
+                        context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.model.ContextLevel cl
                             ? cl
-                            : org.neodymium.ai.executor.selenide.ContextLevel.LEAN;
+                            : org.neodymium.ai.model.ContextLevel.LEAN;
 
                     final LlmCapability capability = currentLevel.includesScreenshot() ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                     final CallLlmStep<List<Action>> continuationLlmStep = new CallLlmStep<>(activePrompt, capability);
@@ -683,12 +710,12 @@ public final class ExecuteActionsStep implements PipelineStep
             final Set<PlaybookStep> alreadySplitSteps = (Set<PlaybookStep>) contextState.getTransientData()
                 .computeIfAbsent("pesap.alreadySplitSteps", k -> new HashSet<>());
 
-            org.neodymium.ai.executor.selenide.ContextLevel initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+            org.neodymium.ai.model.ContextLevel initialLevel = org.neodymium.ai.model.ContextLevel.MINIMAL;
             if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
             {
                 try
                 {
-                    initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
+                    initialLevel = org.neodymium.ai.model.ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
                 }
                 catch (final Exception ignored)
                 {
@@ -701,19 +728,19 @@ public final class ExecuteActionsStep implements PipelineStep
 
             if (lower.contains("(visual: full)"))
             {
-                initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
+                initialLevel = org.neodymium.ai.model.ContextLevel.VISUAL;
             }
             else if (lower.contains("(visual)"))
             {
-                initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
+                initialLevel = org.neodymium.ai.model.ContextLevel.VISUAL;
             }
             else if (lower.contains("(layout)"))
             {
-                initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH;
+                initialLevel = org.neodymium.ai.model.ContextLevel.VISUAL_RICH;
             }
             else if (lower.contains("(hint:"))
             {
-                initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.HINT;
+                initialLevel = org.neodymium.ai.model.ContextLevel.HINT;
             }
 
             @SuppressWarnings("unchecked")
@@ -765,285 +792,43 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 LOGGER.debug("       Flags:       {}", flags);
             }
-            LOGGER.debug("================================================================================");
-
-            final boolean isReplayMode = executionMode != null && executionMode.isReplay();
-            final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
-            if (!isReplayMode && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(step))
-            {
-                alreadySplitSteps.add(step);
-                try
-                {
-                    String previousInstruction = null;
-                    final List<String> nextInstructions = new ArrayList<>();
-                    if (flatSteps != null)
-                    {
-                        final int idx = flatSteps.indexOf(step);
-                        if (idx != -1)
-                        {
-                            if (idx > 0)
-                            {
-                                previousInstruction = contextState.getSessionData().resolveVariables(flatSteps.get(idx - 1).getInstruction());
-                            }
-                            for (int i = idx + 1; i < flatSteps.size() && nextInstructions.size() < 2; i++)
-                            {
-                                nextInstructions.add(contextState.getSessionData().resolveVariables(flatSteps.get(i).getInstruction()));
-                            }
-                        }
-                    }
-
-                    final PesapPrompt pesapPrompt = new PesapPrompt(resolvedInstruction, previousInstruction, nextInstructions);
-                    final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.PESAP);
-                    final double temp = config.getTemperature("action");
-                    final int timeoutSeconds = config.getTimeoutSeconds("action");
-
-                    final LlmRequest request = new LlmRequest(
-                        pesapPrompt.compileSystemMessage(contextState),
-                        pesapPrompt.compileUserMessage(contextState),
-                        Collections.emptyList(),
-                        pesapPrompt.getResponseSchema(),
-                        temp,
-                        timeoutSeconds
-                    );
-
-                    LOGGER.debug("💬 [Pre-Step PESAP] Running analysis using provider '{}'", provider.getClass().getSimpleName());
-                    if (LOGGER.isTraceEnabled())
-                    {
-                        LOGGER.trace("System Prompt:\n{}", request.systemMessage());
-                        LOGGER.trace("User Prompt:\n{}", request.userMessage());
-                    }
-
-                    final long startTime = System.currentTimeMillis();
-                    final LlmResponse response = provider.chat(request);
-                    final long durationMs = System.currentTimeMillis() - startTime;
-
-                    LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
-                    if (LOGGER.isTraceEnabled())
-                    {
-                        LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
-                    }
-
-                    contextState.getTransientData().compute("pesapCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
-
-                    final org.neodymium.ai.client.TokenUsage newUsage = response.tokenUsage();
-                    if (newUsage != null)
-                    {
-                        stats.addPesapCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
-
-                        LOGGER.debug("   📊 [Pre-Step PESAP] Tokens: {} in ({} cached) → {} out (total: {})",
-                            newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
-
-                        final org.neodymium.ai.client.TokenUsage existing = (org.neodymium.ai.client.TokenUsage) contextState.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
-                        if (existing == null)
-                        {
-                            contextState.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, newUsage);
-                        }
-                        else
-                        {
-                            contextState.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new org.neodymium.ai.client.TokenUsage(
-                                existing.inputTokenCount() + newUsage.inputTokenCount(),
-                                existing.outputTokenCount() + newUsage.outputTokenCount(),
-                                existing.totalTokenCount() + newUsage.totalTokenCount(),
-                                existing.cachedTokenCount() + newUsage.cachedTokenCount()
-                            ));
-                        }
-                    }
-
-                    final PesapPrompt.PesapResult pesapResult = pesapPrompt.parseResponse(response.content(), contextState);
-
-                    if (pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
-                    {
-                        LOGGER.info("✂️ Upfront JIT step split detected: \"{}\" split into {}", resolvedInstruction, pesapResult.splitSteps());
-                        for (final String part : pesapResult.splitSteps())
-                        {
-                            final PlaybookStep subStep = new PlaybookStep(part);
-                            subStep.setSourceFile(step.getSourceFile());
-                            subStep.setLineNumber(step.getLineNumber());
-                            subStep.setParent(step);
-                            
-                            // Explicitly copy control flags from the parent step
-                            subStep.setBug(step.isBug());
-                            subStep.setBugDetails(step.getBugDetails());
-                            subStep.setContinueOnError(step.isContinueOnError());
-                            subStep.setNoHealing(step.isNoHealing());
-                            subStep.setOptional(step.isOptional());
-                            
-                            step.getSubSteps().add(subStep);
-                        }
-
-                        final List<PipelineStep> subPipelineSteps = new ArrayList<>();
-                        for (final PlaybookStep subStep : step.getSubSteps())
-                        {
-                            subPipelineSteps.add(mapPlaybookStepToPipelineStep(subStep, session, context));
-                        }
-                        for (int i = subPipelineSteps.size() - 1; i >= 0; i--)
-                        {
-                            contextState.pushStep(subPipelineSteps.get(i));
-                        }
-                        return;
-                    }
-
-                    if (pesapResult.contextLevel() != null)
-                    {
-                        try
-                        {
-                            final org.neodymium.ai.executor.selenide.ContextLevel predicted =
-                                org.neodymium.ai.executor.selenide.ContextLevel.valueOf(pesapResult.contextLevel().toUpperCase().trim());
-                            // Preserve explicit (visual) tag unless (visual: full) or (layout) was explicitly specified
-                            if (initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL && predicted == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH)
-                            {
-                                LOGGER.debug("   🛡️ Preserving explicit (visual) tag level VISUAL over PESAP predicted VISUAL_RICH");
-                            }
-                            else
-                            {
-                                initialLevel = predicted;
-                            }
-                        }
-                        catch (final Exception e)
-                        {
-                            // Keep default
-                        }
-                    }
-                }
-                catch (final Exception e)
-                {
-                    LOGGER.warn("⚠️ Pre-Step PESAP failed for step '{}' — falling back to defaults: {}", resolvedInstruction, e.getMessage());
-                }
-            }
-
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, initialLevel);
             step.setContextLevel(initialLevel.name());
-            stats.getContextLevels().add(initialLevel.name());
+
+            final PesapPreStep pesapPreStep = new PesapPreStep(step, session);
+            final boolean isSplit = pesapPreStep.executePreStep(contextState);
+            if (isSplit)
+            {
+                return;
+            }
+
+            final ContextLevel effectiveLevel = (ContextLevel) contextState.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+            stats.addContextLevel(effectiveLevel != null ? effectiveLevel.name() : initialLevel.name());
 
             final int maxRetriesAtMaxLevel = org.neodymium.ai.config.AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
-            final int ladderDistance = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH.ordinal() - initialLevel.ordinal() + 1;
+            final int ladderDistance = org.neodymium.ai.model.ContextLevel.VISUAL_RICH.ordinal() - (effectiveLevel != null ? effectiveLevel.ordinal() : initialLevel.ordinal()) + 1;
             final int totalStepBudget = Math.max(1, ladderDistance) + Math.max(0, maxRetriesAtMaxLevel);
 
             contextState.getTransientData().put("KEY_STEP_TOTAL_BUDGET", totalStepBudget);
             contextState.getTransientData().put("KEY_STEP_ATTEMPTS_USED", 1);
 
             @SuppressWarnings("unchecked")
-            final AiPrompt<List<Action>> activePrompt = (AiPrompt<List<Action>>) contextState.getTransientData()
+            final AiPrompt<List<Action>> candidatePrompt = (AiPrompt<List<Action>>) contextState.getTransientData()
                 .get(ExecutionContext.KEY_ACTIVE_PROMPT);
-
-            if (activePrompt == null)
+            final AiPrompt<List<Action>> activePrompt = candidatePrompt != null ? candidatePrompt : new org.neodymium.ai.prompt.ActionExtractionPrompt();
+            if (candidatePrompt == null)
             {
-                throw new ConclusiveFailureException("No active prompt template registered in ExecutionContext transient data");
+                contextState.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, activePrompt);
             }
 
             final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) contextState.getTransientData()
                 .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> org.neodymium.ai.config.AiConfiguration.getInstance().getExecutionMode());
 
-            // Check if we are in replay mode and have a recorded dHash for this step
-            if (mode.isReplay() && !stepNoReplay && step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
+            final VisualBaselineGateStep visualBaselineGateStep = new VisualBaselineGateStep(step, session);
+            final boolean isBypassed = visualBaselineGateStep.executeGate(contextState);
+            if (isBypassed)
             {
-                final TargetExecutor executor = (TargetExecutor) contextState.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-                if (executor != null)
-                {
-                    try
-                    {
-                        if (org.neodymium.ai.config.AiConfiguration.getInstance().isUseRecordedDelays())
-                        {
-                            final Long recStepDelay = step.getDelayMs();
-                            if (recStepDelay != null && recStepDelay > 0)
-                            {
-                                final double scale = org.neodymium.ai.config.AiConfiguration.getInstance().getReplayDelayScale();
-                                final long sleepTime = Math.max(0L, (long) (recStepDelay * scale));
-                                if (sleepTime > 0)
-                                {
-                                    try
-                                    {
-                                        Thread.sleep(sleepTime);
-                                    }
-                                    catch (final InterruptedException e)
-                                    {
-                                        Thread.currentThread().interrupt();
-                                    }
-                                }
-                            }
-                        }
-
-                        final boolean isFullPageReq = Boolean.TRUE.equals(contextState.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
-                        final SutState currentState = VisualStabilityDetector.captureSettledState(executor, isFullPageReq);
-                        contextState.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
-
-                        final String currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(currentState);
-
-                        if (step.getScreenshotHash() != null)
-                        {
-                            boolean isVisualMatch = false;
-                            final String recordedHash = step.getScreenshotHash();
-                            if (currentSsimMatrix != null)
-                            {
-                                final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
-                                final double minScore = AiConfiguration.getInstance().getVisualSsimMinScore();
-
-                                LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | SSIM Score: {} | Required Min Score: {}",
-                                    resolvedInstruction, String.format("%.4f", ssimScore), minScore);
-
-                                if (ssimScore >= minScore)
-                                {
-                                    isVisualMatch = true;
-                                    LOGGER.info("   ✅ Visual SSIM match (score: {} >= {}) for instruction: \"{}\". Bypassing LLM call/actions.",
-                                        String.format("%.4f", ssimScore), minScore, resolvedInstruction);
-                                }
-                                else
-                                {
-                                    LOGGER.debug("   ⚠️ Visual SSIM score below threshold ({} < {}) for instruction: \"{}\"",
-                                        String.format("%.4f", ssimScore), minScore, resolvedInstruction);
-                                }
-                            }
-
-                            final boolean hasActualActions = step.getActions() != null && !step.getActions().isEmpty()
-                                && step.getActions().stream().anyMatch(a -> !"NONE".equalsIgnoreCase(a.getType()));
-
-                            if (isVisualMatch && !hasActualActions)
-                            {
-                                return;
-                            }
-                            else
-                            {
-                                if (hasActualActions)
-                                {
-                                    if (isVisualMatch)
-                                    {
-                                        org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).info(
-                                            "   Visual match for interactive instruction: \"{}\". Executing actions anyway to guarantee state.",
-                                            resolvedInstruction);
-                                    }
-                                    else
-                                    {
-                                        org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).debug(
-                                            "   Visual mismatch for interactive instruction: \"{}\". Proceeding to execute actions.",
-                                            resolvedInstruction);
-                                    }
-                                }
-                                else
-                                {
-                                    final String msg = String.format("Visual mismatch for instruction: \"%s\".", resolvedInstruction);
-                                    org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("   ❌ " + msg);
-
-                                    if (mode.supportsHealing())
-                                    {
-                                        throw new HealingRequiredException(msg);
-                                    }
-                                    else
-                                    {
-                                        throw new DivergenceException(msg);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (final PipelineException e)
-                    {
-                        throw e;
-                    }
-                    catch (final Exception e)
-                    {
-                        org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("   ⚠️ Failed to capture state or compare visual dHash: {}", e.getMessage());
-                    }
-                }
+                return;
             }
 
             // Assemble try block sequence: [CaptureStateStep] -> [CallLlmStep | Replay Actions] -> ExecuteActionsStep -> VerifyOutcomeStep
@@ -1083,7 +868,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     {
                         try
                         {
-                            final SutState state = executor.captureState(org.neodymium.ai.executor.selenide.ContextLevel.STANDARD);
+                            final SutState state = executor.captureState(org.neodymium.ai.model.ContextLevel.STANDARD);
                             c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
                         }
                         catch (final Exception ignored)
@@ -1099,10 +884,10 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 // Live mode: Query LLM for actions
                 final boolean verificationEnabled = org.neodymium.ai.config.AiConfiguration.getInstance().isSemanticVerificationEnabled();
-                final org.neodymium.ai.executor.selenide.ContextLevel captureLevel;
-                if (verificationEnabled && (initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL || initialLevel == org.neodymium.ai.executor.selenide.ContextLevel.LEAN))
+                final org.neodymium.ai.model.ContextLevel captureLevel;
+                if (verificationEnabled && (initialLevel == org.neodymium.ai.model.ContextLevel.MINIMAL || initialLevel == org.neodymium.ai.model.ContextLevel.LEAN))
                 {
-                    captureLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN;
+                    captureLevel = org.neodymium.ai.model.ContextLevel.VISUAL_LEAN;
                 }
                 else
                 {
@@ -1152,8 +937,8 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 // Healing Escalation: PrepareRetryStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {
-                    org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
-                        c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+                    org.neodymium.ai.model.ContextLevel activeLevel =
+                        c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.model.ContextLevel cl
                             ? cl
                             : null;
 
@@ -1162,7 +947,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     {
                         try
                         {
-                            activeLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
+                            activeLevel = org.neodymium.ai.model.ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
                         }
                         catch (final Exception ignored)
                         {
@@ -1170,10 +955,10 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                     if (activeLevel == null)
                     {
-                        activeLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+                        activeLevel = org.neodymium.ai.model.ContextLevel.MINIMAL;
                     }
 
-                    final org.neodymium.ai.executor.selenide.ContextLevel escalatedLevel = isFirstHealingAttempt ? activeLevel : activeLevel.escalate();
+                    final org.neodymium.ai.model.ContextLevel escalatedLevel = isFirstHealingAttempt ? activeLevel : activeLevel.escalate();
 
                     if (escalatedLevel == null)
                     {
@@ -1182,11 +967,11 @@ public final class ExecuteActionsStep implements PipelineStep
                         throw new ConclusiveFailureException("Action execution failed after maximum context escalation (" + activeLevel + "): " + lastErr);
                     }
 
-                    if (activeLevel == escalatedLevel || escalatedLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH)
+                    if (activeLevel == escalatedLevel || escalatedLevel == org.neodymium.ai.model.ContextLevel.VISUAL_RICH)
                     {
                         final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
                         final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
-                        if (attemptsUsed >= totalBudget && activeLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH)
+                        if (attemptsUsed >= totalBudget && activeLevel == org.neodymium.ai.model.ContextLevel.VISUAL_RICH)
                         {
                             org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error(
                                 "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at highest context level ({}) for step. Aborting retry loop.",
@@ -1210,7 +995,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
                     if (statsObj instanceof org.neodymium.ai.pipeline.StepStats stepStats)
                     {
-                        stepStats.getContextLevels().add(escalatedLevel.name());
+                        stepStats.addContextLevel(escalatedLevel.name());
                     }
 
                     final LlmCapability capability = escalatedLevel.includesScreenshot() ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
@@ -1231,17 +1016,17 @@ public final class ExecuteActionsStep implements PipelineStep
                     final Object errObj = c.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
                     final org.neodymium.ai.pipeline.ToLevelEscalationException e = errObj instanceof org.neodymium.ai.pipeline.ToLevelEscalationException tle ? tle : null;
                     final String targetLevelStr = e != null ? e.getTargetLevel() : "VISUAL_RICH";
-                    org.neodymium.ai.executor.selenide.ContextLevel targetLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+                    org.neodymium.ai.model.ContextLevel targetLevel = org.neodymium.ai.model.ContextLevel.MINIMAL;
                     try
                     {
-                        targetLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(targetLevelStr.toUpperCase());
+                        targetLevel = org.neodymium.ai.model.ContextLevel.valueOf(targetLevelStr.toUpperCase());
                         final Object curLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                        final org.neodymium.ai.executor.selenide.ContextLevel currentLevel = curLevelObj instanceof org.neodymium.ai.executor.selenide.ContextLevel cl ? cl : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+                        final org.neodymium.ai.model.ContextLevel currentLevel = curLevelObj instanceof org.neodymium.ai.model.ContextLevel cl ? cl : org.neodymium.ai.model.ContextLevel.MINIMAL;
 
                         final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
                         final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
 
-                        if (attemptsUsed >= totalBudget && (currentLevel == org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH || targetLevel == currentLevel))
+                        if (attemptsUsed >= totalBudget && (currentLevel == org.neodymium.ai.model.ContextLevel.VISUAL_RICH || targetLevel == currentLevel))
                         {
                             org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).error(
                                 "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at context level ({}) for step. Aborting retry loop.",
@@ -1258,7 +1043,7 @@ public final class ExecuteActionsStep implements PipelineStep
                         final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
                         if (statsObj instanceof org.neodymium.ai.pipeline.StepStats stepStats)
                         {
-                            stepStats.getContextLevels().add(targetLevel.name());
+                            stepStats.addContextLevel(targetLevel.name());
                         }
                     }
                     catch (final ConclusiveFailureException cfe)

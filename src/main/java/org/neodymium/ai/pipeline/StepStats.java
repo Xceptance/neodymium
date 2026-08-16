@@ -133,6 +133,19 @@ public final class StepStats
     }
 
     /**
+     * Records a context level traversed during step execution, deduplicating against the immediately preceding level.
+     *
+     * @param level the context level name
+     */
+    public void addContextLevel(final String level)
+    {
+        if (level != null && (this.contextLevels.isEmpty() || !this.contextLevels.get(this.contextLevels.size() - 1).equals(level)))
+        {
+            this.contextLevels.add(level);
+        }
+    }
+
+    /**
      * Gets the actions executed.
      *
      * @return the list of actions

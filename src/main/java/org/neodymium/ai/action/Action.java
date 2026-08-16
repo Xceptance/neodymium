@@ -104,6 +104,12 @@ public class Action
     private List<LocatorCandidate> candidateLocators = new ArrayList<>();
 
     /**
+     * The DOM Feature Vector snapshot of the target interactive element.
+     */
+    @JsonProperty("domFeatureVector")
+    private org.neodymium.ai.model.DomFeatureVector domFeatureVector;
+
+    /**
      * Dynamic parameter binding bindings for extensible runtime properties.
      */
     private final transient Map<String, Object> parameters = new HashMap<>();
@@ -235,6 +241,7 @@ public class Action
         copy.stepScreenshotHash = this.stepScreenshotHash;
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -264,6 +271,9 @@ public class Action
         copy.stepScreenshotHash = this.stepScreenshotHash;
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -288,8 +298,57 @@ public class Action
         copy.stepScreenshotHash = this.stepScreenshotHash;
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
         return copy;
+    }
+
+    /**
+     * Creates a new Action copy with an updated DOM Feature Vector.
+     *
+     * @param featureVector the new DOM feature vector
+     * @return a new Action instance with the updated feature vector
+     */
+    public Action withDomFeatureVector(final org.neodymium.ai.model.DomFeatureVector featureVector)
+    {
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = featureVector;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    /**
+     * Returns the DOM Feature Vector snapshot of the target element.
+     *
+     * @return the DOM feature vector, or {@code null} if not set
+     */
+    public final org.neodymium.ai.model.DomFeatureVector getDomFeatureVector()
+    {
+        return this.domFeatureVector;
+    }
+
+    /**
+     * Sets the DOM Feature Vector snapshot of the target element.
+     *
+     * @param domFeatureVector the DOM feature vector to set
+     */
+    public final void setDomFeatureVector(final org.neodymium.ai.model.DomFeatureVector domFeatureVector)
+    {
+        this.domFeatureVector = domFeatureVector;
     }
 
     /**

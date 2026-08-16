@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.executor.SutState;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 
 /**
  * Unit tests for {@link RestTargetExecutor}.

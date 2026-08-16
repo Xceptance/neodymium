@@ -38,10 +38,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Prompt builder and parser for the Quality Judge ("second opinion") evaluation step.
  * Compiles DOM context, proposed action, and candidate locators into a structured LLM query.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
-public class QualityJudgePrompt
+public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJudgeResult>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(QualityJudgePrompt.class);
     private static final String PROMPT_RESOURCE = "/ai-prompts/quality-judge-prompt.md";
@@ -70,6 +70,100 @@ public class QualityJudgePrompt
         return "You are the Neodymium AI Quality Judge. Review proposed actions and candidate locators for stability, accuracy, and text targeting.";
     }
 
+    @Override
+    public org.neodymium.ai.client.ResponseSchema getResponseSchema()
+    {
+        return org.neodymium.ai.client.ResponseSchema.TEXT;
+    }
+
+    @Override
+    public String compileSystemMessage(final ExecutionContext context)
+    {
+        final Object targetExecutor = context != null ? context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
+        final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;
+
+        String compiledSystemPrompt = systemPrompt;
+        if (isSelenideMode)
+        {
+            compiledSystemPrompt = compiledSystemPrompt + ActionExtractionPrompt.SELENIDE_LOCATOR_RULE;
+        }
+        return compiledSystemPrompt;
+    }
+
+    @Override
+    public String compileUserMessage(final ExecutionContext context)
+    {
+        if (context == null)
+        {
+            return "";
+        }
+        final String instruction = (String) context.getTransientData().get("KEY_CURRENT_INSTRUCTION");
+        final String domContext = (String) context.getTransientData().get("KEY_DOM_CONTEXT");
+        final Action proposedAction = (Action) context.getTransientData().get("KEY_PROPOSED_ACTION");
+        final AiConfiguration aiConfig = AiConfiguration.getInstance();
+        return compileUserMessage(instruction, domContext, proposedAction, aiConfig);
+    }
+
+    /**
+     * Compiles user query message from components.
+     *
+     * @param instruction step instruction
+     * @param domContext DOM context text
+     * @param proposedAction proposed action
+     * @param aiConfig AI configuration
+     * @return compiled user prompt message
+     */
+    public String compileUserMessage(
+            final String instruction,
+            final String domContext,
+            final Action proposedAction,
+            final AiConfiguration aiConfig)
+    {
+        final StringBuilder userMsg = new StringBuilder();
+        userMsg.append("## Execution Instruction\n");
+        userMsg.append(instruction != null ? instruction : "").append("\n\n");
+
+        if (proposedAction != null)
+        {
+            userMsg.append("## Proposed Action\n");
+            userMsg.append("Action Type: ").append(proposedAction.getType()).append("\n");
+            userMsg.append("Primary Locator: ").append(proposedAction.getTarget()).append("\n");
+            userMsg.append("Value: ").append(proposedAction.getValue() != null ? proposedAction.getValue() : "").append("\n");
+            userMsg.append("isRegex: ").append(proposedAction.isRegex()).append("\n");
+            userMsg.append("Reasoning: ").append(proposedAction.getReasoning()).append("\n\n");
+
+            userMsg.append("## Candidate Locators\n");
+            final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
+            final boolean isCompact = "COMPACT".equalsIgnoreCase(aiConfig != null ? aiConfig.getLocatorsFormat() : "DETAILED");
+            if (candidates != null && !candidates.isEmpty())
+            {
+                for (int i = 0; i < candidates.size(); i++)
+                {
+                    final LocatorCandidate cand = candidates.get(i);
+                    if (isCompact)
+                    {
+                        userMsg.append(String.format("Candidate %d: '%s' (%s)\n", i + 1, cand.getLocator(), cand.getStrategy()));
+                    }
+                    else
+                    {
+                        userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f, reasoning='%s'\n",
+                                i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore(), cand.getReasoning()));
+                    }
+                }
+            }
+            else
+            {
+                userMsg.append("Candidate 1: locator='").append(proposedAction.getTarget()).append("'\n");
+            }
+            userMsg.append("\n");
+        }
+
+        userMsg.append("## Current DOM Context\n");
+        userMsg.append(domContext != null ? domContext : "").append("\n");
+
+        return userMsg.toString();
+    }
+
     /**
      * Compiles an LlmRequest for evaluating the proposed action against the DOM context.
      *
@@ -85,50 +179,11 @@ public class QualityJudgePrompt
             final Action proposedAction,
             final AiConfiguration aiConfig)
     {
-        final StringBuilder userMsg = new StringBuilder();
-        userMsg.append("## Execution Instruction\n");
-        userMsg.append(instruction != null ? instruction : "").append("\n\n");
-
-        userMsg.append("## Proposed Action\n");
-        userMsg.append("Action Type: ").append(proposedAction.getType()).append("\n");
-        userMsg.append("Primary Locator: ").append(proposedAction.getTarget()).append("\n");
-        userMsg.append("Value: ").append(proposedAction.getValue() != null ? proposedAction.getValue() : "").append("\n");
-        userMsg.append("isRegex: ").append(proposedAction.isRegex()).append("\n");
-        userMsg.append("Reasoning: ").append(proposedAction.getReasoning()).append("\n\n");
-
-        userMsg.append("## Candidate Locators\n");
-        final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
-        final boolean isCompact = "COMPACT".equalsIgnoreCase(aiConfig != null ? aiConfig.getLocatorsFormat() : "DETAILED");
-        if (candidates != null && !candidates.isEmpty())
-        {
-            for (int i = 0; i < candidates.size(); i++)
-            {
-                final LocatorCandidate cand = candidates.get(i);
-                if (isCompact)
-                {
-                    userMsg.append(String.format("Candidate %d: '%s' (%s)\n", i + 1, cand.getLocator(), cand.getStrategy()));
-                }
-                else
-                {
-                    userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f, reasoning='%s'\n",
-                            i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore(), cand.getReasoning()));
-                }
-            }
-        }
-        else
-        {
-            userMsg.append("Candidate 1: locator='").append(proposedAction.getTarget()).append("'\n");
-        }
-        userMsg.append("\n");
-
-        userMsg.append("## Current DOM Context\n");
-        userMsg.append(domContext != null ? domContext : "").append("\n");
+        final String userMsg = compileUserMessage(instruction, domContext, proposedAction, aiConfig);
 
         final double temp = aiConfig != null ? aiConfig.getTemperature("judge") : 0.0;
         final int timeout = aiConfig != null ? aiConfig.getTimeoutSeconds("judge") : 30;
 
-        // Conditionally append the Selenide/Selenium W3C CSS locator constraint rule
-        // only when operating in Selenide mode, leaving REST or custom non-browser modes clean.
         final ExecutionContext activeContext = ExecutionContext.getActiveContext();
         final Object targetExecutor = activeContext != null ? activeContext.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
         final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;
@@ -139,7 +194,13 @@ public class QualityJudgePrompt
             compiledSystemPrompt = compiledSystemPrompt + ActionExtractionPrompt.SELENIDE_LOCATOR_RULE;
         }
 
-        return new LlmRequest(compiledSystemPrompt, userMsg.toString(), java.util.Collections.emptyList(), null, temp, timeout);
+        return new LlmRequest(compiledSystemPrompt, userMsg, java.util.Collections.emptyList(), null, temp, timeout);
+    }
+
+    @Override
+    public QualityJudgeResult parseResponse(final String rawContent, final ExecutionContext context) throws Exception
+    {
+        return parseResponse(rawContent);
     }
 
     /**

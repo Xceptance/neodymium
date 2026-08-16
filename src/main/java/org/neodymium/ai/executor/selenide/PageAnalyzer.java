@@ -22,11 +22,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
@@ -38,7 +42,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.neodymium.common.ScreenshotWriter;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.DomFeatureVector;
 
 /**
  * Captures page context (screenshot + simplified DOM) for the LLM. The DOM is
@@ -1288,6 +1293,187 @@ public class PageAnalyzer
         {
             throw new RuntimeException("Failed to load resource: " + resourceName, e);
         }
+    }
+
+    /**
+     * Extracts all visible interactive elements across windows, frames, and shadow DOM roots
+     * as structured {@link DomFeatureVector} objects for sub-millisecond local similarity matching.
+     *
+     * @return list of extracted DOM feature vectors
+     */
+    public List<DomFeatureVector> extractFeatureVectors()
+    {
+        return extractFeatureVectors(resolveDriver(null));
+    }
+
+    /**
+     * Extracts all visible interactive elements as structured {@link DomFeatureVector} objects
+     * using the specified explicit WebDriver instance.
+     *
+     * @param explicitDriver the WebDriver instance to evaluate against
+     * @return list of extracted DOM feature vectors
+     */
+    public List<DomFeatureVector> extractFeatureVectors(final WebDriver explicitDriver)
+    {
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null)
+        {
+            return Collections.emptyList();
+        }
+
+        final String script = """
+            return (function() {
+                var roots = [document];
+                function collectRoots(root) {
+                    try {
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].shadowRoot) {
+                                roots.push(all[i].shadowRoot);
+                                collectRoots(all[i].shadowRoot);
+                            }
+                        }
+                    } catch(e) {}
+                }
+                collectRoots(document);
+
+                var results = [];
+                for (var r = 0; r < roots.length; r++) {
+                    try {
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, [role], [onclick], [data-testid], [data-test], [data-qa]');
+                        for (var i = 0; i < els.length; i++) {
+                            var el = els[i];
+                            if (el.closest && el.closest('.neodymium-ai-hud')) continue;
+                            var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                            var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                            var classes = Array.from(el.classList || []);
+                            var attrMap = {};
+                            if (el.attributes) {
+                                for (var a = 0; a < el.attributes.length; a++) {
+                                    var attr = el.attributes[a];
+                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                        attrMap[attr.name] = attr.value;
+                                    }
+                                }
+                            }
+                            var role = el.getAttribute('role') || '';
+                            var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
+                            var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
+                            var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                            results.push({
+                                tag: tag,
+                                text: text,
+                                classes: classes,
+                                attributes: attrMap,
+                                role: role,
+                                accessibleName: accessibleName ? accessibleName.trim() : '',
+                                parentTag: parentTag,
+                                siblingIndex: siblingIndex >= 0 ? siblingIndex : 0
+                            });
+                        }
+                    } catch(e) {}
+                }
+                return JSON.stringify(results);
+            })();
+            """;
+
+        try
+        {
+            final Object response = ((JavascriptExecutor) driver).executeScript(script);
+            if (response instanceof String jsonStr && !jsonStr.isBlank())
+            {
+                final ObjectMapper mapper = new ObjectMapper();
+                final TypeReference<List<DomFeatureVector>> typeRef = new TypeReference<>() {};
+                return mapper.readValue(jsonStr, typeRef);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to extract DOM Feature Vectors: {}", e.getMessage());
+        }
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * Extracts a structured {@link DomFeatureVector} for a specific target {@link WebElement}.
+     *
+     * @param element the WebElement to extract features from
+     * @return the extracted DomFeatureVector, or null if element is invalid
+     */
+    public DomFeatureVector extractFeatureVector(final WebElement element)
+    {
+        return extractFeatureVector(resolveDriver(null), element);
+    }
+
+    /**
+     * Extracts a structured {@link DomFeatureVector} for a specific target {@link WebElement}
+     * using the specified explicit WebDriver instance.
+     *
+     * @param explicitDriver the WebDriver instance to evaluate against
+     * @param element        the WebElement to extract features from
+     * @return the extracted DomFeatureVector, or null if element is invalid
+     */
+    public DomFeatureVector extractFeatureVector(final WebDriver explicitDriver, final WebElement element)
+    {
+        if (element == null)
+        {
+            return null;
+        }
+
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null)
+        {
+            return null;
+        }
+
+        final String script = """
+            return (function(el) {
+                if (!el) return null;
+                var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                var classes = Array.from(el.classList || []);
+                var attrMap = {};
+                if (el.attributes) {
+                    for (var a = 0; a < el.attributes.length; a++) {
+                        var attr = el.attributes[a];
+                        if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                            attrMap[attr.name] = attr.value;
+                        }
+                    }
+                }
+                var role = el.getAttribute('role') || '';
+                var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
+                var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
+                var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                return JSON.stringify({
+                    tag: tag,
+                    text: text,
+                    classes: classes,
+                    attributes: attrMap,
+                    role: role,
+                    accessibleName: accessibleName ? accessibleName.trim() : '',
+                    parentTag: parentTag,
+                    siblingIndex: siblingIndex >= 0 ? siblingIndex : 0
+                });
+            })(arguments[0]);
+            """;
+
+        try
+        {
+            final Object response = ((JavascriptExecutor) driver).executeScript(script, element);
+            if (response instanceof String jsonStr && !jsonStr.isBlank())
+            {
+                final ObjectMapper mapper = new ObjectMapper();
+                return mapper.readValue(jsonStr, DomFeatureVector.class);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to extract DOM Feature Vector for element: {}", e.getMessage());
+        }
+
+        return null;
     }
 
     private static boolean isImplicitRole(final String tag, final String role)

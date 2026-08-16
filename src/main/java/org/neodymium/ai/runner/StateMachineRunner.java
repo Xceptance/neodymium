@@ -28,6 +28,8 @@ import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
+import org.neodymium.ai.model.IncompatibleFrameworkException;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
@@ -130,6 +132,36 @@ public final class StateMachineRunner
         try
         {
             ExecutionContext.setActiveContext(context);
+
+            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+            final String activeFramework = executor != null ? executor.getFrameworkName().toUpperCase() : "SELENIUM_SELENIDE";
+
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            if (sessionSteps != null)
+            {
+                for (final PlaybookStep step : sessionSteps)
+                {
+                    if (step.getTargetFramework() != null && !step.getTargetFramework().trim().isEmpty())
+                    {
+                        final String fw = step.getTargetFramework().trim().toUpperCase();
+                        final boolean isCompatible;
+                        if ("SELENIUM_SELENIDE".equals(activeFramework))
+                        {
+                            isCompatible = "SELENIUM_SELENIDE".equals(fw) || "SELENIUM".equals(fw) || "SELENIDE".equals(fw);
+                        }
+                        else
+                        {
+                            isCompatible = activeFramework.equals(fw);
+                        }
+                        if (!isCompatible)
+                        {
+                            throw new IncompatibleFrameworkException("Playbook step '" + step.getInstruction() + "' targets framework '" + step.getTargetFramework() + "' which is incompatible with runner engine '" + activeFramework + "'.");
+                        }
+                    }
+                }
+            }
+
             mainLoop: while (context.hasSteps())
             {
                 final PipelineStep step = context.popStep();
@@ -301,7 +333,7 @@ public final class StateMachineRunner
                                 if (playbookStep != null)
                                 {
                                     playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
-                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH);
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.model.ContextLevel.VISUAL_RICH);
                                     context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;

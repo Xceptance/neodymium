@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.model.IncompatibleFrameworkException;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
@@ -192,10 +193,21 @@ public final class YamlPlaybookParser implements PlaybookParser
                         {
                             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
                         }
+                        for (final PlaybookStep step : parsedSteps)
+                        {
+                            if (step.getTargetFramework() != null && !step.getTargetFramework().trim().isEmpty())
+                            {
+                                final String fw = step.getTargetFramework().trim().toUpperCase();
+                                if (!fw.equals("SELENIUM_SELENIDE") && !fw.equals("SELENIUM") && !fw.equals("SELENIDE"))
+                                {
+                                    throw new IncompatibleFrameworkException("Playbook step in '" + identifier + "' targets framework '" + step.getTargetFramework() + "' which is incompatible with current runner engine 'SELENIUM_SELENIDE'.");
+                                }
+                            }
+                        }
                         return new Playbook(parsedSteps, dataSets, promptAddons);
                     }
                 }
-                catch (final IllegalArgumentException e)
+                catch (final IllegalArgumentException | IncompatibleFrameworkException e)
                 {
                     throw e;
                 }

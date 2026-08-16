@@ -97,6 +97,68 @@ public final class ScreenshotHasher
     }
 
     /**
+     * Computes a 64x64 SSIM luminance matrix for a micro-cropped region around (x, y) with radius r.
+     *
+     * @param base64Png the Base64-encoded PNG screenshot string
+     * @param x center X coordinate
+     * @param y center Y coordinate
+     * @param radius crop radius (half-width / half-height)
+     * @return the Base64-encoded 64x64 luminance matrix of the cropped tile, or null
+     */
+    public static String computeTileSsimMatrix(final String base64Png, final int x, final int y, final int radius)
+    {
+        if (base64Png == null || base64Png.isEmpty())
+        {
+            return null;
+        }
+
+        try
+        {
+            final byte[] imageBytes = Base64.getDecoder().decode(base64Png);
+            try (final ByteArrayInputStream bais = new ByteArrayInputStream(imageBytes))
+            {
+                final BufferedImage image = ImageIO.read(bais);
+                if (image == null)
+                {
+                    return null;
+                }
+
+                final int imgW = image.getWidth();
+                final int imgH = image.getHeight();
+                final int cropX = Math.max(0, Math.min(imgW - 1, x - radius));
+                final int cropY = Math.max(0, Math.min(imgH - 1, y - radius));
+                final int cropW = Math.max(1, Math.min(imgW - cropX, radius * 2));
+                final int cropH = Math.max(1, Math.min(imgH - cropY, radius * 2));
+
+                final BufferedImage subImage = image.getSubimage(cropX, cropY, cropW, cropH);
+
+                final int matrixDim = 64;
+                final BufferedImage resized = new BufferedImage(matrixDim, matrixDim, BufferedImage.TYPE_BYTE_GRAY);
+                final Graphics2D g = resized.createGraphics();
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.drawImage(subImage, 0, 0, matrixDim, matrixDim, null);
+                g.dispose();
+
+                final byte[] matrixBytes = new byte[matrixDim * matrixDim];
+                int idx = 0;
+                for (int ty = 0; ty < matrixDim; ty++)
+                {
+                    for (int tx = 0; tx < matrixDim; tx++)
+                    {
+                        matrixBytes[idx++] = (byte) (resized.getRaster().getSample(tx, ty, 0) & 0xFF);
+                    }
+                }
+                return Base64.getEncoder().encodeToString(matrixBytes);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to compute tile SSIM matrix", e);
+            return null;
+        }
+    }
+
+    /**
      * Calculates the Mean SSIM score (0.0 to 1.0) between two Base64-encoded 64x64 luminance matrices.
      *
      * @param base64Matrix1 the first Base64 luminance matrix

@@ -23,7 +23,7 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

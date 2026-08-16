@@ -21,7 +21,7 @@ package org.neodymium.ai.model;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Assertions;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 
 /**
  * Fluent assertion helper providing chainable validations and conditional mode lambdas

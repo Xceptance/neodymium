@@ -81,10 +81,10 @@ public final class VerifyOutcomeStep implements PipelineStep
         final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
 
-        final org.neodymium.ai.executor.selenide.ContextLevel activeLevel =
-            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.executor.selenide.ContextLevel cl
+        final org.neodymium.ai.model.ContextLevel activeLevel =
+            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.model.ContextLevel cl
                 ? cl
-                : org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+                : org.neodymium.ai.model.ContextLevel.MINIMAL;
         final boolean isVisualExecution = (step != null && step.isVisualStep()) || (activeLevel != null && activeLevel.includesScreenshot());
 
         // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps / escalated visual context
@@ -102,22 +102,48 @@ public final class VerifyOutcomeStep implements PipelineStep
                     }
                     else
                     {
-                        final org.neodymium.ai.executor.selenide.ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
+                        final org.neodymium.ai.model.ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
                             ? activeLevel 
                             : ((step != null && step.isVisualStep()) 
-                                ? org.neodymium.ai.executor.selenide.ContextLevel.VISUAL 
-                                : org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_LEAN);
+                                ? org.neodymium.ai.model.ContextLevel.VISUAL 
+                                : org.neodymium.ai.model.ContextLevel.VISUAL_LEAN);
                         final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
                         capturedState = executor.captureState(level, isFullPageReq);
                     }
                 }
                 if (capturedState != null && capturedState.getAttachments() != null)
                 {
+                    org.neodymium.ai.executor.selenide.plugins.ClickAction.CoordinateTarget coordinateTarget = null;
+                    if (step.getActions() != null)
+                    {
+                        for (final Action act : step.getActions())
+                        {
+                            if (act != null && act.getTarget() != null)
+                            {
+                                final org.neodymium.ai.executor.selenide.plugins.ClickAction.CoordinateTarget parsed =
+                                    org.neodymium.ai.executor.selenide.plugins.ClickAction.parseCoordinateTarget(act.getTarget());
+                                if (parsed != null)
+                                {
+                                    coordinateTarget = parsed;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
                     for (final SutAttachment attachment : capturedState.getAttachments())
                     {
                         if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                         {
-                            final String ssimMatrix = org.neodymium.ai.util.ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
+                            final String ssimMatrix;
+                            if (coordinateTarget != null)
+                            {
+                                ssimMatrix = org.neodymium.ai.util.ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), coordinateTarget.x(), coordinateTarget.y(), 32);
+                            }
+                            else
+                            {
+                                ssimMatrix = org.neodymium.ai.util.ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
+                            }
                             if (ssimMatrix != null)
                             {
                                 step.setScreenshotHash(ssimMatrix);
@@ -209,7 +235,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             }
             else
             {
-                final org.neodymium.ai.executor.selenide.ContextLevel verificationLevel = org.neodymium.ai.executor.selenide.ContextLevel.VISUAL;
+                final org.neodymium.ai.model.ContextLevel verificationLevel = org.neodymium.ai.model.ContextLevel.VISUAL;
                 LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}, fullPage: {}) AFTER executing actions", verificationLevel, isFullPageReq);
                 finalState = executor.captureState(verificationLevel, isFullPageReq);
             }

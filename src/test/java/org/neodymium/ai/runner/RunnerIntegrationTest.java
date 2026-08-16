@@ -400,7 +400,7 @@ public final class RunnerIntegrationTest
             }
 
             @Override
-            public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level)
+            public SutState captureState(final org.neodymium.ai.model.ContextLevel level)
             {
                 return null;
             }
@@ -774,7 +774,7 @@ public final class RunnerIntegrationTest
             private boolean failed = false;
 
             @Override
-            public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException
+            public SutState captureState(final org.neodymium.ai.model.ContextLevel level) throws IOException
             {
                 return delegate.captureState(level);
             }

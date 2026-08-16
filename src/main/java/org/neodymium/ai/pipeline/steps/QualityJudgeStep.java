@@ -99,20 +99,32 @@ public final class QualityJudgeStep implements PipelineStep
         if ("ON_AMBIGUITY".equals(judgeMode) && !isRetry)
         {
             final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
-            if (candidates == null || candidates.size() < 2)
+            if (candidates == null || candidates.isEmpty())
             {
-                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY but only {} candidate(s) found (requires at least 2). Skipping.",
-                    candidates != null ? candidates.size() : 0);
+                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY but no candidates found. Skipping.");
                 return;
             }
             final double score1 = candidates.get(0).getScore();
-            final double score2 = candidates.get(1).getScore();
-            if ((score1 - score2) >= 0.15)
+            if (score1 < 0.85)
             {
-                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Clear candidate winner found (diff: {}). Skipping.", String.format("%.2f", score1 - score2));
+                LOGGER.info("⚖️ Quality Judge triggered due to low top candidate score ({} < 0.85).", String.format("%.2f", score1));
+            }
+            else if (candidates.size() >= 2)
+            {
+                final double score2 = candidates.get(1).getScore();
+                if ((score1 - score2) >= 0.15)
+                {
+                    LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Clear high-confidence candidate winner found (score: {}, diff: {}). Skipping.",
+                        String.format("%.2f", score1), String.format("%.2f", score1 - score2));
+                    return;
+                }
+                LOGGER.info("⚖️ Quality Judge triggered due to ambiguous top candidate scores (diff: {}).", String.format("%.2f", score1 - score2));
+            }
+            else
+            {
+                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. High confidence single candidate found (score: {}). Skipping.", String.format("%.2f", score1));
                 return;
             }
-            LOGGER.info("⚖️ Quality Judge triggered due to ambiguous top candidate scores (diff: {}).", String.format("%.2f", score1 - score2));
         }
 
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);

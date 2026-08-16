@@ -145,16 +145,16 @@ public class MetricsAsserterTest
         final MetricsAsserter asserter = new MetricsAsserter(metrics);
 
         Assertions.assertEquals(2, metrics.getTotalEscalations());
-        Assertions.assertEquals(12, metrics.getContextLevelCount(org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL));
-        Assertions.assertEquals(2, metrics.getContextLevelCount(org.neodymium.ai.executor.selenide.ContextLevel.LEAN));
+        Assertions.assertEquals(12, metrics.getContextLevelCount(org.neodymium.ai.model.ContextLevel.MINIMAL));
+        Assertions.assertEquals(2, metrics.getContextLevelCount(org.neodymium.ai.model.ContextLevel.LEAN));
 
         asserter
             .hasEscalations()
             .hasEscalationCount(2)
             .hasEscalationCount(1, 3)
-            .hasContextLevelCount(org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL, 12)
-            .hasContextLevelCount(org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL, 10, 15)
-            .hasContextLevelCount(org.neodymium.ai.executor.selenide.ContextLevel.LEAN, 2)
+            .hasContextLevelCount(org.neodymium.ai.model.ContextLevel.MINIMAL, 12)
+            .hasContextLevelCount(org.neodymium.ai.model.ContextLevel.MINIMAL, 10, 15)
+            .hasContextLevelCount(org.neodymium.ai.model.ContextLevel.LEAN, 2)
             .hasContextLevelCount("MINIMAL", 12)
             .hasContextLevelCount("LEAN", 1, 3);
     }

@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
@@ -172,6 +173,55 @@ public class PageAnalyzerTest extends BaseAiTest
             org.junit.jupiter.api.Assertions.assertFalse(leanDom.contains("sel="), "LEAN DOM should NOT contain 'sel=' attributes");
             assertTrue(leanDom.contains("<select id=\"country-select\""), "LEAN DOM should contain select element with standard id");
             assertTrue(leanDom.contains("data-ai="), "LEAN DOM should contain data-ai attributes");
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testExtractFeatureVectors() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/verla-normal/index.html");
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+            final java.util.List<org.neodymium.ai.model.DomFeatureVector> vectors = analyzer.extractFeatureVectors();
+
+            assertNotNull(vectors);
+            assertTrue(vectors.size() > 5, "Should extract multiple interactive feature vectors");
+            assertTrue(vectors.stream().anyMatch(v -> "input".equalsIgnoreCase(v.getTag())), "Should extract input elements");
+            assertTrue(vectors.stream().anyMatch(v -> "button".equalsIgnoreCase(v.getTag()) || "a".equalsIgnoreCase(v.getTag())), "Should extract button or link elements");
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testExtractSingleElementFeatureVector() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/verla-normal/index.html");
+            final org.openqa.selenium.WebElement btn = com.codeborne.selenide.Selenide.$("button, a").toWebElement();
+            assertNotNull(btn, "Target button or link element should exist on page");
+
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+            final org.neodymium.ai.model.DomFeatureVector vector = analyzer.extractFeatureVector(btn);
+
+            assertNotNull(vector, "Extracted single-element feature vector should not be null");
+            assertNotNull(vector.getTag(), "Extracted tag should not be null");
+            assertNotNull(vector.getAttributes(), "Extracted attributes map should not be null");
+            assertNotNull(vector.getClasses(), "Extracted classes set should not be null");
         }
         finally
         {

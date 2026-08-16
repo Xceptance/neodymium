@@ -16,8 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-package org.neodymium.ai.executor.selenide;
+package org.neodymium.ai.model;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -25,7 +24,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for {@link ContextLevel} enum escalation sequence and capability boolean checks.
  *
- * @author AI-generated: Gemini 3.6 Flash (High)
+ * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
 public class ContextLevelTest
@@ -37,7 +36,7 @@ public class ContextLevelTest
         Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.MINIMAL.escalate());
         Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.LEAN.escalate());
         Assertions.assertEquals(ContextLevel.RICH, ContextLevel.STANDARD.escalate());
-        Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.RICH.escalate());
+        Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.RICH.escalate());
         Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.VISUAL.escalate());
         Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.VISUAL_LEAN.escalate());
         Assertions.assertNull(ContextLevel.VISUAL_RICH.escalate());

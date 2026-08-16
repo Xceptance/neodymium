@@ -98,9 +98,9 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                         }
 
                         final boolean isSensitive = sensitiveMap.containsKey(varKey);
-                        if ((isSensitive || rawVal.length() >= 4) && !cleanVal.contains("${" + varKey + "}"))
+                        if (isSensitive || rawVal.length() >= 4)
                         {
-                            cleanVal = cleanVal.replace(rawVal, "${" + varKey + "}");
+                            cleanVal = replaceOutsidePlaceholders(cleanVal, rawVal, "${" + varKey + "}");
                         }
                     }
                 }
@@ -130,7 +130,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                     final boolean isSensitive = sensitiveMap.containsKey(varKey);
                     if (isSensitive || rawVal.length() >= 4)
                     {
-                        sanitizedTarget = sanitizedTarget.replace(rawVal, "${" + varKey + "}");
+                        sanitizedTarget = replaceOutsidePlaceholders(sanitizedTarget, rawVal, "${" + varKey + "}");
                     }
                 }
             }
@@ -155,7 +155,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                     final boolean isSensitive = sensitiveMap.containsKey(varKey);
                     if (isSensitive || rawVal.length() >= 4)
                     {
-                        sanitizedDesc = sanitizedDesc.replace(rawVal, "${" + varKey + "}");
+                        sanitizedDesc = replaceOutsidePlaceholders(sanitizedDesc, rawVal, "${" + varKey + "}");
                     }
                 }
             }
@@ -174,7 +174,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                     final boolean isSensitive = sensitiveMap.containsKey(varKey);
                     if (isSensitive || rawVal.length() >= 4)
                     {
-                        sanitizedReasoning = sanitizedReasoning.replace(rawVal, "${" + varKey + "}");
+                        sanitizedReasoning = replaceOutsidePlaceholders(sanitizedReasoning, rawVal, "${" + varKey + "}");
                     }
                 }
             }
@@ -269,10 +269,52 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                 final boolean isSensitive = sensitiveMap.containsKey(varKey);
                 if (isSensitive || rawVal.length() >= 4)
                 {
-                    clean = clean.replace(rawVal, "${" + varKey + "}");
+                    clean = replaceOutsidePlaceholders(clean, rawVal, "${" + varKey + "}");
                 }
             }
         }
         return clean;
+    }
+
+    /**
+     * Safely replaces target string with replacement without modifying text inside existing ${...} placeholders.
+     */
+    private static String replaceOutsidePlaceholders(final String text, final String target, final String replacement)
+    {
+        if (text == null || target == null || target.isEmpty())
+        {
+            return text;
+        }
+
+        final StringBuilder result = new StringBuilder();
+        int i = 0;
+        final int len = text.length();
+        final int targetLen = target.length();
+
+        while (i < len)
+        {
+            if (text.startsWith("${", i))
+            {
+                final int closeIdx = text.indexOf('}', i + 2);
+                if (closeIdx != -1)
+                {
+                    result.append(text, i, closeIdx + 1);
+                    i = closeIdx + 1;
+                    continue;
+                }
+            }
+
+            if (text.startsWith(target, i))
+            {
+                result.append(replacement);
+                i += targetLen;
+            }
+            else
+            {
+                result.append(text.charAt(i));
+                i++;
+            }
+        }
+        return result.toString();
     }
 }

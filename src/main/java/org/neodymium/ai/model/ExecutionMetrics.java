@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 
 /**
  * Immutable snapshot of execution telemetry statistics and execution mode context.
