@@ -116,11 +116,15 @@ public final class ExecuteActionsStep implements PipelineStep
             return;
         }
 
+        final org.neodymium.ai.config.ExecutionMode execMode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final PlaybookStep currentStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-        if (currentStep != null)
+        final boolean isNoReplay = currentStep != null && currentStep.isNoReplay();
+        final boolean isReplayingStep = execMode != null && execMode.isReplay() && !isNoReplay
+            && (currentStep == null || execMode == org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT || (currentStep.getActions() != null && (!currentStep.getActions().isEmpty() || currentStep.getScreenshotHash() != null)));
+
+        if (!isReplayingStep && currentStep != null)
         {
             currentStep.getActions().clear();
-            currentStep.getActions().addAll(actions);
         }
 
         // Check if InteractiveConsoleListener is attached to the session

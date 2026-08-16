@@ -1,7 +1,7 @@
 <div id="checkout-form-container" style="max-width: 800px; margin: 0 auto;">
     <h1 style="font-family: var(--font-family-serif); font-size: 32px; font-weight: 600; margin-bottom: 30px;">${lang_checkout}</h1>
     
-    <form hx-post="api/checkout/purchase" hx-target="#checkout-form-container" hx-swap="innerHTML">
+    <form hx-post="api/checkout/purchase" hx-target="#checkout-form-container" hx-swap="innerHTML show:window:top">
         <div class="checkout-container">
             <!-- Left Panel: Forms -->
             <div class="checkout-main">

@@ -241,16 +241,40 @@ public class ScreenshotWriter {
         boolean exceedViewport = fullWidth > viewWidth || fullHeight > viewHeight;
         Viewport viewport = new Viewport(0, 0, fullWidth, fullHeight, 1);
 
-        String base64 = devTools.send(Page.captureScreenshot(
-                Optional.empty(),
-                Optional.empty(),
-                Optional.of(viewport),
-                Optional.empty(),
-                Optional.of(exceedViewport),
-                Optional.of(true)));
+        long origX = 0;
+        long origY = 0;
+        boolean didScroll = false;
+        try {
+            Object xVal = devtoolsDriver.executeScript("return window.scrollX || window.pageXOffset || 0");
+            Object yVal = devtoolsDriver.executeScript("return window.scrollY || window.pageYOffset || 0");
+            origX = xVal instanceof Number ? ((Number) xVal).longValue() : 0;
+            origY = yVal instanceof Number ? ((Number) yVal).longValue() : 0;
+            if (origX != 0 || origY != 0) {
+                devtoolsDriver.executeScript("window.scrollTo(0, 0)");
+                didScroll = true;
+            }
+        } catch (Exception ignored) {
+        }
 
-        ResultType screenshot = outputType.convertFromBase64Png(base64);
-        return Optional.of(screenshot);
+        try {
+            String base64 = devTools.send(Page.captureScreenshot(
+                    Optional.empty(),
+                    Optional.empty(),
+                    Optional.of(viewport),
+                    Optional.empty(),
+                    Optional.of(exceedViewport),
+                    Optional.of(true)));
+
+            ResultType screenshot = outputType.convertFromBase64Png(base64);
+            return Optional.of(screenshot);
+        } finally {
+            if (didScroll) {
+                try {
+                    devtoolsDriver.executeScript("window.scrollTo(arguments[0], arguments[1])", origX, origY);
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     public static <WD extends WebDriver & HasCdp & JavascriptExecutor, ResultType> Optional<ResultType> takeScreenshotWithCDP(
@@ -273,11 +297,35 @@ public class ScreenshotWriter {
                         "scale", 1),
                 "captureBeyondViewport", exceedViewport);
 
-        Map<String, Object> result = cdpDriver.executeCdpCommand("Page.captureScreenshot", captureScreenshotOptions);
+        long origX = 0;
+        long origY = 0;
+        boolean didScroll = false;
+        try {
+            Object xVal = cdpDriver.executeScript("return window.scrollX || window.pageXOffset || 0");
+            Object yVal = cdpDriver.executeScript("return window.scrollY || window.pageYOffset || 0");
+            origX = xVal instanceof Number ? ((Number) xVal).longValue() : 0;
+            origY = yVal instanceof Number ? ((Number) yVal).longValue() : 0;
+            if (origX != 0 || origY != 0) {
+                cdpDriver.executeScript("window.scrollTo(0, 0)");
+                didScroll = true;
+            }
+        } catch (Exception ignored) {
+        }
 
-        String base64 = (String) result.get("data");
-        ResultType screenshot = outputType.convertFromBase64Png(base64);
-        return Optional.of(screenshot);
+        try {
+            Map<String, Object> result = cdpDriver.executeCdpCommand("Page.captureScreenshot", captureScreenshotOptions);
+
+            String base64 = (String) result.get("data");
+            ResultType screenshot = outputType.convertFromBase64Png(base64);
+            return Optional.of(screenshot);
+        } finally {
+            if (didScroll) {
+                try {
+                    cdpDriver.executeScript("window.scrollTo(arguments[0], arguments[1])", origX, origY);
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     public static BufferedImage highlightScreenShot(BufferedImage sourceImage, Coordinates coords, Color color) {

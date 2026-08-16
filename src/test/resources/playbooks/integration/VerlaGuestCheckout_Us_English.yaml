@@ -21,7 +21,7 @@ steps: |
   Card number is '4111 1111 1111 1111', expiry data '12/29', and CVV is '111'.
   Click 'Purchase'.
   Wait for text "Thank you for your purchase!" to appear.
-  Scroll up as much as possible to reveal the full order conformation.
+  Scroll up as much as possible to reveal the full order confirmation.
   An order number is shown in the form 'V-[0-9]+-US'.
   The total is mentioned and in USD.
   The zip code says '12345'.
@@ -49,3 +49,7 @@ data:
     quality: "modern-bad-nowcag"
     email: "user-modern-bad-nowcag@example.com"
     guestEmail: "guest-modern-bad-nowcag@example.com"
+  - testId: "tailwind"
+    quality: "tailwind"
+    email: "user-tailwind@example.com"
+    guestEmail: "guest-tailwind@example.com"

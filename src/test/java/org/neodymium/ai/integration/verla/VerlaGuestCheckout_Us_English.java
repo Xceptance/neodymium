@@ -95,7 +95,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
-    @AiPlaybook(recordingMethod = "testCheckoutLivePerfect")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePerfectWithJudge")
     public void testCheckoutReplayPerfect()
     {
     }
@@ -111,7 +111,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
-    @AiPlaybook(recordingMethod = "testCheckoutLiveNormal")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveNormalWithJudge")
     public void testCheckoutReplayNormal()
     {
     }
@@ -127,7 +127,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     @Order(6)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
-    @AiPlaybook(recordingMethod = "testCheckoutLiveBad")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveBadWithJudge")
     public void testCheckoutReplayBad()
     {
     }
@@ -161,6 +161,22 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     @AiDataSet("modern-bad-nowcag")
     @AiPlaybook(recordingMethod = "testCheckoutLiveModernBadNoWcag")
     public void testCheckoutReplayModernBadNoWcag()
+    {
+    }
+
+    @Order(11)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("tailwind")
+    @AiPlaybook
+    public void testCheckoutLiveTailwind()
+    {
+    }
+
+    @Order(12)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("tailwind")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveTailwind")
+    public void testCheckoutReplayTailwind()
     {
     }
 }
