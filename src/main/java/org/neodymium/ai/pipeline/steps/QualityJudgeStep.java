@@ -26,7 +26,10 @@ import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
@@ -166,13 +169,13 @@ public final class QualityJudgeStep implements PipelineStep
         {
             final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
             LOGGER.debug("💬 [Quality Judge] Calling LLM provider '{}'", provider.getClass().getSimpleName());
-            session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmRequestSentEvent(request, "JUDGE"));
+            session.getEventBus().dispatch(new LlmRequestSentEvent(request, "JUDGE"));
             final long startTime = System.currentTimeMillis();
 
             final LlmResponse response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;
 
-            session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
+            session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
             LOGGER.debug("Quality Judge LLM response received in {} ms (length: {} chars)",
                     durationMs, response != null && response.content() != null ? response.content().length() : 0);
 
@@ -186,13 +189,13 @@ public final class QualityJudgeStep implements PipelineStep
             final Integer judgeCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0);
             context.getTransientData().put(ExecutionContext.KEY_JUDGE_CALL_COUNT, judgeCalls + 1);
 
-            final org.neodymium.ai.client.TokenUsage newUsage = response != null ? response.tokenUsage() : null;
+            final TokenUsage newUsage = response != null ? response.tokenUsage() : null;
             if (newUsage != null)
             {
-                final org.neodymium.ai.client.TokenUsage existing = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+                final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
                 if (existing != null)
                 {
-                    context.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new org.neodymium.ai.client.TokenUsage(
+                    context.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new TokenUsage(
                             existing.inputTokenCount() + newUsage.inputTokenCount(),
                             existing.outputTokenCount() + newUsage.outputTokenCount(),
                             existing.totalTokenCount() + newUsage.totalTokenCount()

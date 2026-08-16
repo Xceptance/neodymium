@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 import org.neodymium.common.ScreenshotWriter;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.LocatorCascadeResolver;
 
 /**
  * Captures page context (screenshot + simplified DOM) for the LLM. The DOM is
@@ -1360,6 +1361,7 @@ public class PageAnalyzer
                             var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
                             var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
                             var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                            var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : {left: 0, top: 0, width: 0, height: 0};
                             results.push({
                                 tag: tag,
                                 text: text,
@@ -1368,7 +1370,11 @@ public class PageAnalyzer
                                 role: role,
                                 accessibleName: accessibleName ? accessibleName.trim() : '',
                                 parentTag: parentTag,
-                                siblingIndex: siblingIndex >= 0 ? siblingIndex : 0
+                                siblingIndex: siblingIndex >= 0 ? siblingIndex : 0,
+                                x: Math.round(rect.left),
+                                y: Math.round(rect.top),
+                                width: Math.round(rect.width),
+                                height: Math.round(rect.height)
                             });
                         }
                     } catch(e) {}
@@ -1446,6 +1452,7 @@ public class PageAnalyzer
                 var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
                 var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
                 var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : {left: 0, top: 0, width: 0, height: 0};
                 return JSON.stringify({
                     tag: tag,
                     text: text,
@@ -1454,7 +1461,11 @@ public class PageAnalyzer
                     role: role,
                     accessibleName: accessibleName ? accessibleName.trim() : '',
                     parentTag: parentTag,
-                    siblingIndex: siblingIndex >= 0 ? siblingIndex : 0
+                    siblingIndex: siblingIndex >= 0 ? siblingIndex : 0,
+                    x: Math.round(rect.left),
+                    y: Math.round(rect.top),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height)
                 });
             })(arguments[0]);
             """;
@@ -1471,6 +1482,137 @@ public class PageAnalyzer
         catch (final Exception e)
         {
             LOG.warn("Failed to extract DOM Feature Vector for element: {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Finds the live interactive WebElement matching a recorded {@link DomFeatureVector}
+     * with similarity score exceeding the given minimum threshold.
+     *
+     * @param explicitDriver the WebDriver instance
+     * @param recordedVector the target recorded DomFeatureVector
+     * @param minScore       the minimum required similarity score (e.g. 0.80)
+     * @return the matched WebElement, or null if no candidate met the threshold
+     */
+    public WebElement findLiveElementByFeatureVector(final WebDriver explicitDriver, final DomFeatureVector recordedVector, final double minScore)
+    {
+        if (recordedVector == null)
+        {
+            return null;
+        }
+
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null)
+        {
+            return null;
+        }
+
+        final String script = """
+            return (function() {
+                var roots = [document];
+                function collectRoots(root) {
+                    try {
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].shadowRoot) {
+                                roots.push(all[i].shadowRoot);
+                                collectRoots(all[i].shadowRoot);
+                            }
+                        }
+                    } catch(e) {}
+                }
+                collectRoots(document);
+
+                var elements = [];
+                var vectorData = [];
+                for (var r = 0; r < roots.length; r++) {
+                    try {
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, [role], [onclick], [data-testid], [data-test], [data-qa]');
+                        for (var i = 0; i < els.length; i++) {
+                            var el = els[i];
+                            if (el.closest && el.closest('.neodymium-ai-hud')) continue;
+                            var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                            var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                            var classes = Array.from(el.classList || []);
+                            var attrMap = {};
+                            if (el.attributes) {
+                                for (var a = 0; a < el.attributes.length; a++) {
+                                    var attr = el.attributes[a];
+                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                        attrMap[attr.name] = attr.value;
+                                    }
+                                }
+                            }
+                            var role = el.getAttribute('role') || '';
+                            var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
+                            var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
+                            var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                            var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : {left: 0, top: 0, width: 0, height: 0};
+                            elements.push(el);
+                            vectorData.push({
+                                tag: tag,
+                                text: text,
+                                classes: classes,
+                                attributes: attrMap,
+                                role: role,
+                                accessibleName: accessibleName ? accessibleName.trim() : '',
+                                parentTag: parentTag,
+                                siblingIndex: siblingIndex >= 0 ? siblingIndex : 0,
+                                x: Math.round(rect.left),
+                                y: Math.round(rect.top),
+                                width: Math.round(rect.width),
+                                height: Math.round(rect.height)
+                            });
+                        }
+                    } catch(e) {}
+                }
+                window.__neo_candidate_elements = elements;
+                return JSON.stringify(vectorData);
+            })();
+            """;
+
+        try
+        {
+            final Object response = ((JavascriptExecutor) driver).executeScript(script);
+            if (response instanceof String jsonStr && !jsonStr.isBlank())
+            {
+                final ObjectMapper mapper = new ObjectMapper();
+                final TypeReference<List<DomFeatureVector>> typeRef = new TypeReference<>() {};
+                final List<DomFeatureVector> candidates = mapper.readValue(jsonStr, typeRef);
+
+                int bestIndex = -1;
+                double bestScore = -1.0;
+                for (int i = 0; i < candidates.size(); i++)
+                {
+                    final double score = LocatorCascadeResolver.computeSimilarity(recordedVector, candidates.get(i));
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestIndex = i;
+                    }
+                }
+
+                if (bestIndex >= 0 && bestScore >= minScore)
+                {
+                    final Object elResponse = ((JavascriptExecutor) driver).executeScript(
+                        "var el = (window.__neo_candidate_elements && window.__neo_candidate_elements[" + bestIndex + "]) ? window.__neo_candidate_elements[" + bestIndex + "] : null; "
+                        + "delete window.__neo_candidate_elements; return el;");
+                    if (elResponse instanceof WebElement webElement)
+                    {
+                        return webElement;
+                    }
+                }
+                else
+                {
+                    ((JavascriptExecutor) driver).executeScript("delete window.__neo_candidate_elements;");
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to find live element by DOM feature vector: {}", e.getMessage());
         }
 
         return null;

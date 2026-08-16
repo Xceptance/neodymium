@@ -33,8 +33,6 @@ import java.util.Set;
  */
 public final class LocatorCascadeResolver
 {
-    private static final Set<String> CLICKABLE_TAG_BUCKET = Set.of("button", "a", "div", "span", "input");
-
     private LocatorCascadeResolver()
     {
     }

@@ -22,10 +22,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
-import org.openqa.selenium.WebDriver;
+import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import org.openqa.selenium.interactions.Actions;
 
 /**
  * Concrete action plugin executing CLICK browser commands.
@@ -103,8 +104,7 @@ public final class ClickAction implements BrowserActionPlugin
             final CoordinateTarget coord = parseCoordinateTarget(target);
             if (coord != null)
             {
-                final WebDriver driver = WebDriverRunner.getWebDriver();
-                final org.openqa.selenium.interactions.Actions actions = new org.openqa.selenium.interactions.Actions(driver);
+                final Actions actions = new Actions(WebDriverRunner.getWebDriver());
                 if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                 {
                     final SelenideElement anchorElement = SelenideElementFinder.findElement(coord.anchorSelector());
@@ -125,7 +125,7 @@ public final class ClickAction implements BrowserActionPlugin
             try
             {
                 final String preTagName = element.getTagName();
-                if ("a".equalsIgnoreCase(preTagName) && (element.has(com.codeborne.selenide.Condition.cssClass("screen-reader-text")) || element.has(com.codeborne.selenide.Condition.cssClass("sr-only"))))
+                if ("a".equalsIgnoreCase(preTagName) && (element.has(Condition.cssClass("screen-reader-text")) || element.has(Condition.cssClass("sr-only"))))
                 {
                     Selenide.executeJavaScript(
                         "if (arguments[0] && arguments[0].parentElement) { arguments[0].parentElement.click(); }",

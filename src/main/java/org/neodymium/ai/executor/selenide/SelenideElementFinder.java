@@ -37,6 +37,7 @@ import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -209,82 +210,13 @@ public final class SelenideElementFinder
             {
                 try
                 {
-                    final List<DomFeatureVector> liveVectors = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());
-                    if (liveVectors != null && !liveVectors.isEmpty())
+                    final WebElement matchedWebElement = new PageAnalyzer().findLiveElementByFeatureVector(
+                        WebDriverRunner.getWebDriver(),
+                        recordedVector,
+                        0.80);
+                    if (matchedWebElement != null)
                     {
-                        final DomFeatureVector bestMatch = LocatorCascadeResolver.findBestMatch(recordedVector, liveVectors, 0.80);
-                        if (bestMatch != null)
-                        {
-                            final Map<String, String> attrs = bestMatch.getAttributes();
-                            if (attrs != null)
-                            {
-                                if (attrs.containsKey("data-testid") && !attrs.get("data-testid").isBlank())
-                                {
-                                    final SelenideElement found = findDirect("[data-testid='" + attrs.get("data-testid") + "']");
-                                    if (found != null)
-                                    {
-                                        return found;
-                                    }
-                                }
-                                if (attrs.containsKey("data-test") && !attrs.get("data-test").isBlank())
-                                {
-                                    final SelenideElement found = findDirect("[data-test='" + attrs.get("data-test") + "']");
-                                    if (found != null)
-                                    {
-                                        return found;
-                                    }
-                                }
-                                if (attrs.containsKey("data-ai") && !attrs.get("data-ai").isBlank())
-                                {
-                                    final SelenideElement found = findDirect("[data-ai='" + attrs.get("data-ai") + "']");
-                                    if (found != null)
-                                    {
-                                        return found;
-                                    }
-                                }
-                                if (attrs.containsKey("id") && !attrs.get("id").isBlank())
-                                {
-                                    final SelenideElement found = findDirect("#" + attrs.get("id"));
-                                    if (found != null)
-                                    {
-                                        return found;
-                                    }
-                                }
-                                if (attrs.containsKey("name") && !attrs.get("name").isBlank())
-                                {
-                                    final SelenideElement found = findDirect("[name='" + attrs.get("name") + "']");
-                                    if (found != null)
-                                    {
-                                        return found;
-                                    }
-                                }
-                                if (attrs.containsKey("aria-label") && !attrs.get("aria-label").isBlank())
-                                {
-                                    final SelenideElement found = findDirect("[aria-label='" + attrs.get("aria-label") + "']");
-                                    if (found != null)
-                                    {
-                                        return found;
-                                    }
-                                }
-                            }
-                            if (bestMatch.getText() != null && !bestMatch.getText().isBlank())
-                            {
-                                final SelenideElement found = findDirect(bestMatch.getText());
-                                if (found != null)
-                                {
-                                    return found;
-                                }
-                            }
-                            if (bestMatch.getTag() != null && bestMatch.getClasses() != null && !bestMatch.getClasses().isEmpty())
-                            {
-                                final String classSelector = bestMatch.getTag() + "." + String.join(".", bestMatch.getClasses());
-                                final SelenideElement found = findDirect(classSelector);
-                                if (found != null)
-                                {
-                                    return found;
-                                }
-                            }
-                        }
+                        return Selenide.$(matchedWebElement);
                     }
                 }
                 catch (final Exception ignored)

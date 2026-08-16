@@ -245,4 +245,35 @@ public class LocatorCascadeResolverTest
         final double sim = LocatorCascadeResolver.computeSimilarity(v1, v2);
         Assertions.assertEquals(0.75, sim, 0.001);
     }
+
+    @Test
+    public void testDomFeatureVectorBoundingBoxAndConstructors()
+    {
+        final DomFeatureVector v = new DomFeatureVector(
+            "button", "Checkout", Set.of("btn"), Map.of("id", "btn1"), "button", "Checkout", "form", 0, 100, 200, 150, 40
+        );
+
+        Assertions.assertEquals(100, v.getX());
+        Assertions.assertEquals(200, v.getY());
+        Assertions.assertEquals(150, v.getWidth());
+        Assertions.assertEquals(40, v.getHeight());
+        Assertions.assertEquals("button", v.getTag());
+        Assertions.assertEquals("Checkout", v.getText());
+
+        final DomFeatureVector legacy = new DomFeatureVector(
+            "button", "Checkout", Set.of("btn"), Map.of("id", "btn1"), "button", "Checkout", "form", 0
+        );
+        Assertions.assertEquals(0, legacy.getX());
+        Assertions.assertEquals(0, legacy.getY());
+        Assertions.assertEquals(0, legacy.getWidth());
+        Assertions.assertEquals(0, legacy.getHeight());
+
+        final DomFeatureVector same = new DomFeatureVector(
+            "button", "Checkout", Set.of("btn"), Map.of("id", "btn1"), "button", "Checkout", "form", 0, 100, 200, 150, 40
+        );
+        Assertions.assertEquals(v, same);
+        Assertions.assertEquals(v.hashCode(), same.hashCode());
+        Assertions.assertNotEquals(v, legacy);
+        Assertions.assertTrue(v.toString().contains("x=100"));
+    }
 }

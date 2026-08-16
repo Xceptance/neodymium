@@ -21,6 +21,7 @@ package org.neodymium.ai.executor.selenide.plugins;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.interactions.Actions;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 
@@ -56,8 +57,7 @@ public final class TypeAction implements BrowserActionPlugin
             final ClickAction.CoordinateTarget coord = ClickAction.parseCoordinateTarget(target);
             if (coord != null)
             {
-                final WebDriver driver = WebDriverRunner.getWebDriver();
-                final org.openqa.selenium.interactions.Actions actions = new org.openqa.selenium.interactions.Actions(driver);
+                final Actions actions = new Actions(WebDriverRunner.getWebDriver());
                 if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                 {
                     final SelenideElement anchorElement = SelenideElementFinder.findElement(coord.anchorSelector());
@@ -79,8 +79,7 @@ public final class TypeAction implements BrowserActionPlugin
             if ("canvas".equalsIgnoreCase(tagName) || "svg".equalsIgnoreCase(tagName))
             {
                 element.click();
-                final WebDriver driver = WebDriverRunner.getWebDriver();
-                final org.openqa.selenium.interactions.Actions actions = new org.openqa.selenium.interactions.Actions(driver);
+                final Actions actions = new Actions(WebDriverRunner.getWebDriver());
                 if (action.getValue() != null && !action.getValue().isEmpty())
                 {
                     actions.sendKeys(action.getValue()).perform();

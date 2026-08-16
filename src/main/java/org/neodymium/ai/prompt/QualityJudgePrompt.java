@@ -29,6 +29,7 @@ import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -260,7 +261,7 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
                 @JsonProperty("judgment") final String judgment,
                 @JsonProperty("chosenLocator") final String chosenLocator,
                 @JsonProperty("chosenValue") final String chosenValue,
-                @JsonProperty("isRegex") final Boolean isRegex,
+                @JsonProperty("isRegex") @JsonAlias({"isRegex", "regex"}) final Boolean isRegex,
                 @JsonProperty("confidence") final Double confidence,
                 @JsonProperty("reasoning") final String reasoning)
         {

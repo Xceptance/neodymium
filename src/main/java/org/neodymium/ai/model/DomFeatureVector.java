@@ -67,8 +67,20 @@ public final class DomFeatureVector implements Serializable
     @JsonProperty("siblingIndex")
     private final int siblingIndex;
 
+    @JsonProperty("x")
+    private final int x;
+
+    @JsonProperty("y")
+    private final int y;
+
+    @JsonProperty("width")
+    private final int width;
+
+    @JsonProperty("height")
+    private final int height;
+
     /**
-     * Constructs a new DomFeatureVector with all fields.
+     * Constructs a new DomFeatureVector with all fields including spatial bounding box geometry.
      *
      * @param tag the HTML tag name
      * @param text the visible text content
@@ -78,6 +90,10 @@ public final class DomFeatureVector implements Serializable
      * @param accessibleName the computed accessible name
      * @param parentTag the immediate parent element tag
      * @param siblingIndex the 0-based sibling index
+     * @param x the bounding box X coordinate
+     * @param y the bounding box Y coordinate
+     * @param width the bounding box width
+     * @param height the bounding box height
      */
     @JsonCreator
     public DomFeatureVector(
@@ -88,7 +104,11 @@ public final class DomFeatureVector implements Serializable
         @JsonProperty("role") final String role,
         @JsonProperty("accessibleName") final String accessibleName,
         @JsonProperty("parentTag") final String parentTag,
-        @JsonProperty("siblingIndex") final int siblingIndex)
+        @JsonProperty("siblingIndex") final int siblingIndex,
+        @JsonProperty("x") final Integer x,
+        @JsonProperty("y") final Integer y,
+        @JsonProperty("width") final Integer width,
+        @JsonProperty("height") final Integer height)
     {
         this.tag = tag != null ? tag.trim().toLowerCase() : "";
         this.text = text != null ? text.trim() : "";
@@ -98,6 +118,35 @@ public final class DomFeatureVector implements Serializable
         this.accessibleName = accessibleName != null ? accessibleName.trim() : "";
         this.parentTag = parentTag != null ? parentTag.trim().toLowerCase() : "";
         this.siblingIndex = siblingIndex >= 0 ? siblingIndex : 0;
+        this.x = x != null ? x : 0;
+        this.y = y != null ? y : 0;
+        this.width = width != null ? width : 0;
+        this.height = height != null ? height : 0;
+    }
+
+    /**
+     * Constructs a new DomFeatureVector without explicit bounding box geometry.
+     *
+     * @param tag the HTML tag name
+     * @param text the visible text content
+     * @param classes the CSS class set
+     * @param attributes the attribute key-value map
+     * @param role the explicit or computed ARIA role
+     * @param accessibleName the computed accessible name
+     * @param parentTag the immediate parent element tag
+     * @param siblingIndex the 0-based sibling index
+     */
+    public DomFeatureVector(
+        final String tag,
+        final String text,
+        final Set<String> classes,
+        final Map<String, String> attributes,
+        final String role,
+        final String accessibleName,
+        final String parentTag,
+        final int siblingIndex)
+    {
+        this(tag, text, classes, attributes, role, accessibleName, parentTag, siblingIndex, 0, 0, 0, 0);
     }
 
     /**
@@ -180,6 +229,46 @@ public final class DomFeatureVector implements Serializable
         return siblingIndex;
     }
 
+    /**
+     * Returns the bounding box X coordinate.
+     *
+     * @return the X coordinate
+     */
+    public int getX()
+    {
+        return x;
+    }
+
+    /**
+     * Returns the bounding box Y coordinate.
+     *
+     * @return the Y coordinate
+     */
+    public int getY()
+    {
+        return y;
+    }
+
+    /**
+     * Returns the bounding box width.
+     *
+     * @return the width
+     */
+    public int getWidth()
+    {
+        return width;
+    }
+
+    /**
+     * Returns the bounding box height.
+     *
+     * @return the height
+     */
+    public int getHeight()
+    {
+        return height;
+    }
+
     @Override
     public boolean equals(final Object obj)
     {
@@ -193,6 +282,10 @@ public final class DomFeatureVector implements Serializable
         }
         final DomFeatureVector other = (DomFeatureVector) obj;
         return siblingIndex == other.siblingIndex
+            && x == other.x
+            && y == other.y
+            && width == other.width
+            && height == other.height
             && Objects.equals(tag, other.tag)
             && Objects.equals(text, other.text)
             && Objects.equals(classes, other.classes)
@@ -205,7 +298,7 @@ public final class DomFeatureVector implements Serializable
     @Override
     public int hashCode()
     {
-        return Objects.hash(tag, text, classes, attributes, role, accessibleName, parentTag, siblingIndex);
+        return Objects.hash(tag, text, classes, attributes, role, accessibleName, parentTag, siblingIndex, x, y, width, height);
     }
 
     @Override
@@ -219,6 +312,10 @@ public final class DomFeatureVector implements Serializable
             + ", accessibleName='" + accessibleName + '\''
             + ", parentTag='" + parentTag + '\''
             + ", siblingIndex=" + siblingIndex
+            + ", x=" + x
+            + ", y=" + y
+            + ", width=" + width
+            + ", height=" + height
             + '}';
     }
 }

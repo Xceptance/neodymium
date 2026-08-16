@@ -129,7 +129,7 @@ public final class PlaybookParserTest
 
         // First step should be the include step: 'common/setup.yaml'
         final PlaybookStep setupInclude = steps.get(0);
-        assertEquals("include: common/setup.yaml", setupInclude.getInstruction());
+        assertEquals("_include: common/setup.yaml", setupInclude.getInstruction());
         assertTrue(setupInclude.isComposite());
         assertEquals(2, setupInclude.getSubSteps().size());
 
@@ -137,7 +137,7 @@ public final class PlaybookParserTest
         assertEquals("Open homepage", setupInclude.getSubSteps().get(0).getInstruction());
         
         final PlaybookStep loginInclude = setupInclude.getSubSteps().get(1);
-        assertEquals("include: login.yaml", loginInclude.getInstruction());
+        assertEquals("_include: login.yaml", loginInclude.getInstruction());
         assertTrue(loginInclude.isComposite());
         assertEquals(1, loginInclude.getSubSteps().size());
         assertEquals("Enter credentials", loginInclude.getSubSteps().get(0).getInstruction());
