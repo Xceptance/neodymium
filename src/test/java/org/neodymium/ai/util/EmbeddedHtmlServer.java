@@ -2396,7 +2396,9 @@ public final class EmbeddedHtmlServer
 
             if (isHtmx)
             {
-                if ("plp.html".equals(pageName) && !isPwaRouter && hxTarget != null && (hxTarget.contains("product-grid") || hxTarget.contains("plp-product-grid")))
+                if (("plp.html".equals(pageName) || "category.html".equals(pageName))
+                    && !isPwaRouter
+                    && (requestUri.contains("page=") || (hxTarget != null && (hxTarget.contains("product-grid") || hxTarget.contains("plp-product-grid") || hxTarget.contains("products")))))
                 {
                     return model.getOrDefault("plp_products", "");
                 }

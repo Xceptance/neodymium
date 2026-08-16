@@ -270,8 +270,9 @@
         .wick-card__footer.emotion-1nht3qk { margin-top: 10px; }
         
         /* Number Stepper & Button */
-        .wick-number-stepper__root.emotion-1bd2lri { position: relative; height: 38px; }
+        .wick-number-stepper__root.emotion-1bd2lri { position: relative; height: 38px; overflow: hidden; border-radius: 4px; }
         .wick-number-stepper__label { display: none; }
+        .wick-number-stepper__input.emotion-ds87jz, input.wick-number-stepper__input { display: none !important; }
         .wick-button.emotion-wasmr0.product-quick-add {
             width: 100%; background: #005699; color: #fff; font-weight: 600; font-size: 12px;
             text-transform: uppercase; letter-spacing: 0.05em; padding: 10px; border-radius: 4px;
@@ -285,6 +286,48 @@
         .wick-number-stepper__stepper-wrapper.active { display: flex; }
         .stepper-btn { width: 36px; height: 100%; background: #F0F6FA; color: #005699; font-weight: bold; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .stepper-val { font-weight: 700; font-size: 14px; color: #005699; flex: 1; text-align: center; }
+
+        /* Quick Size Selection Modal */
+        .quick-size-modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2400;
+            align-items: center; justify-content: center;
+        }
+        .quick-size-modal-overlay.active { display: flex !important; }
+        .quick-size-modal {
+            background: #fff; border-radius: 8px; max-width: 460px; width: 92%;
+            padding: 28px; position: relative; box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+        }
+        .quick-size-close-btn {
+            position: absolute; top: 14px; right: 14px; font-size: 24px; color: #888;
+            background: none; border: none; cursor: pointer; line-height: 1;
+        }
+        .quick-size-close-btn:hover { color: #111; }
+        .quick-size-modal-content { display: flex; gap: 20px; align-items: flex-start; }
+        .quick-size-thumb {
+            width: 100px; height: 100px; background: #FAF9F6; border: 1px solid var(--color-border);
+            border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 10px;
+        }
+        .quick-size-thumb svg { width: 100%; height: 100%; color: #005699; }
+        .quick-size-info { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+        .quick-size-title { font-family: var(--font-family-serif); font-size: 17px; font-weight: 700; color: #1A1A1A; line-height: 1.3; }
+        .quick-size-price { font-size: 16px; font-weight: 700; color: #005699; }
+        .quick-size-selector-wrap { margin-top: 6px; }
+        .quick-size-label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #555; display: block; margin-bottom: 8px; }
+        .quick-size-options { display: flex; flex-wrap: wrap; gap: 8px; }
+        .quick-size-pill {
+            padding: 8px 14px; border: 1px solid var(--color-border); border-radius: 4px; background: #fff;
+            font-size: 13px; font-weight: 600; color: #333; cursor: pointer; transition: all 0.2s;
+        }
+        .quick-size-pill:hover:not(:disabled) { border-color: #005699; color: #005699; }
+        .quick-size-pill.selected { border-color: #005699; background: #005699; color: #fff; }
+        .quick-size-pill:disabled { opacity: 0.4; cursor: not-allowed; text-decoration: line-through; background: #f5f5f5; }
+        .quick-size-submit-btn {
+            width: 100%; background: #005699; color: #fff; font-weight: 700; font-size: 13px;
+            text-transform: uppercase; letter-spacing: 0.05em; padding: 12px; border-radius: 4px;
+            border: none; cursor: pointer; margin-top: 12px; transition: background 0.2s;
+        }
+        .quick-size-submit-btn:hover:not(:disabled) { background: #003B69; }
+        .quick-size-submit-btn:disabled { background: #ccc; cursor: not-allowed; }
 
         .wick-stack.emotion-1wv6ypd { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; margin-top: 6px; }
         .wick-icon.emotion-e1qt4e { width: 14px; height: 14px; color: #399E4A; }
@@ -923,6 +966,25 @@
                     </div>
                 </div>
 
+                <!-- Quick Size Selection Modal -->
+                <div class="quick-size-modal-overlay" id="quick-size-modal-overlay" role="dialog" aria-modal="true">
+                    <div class="quick-size-modal">
+                        <button class="quick-size-close-btn" type="button" onclick="closeQuickSizeModal()">&times;</button>
+                        <div class="quick-size-modal-content">
+                            <div class="quick-size-thumb" id="quick-size-thumb"></div>
+                            <div class="quick-size-info">
+                                <h3 id="quick-size-title" class="quick-size-title"></h3>
+                                <div id="quick-size-price" class="quick-size-price"></div>
+                                <div class="quick-size-selector-wrap">
+                                    <label class="quick-size-label">Select Size:</label>
+                                    <div id="quick-size-options" class="quick-size-options"></div>
+                                </div>
+                                <button type="button" id="quick-size-add-btn" class="quick-size-submit-btn" disabled>Add to Bag</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -964,6 +1026,68 @@
             }
         };
 
+        // Quick Size Modal Manager
+        let currentQuickAddProduct = null;
+        let selectedQuickAddSize = null;
+
+        function openQuickSizeModal(productData) {
+            currentQuickAddProduct = productData;
+            selectedQuickAddSize = null;
+            
+            document.getElementById('quick-size-title').textContent = productData.name;
+            document.getElementById('quick-size-price').textContent = productData.price;
+            document.getElementById('quick-size-thumb').innerHTML = productData.svg;
+            
+            const optionsContainer = document.getElementById('quick-size-options');
+            optionsContainer.innerHTML = '';
+            
+            const submitBtn = document.getElementById('quick-size-add-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Add to Bag';
+            
+            const sizes = productData.sizes;
+            const stockMap = productData.stock || {};
+            
+            sizes.forEach(sz => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'quick-size-pill';
+                btn.textContent = sz;
+                const inStock = stockMap[sz] === undefined || stockMap[sz] > 0;
+                if (!inStock) {
+                    btn.disabled = true;
+                    btn.title = 'Out of stock';
+                }
+                btn.onclick = () => {
+                    optionsContainer.querySelectorAll('.quick-size-pill').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedQuickAddSize = sz;
+                    submitBtn.disabled = false;
+                };
+                optionsContainer.appendChild(btn);
+            });
+            
+            submitBtn.onclick = () => {
+                if (!selectedQuickAddSize || !currentQuickAddProduct) return;
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Adding...';
+                window.pwaCart.add(currentQuickAddProduct.id, 1, null, selectedQuickAddSize);
+                setTimeout(() => {
+                    closeQuickSizeModal();
+                    openMiniCartDrawer();
+                }, 300);
+            };
+            
+            document.getElementById('quick-size-modal-overlay').classList.add('active');
+        }
+
+        function closeQuickSizeModal() {
+            const overlay = document.getElementById('quick-size-modal-overlay');
+            if (overlay) overlay.classList.remove('active');
+            currentQuickAddProduct = null;
+            selectedQuickAddSize = null;
+        }
+
         // Global delegated click listener for Quick Add buttons
         document.addEventListener('click', function(e) {
             const btn = e.target.closest('.product-quick-add');
@@ -972,7 +1096,31 @@
                 e.preventDefault();
                 e.stopPropagation();
                 const pid = btn.getAttribute('data-product-id');
+                const cat = btn.getAttribute('data-category');
+                const stockStr = btn.getAttribute('data-stock');
+                
                 if (pid) {
+                    let stockMap = {};
+                    try { stockMap = JSON.parse(stockStr || '{}'); } catch(err) {}
+                    
+                    const sizeKeys = Object.keys(stockMap).filter(k => k !== '');
+                    if (cat && cat !== 'accessories' && sizeKeys.length > 0) {
+                        const tile = btn.closest('[data-dan-component="product-tile"]') || btn.closest('.emotion-1s86rl4') || btn.closest('.product-card');
+                        const title = tile ? (tile.querySelector('.wick-card__title a') || tile.querySelector('.wick-card__title') || tile.querySelector('.product-title a'))?.textContent?.trim() : '';
+                        const price = tile ? (tile.querySelector('.emotion-1rkvoei') || tile.querySelector('.product-price'))?.textContent?.trim() : '';
+                        const svg = tile ? (tile.querySelector('svg.wick-image') || tile.querySelector('svg'))?.outerHTML : '';
+                        
+                        openQuickSizeModal({
+                            id: pid,
+                            name: title || btn.getAttribute('data-rec-name') || 'Product',
+                            price: price || '',
+                            svg: svg || '',
+                            sizes: sizeKeys,
+                            stock: stockMap
+                        });
+                        return;
+                    }
+                    
                     const originalText = btn.textContent;
                     btn.classList.add('adding');
                     btn.textContent = 'Adding...';
@@ -993,9 +1141,13 @@
 
         // PWA Cart Manager
         window.pwaCart = {
-            add: async function(productId, qty, btnEl) {
+            add: async function(productId, qty, btnEl, size) {
                 try {
-                    const resp = await fetch('api/cart/add?productId=' + encodeURIComponent(productId) + '&quantity=' + (qty || 1), {
+                    let url = 'api/cart/add?productId=' + encodeURIComponent(productId) + '&quantity=' + (qty || 1);
+                    if (size) {
+                        url += '&size=' + encodeURIComponent(size);
+                    }
+                    const resp = await fetch(url, {
                         method: 'POST',
                         headers: { 'X-PWA-Router': 'true' }
                     });
