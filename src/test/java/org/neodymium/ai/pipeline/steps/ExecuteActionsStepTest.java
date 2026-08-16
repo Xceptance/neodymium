@@ -106,4 +106,42 @@ public class ExecuteActionsStepTest
         assertNotNull(context);
         assertEquals(actions, context.getTransientData().get("KEY_CURRENT_STEP_ACTIONS"));
     }
+
+    /**
+     * Verifies that mapping and executing a step in REPLAY_STRICT mode throws ConclusiveFailureException
+     * when the step has no recorded actions and is not a visual/composite step.
+     */
+    @Test
+    public void testReplayStrictThrowsWhenStepHasNoRecordedActions()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new org.neodymium.ai.prompt.ActionExtractionPrompt());
+
+        final org.neodymium.ai.model.PlaybookStep emptyStep = new org.neodymium.ai.model.PlaybookStep();
+        emptyStep.setInstruction("Click the checkout button");
+
+        final org.neodymium.ai.pipeline.PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(emptyStep, session, context);
+
+        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () -> {
+            pipelineStep.execute(context);
+            // Execute any pushed sequence steps
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(ex.getMessage().contains("No recorded actions found for step"));
+    }
 }

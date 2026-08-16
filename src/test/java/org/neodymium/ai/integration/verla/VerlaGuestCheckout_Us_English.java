@@ -38,8 +38,9 @@ import org.neodymium.util.Neodymium;
 
 /**
  * English Language Guest Checkout Integration Test targeting the US storefront.
- * Tests LLM action generation, recording, and strict replay modes across all 5 quality variants
- * (perfect, normal, bad, modern-bad, modern-bad-nowcag).
+ * Tests LLM action generation, recording, and strict replay modes across all 8 quality variants
+ * (perfect, normal, bad, modern-bad, modern-bad-nowcag, tailwind, tailwind-by-claude, pwa-chaos),
+ * evaluating both without-judge and with-judge execution pipelines.
  *
  * Schema: Feature_TargetStore_ScriptLanguage
  *
@@ -84,7 +85,27 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
         AiConfiguration.resetInstance();
     }
 
+    // =========================================================================
+    // 1. Perfect Quality Dataset
+    // =========================================================================
+
     @Order(1)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook
+    public void testCheckoutLivePerfect()
+    {
+    }
+
+    @Order(2)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePerfect")
+    public void testCheckoutReplayPerfect()
+    {
+    }
+
+    @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
     @AiPlaybook
@@ -92,15 +113,35 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(2)
+    @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
     @AiPlaybook(recordingMethod = "testCheckoutLivePerfectWithJudge")
-    public void testCheckoutReplayPerfect()
+    public void testCheckoutReplayPerfectWithJudge()
     {
     }
 
-    @Order(3)
+    // =========================================================================
+    // 2. Normal Quality Dataset
+    // =========================================================================
+
+    @Order(5)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("normal")
+    @AiPlaybook
+    public void testCheckoutLiveNormal()
+    {
+    }
+
+    @Order(6)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("normal")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveNormal")
+    public void testCheckoutReplayNormal()
+    {
+    }
+
+    @Order(7)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
     @AiPlaybook
@@ -108,15 +149,35 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(4)
+    @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
     @AiPlaybook(recordingMethod = "testCheckoutLiveNormalWithJudge")
-    public void testCheckoutReplayNormal()
+    public void testCheckoutReplayNormalWithJudge()
     {
     }
 
-    @Order(5)
+    // =========================================================================
+    // 3. Bad Quality Dataset
+    // =========================================================================
+
+    @Order(9)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("bad")
+    @AiPlaybook
+    public void testCheckoutLiveBad()
+    {
+    }
+
+    @Order(10)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("bad")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveBad")
+    public void testCheckoutReplayBad()
+    {
+    }
+
+    @Order(11)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
     @AiPlaybook
@@ -124,15 +185,19 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(6)
+    @Order(12)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
     @AiPlaybook(recordingMethod = "testCheckoutLiveBadWithJudge")
-    public void testCheckoutReplayBad()
+    public void testCheckoutReplayBadWithJudge()
     {
     }
 
-    @Order(7)
+    // =========================================================================
+    // 4. Modern Bad (WCAG) Quality Dataset
+    // =========================================================================
+
+    @Order(13)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("modern-bad")
     @AiPlaybook
@@ -140,7 +205,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(8)
+    @Order(14)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("modern-bad")
     @AiPlaybook(recordingMethod = "testCheckoutLiveModernBad")
@@ -148,7 +213,27 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(9)
+    @Order(15)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("modern-bad")
+    @AiPlaybook
+    public void testCheckoutLiveModernBadWithJudge()
+    {
+    }
+
+    @Order(16)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("modern-bad")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveModernBadWithJudge")
+    public void testCheckoutReplayModernBadWithJudge()
+    {
+    }
+
+    // =========================================================================
+    // 5. Modern Bad (No WCAG) Quality Dataset
+    // =========================================================================
+
+    @Order(17)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("modern-bad-nowcag")
     @AiPlaybook
@@ -156,7 +241,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(10)
+    @Order(18)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("modern-bad-nowcag")
     @AiPlaybook(recordingMethod = "testCheckoutLiveModernBadNoWcag")
@@ -164,7 +249,27 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(11)
+    @Order(19)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("modern-bad-nowcag")
+    @AiPlaybook
+    public void testCheckoutLiveModernBadNoWcagWithJudge()
+    {
+    }
+
+    @Order(20)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("modern-bad-nowcag")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveModernBadNoWcagWithJudge")
+    public void testCheckoutReplayModernBadNoWcagWithJudge()
+    {
+    }
+
+    // =========================================================================
+    // 6. Tailwind Quality Dataset
+    // =========================================================================
+
+    @Order(21)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("tailwind")
     @AiPlaybook
@@ -172,11 +277,99 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     {
     }
 
-    @Order(12)
+    @Order(22)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("tailwind")
     @AiPlaybook(recordingMethod = "testCheckoutLiveTailwind")
     public void testCheckoutReplayTailwind()
+    {
+    }
+
+    @Order(23)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("tailwind")
+    @AiPlaybook
+    public void testCheckoutLiveTailwindWithJudge()
+    {
+    }
+
+    @Order(24)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("tailwind")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveTailwindWithJudge")
+    public void testCheckoutReplayTailwindWithJudge()
+    {
+    }
+
+    // =========================================================================
+    // 7. Tailwind-by-Claude (Strict Utility-First) Quality Dataset
+    // =========================================================================
+
+    @Order(25)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("tailwind-by-claude")
+    @AiPlaybook
+    public void testCheckoutLiveTailwindByClaude()
+    {
+    }
+
+    @Order(26)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("tailwind-by-claude")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveTailwindByClaude")
+    public void testCheckoutReplayTailwindByClaude()
+    {
+    }
+
+    @Order(27)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("tailwind-by-claude")
+    @AiPlaybook
+    public void testCheckoutLiveTailwindByClaudeWithJudge()
+    {
+    }
+
+    @Order(28)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("tailwind-by-claude")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveTailwindByClaudeWithJudge")
+    public void testCheckoutReplayTailwindByClaudeWithJudge()
+    {
+    }
+
+    // =========================================================================
+    // 8. PWA Chaos Quality Dataset
+    // =========================================================================
+
+    @Order(29)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("pwa-chaos")
+    @AiPlaybook
+    public void testCheckoutLivePwaChaos()
+    {
+    }
+
+    @Order(30)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("pwa-chaos")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePwaChaos")
+    public void testCheckoutReplayPwaChaos()
+    {
+    }
+
+    @Order(31)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("pwa-chaos")
+    @AiPlaybook
+    public void testCheckoutLivePwaChaosWithJudge()
+    {
+    }
+
+    @Order(32)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("pwa-chaos")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePwaChaosWithJudge")
+    public void testCheckoutReplayPwaChaosWithJudge()
     {
     }
 }

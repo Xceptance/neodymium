@@ -939,40 +939,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    boolean yamlExists = false;
-                    if (playbookPath != null)
-                    {
-                        try (final java.io.InputStream in = manager.read(playbookPath))
-                        {
-                            if (in != null)
-                            {
-                                yamlExists = true;
-                            }
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
-                    }
-
-                    if (yamlExists)
-                    {
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn(
-                            "⚠️ No companion recorded JSON file found for '{}'. Falling back to YAML playbook '{}'.",
-                            playbookPath, playbookPath);
-                        resolvedPlaybookPath = playbookPath;
-                    }
-                    else
-                    {
-                        final String msg = String.format(
-                            "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
-                            this.mode,
-                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
-                            method != null ? method.getName() : "unknownMethod",
-                            String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
-                        );
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
-                        throw new java.io.FileNotFoundException(msg);
-                    }
+                    final String msg = String.format(
+                        "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s\n"
+                        + "Please run the live recording test first to generate the recording.",
+                        this.mode,
+                        testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                        method != null ? method.getName() : "unknownMethod",
+                        String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
+                    );
+                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
+                    throw new java.io.FileNotFoundException(msg);
                 }
             }
             else if (this.mode.isLive())
