@@ -94,7 +94,7 @@ public enum ContextLevel
             case MINIMAL -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> RICH;
-            case RICH -> VISUAL;
+            case RICH -> VISUAL_RICH;
             case VISUAL -> VISUAL_LEAN;
             case VISUAL_LEAN -> VISUAL_RICH;
             case VISUAL_RICH -> null;

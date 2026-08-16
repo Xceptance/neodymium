@@ -88,7 +88,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
     @AiPlaybook
-    public void testCheckoutLivePerfect()
+    public void testCheckoutLivePerfectWithJudge()
     {
     }
 
@@ -104,7 +104,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
     @AiPlaybook
-    public void testCheckoutLiveNormal()
+    public void testCheckoutLiveNormalWithJudge()
     {
     }
 
@@ -120,7 +120,7 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
     @AiPlaybook
-    public void testCheckoutLiveBad()
+    public void testCheckoutLiveBadWithJudge()
     {
     }
 

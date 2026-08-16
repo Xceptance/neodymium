@@ -99,9 +99,10 @@ public final class QualityJudgeStep implements PipelineStep
         if ("ON_AMBIGUITY".equals(judgeMode) && !isRetry)
         {
             final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
-            if (candidates.size() < 2)
+            if (candidates == null || candidates.size() < 2)
             {
-                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY but less than 2 candidates exist. Skipping.");
+                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY but only {} candidate(s) found (requires at least 2). Skipping.",
+                    candidates != null ? candidates.size() : 0);
                 return;
             }
             final double score1 = candidates.get(0).getScore();
@@ -124,13 +125,35 @@ public final class QualityJudgeStep implements PipelineStep
             return;
         }
 
-        LOGGER.info("⚖️ Quality Judge reviewing proposed action '{}' on target '{}'...", proposedAction.getType(), proposedAction.getTarget());
+        LOGGER.info("⚖️ Quality Judge reviewing proposed action '{}' on target '{}' (instruction: \"{}\")...",
+                proposedAction.getType(), proposedAction.getTarget(), instruction);
+
+        if (LOGGER.isDebugEnabled())
+        {
+            final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
+            if (candidates != null && !candidates.isEmpty())
+            {
+                LOGGER.debug("   📋 [Quality Judge Candidates] (count: {}):", candidates.size());
+                for (int i = 0; i < candidates.size(); i++)
+                {
+                    final LocatorCandidate cand = candidates.get(i);
+                    LOGGER.debug("      [{}] locator='{}', strategy='{}', score={}", i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore());
+                }
+            }
+        }
 
         final LlmRequest request = this.judgePrompt.compileRequest(instruction, domContext, proposedAction, config);
+
+        if (LOGGER.isTraceEnabled())
+        {
+            LOGGER.trace("Quality Judge System Prompt:\n{}", request.systemMessage());
+            LOGGER.trace("Quality Judge User Prompt:\n{}", request.userMessage());
+        }
 
         try
         {
             final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+            LOGGER.debug("💬 [Quality Judge] Calling LLM provider '{}'", provider.getClass().getSimpleName());
             session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmRequestSentEvent(request, "JUDGE"));
             final long startTime = System.currentTimeMillis();
 
@@ -138,6 +161,13 @@ public final class QualityJudgeStep implements PipelineStep
             final long durationMs = System.currentTimeMillis() - startTime;
 
             session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
+            LOGGER.debug("Quality Judge LLM response received in {} ms (length: {} chars)",
+                    durationMs, response != null && response.content() != null ? response.content().length() : 0);
+
+            if (LOGGER.isDebugEnabled() && response != null && response.content() != null)
+            {
+                LOGGER.debug("   💬 [Quality Judge Response]:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+            }
 
             final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
             context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);

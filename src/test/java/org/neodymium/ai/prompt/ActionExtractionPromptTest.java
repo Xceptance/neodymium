@@ -67,7 +67,7 @@ public final class ActionExtractionPromptTest
         assertTrue(userMessage.contains("## Execution Context"));
         assertTrue(userMessage.contains("[INSTRUCTION]      Verify free gift item"));
         assertTrue(userMessage.contains("[CURRENT_LEVEL]    RICH"));
-        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL"));
+        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL_RICH"));
     }
 
     /**
@@ -148,8 +148,8 @@ public final class ActionExtractionPromptTest
             prompt.parseResponse(rawJson, context);
         });
 
-        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL
-        assertEquals("VISUAL", ex.getTargetLevel());
+        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL_RICH
+        assertEquals("VISUAL_RICH", ex.getTargetLevel());
     }
 
     /**
@@ -218,5 +218,26 @@ public final class ActionExtractionPromptTest
         final String restSystemMsg = prompt.compileSystemMessage(restContext);
         assertNotNull(restSystemMsg);
         assertFalse(restSystemMsg.contains("## Selenide/Selenium Engine Locators"), "REST system prompt must not include Selenide engine locator rule.");
+    }
+
+    /**
+     * Verifies that compileSystemMessage includes the Candidate Locators rule when Quality Judge is enabled.
+     */
+    @Test
+    public void testCompileSystemMessageCandidateLocatorsRule()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final String systemMsg = prompt.compileSystemMessage(null);
+        assertNotNull(systemMsg);
+
+        final boolean isJudgeEnabled = org.neodymium.ai.config.AiConfiguration.getInstance().isJudgeEnabled();
+        if (isJudgeEnabled)
+        {
+            assertTrue(systemMsg.contains("## Candidate Locators & Ambiguity Evaluation"), "System prompt must include candidate locators rule when judge is enabled.");
+        }
+        else
+        {
+            assertFalse(systemMsg.contains("## Candidate Locators & Ambiguity Evaluation"), "System prompt must omit candidate locators rule when judge is disabled.");
+        }
     }
 }

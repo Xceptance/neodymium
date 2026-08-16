@@ -301,7 +301,7 @@ public final class StateMachineRunner
                                 if (playbookStep != null)
                                 {
                                     playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
-                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.VISUAL);
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.VISUAL_RICH);
                                     context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;

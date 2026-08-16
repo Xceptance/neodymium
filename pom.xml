@@ -373,6 +373,11 @@
 			<artifactId>webdrivermanager</artifactId>
 			<version>6.3.3</version>
 		</dependency>
+		<dependency>
+			<groupId>org.jsoup</groupId>
+			<artifactId>jsoup</artifactId>
+			<version>1.18.3</version>
+		</dependency>
 		
 		<dependency>
 			<groupId>com.github.valfirst.browserup-proxy</groupId>

@@ -21,7 +21,6 @@ package org.neodymium.ai.executor.selenide;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Method;
 import java.util.List;
 
 /**
@@ -33,59 +32,21 @@ import java.util.List;
 public class SelenideElementFinderTest
 {
     @Test
-    public void testSplitCandidatesWithCommaSeparatedTargets() throws Exception
+    public void testCandidateSetPreservation()
     {
-        final Method method = SelenideElementFinder.class.getDeclaredMethod("splitCandidates", String.class);
-        method.setAccessible(true);
+        final org.neodymium.ai.action.Action action = new org.neodymium.ai.action.Action("CLICK", "#primary-btn", "Click button");
+        action.setCandidateLocators(List.of(
+            new org.neodymium.ai.action.LocatorCandidate(".btn-primary", 0.9),
+            new org.neodymium.ai.action.LocatorCandidate("button[type='submit']", 0.8),
+            new org.neodymium.ai.action.LocatorCandidate("text=Submit", 0.7)
+        ));
 
-        @SuppressWarnings("unchecked")
-        final List<String> candidates1 = (List<String>) method.invoke(null, "button#xc_eb4gzc, button:has-text('L')");
-        Assertions.assertEquals(2, candidates1.size());
-        Assertions.assertEquals("button#xc_eb4gzc", candidates1.get(0));
-        Assertions.assertEquals("button:has-text('L')", candidates1.get(1));
-
-        @SuppressWarnings("unchecked")
-        final List<String> candidates2 = (List<String>) method.invoke(null, "button[data-text='a,b'], button.class2");
-        Assertions.assertEquals(2, candidates2.size());
-        Assertions.assertEquals("button[data-text='a,b']", candidates2.get(0));
-        Assertions.assertEquals("button.class2", candidates2.get(1));
-
-        @SuppressWarnings("unchecked")
-        final List<String> candidates3 = (List<String>) method.invoke(null, "simple-target");
-        Assertions.assertEquals(1, candidates3.size());
-        Assertions.assertEquals("simple-target", candidates3.get(0));
-
-        @SuppressWarnings("unchecked")
-        final List<String> candidates4 = (List<String>) method.invoke(null, "text=Total Paid: $27.58");
-        Assertions.assertEquals(1, candidates4.size());
-        Assertions.assertEquals("text=Total Paid: $27.58", candidates4.get(0));
-
-        // Functional pseudo-classes with commas inside parentheses
-        @SuppressWarnings("unchecked")
-        final List<String> candidatesNot = (List<String>) method.invoke(null, "button:not(.a, .b)");
-        Assertions.assertEquals(1, candidatesNot.size());
-        Assertions.assertEquals("button:not(.a, .b)", candidatesNot.get(0));
-
-        @SuppressWarnings("unchecked")
-        final List<String> candidatesIs = (List<String>) method.invoke(null, ".card:is(.x, .y)");
-        Assertions.assertEquals(1, candidatesIs.size());
-        Assertions.assertEquals(".card:is(.x, .y)", candidatesIs.get(0));
-
-        @SuppressWarnings("unchecked")
-        final List<String> candidatesNth = (List<String>) method.invoke(null, "li:nth-child(2n, 3)");
-        Assertions.assertEquals(1, candidatesNth.size());
-        Assertions.assertEquals("li:nth-child(2n, 3)", candidatesNth.get(0));
-
-        @SuppressWarnings("unchecked")
-        final List<String> candidatesHas = (List<String>) method.invoke(null, "div:has(> span, > em)");
-        Assertions.assertEquals(1, candidatesHas.size());
-        Assertions.assertEquals("div:has(> span, > em)", candidatesHas.get(0));
-
-        @SuppressWarnings("unchecked")
-        final List<String> candidatesMulti = (List<String>) method.invoke(null, "#a, #b");
-        Assertions.assertEquals(2, candidatesMulti.size());
-        Assertions.assertEquals("#a", candidatesMulti.get(0));
-        Assertions.assertEquals("#b", candidatesMulti.get(1));
+        final List<String> candidates = action.getAllCandidateLocators();
+        Assertions.assertEquals(4, candidates.size());
+        Assertions.assertEquals("#primary-btn", candidates.get(0));
+        Assertions.assertEquals(".btn-primary", candidates.get(1));
+        Assertions.assertEquals("button[type='submit']", candidates.get(2));
+        Assertions.assertEquals("text=Submit", candidates.get(3));
     }
 
     @Test

@@ -32,7 +32,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
-import org.neodymium.ai.util.SelectorSyntaxChecker;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
@@ -60,6 +59,7 @@ public final class SelenideElementFinder
     private static final Logger LOG = LoggerFactory.getLogger(SelenideElementFinder.class);
     private static final Map<String, Long> LAST_STAMP_TIMESTAMP_PER_URL = new ConcurrentHashMap<>();
     private static final long STAMP_THROTTLE_MS = 2000L;
+    private static final long RETRY_INTERVAL_MS = 100L;
 
     /**
      * Private constructor to prevent instantiation of this static utility class.
@@ -157,7 +157,7 @@ public final class SelenideElementFinder
         final Set<String> candidateSet = new LinkedHashSet<>();
         if (target != null && !target.isBlank())
         {
-            candidateSet.addAll(splitCandidates(target));
+            candidateSet.add(target.trim());
         }
         if (fallbackCandidates != null)
         {
@@ -165,7 +165,7 @@ public final class SelenideElementFinder
             {
                 if (fallback != null && !fallback.isBlank())
                 {
-                    candidateSet.addAll(splitCandidates(fallback));
+                    candidateSet.add(fallback.trim());
                 }
             }
         }
@@ -183,14 +183,13 @@ public final class SelenideElementFinder
         {
             for (final String candidate : allCandidates)
             {
-                final SelenideElement found = tryResolveCandidate(candidate);
+                final SelenideElement found = findDirect(candidate);
                 if (found != null)
                 {
                     return found;
                 }
             }
 
-            // Check if timeout has expired
             if (System.currentTimeMillis() - start >= timeoutMs)
             {
                 break;
@@ -198,7 +197,7 @@ public final class SelenideElementFinder
 
             try
             {
-                Thread.sleep(100);
+                Thread.sleep(RETRY_INTERVAL_MS);
             }
             catch (final InterruptedException e)
             {
@@ -216,16 +215,9 @@ public final class SelenideElementFinder
         return Selenide.$(resolveLocator(firstCandidate));
     }
 
-    /**
-     * Attempts to resolve a single candidate locator across Neodymium ID, CSS, XPath, and text matching
-     * using targeted strategy dispatch based on syntactic pre-classification.
-     *
-     * @param rawCandidate the raw candidate locator string
-     * @return the resolved visible SelenideElement, or null
-     */
-    private static SelenideElement tryResolveCandidate(final String rawCandidate)
+    private static SelenideElement findDirect(final String rawCandidate)
     {
-        if (rawCandidate == null || rawCandidate.trim().isEmpty())
+        if (rawCandidate == null || rawCandidate.isBlank())
         {
             return null;
         }
@@ -233,24 +225,25 @@ public final class SelenideElementFinder
         String clean = rawCandidate.trim();
         boolean forceXpath = false;
         boolean forceCss = false;
+        boolean forceText = false;
 
-        if (clean.toLowerCase().startsWith("xpath="))
+        final String lower = clean.toLowerCase();
+        if (lower.startsWith("xpath="))
         {
             clean = clean.substring(6).trim();
             forceXpath = true;
         }
-        else if (clean.toLowerCase().startsWith("css="))
+        else if (lower.startsWith("css="))
         {
             clean = clean.substring(4).trim();
             forceCss = true;
         }
+        else if (lower.startsWith("text=") || lower.startsWith("has-text="))
+        {
+            forceText = true;
+        }
 
-        final SelectorSyntaxChecker.SelectorType type = SelectorSyntaxChecker.determineType(clean);
-
-        // -------------------------------------------------------------------------
-        // Strategy 1: Neodymium Automation ID (data-ai=... or #xc...) extraction
-        // -------------------------------------------------------------------------
-        if (!forceXpath && (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*")))
+        if (!forceXpath && !forceText && (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*")))
         {
             final SelenideElement el = tryResolveAutomationId(clean);
             if (el != null)
@@ -259,10 +252,7 @@ public final class SelenideElementFinder
             }
         }
 
-        // -------------------------------------------------------------------------
-        // Strategy 2: Playwright Pseudo-Selector Translation (:has-text, :text, :contains, text=..., has-text=...)
-        // -------------------------------------------------------------------------
-        if (!forceXpath && !forceCss && (type == SelectorSyntaxChecker.SelectorType.TEXT || clean.contains(":") || clean.contains("=")))
+        if (!forceXpath && !forceCss && (forceText || clean.contains(":") || clean.contains("=")))
         {
             final SelenideElement el = tryResolvePlaywrightPseudo(clean);
             if (el != null)
@@ -271,29 +261,7 @@ public final class SelenideElementFinder
             }
         }
 
-        // -------------------------------------------------------------------------
-        // Strategy 3: Standard CSS Selector
-        // -------------------------------------------------------------------------
-        if (!forceXpath && (forceCss || type == SelectorSyntaxChecker.SelectorType.CSS))
-        {
-            try
-            {
-                final ElementsCollection els = Selenide.$$(LocatorResolver.resolveLocator(clean));
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
-                {
-                    return visible;
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
-        // -------------------------------------------------------------------------
-        // Strategy 4: XPath Expression
-        // -------------------------------------------------------------------------
-        if (!forceCss && (forceXpath || type == SelectorSyntaxChecker.SelectorType.XPATH || clean.startsWith("/") || clean.startsWith("./") || clean.startsWith("(")))
+        if (!forceCss && !forceText && (forceXpath || clean.startsWith("/") || clean.startsWith("./") || clean.startsWith("(")))
         {
             try
             {
@@ -309,10 +277,23 @@ public final class SelenideElementFinder
             }
         }
 
-        // -------------------------------------------------------------------------
-        // Strategy 5: Link Text Matching
-        // -------------------------------------------------------------------------
-        if (!forceCss && !forceXpath && type == SelectorSyntaxChecker.SelectorType.TEXT)
+        if (!forceXpath && !forceText)
+        {
+            try
+            {
+                final ElementsCollection els = Selenide.$$(LocatorResolver.resolveLocator(clean));
+                final SelenideElement visible = findFirstVisible(els, clean);
+                if (visible != null)
+                {
+                    return visible;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (!forceCss && !forceXpath)
         {
             try
             {
@@ -328,14 +309,11 @@ public final class SelenideElementFinder
             }
         }
 
-        // -------------------------------------------------------------------------
-        // Strategy 6: Text Content Searching (ONLY for plain text queries, not structured CSS/XPath)
-        // -------------------------------------------------------------------------
-        if (!forceCss && !forceXpath && type == SelectorSyntaxChecker.SelectorType.TEXT && !clean.contains("<") && !clean.contains(">"))
+        if (!forceCss && !forceXpath && !clean.contains("<") && !clean.contains(">"))
         {
             try
             {
-                final String escaped = escapeXpath(clean);
+                final String escaped = LocatorResolver.escapeXpath(clean);
                 final String xpath = String.format(
                     "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
                     escaped, escaped, escaped
@@ -352,8 +330,7 @@ public final class SelenideElementFinder
             }
         }
 
-        // Fallback for bare tag names classified as TEXT (e.g. "button", "select", "input")
-        if (!forceXpath && type == SelectorSyntaxChecker.SelectorType.TEXT && clean.matches("^[a-zA-Z0-9_-]+$"))
+        if (!forceXpath && clean.matches("^[a-zA-Z0-9_-]+$"))
         {
             try
             {
@@ -372,9 +349,6 @@ public final class SelenideElementFinder
         return null;
     }
 
-    /**
-     * Resolves Neodymium Automation ID selectors (data-ai or xc_ identifiers).
-     */
     private static SelenideElement tryResolveAutomationId(final String clean)
     {
         final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
@@ -400,7 +374,6 @@ public final class SelenideElementFinder
                 return visible;
             }
 
-            // Dynamically stamp data-ai attributes into live DOM if absent (throttled to at most 1 stamp per 2 seconds per URL)
             final WebDriver driver = WebDriverRunner.getWebDriver();
             if (shouldAttemptDomStamp(driver))
             {
@@ -424,27 +397,20 @@ public final class SelenideElementFinder
                 {
                 }
             }
-
-            final ElementsCollection retryEls = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-            return findFirstVisible(retryEls, clean);
         }
         catch (final Exception ignored)
         {
-            return null;
         }
+        return null;
     }
 
-    /**
-     * Resolves Playwright and jQuery pseudo-selectors into XPath queries.
-     */
     private static SelenideElement tryResolvePlaywrightPseudo(final String clean)
     {
         final String lower = clean.toLowerCase();
-        if (lower.startsWith("text=") || lower.startsWith("text*=") || lower.startsWith("text:") || lower.startsWith("text*:")
-                || lower.startsWith("has-text=") || lower.startsWith("has-text*=") || lower.startsWith("has-text:") || lower.startsWith("has-text*:"))
+        if (lower.startsWith("text=") || lower.startsWith("text*=") || lower.startsWith("has-text=") || lower.startsWith("has-text*="))
         {
-            final int delimIdx = clean.indexOf(clean.contains("=") ? '=' : ':');
-            String text = clean.substring(delimIdx + 1).trim();
+            final int eqIdx = clean.indexOf('=');
+            String text = clean.substring(eqIdx + 1).trim();
             if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'")))
             {
                 if (text.length() >= 2)
@@ -456,7 +422,7 @@ public final class SelenideElementFinder
             {
                 try
                 {
-                    final String escaped = escapeXpath(text);
+                    final String escaped = LocatorResolver.escapeXpath(text);
                     final String xpath = String.format(
                         "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(normalize-space(.), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
                         escaped, escaped, escaped, escaped
@@ -487,7 +453,7 @@ public final class SelenideElementFinder
             {
                 try
                 {
-                    final String xpath = String.format("//%s[contains(normalize-space(.), %s)]", tag, escapeXpath(text));
+                    final String xpath = String.format("//%s[contains(normalize-space(.), %s)]", tag, LocatorResolver.escapeXpath(text));
                     final ElementsCollection els = Selenide.$$x(xpath);
                     final SelenideElement visible = findFirstVisible(els, clean);
                     if (visible != null)
@@ -500,18 +466,11 @@ public final class SelenideElementFinder
                 }
             }
         }
+
         return null;
     }
 
-    /**
-     * Helper method to filter an {@link ElementsCollection} and return the first element that is currently displayed in the live DOM.
-     * Detects ambiguous multi-matches and logs a warning while smartly disambiguating active/focused elements.
-     *
-     * @param els       the collection of elements
-     * @param candidate the candidate locator string for diagnostic logging
-     * @return the resolved visible element, or null if none is displayed or collection is empty
-     */
-    private static SelenideElement findFirstVisible(final ElementsCollection els, final String candidate)
+    public static SelenideElement findFirstVisible(final ElementsCollection els, final String originalTarget)
     {
         if (els == null || els.isEmpty())
         {
@@ -543,11 +502,32 @@ public final class SelenideElementFinder
             return visibleEls.get(0);
         }
 
-        // Ambiguity detected: multiple visible elements match the candidate locator
-        LOG.warn("⚠️ [AMBIGUITY WARNING] Target locator '{}' matched {} visible elements in the DOM (out of {} total matching elements). Applying smart selection.",
-            candidate, visibleEls.size(), els.size());
+        final String cleanTarget = originalTarget != null ? originalTarget.trim().toLowerCase() : "";
+        for (final SelenideElement el : visibleEls)
+        {
+            try
+            {
+                final String text = el.getText();
+                if (text != null && text.trim().equalsIgnoreCase(cleanTarget))
+                {
+                    return el;
+                }
+                final String val = el.getValue();
+                if (val != null && val.trim().equalsIgnoreCase(cleanTarget))
+                {
+                    return el;
+                }
+                final String aria = el.getAttribute("aria-label");
+                if (aria != null && aria.trim().equalsIgnoreCase(cleanTarget))
+                {
+                    return el;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
 
-        // Disambiguation Priority 1: Currently focused element
         for (final SelenideElement el : visibleEls)
         {
             try
@@ -562,130 +542,9 @@ public final class SelenideElementFinder
             }
         }
 
-        // Disambiguation Priority 2: Enabled interactive element over disabled
-        final List<SelenideElement> enabledEls = new ArrayList<>();
-        for (final SelenideElement el : visibleEls)
-        {
-            try
-            {
-                if (el.isEnabled())
-                {
-                    enabledEls.add(el);
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-        if (enabledEls.size() == 1)
-        {
-            return enabledEls.get(0);
-        }
-
-        // Disambiguation Priority 3: First visible in document order
         return visibleEls.get(0);
     }
 
-    /**
-     * Splits a comma-separated target string into individual candidate locators, respecting quotes, brackets, and parentheses.
-     */
-    private static List<String> splitCandidates(final String target)
-    {
-        final List<String> result = new ArrayList<>();
-        if (target == null)
-        {
-            return result;
-        }
-
-        final StringBuilder current = new StringBuilder();
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        int bracketDepth = 0;
-        int parenDepth = 0;
-
-        for (int i = 0; i < target.length(); i++)
-        {
-            final char c = target.charAt(i);
-            if (c == '\'' && !inDoubleQuote)
-            {
-                inSingleQuote = !inSingleQuote;
-            }
-            else if (c == '"' && !inSingleQuote)
-            {
-                inDoubleQuote = !inDoubleQuote;
-            }
-            else if (c == '[' && !inSingleQuote && !inDoubleQuote)
-            {
-                bracketDepth++;
-            }
-            else if (c == ']' && !inSingleQuote && !inDoubleQuote)
-            {
-                bracketDepth--;
-            }
-            else if (c == '(' && !inSingleQuote && !inDoubleQuote)
-            {
-                parenDepth++;
-            }
-            else if (c == ')' && !inSingleQuote && !inDoubleQuote)
-            {
-                parenDepth--;
-            }
-
-            if (c == ',' && !inSingleQuote && !inDoubleQuote && bracketDepth <= 0 && parenDepth <= 0)
-            {
-                final String candidate = current.toString().trim();
-                if (!candidate.isEmpty())
-                {
-                    result.add(candidate);
-                }
-                current.setLength(0);
-            }
-            else
-            {
-                current.append(c);
-            }
-        }
-
-        final String finalCandidate = current.toString().trim();
-        if (!finalCandidate.isEmpty())
-        {
-            result.add(finalCandidate);
-        }
-
-        if (result.isEmpty())
-        {
-            result.add(target.trim());
-        }
-
-        return result;
-    }
-
-    /**
-     * Safely escapes string values for insertion into XPath string literals.
-     * Handles single quotes, double quotes, and mixed strings using XPath {@code concat()}.
-     *
-     * @param value the raw text value to escape
-     * @return an XPath-safe string expression
-     */
-    private static String escapeXpath(final String value)
-    {
-        if (!value.contains("'"))
-        {
-            return "'" + value + "'";
-        }
-        if (!value.contains("\""))
-        {
-            return "\"" + value + "\"";
-        }
-        return "concat('" + value.replace("'", "', \"'\", '") + "')";
-    }
-
-    /**
-     * Resolves a target locator into a Selenium {@link By} instance using {@link LocatorResolver}.
-     *
-     * @param target the target string
-     * @return resolved By locator
-     */
     public static By resolveLocator(final String target)
     {
         return LocatorResolver.resolveLocator(target);

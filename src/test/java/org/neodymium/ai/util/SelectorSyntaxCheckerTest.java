@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.neodymium.ai.util.SelectorSyntaxChecker.SelectorType;
 
 /**
- * Unit tests validating combined CSS (jsoup QueryParser) and XPath (JDK XPathFactory)
+ * Unit tests validating combined structural CSS grammar and XPath (JDK XPathFactory)
  * selector syntax classification in {@link SelectorSyntaxChecker}.
  *
  * @author AI-generated: Gemini 3.5 Pro
@@ -100,6 +100,17 @@ public class SelectorSyntaxCheckerTest
         assertTrue(SelectorSyntaxChecker.isCssSelector(".active:nth-child(2)"));
         assertTrue(SelectorSyntaxChecker.isCssSelector(".active:not(.hidden)"));
         assertTrue(SelectorSyntaxChecker.isCssSelector("button.btn.active:focus-visible"));
+
+        // Functional pseudo-classes with comma-separated selector lists
+        assertTrue(SelectorSyntaxChecker.isCssSelector("button:not(.a, .b)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".card:is(.x, .y)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("div:has(> span, > em)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("#a, #b"));
+
+        // Malformed CSS rejection via structural syntax checker
+        assertFalse(SelectorSyntaxChecker.isCssSelector("button:not(.a"));
+        assertFalse(SelectorSyntaxChecker.isCssSelector("div[required"));
+        assertFalse(SelectorSyntaxChecker.isCssSelector("div > > span"));
     }
 
     @Test

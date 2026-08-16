@@ -50,6 +50,19 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         + "FORBIDDEN: Playwright pseudo-selectors (such as ':has-text(...)', ':text(...)', ':text-is(...)', ':has(...)').";
 
     /**
+     * Candidate locators instruction appended dynamically when the Quality Judge is active.
+     */
+    public static final String CANDIDATE_LOCATORS_RULE =
+        "\n\n## Candidate Locators & Ambiguity Evaluation\n"
+        + "- For each action, in addition to 'locator', provide a 'candidateLocators' array containing 1 to 3 alternate locator strategies (e.g. ID, clean CSS class, aria-label, data-ai) with confidence 'score' (0.0 to 1.0) and 'strategy'.\n"
+        + "- Example format inside each action:\n"
+        + "  \"candidateLocators\": [\n"
+        + "    {\"locator\": \"#submit-order\", \"strategy\": \"ID\", \"score\": 0.95},\n"
+        + "    {\"locator\": \".btn-checkout[type='submit']\", \"strategy\": \"CLASS_ATTRIBUTE\", \"score\": 0.85},\n"
+        + "    {\"locator\": \"[data-ai='xc123']\", \"strategy\": \"AUTOMATION_ID\", \"score\": 0.60}\n"
+        + "  ]";
+
+    /**
      * Constructs the extraction prompt.
      */
     public ActionExtractionPrompt()
@@ -73,6 +86,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         if (isSelenideMode)
         {
             basePrompt = basePrompt + SELENIDE_LOCATOR_RULE;
+        }
+
+        if (org.neodymium.ai.config.AiConfiguration.getInstance().isJudgeEnabled())
+        {
+            basePrompt = basePrompt + CANDIDATE_LOCATORS_RULE;
         }
 
         return SystemPromptAddonHelper.appendAddon(basePrompt, "general", context);

@@ -680,6 +680,17 @@ public final class ExecuteActionsStep implements PipelineStep
                 .computeIfAbsent("pesap.alreadySplitSteps", k -> new HashSet<>());
 
             org.neodymium.ai.executor.selenide.ContextLevel initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL;
+            if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
+            {
+                try
+                {
+                    initialLevel = org.neodymium.ai.executor.selenide.ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+
             final String lower = resolvedInstruction.toLowerCase();
             final boolean isFullPageTag = lower.contains("(visual: full)") || lower.contains("(layout)");
             contextState.getTransientData().put("KEY_IS_FULL_PAGE_SCREENSHOT", isFullPageTag);
@@ -1186,6 +1197,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
 
                     c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, escalatedLevel);
+                    step.setContextLevel(escalatedLevel.name());
                     org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("⚠️ Context escalated on action execution failure to: {}", escalatedLevel);
 
                     final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
@@ -1199,10 +1211,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     final CallLlmStep<List<Action>> escalationLlmStep = new CallLlmStep<>(activePrompt, capability);
                     final List<PipelineStep> healFlow = new java.util.ArrayList<>();
                     healFlow.add(prepareStep);
-                    if (escalatedLevel.includesScreenshot())
-                    {
-                        healFlow.add(new CaptureStateStep());
-                    }
+                    healFlow.add(new CaptureStateStep());
                     healFlow.add(escalationLlmStep);
                     healFlow.add(executeStep);
                     healFlow.add(verifyStep);
@@ -1236,6 +1245,7 @@ public final class ExecuteActionsStep implements PipelineStep
                         c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
 
                         c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, targetLevel);
+                        step.setContextLevel(targetLevel.name());
                         org.slf4j.LoggerFactory.getLogger(ExecuteActionsStep.class).warn("⚠️ Context escalated to: {}", targetLevel);
 
                         final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
