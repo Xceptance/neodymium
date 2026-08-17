@@ -160,11 +160,14 @@ public final class VisualBaselineGateStep implements PipelineStep
                     if (this.step.getScreenshotHash() != null)
                     {
                         boolean isVisualMatch = false;
+                        Double currentSsimScore = null;
                         final String recordedHash = this.step.getScreenshotHash();
+                        final double minScore = coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore();
+
                         if (currentSsimMatrix != null)
                         {
                             final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
-                            final double minScore = coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore();
+                            currentSsimScore = ssimScore;
 
                             LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | SSIM Score: {} | Required Min Score: {}",
                                 resolvedInstruction, String.format("%.4f", ssimScore), minScore);
@@ -193,6 +196,22 @@ public final class VisualBaselineGateStep implements PipelineStep
                         {
                             if (hasActualActions)
                             {
+                                if (coordinateTarget != null && !isVisualMatch)
+                                {
+                                    final String msg = String.format("Coordinate SSIM tile mismatch (score: %s < %.2f) for instruction: \"%s\". Aborting coordinate click to prevent blind misclick.",
+                                        currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A", minScore, resolvedInstruction);
+                                    LOGGER.warn("   ❌ " + msg);
+
+                                    if (mode.supportsHealing())
+                                    {
+                                        throw new HealingRequiredException(msg);
+                                    }
+                                    else
+                                    {
+                                        throw new DivergenceException(msg);
+                                    }
+                                }
+
                                 if (isVisualMatch)
                                 {
                                     LOGGER.info("   Visual match for interactive instruction: \"{}\". Executing actions anyway to guarantee state.",

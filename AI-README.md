@@ -1074,3 +1074,98 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 
 ### C. Adaptive Visual Settle in Replay
 When executing visual verification steps (`(visual: full)` / SSIM comparison), replay honors `neodymium.ai.visual.postActionSettleMs` (and any recorded step delay) prior to capturing the screenshot. If transient repaint or dynamic animation occurs, a settle retry is automatically performed to guarantee stable visual comparisons.
+
+---
+
+## 28. Unified Perception Model (UPM) & `DomFeatureVector`
+
+To eliminate perceptual blindness across modern web architectures (such as Shadow DOM, dynamic class utilities like Tailwind, and headless canvas/SVG components), Neodymium AI implements the **Unified Perception Model (UPM)**.
+
+### A. Multi-Layer Feature Extraction
+During DOM analysis (`PageAnalyzer`), the browser evaluates a single-pass extraction script that captures multi-layer structural, semantic, and spatial properties into an immutable `DomFeatureVector`:
+* **Structural:** Tag name, parent container tag (`parentTag`), sibling index position (`siblingIndex`).
+* **Semantic & AOM:** Computed accessible name (`aria-label`, placeholder, label text, or innerText), computed ARIA role (`button`, `link`, `textbox`, etc.).
+* **Styling & Attributes:** Full class list (decomposed for Tailwind/CSS-in-JS drift tolerance) and non-volatile attributes map (e.g. `type`, `name`, `data-testid`).
+* **Spatial Geometry:** Absolute viewport bounding box $[x, y, w, h]$ rounded to integer pixels.
+* **Shadow DOM & Frame Traversal:** Traverses closed/open shadow roots (`collectRoots`) and iframe boundaries seamlessly.
+
+```json
+{
+  "tag": "button",
+  "text": "Place Order",
+  "classes": ["btn", "btn-primary", "w-full", "py-3"],
+  "attributes": {"type": "submit", "id": "order-submit-btn"},
+  "role": "button",
+  "accessibleName": "Place Order",
+  "parentTag": "form",
+  "siblingIndex": 3,
+  "x": 450,
+  "y": 620,
+  "width": 320,
+  "height": 48
+}
+```
+
+---
+
+## 29. 5-Tier Cascading Locator Engine (`LocatorCascadeResolver`)
+
+When replaying recorded actions or executing live steps, Neodymium AI routes element resolution through a strict **5-Tier Cascading Locator Engine**:
+
+```mermaid
+flowchart TD
+    A["Target Action Execution"] --> T1{"Tier 1: Engineering Test-IDs\n(data-testid, data-test, unique ID)"}
+    T1 -->|Found| Match["Dispatch Browser Event"]
+    T1 -->|Not Found| T2{"Tier 2: Semantic / AOM\n(role, aria-label, computed accessible name)"}
+    T2 -->|Found| Match
+    T2 -->|Not Found| T3{"Tier 3: Text & Clean CSS\n(exact text, clean semantic classes)"}
+    T3 -->|Found| Match
+    T3 -->|Not Found| T4{"Tier 4: DOM Feature Proximity Search\n(DomFeatureVector similarity >= 0.80)"}
+    T4 -->|Found (Score >= 0.80)| Match
+    T4 -->|Not Found| T5{"Tier 5: Visual Anchor & Coordinates\n(anchor@x,y with local 64x64 SSIM >= 0.95)"}
+    T5 -->|SSIM Valid| Match
+    T5 -->|SSIM Reflow / Failed| Heal["Escalate to Multimodal LLM Healing"]
+```
+
+### A. Tier 4: Pure Java Similarity Formula & Semantic Tag Bucketing
+If direct candidate selectors fail due to code refactorings, framework migrations, or dynamic Tailwind class changes, the runtime computes local similarity across live candidates in $< 1\text{ ms}$:
+
+$$\text{Score} = 0.35 \times \text{TagScore} + 0.30 \times \text{AttrJaccard} + 0.25 \times \text{TextLevenshtein} + 0.10 \times \text{ClassJaccard}$$
+
+1. **TagScore (35%):**
+   * Exact tag match: $1.0$.
+   * Interactive tag transition (`button` $\leftrightarrow$ `a` $\leftrightarrow$ `input[type='submit']`): $0.70$ (or $0.90$ if explicit ARIA roles match).
+   * Unrelated tag transitions: $0.0$.
+2. **AttrJaccard (30%):** Key-value attribute Jaccard index ($A \cap B / A \cup B$).
+3. **TextLevenshtein (25%):** Maximum of Levenshtein string similarity and tokenized word Jaccard overlap between recorded and live visible/accessible text.
+4. **ClassJaccard (10%):** Set-based Jaccard similarity of CSS class lists.
+5. **Structural Tie-Breaker:** In ambiguous scenarios (e.g. identical buttons in header and footer), adds up to $+0.01$ bonus for matching `parentTag` and `siblingIndex` proximity.
+6. **Acceptance Threshold:** A match is accepted only when $\text{Score} \ge 0.80$.
+
+---
+
+## 30. Visual Form Input, Anchor Coordinates & Local SSIM Gating
+
+For custom web components, interactive canvases, SVG charts, or headless drag-and-drop interfaces lacking native DOM form inputs:
+
+### A. Anchor-Relative Spatial Pinning
+Coordinates are pinned relative to stable parent container elements using the syntax:
+* `coord: #container@100,50` or `#container@100,50`
+* Offsets $(x, y)$ are calculated from the top-left origin $(0, 0)$ of the anchor element.
+
+### B. $64 \times 64$ Luminance Tile SSIM Gating ($\ge 0.95$)
+Before dispatching blind coordinate clicks during replay, `VisualBaselineGateStep` extracts a $64 \times 64$ luminance crop centered on the coordinate centroid $(x, y)$ and compares it against the recorded baseline:
+* **Match ($\text{SSIM} \ge 0.95$):** Safe to dispatch coordinate click.
+* **Reflow Mismatch ($\text{SSIM} < 0.95$):** Aborts blind execution immediately and throws `HealingRequiredException` to escalate to multimodal vision LLM healing rather than misclicking.
+
+### C. Decoupled Visual Form Typing
+For `<canvas>`, `<svg>`, or coordinate targets, `TypeAction` acquires browser focus via coordinate/element click and dispatches raw keyboard events via WebDriver `Actions.sendKeys()`, avoiding native `element.val()` failures.
+
+---
+
+## 31. Target Framework Inscription & Fast-Fail Lock
+
+To prevent cross-framework execution hazards (e.g. running Playwright pseudo-selectors inside a Selenium/Selenide driver session):
+* **Recording Inscription:** Companion JSON files record `"targetFramework": "SELENIUM_SELENIDE"` (or `"PLAYWRIGHT"`).
+* **Pre-Execution Fast Fail:** `StateMachineRunner` validates all session steps before executing the playbook. If a recorded step targets an incompatible framework engine, it immediately throws `IncompatibleFrameworkException`.
+

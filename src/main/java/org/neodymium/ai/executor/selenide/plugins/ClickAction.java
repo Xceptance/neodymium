@@ -108,7 +108,9 @@ public final class ClickAction implements BrowserActionPlugin
                 if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                 {
                     final SelenideElement anchorElement = SelenideElementFinder.findElement(coord.anchorSelector());
-                    actions.moveToElement(anchorElement.toWebElement(), coord.x(), coord.y()).click().perform();
+                    final int xOffset = coord.x() - (anchorElement.getSize().getWidth() / 2);
+                    final int yOffset = coord.y() - (anchorElement.getSize().getHeight() / 2);
+                    actions.moveToElement(anchorElement.toWebElement(), xOffset, yOffset).click().perform();
                 }
                 else
                 {

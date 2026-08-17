@@ -197,6 +197,9 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         sanitizedAction.setAdjust(rawAction.getAdjust());
         sanitizedAction.setSelfCritique(rawAction.getSelfCritique());
         sanitizedAction.setCandidateLocators(new ArrayList<>(rawAction.getCandidateLocators()));
+        sanitizedAction.setDomFeatureVector(rawAction.getDomFeatureVector());
+        sanitizedAction.setDurationMs(rawAction.getDurationMs());
+        sanitizedAction.setDelayMs(rawAction.getDelayMs());
 
         // Copy dynamic parameters map
         sanitizedAction.getParameters().putAll(rawAction.getParameters());

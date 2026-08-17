@@ -1586,15 +1586,26 @@ public class PageAnalyzer
                 double bestScore = -1.0;
                 for (int i = 0; i < candidates.size(); i++)
                 {
-                    final double score = LocatorCascadeResolver.computeSimilarity(recordedVector, candidates.get(i));
-                    if (score > bestScore)
+                    final DomFeatureVector candidate = candidates.get(i);
+                    final double baseScore = LocatorCascadeResolver.computeSimilarity(recordedVector, candidate);
+                    double tieBreaker = 0.0;
+                    if (recordedVector.getParentTag() != null && candidate.getParentTag() != null
+                        && recordedVector.getParentTag().equalsIgnoreCase(candidate.getParentTag()))
                     {
-                        bestScore = score;
+                        tieBreaker += 0.005;
+                    }
+                    final int indexDiff = Math.abs(recordedVector.getSiblingIndex() - candidate.getSiblingIndex());
+                    tieBreaker += Math.max(0.0, 0.005 * (1.0 - (indexDiff / 10.0)));
+
+                    final double totalScore = baseScore + tieBreaker;
+                    if (baseScore >= (minScore - 1e-5) && totalScore > bestScore)
+                    {
+                        bestScore = totalScore;
                         bestIndex = i;
                     }
                 }
 
-                if (bestIndex >= 0 && bestScore >= minScore)
+                if (bestIndex >= 0)
                 {
                     final Object elResponse = ((JavascriptExecutor) driver).executeScript(
                         "var el = (window.__neo_candidate_elements && window.__neo_candidate_elements[" + bestIndex + "]) ? window.__neo_candidate_elements[" + bestIndex + "] : null; "

@@ -1273,6 +1273,9 @@ public final class ExecuteActionsStep implements PipelineStep
         resolvedAction.setAdjust(rawAction.getAdjust());
         resolvedAction.setSelfCritique(rawAction.getSelfCritique());
         resolvedAction.setCandidateLocators(new ArrayList<>(rawAction.getCandidateLocators()));
+        resolvedAction.setDomFeatureVector(rawAction.getDomFeatureVector());
+        resolvedAction.setDurationMs(rawAction.getDurationMs());
+        resolvedAction.setDelayMs(rawAction.getDelayMs());
 
         // Copy dynamic parameters map
         resolvedAction.getParameters().putAll(rawAction.getParameters());
