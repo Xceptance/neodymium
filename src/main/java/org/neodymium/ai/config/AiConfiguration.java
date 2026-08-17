@@ -742,4 +742,42 @@ public final class AiConfiguration
     {
         return getInt("neodymium.ai.tokenBudget.output", -1);
     }
+
+    /**
+     * Checks if preliminary disk reporting is enabled for test runs.
+     * Default is true.
+     *
+     * @return true if preliminary disk report listener is enabled, false otherwise
+     */
+    public boolean isDiskReportEnabled()
+    {
+        return getBoolean("neodymium.ai.report.disk.enabled", true);
+    }
+
+    /**
+     * Resolves the target directory path where preliminary disk reports are stored.
+     * Default is "target/ai-reports".
+     *
+     * @return disk report target directory path
+     */
+    public String getDiskReportDirectory()
+    {
+        return getProperty("neodymium.ai.report.disk.directory", "target/ai-reports");
+    }
+
+    /**
+     * Resolves the output formats for preliminary disk reporting.
+     * Default is "ALL" (generates HTML, Markdown, and JSON).
+     *
+     * @return comma-delimited or keyword format string
+     */
+    public String getDiskReportFormat()
+    {
+        final String primary = getProperty("neodymium.ai.report.disk.format", null);
+        if (primary != null && !primary.isBlank())
+        {
+            return primary;
+        }
+        return getProperty("neodymium.ai.report.disk.formats", "ALL");
+    }
 }
