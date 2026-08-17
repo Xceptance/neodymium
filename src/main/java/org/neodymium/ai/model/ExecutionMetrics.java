@@ -45,6 +45,8 @@ public final class ExecutionMetrics
 
     private final int judgeCallCount;
 
+    private final int rcaCallCount;
+
     private final int stepCount;
 
     private final int healedStepCount;
@@ -99,6 +101,7 @@ public final class ExecutionMetrics
             verificationCallCount,
             pesapCallCount,
             judgeCallCount,
+            0,
             stepCount,
             healedStepCount,
             softFailedStepCount,
@@ -145,12 +148,69 @@ public final class ExecutionMetrics
         final TokenUsage totalTokenUsage
     )
     {
+        this(
+            executionMode,
+            llmCallCount,
+            standardCallCount,
+            verificationCallCount,
+            pesapCallCount,
+            judgeCallCount,
+            0,
+            stepCount,
+            healedStepCount,
+            softFailedStepCount,
+            replayedStepCount,
+            internalCacheHits,
+            totalEscalations,
+            contextLevelCounts,
+            totalTokenUsage
+        );
+    }
+
+    /**
+     * Constructs an ExecutionMetrics instance with all aggregated telemetry parameters including RCA, escalations and context levels.
+     *
+     * @param executionMode the execution mode governing this run
+     * @param llmCallCount total LLM API calls made
+     * @param standardCallCount standard action extraction LLM calls
+     * @param verificationCallCount post-action verification LLM calls
+     * @param pesapCallCount PESAP pre-step analysis LLM calls
+     * @param judgeCallCount quality judge LLM calls
+     * @param rcaCallCount Visual RCA LLM calls
+     * @param stepCount total playbook steps executed
+     * @param healedStepCount count of steps resolved via self-healing
+     * @param softFailedStepCount count of soft/optional steps that failed but were tolerated
+     * @param replayedStepCount count of steps executed via offline replay cache
+     * @param internalCacheHits count of internal LLM prompt cache hits
+     * @param totalEscalations count of context level escalations
+     * @param contextLevelCounts map of context level names to usage counts
+     * @param totalTokenUsage total token usage across all LLM calls
+     */
+    public ExecutionMetrics(
+        final ExecutionMode executionMode,
+        final int llmCallCount,
+        final int standardCallCount,
+        final int verificationCallCount,
+        final int pesapCallCount,
+        final int judgeCallCount,
+        final int rcaCallCount,
+        final int stepCount,
+        final int healedStepCount,
+        final int softFailedStepCount,
+        final int replayedStepCount,
+        final int internalCacheHits,
+        final int totalEscalations,
+        final Map<String, Integer> contextLevelCounts,
+        final TokenUsage totalTokenUsage
+    )
+    {
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_ONLY;
         this.llmCallCount = llmCallCount;
         this.standardCallCount = standardCallCount;
         this.verificationCallCount = verificationCallCount;
         this.pesapCallCount = pesapCallCount;
         this.judgeCallCount = judgeCallCount;
+        this.rcaCallCount = rcaCallCount;
         this.stepCount = stepCount;
         this.healedStepCount = healedStepCount;
         this.softFailedStepCount = softFailedStepCount;
@@ -279,6 +339,16 @@ public final class ExecutionMetrics
     public int getJudgeCallCount()
     {
         return this.judgeCallCount;
+    }
+
+    /**
+     * Returns the count of Visual RCA LLM calls.
+     *
+     * @return Visual RCA LLM calls
+     */
+    public int getRcaCallCount()
+    {
+        return this.rcaCallCount;
     }
 
     /**

@@ -85,12 +85,14 @@ public class SessionDebuggerTest
         final ExecutionContext context = session.getExecutionContext();
         context.getTransientData().put(ExecutionContext.KEY_STANDARD_TOKEN_USAGE, new TokenUsage(100, 50, 150));
         context.getTransientData().put(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE, new TokenUsage(200, 100, 300));
+        context.getTransientData().put(ExecutionContext.KEY_RCA_TOKEN_USAGE, new TokenUsage(400, 100, 500));
 
         final Map<String, TokenUsage> breakdown = debugger.getTokenUsageBreakdown();
         // Assert token map entries and total token metrics
-        Assertions.assertEquals(2, breakdown.size());
+        Assertions.assertEquals(3, breakdown.size());
         Assertions.assertEquals(150, breakdown.get("standard").totalTokenCount());
         Assertions.assertEquals(300, breakdown.get("verification").totalTokenCount());
+        Assertions.assertEquals(500, breakdown.get("rca").totalTokenCount());
     }
 
     /**

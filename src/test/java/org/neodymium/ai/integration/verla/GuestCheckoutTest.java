@@ -73,7 +73,7 @@ public final class GuestCheckoutTest extends BaseAiTest
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
-    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    @AiPlaybook("verla/GuestCheckoutTest.yaml")
     public void testCheckoutLivePerfect()
     {
     }
@@ -84,7 +84,7 @@ public final class GuestCheckoutTest extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
-    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLivePerfect")
+    @AiPlaybook(value = "verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLivePerfect")
     public void testCheckoutReplayPerfect()
     {
     }
@@ -95,7 +95,7 @@ public final class GuestCheckoutTest extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
-    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    @AiPlaybook("verla/GuestCheckoutTest.yaml")
     public void testCheckoutLiveNormal()
     {
     }
@@ -106,7 +106,7 @@ public final class GuestCheckoutTest extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
-    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveNormal")
+    @AiPlaybook(value = "verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveNormal")
     public void testCheckoutReplayNormal()
     {
     }
@@ -117,7 +117,7 @@ public final class GuestCheckoutTest extends BaseAiTest
     @Order(5)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
-    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    @AiPlaybook("verla/GuestCheckoutTest.yaml")
     public void testCheckoutLiveBad()
     {
     }
@@ -128,7 +128,7 @@ public final class GuestCheckoutTest extends BaseAiTest
     @Order(6)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
-    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveBad")
+    @AiPlaybook(value = "verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveBad")
     public void testCheckoutReplayBad()
     {
     }
@@ -138,7 +138,7 @@ public final class GuestCheckoutTest extends BaseAiTest
      */
     @Order(7)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("/verla/GuestCheckoutTest.yaml")
+    @AiPlaybook("verla/GuestCheckoutTest.yaml")
     public void testCheckoutLiveAllDataSets()
     {
     }
@@ -148,7 +148,7 @@ public final class GuestCheckoutTest extends BaseAiTest
      */
     @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook(value = "/verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
+    @AiPlaybook(value = "verla/GuestCheckoutTest.yaml", recordingMethod = "testCheckoutLiveAllDataSets")
     public void testCheckoutReplayAllDataSets()
     {
     }

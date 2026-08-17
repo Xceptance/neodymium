@@ -310,6 +310,7 @@ public abstract class AiSession implements AutoCloseable
         final Integer verifCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
         final Integer pesapCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
         final Integer judgeCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
+        final Integer rcaCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
 
         @SuppressWarnings("unchecked")
         final List<StepStats> stepStatsList = (List<StepStats>) this.executionContext.getTransientData().get("execution.stepStatsList");
@@ -330,6 +331,7 @@ public abstract class AiSession implements AutoCloseable
             verifCalls != null ? verifCalls : 0,
             pesapCalls != null ? pesapCalls : 0,
             judgeCalls != null ? judgeCalls : 0,
+            rcaCalls != null ? rcaCalls : 0,
             stepCount,
             healedCount,
             softFailedCount,
@@ -539,6 +541,7 @@ public abstract class AiSession implements AutoCloseable
         recordingMetadata.put("verificationCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 0));
         recordingMetadata.put("pesapCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_PESAP_CALL_COUNT, 0));
         recordingMetadata.put("judgeCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0));
+        recordingMetadata.put("rcaCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_RCA_CALL_COUNT, 0));
         recordingMetadata.put("totalReplays", getTotalReplays());
         recordingMetadata.put("internalCacheHits", getInternalCacheHits());
 

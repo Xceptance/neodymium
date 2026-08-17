@@ -25,16 +25,20 @@ import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
-import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.model.IncompatibleFrameworkException;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
-import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
@@ -382,6 +386,7 @@ public final class StateMachineRunner
         catch (final Throwable t)
         {
             failureCause = t;
+            runVisualRca(context, t);
             throw t;
         }
         finally
@@ -468,16 +473,19 @@ public final class StateMachineRunner
         final Integer judgeCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
         final Integer verifCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
         final Integer pesapCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
+        final Integer rcaCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
 
-        final org.neodymium.ai.client.TokenUsage standardUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
-        final org.neodymium.ai.client.TokenUsage judgeUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
-        final org.neodymium.ai.client.TokenUsage verificationUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
-        final org.neodymium.ai.client.TokenUsage pesapUsage = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
+        final TokenUsage standardUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
+        final TokenUsage judgeUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+        final TokenUsage verificationUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
+        final TokenUsage pesapUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
+        final TokenUsage rcaUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
 
         final int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
         final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
         final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
         final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
+        final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
 
         final long standardIn = standardUsage != null ? standardUsage.inputTokenCount() : 0;
         final long standardOut = standardUsage != null ? standardUsage.outputTokenCount() : 0;
@@ -499,10 +507,15 @@ public final class StateMachineRunner
         final long pesapCached = pesapUsage != null ? pesapUsage.cachedTokenCount() : 0;
         final long pesapTotal = pesapIn + pesapOut;
 
-        final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls;
-        final long totalIn = standardIn + judgeIn + verificationIn + pesapIn;
-        final long totalOut = standardOut + judgeOut + verificationOut + pesapOut;
-        final long totalCached = standardCached + judgeCached + verificationCached + pesapCached;
+        final long rcaIn = rcaUsage != null ? rcaUsage.inputTokenCount() : 0;
+        final long rcaOut = rcaUsage != null ? rcaUsage.outputTokenCount() : 0;
+        final long rcaCached = rcaUsage != null ? rcaUsage.cachedTokenCount() : 0;
+        final long rcaTotal = rcaIn + rcaOut;
+
+        final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls;
+        final long totalIn = standardIn + judgeIn + verificationIn + pesapIn + rcaIn;
+        final long totalOut = standardOut + judgeOut + verificationOut + pesapOut + rcaOut;
+        final long totalCached = standardCached + judgeCached + verificationCached + pesapCached + rcaCached;
         final long totalTokens = totalIn + totalOut;
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
@@ -535,8 +548,10 @@ public final class StateMachineRunner
                 String.format("%,d", standardCalls), String.format("%,d", standardTotal), String.format("%,d", standardIn), String.format("%,d", standardOut), String.format("%,d", standardCached));
         LOGGER.debug("║   ├─ Judge:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", judgeCalls), String.format("%,d", judgeTotal), String.format("%,d", judgeIn), String.format("%,d", judgeOut), String.format("%,d", judgeCached));
-        LOGGER.debug("║   └─ Verification:      {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+        LOGGER.debug("║   ├─ Verification:      {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", verificationCalls), String.format("%,d", verificationTotal), String.format("%,d", verificationIn), String.format("%,d", verificationOut), String.format("%,d", verificationCached));
+        LOGGER.debug("║   └─ Visual RCA:        {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
+                String.format("%,d", rcaCalls), String.format("%,d", rcaTotal), String.format("%,d", rcaIn), String.format("%,d", rcaOut), String.format("%,d", rcaCached));
         LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
         @SuppressWarnings("unchecked")
         final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
@@ -658,6 +673,7 @@ public final class StateMachineRunner
             }
 
             LOGGER.debug("Calling LLM provider '{}' via capability: VISION (Visual RCA)", provider.getClass().getSimpleName());
+            this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "VISUAL_RCA"));
             final long startTime = System.currentTimeMillis();
             final ExecutionContext previousContext = ExecutionContext.getActiveContext();
             final LlmResponse response;
@@ -671,12 +687,68 @@ public final class StateMachineRunner
                 ExecutionContext.setActiveContext(previousContext);
             }
             final long durationMs = System.currentTimeMillis() - startTime;
+            this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "VISUAL_RCA"));
+
             LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
-            LOGGER.trace("Raw response content:\n{}", response.content());
+            if (LOGGER.isDebugEnabled() && response.content() != null)
+            {
+                LOGGER.debug("   🔍 [Visual RCA Response]:\n{}", response.content());
+            }
+            if (LOGGER.isTraceEnabled())
+            {
+                LOGGER.trace("Raw response content:\n{}", response.content());
+            }
+
+            final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+            context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);
+            final Integer rcaCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_RCA_CALL_COUNT, 0);
+            context.getTransientData().put(ExecutionContext.KEY_RCA_CALL_COUNT, rcaCalls + 1);
+
+            final TokenUsage newUsage = response.tokenUsage();
+            if (newUsage != null)
+            {
+                LOGGER.debug("   📊 Visual RCA Tokens: {} in ({} cached) → {} out (total: {})",
+                    newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
+
+                final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
+                if (existing == null)
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_RCA_TOKEN_USAGE, newUsage);
+                }
+                else
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_RCA_TOKEN_USAGE, new TokenUsage(
+                        existing.inputTokenCount() + newUsage.inputTokenCount(),
+                        existing.outputTokenCount() + newUsage.outputTokenCount(),
+                        existing.totalTokenCount() + newUsage.totalTokenCount(),
+                        existing.cachedTokenCount() + newUsage.cachedTokenCount()
+                    ));
+                }
+
+                @SuppressWarnings("unchecked")
+                final List<StepStats> stepStatsList = (List<StepStats>) context.getTransientData().get("execution.stepStatsList");
+                if (stepStatsList != null && !stepStatsList.isEmpty())
+                {
+                    final StepStats lastStats = stepStatsList.get(stepStatsList.size() - 1);
+                    lastStats.addRcaCall((int) newUsage.inputTokenCount(), (int) newUsage.outputTokenCount(), (int) newUsage.cachedTokenCount());
+                }
+            }
+            else
+            {
+                @SuppressWarnings("unchecked")
+                final List<StepStats> stepStatsList = (List<StepStats>) context.getTransientData().get("execution.stepStatsList");
+                if (stepStatsList != null && !stepStatsList.isEmpty())
+                {
+                    final StepStats lastStats = stepStatsList.get(stepStatsList.size() - 1);
+                    lastStats.addRcaCall(0, 0, 0);
+                }
+            }
+
             final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);
 
             LOGGER.info("🚨 [Visual RCA Diagnosis]: {}", rcaExplanation);
             context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, rcaExplanation);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaExplanation);
             this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Visual RCA analysis: " + rcaExplanation, exception));
         }
         catch (final Exception e)
@@ -729,9 +801,18 @@ public final class StateMachineRunner
             LOGGER.debug("{}Actions:        0", indent);
         }
 
+        if (stats.getPesapCalls() > 0)
+        {
+            LOGGER.debug("{}PESAP Calls:        {} (Tokens: {} in ({} cached) → {} out)",
+                indent,
+                stats.getPesapCalls(),
+                stats.getPesapInputTokens(),
+                stats.getPesapCachedTokens(),
+                stats.getPesapOutputTokens());
+        }
         if (stats.getStandardCalls() > 0)
         {
-            LOGGER.debug("{}Standard Calls: {} (Tokens: {} in ({} cached) → {} out)",
+            LOGGER.debug("{}Standard Calls:     {} (Tokens: {} in ({} cached) → {} out)",
                 indent,
                 stats.getStandardCalls(),
                 stats.getStandardInputTokens(),
@@ -746,6 +827,15 @@ public final class StateMachineRunner
                 stats.getVerificationInputTokens(),
                 stats.getVerificationCachedTokens(),
                 stats.getVerificationOutputTokens());
+        }
+        if (stats.getRcaCalls() > 0)
+        {
+            LOGGER.debug("{}Visual RCA Calls:   {} (Tokens: {} in ({} cached) → {} out)",
+                indent,
+                stats.getRcaCalls(),
+                stats.getRcaInputTokens(),
+                stats.getRcaCachedTokens(),
+                stats.getRcaOutputTokens());
         }
         if (stats.getFailureReason() != null)
         {
@@ -766,12 +856,12 @@ public final class StateMachineRunner
     }
 
     /**
-     * Masks an API key for TRACE log hints (e.g. AQ....4E).
+     * Masks an API key for TRACE log hints, displaying the prefix and at least the last 4 characters (e.g. AQ....1234 or ${...._KEY}).
      *
      * @param apiKey the raw API key to format
      * @return the masked API key hint
      */
-    private static String maskApiKeyHint(final String apiKey)
+    static String maskApiKeyHint(final String apiKey)
     {
         if (apiKey == null || apiKey.isBlank())
         {
@@ -782,6 +872,7 @@ public final class StateMachineRunner
         {
             return "****";
         }
-        return trimmed.substring(0, 2) + "...." + trimmed.substring(trimmed.length() - 2);
+        final int prefixLen = Math.min(2, trimmed.length() - 4);
+        return trimmed.substring(0, prefixLen) + "...." + trimmed.substring(trimmed.length() - 4);
     }
 }

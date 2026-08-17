@@ -84,5 +84,22 @@ public class ExecutionMetricsTest
         Assertions.assertFalse(metrics.isStrictReplay());
         Assertions.assertEquals(3, metrics.getLlmCallCount());
         Assertions.assertEquals(1, metrics.getInternalCacheHits());
+        Assertions.assertEquals(0, metrics.getRcaCallCount());
+    }
+
+    @Test
+    @DisplayName("ExecutionMetrics correctly retains and returns rcaCallCount")
+    public void testRcaCallMetrics()
+    {
+        final ExecutionMetrics metrics = new ExecutionMetrics(
+            ExecutionMode.LLM_ONLY, 4, 1, 1, 1, 0, 1, 3, 0, 0, 0, 0, 0, null, new TokenUsage(300, 100, 0)
+        );
+
+        Assertions.assertEquals(1, metrics.getRcaCallCount());
+        Assertions.assertEquals(4, metrics.getLlmCallCount());
+        Assertions.assertEquals(1, metrics.getStandardCallCount());
+        Assertions.assertEquals(1, metrics.getVerificationCallCount());
+        Assertions.assertEquals(1, metrics.getPesapCallCount());
+        Assertions.assertEquals(0, metrics.getJudgeCallCount());
     }
 }

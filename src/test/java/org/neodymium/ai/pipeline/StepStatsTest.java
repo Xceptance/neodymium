@@ -59,4 +59,27 @@ public class StepStatsTest
         stats.addContextLevel(null);
         assertTrue(stats.getContextLevels().isEmpty());
     }
+
+    @Test
+    public void testAddRcaCallAggregatesMetricsAndFlagsExecuted()
+    {
+        final StepStats stats = new StepStats("Verify product grid", System.currentTimeMillis());
+        assertEquals(0, stats.getRcaCalls());
+        assertEquals(0, stats.getRcaInputTokens());
+        assertEquals(0, stats.getRcaOutputTokens());
+        assertEquals(0, stats.getRcaCachedTokens());
+
+        stats.addRcaCall(1200, 300, 400);
+        assertEquals(1, stats.getRcaCalls());
+        assertEquals(1200, stats.getRcaInputTokens());
+        assertEquals(300, stats.getRcaOutputTokens());
+        assertEquals(400, stats.getRcaCachedTokens());
+        assertTrue(stats.isExecuted());
+
+        stats.addRcaCall(800, 150, 100);
+        assertEquals(2, stats.getRcaCalls());
+        assertEquals(2000, stats.getRcaInputTokens());
+        assertEquals(450, stats.getRcaOutputTokens());
+        assertEquals(500, stats.getRcaCachedTokens());
+    }
 }

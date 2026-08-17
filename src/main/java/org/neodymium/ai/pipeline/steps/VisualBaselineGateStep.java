@@ -115,11 +115,6 @@ public final class VisualBaselineGateStep implements PipelineStep
                         }
                     }
 
-                    final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                        || (this.step != null && this.step.getInstruction() != null && (this.step.getInstruction().toLowerCase().contains("visual: full") || this.step.getInstruction().toLowerCase().contains("visual:full")));
-                    final SutState currentState = VisualStabilityDetector.captureSettledState(executor, isFullPageReq);
-                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
-
                     ClickAction.CoordinateTarget coordinateTarget = null;
                     if (this.step.getActions() != null)
                     {
@@ -136,6 +131,18 @@ public final class VisualBaselineGateStep implements PipelineStep
                             }
                         }
                     }
+
+                    final String recordedHash = this.step.getScreenshotHash();
+                    final double minScore = coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore();
+
+                    final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                        || (this.step != null && this.step.getInstruction() != null && (this.step.getInstruction().toLowerCase().contains("visual: full") || this.step.getInstruction().toLowerCase().contains("visual:full")));
+                    final SutState currentState = VisualStabilityDetector.captureSettledState(
+                        executor,
+                        isFullPageReq,
+                        coordinateTarget == null ? recordedHash : null,
+                        minScore);
+                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
 
                     String currentSsimMatrix = null;
                     if (coordinateTarget != null)
@@ -162,8 +169,6 @@ public final class VisualBaselineGateStep implements PipelineStep
                     {
                         boolean isVisualMatch = false;
                         Double currentSsimScore = null;
-                        final String recordedHash = this.step.getScreenshotHash();
-                        final double minScore = coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore();
 
                         if (currentSsimMatrix != null)
                         {
