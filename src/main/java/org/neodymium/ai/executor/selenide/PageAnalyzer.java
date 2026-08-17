@@ -1581,6 +1581,10 @@ public class PageAnalyzer
                 final ObjectMapper mapper = new ObjectMapper();
                 final TypeReference<List<DomFeatureVector>> typeRef = new TypeReference<>() {};
                 final List<DomFeatureVector> candidates = mapper.readValue(jsonStr, typeRef);
+                if (LOG.isTraceEnabled())
+                {
+                    LOG.trace("🧬 Evaluating {} candidate elements against target vector: {}", candidates.size(), recordedVector.toSummaryString());
+                }
 
                 int bestIndex = -1;
                 double bestScore = -1.0;
@@ -1598,15 +1602,28 @@ public class PageAnalyzer
                     tieBreaker += Math.max(0.0, 0.005 * (1.0 - (indexDiff / 10.0)));
 
                     final double totalScore = baseScore + tieBreaker;
-                    if (baseScore >= (minScore - 1e-5) && totalScore > bestScore)
+                    final boolean isMatch = baseScore >= (minScore - 1e-5);
+                    if (isMatch && totalScore > bestScore)
                     {
                         bestScore = totalScore;
                         bestIndex = i;
+                    }
+
+                    if (LOG.isTraceEnabled())
+                    {
+                        final String matchBadge = isMatch ? " ★ CANDIDATE" : "";
+                        LOG.trace("   ├─ Candidate #{} [Score: {} / Min: {}] (base: {}, tie: +{}){}",
+                            i + 1, String.format("%.4f", totalScore), minScore, String.format("%.4f", baseScore), String.format("%.4f", tieBreaker), matchBadge);
+                        for (final String line : candidate.toFormattedLines("   │  ", "   │  "))
+                        {
+                            LOG.trace(line);
+                        }
                     }
                 }
 
                 if (bestIndex >= 0)
                 {
+                    LOG.trace("   └─ ✅ Matched Candidate #{} with score {} (>= minScore {})", bestIndex + 1, String.format("%.4f", bestScore), minScore);
                     final Object elResponse = ((JavascriptExecutor) driver).executeScript(
                         "var el = (window.__neo_candidate_elements && window.__neo_candidate_elements[" + bestIndex + "]) ? window.__neo_candidate_elements[" + bestIndex + "] : null; "
                         + "delete window.__neo_candidate_elements; return el;");
@@ -1617,6 +1634,7 @@ public class PageAnalyzer
                 }
                 else
                 {
+                    LOG.trace("   └─ ❌ No candidate met minimum score threshold {}", minScore);
                     ((JavascriptExecutor) driver).executeScript("delete window.__neo_candidate_elements;");
                 }
             }

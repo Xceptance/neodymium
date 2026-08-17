@@ -210,12 +210,14 @@ public final class SelenideElementFinder
             {
                 try
                 {
+                    LOG.trace("   🧬 Attempting DomFeatureVector proximity match for target '{}': {}", target, recordedVector.toSummaryString());
                     final WebElement matchedWebElement = new PageAnalyzer().findLiveElementByFeatureVector(
                         WebDriverRunner.getWebDriver(),
                         recordedVector,
                         0.80);
                     if (matchedWebElement != null)
                     {
+                        LOG.trace("   ✅ Proximity match found live element for target '{}'", target);
                         return Selenide.$(matchedWebElement);
                     }
                 }

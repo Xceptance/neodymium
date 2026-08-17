@@ -275,5 +275,14 @@ public class LocatorCascadeResolverTest
         Assertions.assertEquals(v.hashCode(), same.hashCode());
         Assertions.assertNotEquals(v, legacy);
         Assertions.assertTrue(v.toString().contains("x=100"));
+        Assertions.assertTrue(v.toString().contains("attributes={id=btn1}"));
+        Assertions.assertTrue(v.toDetailString().contains("tag=<button>"));
+        Assertions.assertTrue(v.toDetailString().contains("text='Checkout'"));
+        Assertions.assertTrue(v.toDetailString().contains("attrs={id=btn1}"));
+        Assertions.assertTrue(v.toDetailString().contains("bounds=(100, 200, 150x40)"));
+        Assertions.assertEquals("<button> \"Checkout\" parent=<form>#0 (100, 200, 150x40)", v.toSummaryString());
+        final java.util.List<String> lines = v.toFormattedLines("   │ Vector: ", "   │         ");
+        Assertions.assertFalse(lines.isEmpty());
+        Assertions.assertTrue(lines.get(0).startsWith("   │ Vector: tag=<button>"));
     }
 }

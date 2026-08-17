@@ -28,6 +28,7 @@ import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.pipeline.ExecutionContext;
 
 /**
@@ -333,6 +334,17 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             candidates.add(new LocatorCandidate(locator, 1.0));
         }
         action.setCandidateLocators(candidates);
+
+        if (node.hasNonNull("domFeatureVector") && node.path("domFeatureVector").isObject())
+        {
+            try
+            {
+                action.setDomFeatureVector(MAPPER.treeToValue(node.path("domFeatureVector"), DomFeatureVector.class));
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
         
         final JsonNode condNode = node.path("condition");
         if (condNode.isArray())

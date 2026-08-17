@@ -21,19 +21,23 @@ package org.neodymium.ai.pipeline.steps;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.SutAttachment;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.prompt.AiPrompt;
+import org.neodymium.ai.prompt.VerificationResult;
 import org.neodymium.ai.session.AiSession;
-import org.neodymium.ai.config.AiConfiguration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -220,18 +224,34 @@ public final class CallLlmStep<T> implements PipelineStep
                 int index = 1;
                 for (final Object obj : list)
                 {
-                    if (obj instanceof org.neodymium.ai.action.Action action)
+                    if (obj instanceof Action action)
                     {
                         LOGGER.debug("   ┌─ Action #{} Details ───────────────────────────────────────", index++);
                         LOGGER.debug("   │ Type:      {}", action.getType());
                         LOGGER.debug("   │ Target:    {}", action.getTarget());
                         LOGGER.debug("   │ Value:     {}", action.getValues());
                         LOGGER.debug("   │ Reasoning: {}", action.getReasoning());
+                        if (action.getDomFeatureVector() != null)
+                        {
+                            final DomFeatureVector vector = action.getDomFeatureVector();
+                            for (final String line : vector.toFormattedLines("   │ Vector:    ", "   │            "))
+                            {
+                                LOGGER.trace(line);
+                            }
+                        }
+                        if (action.getCandidateLocators() != null && !action.getCandidateLocators().isEmpty())
+                        {
+                            LOGGER.trace("   │ Candidates: {}", action.getCandidateLocators());
+                        }
+                        if (action.getSelfCritique() != null && !action.getSelfCritique().isEmpty())
+                        {
+                            LOGGER.trace("   │ Critique:  {}", action.getSelfCritique());
+                        }
                         LOGGER.debug("   └────────────────────────────────────────────────────────");
                     }
                 }
             }
-            else if (parsedResult instanceof org.neodymium.ai.prompt.VerificationResult vr)
+            else if (parsedResult instanceof VerificationResult vr)
             {
                 LOGGER.debug("Successfully parsed response: VerificationResult (passed={}, actionReasoning='{}', visualReasoning='{}')", vr.passed(), vr.actionReasoning(), vr.visualReasoning());
             }

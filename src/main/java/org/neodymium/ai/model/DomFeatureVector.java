@@ -301,6 +301,136 @@ public final class DomFeatureVector implements Serializable
         return Objects.hash(tag, text, classes, attributes, role, accessibleName, parentTag, siblingIndex, x, y, width, height);
     }
 
+    /**
+     * Returns a concise, single-line human-readable summary of this feature vector.
+     *
+     * @return the short summary representation
+     */
+    public String toSummaryString()
+    {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("<").append(tag.isEmpty() ? "*" : tag).append(">");
+        if (!text.isEmpty())
+        {
+            final String cleanText = text.length() > 30 ? text.substring(0, 27) + "..." : text;
+            sb.append(" \"").append(cleanText).append("\"");
+        }
+        else if (!accessibleName.isEmpty())
+        {
+            final String cleanAcc = accessibleName.length() > 30 ? accessibleName.substring(0, 27) + "..." : accessibleName;
+            sb.append(" [").append(cleanAcc).append("]");
+        }
+        if (!parentTag.isEmpty())
+        {
+            sb.append(" parent=<").append(parentTag).append(">#").append(siblingIndex);
+        }
+        sb.append(" (").append(x).append(", ").append(y).append(", ").append(width).append("x").append(height).append(")");
+        return sb.toString();
+    }
+
+    /**
+     * Formats this feature vector into structured multi-line segments to avoid terminal line wrapping.
+     *
+     * @param firstLinePrefix    the prefix string for the first line
+     * @param continuationPrefix the prefix string for subsequent continuation lines
+     * @return list of formatted lines
+     */
+    public java.util.List<String> toFormattedLines(final String firstLinePrefix, final String continuationPrefix)
+    {
+        final java.util.List<String> lines = new java.util.ArrayList<>();
+
+        // Line 1: Tag, Role, Text
+        final StringBuilder line1 = new StringBuilder();
+        line1.append(firstLinePrefix != null ? firstLinePrefix : "");
+        line1.append("tag=<").append(tag).append(">");
+        if (!role.isEmpty())
+        {
+            line1.append(", role='").append(role).append("'");
+        }
+        if (!text.isEmpty())
+        {
+            line1.append(", text='").append(text).append("'");
+        }
+        lines.add(line1.toString());
+
+        final String cont = continuationPrefix != null ? continuationPrefix : "";
+
+        // Line 2: Accessible name (if distinct) and CSS classes (if present)
+        if ((!accessibleName.isEmpty() && !accessibleName.equals(text)) || !classes.isEmpty())
+        {
+            final StringBuilder line2 = new StringBuilder(cont);
+            boolean hasPrev = false;
+            if (!accessibleName.isEmpty() && !accessibleName.equals(text))
+            {
+                line2.append("accName='").append(accessibleName).append("'");
+                hasPrev = true;
+            }
+            if (!classes.isEmpty())
+            {
+                if (hasPrev)
+                {
+                    line2.append(", ");
+                }
+                line2.append("classes=").append(classes);
+            }
+            lines.add(line2.toString());
+        }
+
+        // Line 3: Attributes (if present)
+        if (!attributes.isEmpty())
+        {
+            lines.add(cont + "attrs=" + attributes);
+        }
+
+        // Line 4: Parent hierarchy and spatial bounding box
+        final StringBuilder line4 = new StringBuilder(cont);
+        if (!parentTag.isEmpty())
+        {
+            line4.append("parent=<").append(parentTag).append(">#").append(siblingIndex).append(", ");
+        }
+        line4.append("bounds=(").append(x).append(", ").append(y).append(", ").append(width).append("x").append(height).append(")");
+        lines.add(line4.toString());
+
+        return lines;
+    }
+
+    /**
+     * Returns a compact, single-line human-readable summary of this feature vector for structured logging.
+     *
+     * @return the detail string representation
+     */
+    public String toDetailString()
+    {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("tag=<").append(tag).append(">");
+        if (!text.isEmpty())
+        {
+            sb.append(", text='").append(text).append("'");
+        }
+        if (!role.isEmpty())
+        {
+            sb.append(", role='").append(role).append("'");
+        }
+        if (!accessibleName.isEmpty() && !accessibleName.equals(text))
+        {
+            sb.append(", accName='").append(accessibleName).append("'");
+        }
+        if (!classes.isEmpty())
+        {
+            sb.append(", classes=").append(classes);
+        }
+        if (!attributes.isEmpty())
+        {
+            sb.append(", attrs=").append(attributes);
+        }
+        if (!parentTag.isEmpty())
+        {
+            sb.append(", parent=<").append(parentTag).append(">#").append(siblingIndex);
+        }
+        sb.append(", bounds=(").append(x).append(", ").append(y).append(", ").append(width).append("x").append(height).append(")");
+        return sb.toString();
+    }
+
     @Override
     public String toString()
     {
@@ -308,6 +438,7 @@ public final class DomFeatureVector implements Serializable
             + "tag='" + tag + '\''
             + ", text='" + text + '\''
             + ", classes=" + classes
+            + ", attributes=" + attributes
             + ", role='" + role + '\''
             + ", accessibleName='" + accessibleName + '\''
             + ", parentTag='" + parentTag + '\''

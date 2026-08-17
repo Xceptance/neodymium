@@ -266,6 +266,13 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     LOGGER.debug("      💵 Value:       {}", val);
                 }
+                if (resolvedAction.getDomFeatureVector() != null)
+                {
+                    for (final String line : resolvedAction.getDomFeatureVector().toFormattedLines("      📐 Vector:      ", "                      "))
+                    {
+                        LOGGER.trace(line);
+                    }
+                }
 
                 // Execute SUT action via targeted SUT driver
                 // Mask any raw sensitive inputs dynamically matching SessionData variable keys
@@ -388,6 +395,14 @@ public final class ExecuteActionsStep implements PipelineStep
                                 {
                                     actionToExecute = actionToExecute.withDomFeatureVector(vector);
                                     sanitized.setDomFeatureVector(vector);
+                                    if (LOGGER.isTraceEnabled())
+                                    {
+                                        LOGGER.trace("   📐 Captured DomFeatureVector for target '{}':", resolvedAction.getTarget());
+                                        for (final String line : vector.toFormattedLines("        │ ", "        │ "))
+                                        {
+                                            LOGGER.trace(line);
+                                        }
+                                    }
                                     if (step != null && step.getDomFeatureVector() == null)
                                     {
                                         step.setDomFeatureVector(vector);
