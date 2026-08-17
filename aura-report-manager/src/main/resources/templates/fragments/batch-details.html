@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Batch Details Fragment -->
+<div th:fragment="batchDetails" class="d-flex flex-column gap-4">
+    <!-- Batch Header Banner -->
+    <div class="card card-custom p-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <div class="h5 mb-1 font-size-lg fw-bold d-flex align-items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">layers</span>
+                    <span th:text="${batchName}">Batch Name</span>
+                </div>
+                <div class="font-size-sm text-muted" th:text="${batch != null ? batch.description : 'Batch execution history, pass rate trends, and run comparisons.'}">Batch execution history</div>
+            </div>
+            <div class="d-flex align-items-center gap-2" th:if="${batch != null}">
+                <span class="badge badge-status-pass font-size-sm p-2"><span class="material-symbols-outlined">dns</span> <span th:text="${batch.environment}">Environment</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Trend Chart Card -->
+    <div class="card card-custom p-3">
+        <div class="card-header bg-transparent fw-bold font-size-lg border-0 px-0 d-flex align-items-center justify-content-between">
+            <span><span class="material-symbols-outlined text-primary me-2">trending_up</span> Stacked Pass Rate Trend Across Runs</span>
+            <span class="font-size-sm text-muted">Click any data node on trend line to jump directly to run report.</span>
+        </div>
+        <div class="p-2 border rounded bg-light d-flex align-items-center justify-content-center" style="min-height: 220px;" id="batchTrendChartContainer">
+            <div class="text-muted font-size-sm"><span class="material-symbols-outlined text-primary me-2">area_chart</span> Trend chart dynamically rendered via SVG / JS</div>
+        </div>
+    </div>
+
+    <!-- Batch Specific Runs Table -->
+    <div class="card card-custom p-3">
+        <div class="card-header bg-transparent fw-bold font-size-lg border-0 px-0">
+            <span class="material-symbols-outlined text-primary me-2">history</span> Executed Runs in Batch History
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle table-custom mb-0">
+                <thead>
+                    <tr>
+                        <th>Run ID</th>
+                        <th>Timestamp</th>
+                        <th>Total Tests</th>
+                        <th>Status Breakdown</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="batchSpecificRunsTableBody">
+                    <tr th:each="run : ${runs}">
+                        <td class="font-mono fw-bold text-primary" th:text="'#' + ${run.id}">#RUN_ID</td>
+                        <td class="font-size-sm text-muted" th:text="${run.timestampLabel}">UNKNOWN</td>
+                        <td class="font-mono fw-bold" th:text="${run.totalTests}">7</td>
+                        <td style="min-width: 220px; vertical-align: middle;">
+                            <div class="status-stacked-bar">
+                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 2)} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
+                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 2)} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
+                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 2)} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
+                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 2)} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
+                                <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 2)} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
+                            </div>
+                        </td>
+                        <td>
+                            <button class="btn btn-primary btn-sm font-size-sm" 
+                                    th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" 
+                                    hx-target="#mainViewContainer" 
+                                    hx-swap="innerHTML">
+                                <span class="material-symbols-outlined me-1">trending_up</span> Open Report
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

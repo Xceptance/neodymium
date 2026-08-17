@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Side Panel Step List Inspector Drawer Fragment -->
+<div th:fragment="stepListPanel" class="allure-side-page-panel" id="testSidePagePanel">
+    <div class="side-page-header">
+        <div>
+            <div class="side-page-title" id="sidePageTestName">CheckoutProcessTest</div>
+            <div class="text-mono" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;" id="sidePageTestDataSet">[Data Set 1: US CreditCard]</div>
+        </div>
+        <button class="side-page-close js-close-side-panel" onclick="closeSidePanelInspector()"><span class="material-symbols-outlined">close</span></button>
+    </div>
+
+    <div class="side-page-body">
+        <!-- TEST BASE VARIATION CROSS-BATCH HISTORY CONTAINER -->
+        <div id="sidePageTestBaseVariationControls" style="display: none; flex-direction: column; gap: 1rem;">
+            <!-- VARIATION BADGES ROW -->
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <span class="location-highlight-badge" id="tbSideLocaleBadge"><span class="material-symbols-outlined">location_on</span> US</span>
+                <span class="tag-chip" id="tbSideBrowserBadge"><span class="material-symbols-outlined text-accent">language</span> Chrome</span>
+                <span class="badge-status badge-pass" id="tbSideBatchBadge" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;"><span class="material-symbols-outlined">layers</span> US Nightly Regression</span>
+            </div>
+
+            <!-- SECTION TITLE & BATCH FILTER -->
+            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="font-weight: 700; font-size: 0.875rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+                        <span class="material-symbols-outlined text-accent">history</span> Execution History Across All Batches
+                    </div>
+                    <div class="multiselect-dropdown" id="tbSideBatchMultiselect">
+                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="tbSideBatchMultiselectMenu" style="padding: 0.3rem 0.6rem; font-size: 0.78rem; min-width: auto;">
+                            <span>Filter Batches: <strong class="js-selected-text">All Selected</strong></span>
+                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                        </button>
+                        <div class="multiselect-menu" id="tbSideBatchMultiselectMenu">
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="tbSideBatchMultiselectMenu" value="ALL" checked> <strong>Select All Batches</strong></label>
+                            <div class="multiselect-divider"></div>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="tbSideBatchMultiselectMenu" value="US Nightly Regression" checked> US Nightly Regression</label>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="tbSideBatchMultiselectMenu" value="EU Smoke Suite" checked> EU Smoke Suite</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CROSS-BATCH HISTORY TABLE -->
+                <div class="table-responsive">
+                    <table class="aura-table">
+                        <thead>
+                            <tr>
+                                <th>RUN ID</th>
+                                <th>BATCH NAME</th>
+                                <th>ENGINE ORIGIN</th>
+                                <th>TIMESTAMP</th>
+                                <th>STATUS / BUGS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbVariationHistoryTableBody">
+                            <tr class="clickable-row" hx-get="/run-report?runId=1049" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
+                                <td><strong class="text-mono text-accent">#1049</strong></td>
+                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
+                                <td><span class="badge-status badge-mode-ai"><span class="material-symbols-outlined">auto_awesome</span> AI Driven</span></td>
+                                <td>Today, 14:22:10</td>
+                                <td>
+                                    <span class="badge-status badge-known-fail" style="font-size: 0.75rem;">Failed (Known Issue)</span>
+                                    <div style="font-size: 0.72rem; margin-top: 0.2rem;"><span class="badge-status badge-known-fail"><span class="material-symbols-outlined">bug_report</span> #BUG-4821</span> <span class="badge-status badge-known-fail"><span class="material-symbols-outlined">bug_report</span> #BUG-5102</span></div>
+                                </td>
+                            </tr>
+                            <tr class="clickable-row" hx-get="/run-report?runId=1048" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
+                                <td><strong class="text-mono text-accent">#1048</strong></td>
+                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
+                                <td><span class="badge-status badge-mode-ai"><span class="material-symbols-outlined">auto_awesome</span> AI Driven</span></td>
+                                <td>Today, 11:15:00</td>
+                                <td><span class="badge-status badge-pass" style="font-size: 0.75rem;">Passed Clean</span></td>
+                            </tr>
+                            <tr class="clickable-row" hx-get="/run-report?runId=1047" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
+                                <td><strong class="text-mono text-accent">#1047</strong></td>
+                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
+                                <td><span class="badge-status badge-mode-healed"><span class="material-symbols-outlined">healing</span> Healed</span></td>
+                                <td>Yesterday, 18:30:00</td>
+                                <td>
+                                    <span class="badge-status badge-unknown-fail" style="font-size: 0.75rem;">Failed (Without Issue Info)</span>
+                                    <div style="font-size: 0.72rem; color: #dc2626; margin-top: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 0.75rem;">circle</span> ZipCodeInvalidException</div>
+                                </td>
+                            </tr>
+                            <tr class="clickable-row" hx-get="/run-report?runId=1046" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
+                                <td><strong class="text-mono text-accent">#1046</strong></td>
+                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
+                                <td><span class="badge-status badge-mode-playbook"><span class="material-symbols-outlined">menu_book</span> Playbook</span></td>
+                                <td>2 days ago</td>
+                                <td><span class="badge-status badge-pass" style="font-size: 0.75rem;">Passed Clean</span></td>
+                            </tr>
+                            <tr class="clickable-row" hx-get="/run-report?runId=1045" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
+                                <td><strong class="text-mono text-accent">#1045</strong></td>
+                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
+                                <td><span class="badge-status badge-mode-java"><span class="material-symbols-outlined">code</span> Java</span></td>
+                                <td>3 days ago</td>
+                                <td>
+                                    <span class="badge-status badge-known-fail" style="font-size: 0.75rem;">Failed (Known Issue)</span>
+                                    <div style="font-size: 0.72rem; margin-top: 0.2rem;"><span class="badge-status badge-known-fail"><span class="material-symbols-outlined">bug_report</span> #BUG-4821</span></div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SINGLE RUN SPECIFIC CONTROLS CONTAINER -->
+        <div id="sidePageSingleRunControls" style="display: flex; flex-direction: column; gap: 0.85rem;">
+            <!-- RETRIED TEST TRIES SWITCHER BAR -->
+            <div class="tries-switcher-bar" id="sidePageTriesBar" style="display: none;">
+                <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted);"><span class="material-symbols-outlined text-accent">refresh</span> Execution Tries:</span>
+                <div id="sidePageTryButtonsList" style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;"></div>
+            </div>
+
+            <!-- Status Header Line & Action Buttons -->
+            <div class="flex-between" style="flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+                <div id="sidePageStatusBadge" th:fragment="sidePanelBugSection" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                    <span th:each="bug : ${exec?.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family);">
+                        <span class="material-symbols-outlined">bug_report</span> <span th:text="${bug.startsWith('#') ? bug : '#' + bug}">#BUG-4821</span>
+                        <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${bug}"
+                                th:hx-delete="|/fragments/test-side-panel/bugs?runId=${runId ?: '1049'}&rowId=${exec?.id ?: rowId ?: 'row-ds-1'}&bugTicket=${#uris.escapeQueryParam(bug)}|"
+                                hx-target="#sidePageStatusBadge" hx-swap="outerHTML">
+                            <span class="material-symbols-outlined">delete</span>
+                        </button>
+                    </span>
+                    <span th:if="${exec?.bugs == null || exec?.bugs.isEmpty()}" class="badge-status badge-pass" style="font-size: 0.75rem;">Clean / No Linked Bugs</span>
+                </div>
+                <div class="flex-gap-2">
+                    <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="View cross-batch history for this test variation in Test Base" onclick="redirectToTestBaseVariationHistory()">
+                        <span class="material-symbols-outlined text-accent">history</span> View History
+                    </button>
+
+                    <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Show test data" onclick="toggleTestDataInfoBox()">
+                        <span class="material-symbols-outlined text-accent">database</span> Data Info
+                    </button>
+
+                    <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Add link to bug ticket" onclick="toggleBugTicketFormBox()">
+                        <span class="material-symbols-outlined text-accent">bug_report</span> Bug Ticket
+                    </button>
+
+                    <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Add comment specifically for this test execution instance" onclick="toggleRunCommentFormBox()">
+                        <span class="material-symbols-outlined text-accent">comment</span> Comment
+                    </button>
+                </div>
+            </div>
+
+            <!-- INITIAL DATASET PARAMETERS TABLE -->
+            <div class="test-data-box" id="testDataInfoBox">
+                <div style="font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+                    <span>INITIAL DATASET PARAMETERS</span>
+                    <span class="tag-chip" id="sidePanelPlaybookFileLabel" style="font-size: 0.7rem;">Playbook / Test Dataset</span>
+                </div>
+                <div id="testDataParamsContainer">
+                    <table class="data-params-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="testDataParamsTbody">
+                            <tr>
+                                <td class="param-key">location</td>
+                                <td class="param-val">US</td>
+                            </tr>
+                            <tr>
+                                <td class="param-key">browser</td>
+                                <td class="param-val">Chrome</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- INLINE BUG TICKET FORM -->
+            <div class="action-card-box" id="bugTicketFormBox">
+                <div class="action-card-header">
+                    <span><span class="material-symbols-outlined" style="color: var(--status-known-fail);">bug_report</span> Link Bug Ticket(s)</span>
+                    <span class="scope-badge-batch"><span class="material-symbols-outlined">layers</span> PERSISTENT OVER BATCH</span>
+                </div>
+                <form hx-post="/fragments/test-side-panel/bugs" hx-target="#sidePageStatusBadge" hx-swap="outerHTML" class="flex-gap-2">
+                    <input type="hidden" name="runId" th:value="${runId ?: '1049'}">
+                    <input type="hidden" name="rowId" th:value="${exec?.id ?: rowId ?: 'row-ds-1'}">
+                    <input type="text" class="action-input" name="bugTicket" id="bugTicketInput" value="" placeholder="e.g. #BUG-4821">
+                    <button type="submit" class="btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;"><span class="material-symbols-outlined">check</span> Save Bugs</button>
+                </form>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">
+                    <span class="material-symbols-outlined text-accent">info</span> Enter bug ticket (e.g., #BUG-4821) and press Save!
+                </div>
+            </div>
+
+            <!-- INLINE RUN COMMENT FORM -->
+            <div class="action-card-box" id="runCommentFormBox">
+                <div class="action-card-header">
+                    <span><span class="material-symbols-outlined text-accent">comment</span> Add Execution Comment</span>
+                </div>
+                <textarea class="action-input" id="runCommentInput" rows="2" placeholder="Add investigation notes specifically for this concrete test execution..."></textarea>
+                <div class="flex-between">
+                    <span style="font-size: 0.75rem; color: var(--text-muted);"></span>
+                    <button class="btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;" onclick="saveRunComment()"><span class="material-symbols-outlined">check</span> Save Comment</button>
+                </div>
+            </div>
+
+            <!-- ACTIVE CONCRETE EXECUTION COMMENT CARD -->
+            <div id="activeCommentDisplayCard" class="badge-status badge-fixed" style="display: none; justify-content: space-between; align-items: center; width: 100%; padding: 0.5rem 0.75rem; font-size: 0.8rem; background: #f8fafc; color: var(--text-main); border: 1px solid var(--border); font-family: var(--font-family);">
+                <span><span class="material-symbols-outlined text-accent">comment</span> Note: <em id="activeCommentVal">""</em></span>
+                <button class="btn-danger-subtle" title="Delete Comment" onclick="removeRunComment()"><span class="material-symbols-outlined">delete</span></button>
+            </div>
+
+            <!-- TOP ERROR MESSAGE DISPLAY BOX -->
+            <div id="sidePageErrorDisplayCard" class="step-error-box-top" style="display: none;">
+                <div class="error-box-top-header">
+                    <span><span class="material-symbols-outlined">warning</span> Failure / Exception Details</span>
+                    <span class="tag-chip" style="background: #fef2f2; color: #dc2626; border-color: #fecaca;">FAILED</span>
+                </div>
+                <pre class="error-box-top-text" id="sidePageErrorText">com.xceptance.neodymium.exceptions.ZipCodeInvalidException: Provided ZIP '90210' failed validation for US_WEST region.</pre>
+            </div>
+
+            <!-- TOP IGNORED REASON DISPLAY BOX -->
+            <div id="sidePageIgnoredDisplayCard" class="step-ignored-box-top" style="display: none;">
+                <div class="ignored-box-top-header">
+                    <span><span class="material-symbols-outlined">block</span> Test Ignored / Skipped Reason</span>
+                    <span class="tag-chip" style="background: #f1f5f9; color: #475569; border-color: #cbd5e1;">IGNORED</span>
+                </div>
+                <pre class="ignored-box-top-text" id="sidePageIgnoredText">@Disabled("Feature under refactoring for Q3 release - ticket #JIRA-9921")</pre>
+            </div>
+
+            <!-- DYNAMIC STEP EXECUTION LIST CONTAINER -->
+            <div class="step-execution-list" id="sidePageStepList">
+                <!-- DYNAMICALLY POPULATED ON ROW CLICK BY renderStepsForExecution() -->
+            </div>
+
+            <!-- COLLAPSIBLE ATTACHMENT SECTION -->
+            <div class="attachment-section step-section" id="attachmentSectionContainer">
+                <div class="step-section-header" onclick="toggleStepSection(this)" style="border-left-color: var(--status-pass);">
+                    <div class="step-section-title">
+                        <span class="attachment-title" style="margin: 0;"><span class="material-symbols-outlined text-accent">attach_file</span> EXECUTION ATTACHMENTS</span>
+                    </div>
+                    <div class="flex-gap-2">
+                        <span class="tag-chip" style="background: #ffffff; font-size: 0.65rem;">2 FILES</span>
+                        <span class="material-symbols-outlined step-section-chevron">chevron_right</span>
+                    </div>
+                </div>
+
+                <div class="step-section-body" style="margin-top: 0.5rem; gap: 0.85rem;">
+                    <div class="attachment-preview-box">
+                        <div class="flex-between">
+                            <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">image</span> Failure Screenshot Attachment</span>
+                            <div class="flex-gap-2">
+                                <span class="tag-chip">failure_screenshot_step3.png</span>
+                                <button class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window" onclick="openAttachmentWindow('image', 'failure_screenshot_step3.png')">
+                                    <span class="material-symbols-outlined">open_in_new</span> Open in Separate Window
+                                </button>
+                            </div>
+                        </div>
+                        <div class="attachment-img-mock">
+                            <span class="material-symbols-outlined" style="font-size: 2rem; color: #60a5fa;">image</span>
+                            <span>[ Embedded Screenshot: ZIP Validation Error Modal ]</span>
+                        </div>
+                    </div>
+
+                    <div class="attachment-preview-box">
+                        <div class="flex-between">
+                            <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">videocam</span> Video Recording Attachment</span>
+                            <div class="flex-gap-2">
+                                <span class="tag-chip">execution_replay.mp4</span>
+                                <button class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window" onclick="openAttachmentWindow('video', 'execution_replay.mp4')">
+                                    <span class="material-symbols-outlined">open_in_new</span> Open in Separate Window
+                                </button>
+                            </div>
+                        </div>
+                        <div class="attachment-video-mock">
+                            <span class="material-symbols-outlined" style="font-size: 2.5rem; color: #3b82f6; cursor: pointer;">play_circle</span>
+                            <span>[ Embedded Video Replay Player: 00:45 Duration ]</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

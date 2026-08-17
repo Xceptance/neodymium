@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Batch Overview & Directory Fragment -->
+<div th:fragment="batchOverview" class="d-flex flex-column gap-4">
+
+    <!-- OVERVIEW OF RUNS & KNOWN BATCHES DIRECTORY -->
+    <div id="pageRunsList" class="view-state active">
+        <div class="panel">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title"><span class="material-symbols-outlined text-accent">layers</span> All Known Test Batches</div>
+                    <div class="panel-subtitle">Select any batch to open its Batch History Overview containing history trend graphs, area trends, and all batch runs.</div>
+                </div>
+            </div>
+
+            <!-- BATCH FILTERS TOOLBAR -->
+            <div class="test-filters-toolbar" id="batchFiltersToolbar">
+                <div style="font-weight: 700; font-size: 0.825rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
+                    <span class="material-symbols-outlined text-accent">filter_alt</span> Directory Filters (Applies to Batches & Runs):
+                </div>
+
+                <!-- ENVIRONMENT MULTI-SELECT DROPDOWN CHECKBOX -->
+                <div class="multiselect-dropdown" id="batchEnvMultiselect">
+                    <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="batchEnvMultiselectMenu">
+                        <span><span class="material-symbols-outlined text-accent">dns</span> Environment: <strong class="js-selected-text">All Selected</strong></span>
+                        <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                    </button>
+                    <div class="multiselect-menu" id="batchEnvMultiselectMenu">
+                        <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="batchEnvMultiselectMenu" value="ALL" checked> <strong>Select All Environments</strong></label>
+                        <div class="multiselect-divider"></div>
+                        <label class="multiselect-option" th:each="env : ${filterEnvs}">
+                            <input type="checkbox" class="js-chk-option" data-menu-id="batchEnvMultiselectMenu" th:value="${env}" checked> <span th:text="${env}">Staging</span>
+                        </label>
+                        <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(filterEnvs)}">No Environments Available</div>
+                    </div>
+                </div>
+
+                <!-- LOCALES MULTI-SELECT DROPDOWN CHECKBOX -->
+                <div class="multiselect-dropdown" id="batchLocalesMultiselect">
+                    <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="batchLocalesMultiselectMenu">
+                        <span><span class="material-symbols-outlined text-accent">public</span> Locales: <strong class="js-selected-text">All Selected</strong></span>
+                        <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                    </button>
+                    <div class="multiselect-menu" id="batchLocalesMultiselectMenu">
+                        <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="batchLocalesMultiselectMenu" value="ALL" checked> <strong>Select All Locales</strong></label>
+                        <div class="multiselect-divider"></div>
+                        <label class="multiselect-option" th:each="loc : ${filterLocales}">
+                            <input type="checkbox" class="js-chk-option" data-menu-id="batchLocalesMultiselectMenu" th:value="${loc}" checked> <span th:text="${loc}">US</span>
+                        </label>
+                        <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(filterLocales)}">No Locales Available</div>
+                    </div>
+                </div>
+
+                <!-- BROWSERS MULTI-SELECT DROPDOWN CHECKBOX -->
+                <div class="multiselect-dropdown" id="batchBrowsersMultiselect">
+                    <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="batchBrowsersMultiselectMenu">
+                        <span><span class="material-symbols-outlined text-accent">web</span> Browsers: <strong class="js-selected-text">All Selected</strong></span>
+                        <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                    </button>
+                    <div class="multiselect-menu" id="batchBrowsersMultiselectMenu">
+                        <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="batchBrowsersMultiselectMenu" value="ALL" checked> <strong>Select All Browsers</strong></label>
+                        <div class="multiselect-divider"></div>
+                        <label class="multiselect-option" th:each="br : ${filterBrowsers}">
+                            <input type="checkbox" class="js-chk-option" data-menu-id="batchBrowsersMultiselectMenu" th:value="${br}" checked> <span th:text="${br}">Chrome</span>
+                        </label>
+                        <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(filterBrowsers)}">No Browsers Available</div>
+                    </div>
+                </div>
+
+                <!-- RESET BATCH FILTERS ICON BUTTON -->
+                <button class="btn-secondary" style="padding: 0.4rem 0.65rem; font-size: 0.825rem;" title="Reset all batch directory filters" onclick="resetBatchFilters()">
+                    <span class="material-symbols-outlined text-accent">restart_alt</span>
+                </button>
+            </div>
+
+            <!-- DYNAMIC BATCH CARDS GRID -->
+            <div class="batch-grid" style="margin-top: 1rem;" th:if="${not #lists.isEmpty(batches)}">
+                <div th:each="b : ${batches}" class="batch-card" 
+                     th:data-env="${b.environment}" 
+                     th:data-locales="${#strings.arrayJoin(b.locales, ',')}" 
+                     th:data-browsers="${#strings.arrayJoin(b.browsers, ',')}">
+                    <div class="batch-card-header">
+                        <div class="batch-card-title"><span class="material-symbols-outlined text-accent">layers</span> <span th:text="${b.name}">US Nightly Regression</span></div>
+                        <span class="badge-status badge-pass" style="font-family: var(--font-family);" th:text="${b.passRate}">92% Pass</span>
+                    </div>
+                    
+                    <div style="font-size: 0.825rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.2rem; background: #eff6ff; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid #bfdbfe;">
+                        <div>Description: <strong style="color: #2563eb;" th:text="${b.description}">Batch suite</strong></div>
+                        <div>Status: <strong style="color: #2563eb;" th:text="${b.activeBugs}">1 Active Bug</strong></div>
+                    </div>
+
+                    <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.35rem;">
+                        <div><span class="material-symbols-outlined text-accent">dns</span> <strong>Environment:</strong> <span th:text="${b.environment}">Staging</span></div>
+                        <div><span class="material-symbols-outlined text-accent">public</span> <strong>Locales:</strong> <span th:text="${#strings.arrayJoin(b.locales, ', ')}">US, EU, DE</span></div>
+                        <div><span class="material-symbols-outlined text-accent">web</span> <strong>Browsers:</strong> <span th:text="${#strings.arrayJoin(b.browsers, ', ')}">Chrome, Firefox, Edge</span></div>
+                    </div>
+
+                    <!-- LAST EXECUTION PIE CHART SECTION -->
+                    <div class="batch-last-run-section" th:if="${b.hasLatestRun()}">
+                        <div class="last-run-header">
+                            <span class="d-flex align-items-center gap-1"><span class="material-symbols-outlined text-accent" style="font-size: 0.9rem;">pie_chart</span> <strong>Last Execution</strong> (<span th:text="${b.lastExecuted}">Today 14:22</span>)</span>
+                            <span class="badge-status badge-pass" style="font-size: 0.7rem; padding: 0.1rem 0.4rem;" th:text="${b.latestRunPassRateText}">83% Pass</span>
+                        </div>
+                        <div class="last-run-body">
+                            <div class="pie-chart-wrapper-sm">
+                                <svg width="100%" height="100%" viewBox="0 0 36 36">
+                                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+                                    <circle th:if="${b.latestPassedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${b.passDashArray},stroke-dashoffset=${b.passDashOffset}"/>
+                                    <circle th:if="${b.latestFixedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedDashArray},stroke-dashoffset=${b.fixedDashOffset}"/>
+                                    <circle th:if="${b.latestKnownCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.knownDashArray},stroke-dashoffset=${b.knownDashOffset}"/>
+                                    <circle th:if="${b.latestUnknownCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownDashArray},stroke-dashoffset=${b.unknownDashOffset}"/>
+                                    <circle th:if="${b.latestIgnoredCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-ignored)" stroke-width="5" th:attr="stroke-dasharray=${b.ignoredDashArray},stroke-dashoffset=${b.ignoredDashOffset}"/>
+                                </svg>
+                            </div>
+                            <div class="pie-breakdown-list-sm">
+                                <div class="pie-breakdown-item" th:if="${b.latestPassedCount > 0}">
+                                    <div class="label"><div class="dot" style="background: var(--status-pass);"></div> Passed</div>
+                                    <div class="val" style="color: var(--status-pass);" th:text="${b.latestPassedCount}">0</div>
+                                </div>
+                                <div class="pie-breakdown-item" th:if="${b.latestFixedCount > 0}">
+                                    <div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed</div>
+                                    <div class="val" style="color: var(--status-fixed);" th:text="${b.latestFixedCount}">0</div>
+                                </div>
+                                <div class="pie-breakdown-item" th:if="${b.latestKnownCount > 0}">
+                                    <div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Fail</div>
+                                    <div class="val" style="color: var(--status-known-fail);" th:text="${b.latestKnownCount}">0</div>
+                                </div>
+                                <div class="pie-breakdown-item" th:if="${b.latestUnknownCount > 0}">
+                                    <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Fail</div>
+                                    <div class="val" style="color: var(--status-unknown-fail);" th:text="${b.latestUnknownCount}">0</div>
+                                </div>
+                                <div class="pie-breakdown-item" th:if="${b.latestIgnoredCount > 0}">
+                                    <div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored</div>
+                                    <div class="val" style="color: var(--status-ignored);" th:text="${b.latestIgnoredCount}">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ACTION BUTTONS: LINK TO LAST REPORT & HISTORY -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                        <button class="btn-primary flex-center gap-1" style="flex: 1; font-size: 0.78rem; padding: 0.4rem 0.5rem;"
+                                th:if="${b.hasLatestRun()}"
+                                th:attr="hx-get='/run-report?runId=' + ${b.latestRunId}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                hx-push-url="true">
+                            <span class="material-symbols-outlined" style="font-size: 0.9rem;">analytics</span>
+                            <span>Open Last Report</span>
+                        </button>
+                        <button class="btn-secondary flex-center gap-1" style="flex: 1; font-size: 0.78rem; padding: 0.4rem 0.5rem;"
+                                th:attr="hx-get='/batch-history?batchName=' + ${b.name}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                hx-push-url="true">
+                            <span class="material-symbols-outlined" style="font-size: 0.9rem;">history</span>
+                            <span>Batch History</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EMPTY BATCHES STATE -->
+            <div th:if="${#lists.isEmpty(batches)}" class="text-center py-5" style="color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-color); padding: 3rem 1rem; margin-top: 1rem;">
+                <span class="material-symbols-outlined mb-2" style="font-size: 2.5rem; color: var(--text-muted);">layers_clear</span>
+                <h5 style="font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">No Batches Found</h5>
+                <p style="max-width: 500px; margin: 0 auto 1.25rem; font-size: 0.875rem;">
+                    No test batches or test run executions found in the database. Run tests or click <strong>Resync Storage</strong> to analyze stored execution reports.
+                </p>
+                <button class="btn-primary" hx-post="/runs/refresh" hx-target="#mainViewContainer" hx-swap="innerHTML" style="font-size: 0.825rem; padding: 0.5rem 1rem;">
+                    <span class="material-symbols-outlined">sync</span> Resync Local Run Storage
+                </button>
+            </div>
+        </div>
+
+        <!-- RECENT RUN DIRECTORY TABLE PANEL -->
+        <div class="panel">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title"><span class="material-symbols-outlined text-accent">fact_check</span> Recent Run Execution Directory</div>
+                    <div class="panel-subtitle">Comprehensive directory of all historical and active test execution runs across all batches.</div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="aura-table">
+                    <thead>
+                        <tr>
+                            <th>Run ID</th>
+                            <th>Batch Suite</th>
+                            <th>Trigger</th>
+                            <th>Environment</th>
+                            <th>Locales</th>
+                            <th>Browsers</th>
+                            <th>Total</th>
+                            <th style="min-width: 220px;">Status Breakdown</th>
+                            <th>Pass Rate</th>
+                            <th>Timestamp</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="overviewRunsTableBody">
+                        <tr th:each="r : ${runs}" class="run-directory-row clickable-row" 
+                            th:data-env="${r.environment}" 
+                            th:data-locales="${r.localesCsv}" 
+                            th:data-browsers="${r.browsersCsv}"
+                            th:attr="hx-get='/run-report?runId=' + ${r.id}" 
+                            hx-target="#mainViewContainer" 
+                            hx-swap="innerHTML" 
+                            hx-push-url="true">
+                            <td><strong class="text-mono" th:text="'#' + ${r.id}">#1049</strong></td>
+                            <td><span class="tag-batch" th:text="${r.batchName}">US Nightly Regression</span></td>
+                            <td><span class="tag-trigger" th:text="${r.triggerSource}">Jenkins CI</span></td>
+                            <td><span class="tag-env" th:text="${r.environment}">Staging</span></td>
+                            <td th:text="${r.localesCsv}">US, EU, DE</td>
+                            <td th:text="${r.browsersCsv}">Chrome, Firefox, Edge</td>
+                            <td class="text-mono" th:text="${r.totalTests}">8</td>
+                            <td style="min-width: 220px; vertical-align: middle;">
+                                <div class="status-stacked-bar">
+                                    <div th:if="${r.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(r.passedPct, 1, 2)} + '%;'" th:title="${r.passedTooltip}" th:text="${r.passedLabel}">3</div>
+                                    <div th:if="${r.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(r.fixedPct, 1, 2)} + '%;'" th:title="${r.fixedTooltip}" th:text="${r.fixedLabel}">2</div>
+                                    <div th:if="${r.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(r.knownPct, 1, 2)} + '%;'" th:title="${r.knownTooltip}" th:text="${r.knownLabel}">1</div>
+                                    <div th:if="${r.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(r.unknownPct, 1, 2)} + '%;'" th:title="${r.unknownTooltip}" th:text="${r.unknownLabel}">1</div>
+                                    <div th:if="${r.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(r.ignoredPct, 1, 2)} + '%;'" th:title="${r.ignoredTooltip}" th:text="${r.ignoredLabel}">1</div>
+                                </div>
+                            </td>
+                            <td><span class="badge-status badge-pass" th:text="${r.passRate + '% Pass'}">37.5% Pass</span></td>
+                            <td class="text-muted" th:text="${r.timestampLabel}">Today, 14:22:10</td>
+                            <td>
+                                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
+                                </button>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(runs)}">
+                            <td colspan="11" class="text-center py-4 text-muted">
+                                No test runs recorded in database. Run tests or click Resync Storage.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- BATCH HISTORY OVERVIEW VIEW STATE (SUB-PANEL FOR A SINGLE BATCH) -->
+    <div id="pageBatchHistoryOverview" class="view-state">
+        <div class="panel">
+            <div class="panel-header">
+                <div>
+                    <div class="panel-title"><span class="material-symbols-outlined text-accent">trending_up</span> Batch History Overview & Trend Analysis</div>
+                    <div class="panel-subtitle">Comprehensive run execution metrics, pass rates, and history graphs for <strong id="batchOverviewTitle" style="color: var(--accent-color);">US Nightly Regression</strong></div>
+                </div>
+                <button class="btn-secondary" style="font-size: 0.825rem;" onclick="showRunsList()">
+                    <span class="material-symbols-outlined">arrow_back</span> Back to Directory
+                </button>
+            </div>
+
+            <!-- TREND GRAPH CARD -->
+            <div style="background: var(--bg-hover); border-radius: var(--radius-md); border: 1px solid var(--border-color); padding: 1.25rem; margin-top: 0.5rem;">
+                <div class="flex-between" style="margin-bottom: 1rem;">
+                    <div>
+                        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">Execution History Trend</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">Pass rate progression and test counts across recent runs</div>
+                    </div>
+                </div>
+
+                <!-- SVG TREND CHART -->
+                <div style="position: relative; width: 100%; height: 220px;">
+                    <svg id="mainTrendSvg" width="100%" height="100%" viewBox="0 0 800 200" preserveAspectRatio="none" onmousemove="handleTrendChartHover(event)" onmouseleave="hideTrendChartHover()">
+                        <!-- Background Grid Lines -->
+                        <line x1="0" y1="40" x2="800" y2="40" stroke="var(--border-color)" stroke-dasharray="4,4" opacity="0.6"/>
+                        <line x1="0" y1="80" x2="800" y2="80" stroke="var(--border-color)" stroke-dasharray="4,4" opacity="0.6"/>
+                        <line x1="0" y1="120" x2="800" y2="120" stroke="var(--border-color)" stroke-dasharray="4,4" opacity="0.6"/>
+                        <line x1="0" y1="160" x2="800" y2="160" stroke="var(--border-color)" stroke-dasharray="4,4" opacity="0.6"/>
+
+                        <!-- Dynamic Trend Stack Paths & Polylines -->
+                        <g id="trendSvgStackBars"></g>
+                        <polyline id="trendSvgLine" fill="none" stroke="var(--accent-color)" stroke-width="3" points="50,160 230,120 420,140 610,90 800,125"/>
+                        <g id="trendSvgDots"></g>
+
+                        <!-- Hover Guide Line -->
+                        <line id="trendHoverGuide" x1="0" y1="0" x2="0" y2="200" stroke="var(--accent-color)" stroke-width="1.5" stroke-dasharray="3,3" style="display: none;"/>
+                    </svg>
+
+                    <!-- HOVER TOOLTIP FLOATING CONTAINER -->
+                    <div id="trendHoverTooltip" class="trend-tooltip" style="display: none;">
+                        <div id="trendTooltipTitle" style="font-weight: 700; font-size: 0.825rem; color: var(--text-main); margin-bottom: 0.4rem;">Run #1049</div>
+                        <div style="display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem;">
+                            <div class="flex-between"><span class="text-pass"><span class="material-symbols-outlined" style="font-size: 0.8rem;">check_circle</span> Passed Clean:</span> <strong id="trendTooltipPass">3</strong></div>
+                            <div class="flex-between"><span class="text-fixed"><span class="material-symbols-outlined" style="font-size: 0.8rem;">build</span> Succeeded Fixed:</span> <strong id="trendTooltipFixed">2</strong></div>
+                            <div class="flex-between"><span class="text-known"><span class="material-symbols-outlined" style="font-size: 0.8rem;">bug_report</span> Failed Known:</span> <strong id="trendTooltipKnown">1</strong></div>
+                            <div class="flex-between"><span class="text-unknown"><span class="material-symbols-outlined" style="font-size: 0.8rem;">error</span> Failed Unknown:</span> <strong id="trendTooltipUnknown">1</strong></div>
+                            <div class="flex-between"><span class="text-muted"><span class="material-symbols-outlined" style="font-size: 0.8rem;">block</span> Ignored:</span> <strong id="trendTooltipIgnored">1</strong></div>
+                            <div class="flex-between" style="border-top: 1px stroke var(--border-color); padding-top: 0.2rem; margin-top: 0.2rem;"><span style="color: var(--text-muted);">Pass Rate:</span> <strong id="trendTooltipRate" class="text-accent">37.5%</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BATCH SPECIFIC RUNS TABLE -->
+            <div style="margin-top: 1.5rem;">
+                <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); margin-bottom: 0.75rem;">Batch Run Executions</div>
+                <div class="table-responsive">
+                    <table class="aura-table">
+                        <thead>
+                            <tr>
+                                <th>Run ID</th>
+                                <th>Batch Suite</th>
+                                <th>Trigger</th>
+                                <th>Environment</th>
+                                <th>Locales</th>
+                                <th>Browsers</th>
+                                <th>Total</th>
+                                <th style="min-width: 220px;">Status Breakdown</th>
+                                <th>Pass Rate</th>
+                                <th>Timestamp</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batchSpecificRunsTableBody">
+                            <!-- Populated dynamically via JS / HTMX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

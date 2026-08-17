@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Run Report Fragment -->
+<div th:fragment="runReport" class="d-flex flex-column gap-4">
+
+    <!-- PAGE HEADER / SUB-TABS BAR -->
+    <div class="sub-tab-bar">
+        <button class="sub-tab-btn active" id="runReportTabBtnOverview" onclick="switchRunReportSubTab('runReportSubTabOverview', this)">
+            <span class="material-symbols-outlined">pie_chart</span> Overview
+        </button>
+
+        <button class="sub-tab-btn" id="runReportTabBtnAllTests" onclick="switchRunReportSubTab('runReportSubTabAllTests', this)">
+            <span class="material-symbols-outlined">fact_check</span> All Tests
+        </button>
+
+        <button class="sub-tab-btn" id="runReportTabBtnTimeline" onclick="switchRunReportSubTab('runReportSubTabTimeline', this)">
+            <span class="material-symbols-outlined">timeline</span> Timeline
+        </button>
+    </div>
+
+    <!-- ALLURE SPLIT LAYOUT WRAPPER -->
+    <div class="allure-split-layout">
+        
+        <!-- LEFT MAIN CONTENT PANE -->
+        <div class="allure-main-pane">
+            
+            <!-- SUB-TAB 1: RUN REPORT OVERVIEW -->
+            <div id="runReportSubTabOverview" class="view-state active">
+                <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">
+                    <span class="material-symbols-outlined text-accent">touch_app</span> Click any status metric card below to filter and open <strong>All Tests</strong> grouped by areas for that specific status.
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card" style="--card-accent: var(--status-pass)" onclick="filterAllTestsByStatus('passed-clean')">
+                        <div class="metric-label">Passed Clean</div>
+                        <div class="metric-val" style="color: var(--status-pass);" id="metricValPassed" th:text="${report?.passCount ?: 0}">0</div>
+                        <div class="metric-sub" style="color: var(--status-pass); font-weight: 600;">View all passed clean tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    </div>
+
+                    <div class="metric-card" style="--card-accent: var(--status-fixed)" onclick="filterAllTestsByStatus('succeeded-fixed')">
+                        <div class="metric-label">Succeeded (Known Bug)</div>
+                        <div class="metric-val" style="color: var(--status-fixed);" id="metricValSucceeded" th:text="${report?.fixedCount ?: 0}">0</div>
+                        <div class="metric-sub" style="color: var(--status-fixed); font-weight: 600;">View all fixed bug tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    </div>
+
+                    <div class="metric-card" style="--card-accent: var(--status-known-fail)" onclick="filterAllTestsByStatus('failed-known')">
+                        <div class="metric-label">Failed (Known Bug)</div>
+                        <div class="metric-val" style="color: var(--status-known-fail);" id="metricValKnownFail" th:text="${report?.knownCount ?: 0}">0</div>
+                        <div class="metric-sub" style="color: var(--status-known-fail); font-weight: 600;">View all known failed tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    </div>
+
+                    <div class="metric-card" style="--card-accent: var(--status-unknown-fail)" onclick="filterAllTestsByStatus('failed-unknown')">
+                        <div class="metric-label">Failed (Unknown)</div>
+                        <div class="metric-val" style="color: var(--status-unknown-fail);" id="metricValUnknownFail" th:text="${report?.unknownCount ?: 0}">0</div>
+                        <div class="metric-sub" style="color: var(--status-unknown-fail); font-weight: 600;">View all unknown failed tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    </div>
+
+                    <div class="metric-card" style="--card-accent: var(--status-ignored)" onclick="filterAllTestsByStatus('ignored')">
+                        <div class="metric-label">Ignored / Skipped</div>
+                        <div class="metric-val" style="color: var(--status-ignored);" id="metricValIgnored" th:text="${report?.ignoredCount ?: 0}">0</div>
+                        <div class="metric-sub" style="color: var(--status-ignored); font-weight: 600;">View all ignored tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 1rem;">
+                    <div class="panel-header">
+                        <div>
+                            <div class="panel-title"><span class="material-symbols-outlined text-accent">pie_chart</span> Test Area Breakdown</div>
+                            <div class="panel-subtitle">Area statistics match overall total test numbers.</div>
+                        </div>
+                    </div>
+
+                    <div class="area-pie-grid">
+                        <!-- DYNAMIC AREA PIE CARDS -->
+                        <div th:each="area : ${report?.areaSummaries}" class="area-pie-card">
+                            <div class="area-pie-card-header">
+                                <div class="area-pie-title">
+                                    <span class="material-symbols-outlined text-accent">folder</span>
+                                    <span>Area: @<span th:text="${area.areaName}">Checkout</span></span>
+                                </div>
+                                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:data-area-group="${area.areaGroup}" onclick="openAllTestsAndExpandArea(this.getAttribute('data-area-group'))">
+                                    Open Area in All Tests <span class="material-symbols-outlined">arrow_forward</span>
+                                </button>
+                            </div>
+                            <div class="area-pie-body">
+                                <div class="pie-chart-wrapper">
+                                    <svg width="100%" height="100%" viewBox="0 0 36 36">
+                                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+                                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#059669" stroke-width="5" stroke-dasharray="100 0" stroke-dashoffset="25"/>
+                                    </svg>
+                                </div>
+
+                                <div class="pie-breakdown-list">
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-pass);"></div> Successful</div><div class="val" style="color: var(--status-pass);" th:text="${area.passCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed Failed</div><div class="val" style="color: var(--status-fixed);" th:text="${area.fixedCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Failed</div><div class="val" style="color: var(--status-known-fail);" th:text="${area.knownCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div><div class="val" style="color: var(--status-unknown-fail);" th:text="${area.unknownCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored / Skipped</div><div class="val" style="color: var(--status-ignored);" th:text="${area.ignoredCount}">0</div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-TAB 2: ALL TESTS -->
+            <div id="runReportSubTabAllTests" th:fragment="allTestsContent" class="view-state">
+                
+                <!-- GLOBAL EXECUTION FILTERS TOOLBAR -->
+                <div class="test-filters-toolbar" id="globalTestFiltersToolbar">
+                    <div style="font-weight: 700; font-size: 0.825rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
+                        <span class="material-symbols-outlined text-accent">filter_alt</span> Execution Filters:
+                    </div>
+
+                    <!-- MULTI-SELECT LOCATION DROPDOWN CHECKBOX -->
+                    <div class="multiselect-dropdown" id="locationMultiselect">
+                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="locationMultiselectMenu">
+                            <span><span class="material-symbols-outlined text-accent">public</span> Location: <strong class="js-selected-text">All Selected</strong></span>
+                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                        </button>
+                        <div class="multiselect-menu" id="locationMultiselectMenu">
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="locationMultiselectMenu" value="ALL" checked> <strong>Select All Locations</strong></label>
+                            <div class="multiselect-divider"></div>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="US" checked> US (United States)</label>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="EU" checked> EU (Europe)</label>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="DE" checked> DE (Germany)</label>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="UNKNOWN" checked> Unknown Location</label>
+                        </div>
+                    </div>
+
+                    <!-- MULTI-SELECT BROWSER DROPDOWN CHECKBOX -->
+                    <div class="multiselect-dropdown" id="browserMultiselect">
+                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="browserMultiselectMenu">
+                            <span><span class="material-symbols-outlined text-accent">web</span> Browser: <strong class="js-selected-text">All Selected</strong></span>
+                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                        </button>
+                        <div class="multiselect-menu" id="browserMultiselectMenu">
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="browserMultiselectMenu" value="ALL" checked> <strong>Select All Browsers</strong></label>
+                            <div class="multiselect-divider"></div>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" value="Chrome" checked> Chrome</label>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" value="Firefox" checked> Firefox</label>
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" value="Edge" checked> Edge</label>
+                        </div>
+                    </div>
+
+                    <!-- RESET FILTERS BUTTON -->
+                    <button class="btn-secondary" style="padding: 0.4rem 0.65rem; font-size: 0.825rem;" title="Reset all filters" onclick="resetGlobalTestFilters()">
+                        <span class="material-symbols-outlined">restart_alt</span>
+                    </button>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <div class="panel-title">
+                                <span class="material-symbols-outlined text-accent">fact_check</span>
+                                <span>All Tests Executed in Run #<span class="run-id-label" th:text="${report?.runId ?: '1049'}">1049</span></span>
+                                <span class="tag-chip" id="wholeExecutionTotalCountChip" style="margin-left: 0.5rem; vertical-align: middle;" th:text="${report?.totalCount + ' Executions'}">8 Executions</span>
+                            </div>
+                            <div class="panel-subtitle">
+                                <span>Grouped dynamically by Area and Test Class from JSON storage.</span>
+                            </div>
+                        </div>
+
+                        <!-- CLICKABLE EXECUTION-WIDE STATUS FILTER BADGES -->
+                        <div class="flex-gap-2" id="wholeExecutionSummaryBadges">
+                            <span class="badge-status badge-pass clickable-badge js-filter-badge" data-status-key="passed-clean" th:text="${report?.passCount}">0</span>
+                            <span class="badge-status badge-fixed clickable-badge js-filter-badge" data-status-key="succeeded-fixed" th:text="${report?.fixedCount}">0</span>
+                            <span class="badge-status badge-known-fail clickable-badge js-filter-badge" data-status-key="failed-known" th:text="${report?.knownCount}">0</span>
+                            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="failed-unknown" th:text="${report?.unknownCount}">0</span>
+                            <span class="badge-status badge-ignored clickable-badge js-filter-badge" data-status-key="ignored" th:text="${report?.ignoredCount}">0</span>
+                        </div>
+                    </div>
+
+                    <!-- DYNAMIC AREA GROUPS -->
+                    <div th:each="area : ${report?.areaSummaries}" class="area-group test-row-group expanded" th:id="${area.areaGroup}" th:data-area="${area.areaName}">
+                        <div class="area-group-header" onclick="toggleAreaGroup(this)">
+                            <div class="area-group-title">
+                                <span class="material-symbols-outlined area-chevron">chevron_right</span>
+                                <span class="material-symbols-outlined text-accent">folder_open</span>
+                                <span>Area: @<span th:text="${area.areaName}">Checkout</span></span>
+                                <span class="tag-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
+                            </div>
+                            
+                            <div class="flex-gap-2">
+                                <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" th:text="${area.passCount}">1</span>
+                                <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" th:text="${area.fixedCount}">1</span>
+                                <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" th:text="${area.knownCount}">1</span>
+                                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" th:text="${area.unknownCount}">1</span>
+                                <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" th:text="${area.ignoredCount}">1</span>
+                            </div>
+                        </div>
+
+                        <div class="area-group-body">
+                            <!-- DYNAMIC TEST CLASS GROUPS -->
+                            <div th:each="cls : ${area.testClasses}" class="test-class-container expanded" th:id="${cls.classContainer}">
+                                <div class="test-class-header" onclick="toggleTestClassGroup(this)">
+                                    <div class="test-class-title">
+                                        <span class="material-symbols-outlined test-class-chevron">chevron_right</span>
+                                        <span class="material-symbols-outlined text-accent">folder</span>
+                                        <span th:text="${cls.className}">CheckoutProcessTest</span>
+                                        <span class="tag-chip class-exec-count-chip" style="margin-left: 0.5rem;" th:text="${cls.totalCount + ' Executions'}">4 Executions</span>
+                                    </div>
+                                    <div class="flex-gap-2">
+                                        <span class="badge-status badge-pass clickable-badge" th:if="${cls.passCount > 0}" th:text="${cls.passCount}">1</span>
+                                        <span class="badge-status badge-fixed clickable-badge" th:if="${cls.fixedCount > 0}" th:text="${cls.fixedCount}">1</span>
+                                        <span class="badge-status badge-known-fail clickable-badge" th:if="${cls.knownCount > 0}" th:text="${cls.knownCount}">1</span>
+                                        <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" th:text="${cls.unknownCount}">1</span>
+                                        <span class="badge-status badge-ignored clickable-badge" th:if="${cls.ignoredCount > 0}" th:text="${cls.ignoredCount}">1</span>
+                                    </div>
+                                </div>
+
+                                <div class="test-class-executions">
+                                    <div class="table-responsive">
+                                        <table class="aura-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Data Set / Variation</th>
+                                                    <th>Engine Origin</th>
+                                                    <th>Browser</th>
+                                                    <th>Status</th>
+                                                    <th>Bug Issue / Info</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr th:each="exec : ${cls.executions}" class="clickable-row test-row js-open-side-panel" 
+                                                    th:id="${exec.id}" 
+                                                    th:data-run-id="${report?.runId ?: runId}"
+                                                    th:data-row-id="${exec.id}" 
+                                                    th:data-test-name="${exec.testClass}" 
+                                                    th:data-dataset="${exec.title}" 
+                                                    th:data-status="${exec.status}" 
+                                                    th:data-location="${exec.location}" 
+                                                    th:data-browser="${exec.browser}" 
+                                                    th:data-bugs="${exec.bugs != null && !exec.bugs.isEmpty() ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
+                                                    th:data-failure="${exec.failure}"
+                                                    th:data-blocks="${exec.blocksJson}"
+                                                    th:data-steps="${exec.stepsJson}"
+                                                    th:data-local-bindings="${exec.localDataBindingsJson}"
+                                                    th:data-playbook-file="${exec.playbookFile}">
+                                                    <td>
+                                                        <span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${exec.location}">US</span></span>
+                                                        <strong class="text-mono" style="color: var(--text-main);" th:text="${exec.title != null && !exec.title.isEmpty() ? exec.title : exec.testClass}">CheckoutProcessTest [US CreditCard]</strong>
+                                                    </td>
+                                                    <td><span class="badge-status badge-mode-java"><span class="material-symbols-outlined">code</span> <span th:text="${exec.engine}">Java</span></span></td>
+                                                    <td><span class="material-symbols-outlined text-accent">language</span> <span th:text="${exec.browser}">Chrome</span></td>
+                                                    <td class="col-status-badge">
+                                                        <span class="badge-status badge-pass" th:if="${exec.status == 'passed-clean'}">Passed Clean</span>
+                                                        <span class="badge-status badge-fixed" th:if="${exec.status == 'succeeded-fixed'}">Succeeded (Fixed)</span>
+                                                        <span class="badge-status badge-known-fail" th:if="${exec.status == 'failed-known'}">Failed (Known Issue)</span>
+                                                        <span class="badge-status badge-unknown-fail" th:if="${exec.status == 'failed-unknown'}">Failed (Unknown)</span>
+                                                        <span class="badge-status badge-ignored" th:if="${exec.status == 'ignored'}">Ignored / Skipped</span>
+                                                    </td>
+                                                    <td class="col-bug-info">
+                                                        <span th:each="bug : ${exec.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family); margin-right: 0.25rem;">
+                                                            <span class="material-symbols-outlined">bug_report</span> <span th:text="'#' + ${bug}">#BUG-4821</span>
+                                                        </span>
+                                                        <span th:if="${exec.bugs == null || exec.bugs.isEmpty()}" style="color: var(--text-muted); font-size: 0.75rem;">None</span>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-TAB 3: ALLURE MULTI-THREAD TIMELINE -->
+            <div id="runReportSubTabTimeline" class="view-state">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <div class="panel-title"><span class="material-symbols-outlined text-accent">timeline</span> Execution Timeline</div>
+                            <div class="panel-subtitle">Click any test block to open its test execution detail page.</div>
+                        </div>
+                    </div>
+
+                    <div class="timeline-container">
+                        <div class="timeline-header-scale">
+                            <div class="timeline-scale-tick">0s</div>
+                            <div class="timeline-scale-tick">30s</div>
+                            <div class="timeline-scale-tick">60s</div>
+                            <div class="timeline-scale-tick">90s</div>
+                            <div class="timeline-scale-tick">120s</div>
+                        </div>
+
+                        <div class="timeline-threads">
+                            <div class="thread-row">
+                                <div class="thread-label"><span class="material-symbols-outlined">dns</span> Execution Thread</div>
+                                <div class="thread-track">
+                                    <div th:each="exec, iterStat : ${report?.executions}" class="timeline-block js-open-side-panel"
+                                         th:classappend="${exec.status == 'passed-clean' ? 'tb-pass' : (exec.status == 'succeeded-fixed' ? 'tb-fixed' : (exec.status == 'failed-known' ? 'tb-known-fail' : (exec.status == 'failed-unknown' ? 'tb-unknown-fail' : 'tb-ignored')))}"
+                                         th:style="'left: ' + ${(iterStat.index * 14) + 1} + '%; width: 12%;'"
+                                         th:data-row-id="${exec.id}"
+                                         th:data-test-name="${exec.testClass}"
+                                         th:data-dataset="${exec.title}"
+                                         th:data-status="${exec.status}"
+                                         th:text="${exec.testClass}">TestClass</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
