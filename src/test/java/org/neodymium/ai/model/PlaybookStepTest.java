@@ -58,6 +58,26 @@ public class PlaybookStepTest
     }
 
     @Test
+    public void testIsHintStep()
+    {
+        final PlaybookStep standardStep = new PlaybookStep();
+        standardStep.setInstruction("Click on the login button");
+        Assertions.assertFalse(standardStep.isHintStep());
+
+        final PlaybookStep standardHintStep = new PlaybookStep();
+        standardHintStep.setInstruction("Click submit (hint: #submit-order)");
+        Assertions.assertTrue(standardHintStep.isHintStep());
+
+        final PlaybookStep noSpaceHintStep = new PlaybookStep();
+        noSpaceHintStep.setInstruction("Click search (hint:#search)");
+        Assertions.assertTrue(noSpaceHintStep.isHintStep());
+
+        final PlaybookStep spaceTolerantHintStep = new PlaybookStep();
+        spaceTolerantHintStep.setInstruction("Click cart ( hint : button.cart-btn )");
+        Assertions.assertTrue(spaceTolerantHintStep.isHintStep());
+    }
+
+    @Test
     public void testIsFullPageVisualStep()
     {
         final PlaybookStep standardVisualStep = new PlaybookStep();
@@ -65,15 +85,15 @@ public class PlaybookStepTest
         Assertions.assertTrue(standardVisualStep.isVisualStep());
         Assertions.assertFalse(standardVisualStep.isFullPageVisualStep());
 
-        final PlaybookStep fullPageVisualStepHyphen = new PlaybookStep();
-        fullPageVisualStepHyphen.setInstruction("Inspect footer copyright and legal notice (visual-full)");
-        Assertions.assertTrue(fullPageVisualStepHyphen.isVisualStep());
-        Assertions.assertTrue(fullPageVisualStepHyphen.isFullPageVisualStep());
+        final PlaybookStep visualFullNoSpace = new PlaybookStep();
+        visualFullNoSpace.setInstruction("Inspect footer (visual:full)");
+        Assertions.assertTrue(visualFullNoSpace.isVisualStep());
+        Assertions.assertTrue(visualFullNoSpace.isFullPageVisualStep());
 
-        final PlaybookStep fullPageVisualStepUnderscore = new PlaybookStep();
-        fullPageVisualStepUnderscore.setInstruction("Inspect full page overview (visual_full)");
-        Assertions.assertTrue(fullPageVisualStepUnderscore.isVisualStep());
-        Assertions.assertTrue(fullPageVisualStepUnderscore.isFullPageVisualStep());
+        final PlaybookStep visualFullSpaces = new PlaybookStep();
+        visualFullSpaces.setInstruction("Inspect full page overview ( visual : full )");
+        Assertions.assertTrue(visualFullSpaces.isVisualStep());
+        Assertions.assertTrue(visualFullSpaces.isFullPageVisualStep());
     }
 
     @Test

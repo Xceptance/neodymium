@@ -778,22 +778,27 @@ public final class ExecuteActionsStep implements PipelineStep
             }
 
             final String lower = resolvedInstruction.toLowerCase();
-            final boolean isFullPageTag = lower.contains("(visual: full)") || lower.contains("(layout)");
+            final boolean hasVisualFull = PlaybookStep.VISUAL_FULL_PATTERN.matcher(resolvedInstruction).find();
+            final boolean hasLayout = PlaybookStep.LAYOUT_PATTERN.matcher(resolvedInstruction).find();
+            final boolean hasVisual = PlaybookStep.VISUAL_PATTERN.matcher(resolvedInstruction).find();
+            final boolean hasHint = PlaybookStep.HINT_PATTERN.matcher(resolvedInstruction).find();
+
+            final boolean isFullPageTag = hasVisualFull || hasLayout;
             contextState.getTransientData().put("KEY_IS_FULL_PAGE_SCREENSHOT", isFullPageTag);
 
-            if (lower.contains("(visual: full)"))
+            if (hasVisualFull)
             {
                 initialLevel = ContextLevel.VISUAL;
             }
-            else if (lower.contains("(visual)"))
+            else if (hasVisual)
             {
                 initialLevel = ContextLevel.VISUAL;
             }
-            else if (lower.contains("(layout)"))
+            else if (hasLayout)
             {
                 initialLevel = ContextLevel.VISUAL_RICH;
             }
-            else if (lower.contains("(hint:"))
+            else if (hasHint)
             {
                 initialLevel = ContextLevel.HINT;
             }

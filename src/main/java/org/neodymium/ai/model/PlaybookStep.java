@@ -20,6 +20,8 @@ package org.neodymium.ai.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.action.Action;
 
@@ -551,6 +553,26 @@ public final class PlaybookStep
         this.parent = parent;
     }
 
+    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:\\s*full\\s*\\)");
+    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)");
+    public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
+    public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
+
+    /**
+     * Checks if this step provides an explicit selector hint.
+     *
+     * @return true if the instruction contains (hint: <selector>), false otherwise
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isHintStep()
+    {
+        if (this.instruction == null)
+        {
+            return false;
+        }
+        return HINT_PATTERN.matcher(this.instruction).find();
+    }
+
     /**
      * Checks if this step is a visual-only or layout verification step.
      *
@@ -563,14 +585,13 @@ public final class PlaybookStep
         {
             return false;
         }
-        final String lower = this.instruction.toLowerCase();
-        return lower.contains("(visual") || lower.contains("(layout)");
+        return VISUAL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
     }
 
     /**
      * Checks if this step explicitly requests full-page visual context.
      *
-     * @return true if the instruction contains (visual: full), (visual:full), (visual-full), or (visual_full), false otherwise
+     * @return true if the instruction contains (visual: full), (visual:full), false otherwise
      */
     @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isFullPageVisualStep()
@@ -579,8 +600,7 @@ public final class PlaybookStep
         {
             return false;
         }
-        final String lower = this.instruction.toLowerCase();
-        return lower.contains("(visual: full)") || lower.contains("(visual:full)") || lower.contains("(visual-full)") || lower.contains("(visual_full)");
+        return VISUAL_FULL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
     }
 
     /**
