@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vector Drift Healing Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card" style="position: relative;">
+                <h1>DOM Vector Drift & Self-Healing Challenge</h1>
+                <p class="aura-desc">
+                    This challenge tests DomFeatureVector proximity matching when element IDs and class names
+                    drift dynamically between recording and replay.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 1.5rem; margin: 3rem 0; padding: 2rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                    <div id="form-container" style="display: flex; flex-wrap: wrap; gap: 1rem; width: 100%; max-width: 650px; justify-content: center;">
+                        <input type="text" id="coupon-input" name="couponCode" aria-label="Coupon Code" class="aura-input btn-form" placeholder="Enter coupon code" style="flex: 1; min-width: 180px; padding: 12px 16px; font-size: 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #ffffff;">
+                        <button type="button" id="apply-coupon-btn" name="applyBtn" aria-label="Apply Coupon" class="aura-btn btn-action" style="padding: 12px 20px; font-size: 15px; cursor: pointer; border-radius: 6px; font-weight: 600;">
+                            Apply Coupon
+                        </button>
+                        <button type="button" id="apply-giftcard-btn" name="giftCardBtn" aria-label="Apply Gift Card" class="aura-btn btn-secondary" style="padding: 12px 20px; font-size: 15px; cursor: pointer; border-radius: 6px; font-weight: 600; background: rgba(255,255,255,0.1);">
+                            Apply Gift Card
+                        </button>
+                        <button type="button" id="cancel-coupon-btn" name="cancelBtn" aria-label="Cancel" class="aura-btn btn-cancel" style="padding: 12px 20px; font-size: 15px; cursor: pointer; border-radius: 6px; font-weight: 600; background: rgba(255,51,102,0.2);">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="status-message" style="font-weight: bold; color: #ffcc00;">Waiting for coupon...</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const input = document.getElementById('coupon-input');
+        let btn = document.getElementById('apply-coupon-btn');
+        const giftCardBtn = document.getElementById('apply-giftcard-btn');
+        const cancelBtn = document.getElementById('cancel-coupon-btn');
+        const status = document.getElementById('status-message');
+
+        function handleApplyCoupon() {
+            if (input.value.trim() === 'SAVE20') {
+                status.innerText = 'Coupon APPLIED successfully!';
+                status.style.color = '#00ffcc';
+            } else {
+                status.innerText = 'Invalid Coupon';
+                status.style.color = '#ff3366';
+            }
+        }
+
+        btn.addEventListener('click', handleApplyCoupon);
+
+        giftCardBtn.addEventListener('click', function() {
+            status.innerText = 'Gift Card Applied';
+            status.style.color = '#ffcc00';
+        });
+
+        cancelBtn.addEventListener('click', function() {
+            status.innerText = 'Action Cancelled';
+            status.style.color = '#ff3366';
+        });
+
+        // Check if drift mode is active via query parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const driftMode = urlParams.get('drift');
+
+        if (driftMode === 'true' || driftMode === 'attribute') {
+            // Attribute & class drift
+            input.id = 'input_dyn_84920';
+            input.className = 'custom_input_dyn_774 btn-form';
+            btn.id = 'btn_dyn_19384';
+            btn.className = 'custom_btn_dyn_332 btn-action';
+        } else if (driftMode === 'wrapper') {
+            // Structural DOM hierarchy drift: Deep wrapper injection on input & unwrapping on button
+            input.id = 'input_wrapped_99182';
+            input.className = 'custom_input_wrapped btn-form';
+            
+            // Wrap input inside a div > span structure
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.className = 'wrapper-outer-layer';
+            const wrapperSpan = document.createElement('span');
+            wrapperSpan.className = 'input-slot-wrapper';
+            
+            input.parentNode.insertBefore(wrapperDiv, input);
+            wrapperDiv.appendChild(wrapperSpan);
+            wrapperSpan.appendChild(input);
+
+            // Unwrap button: Move button out of inner container into section root
+            btn.id = 'btn_unwrapped_44821';
+            btn.className = 'custom_btn_unwrapped btn-action';
+            const cardSection = document.querySelector('.aura-card');
+            if (cardSection) {
+                cardSection.appendChild(btn);
+            }
+        } else if (driftMode === 'tag') {
+            // Tag migration: <button> converted into <a href="#" role="button">
+            const linkBtn = document.createElement('a');
+            linkBtn.href = '#';
+            linkBtn.setAttribute('role', 'button');
+            linkBtn.id = 'link_coupon_dyn_3389';
+            linkBtn.name = 'applyBtn';
+            linkBtn.setAttribute('aria-label', 'Apply Coupon');
+            linkBtn.className = 'aura-btn btn-action custom-link-btn';
+            linkBtn.style.padding = '12px 20px';
+            linkBtn.style.fontSize = '15px';
+            linkBtn.style.fontWeight = '600';
+            linkBtn.style.textDecoration = 'none';
+            linkBtn.style.display = 'inline-block';
+            linkBtn.innerText = 'Apply Coupon';
+            
+            linkBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                handleApplyCoupon();
+            });
+
+            btn.parentNode.replaceChild(linkBtn, btn);
+            btn = linkBtn;
+        } else if (driftMode === 'disambiguation') {
+            // Mangle all IDs to test discrimination among similar adjacent buttons
+            input.id = 'inp_rand_0';
+            btn.id = 'btn_rand_1';
+            giftCardBtn.id = 'btn_rand_2';
+            cancelBtn.id = 'btn_rand_3';
+        }
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>
