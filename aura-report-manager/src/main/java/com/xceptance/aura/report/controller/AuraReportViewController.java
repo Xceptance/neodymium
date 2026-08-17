@@ -31,9 +31,15 @@ import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -47,12 +53,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Controller
 public class AuraReportViewController
 {
+    private static final Logger LOG = LoggerFactory.getLogger(AuraReportViewController.class);
+
     private final AuraReportDataService dataService;
     private final RunStorageSyncService runStorageSyncService;
     private final TestRunRepository runRepository;
     private final TestBatchRepository batchRepository;
     private final TestBaseVariationRepository variationRepository;
     private final TestBaseBugRepository bugRepository;
+    private final ObjectMapper objectMapper;
 
     public AuraReportViewController(
         final AuraReportDataService dataService,
@@ -68,6 +77,7 @@ public class AuraReportViewController
         this.batchRepository = batchRepository;
         this.variationRepository = variationRepository;
         this.bugRepository = bugRepository;
+        this.objectMapper = new ObjectMapper();
     }
 
     @GetMapping({"/", "/report", "/batch-overview", "/fragments/batch-overview"})
@@ -235,27 +245,77 @@ public class AuraReportViewController
         @RequestParam("runId") final String runId,
         @RequestParam("rowId") final String rowId,
         @RequestParam("bugTicket") final String bugTicket,
-        final Model model)
+        final Model model,
+        final HttpServletResponse response)
     {
         final TestExecutionDto updatedExec = dataService.addBugToExecution(runId, rowId, bugTicket);
+        final RunReportDto report = dataService.getRunReport(runId);
+
+        try
+        {
+            final Map<String, Object> triggerMap = Map.of(
+                "bugUpdated", Map.of(
+                    "runId", runId,
+                    "rowId", rowId,
+                    "status", updatedExec.getStatus() != null ? updatedExec.getStatus() : "",
+                    "bugs", updatedExec.getBugs() != null ? updatedExec.getBugs() : List.of(),
+                    "pass", report.getPassCount(),
+                    "fixed", report.getFixedCount(),
+                    "known", report.getKnownCount(),
+                    "unknown", report.getUnknownCount(),
+                    "ignored", report.getIgnoredCount()
+                )
+            );
+            response.setHeader("HX-Trigger", objectMapper.writeValueAsString(triggerMap));
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to serialize HX-Trigger header: {}", e.getMessage());
+        }
+
         model.addAttribute("runId", runId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("exec", updatedExec);
         return "fragments/side-panel-step-list :: sidePanelBugSection";
     }
 
-    @org.springframework.web.bind.annotation.DeleteMapping("/fragments/test-side-panel/bugs")
+    @DeleteMapping("/fragments/test-side-panel/bugs")
     public String removeBugFromExecution(
         @RequestParam(name = "runId", required = false) final String runId,
         @RequestParam(name = "rowId", required = false) final String rowIdParam,
         @RequestParam(name = "amp;rowId", required = false) final String ampRowId,
         @RequestParam(name = "bugTicket", required = false) final String bugTicketParam,
         @RequestParam(name = "amp;bugTicket", required = false) final String ampBugTicket,
-        final Model model)
+        final Model model,
+        final HttpServletResponse response)
     {
         final String effectiveRowId = rowIdParam != null ? rowIdParam : ampRowId;
         final String effectiveBugTicket = bugTicketParam != null ? bugTicketParam : ampBugTicket;
         final TestExecutionDto updatedExec = dataService.removeBugFromExecution(runId, effectiveRowId, effectiveBugTicket);
+        final RunReportDto report = dataService.getRunReport(runId);
+
+        try
+        {
+            final Map<String, Object> triggerMap = Map.of(
+                "bugUpdated", Map.of(
+                    "runId", runId,
+                    "rowId", effectiveRowId,
+                    "status", updatedExec.getStatus() != null ? updatedExec.getStatus() : "",
+                    "bugs", updatedExec.getBugs() != null ? updatedExec.getBugs() : List.of(),
+                    "pass", report.getPassCount(),
+                    "fixed", report.getFixedCount(),
+                    "known", report.getKnownCount(),
+                    "unknown", report.getUnknownCount(),
+                    "ignored", report.getIgnoredCount()
+                )
+            );
+            response.setHeader("HX-Trigger", objectMapper.writeValueAsString(triggerMap));
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to serialize HX-Trigger header: {}", e.getMessage());
+        }
+
         model.addAttribute("runId", runId);
         model.addAttribute("rowId", effectiveRowId);
         model.addAttribute("exec", updatedExec);
