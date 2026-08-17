@@ -898,10 +898,10 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 // Replay mode: Stamp live DOM with data-ai attributes before executing step actions
                 standardFlow.add(c -> {
-                    final boolean hasActions = step.getActions() != null && !step.getActions().isEmpty();
+                    final boolean isRecorded = step.getActions() != null;
                     final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
                     final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
-                    if (mode == ExecutionMode.REPLAY_STRICT && !hasActions && !isVisualOnly && !isComposite)
+                    if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite)
                     {
                         final String resolvedStrictStep = c.getSessionData() != null
                             ? c.getSessionData().resolveVariables(step.getInstruction())

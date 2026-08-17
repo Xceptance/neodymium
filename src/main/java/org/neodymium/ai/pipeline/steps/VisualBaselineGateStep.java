@@ -115,7 +115,8 @@ public final class VisualBaselineGateStep implements PipelineStep
                         }
                     }
 
-                    final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                    final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                        || (this.step != null && this.step.getInstruction() != null && (this.step.getInstruction().toLowerCase().contains("visual: full") || this.step.getInstruction().toLowerCase().contains("visual:full")));
                     final SutState currentState = VisualStabilityDetector.captureSettledState(executor, isFullPageReq);
                     context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
 

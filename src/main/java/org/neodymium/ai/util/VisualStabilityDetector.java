@@ -96,7 +96,8 @@ public final class VisualStabilityDetector
         final int effectiveMaxAttempts = Math.max(1, maxAttempts);
 
         // 1. Capture initial Frame 0
-        SutState previousState = executor.captureState(ContextLevel.VISUAL_LEAN, isFullPage);
+        final ContextLevel captureLevel = isFullPage ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+        SutState previousState = executor.captureState(captureLevel, isFullPage);
         String previousMatrix = extractSsimMatrix(previousState);
 
         if (previousMatrix == null)
@@ -122,7 +123,7 @@ public final class VisualStabilityDetector
                 break;
             }
 
-            currentState = executor.captureState(ContextLevel.VISUAL_LEAN, isFullPage);
+            currentState = executor.captureState(captureLevel, isFullPage);
             currentMatrix = extractSsimMatrix(currentState);
 
             if (currentMatrix == null)

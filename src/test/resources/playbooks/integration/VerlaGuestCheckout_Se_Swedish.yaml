@@ -8,7 +8,7 @@ steps: |
   Klicka på Sweden.
   Kontrollera att Sveriges flagga visas.
 
-  Hitta den första produktkorts-knappen och klicka på 'Add to Cart'
+  Klicka på knappen 'Add to Cart' på det första produktkortet
   När strängen '${quality}' inte är lika med 'bad', klicka på storleksknappen 'L'
   Antalet i minivarukorgen är nu 1.
   Gå till varukorgen från minivarukorgen.

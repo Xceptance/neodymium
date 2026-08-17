@@ -454,9 +454,11 @@ public final class YamlPlaybookParser implements PlaybookParser
 
                         outSteps.add(includeStep);
                     }
-                    else if (mapStep.containsKey("instruction"))
+                    else if (mapStep.containsKey("instruction") || mapStep.containsKey("promptLine") || mapStep.containsKey("step"))
                     {
-                        final String instruction = String.valueOf(mapStep.get("instruction"));
+                        final String instruction = mapStep.containsKey("instruction")
+                            ? String.valueOf(mapStep.get("instruction"))
+                            : (mapStep.containsKey("promptLine") ? String.valueOf(mapStep.get("promptLine")) : String.valueOf(mapStep.get("step")));
                         final PlaybookStep step = new PlaybookStep(instruction);
                         initStepLocation(step, fileName, fileContent, instruction);
 

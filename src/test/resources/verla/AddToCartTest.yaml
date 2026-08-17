@@ -16,7 +16,7 @@ steps: |
   Verify that the order summary now shows a 'Discount (10P-OFF)' line item.
   Locate the promo code input field with id 'couponCode', clear its content, and type 'FREEGIFT' into it.
   Submit the promo code form to apply the new coupon.
-  Verify that the cart table now includes a free bonus gift item (bug).
+  Assert that the cart items table contains a line item for 'Free Bonus Gift' (bug).
   Click on the country trigger button with id 'country-trigger-btn' to open the country selection modal.
   Locate the country search input with id 'country-search' and type 'Sweden' into it.
   Select 'Sweden' from the filtered country list results.

@@ -136,7 +136,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
     @Override
     public SutState captureState(final ContextLevel level) throws IOException
     {
-        return captureState(level, false);
+        return captureState(level, level != null && level.isFullPageScreenshot());
     }
 
     @Override
@@ -158,7 +158,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             String base64Data = null;
             try
             {
-                final boolean forceFullPage = isFullPage || activeLevel.isFullPageScreenshot();
+                final boolean forceFullPage = isFullPage;
                 base64Data = new PageAnalyzer(WebDriverRunner.getWebDriver())
                         .captureScreenshot("capture_" + System.currentTimeMillis(), activeLevel, forceFullPage, null);
             }

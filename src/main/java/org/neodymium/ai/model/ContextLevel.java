@@ -119,7 +119,7 @@ public enum ContextLevel
      */
     public boolean isFullPageScreenshot()
     {
-        return this == VISUAL_LEAN || this == VISUAL_RICH;
+        return this == VISUAL || this == VISUAL_LEAN || this == VISUAL_RICH;
     }
 
     /**
