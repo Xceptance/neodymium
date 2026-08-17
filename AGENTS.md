@@ -17,6 +17,7 @@
 - **Java First:** Prefer Java for scripting/agent tasks over Python/Bash, unless standard Unix tooling fits perfectly.
 - **Workflow:** Check `specifications/openspec/changes/` for active changes and delta specs before implementing. Use `/opsx-*` workflows.
 - **Secrets & Security:** You must never directly store any secrets, such as API keys, in source code, configuration files (e.g. `neodymium.properties`, `ai.properties`), or templates. All API keys and credentials must be injected dynamically via environment variables (such as `GEMINI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Before you commit anything, verify your staged changes do not contain keys by running `git diff --cached | grep -E "(apiKey|API_KEY|AQ\.[a-zA-Z0-9_\-]{10,})"`. If a secret is accidentally committed, notify the user immediately.
+- **Universal Framework (No SUT Hardcodings):** Neodymium Aura is a universal, application-agnostic framework, not tied to any specific SUT or domain. The core engine and PESAP must never contain domain-specific heuristics, SUT hardcodings, or site-specific assumptions.
 
 ## Coding Standards
 - **TDD:** Write unit/integration tests before implementing new functionality. Ensure full coverage.
