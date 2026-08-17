@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Top Header Fragment -->
+<header th:fragment="header">
+    <div class="header-title-area">
+        <div class="header-title" id="pageTitle">
+            <span class="material-symbols-outlined text-accent">fact_check</span> Overview of Runs & Known Batches
+        </div>
+        <div class="breadcrumb" id="headerBreadcrumb" style="display: none;">
+            <span>/</span> <a hx-get="fragments/batch-overview" hx-target="#mainViewContainer" hx-swap="innerHTML" style="cursor: pointer;">Known Batches</a> <span id="breadcrumbTrail"></span>
+        </div>
+    </div>
+
+    <div class="header-actions">
+        <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" 
+                hx-post="/runs/refresh" 
+                hx-target="#mainViewContainer" 
+                hx-swap="innerHTML" 
+                title="Analyze storage report folders, generate run.json files, and refresh views">
+            <span class="material-symbols-outlined">sync</span> Resync Storage
+        </button>
+
+        <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" 
+                hx-post="/runs/refresh" 
+                hx-target="#mainViewContainer" 
+                hx-swap="innerHTML"
+                title="Refresh reports and re-sync database">
+            <span class="material-symbols-outlined">refresh</span> Refresh
+        </button>
+        <span id="resyncToast" style="font-size: 0.8rem; color: #22c55e; margin-left: 0.5rem; font-weight: 500;"></span>
+    </div>
+</header>
+
+</body>
+</html>
