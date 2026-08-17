@@ -22,11 +22,17 @@ RUN_SPECS = {
     "1044": {
         "pass": 10, "fixed": 1, "known": 1, "unknown": 0, "ignored": 0, "loc": "DE", "browser": "Edge"
     },
+    "1045": {
+        "pass": 7, "fixed": 2, "known": 1, "unknown": 1, "ignored": 1, "loc": "EU", "browser": "Chrome"
+    },
     "1047": {
         "pass": 2, "fixed": 2, "known": 1, "unknown": 1, "ignored": 2, "loc": "US", "browser": "Chrome"
     },
     "1048": {
         "pass": 1, "fixed": 2, "known": 0, "unknown": 0, "ignored": 0, "loc": "US", "browser": "Chrome"
+    },
+    "1049": {
+        "pass": 6, "fixed": 2, "known": 2, "unknown": 1, "ignored": 1, "loc": "US", "browser": "Chrome"
     }
 }
 

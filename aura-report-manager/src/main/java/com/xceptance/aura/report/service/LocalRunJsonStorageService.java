@@ -22,11 +22,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +40,7 @@ import org.springframework.stereotype.Service;
  * Service managing local disk storage for structured run report JSON files (storage/runs/{runId}/run.json and storage/runs/run-{runId}.json).
  * Compatible with Neodymium Aura runs directory organization.
  *
+ * @author AI-generated: Antigravity
  * @author Xceptance GmbH 2026
  */
 @Service
@@ -75,6 +79,13 @@ public class LocalRunJsonStorageService
     public Optional<String> readRunJson(final String runId)
     {
         final Path nestedRunJson = Paths.get(baseDir, runId, "run.json");
+        final Path runDir = Paths.get(baseDir, runId);
+
+        if (!Files.exists(nestedRunJson) && Files.exists(runDir) && Files.isDirectory(runDir))
+        {
+            generateRunJsonFromTestExecutions(runDir.toFile(), runId);
+        }
+
         if (Files.exists(nestedRunJson))
         {
             try
@@ -101,6 +112,361 @@ public class LocalRunJsonStorageService
         }
 
         return Optional.empty();
+    }
+
+    public void generateRunJsonFromTestExecutions(final File runDir, final String runId)
+    {
+        try
+        {
+            final List<File> testExecJsonFiles = new ArrayList<>();
+            scanForTestExecJsonFiles(runDir, testExecJsonFiles);
+
+            if (testExecJsonFiles.isEmpty())
+            {
+                return;
+            }
+
+            final ArrayNode execsArray = objectMapper.createArrayNode();
+            int pass = 0, fixed = 0, known = 0, unknown = 0, ignoredCount = 0;
+
+            final BatchInfo batchInfo = resolveOrCreateBatchJson(runDir, testExecJsonFiles);
+            String batchName = batchInfo.name;
+            String env = batchInfo.environment;
+            String trigger = "Jenkins CI";
+            String timestamp = "Today, 14:22:10";
+
+            final File runJsonFile = new File(runDir, "run.json");
+            if (runJsonFile.exists())
+            {
+                try
+                {
+                    final JsonNode existingRoot = objectMapper.readTree(runJsonFile);
+                    if (existingRoot.has("batchName")) batchName = existingRoot.path("batchName").asText(batchName);
+                    if (existingRoot.has("environment")) env = existingRoot.path("environment").asText(env);
+                    if (existingRoot.has("trigger")) trigger = existingRoot.path("trigger").asText(trigger);
+                    if (existingRoot.has("timestamp")) timestamp = existingRoot.path("timestamp").asText(timestamp);
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+
+            for (final File f : testExecJsonFiles)
+            {
+                try
+                {
+                    final JsonNode node = objectMapper.readTree(f);
+                    if (isTestExecutionJson(node))
+                    {
+                        if (node instanceof ObjectNode objNode)
+                        {
+                            final Path relPath = runDir.toPath().relativize(f.toPath());
+                            if (relPath.getNameCount() >= 2)
+                            {
+                                final String folderArea = relPath.getName(0).toString();
+                                final String folderClass = relPath.getName(1).toString();
+                                objNode.put("areaName", folderArea);
+                                if (!objNode.has("testClass") || objNode.path("testClass").asText().isEmpty())
+                                {
+                                    objNode.put("testClass", folderClass);
+                                }
+                            }
+
+                            final String testClass = objNode.path("testClass").asText("");
+                            final String title = objNode.path("title").asText("");
+                            final String areaName = objNode.path("areaName").asText("General");
+                            final String location = objNode.path("location").asText("US");
+                            final String browser = objNode.path("browser").asText("Chrome");
+                            final String engine = objNode.path("engine").asText("Java");
+
+                            if (!objNode.has("runId") || objNode.path("runId").asText().isEmpty())
+                            {
+                                objNode.put("runId", runId);
+                            }
+
+                            if (!objNode.has("testName") || objNode.path("testName").asText().isEmpty())
+                            {
+                                objNode.put("testName", testClass + " · " + (title.isEmpty() ? "Default" : title));
+                            }
+
+                            if (!objNode.has("playbookFile") || objNode.path("playbookFile").asText().isEmpty())
+                            {
+                                objNode.put("playbookFile", "tests/suites/" + areaName.toLowerCase() + "/" + testClass + ".yml");
+                            }
+
+                            if (!objNode.has("testFile") || objNode.path("testFile").asText().isEmpty())
+                            {
+                                objNode.put("testFile", "com.xceptance.neodymium.aura.tests." + areaName.toLowerCase() + "." + testClass + "#executeTest");
+                            }
+
+                            if (!objNode.has("junitTags") || !objNode.path("junitTags").isArray() || objNode.path("junitTags").isEmpty())
+                            {
+                                final ArrayNode tags = objectMapper.createArrayNode();
+                                tags.add(areaName);
+                                tags.add(testClass);
+                                if (!title.isEmpty()) tags.add("Dataset: " + title);
+                                tags.add("Location: " + location);
+                                tags.add("Browser: " + browser);
+                                objNode.set("junitTags", tags);
+                            }
+
+                            if (!objNode.has("localDataBindings") || objNode.path("localDataBindings").isMissingNode() || objNode.path("localDataBindings").isEmpty())
+                            {
+                                final ObjectNode localData = objectMapper.createObjectNode();
+                                localData.put("areaName", areaName);
+                                localData.put("testClass", testClass);
+                                if (!title.isEmpty()) localData.put("dataSet", title);
+                                localData.put("location", location);
+                                localData.put("browser", browser);
+                                localData.put("engine", engine);
+                                objNode.set("localDataBindings", localData);
+                            }
+
+                            if (!objNode.has("dataBindings") || objNode.path("dataBindings").isMissingNode() || objNode.path("dataBindings").isEmpty())
+                            {
+                                final ObjectNode dataBind = objectMapper.createObjectNode();
+                                dataBind.put("neodymium.url", "https://staging.shop.xceptance.com");
+                                dataBind.put("neodymium.selenide.timeout", "3000");
+                                dataBind.put("neodymium.screenshots.enableOnSuccess", "true");
+                                dataBind.put("location", location);
+                                dataBind.put("browser", browser);
+                                objNode.set("dataBindings", dataBind);
+                            }
+
+                            if (!objNode.has("blocks") || !objNode.path("blocks").isObject())
+                            {
+                                final ObjectNode blocksNode = objectMapper.createObjectNode();
+                                final ArrayNode beforeArr = objectMapper.createArrayNode();
+                                final ArrayNode stepsArr = objectMapper.createArrayNode();
+                                final ArrayNode afterArr = objectMapper.createArrayNode();
+
+                                final JsonNode legacySteps = objNode.path("steps");
+                                final JsonNode triesNode = legacySteps.path("tries");
+                                final JsonNode try1 = triesNode.has("1") ? triesNode.get("1") : (triesNode.elements().hasNext() ? triesNode.elements().next() : null);
+
+                                if (try1 != null)
+                                {
+                                    populateBlockSteps(try1.path("beforeSteps"), beforeArr, "before", testClass, engine, objectMapper);
+                                    populateBlockSteps(try1.path("coreSteps"), stepsArr, "playbook", testClass, engine, objectMapper);
+                                    populateBlockSteps(try1.path("afterSteps"), afterArr, "after", testClass, engine, objectMapper);
+                                }
+
+                                blocksNode.set("before", beforeArr);
+                                blocksNode.set("steps", stepsArr);
+                                blocksNode.set("after", afterArr);
+
+                                objNode.set("blocks", blocksNode);
+                            }
+
+                            try
+                            {
+                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, objNode);
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+
+                        execsArray.add(node);
+                        final String rawStatus = node.path("status").asText("passed-clean");
+                        switch (rawStatus)
+                        {
+                            case "passed-clean", "passed", "succeeded" -> pass++;
+                            case "succeeded-fixed" -> fixed++;
+                            case "failed-known" -> known++;
+                            case "failed-unknown", "failed", "error" -> unknown++;
+                            case "ignored", "skipped" -> ignoredCount++;
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("Could not parse test execution JSON file {}: {}", f.getAbsolutePath(), e.getMessage());
+                }
+            }
+
+            final int total = execsArray.size();
+            final double passRate = total > 0 ? (double)(pass + fixed) / total * 100.0 : 0.0;
+
+            final ObjectNode rootNode = objectMapper.createObjectNode();
+            rootNode.put("runId", runId);
+            rootNode.put("batchName", batchName);
+            rootNode.put("environment", env);
+            rootNode.put("trigger", trigger);
+            rootNode.put("timestamp", timestamp);
+
+            final ObjectNode summaryNode = objectMapper.createObjectNode();
+            summaryNode.put("total", total);
+            summaryNode.put("pass", pass);
+            summaryNode.put("fixed", fixed);
+            summaryNode.put("known", known);
+            summaryNode.put("unknown", unknown);
+            summaryNode.put("ignored", ignoredCount);
+            summaryNode.put("passRate", Math.round(passRate * 10.0) / 10.0);
+
+            rootNode.set("summary", summaryNode);
+            rootNode.set("executions", execsArray);
+
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(runJsonFile, rootNode);
+            LOG.info("Generated/Updated run.json for runId={} from {} test execution JSON files (Total: {}, Pass: {}, Known: {}, Unknown: {}).",
+                runId, total, total, pass, known, unknown);
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to generate run.json for runId {}: {}", runId, e.getMessage(), e);
+        }
+    }
+
+    private void populateBlockSteps(final JsonNode sourceSteps, final ArrayNode targetArray, final String prefix, final String file, final String defaultEngine, final ObjectMapper mapper)
+    {
+        if (sourceSteps != null && sourceSteps.isArray())
+        {
+            int idx = 1;
+            for (final JsonNode stepNode : sourceSteps)
+            {
+                final ObjectNode stepObj = mapper.createObjectNode();
+                stepObj.put("id", prefix + "_" + (idx - 1));
+                stepObj.put("index", idx);
+
+                final String name = stepNode.path("name").asText(stepNode.path("title").asText(stepNode.path("instruction").asText("Step " + idx)));
+                stepObj.put("instruction", name);
+                stepObj.put("line", idx);
+                stepObj.put("file", file + ".java");
+                stepObj.put("source", stepNode.path("engine").asText(stepNode.path("source").asText(defaultEngine)));
+
+                final boolean isPassed = stepNode.path("passed").asBoolean(true);
+                stepObj.put("status", isPassed ? "passed" : "failed");
+                stepObj.put("screenshot", stepNode.path("screenshot").asText(""));
+                stepObj.put("error", stepNode.path("error").asText(""));
+
+                final ArrayNode actionsArr = mapper.createArrayNode();
+                final JsonNode sourceActions = stepNode.path("actions");
+                if (sourceActions.isArray())
+                {
+                    for (final JsonNode actNode : sourceActions)
+                    {
+                        final ObjectNode actObj = mapper.createObjectNode();
+                        final String actName = actNode.path("name").asText(actNode.path("type").asText("ACTION"));
+                        actObj.put("type", actName);
+                        actObj.put("name", actName);
+                        actObj.put("target", actNode.path("target").asText(""));
+                        actObj.put("value", actNode.path("value").asText(""));
+                        actObj.put("description", actNode.path("description").asText("Executed " + actName + " action"));
+                        actionsArr.add(actObj);
+                    }
+                }
+                stepObj.set("actions", actionsArr);
+                targetArray.add(stepObj);
+                idx++;
+            }
+        }
+    }
+
+    private void scanForTestExecJsonFiles(final File dir, final List<File> results)
+    {
+        final File[] files = dir.listFiles();
+        if (files == null) return;
+
+        for (final File f : files)
+        {
+            if (f.isDirectory())
+            {
+                scanForTestExecJsonFiles(f, results);
+            }
+            else if (f.getName().endsWith(".json") && !"run.json".equalsIgnoreCase(f.getName()))
+            {
+                results.add(f);
+            }
+        }
+    }
+
+    private boolean isTestExecutionJson(final JsonNode node)
+    {
+        return node.isObject() && (node.has("status") || node.has("testClass") || node.has("id") || node.has("testName"));
+    }
+
+    public static class BatchInfo
+    {
+        public final String name;
+        public final String description;
+        public final String environment;
+
+        public BatchInfo(final String name, final String description, final String environment)
+        {
+            this.name = name;
+            this.description = description;
+            this.environment = environment;
+        }
+    }
+
+    public BatchInfo resolveOrCreateBatchJson(final File runDir, final List<File> testExecJsonFiles)
+    {
+        final File batchJsonFile = new File(runDir, "batch.json");
+        if (batchJsonFile.exists())
+        {
+            try
+            {
+                final JsonNode batchNode = objectMapper.readTree(batchJsonFile);
+                final String name = batchNode.path("name").asText(batchNode.path("batchName").asText("Unknown"));
+                final String desc = batchNode.path("description").asText("");
+                final String env = batchNode.path("environment").asText(batchNode.path("env").asText("Unknown"));
+                return new BatchInfo(name, desc, env);
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Failed to read existing batch.json in {}: {}", runDir.getAbsolutePath(), e.getMessage());
+            }
+        }
+
+        String detectedEnv = null;
+        if (testExecJsonFiles != null)
+        {
+            for (final File f : testExecJsonFiles)
+            {
+                try
+                {
+                    final JsonNode node = objectMapper.readTree(f);
+                    if (node.has("environment") && !node.path("environment").asText().isEmpty())
+                    {
+                        detectedEnv = node.path("environment").asText();
+                        break;
+                    }
+                    if (node.has("env") && !node.path("env").asText().isEmpty())
+                    {
+                        detectedEnv = node.path("env").asText();
+                        break;
+                    }
+                    if (node.path("dataBindings").has("environment") && !node.path("dataBindings").path("environment").asText().isEmpty())
+                    {
+                        detectedEnv = node.path("dataBindings").path("environment").asText();
+                        break;
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
+        final String finalEnv = (detectedEnv != null && !detectedEnv.trim().isEmpty()) ? detectedEnv.trim() : "Unknown";
+        final String defaultName = "Unknown";
+        final String defaultDesc = "";
+
+        try
+        {
+            final ObjectNode batchNode = objectMapper.createObjectNode();
+            batchNode.put("name", defaultName);
+            batchNode.put("description", defaultDesc);
+            batchNode.put("environment", finalEnv);
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonFile, batchNode);
+            LOG.info("Created batch.json for runDir={} with default name='Unknown', description='', environment='{}'", runDir.getName(), finalEnv);
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to write default batch.json in {}: {}", runDir.getAbsolutePath(), e.getMessage());
+        }
+
+        return new BatchInfo(defaultName, defaultDesc, finalEnv);
     }
 
     private String buildFullRunJsonFromNestedDir(final String runId, final Path runJsonPath) throws IOException
