@@ -824,8 +824,16 @@ public final class ExecuteActionsStep implements PipelineStep
 
             if (session != null && session.getEventBus() != null)
             {
-                final int stepIndex = flatSteps != null ? flatSteps.indexOf(step) : 0;
-                session.getEventBus().dispatch(new StepStartedEvent(step, stepIndex));
+                int stepIndex = 0;
+                if (step.getParent() != null && flatSteps != null)
+                {
+                    stepIndex = flatSteps.indexOf(step.getParent());
+                }
+                else if (flatSteps != null)
+                {
+                    stepIndex = flatSteps.indexOf(step);
+                }
+                session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
             }
 
             if (step.getStatus() == PlaybookStepStatus.SKIPPED)
@@ -839,7 +847,13 @@ public final class ExecuteActionsStep implements PipelineStep
             }
 
             LOGGER.debug("================================================================================");
-            if (flatSteps != null && flatSteps.contains(step))
+            if (step.getParent() != null && flatSteps != null)
+            {
+                final int parentIdx = flatSteps.indexOf(step.getParent()) + 1;
+                final int subIdx = step.getParent().getSubSteps().indexOf(step) + 1;
+                LOGGER.debug("▶ [Step {}.{}] Instruction: \"{}\"", parentIdx, subIdx, resolvedInstruction);
+            }
+            else if (flatSteps != null && flatSteps.contains(step))
             {
                 final int stepIndex = flatSteps.indexOf(step) + 1;
                 LOGGER.debug("▶ [Step {}/{}] Instruction: \"{}\"", stepIndex, flatSteps.size(), resolvedInstruction);

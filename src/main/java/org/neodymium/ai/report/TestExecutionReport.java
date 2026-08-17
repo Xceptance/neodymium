@@ -20,7 +20,9 @@ package org.neodymium.ai.report;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Data model encapsulating full execution metadata, steps, actions, LLM calls,
@@ -286,7 +288,26 @@ public final class TestExecutionReport
         private int lineNumber;
         private String reasoning;
         private String failureReason;
+        private int escalations;
+        private String contextLevels;
+        private int pesapCalls;
+        private long pesapInputTokens;
+        private long pesapOutputTokens;
+        private long pesapCachedTokens;
+        private int standardCalls;
+        private long standardInputTokens;
+        private long standardOutputTokens;
+        private long standardCachedTokens;
         private final List<ReportActionEntry> actions = new ArrayList<>();
+        private final List<ReportStepEntry> subSteps = new ArrayList<>();
+        private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
+        private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
+        private String rawInstruction;
+        private boolean bug;
+        private String bugDetails;
+        private boolean optional;
+        private boolean continueOnError;
+        private boolean noHealing;
 
         public ReportStepEntry()
         {
@@ -388,6 +409,106 @@ public final class TestExecutionReport
             this.failureReason = failureReason;
         }
 
+        public int getEscalations()
+        {
+            return this.escalations;
+        }
+
+        public void setEscalations(final int escalations)
+        {
+            this.escalations = escalations;
+        }
+
+        public String getContextLevels()
+        {
+            return this.contextLevels;
+        }
+
+        public void setContextLevels(final String contextLevels)
+        {
+            this.contextLevels = contextLevels;
+        }
+
+        public int getPesapCalls()
+        {
+            return this.pesapCalls;
+        }
+
+        public void setPesapCalls(final int pesapCalls)
+        {
+            this.pesapCalls = pesapCalls;
+        }
+
+        public long getPesapInputTokens()
+        {
+            return this.pesapInputTokens;
+        }
+
+        public void setPesapInputTokens(final long pesapInputTokens)
+        {
+            this.pesapInputTokens = pesapInputTokens;
+        }
+
+        public long getPesapOutputTokens()
+        {
+            return this.pesapOutputTokens;
+        }
+
+        public void setPesapOutputTokens(final long pesapOutputTokens)
+        {
+            this.pesapOutputTokens = pesapOutputTokens;
+        }
+
+        public long getPesapCachedTokens()
+        {
+            return this.pesapCachedTokens;
+        }
+
+        public void setPesapCachedTokens(final long pesapCachedTokens)
+        {
+            this.pesapCachedTokens = pesapCachedTokens;
+        }
+
+        public int getStandardCalls()
+        {
+            return this.standardCalls;
+        }
+
+        public void setStandardCalls(final int standardCalls)
+        {
+            this.standardCalls = standardCalls;
+        }
+
+        public long getStandardInputTokens()
+        {
+            return this.standardInputTokens;
+        }
+
+        public void setStandardInputTokens(final long standardInputTokens)
+        {
+            this.standardInputTokens = standardInputTokens;
+        }
+
+        public long getStandardOutputTokens()
+        {
+            return this.standardOutputTokens;
+        }
+
+        public void setStandardOutputTokens(final long standardOutputTokens)
+        {
+            this.standardOutputTokens = standardOutputTokens;
+        }
+
+        public long getStandardCachedTokens()
+        {
+            return this.standardCachedTokens;
+        }
+
+        public void setStandardCachedTokens(final long standardCachedTokens)
+        {
+            this.standardCachedTokens = standardCachedTokens;
+        }
+
         public List<ReportActionEntry> getActions()
         {
             return Collections.unmodifiableList(this.actions);
@@ -399,6 +520,105 @@ public final class TestExecutionReport
             {
                 this.actions.add(action);
             }
+        }
+
+        public List<ReportStepEntry> getSubSteps()
+        {
+            return Collections.unmodifiableList(this.subSteps);
+        }
+
+        public void addSubStep(final ReportStepEntry subStep)
+        {
+            if (subStep != null)
+            {
+                this.subSteps.add(subStep);
+            }
+        }
+
+        public List<ReportLlmCallEntry> getLlmCalls()
+        {
+            return Collections.unmodifiableList(this.llmCalls);
+        }
+
+        public void addLlmCall(final ReportLlmCallEntry call)
+        {
+            if (call != null)
+            {
+                this.llmCalls.add(call);
+            }
+        }
+
+        public List<ReportScreenshotEntry> getScreenshots()
+        {
+            return Collections.unmodifiableList(this.screenshots);
+        }
+
+        public void addScreenshot(final ReportScreenshotEntry screenshot)
+        {
+            if (screenshot != null)
+            {
+                this.screenshots.add(screenshot);
+            }
+        }
+
+        public String getRawInstruction()
+        {
+            return this.rawInstruction;
+        }
+
+        public void setRawInstruction(final String rawInstruction)
+        {
+            this.rawInstruction = rawInstruction;
+        }
+
+        public boolean isBug()
+        {
+            return this.bug;
+        }
+
+        public void setBug(final boolean bug)
+        {
+            this.bug = bug;
+        }
+
+        public String getBugDetails()
+        {
+            return this.bugDetails;
+        }
+
+        public void setBugDetails(final String bugDetails)
+        {
+            this.bugDetails = bugDetails;
+        }
+
+        public boolean isOptional()
+        {
+            return this.optional;
+        }
+
+        public void setOptional(final boolean optional)
+        {
+            this.optional = optional;
+        }
+
+        public boolean isContinueOnError()
+        {
+            return this.continueOnError;
+        }
+
+        public void setContinueOnError(final boolean continueOnError)
+        {
+            this.continueOnError = continueOnError;
+        }
+
+        public boolean isNoHealing()
+        {
+            return this.noHealing;
+        }
+
+        public void setNoHealing(final boolean noHealing)
+        {
+            this.noHealing = noHealing;
         }
     }
 
@@ -501,6 +721,7 @@ public final class TestExecutionReport
      */
     public static final class ReportLlmCallEntry
     {
+        private int stepIndex;
         private String capability;
         private String modelName;
         private long durationMs;
@@ -515,6 +736,16 @@ public final class TestExecutionReport
 
         public ReportLlmCallEntry()
         {
+        }
+
+        public int getStepIndex()
+        {
+            return this.stepIndex;
+        }
+
+        public void setStepIndex(final int stepIndex)
+        {
+            this.stepIndex = stepIndex;
         }
 
         public String getCapability()
@@ -710,6 +941,101 @@ public final class TestExecutionReport
     }
 
     /**
+     * Token consumption and call count for a specific LLM responsibility category.
+     */
+    public static final class CategoryTokenUsage
+    {
+        private int calls;
+        private long inputTokens;
+        private long outputTokens;
+        private long cachedTokens;
+        private long totalTokens;
+        private double estimatedCostUsd;
+
+        public CategoryTokenUsage()
+        {
+        }
+
+        public CategoryTokenUsage(
+            final int calls,
+            final long inputTokens,
+            final long outputTokens,
+            final long cachedTokens,
+            final double estimatedCostUsd
+        )
+        {
+            this.calls = calls;
+            this.inputTokens = inputTokens;
+            this.outputTokens = outputTokens;
+            this.cachedTokens = cachedTokens;
+            this.totalTokens = inputTokens + outputTokens;
+            this.estimatedCostUsd = estimatedCostUsd;
+        }
+
+        public int getCalls()
+        {
+            return this.calls;
+        }
+
+        public void setCalls(final int calls)
+        {
+            this.calls = calls;
+        }
+
+        public long getInputTokens()
+        {
+            return this.inputTokens;
+        }
+
+        public void setInputTokens(final long inputTokens)
+        {
+            this.inputTokens = inputTokens;
+            this.totalTokens = this.inputTokens + this.outputTokens;
+        }
+
+        public long getOutputTokens()
+        {
+            return this.outputTokens;
+        }
+
+        public void setOutputTokens(final long outputTokens)
+        {
+            this.outputTokens = outputTokens;
+            this.totalTokens = this.inputTokens + this.outputTokens;
+        }
+
+        public long getCachedTokens()
+        {
+            return this.cachedTokens;
+        }
+
+        public void setCachedTokens(final long cachedTokens)
+        {
+            this.cachedTokens = cachedTokens;
+        }
+
+        public long getTotalTokens()
+        {
+            return this.totalTokens;
+        }
+
+        public void setTotalTokens(final long totalTokens)
+        {
+            this.totalTokens = totalTokens;
+        }
+
+        public double getEstimatedCostUsd()
+        {
+            return this.estimatedCostUsd;
+        }
+
+        public void setEstimatedCostUsd(final double estimatedCostUsd)
+        {
+            this.estimatedCostUsd = estimatedCostUsd;
+        }
+    }
+
+    /**
      * Summary metrics covering steps, tokens, replays, and cost.
      */
     public static final class ReportMetrics
@@ -726,6 +1052,15 @@ public final class TestExecutionReport
         private double estimatedCostUsd;
         private int totalReplays;
         private int internalCacheHits;
+        private int totalEscalations;
+        private Map<String, Integer> contextLevelCounts = new LinkedHashMap<>();
+
+        private CategoryTokenUsage total = new CategoryTokenUsage();
+        private CategoryTokenUsage action = new CategoryTokenUsage();
+        private CategoryTokenUsage pesap = new CategoryTokenUsage();
+        private CategoryTokenUsage judge = new CategoryTokenUsage();
+        private CategoryTokenUsage verification = new CategoryTokenUsage();
+        private CategoryTokenUsage visualRca = new CategoryTokenUsage();
 
         public ReportMetrics()
         {
@@ -779,6 +1114,7 @@ public final class TestExecutionReport
         public void setTotalLlmCalls(final int totalLlmCalls)
         {
             this.totalLlmCalls = totalLlmCalls;
+            this.total.setCalls(totalLlmCalls);
         }
 
         public long getTokenUsageInput()
@@ -789,6 +1125,7 @@ public final class TestExecutionReport
         public void setTokenUsageInput(final long tokenUsageInput)
         {
             this.tokenUsageInput = tokenUsageInput;
+            this.total.setInputTokens(tokenUsageInput);
         }
 
         public long getTokenUsageOutput()
@@ -799,6 +1136,7 @@ public final class TestExecutionReport
         public void setTokenUsageOutput(final long tokenUsageOutput)
         {
             this.tokenUsageOutput = tokenUsageOutput;
+            this.total.setOutputTokens(tokenUsageOutput);
         }
 
         public long getTokenUsageCached()
@@ -809,6 +1147,7 @@ public final class TestExecutionReport
         public void setTokenUsageCached(final long tokenUsageCached)
         {
             this.tokenUsageCached = tokenUsageCached;
+            this.total.setCachedTokens(tokenUsageCached);
         }
 
         public long getTotalTokens()
@@ -819,6 +1158,7 @@ public final class TestExecutionReport
         public void setTotalTokens(final long totalTokens)
         {
             this.totalTokens = totalTokens;
+            this.total.setTotalTokens(totalTokens);
         }
 
         public double getEstimatedCostUsd()
@@ -829,6 +1169,7 @@ public final class TestExecutionReport
         public void setEstimatedCostUsd(final double estimatedCostUsd)
         {
             this.estimatedCostUsd = estimatedCostUsd;
+            this.total.setEstimatedCostUsd(estimatedCostUsd);
         }
 
         public int getTotalReplays()
@@ -849,6 +1190,86 @@ public final class TestExecutionReport
         public void setInternalCacheHits(final int internalCacheHits)
         {
             this.internalCacheHits = internalCacheHits;
+        }
+
+        public int getTotalEscalations()
+        {
+            return this.totalEscalations;
+        }
+
+        public void setTotalEscalations(final int totalEscalations)
+        {
+            this.totalEscalations = totalEscalations;
+        }
+
+        public Map<String, Integer> getContextLevelCounts()
+        {
+            return Collections.unmodifiableMap(this.contextLevelCounts);
+        }
+
+        public void setContextLevelCounts(final Map<String, Integer> contextLevelCounts)
+        {
+            this.contextLevelCounts = contextLevelCounts != null ? new LinkedHashMap<>(contextLevelCounts) : new LinkedHashMap<>();
+        }
+
+        public CategoryTokenUsage getTotal()
+        {
+            return this.total;
+        }
+
+        public void setTotal(final CategoryTokenUsage total)
+        {
+            this.total = total != null ? total : new CategoryTokenUsage();
+        }
+
+        public CategoryTokenUsage getAction()
+        {
+            return this.action;
+        }
+
+        public void setAction(final CategoryTokenUsage action)
+        {
+            this.action = action != null ? action : new CategoryTokenUsage();
+        }
+
+        public CategoryTokenUsage getPesap()
+        {
+            return this.pesap;
+        }
+
+        public void setPesap(final CategoryTokenUsage pesap)
+        {
+            this.pesap = pesap != null ? pesap : new CategoryTokenUsage();
+        }
+
+        public CategoryTokenUsage getJudge()
+        {
+            return this.judge;
+        }
+
+        public void setJudge(final CategoryTokenUsage judge)
+        {
+            this.judge = judge != null ? judge : new CategoryTokenUsage();
+        }
+
+        public CategoryTokenUsage getVerification()
+        {
+            return this.verification;
+        }
+
+        public void setVerification(final CategoryTokenUsage verification)
+        {
+            this.verification = verification != null ? verification : new CategoryTokenUsage();
+        }
+
+        public CategoryTokenUsage getVisualRca()
+        {
+            return this.visualRca;
+        }
+
+        public void setVisualRca(final CategoryTokenUsage visualRca)
+        {
+            this.visualRca = visualRca != null ? visualRca : new CategoryTokenUsage();
         }
     }
 }

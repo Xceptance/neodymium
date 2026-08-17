@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.report;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.Instant;
@@ -25,10 +26,12 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Report generator producing standalone, interactive, single-file HTML documents
- * from {@link TestExecutionReport} with embedded styles, SVG icons, and base64 screenshots.
+ * with a Light Mode UI, draggable and resizable step inspector, runtime variable resolution,
+ * plain-text escaped prompts, sub-step hierarchy visualization, and step control badges.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -38,6 +41,7 @@ public final class HtmlReportGenerator
     private static final DecimalFormat COST_FORMAT = new DecimalFormat("$#,##0.0000", DecimalFormatSymbols.getInstance(Locale.US));
     private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("#,###", DecimalFormatSymbols.getInstance(Locale.US));
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z").withZone(ZoneId.systemDefault());
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * Constructs an HtmlReportGenerator.
@@ -47,7 +51,8 @@ public final class HtmlReportGenerator
     }
 
     /**
-     * Converts a test execution report to a complete self-contained HTML report.
+     * Converts a test execution report to a complete self-contained HTML report with a Light Mode UI
+     * and resizable interactive step inspector.
      *
      * @param report the test execution report
      * @return HTML document string
@@ -56,7 +61,7 @@ public final class HtmlReportGenerator
     {
         if (report == null)
         {
-            return "<html><body><h1>No Report Data</h1></body></html>";
+            return "<!DOCTYPE html><html><body><h1>No Report Data Available</h1></body></html>";
         }
 
         final StringBuilder sb = new StringBuilder();
@@ -76,7 +81,7 @@ public final class HtmlReportGenerator
 
         sb.append("<div class=\"report-container\">\n");
 
-        // Top Navigation Bar / Brand Header
+        // 1. Top Navigation Bar / Brand Header
         sb.append("  <header class=\"report-header\">\n");
         sb.append("    <div class=\"brand-title\">\n");
         sb.append("      <span class=\"brand-icon\">⚡</span>\n");
@@ -109,31 +114,27 @@ public final class HtmlReportGenerator
         sb.append("    <div class=\"status-pill ").append(statusClass).append("\">").append(statusLabel).append("</div>\n");
         sb.append("  </header>\n");
 
-        // Summary Metric Cards
+        // 2. Summary Metric Cards
         sb.append("  <section class=\"metrics-grid\">\n");
 
-        // Card 1: Status & Duration
         sb.append("    <div class=\"metric-card\">\n");
         sb.append("      <div class=\"metric-label\">Duration</div>\n");
         sb.append("      <div class=\"metric-value\">").append(NUMBER_FORMAT.format(report.getDurationMs())).append("<span class=\"unit\">ms</span></div>\n");
         sb.append("      <div class=\"metric-sub\">Status: <strong class=\"").append(statusClass).append("\">").append(statusLabel).append("</strong></div>\n");
         sb.append("    </div>\n");
 
-        // Card 2: Steps & Healing
         sb.append("    <div class=\"metric-card\">\n");
         sb.append("      <div class=\"metric-label\">Playbook Steps</div>\n");
         sb.append("      <div class=\"metric-value\">").append(m.getTotalSteps()).append("</div>\n");
         sb.append("      <div class=\"metric-sub\">✨ Healed: ").append(m.getHealedSteps()).append(" | ❌ Failed: ").append(m.getFailedSteps()).append("</div>\n");
         sb.append("    </div>\n");
 
-        // Card 3: LLM Calls & Tokens
         sb.append("    <div class=\"metric-card\">\n");
         sb.append("      <div class=\"metric-label\">LLM Invocations</div>\n");
         sb.append("      <div class=\"metric-value\">").append(m.getTotalLlmCalls()).append("</div>\n");
         sb.append("      <div class=\"metric-sub\">Tokens: ").append(NUMBER_FORMAT.format(m.getTotalTokens())).append(" (Cached: ").append(NUMBER_FORMAT.format(m.getTokenUsageCached())).append(")</div>\n");
         sb.append("    </div>\n");
 
-        // Card 4: Estimated Cost
         sb.append("    <div class=\"metric-card\">\n");
         sb.append("      <div class=\"metric-label\">Estimated Cost</div>\n");
         sb.append("      <div class=\"metric-value text-accent\">").append(COST_FORMAT.format(m.getEstimatedCostUsd())).append("</div>\n");
@@ -142,8 +143,51 @@ public final class HtmlReportGenerator
 
         sb.append("  </section>\n");
 
-        // Failure Diagnostic Box (if failed)
-        if (!isPassed || report.getFailureReason() != null || report.getVisualRcaExplanation() != null)
+        // 3. LLM Responsibility Breakdown Table
+        sb.append("  <section class=\"card-section\">\n");
+        sb.append("    <h2 class=\"section-title\">🤖 AI LLM Responsibility & Token Accounting</h2>\n");
+        sb.append("    <div class=\"table-container\">\n");
+        sb.append("      <table class=\"data-table\">\n");
+        sb.append("        <thead><tr><th>Category</th><th>Calls</th><th>Total Tokens</th><th>Input Tokens</th><th>Output Tokens</th><th>Cached Tokens</th><th>Est. Cost</th></tr></thead>\n");
+        sb.append("        <tbody>\n");
+
+        appendHtmlCategoryRow(sb, "<strong>Total</strong>", m.getTotal(), "row-total");
+        appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
+        appendHtmlCategoryRow(sb, "PESAP (Pre-Execution Semantic Anchor)", m.getPesap(), "");
+        appendHtmlCategoryRow(sb, "Self-Judging Validation", m.getJudge(), "");
+        appendHtmlCategoryRow(sb, "Semantic Outcome Verification", m.getVerification(), "");
+        appendHtmlCategoryRow(sb, "Visual Root Cause Analysis (RCA)", m.getVisualRca(), "");
+
+        sb.append("        </tbody>\n");
+        sb.append("      </table>\n");
+        sb.append("    </div>\n");
+
+        if (m.getTotalEscalations() > 0 || m.getTotalReplays() > 0 || m.getInternalCacheHits() > 0 || !m.getContextLevelCounts().isEmpty())
+        {
+            sb.append("    <div class=\"stats-sub-row\">\n");
+            if (m.getTotalEscalations() > 0)
+            {
+                sb.append("      <div class=\"stats-tag\">⚡ Total Context Escalations: <strong>").append(m.getTotalEscalations()).append("</strong></div>\n");
+            }
+            if (m.getTotalReplays() > 0)
+            {
+                sb.append("      <div class=\"stats-tag\">🎟️ Replayed Steps: <strong>").append(m.getTotalReplays()).append("</strong></div>\n");
+            }
+            if (m.getInternalCacheHits() > 0)
+            {
+                sb.append("      <div class=\"stats-tag\">⚡ Prompt Cache Hits: <strong>").append(m.getInternalCacheHits()).append("</strong></div>\n");
+            }
+            for (final Map.Entry<String, Integer> entry : m.getContextLevelCounts().entrySet())
+            {
+                sb.append("      <div class=\"stats-tag level-tag\">").append(escapeHtml(entry.getKey())).append(": <strong>").append(entry.getValue()).append("</strong></div>\n");
+            }
+            sb.append("    </div>\n");
+        }
+
+        sb.append("  </section>\n");
+
+        // 4. Failure Diagnostic Box (STRICTLY rendered only if the test actually failed)
+        if (!isPassed && (report.getFailureReason() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
         {
             sb.append("  <section class=\"diagnostic-box failure-box\">\n");
             sb.append("    <div class=\"box-header\">🚨 Execution Failure Details</div>\n");
@@ -168,7 +212,7 @@ public final class HtmlReportGenerator
             sb.append("  </section>\n");
         }
 
-        // Warnings Box (if any)
+        // 5. Warnings Box (if any)
         if (!report.getWarnings().isEmpty())
         {
             sb.append("  <section class=\"diagnostic-box warning-box\">\n");
@@ -182,10 +226,15 @@ public final class HtmlReportGenerator
             sb.append("  </section>\n");
         }
 
-        // Steps Execution Section
+        // 6. Interactive Execution Steps Section with Resizable Split Inspector
         final List<TestExecutionReport.ReportStepEntry> steps = report.getSteps();
         sb.append("  <section class=\"steps-section\">\n");
-        sb.append("    <h2 class=\"section-title\">Execution Steps (").append(steps.size()).append(")</h2>\n");
+        sb.append("    <div class=\"section-header-row\">\n");
+        sb.append("      <h2 class=\"section-title\">Execution Steps (").append(steps.size()).append(")</h2>\n");
+        sb.append("      <div class=\"section-header-actions\">\n");
+        sb.append("        <button class=\"btn-toggle-inspector\" id=\"btnToggleInspector\" onclick=\"toggleInspector()\">🔍 Toggle Step Inspector</button>\n");
+        sb.append("      </div>\n");
+        sb.append("    </div>\n");
 
         if (steps.isEmpty())
         {
@@ -193,91 +242,105 @@ public final class HtmlReportGenerator
         }
         else
         {
-            sb.append("    <div class=\"steps-list\">\n");
+            sb.append("    <div class=\"steps-split-layout\" id=\"stepsSplitLayout\">\n");
+
+            // Left Column: Full-Width Step List
+            sb.append("      <div class=\"steps-master-pane\" id=\"stepsMasterList\">\n");
             for (int i = 0; i < steps.size(); i++)
             {
                 final TestExecutionReport.ReportStepEntry step = steps.get(i);
-                final String stepStatus = step.getStatus() != null ? step.getStatus().toUpperCase() : "PENDING";
-                final String stepPillClass = "PASSED".equals(stepStatus) || "SUCCESS".equals(stepStatus) ? "pill-pass"
-                    : "HEALED".equals(stepStatus) ? "pill-heal"
-                    : "FAILED".equals(stepStatus) ? "pill-fail"
-                    : "SKIPPED".equals(stepStatus) ? "pill-skip" : "pill-pending";
-
-                sb.append("      <div class=\"step-card\">\n");
-                sb.append("        <div class=\"step-header\">\n");
-                sb.append("          <div class=\"step-header-left\">\n");
-                sb.append("            <span class=\"step-number\">#").append(i + 1).append("</span>\n");
-                sb.append("            <span class=\"step-status-pill ").append(stepPillClass).append("\">").append(stepStatus).append("</span>\n");
-                sb.append("            <span class=\"step-instruction\">").append(escapeHtml(step.getInstruction())).append("</span>\n");
-                sb.append("          </div>\n");
-                sb.append("          <div class=\"step-header-right\">\n");
-                if (step.getDurationMs() > 0)
-                {
-                    sb.append("            <span class=\"step-duration\">").append(step.getDurationMs()).append(" ms</span>\n");
-                }
-                if (step.getSourceFile() != null && step.getLineNumber() > 0)
-                {
-                    sb.append("            <span class=\"step-source\">").append(escapeHtml(step.getSourceFile())).append(":").append(step.getLineNumber()).append("</span>\n");
-                }
-                sb.append("          </div>\n");
-                sb.append("        </div>\n");
-
-                // Step Body
-                sb.append("        <div class=\"step-body\">\n");
-
-                // AI Reasoning
-                if (step.getReasoning() != null && !step.getReasoning().isBlank())
-                {
-                    sb.append("          <div class=\"step-reasoning\">\n");
-                    sb.append("            <span class=\"reasoning-tag\">🧠 AI Reasoning:</span> ").append(escapeHtml(step.getReasoning())).append("\n");
-                    sb.append("          </div>\n");
-                }
-
-                // Failure Reason
-                if (step.getFailureReason() != null && !step.getFailureReason().isBlank())
-                {
-                    sb.append("          <div class=\"step-failure-tag\">❌ Failure Reason: ").append(escapeHtml(step.getFailureReason())).append("</div>\n");
-                }
-
-                // Actions Table
-                if (!step.getActions().isEmpty())
-                {
-                    sb.append("          <div class=\"actions-container\">\n");
-                    sb.append("            <div class=\"sub-title\">Executed Target Actions:</div>\n");
-                    sb.append("            <table class=\"data-table\">\n");
-                    sb.append("              <thead><tr><th>#</th><th>Action</th><th>Target Selector</th><th>Value</th><th>Reasoning / Note</th><th>Result</th></tr></thead>\n");
-                    sb.append("              <tbody>\n");
-                    for (int a = 0; a < step.getActions().size(); a++)
-                    {
-                        final TestExecutionReport.ReportActionEntry act = step.getActions().get(a);
-                        final String actResClass = act.isSuccess() ? "status-pass" : "status-fail";
-                        final String actResLabel = act.isSuccess() ? "SUCCESS" : "FAILED";
-                        sb.append("                <tr>\n");
-                        sb.append("                  <td>").append(a + 1).append("</td>\n");
-                        sb.append("                  <td><span class=\"badge-action\">").append(escapeHtml(act.getType())).append("</span></td>\n");
-                        sb.append("                  <td><code>").append(escapeHtml(act.getTarget() != null ? act.getTarget() : "-")).append("</code></td>\n");
-                        sb.append("                  <td><code>").append(escapeHtml(act.getValue() != null ? act.getValue() : "-")).append("</code></td>\n");
-                        sb.append("                  <td class=\"text-muted\">").append(escapeHtml(act.getReasoning() != null ? act.getReasoning() : (act.getDescription() != null ? act.getDescription() : "-"))).append("</td>\n");
-                        sb.append("                  <td><span class=\"").append(actResClass).append("\">").append(actResLabel).append("</span></td>\n");
-                        sb.append("                </tr>\n");
-                    }
-                    sb.append("              </tbody>\n");
-                    sb.append("            </table>\n");
-                    sb.append("          </div>\n");
-                }
-
-                sb.append("        </div>\n");
-                sb.append("      </div>\n");
+                renderStepCardWithSubSteps(sb, step, i);
             }
+            sb.append("      </div>\n");
+
+            // Draggable Vertical Splitter
+            sb.append("      <div class=\"split-resizer\" id=\"splitResizer\" title=\"Drag to adjust inspector width\"></div>\n");
+
+            // Right Column: Step Inspector (Collapsible & Resizable)
+            sb.append("      <div class=\"steps-inspector-pane\" id=\"stepInspectorPane\">\n");
+            sb.append("        <div class=\"inspector-card\">\n");
+            sb.append("          <div class=\"inspector-header\" id=\"inspectorHeader\">\n");
+            sb.append("            <div class=\"inspector-header-top\">\n");
+            sb.append("              <div class=\"inspector-header-left\">\n");
+            sb.append("                <span class=\"inspector-badge\" id=\"inspStepBadge\">Step #1</span>\n");
+            sb.append("                <span class=\"step-status-pill\" id=\"inspStatusPill\">SUCCESS</span>\n");
+            sb.append("                <span class=\"inspector-meta\" id=\"inspDuration\">0 ms</span>\n");
+            sb.append("                <span class=\"context-badge\" id=\"inspContextBadge\" style=\"display:none;\"></span>\n");
+            sb.append("                <span class=\"badge-flag bug-badge\" id=\"inspBugBadge\" style=\"display:none;\">🐛 BUG EXPECTED</span>\n");
+            sb.append("              </div>\n");
+            sb.append("              <div class=\"inspector-header-controls\">\n");
+            sb.append("                <div class=\"width-presets\">\n");
+            sb.append("                  <button class=\"btn-preset\" onclick=\"setInspectorWidth(520)\" title=\"Standard Width (520px)\">◧ 520px</button>\n");
+            sb.append("                  <button class=\"btn-preset\" onclick=\"setInspectorWidth(750)\" title=\"Wide Width (750px)\">◨ 750px</button>\n");
+            sb.append("                  <button class=\"btn-preset\" onclick=\"setInspectorWidth(950)\" title=\"Max Width (950px)\">◫ 950px</button>\n");
+            sb.append("                </div>\n");
+            sb.append("                <button class=\"btn-close-inspector\" onclick=\"closeInspector()\" title=\"Close Inspector\">✕</button>\n");
+            sb.append("              </div>\n");
+            sb.append("            </div>\n");
+            sb.append("            <div class=\"inspector-instruction\" id=\"inspInstruction\">Select a step</div>\n");
+            sb.append("            <div class=\"inspector-raw-template\" id=\"inspRawTemplate\" style=\"display:none;\"></div>\n");
+            sb.append("            <div class=\"inspector-sub-meta\" id=\"inspSourceFile\"></div>\n");
+            sb.append("          </div>\n");
+
+            // Tab Navigation Bar
+            sb.append("          <div class=\"inspector-tabs\">\n");
+            sb.append("            <button class=\"tab-btn active\" id=\"tabBtn-llm\" onclick=\"switchInspectorTab('llm')\">🤖 LLM Details (<span id=\"tabLlmCount\">0</span>)</button>\n");
+            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-actions\" onclick=\"switchInspectorTab('actions')\">🎯 Actions (<span id=\"tabActionsCount\">0</span>)</button>\n");
+            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-visuals\" onclick=\"switchInspectorTab('visuals')\">📸 Visuals (<span id=\"tabVisualsCount\">0</span>)</button>\n");
+            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes</button>\n");
+            sb.append("          </div>\n");
+
+            // Tab Content Panels
+            sb.append("          <div class=\"inspector-content\">\n");
+            sb.append("            <div class=\"tab-panel active\" id=\"panel-llm\"></div>\n");
+            sb.append("            <div class=\"tab-panel\" id=\"panel-actions\"></div>\n");
+            sb.append("            <div class=\"tab-panel\" id=\"panel-visuals\"></div>\n");
+            sb.append("            <div class=\"tab-panel\" id=\"panel-reasoning\"></div>\n");
+            sb.append("          </div>\n");
+
+            sb.append("        </div>\n");
+            sb.append("      </div>\n");
+
             sb.append("    </div>\n");
         }
         sb.append("  </section>\n");
 
-        // Screenshots Gallery
+        // 7. Global LLM Interactions Summary (if any)
+        final List<TestExecutionReport.ReportLlmCallEntry> llmCalls = report.getLlmCalls();
+        if (!llmCalls.isEmpty())
+        {
+            sb.append("  <section class=\"card-section\">\n");
+            sb.append("    <h2 class=\"section-title\">💬 All LLM Invocations & Prompt Trace (").append(llmCalls.size()).append(")</h2>\n");
+            sb.append("    <div class=\"table-container\">\n");
+            sb.append("      <table class=\"data-table\">\n");
+            sb.append("        <thead><tr><th>#</th><th>Step</th><th>Capability</th><th>Model</th><th>Duration</th><th>In Tokens</th><th>Out Tokens</th><th>Cached</th><th>Est. Cost</th></tr></thead>\n");
+            sb.append("        <tbody>\n");
+            for (int i = 0; i < llmCalls.size(); i++)
+            {
+                final TestExecutionReport.ReportLlmCallEntry call = llmCalls.get(i);
+                sb.append("          <tr>\n");
+                sb.append("            <td>").append(i + 1).append("</td>\n");
+                sb.append("            <td><span class=\"step-ref\" onclick=\"openAndSelectStep(").append(call.getStepIndex()).append(")\">Step #").append(call.getStepIndex() + 1).append("</span></td>\n");
+                sb.append("            <td><span class=\"badge-role\">").append(escapeHtml(call.getCapability() != null ? call.getCapability() : "-")).append("</span></td>\n");
+                sb.append("            <td><code>").append(escapeHtml(call.getModelName() != null ? call.getModelName() : "default")).append("</code></td>\n");
+                sb.append("            <td>").append(NUMBER_FORMAT.format(call.getDurationMs())).append(" ms</td>\n");
+                sb.append("            <td>").append(NUMBER_FORMAT.format(call.getInputTokens())).append("</td>\n");
+                sb.append("            <td>").append(NUMBER_FORMAT.format(call.getOutputTokens())).append("</td>\n");
+                sb.append("            <td>").append(NUMBER_FORMAT.format(call.getCachedTokens())).append("</td>\n");
+                sb.append("            <td><strong class=\"text-accent\">").append(COST_FORMAT.format(call.getEstimatedCostUsd())).append("</strong></td>\n");
+                sb.append("          </tr>\n");
+            }
+            sb.append("        </tbody>\n");
+            sb.append("      </table>\n");
+            sb.append("    </div>\n");
+            sb.append("  </section>\n");
+        }
+
+        // 8. Global Screenshots Gallery (if any)
         final List<TestExecutionReport.ReportScreenshotEntry> screenshots = report.getScreenshots();
         if (!screenshots.isEmpty())
         {
-            sb.append("  <section class=\"screenshots-section\">\n");
+            sb.append("  <section class=\"card-section\">\n");
             sb.append("    <h2 class=\"section-title\">Captured Screenshots & Visual State (").append(screenshots.size()).append(")</h2>\n");
             sb.append("    <div class=\"screenshots-grid\">\n");
             for (int s = 0; s < screenshots.size(); s++)
@@ -300,62 +363,603 @@ public final class HtmlReportGenerator
             sb.append("  </section>\n");
         }
 
-        // LLM Interactions Table
-        final List<TestExecutionReport.ReportLlmCallEntry> llmCalls = report.getLlmCalls();
-        if (!llmCalls.isEmpty())
-        {
-            sb.append("  <section class=\"llm-section\">\n");
-            sb.append("    <h2 class=\"section-title\">LLM Call Audit & Interaction Details (").append(llmCalls.size()).append(")</h2>\n");
-            sb.append("    <div class=\"table-container\">\n");
-            sb.append("      <table class=\"data-table\">\n");
-            sb.append("        <thead><tr><th>#</th><th>Capability</th><th>Model</th><th>Duration</th><th>Input Tokens</th><th>Output Tokens</th><th>Cached</th><th>Est. Cost</th></tr></thead>\n");
-            sb.append("        <tbody>\n");
-            for (int i = 0; i < llmCalls.size(); i++)
-            {
-                final TestExecutionReport.ReportLlmCallEntry call = llmCalls.get(i);
-                sb.append("          <tr>\n");
-                sb.append("            <td>").append(i + 1).append("</td>\n");
-                sb.append("            <td><span class=\"badge-role\">").append(escapeHtml(call.getCapability())).append("</span></td>\n");
-                sb.append("            <td>").append(escapeHtml(call.getModelName() != null ? call.getModelName() : "default")).append("</td>\n");
-                sb.append("            <td>").append(call.getDurationMs()).append(" ms</td>\n");
-                sb.append("            <td>").append(NUMBER_FORMAT.format(call.getInputTokens())).append("</td>\n");
-                sb.append("            <td>").append(NUMBER_FORMAT.format(call.getOutputTokens())).append("</td>\n");
-                sb.append("            <td>").append(NUMBER_FORMAT.format(call.getCachedTokens())).append("</td>\n");
-                sb.append("            <td><strong class=\"text-accent\">").append(COST_FORMAT.format(call.getEstimatedCostUsd())).append("</strong></td>\n");
-                sb.append("          </tr>\n");
-            }
-            sb.append("        </tbody>\n");
-            sb.append("      </table>\n");
-            sb.append("    </div>\n");
-            sb.append("  </section>\n");
-        }
-
-        // Footer
+        // 9. Footer
         sb.append("  <footer class=\"report-footer\">\n");
         sb.append("    Generated by <strong>Neodymium Aura AI</strong> Preliminary Disk Report Listener &bull; Xceptance GmbH 2026\n");
         sb.append("  </footer>\n");
 
         sb.append("</div>\n");
+
+        // Embedded Step Data Island & Reactive Controller JS
+        appendClientScript(sb, report);
+
         sb.append("</body>\n</html>\n");
 
         return sb.toString();
+    }
+
+    private static void appendHtmlCategoryRow(final StringBuilder sb, final String label, final TestExecutionReport.CategoryTokenUsage cat, final String rowClass)
+    {
+        final int calls = cat != null ? cat.getCalls() : 0;
+        final long total = cat != null ? cat.getTotalTokens() : 0;
+        final long in = cat != null ? cat.getInputTokens() : 0;
+        final long out = cat != null ? cat.getOutputTokens() : 0;
+        final long cached = cat != null ? cat.getCachedTokens() : 0;
+        final double cost = cat != null ? cat.getEstimatedCostUsd() : 0.0;
+
+        sb.append("          <tr class=\"").append(rowClass).append("\">\n");
+        sb.append("            <td>").append(label).append("</td>\n");
+        sb.append("            <td>").append(NUMBER_FORMAT.format(calls)).append("</td>\n");
+        sb.append("            <td><strong>").append(NUMBER_FORMAT.format(total)).append("</strong></td>\n");
+        sb.append("            <td>").append(NUMBER_FORMAT.format(in)).append("</td>\n");
+        sb.append("            <td>").append(NUMBER_FORMAT.format(out)).append("</td>\n");
+        sb.append("            <td>").append(NUMBER_FORMAT.format(cached)).append("</td>\n");
+        sb.append("            <td><strong class=\"text-accent\">").append(COST_FORMAT.format(cost)).append("</strong></td>\n");
+        sb.append("          </tr>\n");
+    }
+
+    private static void renderStepCardWithSubSteps(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final int index)
+    {
+        final String stepStatus = step.getStatus() != null ? step.getStatus().toUpperCase() : "PENDING";
+        final String stepPillClass = "PASSED".equals(stepStatus) || "SUCCESS".equals(stepStatus) ? "pill-pass"
+            : "HEALED".equals(stepStatus) ? "pill-heal"
+            : "FAILED".equals(stepStatus) ? "pill-fail"
+            : "SKIPPED".equals(stepStatus) ? "pill-skip" : "pill-pending";
+
+        final boolean hasSubSteps = !step.getSubSteps().isEmpty();
+
+        sb.append("        <div class=\"step-card step-select-item\" id=\"step-item-").append(index).append("\">\n");
+        sb.append("          <div class=\"step-header\">\n");
+        sb.append("            <div class=\"step-header-left\">\n");
+        sb.append("              <span class=\"step-number\">#").append(index + 1).append("</span>\n");
+        sb.append("              <span class=\"step-status-pill ").append(stepPillClass).append("\">").append(stepStatus).append("</span>\n");
+
+        if (step.isBug())
+        {
+            final String tooltip = step.getBugDetails() != null ? "Expected bug: " + escapeHtml(step.getBugDetails()) : "Expected bug";
+            sb.append("              <span class=\"badge-flag bug-badge\" title=\"").append(tooltip).append("\">🐛 BUG EXPECTED</span>\n");
+        }
+        if (step.isOptional())
+        {
+            sb.append("              <span class=\"badge-flag optional-badge\">OPTIONAL</span>\n");
+        }
+        if (step.isNoHealing())
+        {
+            sb.append("              <span class=\"badge-flag\">NO-HEALING</span>\n");
+        }
+        if (step.isContinueOnError())
+        {
+            sb.append("              <span class=\"badge-flag\">CONTINUE-ON-ERROR</span>\n");
+        }
+
+        if (step.getContextLevels() != null && !step.getContextLevels().isBlank())
+        {
+            sb.append("              <span class=\"context-badge\">").append(escapeHtml(step.getContextLevels())).append("</span>\n");
+        }
+        if (step.getEscalations() > 0)
+        {
+            sb.append("              <span class=\"escalation-badge\">⚡ ").append(step.getEscalations()).append(" esc</span>\n");
+        }
+        sb.append("            </div>\n");
+        sb.append("            <div class=\"step-header-right\">\n");
+        if (step.getDurationMs() > 0)
+        {
+            sb.append("              <span class=\"step-duration\">").append(NUMBER_FORMAT.format(step.getDurationMs())).append(" ms</span>\n");
+        }
+        sb.append("              <button class=\"btn-inspect-step\" onclick=\"openAndSelectStep(").append(index).append(", -1)\">🔍 Inspect</button>\n");
+        sb.append("            </div>\n");
+        sb.append("          </div>\n");
+
+        sb.append("          <div class=\"step-body\" onclick=\"openAndSelectStep(").append(index).append(", -1)\">\n");
+        sb.append("            <div class=\"step-instruction-full\">").append(escapeHtml(step.getInstruction())).append("</div>\n");
+        if (step.getSourceFile() != null)
+        {
+            sb.append("            <div class=\"step-source-meta\">📄 ").append(escapeHtml(step.getSourceFile()))
+              .append(step.getLineNumber() > 0 ? ":" + step.getLineNumber() : "").append("</div>\n");
+        }
+        sb.append("          </div>\n");
+
+        // Render Action and LLM Summary tags
+        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty())
+        {
+            sb.append("          <div class=\"step-card-footer\">\n");
+            if (!step.getActions().isEmpty())
+            {
+                sb.append("            <span class=\"footer-tag\">🎯 ").append(step.getActions().size()).append(" action(s)</span>\n");
+            }
+            final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls());
+            if (llmCount > 0)
+            {
+                sb.append("            <span class=\"footer-tag\">🤖 ").append(llmCount).append(" LLM call(s)</span>\n");
+            }
+            if (hasSubSteps)
+            {
+                sb.append("            <span class=\"footer-tag highlight\">✂️ Split into ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
+            }
+            sb.append("          </div>\n");
+        }
+
+        // Render Nested Sub-Steps Hierarchy if compound step was split
+        if (hasSubSteps)
+        {
+            sb.append("          <div class=\"sub-steps-container\">\n");
+            sb.append("            <div class=\"sub-steps-header\">✂️ JIT Compound Step Split:</div>\n");
+            for (int s = 0; s < step.getSubSteps().size(); s++)
+            {
+                final TestExecutionReport.ReportStepEntry sub = step.getSubSteps().get(s);
+                final String subStatus = sub.getStatus() != null ? sub.getStatus().toUpperCase() : "SUCCESS";
+                final String subPillClass = "PASSED".equals(subStatus) || "SUCCESS".equals(subStatus) ? "pill-pass"
+                    : "HEALED".equals(subStatus) ? "pill-heal"
+                    : "FAILED".equals(subStatus) ? "pill-fail" : "pill-pending";
+
+                sb.append("            <div class=\"sub-step-card\" id=\"substep-item-").append(index).append("-").append(s).append("\">\n");
+                sb.append("              <div class=\"sub-step-header\">\n");
+                sb.append("                <span class=\"sub-step-number\">#").append(index + 1).append(".").append(s + 1).append("</span>\n");
+                sb.append("                <span class=\"step-status-pill ").append(subPillClass).append("\">").append(subStatus).append("</span>\n");
+                sb.append("                <span class=\"sub-step-instruction\">").append(escapeHtml(sub.getInstruction())).append("</span>\n");
+                if (sub.getDurationMs() > 0)
+                {
+                    sb.append("                <span class=\"sub-step-duration\">").append(NUMBER_FORMAT.format(sub.getDurationMs())).append(" ms</span>\n");
+                }
+                sb.append("                <button class=\"btn-inspect-substep\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">🔍 Inspect</button>\n");
+                sb.append("              </div>\n");
+                sb.append("            </div>\n");
+            }
+            sb.append("          </div>\n");
+        }
+
+        sb.append("        </div>\n");
+    }
+
+    private static void appendClientScript(final StringBuilder sb, final TestExecutionReport report)
+    {
+        sb.append("<script id=\"stepDataPayload\" type=\"application/json\">\n");
+        try
+        {
+            sb.append(OBJECT_MAPPER.writeValueAsString(report.getSteps()));
+        }
+        catch (final Exception e)
+        {
+            sb.append("[]");
+        }
+        sb.append("\n</script>\n");
+
+        sb.append("""
+        <script>
+        (function() {
+            var rawJson = document.getElementById('stepDataPayload').textContent;
+            var steps = [];
+            try {
+                steps = JSON.parse(rawJson) || [];
+            } catch(e) {
+                console.error("Failed to parse steps payload", e);
+            }
+
+            var currentParentIdx = 0;
+            var currentSubIdx = -1;
+            var currentTab = 'llm';
+            var isInspectorOpen = false;
+            var currentInspectorWidth = 520;
+
+            function formatNumber(n) {
+                if (n == null) return "0";
+                return n.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g, ",");
+            }
+
+            function formatCost(c) {
+                if (c == null) return "$0.0000";
+                return "$" + Number(c).toFixed(4);
+            }
+
+            window.setInspectorWidth = function(widthPx) {
+                currentInspectorWidth = Math.max(380, Math.min(1200, widthPx));
+                var layout = document.getElementById('stepsSplitLayout');
+                if (layout && layout.classList.contains('inspector-open')) {
+                    layout.style.gridTemplateColumns = '1fr 8px ' + currentInspectorWidth + 'px';
+                }
+            };
+
+            window.toggleInspector = function() {
+                if (isInspectorOpen) {
+                    window.closeInspector();
+                } else {
+                    window.openInspector();
+                }
+            };
+
+            window.openInspector = function() {
+                isInspectorOpen = true;
+                var layout = document.getElementById('stepsSplitLayout');
+                if (layout) {
+                    layout.classList.add('inspector-open');
+                    layout.style.gridTemplateColumns = '1fr 8px ' + currentInspectorWidth + 'px';
+                }
+                var btn = document.getElementById('btnToggleInspector');
+                if (btn) btn.classList.add('active');
+            };
+
+            window.closeInspector = function() {
+                isInspectorOpen = false;
+                var layout = document.getElementById('stepsSplitLayout');
+                if (layout) {
+                    layout.classList.remove('inspector-open');
+                    layout.style.gridTemplateColumns = '1fr';
+                }
+                var btn = document.getElementById('btnToggleInspector');
+                if (btn) btn.classList.remove('active');
+                document.querySelectorAll('.step-select-item').forEach(function(item) {
+                    item.classList.remove('active');
+                });
+                document.querySelectorAll('.sub-step-card').forEach(function(item) {
+                    item.classList.remove('active');
+                });
+            };
+
+            // Draggable splitter initialization
+            var resizer = document.getElementById('splitResizer');
+            if (resizer) {
+                var isDragging = false;
+                resizer.addEventListener('mousedown', function(e) {
+                    isDragging = true;
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                });
+
+                document.addEventListener('mousemove', function(e) {
+                    if (!isDragging) return;
+                    var container = document.getElementById('stepsSplitLayout');
+                    if (!container) return;
+                    var containerRect = container.getBoundingClientRect();
+                    var newWidth = containerRect.right - e.clientX;
+                    window.setInspectorWidth(newWidth);
+                });
+
+                document.addEventListener('mouseup', function(e) {
+                    if (isDragging) {
+                        isDragging = false;
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                    }
+                });
+            }
+
+            window.switchInspectorTab = function(tabId) {
+                currentTab = tabId;
+                var tabBtns = document.querySelectorAll('.inspector-tabs .tab-btn');
+                tabBtns.forEach(function(btn) { btn.classList.remove('active'); });
+
+                var targetBtn = document.getElementById('tabBtn-' + tabId);
+                if (targetBtn) targetBtn.classList.add('active');
+
+                var panels = document.querySelectorAll('.inspector-content .tab-panel');
+                panels.forEach(function(p) { p.classList.remove('active'); });
+
+                var targetPanel = document.getElementById('panel-' + tabId);
+                if (targetPanel) targetPanel.classList.add('active');
+            };
+
+            window.copyLlmField = function(callIndex, fieldName, btn) {
+                var step = getActiveStepObject();
+                if (!step || !step.llmCalls || !step.llmCalls[callIndex]) return;
+                var val = step.llmCalls[callIndex][fieldName] || '';
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(val).then(function() {
+                        var original = btn.textContent;
+                        btn.textContent = "✓ Copied";
+                        setTimeout(function() { btn.textContent = original; }, 1500);
+                    });
+                }
+            };
+
+            window.copyActionTarget = function(actionIndex, btn) {
+                var step = getActiveStepObject();
+                if (!step || !step.actions || !step.actions[actionIndex]) return;
+                var val = step.actions[actionIndex].target || '';
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(val).then(function() {
+                        var original = btn.textContent;
+                        btn.textContent = "✓ Copied";
+                        setTimeout(function() { btn.textContent = original; }, 1500);
+                    });
+                }
+            };
+
+            function getActiveStepObject() {
+                if (currentParentIdx < 0 || currentParentIdx >= steps.length) return null;
+                var parent = steps[currentParentIdx];
+                if (currentSubIdx >= 0 && parent.subSteps && currentSubIdx < parent.subSteps.length) {
+                    return parent.subSteps[currentSubIdx];
+                }
+                return parent;
+            }
+
+            window.openAndSelectStep = function(parentIndex, subIndex) {
+                window.openInspector();
+                window.selectStep(parentIndex, subIndex);
+            };
+
+            window.selectStep = function(parentIndex, subIndex) {
+                if (parentIndex < 0 || parentIndex >= steps.length) return;
+                currentParentIdx = parentIndex;
+                currentSubIdx = (subIndex != null ? subIndex : -1);
+
+                // Highlight active step item
+                document.querySelectorAll('.step-select-item').forEach(function(item, idx) {
+                    if (idx === parentIndex && currentSubIdx < 0) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+
+                document.querySelectorAll('.sub-step-card').forEach(function(item) {
+                    item.classList.remove('active');
+                });
+                if (currentSubIdx >= 0) {
+                    var subEl = document.getElementById('substep-item-' + parentIndex + '-' + currentSubIdx);
+                    if (subEl) subEl.classList.add('active');
+                }
+
+                var step = getActiveStepObject();
+                if (!step) return;
+
+                // Update Header
+                var badgeLabel = currentSubIdx >= 0 ? ('Step #' + (parentIndex + 1) + '.' + (currentSubIdx + 1)) : ('Step #' + (parentIndex + 1));
+                document.getElementById('inspStepBadge').textContent = badgeLabel;
+
+                var statusPill = document.getElementById('inspStatusPill');
+                var status = (step.status || 'PENDING').toUpperCase();
+                statusPill.textContent = status;
+                statusPill.className = 'step-status-pill ' + (
+                    status === 'SUCCESS' || status === 'PASSED' ? 'pill-pass' :
+                    status === 'HEALED' ? 'pill-heal' :
+                    status === 'FAILED' ? 'pill-fail' :
+                    status === 'SKIPPED' ? 'pill-skip' : 'pill-pending'
+                );
+
+                document.getElementById('inspDuration').textContent = formatNumber(step.durationMs || 0) + ' ms';
+                document.getElementById('inspInstruction').textContent = step.instruction || 'No instruction';
+
+                var rawTpl = document.getElementById('inspRawTemplate');
+                if (step.rawInstruction && step.rawInstruction !== step.instruction) {
+                    rawTpl.textContent = 'Template: ' + step.rawInstruction;
+                    rawTpl.style.display = 'block';
+                } else {
+                    rawTpl.style.display = 'none';
+                }
+
+                var bugBadge = document.getElementById('inspBugBadge');
+                if (step.bug) {
+                    bugBadge.style.display = 'inline-block';
+                    bugBadge.textContent = step.bugDetails ? ('🐛 BUG: ' + step.bugDetails) : '🐛 BUG EXPECTED';
+                } else {
+                    bugBadge.style.display = 'none';
+                }
+
+                var srcEl = document.getElementById('inspSourceFile');
+                if (step.sourceFile) {
+                    srcEl.textContent = '📄 ' + step.sourceFile + (step.lineNumber ? ':' + step.lineNumber : '');
+                    srcEl.style.display = 'block';
+                } else {
+                    srcEl.style.display = 'none';
+                }
+
+                var ctxBadge = document.getElementById('inspContextBadge');
+                if (step.contextLevels) {
+                    ctxBadge.textContent = step.contextLevels + (step.escalations ? ' (⚡ ' + step.escalations + ' esc)' : '');
+                    ctxBadge.style.display = 'inline-block';
+                } else {
+                    ctxBadge.style.display = 'none';
+                }
+
+                // Update Tab Counts
+                var llmCalls = step.llmCalls || [];
+                var actions = step.actions || [];
+                var visuals = step.screenshots || [];
+
+                document.getElementById('tabLlmCount').textContent = llmCalls.length;
+                document.getElementById('tabActionsCount').textContent = actions.length;
+                document.getElementById('tabVisualsCount').textContent = visuals.length;
+
+                // 1. Render LLM Panel (Safe Text Rendering via DOM textContent)
+                var llmPanel = document.getElementById('panel-llm');
+                llmPanel.innerHTML = '';
+                if (llmCalls.length === 0) {
+                    var emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-inspector-state';
+                    emptyDiv.textContent = 'No direct LLM completion calls recorded for this step (replayed or deterministic).';
+                    llmPanel.appendChild(emptyDiv);
+                } else {
+                    llmCalls.forEach(function(call, ci) {
+                        var card = document.createElement('div');
+                        card.className = 'llm-call-card';
+
+                        var header = document.createElement('div');
+                        header.className = 'llm-call-header';
+                        header.innerHTML = '<div class="llm-call-title">Call #' + (ci + 1) + ' &bull; <code>' + (call.modelName || 'default') + '</code> (' + (call.capability || 'TEXT') + ')</div>' +
+                                           '<div class="llm-call-meta">' + formatNumber(call.durationMs || 0) + ' ms | ' + formatNumber(call.totalTokens || 0) + ' tokens (' + formatCost(call.estimatedCostUsd) + ')</div>';
+                        card.appendChild(header);
+
+                        if (call.systemPrompt) {
+                            var sec = createPromptSection('System Prompt:', call.systemPrompt, ci, 'systemPrompt');
+                            card.appendChild(sec);
+                        }
+
+                        if (call.userPrompt) {
+                            var sec = createPromptSection('User Prompt & DOM Context (Plain Text):', call.userPrompt, ci, 'userPrompt');
+                            card.appendChild(sec);
+                        }
+
+                        if (call.responseContent) {
+                            var sec = createPromptSection('Raw Model Response:', call.responseContent, ci, 'responseContent');
+                            sec.classList.add('response-section');
+                            card.appendChild(sec);
+                        }
+
+                        llmPanel.appendChild(card);
+                    });
+                }
+
+                // 2. Render Actions Panel
+                var actionsPanel = document.getElementById('panel-actions');
+                actionsPanel.innerHTML = '';
+                if (actions.length === 0) {
+                    var emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-inspector-state';
+                    emptyDiv.textContent = 'No target DOM actions executed in this step.';
+                    actionsPanel.appendChild(emptyDiv);
+                } else {
+                    var tableWrapper = document.createElement('div');
+                    tableWrapper.className = 'table-container';
+                    var table = document.createElement('table');
+                    table.className = 'data-table actions-table';
+                    table.innerHTML = '<thead><tr><th>#</th><th>Action</th><th>Target Selector</th><th>Value</th><th>Reasoning</th><th>Result</th></tr></thead>';
+                    var tbody = document.createElement('tbody');
+                    actions.forEach(function(a, ai) {
+                        var tr = document.createElement('tr');
+                        var resClass = a.success ? 'status-pass' : 'status-fail';
+                        var resText = a.success ? 'SUCCESS' : 'FAILED';
+
+                        tr.innerHTML = '<td>' + (ai + 1) + '</td>' +
+                                       '<td><span class="badge-action">' + (a.type || '-') + '</span></td>' +
+                                       '<td><code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + (a.target || '-') + '</code></td>' +
+                                       '<td><code>' + (a.value || '-') + '</code></td>' +
+                                       '<td class="text-muted">' + (a.reasoning || a.description || '-') + '</td>' +
+                                       '<td><span class="' + resClass + '">' + resText + '</span></td>';
+                        tbody.appendChild(tr);
+                    });
+                    table.appendChild(tbody);
+                    tableWrapper.appendChild(table);
+                    actionsPanel.appendChild(tableWrapper);
+                }
+
+                // 3. Render Visuals Panel
+                var visualsPanel = document.getElementById('panel-visuals');
+                visualsPanel.innerHTML = '';
+                if (visuals.length === 0) {
+                    var emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-inspector-state';
+                    emptyDiv.textContent = 'No state screenshots captured during this step.';
+                    visualsPanel.appendChild(emptyDiv);
+                } else {
+                    var grid = document.createElement('div');
+                    grid.className = 'screenshots-grid';
+                    visuals.forEach(function(sc, si) {
+                        var card = document.createElement('div');
+                        card.className = 'screenshot-card';
+
+                        var header = document.createElement('div');
+                        header.className = 'screenshot-header';
+                        header.textContent = sc.name || ('Screenshot #' + (si + 1));
+                        card.appendChild(header);
+
+                        var src = sc.base64Data || '';
+                        if (src && !src.startsWith('data:')) {
+                            src = 'data:' + (sc.mediaType || 'image/png') + ';base64,' + src;
+                        }
+                        var img = document.createElement('img');
+                        img.src = src;
+                        img.className = 'screenshot-img';
+                        img.title = 'Click to open full size';
+                        img.onclick = function() { window.open(this.src); };
+                        card.appendChild(img);
+                        grid.appendChild(card);
+                    });
+                    visualsPanel.appendChild(grid);
+                }
+
+                // 4. Render Reasoning Panel
+                var reasPanel = document.getElementById('panel-reasoning');
+                reasPanel.innerHTML = '';
+                if (step.reasoning) {
+                    var rCard = document.createElement('div');
+                    rCard.className = 'reasoning-card';
+                    rCard.innerHTML = '<div class="reasoning-title">🧠 Step Intent & AI Reasoning:</div>';
+                    var rBody = document.createElement('div');
+                    rBody.className = 'reasoning-body';
+                    rBody.textContent = step.reasoning;
+                    rCard.appendChild(rBody);
+                    reasPanel.appendChild(rCard);
+                }
+                if (step.failureReason) {
+                    var fCard = document.createElement('div');
+                    fCard.className = step.bug ? 'reasoning-card' : 'failure-card';
+                    var fTitle = step.bug ? '🐛 Expected Bug / Defect Encountered:' : '❌ Failure Reason:';
+                    fCard.innerHTML = '<div class="' + (step.bug ? 'reasoning-title' : 'failure-title') + '">' + fTitle + '</div>';
+                    var fBody = document.createElement('div');
+                    fBody.className = step.bug ? 'reasoning-body' : 'failure-body';
+                    fBody.textContent = step.failureReason;
+                    fCard.appendChild(fBody);
+                    reasPanel.appendChild(fCard);
+                }
+                if (!step.reasoning && !step.failureReason) {
+                    var emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-inspector-state';
+                    emptyDiv.textContent = 'No special reasoning notes or failure diagnostics recorded.';
+                    reasPanel.appendChild(emptyDiv);
+                }
+            };
+
+            function createPromptSection(label, text, callIdx, fieldName) {
+                var sec = document.createElement('div');
+                sec.className = 'prompt-section';
+
+                var row = document.createElement('div');
+                row.className = 'prompt-label-row';
+
+                var labelSpan = document.createElement('span');
+                labelSpan.textContent = label;
+                row.appendChild(labelSpan);
+
+                var copyBtn = document.createElement('button');
+                copyBtn.className = 'btn-copy';
+                copyBtn.textContent = 'Copy';
+                copyBtn.onclick = function() { window.copyLlmField(callIdx, fieldName, copyBtn); };
+                row.appendChild(copyBtn);
+
+                sec.appendChild(row);
+
+                var pre = document.createElement('pre');
+                pre.className = 'prompt-text';
+                pre.textContent = text;
+                sec.appendChild(pre);
+
+                return sec;
+            }
+
+            // Auto-focus on failed step if test failed, but keep inspector closed by default unless user clicks inspect
+            if (steps.length > 0) {
+                var firstFail = steps.findIndex(function(s) { return (s.status || '').toUpperCase() === 'FAILED'; });
+                currentParentIdx = firstFail >= 0 ? firstFail : 0;
+            }
+        })();
+        </script>
+        """);
     }
 
     private static void appendStyles(final StringBuilder sb)
     {
         sb.append("""
             :root {
-                --bg: #0f172a;
-                --card-bg: #1e293b;
-                --card-hover: #334155;
-                --border: #334155;
-                --text: #f8fafc;
-                --text-muted: #94a3b8;
-                --accent-primary: #38bdf8;
-                --accent-success: #22c55e;
-                --accent-danger: #ef4444;
-                --accent-warning: #f59e0b;
-                --accent-purple: #a855f7;
+                --bg: #f8fafc;
+                --card-bg: #ffffff;
+                --card-header-bg: #f1f5f9;
+                --card-hover: #f8fafc;
+                --border: #e2e8f0;
+                --border-subtle: #cbd5e1;
+                --text: #0f172a;
+                --text-muted: #64748b;
+                --text-sub: #475569;
+                --accent-primary: #0284c7;
+                --accent-primary-light: #e0f2fe;
+                --accent-success: #16a34a;
+                --accent-success-light: #dcfce7;
+                --accent-danger: #dc2626;
+                --accent-danger-light: #fee2e2;
+                --accent-warning: #d97706;
+                --accent-warning-light: #fef3c7;
+                --accent-purple: #7c3aed;
+                --accent-purple-light: #f3e8ff;
                 --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             }
@@ -368,7 +972,7 @@ public final class HtmlReportGenerator
                 padding: 2rem 1rem;
             }
             .report-container {
-                max-width: 1200px;
+                max-width: 1440px;
                 margin: 0 auto;
                 display: flex;
                 flex-direction: column;
@@ -382,7 +986,7 @@ public final class HtmlReportGenerator
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
             }
             .brand-title {
                 display: flex;
@@ -405,8 +1009,8 @@ public final class HtmlReportGenerator
             }
             .meta-badge {
                 font-size: 0.75rem;
-                background: #0f172a;
-                color: var(--text-muted);
+                background: #f1f5f9;
+                color: var(--text-sub);
                 padding: 0.2rem 0.6rem;
                 border-radius: 6px;
                 border: 1px solid var(--border);
@@ -415,6 +1019,8 @@ public final class HtmlReportGenerator
             .meta-badge.highlight {
                 color: var(--accent-primary);
                 border-color: var(--accent-primary);
+                background: var(--accent-primary-light);
+                font-weight: 600;
             }
             .status-pill {
                 font-size: 1rem;
@@ -424,8 +1030,8 @@ public final class HtmlReportGenerator
                 text-transform: uppercase;
                 letter-spacing: 0.05em;
             }
-            .status-pass { background: rgba(34, 197, 94, 0.15); color: var(--accent-success); border: 1px solid var(--accent-success); }
-            .status-fail { background: rgba(239, 68, 68, 0.15); color: var(--accent-danger); border: 1px solid var(--accent-danger); }
+            .status-pass { background: var(--accent-success-light); color: var(--accent-success); border: 1px solid var(--accent-success); }
+            .status-fail { background: var(--accent-danger-light); color: var(--accent-danger); border: 1px solid var(--accent-danger); }
             .metrics-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -439,12 +1045,14 @@ public final class HtmlReportGenerator
                 display: flex;
                 flex-direction: column;
                 gap: 0.25rem;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
             }
             .metric-label {
                 font-size: 0.8rem;
                 text-transform: uppercase;
                 letter-spacing: 0.05em;
                 color: var(--text-muted);
+                font-weight: 600;
             }
             .metric-value {
                 font-size: 1.8rem;
@@ -462,6 +1070,13 @@ public final class HtmlReportGenerator
                 margin-top: 0.25rem;
             }
             .text-accent { color: var(--accent-primary) !important; }
+            .card-section {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 1.5rem;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
             .diagnostic-box {
                 border-radius: 10px;
                 padding: 1.25rem;
@@ -470,12 +1085,12 @@ public final class HtmlReportGenerator
                 gap: 0.75rem;
             }
             .failure-box {
-                background: rgba(239, 68, 68, 0.1);
-                border: 1px solid rgba(239, 68, 68, 0.4);
+                background: var(--accent-danger-light);
+                border: 1px solid rgba(220, 38, 38, 0.3);
             }
             .warning-box {
-                background: rgba(245, 158, 11, 0.1);
-                border: 1px solid rgba(245, 158, 11, 0.4);
+                background: var(--accent-warning-light);
+                border: 1px solid rgba(217, 119, 6, 0.3);
             }
             .box-header {
                 font-size: 1rem;
@@ -485,24 +1100,24 @@ public final class HtmlReportGenerator
             .warning-box .box-header { color: var(--accent-warning); }
             .failure-reason {
                 font-size: 0.95rem;
-                color: #fca5a5;
+                color: #991b1b;
                 font-family: var(--font-mono);
             }
             .visual-rca-box {
-                background: #0f172a;
-                border: 1px solid rgba(239, 68, 68, 0.3);
+                background: #ffffff;
+                border: 1px solid rgba(220, 38, 38, 0.3);
                 border-radius: 8px;
                 padding: 1rem;
             }
             .rca-title {
                 font-weight: 600;
-                color: #38bdf8;
+                color: var(--accent-primary);
                 font-size: 0.9rem;
                 margin-bottom: 0.4rem;
             }
             .rca-content {
                 font-size: 0.88rem;
-                color: #cbd5e1;
+                color: var(--text-sub);
                 white-space: pre-wrap;
             }
             .stacktrace-details summary {
@@ -511,114 +1126,571 @@ public final class HtmlReportGenerator
                 font-size: 0.85rem;
             }
             .code-block {
-                background: #020617;
+                background: #f1f5f9;
                 border: 1px solid var(--border);
                 border-radius: 6px;
                 padding: 0.75rem;
                 margin-top: 0.5rem;
                 font-family: var(--font-mono);
                 font-size: 0.8rem;
-                color: #f1f5f9;
+                color: #1e293b;
                 overflow-x: auto;
             }
             .warning-list {
                 padding-left: 1.25rem;
                 font-size: 0.85rem;
-                color: #fde68a;
+                color: #92400e;
             }
             .section-title {
                 font-size: 1.25rem;
                 font-weight: 600;
-                margin-bottom: 1rem;
                 color: var(--text);
             }
-            .steps-list {
+            .section-header-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+            }
+            .btn-toggle-inspector {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.4rem 0.8rem;
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: var(--accent-primary);
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+            .btn-toggle-inspector:hover, .btn-toggle-inspector.active {
+                background: var(--accent-primary-light);
+                border-color: var(--accent-primary);
+            }
+            .steps-split-layout {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 0;
+                align-items: start;
+                transition: grid-template-columns 0.15s ease;
+            }
+            .steps-split-layout.inspector-open {
+                grid-template-columns: 1fr 8px 520px;
+            }
+            @media (max-width: 1100px) {
+                .steps-split-layout.inspector-open {
+                    grid-template-columns: 1fr;
+                }
+                .split-resizer {
+                    display: none !important;
+                }
+            }
+            .split-resizer {
+                display: none;
+                width: 8px;
+                cursor: col-resize;
+                align-self: stretch;
+                background: transparent;
+                position: relative;
+                transition: background 0.15s ease;
+            }
+            .split-resizer::after {
+                content: "";
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 3px;
+                width: 2px;
+                background: var(--border);
+                border-radius: 2px;
+            }
+            .split-resizer:hover::after, .split-resizer:active::after {
+                background: var(--accent-primary);
+                width: 4px;
+                left: 2px;
+            }
+            .steps-split-layout.inspector-open .split-resizer {
+                display: block;
+            }
+            .steps-master-pane {
                 display: flex;
                 flex-direction: column;
-                gap: 1rem;
+                gap: 0.85rem;
             }
             .step-card {
                 background: var(--card-bg);
                 border: 1px solid var(--border);
                 border-radius: 10px;
                 overflow: hidden;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+                transition: all 0.15s ease-in-out;
+            }
+            .step-card:hover {
+                border-color: var(--border-subtle);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            }
+            .step-select-item.active {
+                border-color: var(--accent-primary);
+                box-shadow: 0 0 0 2px var(--accent-primary-light), 0 2px 4px rgba(0,0,0,0.06);
             }
             .step-header {
-                background: #1e293b;
-                padding: 0.9rem 1.25rem;
+                background: #f8fafc;
+                padding: 0.75rem 1.25rem;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 border-bottom: 1px solid var(--border);
             }
+            .step-select-item.active .step-header {
+                background: var(--accent-primary-light);
+            }
             .step-header-left {
                 display: flex;
                 align-items: center;
-                gap: 0.75rem;
-                flex: 1;
+                gap: 0.5rem;
+                flex-wrap: wrap;
             }
             .step-number {
                 font-weight: 700;
                 color: var(--accent-primary);
                 font-family: var(--font-mono);
-                font-size: 0.9rem;
+                font-size: 0.95rem;
             }
             .step-status-pill {
-                font-size: 0.7rem;
+                font-size: 0.72rem;
                 font-weight: 700;
                 padding: 0.15rem 0.5rem;
                 border-radius: 4px;
                 text-transform: uppercase;
             }
-            .pill-pass { background: rgba(34, 197, 94, 0.2); color: var(--accent-success); }
-            .pill-heal { background: rgba(168, 85, 247, 0.2); color: var(--accent-purple); }
-            .pill-fail { background: rgba(239, 68, 68, 0.2); color: var(--accent-danger); }
-            .pill-skip { background: rgba(148, 163, 184, 0.2); color: var(--text-muted); }
-            .pill-pending { background: rgba(245, 158, 11, 0.2); color: var(--accent-warning); }
-            .step-instruction {
-                font-weight: 600;
-                font-size: 0.95rem;
-                color: var(--text);
+            .pill-pass { background: var(--accent-success-light); color: var(--accent-success); border: 1px solid rgba(22, 163, 74, 0.3); }
+            .pill-heal { background: var(--accent-purple-light); color: var(--accent-purple); border: 1px solid rgba(124, 58, 237, 0.3); }
+            .pill-fail { background: var(--accent-danger-light); color: var(--accent-danger); border: 1px solid rgba(220, 38, 38, 0.3); }
+            .pill-skip { background: #f1f5f9; color: var(--text-muted); border: 1px solid var(--border); }
+            .pill-pending { background: var(--accent-warning-light); color: var(--accent-warning); border: 1px solid rgba(217, 119, 6, 0.3); }
+            .badge-flag {
+                font-size: 0.72rem;
+                font-weight: 700;
+                padding: 0.15rem 0.5rem;
+                border-radius: 4px;
+                text-transform: uppercase;
+                background: #f1f5f9;
+                color: var(--text-sub);
+                border: 1px solid var(--border);
+            }
+            .badge-flag.bug-badge {
+                background: var(--accent-warning-light);
+                color: var(--accent-warning);
+                border-color: rgba(217, 119, 6, 0.4);
+            }
+            .badge-flag.optional-badge {
+                background: var(--accent-purple-light);
+                color: var(--accent-purple);
+                border-color: rgba(124, 58, 237, 0.4);
             }
             .step-header-right {
                 display: flex;
                 align-items: center;
-                gap: 0.75rem;
+                gap: 0.6rem;
                 font-size: 0.8rem;
                 color: var(--text-muted);
                 font-family: var(--font-mono);
             }
+            .btn-inspect-step, .btn-inspect-substep {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.25rem 0.6rem;
+                font-size: 0.78rem;
+                font-weight: 600;
+                color: var(--accent-primary);
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+            .btn-inspect-step:hover, .btn-inspect-substep:hover {
+                background: var(--accent-primary-light);
+                border-color: var(--accent-primary);
+            }
             .step-body {
-                padding: 1.25rem;
+                padding: 1rem 1.25rem;
+                cursor: pointer;
+            }
+            .step-instruction-full {
+                font-weight: 600;
+                font-size: 0.95rem;
+                color: var(--text);
+                line-height: 1.4;
+                word-break: break-word;
+                white-space: normal;
+            }
+            .step-source-meta {
+                font-size: 0.78rem;
+                color: var(--text-muted);
+                font-family: var(--font-mono);
+                margin-top: 0.4rem;
+            }
+            .step-card-footer {
+                padding: 0.5rem 1.25rem;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                background: #ffffff;
+                border-top: 1px solid var(--border);
+            }
+            .footer-tag {
+                font-size: 0.72rem;
+                background: #f1f5f9;
+                color: var(--text-sub);
+                padding: 0.15rem 0.45rem;
+                border-radius: 4px;
+                font-weight: 500;
+            }
+            .footer-tag.highlight {
+                background: var(--accent-primary-light);
+                color: var(--accent-primary);
+                font-weight: 600;
+            }
+            .sub-steps-container {
+                background: #f8fafc;
+                border-top: 1px solid var(--border);
+                padding: 0.75rem 1.25rem;
                 display: flex;
                 flex-direction: column;
-                gap: 0.75rem;
+                gap: 0.5rem;
             }
-            .step-reasoning {
-                background: #0f172a;
-                border-left: 3px solid var(--accent-primary);
-                padding: 0.6rem 0.9rem;
-                border-radius: 0 6px 6px 0;
-                font-size: 0.85rem;
-                color: #cbd5e1;
-            }
-            .reasoning-tag {
+            .sub-steps-header {
+                font-size: 0.8rem;
                 font-weight: 700;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+            .sub-step-card {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.5rem 0.75rem;
+                transition: all 0.15s ease;
+            }
+            .sub-step-card.active {
+                border-color: var(--accent-primary);
+                background: #ffffff;
+                box-shadow: 0 0 0 2px var(--accent-primary-light);
+            }
+            .sub-step-header {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                flex-wrap: wrap;
+            }
+            .sub-step-number {
+                font-family: var(--font-mono);
+                font-weight: 700;
+                font-size: 0.85rem;
                 color: var(--accent-primary);
             }
-            .step-failure-tag {
-                background: rgba(239, 68, 68, 0.15);
-                border-left: 3px solid var(--accent-danger);
-                padding: 0.5rem 0.8rem;
-                color: #fca5a5;
-                font-size: 0.85rem;
+            .sub-step-instruction {
+                font-size: 0.88rem;
+                color: var(--text);
+                font-weight: 500;
+                flex: 1;
+            }
+            .sub-step-duration {
+                font-size: 0.75rem;
+                font-family: var(--font-mono);
+                color: var(--text-muted);
+            }
+            .steps-inspector-pane {
+                display: none;
+                position: sticky;
+                top: 1rem;
+                max-height: calc(100vh - 2rem);
+                overflow-y: auto;
+            }
+            .steps-split-layout.inspector-open .steps-inspector-pane {
+                display: block;
+            }
+            .inspector-card {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .inspector-header {
+                background: #f8fafc;
+                padding: 1.25rem 1.5rem;
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                flex-direction: column;
+                gap: 0.4rem;
+            }
+            .inspector-header-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .inspector-header-left {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+            }
+            .inspector-header-controls {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+            }
+            .width-presets {
+                display: flex;
+                gap: 0.2rem;
+            }
+            .btn-preset {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                padding: 0.15rem 0.4rem;
+                font-size: 0.7rem;
+                font-weight: 600;
+                color: var(--text-sub);
+                cursor: pointer;
+            }
+            .btn-preset:hover {
+                background: var(--accent-primary-light);
+                color: var(--accent-primary);
+            }
+            .inspector-badge {
+                font-size: 0.95rem;
+                font-weight: 700;
+                color: var(--accent-primary);
                 font-family: var(--font-mono);
             }
-            .sub-title {
-                font-size: 0.85rem;
+            .btn-close-inspector {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                width: 28px;
+                height: 28px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                font-size: 0.9rem;
+                color: var(--text-muted);
+                cursor: pointer;
+            }
+            .btn-close-inspector:hover {
+                background: var(--accent-danger-light);
+                color: var(--accent-danger);
+                border-color: var(--accent-danger);
+            }
+            .inspector-instruction {
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: var(--text);
+                line-height: 1.4;
+            }
+            .inspector-raw-template {
+                font-size: 0.8rem;
+                color: var(--text-muted);
+                font-family: var(--font-mono);
+                background: #f1f5f9;
+                padding: 0.2rem 0.5rem;
+                border-radius: 4px;
+                display: inline-block;
+            }
+            .inspector-sub-meta {
+                font-size: 0.8rem;
+                color: var(--text-muted);
+                font-family: var(--font-mono);
+            }
+            .inspector-tabs {
+                display: flex;
+                background: #f1f5f9;
+                border-bottom: 1px solid var(--border);
+                padding: 0.25rem 0.5rem 0;
+                gap: 0.25rem;
+                overflow-x: auto;
+            }
+            .tab-btn {
+                background: transparent;
+                border: none;
+                border-radius: 6px 6px 0 0;
+                padding: 0.6rem 0.9rem;
+                font-size: 0.82rem;
                 font-weight: 600;
                 color: var(--text-muted);
+                cursor: pointer;
+                white-space: nowrap;
+                transition: all 0.15s ease;
+            }
+            .tab-btn:hover {
+                color: var(--text);
+                background: rgba(255,255,255,0.5);
+            }
+            .tab-btn.active {
+                background: var(--card-bg);
+                color: var(--accent-primary);
+                border-bottom: 2px solid var(--accent-primary);
+            }
+            .inspector-content {
+                padding: 1.25rem;
+                min-height: 350px;
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+            }
+            .tab-panel {
+                display: none;
+                flex-direction: column;
+                gap: 1rem;
+            }
+            .tab-panel.active {
+                display: flex;
+            }
+            .empty-inspector-state {
+                text-align: center;
+                padding: 3rem 1rem;
+                color: var(--text-muted);
+                font-size: 0.9rem;
+            }
+            .llm-call-card {
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: #f8fafc;
+                overflow: hidden;
+            }
+            .llm-call-header {
+                background: #f1f5f9;
+                padding: 0.6rem 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid var(--border);
+                flex-wrap: wrap;
+                gap: 0.4rem;
+            }
+            .llm-call-title {
+                font-weight: 600;
+                font-size: 0.85rem;
+            }
+            .llm-call-meta {
+                font-size: 0.78rem;
+                font-family: var(--font-mono);
+                color: var(--text-muted);
+            }
+            .prompt-section {
+                padding: 0.75rem 1rem;
+                border-bottom: 1px solid var(--border);
+            }
+            .prompt-section:last-child {
+                border-bottom: none;
+            }
+            .prompt-label-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
                 margin-bottom: 0.4rem;
+                font-size: 0.78rem;
+                font-weight: 600;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+            .prompt-text {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.75rem;
+                font-family: var(--font-mono);
+                font-size: 0.78rem;
+                color: #1e293b;
+                max-height: 260px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            .response-section {
+                background: #ffffff;
+            }
+            .btn-copy {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                padding: 0.15rem 0.45rem;
+                font-size: 0.7rem;
+                font-weight: 600;
+                color: var(--text-sub);
+                cursor: pointer;
+            }
+            .btn-copy:hover {
+                background: #f1f5f9;
+                color: var(--text);
+            }
+            .code-selector {
+                cursor: pointer;
+                background: #f1f5f9;
+                padding: 0.1rem 0.3rem;
+                border-radius: 4px;
+            }
+            .code-selector:hover {
+                background: var(--accent-primary-light);
+                color: var(--accent-primary);
+            }
+            .reasoning-card {
+                background: var(--accent-primary-light);
+                border-left: 4px solid var(--accent-primary);
+                border-radius: 0 8px 8px 0;
+                padding: 1rem;
+            }
+            .reasoning-title {
+                font-weight: 700;
+                color: var(--accent-primary);
+                font-size: 0.9rem;
+                margin-bottom: 0.3rem;
+            }
+            .reasoning-body {
+                font-size: 0.9rem;
+                color: #0369a1;
+            }
+            .failure-card {
+                background: var(--accent-danger-light);
+                border-left: 4px solid var(--accent-danger);
+                border-radius: 0 8px 8px 0;
+                padding: 1rem;
+            }
+            .failure-title {
+                font-weight: 700;
+                color: var(--accent-danger);
+                font-size: 0.9rem;
+                margin-bottom: 0.3rem;
+            }
+            .failure-body {
+                font-size: 0.88rem;
+                color: #991b1b;
+                font-family: var(--font-mono);
+            }
+            .context-badge {
+                background: #f1f5f9;
+                color: var(--text-sub);
+                padding: 0.15rem 0.5rem;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                border: 1px solid var(--border);
+            }
+            .escalation-badge {
+                background: var(--accent-warning-light);
+                color: var(--accent-warning);
+                padding: 0.15rem 0.5rem;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                border: 1px solid rgba(217, 119, 6, 0.3);
             }
             .data-table {
                 width: 100%;
@@ -627,20 +1699,24 @@ public final class HtmlReportGenerator
                 text-align: left;
             }
             .data-table th {
-                background: #0f172a;
-                color: var(--text-muted);
+                background: #f8fafc;
+                color: var(--text-sub);
                 padding: 0.6rem 0.8rem;
                 font-weight: 600;
-                border-bottom: 1px solid var(--border);
+                border-bottom: 2px solid var(--border);
             }
             .data-table td {
                 padding: 0.6rem 0.8rem;
-                border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+                border-bottom: 1px solid var(--border);
+                color: var(--text);
             }
-            .data-table tr:last-child td { border-bottom: none; }
-            .data-table tr:hover { background: rgba(51, 65, 85, 0.3); }
+            .data-table tr.row-total {
+                background: #f1f5f9;
+                font-weight: 700;
+            }
+            .data-table tr:hover { background: #f8fafc; }
             .badge-action {
-                background: rgba(56, 189, 248, 0.15);
+                background: var(--accent-primary-light);
                 color: var(--accent-primary);
                 padding: 0.15rem 0.45rem;
                 border-radius: 4px;
@@ -649,7 +1725,7 @@ public final class HtmlReportGenerator
                 font-family: var(--font-mono);
             }
             .badge-role {
-                background: rgba(168, 85, 247, 0.15);
+                background: var(--accent-purple-light);
                 color: var(--accent-purple);
                 padding: 0.15rem 0.45rem;
                 border-radius: 4px;
@@ -657,15 +1733,42 @@ public final class HtmlReportGenerator
                 font-weight: 600;
                 font-family: var(--font-mono);
             }
+            .step-ref {
+                cursor: pointer;
+                color: var(--accent-primary);
+                font-weight: 600;
+                font-family: var(--font-mono);
+            }
+            .step-ref:hover { text-decoration: underline; }
+            .stats-sub-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.75rem;
+                margin-top: 1rem;
+                padding-top: 1rem;
+                border-top: 1px solid var(--border);
+            }
+            .stats-tag {
+                font-size: 0.8rem;
+                background: #f1f5f9;
+                padding: 0.3rem 0.7rem;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                color: var(--text-sub);
+            }
+            .stats-tag.level-tag {
+                font-family: var(--font-mono);
+                background: #f8fafc;
+            }
             .table-container {
                 background: var(--card-bg);
                 border: 1px solid var(--border);
-                border-radius: 10px;
-                overflow: hidden;
+                border-radius: 8px;
+                overflow-x: auto;
             }
             .screenshots-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                 gap: 1rem;
             }
             .screenshot-card {
@@ -673,9 +1776,10 @@ public final class HtmlReportGenerator
                 border: 1px solid var(--border);
                 border-radius: 8px;
                 overflow: hidden;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
             }
             .screenshot-header {
-                background: #1e293b;
+                background: #f8fafc;
                 padding: 0.5rem 0.8rem;
                 font-size: 0.8rem;
                 font-weight: 600;
@@ -687,10 +1791,6 @@ public final class HtmlReportGenerator
                 height: auto;
                 display: block;
                 cursor: pointer;
-                transition: transform 0.2s ease;
-            }
-            .screenshot-img:hover {
-                opacity: 0.95;
             }
             .report-footer {
                 text-align: center;
