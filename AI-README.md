@@ -1,6 +1,62 @@
 # Neodymium AI - Reference Manual & Architecture Documentation
 
-The Neodymium AI framework (contained in `org.neodymium.ai.*`) delivers advanced agentic test execution, featuring structured playbook companion recordings, a Unified Perception Model (UPM), 5-tier locator cascading, context escalation ladders, soft failure tolerance, in-memory LLM response caching, and deterministic replay capabilities.
+Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent test automation framework built to bridge the gap between test design and test execution. It empowers test engineers, manual testers, and domain experts alike by making human-readable test descriptions directly executable against real web applications.
+
+---
+
+## Introduction
+
+### Purpose: Making Test Definitions Executable
+
+In traditional test automation, a wide divide exists between test definitions (written by QA engineers, product managers, or domain experts in test management tools or plain English/German specs) and actual test automation scripts (written by software developers in code with complex Page Object hierarchies, custom locators, and WebDriver glue code). Every UI change requires a developer to update selectors, adjust methods, and maintain brittle test code.
+
+Neodymium AI eliminates this friction by **making the test definition itself the executable test case**:
+* **Natural Language Playbooks**: Write test steps in plain natural language (e.g. `Open store homepage`, `Search for "Minimalist Watch"`, `Click add to cart button`) via simple YAML files, inline Java text blocks, or JUnit annotations.
+* **Empowering Non-Automation Engineers**: Testers and domain specialists without deep programming experience can create, run, and maintain reliable browser automation suites without getting bogged down in DOM inspection, CSS selectors, or WebDriver plumbing.
+* **Unified Specification & Automation**: The test specification is no longer a separate document that drifts out of sync with the code—it *is* the test.
+
+---
+
+### Vision: AI-Authored, Offline-Replayed, Self-Healing
+
+The core architectural philosophy of Neodymium AI is **"Record Once with AI, Replay Offline at Native Speed, Self-Heal on Drift"**:
+
+```mermaid
+flowchart LR
+    A["Natural Language Playbook<br/>(YAML / Annotations / Java)"] -->|Initial AI Run| B["LLM Action Extraction<br/>(UPM, 5-Tier Cascading)"]
+    B -->|Generates| C["Companion JSON Recording<br/>(Deterministic SUT Actions & Hashes)"]
+    C -->|Subsequent CI Runs| D["Fast Offline Replay<br/>(Milliseconds, 0 LLM Calls, 100% Deterministic)"]
+    D -->|On UI Drift / Failure| E["Autonomous Self-Healing<br/>(Multimodal Vision & JIT Fixes)"]
+    E -->|Updates| C
+```
+
+1. **Intelligent Recording**: On the initial run (`FORCE_RECORDING`), a Multimodal Large Language Model (LLM) inspects the page, understands the human intent, interacts with the browser, and compiles the step into a structured JSON companion recording.
+2. **Millisecond Offline Replay**: In continuous integration (CI) and daily test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`), the test executes directly via the browser engine in milliseconds—**with zero LLM API calls, zero token costs, and 100% determinism**.
+3. **Autonomous Self-Healing**: When a web application evolves (new styling, modified layout, framework migration, or dynamic IDs), the engine detects the divergence and automatically invokes the LLM to heal broken locators and update the recording on the fly.
+4. **Target Drivers & Upcoming Playwright Support**: Built natively on top of Selenide and Selenium WebDriver, with an extensible driver architecture (`TargetExecutor`) designed to bring native **Playwright support** in an upcoming release.
+
+---
+
+### Key Challenges & How Neodymium AI Solves Them
+
+| Challenge in AI Web Testing | The Core Problem | Neodymium AI Solution |
+| :--- | :--- | :--- |
+| **Cost & Latency in CI/CD** | Calling cloud LLMs on every step of large test suites is slow, expensive, and rate-limited. | **Companion JSON Replay**: AI runs once to create the recording; subsequent CI runs execute offline at native browser speed with 0 API calls. |
+| **DOM Volatility & Flaky Locators** | Dynamic CSS classes (e.g. Tailwind), volatile IDs, and framework refactorings constantly break selectors. | **Unified Perception Model (UPM) & 5-Tier Cascading Locators**: Resolves elements across QA test-IDs, ARIA accessibility semantics, clean text/CSS, DOM feature proximity scoring, and visual anchor coordinates. |
+| **LLM Non-Determinism & Hallucinations** | Generative models can hallucinate invalid selectors, wrong element IDs, or non-existent syntax. | **Context Escalation Ladder & Offline Syntax ASTs**: Monotonically escalates context (`MINIMAL` $\to$ `VISUAL_RICH`), pre-validates selectors via jsoup/XPath ASTs before browser execution, and rejects volatile IDs early. |
+| **Enterprise Data Privacy** | Sensitive credentials (passwords, API tokens, PII) in test data risk leaking to external LLM providers. | **Outbound Secret Masking (`ContextSanitizer`)**: Replaces sensitive data with format-preserving placeholders (`[MASKED_VAR_password]`) before network transmission and restores variables locally. |
+| **Multilingual Applications** | Testing internationalized applications often leads to brittle language-specific heuristics in test code. | **Language-Agnostic `CONTINUE` Protocol**: Uses native LLM semantic understanding across all natural languages with zero hardcoded human language string checks in Java. |
+
+---
+
+### Out-of-the-Box "Free Extra" Capabilities
+
+Because Neodymium AI observes both the semantic DOM tree and visual rendering at each step, you get powerful testing features **for free with zero extra authoring effort**:
+
+* 🖼️ **Visual Baseline & Layout Checks**: Automatically captures visual hashes and verifies page layouts using local $64 \times 64$ luminance Structural Similarity Index (SSIM) gating and temporal visual stability detection.
+* 🎯 **Post-Action Outcome Validation**: Automatically verifies that an action actually achieved its intended effect (e.g., verifying that clicking "Add to Cart" updated the cart badge or transitioned the view, rather than just blind clicking).
+* 🔍 **Prompt & Selector Quality Checking**: Automatically validates and scores generated CSS/XPath selectors against live DOM invariants, rejecting brittle or dynamic IDs before they reach test recordings.
+* 🩺 **Visual Root Cause Analysis (Visual RCA)**: When an unexpected failure occurs, the engine automatically analyzes failure screenshots, baseline deltas, and DOM state to deliver an instant, plain-language diagnostic report explaining *why* the test failed.
 
 ---
 
