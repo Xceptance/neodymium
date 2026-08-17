@@ -147,8 +147,17 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
                     }
                     else
                     {
-                        userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f, reasoning='%s'\n",
-                                i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore(), cand.getReasoning()));
+                        final String reasoning = cand.getReasoning();
+                        if (reasoning != null && !reasoning.isBlank())
+                        {
+                            userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f, reasoning='%s'\n",
+                                    i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore(), reasoning.trim()));
+                        }
+                        else
+                        {
+                            userMsg.append(String.format("Candidate %d: locator='%s', strategy='%s', score=%.2f\n",
+                                    i + 1, cand.getLocator(), cand.getStrategy(), cand.getScore()));
+                        }
                     }
                 }
             }

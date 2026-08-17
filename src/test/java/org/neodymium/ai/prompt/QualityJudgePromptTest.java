@@ -55,8 +55,29 @@ public class QualityJudgePromptTest
         final LlmRequest req = prompt.compileRequest("Click the submit button", "=== DOM Context ===", action, AiConfiguration.getInstance());
         assertNotNull(req);
         assertTrue(req.userMessage().contains("Click the submit button"));
-        assertTrue(req.userMessage().contains("#btn-submit"));
-        assertTrue(req.userMessage().contains("button.btn-primary"));
+        assertTrue(req.userMessage().contains("Candidate 1: locator='#btn-submit', strategy='ID', score=0.95, reasoning='Primary ID'"));
+        assertTrue(req.userMessage().contains("Candidate 2: locator='button.btn-primary', strategy='CLASS', score=0.85, reasoning='Class fallback'"));
+    }
+
+    @Test
+    public void testCompileRequestCandidateLocatorsWithoutReasoning()
+    {
+        final QualityJudgePrompt prompt = new QualityJudgePrompt();
+        final Action action = new Action("CLICK", ".cart-sidebar form button[type='submit']", List.of(), "Submit order", "Submit cart");
+        action.setCandidateLocators(List.of(
+                new LocatorCandidate(".cart-sidebar form button[type='submit']", "CLASS_ATTRIBUTE", 0.95, ""),
+                new LocatorCandidate("#couponCode + button", "CSS_SELECTOR", 0.85, "   "),
+                new LocatorCandidate("[data-ai='xcbnt56b']", "AUTOMATION_ID", 0.70, null)
+        ));
+
+        final LlmRequest req = prompt.compileRequest("Submit order", "=== DOM Context ===", action, AiConfiguration.getInstance());
+        assertNotNull(req);
+        final String userMsg = req.userMessage();
+        assertTrue(userMsg.contains("Candidate 1: locator='.cart-sidebar form button[type='submit']', strategy='CLASS_ATTRIBUTE', score=0.95\n"));
+        assertTrue(userMsg.contains("Candidate 2: locator='#couponCode + button', strategy='CSS_SELECTOR', score=0.85\n"));
+        assertTrue(userMsg.contains("Candidate 3: locator='[data-ai='xcbnt56b']', strategy='AUTOMATION_ID', score=0.70\n"));
+        assertFalse(userMsg.contains("reasoning=''"), "User prompt must not contain empty reasoning=''.");
+        assertFalse(userMsg.contains("reasoning="), "User prompt must not contain reasoning attribute when candidates have no reasoning.");
     }
 
     @Test
