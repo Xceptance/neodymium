@@ -44,7 +44,6 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
-import org.neodymium.ai.client.CachingLlmProvider;
 import org.neodymium.ai.client.InMemoryLlmCache;
 import org.neodymium.ai.client.LlmCacheHelper;
 import org.neodymium.ai.client.LlmRegistry;

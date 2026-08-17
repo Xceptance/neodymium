@@ -30,6 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
@@ -1277,10 +1278,24 @@ public final class ExecuteActionsStep implements PipelineStep
         resolvedAction.setStepScreenshotHash(rawAction.getStepScreenshotHash());
         resolvedAction.setAdjust(rawAction.getAdjust());
         resolvedAction.setSelfCritique(rawAction.getSelfCritique());
-        resolvedAction.setCandidateLocators(new ArrayList<>(rawAction.getCandidateLocators()));
+        final List<LocatorCandidate> resolvedCandidates = new ArrayList<>();
+        if (rawAction.getCandidateLocators() != null)
+        {
+            for (final LocatorCandidate candidate : rawAction.getCandidateLocators())
+            {
+                if (candidate != null)
+                {
+                    final String rawLoc = candidate.getLocator();
+                    final String resolvedCandidateTarget = rawLoc != null ? data.resolveVariables(rawLoc) : "";
+                    resolvedCandidates.add(new LocatorCandidate(resolvedCandidateTarget, candidate.getStrategy(), candidate.getScore(), candidate.getReasoning()));
+                }
+            }
+        }
+        resolvedAction.setCandidateLocators(resolvedCandidates);
         resolvedAction.setDomFeatureVector(rawAction.getDomFeatureVector());
         resolvedAction.setDurationMs(rawAction.getDurationMs());
         resolvedAction.setDelayMs(rawAction.getDelayMs());
+        resolvedAction.setHasElse(rawAction.getHasElse());
 
         // Copy dynamic parameters map
         resolvedAction.getParameters().putAll(rawAction.getParameters());

@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.SessionData;
 
 /**
@@ -196,10 +197,23 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         sanitizedAction.setStepScreenshotHash(rawAction.getStepScreenshotHash());
         sanitizedAction.setAdjust(rawAction.getAdjust());
         sanitizedAction.setSelfCritique(rawAction.getSelfCritique());
-        sanitizedAction.setCandidateLocators(new ArrayList<>(rawAction.getCandidateLocators()));
+        final List<LocatorCandidate> sanitizedCandidates = new ArrayList<>();
+        if (rawAction.getCandidateLocators() != null)
+        {
+            for (final LocatorCandidate candidate : rawAction.getCandidateLocators())
+            {
+                if (candidate != null)
+                {
+                    final String sanitizedCandidateTarget = sanitizeText(candidate.getLocator(), data);
+                    sanitizedCandidates.add(new LocatorCandidate(sanitizedCandidateTarget, candidate.getStrategy(), candidate.getScore(), candidate.getReasoning()));
+                }
+            }
+        }
+        sanitizedAction.setCandidateLocators(sanitizedCandidates);
         sanitizedAction.setDomFeatureVector(rawAction.getDomFeatureVector());
         sanitizedAction.setDurationMs(rawAction.getDurationMs());
         sanitizedAction.setDelayMs(rawAction.getDelayMs());
+        sanitizedAction.setHasElse(rawAction.getHasElse());
 
         // Copy dynamic parameters map
         sanitizedAction.getParameters().putAll(rawAction.getParameters());

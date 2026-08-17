@@ -42,6 +42,8 @@ public class Action
     private List<Action> then;
     @JsonProperty("else")
     private List<Action> elseActions;
+    @JsonProperty("hasElse")
+    private Boolean hasElse;
     private boolean adjust = false;
     /**
      * The domain action type (e.g. "CLICK", "TYPE", "NAVIGATE").
@@ -237,6 +239,7 @@ public class Action
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
         copy.adjust = this.adjust;
         copy.stepInstruction = this.stepInstruction;
         copy.stepLine = this.stepLine;
@@ -269,6 +272,7 @@ public class Action
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
         copy.adjust = this.adjust;
         copy.stepInstruction = this.stepInstruction;
         copy.stepLine = this.stepLine;
@@ -296,6 +300,7 @@ public class Action
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
         copy.adjust = this.adjust;
         copy.stepInstruction = this.stepInstruction;
         copy.stepLine = this.stepLine;
@@ -322,6 +327,7 @@ public class Action
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
         copy.adjust = this.adjust;
         copy.stepInstruction = this.stepInstruction;
         copy.stepLine = this.stepLine;
@@ -571,6 +577,27 @@ public class Action
     public final void setElseActions(final List<Action> elseActions)
     {
         this.elseActions = elseActions;
+    }
+
+    @JsonProperty("hasElse")
+    public final Boolean getHasElse()
+    {
+        return this.hasElse;
+    }
+
+    @JsonProperty("hasElse")
+    public final void setHasElse(final Boolean hasElse)
+    {
+        this.hasElse = hasElse;
+    }
+
+    public final boolean hasElse()
+    {
+        if (this.hasElse != null)
+        {
+            return this.hasElse;
+        }
+        return this.elseActions != null && !this.elseActions.isEmpty();
     }
 
     public final boolean getAdjust()

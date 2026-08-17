@@ -3,7 +3,7 @@
 # @author Xceptance GmbH 2026
 
 steps: |
-  Open ${verla.url}/verla-${quality}/index.html
+  Open ${verla.url}/verla-${testId}/index.html
   Verify that the storefront home page has loaded.
   Locate the first product card and hover over it
   Click its 'Add to Cart' button
@@ -24,8 +24,5 @@ steps: |
 
 data:
   - testId: "perfect"
-    quality: "perfect"
   - testId: "normal"
-    quality: "normal"
   - testId: "bad"
-    quality: "bad"
