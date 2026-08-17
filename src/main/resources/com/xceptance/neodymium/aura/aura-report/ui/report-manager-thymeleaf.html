@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title ?: 'Neodymium Report Manager'}">Neodymium Report Manager</title>
+
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome 6.5 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- HTMX 1.9.10 -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Custom Modular CSS -->
+    <link rel="stylesheet" th:href="@{/css/report-manager.css}" href="css/report-manager.css">
+</head>
+<body class="d-flex min-vh-100 bg-light">
+
+    <!-- Main Flex Application Layout -->
+    <div class="d-flex w-100">
+        
+        <!-- Left Sidebar Fragment -->
+        <nav th:replace="~{fragments/sidebar :: sidebar}"></nav>
+
+        <!-- Main Content Area -->
+        <div class="app-main flex-grow-1 d-flex flex-column min-w-0">
+            
+            <!-- Top Header Fragment -->
+            <header th:replace="~{fragments/header :: header}"></header>
+
+            <!-- Dynamic View Container Swapped via HTMX -->
+            <main class="p-3 p-md-4 flex-grow-1" id="mainViewContainer">
+                <!-- Default Initial View: Batch Overview Directory Fragment -->
+                <div th:replace="~{fragments/batch-overview :: batchOverview}"></div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Step Inspector Side Panel Drawer Fragment -->
+    <div th:replace="~{fragments/side-panel-step-list :: stepListPanel}"></div>
+
+    <!-- Test Base Variation History Side Panel Drawer Fragment -->
+    <div th:replace="~{fragments/side-panel-variation-history :: variationHistoryPanel}"></div>
+
+    <!-- Bootstrap 5.3 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Custom Modular Unobtrusive JavaScript Controller -->
+    <script th:src="@{/js/report-manager.js}" src="js/report-manager.js"></script>
+</body>
+</html>

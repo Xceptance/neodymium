@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Step Inspector Drawer Side Panel Fragment -->
+<div th:fragment="stepListPanel" class="side-panel-drawer" id="sidePanelDrawer">
+    <div class="side-panel-resizer" id="sidePanelResizer"></div>
+    
+    <!-- Drawer Header -->
+    <div class="p-3 border-bottom bg-light d-flex align-items-start justify-content-between">
+        <div>
+            <div class="h6 mb-1 fw-bold font-size-lg" id="sidePanelTestTitle">CheckoutProcessTest</div>
+            <div class="font-size-sm text-muted" id="sidePanelDataSetSubtitle">[Data Set 1: US CreditCard]</div>
+        </div>
+        <button type="button" class="btn-close js-close-side-panel" aria-label="Close"></button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="p-3 overflow-auto flex-grow-1 d-flex flex-column gap-3">
+        <!-- Metadata Badges -->
+        <div class="d-flex align-items-center gap-2 flex-wrap" id="sidePanelMetaBadges">
+            <span class="badge badge-status-known"><i class="fa-solid fa-bug me-1"></i> BUG-4821</span>
+            <span class="badge badge-engine-java"><i class="fa-brands fa-java me-1"></i> Java</span>
+            <span class="badge bg-light text-dark border">US</span>
+            <span class="badge bg-light text-dark border"><i class="fa-brands fa-chrome text-primary me-1"></i> Chrome</span>
+        </div>
+
+        <!-- Timeline Track -->
+        <div class="timeline-track">
+            <div class="timeline-block badge-status-pass" style="left: 1%; width: 35%;">Open Storefront</div>
+            <div class="timeline-block badge-status-known" style="left: 37%; width: 60%;">Validate Payment Token</div>
+        </div>
+
+        <!-- Steps List Accordion -->
+        <div class="card card-custom p-3">
+            <div class="fw-bold font-size-base mb-2"><i class="fa-solid fa-list-ol text-primary me-1"></i> Execution Steps Inspector</div>
+            <div class="d-flex flex-column gap-2" id="sidePanelStepsAccordion">
+                <div class="p-2 border rounded font-size-sm">
+                    <div class="fw-bold text-dark">Step 1: Open Storefront & Add CreditCard Item</div>
+                    <div class="text-muted font-size-sm">Duration: 1.2s • Status: Passed</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

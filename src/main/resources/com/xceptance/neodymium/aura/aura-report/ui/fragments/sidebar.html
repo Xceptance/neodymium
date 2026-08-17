@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Sidebar Fragment -->
+<nav th:fragment="sidebar" id="sidebarMenu" class="app-sidebar p-3 d-flex flex-column">
+    <!-- Logo & Brand Header -->
+    <div class="d-flex align-items-center gap-2 mb-4 px-2">
+        <div class="p-2 rounded bg-primary text-white">
+            <i class="fa-solid fa-cube fa-lg"></i>
+        </div>
+        <div>
+            <div class="fw-bold text-white font-size-base">Neodymium</div>
+            <div class="font-size-sm text-secondary">Aura Report Hub</div>
+        </div>
+    </div>
+
+    <!-- Navigation Links -->
+    <div class="nav nav-pills flex-column gap-1">
+        <button class="nav-link text-start d-flex align-items-center gap-2 active" 
+                hx-get="fragments/batch-overview.html" 
+                hx-target="#mainViewContainer" 
+                hx-swap="innerHTML">
+            <i class="fa-solid fa-folder-tree"></i>
+            <span>Batch Directory</span>
+        </button>
+
+        <button class="nav-link text-start d-flex align-items-center gap-2" 
+                hx-get="fragments/batch-details.html" 
+                hx-target="#mainViewContainer" 
+                hx-swap="innerHTML">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Batch Deep Dive</span>
+        </button>
+
+        <button class="nav-link text-start d-flex align-items-center gap-2" 
+                hx-get="fragments/run-report.html" 
+                hx-target="#mainViewContainer" 
+                hx-swap="innerHTML">
+            <i class="fa-solid fa-vial"></i>
+            <span>Single Run Report</span>
+        </button>
+
+        <button class="nav-link text-start d-flex align-items-center gap-2" 
+                hx-get="fragments/test-base.html" 
+                hx-target="#mainViewContainer" 
+                hx-swap="innerHTML">
+            <i class="fa-solid fa-database"></i>
+            <span>Test Base Workspace</span>
+        </button>
+    </div>
+
+    <!-- Footer Stats -->
+    <div class="mt-auto pt-3 border-top border-secondary font-size-sm text-secondary">
+        <div><i class="fa-solid fa-server me-1"></i> System Status: <span class="text-success">Healthy</span></div>
+        <div><i class="fa-solid fa-clock me-1"></i> Sync: Real-time JSON</div>
+    </div>
+</nav>
+
+</body>
+</html>
