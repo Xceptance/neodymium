@@ -597,16 +597,26 @@ function toggleRunCommentFormBox() {
 function saveBugTicketLink() {
     const inputVal = document.getElementById('bugTicketInput')?.value || '#BUG-4821';
     const parsedBugs = inputVal.split(/[, ]+/).map(s => s.trim()).filter(s => s.length > 0);
-    
+    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '1049';
+
     if (currentActiveRowId) {
         if (parsedBugs.length > 0) {
             executionBugMap[currentActiveRowId] = parsedBugs;
-        } else {
-            delete executionBugMap[currentActiveRowId];
+            parsedBugs.forEach(bugTicket => {
+                const params = new URLSearchParams({ runId: activeRunId, rowId: currentActiveRowId, bugTicket: bugTicket });
+                fetch('/fragments/test-side-panel/bugs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'HX-Request': 'true' },
+                    body: params.toString()
+                }).then(res => res.text()).then(html => {
+                    const section = document.getElementById('sidePageStatusBadge');
+                    if (section && html) section.outerHTML = html;
+                    if (window.htmx) htmx.process(document.getElementById('sidePageStatusBadge') || document.body);
+                }).catch(err => console.error('Failed to link bug ticket:', err));
+            });
         }
         updateRowStatusAndMetrics(currentActiveRowId);
     }
-    renderSidePanelStatusBugs();
     toggleBugTicketFormBox();
 }
 
@@ -642,8 +652,18 @@ function removeSpecificBugTicketLink(bugToRemove) {
     } else {
         delete executionBugMap[currentActiveRowId];
     }
+
+    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '1049';
+    fetch(`/fragments/test-side-panel/bugs?runId=${encodeURIComponent(activeRunId)}&rowId=${encodeURIComponent(currentActiveRowId)}&bugTicket=${encodeURIComponent(bugToRemove)}`, {
+        method: 'DELETE',
+        headers: { 'HX-Request': 'true' }
+    }).then(res => res.text()).then(html => {
+        const section = document.getElementById('sidePageStatusBadge');
+        if (section && html) section.outerHTML = html;
+        if (window.htmx) htmx.process(document.getElementById('sidePageStatusBadge') || document.body);
+    }).catch(err => console.error('Failed to unlink bug ticket:', err));
+
     updateRowStatusAndMetrics(currentActiveRowId);
-    renderSidePanelStatusBugs();
 }
 
 function updateRowStatusAndMetrics(rowId) {
@@ -1463,3 +1483,24 @@ window.closeTestSidePagePanel = closeTestSidePagePanel;
 window.openTestSidePagePanel = openTestSidePagePanel;
 window.redirectToTestBaseVariationHistory = redirectToTestBaseVariationHistory;
 window.recalculateRunReportMetrics = recalculateRunReportMetrics;
+
+// Listen for bugUpdated trigger from backend
+document.body.addEventListener('bugUpdated', function(evt) {
+    const data = evt.detail;
+    if (!data) return;
+    const rowId = data.rowId;
+    if (rowId) {
+        if (data.bugs) {
+            if (data.bugs.length > 0) {
+                executionBugMap[rowId] = data.bugs;
+            } else {
+                delete executionBugMap[rowId];
+            }
+        }
+        const row = document.getElementById(rowId);
+        if (row && data.status) {
+            row.setAttribute('data-status', data.status);
+        }
+        updateRowStatusAndMetrics(rowId);
+    }
+});

@@ -274,6 +274,7 @@ public class AuraReportDataService
         final List<TestBaseBugEntity> allBugs = bugRepository.findAll();
 
         final Map<String, List<String>> bugsMap = allBugs.stream()
+            .filter(b -> b.getRemovedRunId() == null)
             .collect(Collectors.groupingBy(
                 TestBaseBugEntity::getVariationId,
                 Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
@@ -720,9 +721,11 @@ public class AuraReportDataService
                     bugRepository.save(new TestBaseBugEntity(varId, cleanTicket, runEnv, runStartTime, runId));
                 }
 
+                final RunReportDto updatedReport = getRunReport(runId);
+                saveRunReportToDisk(runId, updatedReport);
                 recalculateRunEntityStats(runId);
 
-                return getRunReport(runId).getExecutions().stream()
+                return updatedReport.getExecutions().stream()
                     .filter(e -> rowId.equalsIgnoreCase(e.getId()))
                     .findFirst()
                     .orElse(new TestExecutionDto());
@@ -772,9 +775,11 @@ public class AuraReportDataService
                     }
                 }
 
+                final RunReportDto updatedReport = getRunReport(runId);
+                saveRunReportToDisk(runId, updatedReport);
                 recalculateRunEntityStats(runId);
 
-                return getRunReport(runId).getExecutions().stream()
+                return updatedReport.getExecutions().stream()
                     .filter(e -> rowId.equalsIgnoreCase(e.getId()))
                     .findFirst()
                     .orElse(new TestExecutionDto());
@@ -786,6 +791,64 @@ public class AuraReportDataService
         }
 
         return new TestExecutionDto();
+    }
+
+    public void saveRunReportToDisk(final String runId, final RunReportDto report)
+    {
+        if (runId == null || report == null)
+        {
+            return;
+        }
+        try
+        {
+            final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
+            final String batchName = report.getBatchName() != null ? report.getBatchName() : runOpt.map(TestRunEntity::getBatchName).orElse("Unknown");
+            final String env = runOpt.map(TestRunEntity::getEnvironment).orElse("Unknown");
+            final String duration = report.getDuration() != null ? report.getDuration() : "0s";
+            final int total = report.getTotalCount();
+            final double passRate = total > 0 ? Math.round((report.getPassCount() + report.getFixedCount()) * 100.0 / total * 10.0) / 10.0 : 0.0;
+
+            final String jsonContent = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(Map.of(
+                "runId", runId,
+                "batchName", batchName,
+                "environment", env,
+                "duration", duration,
+                "summary", Map.of(
+                    "total", total,
+                    "passed", report.getPassCount(),
+                    "fixed", report.getFixedCount(),
+                    "known", report.getKnownCount(),
+                    "unknown", report.getUnknownCount(),
+                    "ignored", report.getIgnoredCount(),
+                    "passRate", passRate
+                ),
+                "executions", report.getExecutions()
+            ));
+            localRunJsonStorageService.writeRunJson(runId, jsonContent);
+
+            for (final TestExecutionDto exec : report.getExecutions())
+            {
+                localRunJsonStorageService.updateExecutionInRun(runId, exec.getId(), node -> {
+                    if (node instanceof com.fasterxml.jackson.databind.node.ObjectNode objNode)
+                    {
+                        objNode.put("status", exec.getStatus());
+                        final com.fasterxml.jackson.databind.node.ArrayNode bugsArray = objectMapper.createArrayNode();
+                        if (exec.getBugs() != null)
+                        {
+                            for (final String bug : exec.getBugs())
+                            {
+                                bugsArray.add(bug);
+                            }
+                        }
+                        objNode.set("bugs", bugsArray);
+                    }
+                });
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to save run.json to disk for runId {}: {}", runId, e.getMessage(), e);
+        }
     }
 
     private String normalizeTicket(final String ticket)
@@ -869,11 +932,16 @@ public class AuraReportDataService
             );
         }
 
+        final String runEnv = runEntity.getEnvironment() != null ? runEntity.getEnvironment() : "ALL";
+        final String runId = runEntity.getId();
+
         // Enrich executions with database bug tickets and compute status dynamically
         for (final TestExecutionDto e : executions)
         {
             final String varId = generateVariationId(e.getTestClass(), e.getTitle(), e.getLocation(), e.getBrowser());
-            final List<String> bugTickets = bugRepository.findByVariationId(varId).stream()
+            final List<String> bugTickets = bugRepository.findByVariationIdAndEnvironmentIn(varId, List.of(runEnv, "ALL")).stream()
+                .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(runId, b.getLinkedRunId()))
+                          && (b.getRemovedRunId() == null || !isRunAtOrAfter(runId, b.getRemovedRunId())))
                 .map(TestBaseBugEntity::getBugTicket)
                 .filter(t -> t != null && !t.trim().isEmpty() && !"NONE".equalsIgnoreCase(t))
                 .distinct()
@@ -890,6 +958,17 @@ public class AuraReportDataService
                 else
                 {
                     e.setStatus("failed-unknown");
+                }
+            }
+            else if ("passed".equalsIgnoreCase(currentStatus) || "succeeded-fixed".equalsIgnoreCase(currentStatus) || "passed-clean".equalsIgnoreCase(currentStatus))
+            {
+                if (!bugTickets.isEmpty())
+                {
+                    e.setStatus("succeeded-fixed");
+                }
+                else
+                {
+                    e.setStatus("passed-clean");
                 }
             }
         }
