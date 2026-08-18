@@ -51,12 +51,13 @@ public final class AuraManagerMainHandler implements HttpHandler
 
         // Instantiate standalone public controller classes injecting stateless/stateful singletons and manager
         final AuraManagerQueueController queueController = new AuraManagerQueueController(queueService, fileService, interactiveService, manager);
+        chatService.setQueueController(queueController);
         final AuraManagerReportingController reportingController = new AuraManagerReportingController(reportingService, queueService, manager);
         final AuraManagerDashboardController dashboardController = new AuraManagerDashboardController(interactiveService, fileService, queueController, reportingController, sessionService, manager);
         final AuraManagerFileController fileController = new AuraManagerFileController(fileService, queueController, manager);
         final AuraManagerEditorController editorController = new AuraManagerEditorController(fileService, queueController, manager);
         final AuraManagerInteractiveController interactiveController = new AuraManagerInteractiveController(interactiveService, reportingService, queueService, manager);
-        final AuraManagerChatController chatController = new AuraManagerChatController(chatService, sessionService, manager);
+        final AuraManagerChatController chatController = new AuraManagerChatController(chatService, sessionService, queueController, manager);
         final AuraManagerSettingsController settingsController = new AuraManagerSettingsController(settingsService, manager);
 
         // Register GET & POST mappings declaratively
@@ -91,8 +92,11 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.POST("/api/queue/move", queueController::handleMoveQueue);
         router.POST("/api/queue/remove", queueController::handleRemoveQueue);
         router.POST("/api/queue/clear", queueController::handleClearQueue);
+        router.POST("/api/queue/item-browser", queueController::handleUpdateItemBrowserProfiles);
         router.POST("/api/config/toggle", queueController::handleToggleConfig);
         router.POST("/api/config/mode", queueController::handleToggleConfig);
+        router.POST("/api/config/browser/toggle", queueController::handleToggleBrowserProfile);
+        router.POST("/api/config/browser/preset", queueController::handleBrowserPreset);
 
         router.POST("/api/run", queueController::handleRunQueue);
         router.GET("/api/status", queueController::handleStatusStream);

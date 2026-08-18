@@ -18,35 +18,30 @@
  */
 package com.xceptance.neodymium.aura.dto;
 
-import java.util.List;
-
 /**
- * Data transfer object representing a selected dataset inside a YAML test file.
+ * Data transfer object representing a browser profile discovered from browser configuration.
  *
  * @author AI-generated: Antigravity
  * @author Xceptance GmbH 2026
  */
-public final class DatasetSelection
+public final class BrowserProfileDto
 {
-    public String file;
-    public String id; // testId or index
-    public List<String> browserProfiles; // null or empty means inherit global browser profiles
+    public String id;
+    public String name;
+    public String browser;
+    public String res;
+    public boolean headless;
 
-    public DatasetSelection()
+    public BrowserProfileDto()
     {
     }
 
-    public DatasetSelection(final String file, final String id)
+    public BrowserProfileDto(final String id, final String name, final String browser, final String res, final boolean headless)
     {
-        this.file = file;
         this.id = id;
-    }
-
-    public DatasetSelection(final String file, final String id, final List<String> browserProfiles)
-    {
-        this.file = file;
-        this.id = id;
-        this.browserProfiles = browserProfiles;
+        this.name = name;
+        this.browser = browser;
+        this.res = res;
+        this.headless = headless;
     }
 }
-

@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -290,30 +291,62 @@ public final class AuraQueueService
                     final String safeName = file.replaceAll("[^a-zA-Z0-9]", "_");
                     final String className = "Aura_" + safeName + "_Test";
                     final File tempRunnerFile = new File(tempRunnerDir, className + ".java");
-                    if (!tempRunnerFile.exists())
+
+                    // Collect all requested browser profiles for this file across its datasets
+                    final Set<String> targetProfiles = new LinkedHashSet<>();
+                    if (req.datasets != null)
                     {
-                        tempRunnerDir.mkdirs();
-                        final String runnerSource = "package com.xceptance.neodymium.aura.sandbox;\n\n" +
-                                "import com.xceptance.neodymium.common.browser.Browser;\n" +
-                                "import com.xceptance.neodymium.common.testdata.DataFolder;\n" +
-                                "import com.xceptance.neodymium.junit5.NeodymiumTest;\n" +
-                                "import org.neodymium.ai.junit.NeodymiumAiTest;\n" +
-                                "import org.junit.jupiter.api.DisplayName;\n\n" +
-                                "@Browser()\n" +
-                                "@DataFolder(\".\")\n" +
-                                "@NeodymiumAiTest\n" +
-                                "@DisplayName(\"YAML Test: " + file.replace("\"", "\\\"") + "\")\n" +
-                                "public final class " + className + "\n" +
-                                "{\n" +
-                                "    @NeodymiumTest\n" +
-                                "    public final void executeYamlTest() throws Throwable\n" +
-                                "    {\n" +
-                                "    }\n" +
-                                "}\n";
-                        Files.writeString(tempRunnerFile.toPath(), runnerSource, StandardCharsets.UTF_8);
-                        LOGGER.info("[Aura Server] Created temporary test runner: {}",
-                                tempRunnerFile.getAbsolutePath());
+                        for (final DatasetSelection selection : req.datasets)
+                        {
+                            if (file.equals(selection.file))
+                            {
+                                if (selection.browserProfiles != null && !selection.browserProfiles.isEmpty())
+                                {
+                                    targetProfiles.addAll(selection.browserProfiles);
+                                }
+                                else if (req.globalBrowserProfiles != null && !req.globalBrowserProfiles.isEmpty())
+                                {
+                                    targetProfiles.addAll(req.globalBrowserProfiles);
+                                }
+                            }
+                        }
                     }
+                    if (targetProfiles.isEmpty() && req.globalBrowserProfiles != null && !req.globalBrowserProfiles.isEmpty())
+                    {
+                        targetProfiles.addAll(req.globalBrowserProfiles);
+                    }
+                    if (targetProfiles.isEmpty())
+                    {
+                        targetProfiles.add("Chrome_1024x768");
+                    }
+
+                    final StringBuilder browserAnnotations = new StringBuilder();
+                    for (final String profile : targetProfiles)
+                    {
+                        browserAnnotations.append("@Browser(\"").append(profile.replace("\"", "\\\"")).append("\")\n");
+                    }
+
+                    tempRunnerDir.mkdirs();
+                    final String runnerSource = "package com.xceptance.neodymium.aura.sandbox;\n\n" +
+                            "import com.xceptance.neodymium.common.browser.Browser;\n" +
+                            "import com.xceptance.neodymium.common.testdata.DataFolder;\n" +
+                            "import com.xceptance.neodymium.junit5.NeodymiumTest;\n" +
+                            "import org.neodymium.ai.junit.NeodymiumAiTest;\n" +
+                            "import org.junit.jupiter.api.DisplayName;\n\n" +
+                            browserAnnotations.toString() +
+                            "@DataFolder(\".\")\n" +
+                            "@NeodymiumAiTest\n" +
+                            "@DisplayName(\"YAML Test: " + file.replace("\"", "\\\"") + "\")\n" +
+                            "public final class " + className + "\n" +
+                            "{\n" +
+                            "    @NeodymiumTest\n" +
+                            "    public final void executeYamlTest() throws Throwable\n" +
+                            "    {\n" +
+                            "    }\n" +
+                            "}\n";
+                    Files.writeString(tempRunnerFile.toPath(), runnerSource, StandardCharsets.UTF_8);
+                    LOGGER.info("[Aura Server] Created temporary test runner with profiles {}: {}",
+                            targetProfiles, tempRunnerFile.getAbsolutePath());
                     createdTempFiles.add(tempRunnerFile);
                     tempRunnerFile.deleteOnExit();
 

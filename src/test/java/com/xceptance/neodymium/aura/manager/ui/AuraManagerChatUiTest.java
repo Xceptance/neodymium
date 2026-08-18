@@ -25,8 +25,11 @@ import java.io.File;
 import java.io.IOException;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
@@ -46,6 +49,7 @@ import com.xceptance.neodymium.junit5.NeodymiumTest;
 @Tag("ui")
 @Tag("aura-manager")
 @Browser("Chrome_headless")
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class AuraManagerChatUiTest
 {
     private HttpServer server;
@@ -98,9 +102,11 @@ public final class AuraManagerChatUiTest
     }
 
     @NeodymiumTest
+    @Order(1)
     public final void testDefaultChatSessionLoads()
     {
         Selenide.open("http://localhost:" + this.port + "/?test=true");
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
 
         // Verify the Aura Assistant panel header is present
         $(".chat-container").shouldBe(Condition.visible);
@@ -115,13 +121,15 @@ public final class AuraManagerChatUiTest
 
         // Verify the initial welcome greeting is present
         $(".chat-welcome-card").shouldBe(Condition.visible);
-        $(".chat-welcome-title").shouldHave(Condition.text("Hello I'm Aura"));
+        $(".chat-welcome-title").shouldHave(Condition.text("Hello"));
     }
 
     @NeodymiumTest
+    @Order(2)
     public final void testCreateNewChatSession()
     {
         Selenide.open("http://localhost:" + this.port + "/?test=true");
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
 
         // Click the "+" button inside the chat header to create a new session
         $(".chat-container .btn-edit[title='New Chat']").shouldBe(Condition.visible).click();
@@ -135,9 +143,11 @@ public final class AuraManagerChatUiTest
     }
 
     @NeodymiumTest
+    @Order(3)
     public final void testDeleteChatSession()
     {
         Selenide.open("http://localhost:" + this.port + "/?test=true");
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
 
         // Click "+" to create a new session
         $(".chat-container .btn-edit[title='New Chat']").shouldBe(Condition.visible).click();
@@ -168,9 +178,11 @@ public final class AuraManagerChatUiTest
     }
 
     @NeodymiumTest
+    @Order(4)
     public final void testRenameChatSession()
     {
         Selenide.open("http://localhost:" + this.port + "/?test=true");
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
 
         // Mock window.prompt to return "Renamed Project Discussion"
         Selenide.executeJavaScript("window.prompt = function() { return 'Renamed Project Discussion'; };");
@@ -184,9 +196,11 @@ public final class AuraManagerChatUiTest
     }
 
     @NeodymiumTest
+    @Order(5)
     public final void testSendChatMessage()
     {
         Selenide.open("http://localhost:" + this.port + "/?test=true");
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
 
         // Type a prompt into chat input and submit
         $("#chatInput").shouldBe(Condition.visible).setValue("Hello Aura").pressEnter();

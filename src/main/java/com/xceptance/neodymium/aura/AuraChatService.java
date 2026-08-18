@@ -23,6 +23,7 @@ import org.neodymium.ai.client.LlmProviderFactory;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.config.AiConfiguration;
+import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.ChatMessageDto;
 import com.xceptance.neodymium.aura.dto.ChatRequest;
 import com.xceptance.neodymium.aura.dto.ChatResponse;
@@ -54,10 +55,22 @@ public final class AuraChatService
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraChatService.class);
 
     private final AuraFileService fileService;
+    private AuraManagerQueueController queueController;
 
     public AuraChatService(final AuraFileService fileService)
     {
         this.fileService = fileService;
+    }
+
+    public AuraChatService(final AuraFileService fileService, final AuraManagerQueueController queueController)
+    {
+        this.fileService = fileService;
+        this.queueController = queueController;
+    }
+
+    public void setQueueController(final AuraManagerQueueController queueController)
+    {
+        this.queueController = queueController;
     }
 
     public ChatResponse runChatWorkflow(final ChatRequest req)
@@ -70,13 +83,14 @@ public final class AuraChatService
         // Stage 1: Intent Classifier
         final String stage1SystemPrompt = "You are an AI router for a test automation manager called Neodymium Aura.\n"
                 + "Your job is to classify the user's intent into one of the following categories:\n"
+                + "- \"browser\": The user wants to configure, select, switch, or change browser profiles (e.g., \"Run on Chrome and Firefox\", \"Select mobile profiles\", \"Use Safari\", \"Configure desktop browsers\", \"Select all browsers\", \"Clear browsers\").\n"
                 + "- \"select\": The user wants to select, run, filter, check, or execute one or more test cases.\n"
                 + "- \"edit\": The user wants to edit, update, create, delete, add steps, or modify a test case.\n"
-                + "- \"both\": The user request implies both selection and editing.\n"
+                + "- \"both\": The user request implies both test selection and editing.\n"
                 + "- \"neither\": The user is asking a general question, greeting, or querying system statistics/status.\n\n"
                 + "Respond ONLY with a valid JSON object matching this schema:\n"
                 + "{\n"
-                + "  \"intent\": \"select\" | \"edit\" | \"both\" | \"neither\",\n"
+                + "  \"intent\": \"browser\" | \"select\" | \"edit\" | \"both\" | \"neither\",\n"
                 + "  \"reason\": \"Brief reason for classification\"\n"
                 + "}";
 
@@ -109,6 +123,79 @@ public final class AuraChatService
         }
 
         thinkingLog.append("Classified intent: ").append(intent).append("\n");
+
+        if ("browser".equalsIgnoreCase(intent))
+        {
+            thinkingLog.append("[AI Browser Configuration] Running Stage 2 (Browser Selection)...\n");
+            final List<BrowserProfileDto> availableProfiles = queueController != null
+                    ? queueController.getAvailableBrowserProfiles()
+                    : new ArrayList<>();
+
+            final StringBuilder profilesJson = new StringBuilder("[");
+            for (int i = 0; i < availableProfiles.size(); i++)
+            {
+                final BrowserProfileDto p = availableProfiles.get(i);
+                if (i > 0)
+                {
+                    profilesJson.append(", ");
+                }
+                profilesJson.append("{\"id\":\"").append(p.id)
+                        .append("\",\"name\":\"").append(p.name)
+                        .append("\",\"browser\":\"").append(p.browser)
+                        .append("\",\"resolution\":\"").append(p.res)
+                        .append("\"}");
+            }
+            profilesJson.append("]");
+
+            final String browserSystemPrompt = "You are the Neodymium Aura Browser Configuration Assistant.\n"
+                    + "Your goal is to select matching browser profile IDs based on the user's configuration request.\n"
+                    + "Here are the available browser profiles configured in the project:\n"
+                    + profilesJson.toString() + "\n\n"
+                    + "Guidelines:\n"
+                    + "- If the user asks for Chrome, select all relevant Chrome profiles (or specific ones if requested).\n"
+                    + "- If the user asks for Firefox, select all relevant Firefox profiles.\n"
+                    + "- If the user asks for Chrome + FF, select Chrome and Firefox profiles.\n"
+                    + "- If the user asks for Mobile, select mobile profiles (devices/emulations).\n"
+                    + "- If the user asks for Desktop, select desktop profiles (chrome, firefox, safari, edge).\n"
+                    + "- If the user asks for All, select all available profiles.\n"
+                    + "- If the user asks for Clear, select none (empty array).\n\n"
+                    + "You MUST respond ONLY with a valid JSON object matching this schema:\n"
+                    + "{\n"
+                    + "  \"selectedBrowserProfiles\": [\"Profile_ID_1\", \"Profile_ID_2\", ...],\n"
+                    + "  \"message\": \"Clear, friendly explanation of the applied browser profile selection.\"\n"
+                    + "}";
+
+            try
+            {
+                final LlmResponse resp = client.chat(new LlmRequest(browserSystemPrompt, req.prompt, null, null, 0.2, 30));
+                final String respText = resp != null ? resp.content() : "";
+                thinkingLog.append("Browser configuration LLM response: ").append(respText).append("\n");
+
+                final Map<?, ?> parsed = AuraHttpUtils.gson.fromJson(cleanJsonResponse(respText), Map.class);
+                final String message = parsed != null && parsed.containsKey("message")
+                        ? String.valueOf(parsed.get("message"))
+                        : "Updated browser configuration.";
+                final List<String> selected = new ArrayList<>();
+                if (parsed != null && parsed.get("selectedBrowserProfiles") instanceof List<?> list)
+                {
+                    for (final Object item : list)
+                    {
+                        if (item != null)
+                        {
+                            selected.add(String.valueOf(item));
+                        }
+                    }
+                }
+
+                return new ChatResponse(message, thinkingLog.toString(), "select_browser", null, null, null, null, selected);
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to execute browser configuration LLM request", e);
+                thinkingLog.append("Error during browser configuration: ").append(e.getMessage()).append("\n");
+                return new ChatResponse("Error configuring browser profiles: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+            }
+        }
 
         if ("edit".equalsIgnoreCase(intent) || "both".equalsIgnoreCase(intent))
         {

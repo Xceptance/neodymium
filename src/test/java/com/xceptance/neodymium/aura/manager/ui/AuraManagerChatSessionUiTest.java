@@ -63,6 +63,7 @@ public class AuraManagerChatSessionUiTest extends BaseAuraManagerUiTest
         final String url = Neodymium.getData().get("auraManagerUrl");
         Selenide.open(url);
 
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
         $("#chatContainer").shouldBe(Condition.visible);
 
         final int initialSessionCount = $$("#chatSessionSelect option").size();
@@ -94,6 +95,7 @@ public class AuraManagerChatSessionUiTest extends BaseAuraManagerUiTest
         final String url = Neodymium.getData().get("auraManagerUrl");
         Selenide.open(url);
 
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
         $("#chatContainer").shouldBe(Condition.visible);
 
         // First Rename
@@ -123,6 +125,7 @@ public class AuraManagerChatSessionUiTest extends BaseAuraManagerUiTest
         final String url = Neodymium.getData().get("auraManagerUrl");
         Selenide.open(url);
 
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
         $("#chatContainer").shouldBe(Condition.visible);
 
         // Provision extra sessions first so we can delete twice

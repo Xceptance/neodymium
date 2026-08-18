@@ -186,15 +186,20 @@ public final class AuraManagerTestSelectionPanelUiTest
         Selenide.open("http://localhost:" + this.port + "/");
 
         // Find a file container with multiple datasets
-        final var firstContainer = $$("#yamlFileList .file-container").first();
-        firstContainer.$(".list-item").click();
-        final var datasetList = firstContainer.$(".dataset-list");
+        final var multiContainer = $$("#yamlFileList .file-container")
+                .asDynamicIterable().stream()
+                .filter(c -> c.$$(".dataset-select-cb").size() > 1)
+                .findFirst().orElseThrow();
+        final String targetFileName = multiContainer.$(".list-item").getAttribute("data-file");
+
+        multiContainer.$(".list-item").click();
+        final var datasetList = multiContainer.$(".dataset-list");
         datasetList.shouldBe(Condition.visible);
 
         final var datasetCheckboxes = datasetList.$$(".dataset-select-cb");
         datasetCheckboxes.shouldHave(CollectionCondition.sizeGreaterThan(1));
 
-        final var fileCheckbox = firstContainer.$(".file-select-cb");
+        final var fileCheckbox = multiContainer.$(".file-select-cb");
 
         // Clear any selection first
         if (fileCheckbox.isSelected())
@@ -213,7 +218,8 @@ public final class AuraManagerTestSelectionPanelUiTest
         // Reload page to verify server-side state persistence of partial selection
         Selenide.refresh();
 
-        final var reloadedContainer = $$("#yamlFileList .file-container").first();
+        final var reloadedContainer = $$("#yamlFileList .file-container")
+                .findBy(Condition.attribute("data-file", targetFileName));
         final var reloadedFileCb = reloadedContainer.$(".file-select-cb");
         reloadedFileCb.shouldNotBe(Condition.selected);
         reloadedFileCb.shouldHave(Condition.attribute("data-indeterminate", "true"));

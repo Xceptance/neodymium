@@ -93,6 +93,7 @@ public final class AuraManagerChatEdgeCasesUiTest
     public final void testDeleteLastChatSessionAutoRegeneratesDefault()
     {
         Selenide.open("http://localhost:" + this.port + "/?test=true");
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
 
         $(".chat-container").shouldBe(Condition.visible);
 
@@ -113,6 +114,7 @@ public final class AuraManagerChatEdgeCasesUiTest
     public final void testSendBlankMessageDisabled()
     {
         Selenide.open("http://localhost:" + this.port + "/?test=true");
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
 
         final var chatInput = $("#chatInput");
         chatInput.shouldBe(Condition.visible).setValue("   ").pressEnter();

@@ -428,6 +428,19 @@ function init() {
             if (getEditorContent()) getEditorContent().value = data.content;
             if (typeof updateCenterLayout === 'function') updateCenterLayout();
             if (getEditorContent()) getEditorContent().focus();
+        } else if (data.action === 'select_browser' || data.selectedBrowserProfiles) {
+            if (window.htmx) {
+                window.htmx.ajax('GET', '/', {
+                    target: '#configPanel',
+                    select: '#configPanel',
+                    swap: 'outerHTML'
+                });
+                window.htmx.ajax('GET', '/', {
+                    target: '#queueListContainer',
+                    select: '#queueListContainer',
+                    swap: 'innerHTML'
+                });
+            }
         }
     });
 

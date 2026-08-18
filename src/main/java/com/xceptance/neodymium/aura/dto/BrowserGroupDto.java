@@ -18,35 +18,37 @@
  */
 package com.xceptance.neodymium.aura.dto;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Data transfer object representing a selected dataset inside a YAML test file.
+ * Data transfer object representing a grouped category of browser profiles (e.g. Chrome, Firefox, Mobile).
  *
  * @author AI-generated: Antigravity
  * @author Xceptance GmbH 2026
  */
-public final class DatasetSelection
+public final class BrowserGroupDto
 {
-    public String file;
-    public String id; // testId or index
-    public List<String> browserProfiles; // null or empty means inherit global browser profiles
+    public String key;
+    public String title;
+    public List<BrowserProfileDto> profiles = new ArrayList<>();
+    public int selectedCount;
 
-    public DatasetSelection()
+    public BrowserGroupDto()
     {
     }
 
-    public DatasetSelection(final String file, final String id)
+    public BrowserGroupDto(final String key, final String title)
     {
-        this.file = file;
-        this.id = id;
+        this.key = key;
+        this.title = title;
     }
 
-    public DatasetSelection(final String file, final String id, final List<String> browserProfiles)
+    public BrowserGroupDto(final String key, final String title, final List<BrowserProfileDto> profiles, final int selectedCount)
     {
-        this.file = file;
-        this.id = id;
-        this.browserProfiles = browserProfiles;
+        this.key = key;
+        this.title = title;
+        this.profiles = profiles != null ? profiles : new ArrayList<>();
+        this.selectedCount = selectedCount;
     }
 }
-
