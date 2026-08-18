@@ -126,6 +126,11 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
                 if (capturedState != null && capturedState.getAttachments() != null)
                 {
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new StateCapturedEvent(capturedState));
+                    }
+
                     CoordinateTarget coordinateTarget = null;
                     if (step.getActions() != null)
                     {

@@ -1064,6 +1064,10 @@ public final class ExecuteActionsStep implements PipelineStep
                         final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
                         final SutState state = executor.captureState(captureLevel, isFullPageReq);
                         c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+                        if (session != null && session.getEventBus() != null && state != null)
+                        {
+                            session.getEventBus().dispatch(new StateCapturedEvent(state));
+                        }
                         if (state != null && state.getTextContent() != null)
                         {
                             final PlaybookStep currentStep = (PlaybookStep) c.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
