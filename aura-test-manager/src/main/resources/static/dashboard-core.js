@@ -356,7 +356,7 @@ function init() {
     if (typeof loadHistory === 'function') loadHistory();
     if (typeof startPolling === 'function') startPolling();
     if (typeof initResizers === 'function') initResizers();
-    if (typeof applyHistoryState === 'function') applyHistoryState(1);
+    if (window.location.pathname === '/history' && typeof applyHistoryState === 'function') applyHistoryState(1);
 
     let savedYamlFileListScrollTop = 0;
 
@@ -392,9 +392,9 @@ function init() {
             } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls') {
                 if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
             } else if (evt.detail.target.id === 'colTests') {
-                if (typeof applyHistoryState === 'function') applyHistoryState(2);
+                if (window.location.pathname === '/history' && typeof applyHistoryState === 'function') applyHistoryState(2);
             } else if (evt.detail.target.id === 'colReport') {
-                if (typeof applyHistoryState === 'function') applyHistoryState(3);
+                if (window.location.pathname === '/history' && typeof applyHistoryState === 'function') applyHistoryState(3);
             }
         }
     });
@@ -406,7 +406,7 @@ function init() {
     document.addEventListener('htmx:afterRequest', function(evt) {
         const path = evt.detail.pathInfo ? evt.detail.pathInfo.requestPath : '';
         if (path === '/api/reporting/delete' || path === '/api/reporting/history') {
-            if (typeof loadHistory === 'function') loadHistory();
+            if (window.location.pathname === '/history' && typeof loadHistory === 'function') loadHistory();
             if (typeof updateCenterLayout === 'function') updateCenterLayout();
         }
     });
