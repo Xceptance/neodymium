@@ -1,0 +1,5 @@
+steps: |
+  Open "https://www.wikipedia.org"
+
+data:
+  - id: "wikipedia_search"

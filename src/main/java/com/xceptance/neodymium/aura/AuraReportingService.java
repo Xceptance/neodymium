@@ -367,7 +367,19 @@ public final class AuraReportingService
         }
         catch (final Exception e)
         {
-            LOGGER.error("[Aura Server] Failed to compile report", e);
+            final boolean isExpectedStreamClose = e instanceof IOException && e.getMessage() != null
+                    && (e.getMessage().equalsIgnoreCase("Stream closed")
+                            || e.getMessage().toLowerCase().contains("pipe closed")
+                            || e.getMessage().toLowerCase().contains("bad file descriptor"));
+
+            if (manuallyStoppedVal || (activeProcess.get() == null) || isExpectedStreamClose)
+            {
+                LOGGER.debug("[Aura Server] Report subprocess stream closed or interrupted: {}", e.getMessage());
+            }
+            else
+            {
+                LOGGER.error("[Aura Server] Failed to compile report", e);
+            }
             activeProcess.set(null);
             copyReportToHistory(files, req, runStartTimeMs, testsRun, passed, failed, skipped, manuallyStoppedVal, runLogs, runEvents);
         }

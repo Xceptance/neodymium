@@ -492,13 +492,89 @@ public final class InteractiveConsoleEngine {
         this.sseClients.removeAll(dead);
     }
 
+    public record ActionResult(int statusCode, String responseBody)
+    {
+    }
+
+    /**
+     * Submits an action to the engine and deposits it to wake up any blocked test runner thread.
+     *
+     * @param req JSON object containing runId, pauseId, action, etc.
+     * @return ActionResult containing HTTP status code and response body JSON
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    public ActionResult submitAction(final JsonObject req)
+    {
+        final String incomingRunId = req != null && req.has("runId") && !req.get("runId").isJsonNull()
+                ? req.get("runId").getAsString()
+                : null;
+        if (incomingRunId != null && !this.runId.equals(incomingRunId))
+        {
+            final String hint = "{\"error\":\"stale-tab\",\"activeRunId\":\"" + this.runId
+                    + "\",\"message\":\"This tab is connected to an old test run. Refresh to the current run.\"}";
+            return new ActionResult(409, hint);
+        }
+
+        final String incomingPauseId = req != null && req.has("pauseId") && !req.get("pauseId").isJsonNull()
+                ? req.get("pauseId").getAsString()
+                : null;
+        final String activePauseId = this.currentPauseId.get();
+
+        if (activePauseId == null || !activePauseId.equals(incomingPauseId))
+        {
+            LOG.info("[InteractiveConsole] Action rejected: inactive or mismatched pauseId. activePauseId={}, incomingPauseId={}",
+                    activePauseId, incomingPauseId);
+            return new ActionResult(200, "{\"status\":\"already-handled\"}");
+        }
+
+        LOG.info("[InteractiveConsole] Action accepted: pauseId={}, req={}", incomingPauseId, req);
+        this.pendingAction.set(req);
+        synchronized (this.lock)
+        {
+            this.lock.notifyAll();
+        }
+
+        return new ActionResult(200, "{\"status\":\"accepted\"}");
+    }
+
+    /**
+     * Registers an SSE output stream to receive live events.
+     *
+     * @param out output stream
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    public void addSseClient(final OutputStream out)
+    {
+        if (out != null)
+        {
+            this.sseClients.add(out);
+        }
+    }
+
+    /**
+     * Unregisters an SSE output stream.
+     *
+     * @param out output stream
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    public void removeSseClient(final OutputStream out)
+    {
+        if (out != null)
+        {
+            this.sseClients.remove(out);
+        }
+    }
+
     /**
      * Builds the JSON payload broadcast to all SSE clients when the runner pauses.
      *
      * @param pauseId the freshly generated pause token
      * @return a compact JSON string containing {@code runId} and {@code pauseId}
      */
-    private String buildPausePayload(final String pauseId)
+    public String buildPausePayload(final String pauseId)
     {
         return "{\"runId\":\"" + this.runId + "\",\"pauseId\":\"" + pauseId + "\"}";
     }
@@ -645,36 +721,8 @@ public final class InteractiveConsoleEngine {
                 return;
             }
 
-            // Validate runId — protect against stale tabs from previous test runs.
-            final String incomingRunId = req.has("runId") ? req.get("runId").getAsString() : null;
-            if (!runId.equals(incomingRunId)) {
-                final String hint = "{\"error\":\"stale-tab\",\"activeRunId\":\"" + runId
-                        + "\",\"message\":\"This tab is connected to an old test run. Refresh to the current run.\"}";
-                sendJson(exchange, 409, hint);
-                return;
-            }
-
-            // Validate pauseId — protect against double-clicks / simultaneous multi-tab
-            // clicks.
-            final String incomingPauseId = req.has("pauseId") ? req.get("pauseId").getAsString() : null;
-            final String activePauseId = currentPauseId.get();
-
-            if (activePauseId == null || !activePauseId.equals(incomingPauseId)) {
-                // The pause token was already consumed or the runner is not paused — idempotent
-                // OK.
-                System.out.println("[ACTION HANDLER] Action rejected. activePauseId=" + activePauseId + ", incomingPauseId=" + incomingPauseId);
-                sendJson(exchange, 200, "{\"status\":\"already-handled\"}");
-                return;
-            }
-
-            // Deposit the action and wake up the waiting test-runner thread.
-            System.out.println("[ACTION HANDLER] Action accepted! pauseId=" + incomingPauseId + ", req=" + req);
-            pendingAction.set(req);
-            synchronized (lock) {
-                lock.notifyAll();
-            }
-
-            sendJson(exchange, 200, "{\"status\":\"accepted\"}");
+            final ActionResult result = submitAction(req);
+            sendJson(exchange, result.statusCode(), result.responseBody());
         }
 
         /**

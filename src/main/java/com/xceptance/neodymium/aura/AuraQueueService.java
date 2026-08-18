@@ -457,8 +457,21 @@ public final class AuraQueueService
                     }
                     catch (final IOException e)
                     {
-                        LOGGER.error("[Aura Server] Error reading subprocess stream for " + file, e);
-                        broadcastLog("[ERROR] Error reading process output: " + e.getMessage());
+                        final boolean isStopped = manuallyStopped.get() || !p.isAlive() || activeProcess.get() == null;
+                        final boolean isExpectedStreamClose = e.getMessage() != null
+                                && (e.getMessage().equalsIgnoreCase("Stream closed")
+                                        || e.getMessage().toLowerCase().contains("pipe closed")
+                                        || e.getMessage().toLowerCase().contains("bad file descriptor"));
+
+                        if (isStopped || isExpectedStreamClose)
+                        {
+                            LOGGER.debug("[Aura Server] Subprocess stream closed for {} during process termination/stop: {}", file, e.getMessage());
+                        }
+                        else
+                        {
+                            LOGGER.error("[Aura Server] Error reading subprocess stream for " + file, e);
+                            broadcastLog("[ERROR] Error reading process output: " + e.getMessage());
+                        }
                     }
 
                     int exitCode = -1;
