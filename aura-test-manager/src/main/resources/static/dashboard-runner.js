@@ -32,11 +32,11 @@ function openInteractiveConsoleViewLive(url, skipTestListRender = false) {
     window.currentReportId = null;
     wasInLiveRunView = true;
     window.wasInLiveRunView = true;
-    if (typeof renderHistoryTable === 'function') renderHistoryTable();
+    if (window.location.pathname === '/history' && typeof renderHistoryTable === 'function') renderHistoryTable();
     if (window.location.pathname === '/history' && typeof showView === 'function') showView('reportViewContainer');
 
     requestAnimationFrame(() => {
-        if (typeof applyHistoryState === 'function') applyHistoryState(4);
+        if (window.location.pathname === '/history' && typeof applyHistoryState === 'function') applyHistoryState(4);
         if (!skipTestListRender) {
             renderLiveTestList();
         }
@@ -221,7 +221,7 @@ function prepareClientForExecution() {
     activeRunStats.tests = [];
     liveCompletedFiles.clear();
     liveLastActiveFile = null;
-    if (typeof renderHistoryTable === 'function') renderHistoryTable();
+    if (window.location.pathname === '/history' && typeof renderHistoryTable === 'function') renderHistoryTable();
 
     const runSpinner = document.getElementById('runSpinner');
     const terminalConsole = document.getElementById('terminalConsole');
@@ -498,7 +498,7 @@ async function pollStatus() {
                 data.events.forEach(event => {
                     if (event.type === 'reportReady') {
                         if (typeof loadHistory === 'function') loadHistory();
-                        if (typeof renderHistoryTable === 'function') renderHistoryTable();
+                        if (window.location.pathname === '/history' && typeof renderHistoryTable === 'function') renderHistoryTable();
                         if (window.location.pathname === '/history' && typeof openReportView === 'function') openReportView(event.reportId);
                     }
                     if (event.type === 'interactiveConsoleReady') {
@@ -523,11 +523,8 @@ async function pollStatus() {
                     window.liveCompletedFiles = liveCompletedFiles;
                 }
 
-                if (serverSessionId === null) {
+                if (statusData.sessionId) {
                     serverSessionId = statusData.sessionId;
-                } else if (serverSessionId !== statusData.sessionId) {
-                    window.location.reload();
-                    return;
                 }
 
                 const statsPanel = document.getElementById('statsPanel');
@@ -554,7 +551,7 @@ async function pollStatus() {
                 }
                 const currentStatsStr = `${activeRunStats.running}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${activeRunStats.skipped}:${historyCached.length}`;
                 if (window._lastStatsStr !== currentStatsStr) {
-                    if (typeof renderHistoryTable === 'function') renderHistoryTable();
+                    if (window.location.pathname === '/history' && typeof renderHistoryTable === 'function') renderHistoryTable();
                     window._lastStatsStr = currentStatsStr;
                 }
 
@@ -607,7 +604,7 @@ async function pollStatus() {
 
                         if (lastKnownRunning) {
                             if (typeof loadHistory === 'function') loadHistory();
-                            if (typeof renderHistoryTable === 'function') renderHistoryTable();
+                            if (window.location.pathname === '/history' && typeof renderHistoryTable === 'function') renderHistoryTable();
                             if (typeof updateCenterLayout === 'function') updateCenterLayout();
                         }
                     }
