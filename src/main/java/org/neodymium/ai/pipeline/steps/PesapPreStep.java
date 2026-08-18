@@ -30,6 +30,8 @@ import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -146,9 +148,19 @@ public final class PesapPreStep implements PipelineStep
                     LOGGER.trace("User Prompt:\n{}", request.userMessage());
                 }
 
+                if (this.session != null && this.session.getEventBus() != null)
+                {
+                    this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "PESAP"));
+                }
+
                 final long startTime = System.currentTimeMillis();
                 final LlmResponse response = provider.chat(request);
                 final long durationMs = System.currentTimeMillis() - startTime;
+
+                if (this.session != null && this.session.getEventBus() != null)
+                {
+                    this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "PESAP"));
+                }
 
                 LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)",
                     response.content() != null ? response.content().length() : 0, durationMs);

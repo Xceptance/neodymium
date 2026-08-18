@@ -22,6 +22,7 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
@@ -143,6 +144,10 @@ public final class VisualBaselineGateStep implements PipelineStep
                         coordinateTarget == null ? recordedHash : null,
                         minScore);
                     context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
+                    if (this.session != null && this.session.getEventBus() != null && currentState != null)
+                    {
+                        this.session.getEventBus().dispatch(new StateCapturedEvent(currentState));
+                    }
 
                     String currentSsimMatrix = null;
                     if (coordinateTarget != null)

@@ -29,6 +29,7 @@ import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
@@ -47,7 +48,9 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.InlinePlaybookParser;
 import org.neodymium.ai.prompt.ActionExtractionPrompt;
+import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.runner.StateMachineRunner;
+import org.neodymium.ai.telemetry.TokenBudgetGuard;
 import org.neodymium.util.Neodymium;
 
 /**
@@ -135,7 +138,11 @@ public abstract class AiSession implements AutoCloseable
         this.eventBus = eventBus != null ? eventBus : new ExecutionEventBus();
         this.targetExecutor = targetExecutor;
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_ONLY;
-        this.eventBus.registerListener(new org.neodymium.ai.telemetry.TokenBudgetGuard());
+        this.eventBus.registerListener(new TokenBudgetGuard());
+        if (AiConfiguration.getInstance().isDiskReportEnabled())
+        {
+            this.eventBus.registerListener(new PreliminaryReportListener());
+        }
     }
 
     /**

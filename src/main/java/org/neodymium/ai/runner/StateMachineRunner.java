@@ -30,10 +30,12 @@ import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.IncompatibleFrameworkException;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
@@ -392,6 +394,28 @@ public final class StateMachineRunner
         finally
         {
             final long durationMs = System.currentTimeMillis() - startTime;
+            if (!success && failureCause != null)
+            {
+                final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                if (currentStepObj instanceof PlaybookStep currentStep)
+                {
+                    if (currentStep.getStatus() == PlaybookStepStatus.RUNNING)
+                    {
+                        currentStep.setStatus(PlaybookStepStatus.FAILED);
+                        if (currentStep.getFailureReason() == null)
+                        {
+                            Throwable root = failureCause;
+                            while (root.getCause() != null && root != root.getCause())
+                            {
+                                root = root.getCause();
+                            }
+                            currentStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                        }
+                        this.session.getEventBus().dispatch(new StepFinishedEvent(currentStep, PlaybookStepStatus.FAILED));
+                    }
+                }
+            }
+
             @SuppressWarnings("unchecked")
             final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
             try
