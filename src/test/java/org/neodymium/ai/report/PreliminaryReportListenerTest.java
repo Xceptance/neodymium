@@ -826,4 +826,86 @@ public class PreliminaryReportListenerTest
         assertTrue(md.contains("📸 Captured Visual Screenshots"), "Markdown report must have Screenshots section");
         assertTrue(md.contains("📸 true"), "Markdown report must mark step as visual");
     }
+
+    @Test
+    @DisplayName("Verify index.html and index-data.json are dynamically created and sorted reverse-chronologically with KPI summaries and links")
+    public void testDynamicIndexHtmlDashboardGenerationAndReverseChronologicalOrder() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-index");
+
+        // 1. Run First Test (Oldest, Passed)
+        final PreliminaryReportListener listener1 = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+        listener1.getReport().setTestClass("com.example.FirstTest");
+        listener1.getReport().setTestMethod("testA");
+        listener1.getReport().setDatasetId("us");
+        listener1.getReport().setStartTimeMs(1000000L);
+        listener1.getReport().setDurationMs(1500L);
+        final ExecutionEventBus bus1 = new ExecutionEventBus();
+        bus1.registerListener(listener1);
+        final PlaybookStep s1 = new PlaybookStep("Click first button");
+        bus1.dispatch(new StepStartedEvent(s1, 0));
+        bus1.dispatch(new StepFinishedEvent(s1, PlaybookStepStatus.SUCCESS));
+        bus1.dispatch(new SessionFinishedEvent(1500, true));
+
+        // 2. Run Second Test (Middle, Failed)
+        final PreliminaryReportListener listener2 = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+        listener2.getReport().setTestClass("com.example.SecondTest");
+        listener2.getReport().setTestMethod("testB");
+        listener2.getReport().setDatasetId("de");
+        listener2.getReport().setStartTimeMs(2000000L);
+        listener2.getReport().setDurationMs(3200L);
+        final ExecutionEventBus bus2 = new ExecutionEventBus();
+        bus2.registerListener(listener2);
+        final PlaybookStep s2 = new PlaybookStep("Click second button");
+        bus2.dispatch(new StepStartedEvent(s2, 0));
+        bus2.dispatch(new DiagnosticErrorEvent("Button 2 missing", new AssertionError("Element not found")));
+        bus2.dispatch(new StepFinishedEvent(s2, PlaybookStepStatus.FAILED));
+        bus2.dispatch(new SessionFinishedEvent(3200, false));
+
+        // 3. Run Third Test (Newest, Healed)
+        final PreliminaryReportListener listener3 = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+        listener3.getReport().setTestClass("com.example.ThirdTest");
+        listener3.getReport().setTestMethod("testC");
+        listener3.getReport().setDatasetId("fr");
+        listener3.getReport().setStartTimeMs(3000000L);
+        listener3.getReport().setDurationMs(2100L);
+        final ExecutionEventBus bus3 = new ExecutionEventBus();
+        bus3.registerListener(listener3);
+        final PlaybookStep s3 = new PlaybookStep("Click third button");
+        bus3.dispatch(new StepStartedEvent(s3, 0));
+        bus3.dispatch(new StepFinishedEvent(s3, PlaybookStepStatus.HEALED));
+        bus3.dispatch(new SessionFinishedEvent(2100, true));
+
+        final Path indexPath = reportDir.resolve("index.html");
+        final Path indexDataPath = reportDir.resolve("index-data.json");
+
+        assertTrue(Files.exists(indexPath), "index.html must be created");
+        assertTrue(Files.exists(indexDataPath), "index-data.json must be created");
+
+        // Verify index-data.json reverse-chronological order (Newest: ThirdTest -> SecondTest -> FirstTest)
+        final JsonNode dataRoot = new ObjectMapper().readTree(Files.readString(indexDataPath));
+        assertEquals(3, dataRoot.size(), "Registry must contain 3 tests");
+        assertEquals("ThirdTest_testC_fr", dataRoot.get(0).get("baseFileName").asText(), "Top entry must be newest test");
+        assertEquals("SecondTest_testB_de", dataRoot.get(1).get("baseFileName").asText(), "Middle entry must be intermediate test");
+        assertEquals("FirstTest_testA_us", dataRoot.get(2).get("baseFileName").asText(), "Bottom entry must be oldest test");
+
+        // Verify HTML Content
+        final String indexHtml = Files.readString(indexPath);
+        assertTrue(indexHtml.contains("Neodymium Aura • AI Test Execution Index"));
+        assertTrue(indexHtml.contains("All (3)"), "Must count 3 total tests in filter tabs");
+        assertTrue(indexHtml.contains("Passed (1)"), "Must count 1 passed test");
+        assertTrue(indexHtml.contains("Failed (1)"), "Must count 1 failed test");
+        assertTrue(indexHtml.contains("Healed (1)"), "Must count 1 healed test");
+
+        // Verify Report Links
+        assertTrue(indexHtml.contains("href=\"ThirdTest_testC_fr.html\""), "Must link to third test HTML");
+        assertTrue(indexHtml.contains("href=\"SecondTest_testB_de.html\""), "Must link to second test HTML");
+        assertTrue(indexHtml.contains("href=\"FirstTest_testA_us.html\""), "Must link to first test HTML");
+
+        // Verify ordering in HTML source
+        final int posThird = indexHtml.indexOf("ThirdTest_testC_fr.html");
+        final int posSecond = indexHtml.indexOf("SecondTest_testB_de.html");
+        final int posFirst = indexHtml.indexOf("FirstTest_testA_us.html");
+        assertTrue(posThird < posSecond && posSecond < posFirst, "HTML table rows must be in reverse-chronological order (newest first)");
+    }
 }

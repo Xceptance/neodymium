@@ -73,6 +73,7 @@ public final class PreliminaryReportListener implements ExecutionListener
     private final HtmlReportGenerator htmlGenerator = new HtmlReportGenerator();
     private final MarkdownReportGenerator markdownGenerator = new MarkdownReportGenerator();
     private final JsonReportGenerator jsonGenerator = new JsonReportGenerator();
+    private final HtmlIndexReportGenerator indexGenerator = new HtmlIndexReportGenerator();
 
     private TestExecutionReport.ReportStepEntry currentStep;
     private final AtomicBoolean reportFlushed = new AtomicBoolean(false);
@@ -856,6 +857,11 @@ public final class PreliminaryReportListener implements ExecutionListener
                         // Handled by parseFormats expanding to HTML, MARKDOWN, JSON
                     }
                 }
+            }
+
+            if (this.formats.contains(DiskReportFormat.HTML) || this.formats.contains(DiskReportFormat.ALL))
+            {
+                this.indexGenerator.updateIndex(this.outputDirectory, this.report, baseFileName);
             }
         }
         catch (final Exception e)

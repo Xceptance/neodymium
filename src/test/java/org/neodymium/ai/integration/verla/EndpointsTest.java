@@ -30,7 +30,6 @@ import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.ai.util.VerlaConfiguration;
 import org.neodymium.junit5.NeodymiumTest;
-import org.neodymium.util.Neodymium;
 
 /**
  * Endpoint integration test class testing the VÉRLA e-commerce backend APIs.
