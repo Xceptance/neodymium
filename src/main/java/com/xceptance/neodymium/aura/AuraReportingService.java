@@ -329,6 +329,11 @@ public final class AuraReportingService
         command.add("-DreportDirectory=" + auraReportSite.getAbsolutePath());
 
         final ProcessBuilder pb = new ProcessBuilder(command);
+        final String javaHome = System.getProperty("java.home");
+        if (javaHome != null && !javaHome.isBlank())
+        {
+            pb.environment().put("JAVA_HOME", javaHome);
+        }
         pb.redirectErrorStream(true);
 
         try
