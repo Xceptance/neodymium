@@ -146,6 +146,39 @@ public class ExecuteActionsStepTest
     }
 
     @Test
+    public void testReplayStrictSucceedsWhenRecordedStepCompletedWithZeroActions() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new org.neodymium.ai.prompt.ActionExtractionPrompt());
+
+        final org.neodymium.ai.model.PlaybookStep recordedStep = new org.neodymium.ai.model.PlaybookStep();
+        recordedStep.setInstruction("When this string '' is not empty, enter '' as state.");
+        recordedStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+
+        final org.neodymium.ai.pipeline.PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, context);
+
+        // Must succeed without throwing ConclusiveFailureException
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS, recordedStep.getStatus());
+    }
+
+    @Test
     public void testExecuteActionsInscribesTargetFramework() throws PipelineException
     {
         final MockTargetExecutor executor = new MockTargetExecutor();

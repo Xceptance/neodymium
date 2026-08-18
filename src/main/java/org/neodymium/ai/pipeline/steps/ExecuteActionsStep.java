@@ -149,7 +149,7 @@ public final class ExecuteActionsStep implements PipelineStep
         final PlaybookStep currentStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final boolean isNoReplay = currentStep != null && currentStep.isNoReplay();
         final boolean isReplayingStep = execMode != null && execMode.isReplay() && !isNoReplay
-            && (currentStep == null || execMode == ExecutionMode.REPLAY_STRICT || (currentStep.getActions() != null && (!currentStep.getActions().isEmpty() || currentStep.getScreenshotHash() != null)));
+            && (currentStep == null || execMode == ExecutionMode.REPLAY_STRICT || (currentStep.getActions() != null && (!currentStep.getActions().isEmpty() || currentStep.getScreenshotHash() != null || (currentStep.getStatus() != null && currentStep.getStatus() != PlaybookStepStatus.PENDING))));
 
         if (!isReplayingStep && currentStep != null)
         {
@@ -285,7 +285,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 }
                 final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
                 final boolean isNoReplay = step != null && step.isNoReplay();
-                final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && (step == null || mode == ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
+                final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && (step == null || mode == ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null || (step.getStatus() != null && step.getStatus() != PlaybookStepStatus.PENDING))));
 
                 if (step != null)
                 {
@@ -720,19 +720,71 @@ public final class ExecuteActionsStep implements PipelineStep
         final ExecutionContext context
     )
     {
-        // For composite steps, map and execute all children sequentially using SequenceStep
+        // For composite steps, map and execute all children sequentially, managing parent lifecycle
         if (step.isComposite())
         {
-            final List<PipelineStep> subPipelineSteps = new ArrayList<>();
-            for (final PlaybookStep subStep : step.getSubSteps())
-            {
-                subPipelineSteps.add(mapPlaybookStepToPipelineStep(subStep, session, context));
-            }
-            return new SequenceStep(subPipelineSteps);
+            return contextState -> {
+                contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+                step.setStatus(PlaybookStepStatus.RUNNING);
+                final String rawInstruction = step.getInstruction();
+                final String resolvedInstruction = contextState.getSessionData() != null
+                    ? contextState.getSessionData().resolveVariables(rawInstruction)
+                    : rawInstruction;
+                contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
+                contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, rawInstruction);
+
+                if (session != null && session.getEventBus() != null)
+                {
+                    int stepIndex = -1;
+                    @SuppressWarnings("unchecked")
+                    final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
+                    if (flatSteps != null)
+                    {
+                        for (int i = 0; i < flatSteps.size(); i++)
+                        {
+                            final PlaybookStep fs = flatSteps.get(i);
+                            if (fs == step || (fs.getInstruction() != null && fs.getInstruction().equals(step.getInstruction())))
+                            {
+                                stepIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
+                }
+
+                final PipelineStep finishParent = c -> {
+                    PlaybookStepStatus finalStatus = PlaybookStepStatus.SUCCESS;
+                    for (final PlaybookStep sub : step.getSubSteps())
+                    {
+                        if (sub.getStatus() == PlaybookStepStatus.FAILED)
+                        {
+                            finalStatus = PlaybookStepStatus.FAILED;
+                            break;
+                        }
+                        else if (sub.getStatus() == PlaybookStepStatus.HEALED)
+                        {
+                            finalStatus = PlaybookStepStatus.HEALED;
+                        }
+                    }
+                    step.setStatus(finalStatus);
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new StepFinishedEvent(step, finalStatus));
+                    }
+                };
+
+                contextState.pushStep(finishParent);
+                for (int i = step.getSubSteps().size() - 1; i >= 0; i--)
+                {
+                    contextState.pushStep(mapPlaybookStepToPipelineStep(step.getSubSteps().get(i), session, contextState));
+                }
+            };
         }
 
         // For leaf steps, return a pipeline step wrapper setting the active instruction and pushing execution loop
         return contextState -> {
+            final PlaybookStepStatus initialStepStatus = step.getStatus();
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
             step.setStatus(PlaybookStepStatus.RUNNING);
             final String rawInstruction = step.getInstruction();
@@ -947,7 +999,7 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null)));
+            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING))));
 
             if (isReplay)
             {
@@ -956,7 +1008,8 @@ public final class ExecuteActionsStep implements PipelineStep
                     final boolean isRecorded = step.getActions() != null && !step.getActions().isEmpty();
                     final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
                     final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
-                    if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite)
+                    final boolean isRecordedCompletedStep = initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING;
+                    if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite && !isRecordedCompletedStep)
                     {
                         final String resolvedStrictStep = c.getSessionData() != null
                             ? c.getSessionData().resolveVariables(step.getInstruction())

@@ -144,9 +144,9 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new SessionFinishedEvent(1850, true, List.of("Non-fatal step warning")));
 
         // Verification: Files created
-        final Path htmlPath = reportDir.resolve("AddToCartTest_testAddToCart_us.html");
-        final Path mdPath = reportDir.resolve("AddToCartTest_testAddToCart_us.md");
-        final Path jsonPath = reportDir.resolve("AddToCartTest_testAddToCart_us.json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
 
         assertTrue(Files.exists(htmlPath), "HTML report must exist");
         assertTrue(Files.exists(mdPath), "Markdown report must exist");
@@ -240,9 +240,9 @@ public class PreliminaryReportListenerTest
             bus.dispatch(new StepFinishedEvent(pbStep, PlaybookStepStatus.SUCCESS));
             bus.dispatch(new SessionFinishedEvent(8412, true));
 
-            final Path mdPath = reportDir.resolve("VerlaCartTest_testCartLive.md");
-            final Path htmlPath = reportDir.resolve("VerlaCartTest_testCartLive.html");
-            final Path jsonPath = reportDir.resolve("VerlaCartTest_testCartLive.json");
+            final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+            final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
 
             assertTrue(Files.exists(mdPath));
             assertTrue(Files.exists(htmlPath));
@@ -316,9 +316,9 @@ public class PreliminaryReportListenerTest
         // Finish Session with failure
         bus.dispatch(new SessionFinishedEvent(3400, false));
 
-        final Path htmlPath = reportDir.resolve("CheckoutTest_testFailure.html");
-        final Path mdPath = reportDir.resolve("CheckoutTest_testFailure.md");
-        final Path jsonPath = reportDir.resolve("CheckoutTest_testFailure.json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
 
         assertTrue(Files.exists(htmlPath));
         assertTrue(Files.exists(mdPath));
@@ -329,6 +329,9 @@ public class PreliminaryReportListenerTest
         assertTrue(html.contains("Payment execution failed"));
         assertTrue(html.contains("Payment button disabled due to missing CVV input"));
         assertTrue(html.contains("data:image/png;base64," + fakeBase64));
+        assertTrue(html.contains("id=\"reportLightbox\""), "HTML report must include screenshot Lightbox modal");
+        assertTrue(html.contains("openLightbox("), "HTML report must attach openLightbox click handler to screenshots");
+        assertTrue(html.contains("id=\"lightboxDownloadBtn\""), "Lightbox must contain download button");
 
         final String md = Files.readString(mdPath);
         assertTrue(md.contains("❌"));
@@ -361,9 +364,9 @@ public class PreliminaryReportListenerTest
 
         bus.dispatch(new SessionFinishedEvent(100, true));
 
-        assertTrue(Files.exists(reportDir.resolve("TestClass_testOnlyJson.json")));
-        assertFalse(Files.exists(reportDir.resolve("TestClass_testOnlyJson.html")));
-        assertFalse(Files.exists(reportDir.resolve("TestClass_testOnlyJson.md")));
+        assertTrue(Files.exists(reportDir.resolve(listener.getLastBaseFileName() + ".json")));
+        assertFalse(Files.exists(reportDir.resolve(listener.getLastBaseFileName() + ".html")));
+        assertFalse(Files.exists(reportDir.resolve(listener.getLastBaseFileName() + ".md")));
     }
 
     @Test
@@ -394,9 +397,9 @@ public class PreliminaryReportListenerTest
         // Session finishes with failure (StepFinishedEvent was never dispatched for step2)
         bus.dispatch(new SessionFinishedEvent(5000, false));
 
-        final Path jsonPath = reportDir.resolve("AddToCartTest_testCartLivePerfect.json");
-        final Path mdPath = reportDir.resolve("AddToCartTest_testCartLivePerfect.md");
-        final Path htmlPath = reportDir.resolve("AddToCartTest_testCartLivePerfect.html");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
 
         assertTrue(Files.exists(jsonPath));
         assertTrue(Files.exists(mdPath));
@@ -459,8 +462,8 @@ public class PreliminaryReportListenerTest
         // Parent step finished (all sub-steps passed)
         bus.dispatch(new SessionFinishedEvent(3000, true));
 
-        final Path htmlPath = reportDir.resolve("AddToCartTest_testCompoundSplit.html");
-        final Path jsonPath = reportDir.resolve("AddToCartTest_testCompoundSplit.json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
 
         assertTrue(Files.exists(htmlPath));
         assertTrue(Files.exists(jsonPath));
@@ -525,8 +528,8 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new StepFinishedEvent(step3, PlaybookStepStatus.SUCCESS));
         bus.dispatch(new SessionFinishedEvent(10000, true));
 
-        final Path jsonPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.json");
-        final Path htmlPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.html");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
 
         assertTrue(Files.exists(jsonPath));
         assertTrue(Files.exists(htmlPath));
@@ -628,8 +631,8 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new StepFinishedEvent(root3, PlaybookStepStatus.SUCCESS));
         bus.dispatch(new SessionFinishedEvent(12000, true));
 
-        final Path jsonPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.json");
-        final Path htmlPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.html");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
 
         assertTrue(Files.exists(jsonPath));
         assertTrue(Files.exists(htmlPath));
@@ -694,8 +697,8 @@ public class PreliminaryReportListenerTest
             bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
             bus.dispatch(new SessionFinishedEvent(100, true));
 
-            final Path jsonPath = reportDir.resolve("AddToCartTest_testVarResolution.json");
-            final Path htmlPath = reportDir.resolve("AddToCartTest_testVarResolution.html");
+            final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
 
             assertTrue(Files.exists(jsonPath));
             assertTrue(Files.exists(htmlPath));
@@ -736,9 +739,9 @@ public class PreliminaryReportListenerTest
         // Test passes overall because bug was expected
         bus.dispatch(new SessionFinishedEvent(1200, true));
 
-        final Path jsonPath = reportDir.resolve("AddToCartTest_testExpectedBug.json");
-        final Path htmlPath = reportDir.resolve("AddToCartTest_testExpectedBug.html");
-        final Path mdPath = reportDir.resolve("AddToCartTest_testExpectedBug.md");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
 
         assertTrue(Files.exists(jsonPath));
         assertTrue(Files.exists(htmlPath));
@@ -804,9 +807,9 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new StepFinishedEvent(visualStep, PlaybookStepStatus.SUCCESS));
         bus.dispatch(new SessionFinishedEvent(2500, true));
 
-        final Path jsonPath = reportDir.resolve("OrderSummaryTest_testVisualVerification.json");
-        final Path htmlPath = reportDir.resolve("OrderSummaryTest_testVisualVerification.html");
-        final Path mdPath = reportDir.resolve("OrderSummaryTest_testVisualVerification.md");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
 
         assertTrue(Files.exists(jsonPath));
         assertTrue(Files.exists(htmlPath));
@@ -885,9 +888,9 @@ public class PreliminaryReportListenerTest
         // Verify index-data.json reverse-chronological order (Newest: ThirdTest -> SecondTest -> FirstTest)
         final JsonNode dataRoot = new ObjectMapper().readTree(Files.readString(indexDataPath));
         assertEquals(3, dataRoot.size(), "Registry must contain 3 tests");
-        assertEquals("ThirdTest_testC_fr", dataRoot.get(0).get("baseFileName").asText(), "Top entry must be newest test");
-        assertEquals("SecondTest_testB_de", dataRoot.get(1).get("baseFileName").asText(), "Middle entry must be intermediate test");
-        assertEquals("FirstTest_testA_us", dataRoot.get(2).get("baseFileName").asText(), "Bottom entry must be oldest test");
+        assertTrue(dataRoot.get(0).get("baseFileName").asText().startsWith("ThirdTest_testC_fr_"), "Top entry must be newest test");
+        assertTrue(dataRoot.get(1).get("baseFileName").asText().startsWith("SecondTest_testB_de_"), "Middle entry must be intermediate test");
+        assertTrue(dataRoot.get(2).get("baseFileName").asText().startsWith("FirstTest_testA_us_"), "Bottom entry must be oldest test");
 
         // Verify HTML Content
         final String indexHtml = Files.readString(indexPath);
@@ -898,14 +901,109 @@ public class PreliminaryReportListenerTest
         assertTrue(indexHtml.contains("Healed (1)"), "Must count 1 healed test");
 
         // Verify Report Links
-        assertTrue(indexHtml.contains("href=\"ThirdTest_testC_fr.html\""), "Must link to third test HTML");
-        assertTrue(indexHtml.contains("href=\"SecondTest_testB_de.html\""), "Must link to second test HTML");
-        assertTrue(indexHtml.contains("href=\"FirstTest_testA_us.html\""), "Must link to first test HTML");
+        assertTrue(indexHtml.contains("href=\"" + listener3.getLastBaseFileName() + ".html\""), "Must link to third test HTML");
+        assertTrue(indexHtml.contains("href=\"" + listener2.getLastBaseFileName() + ".html\""), "Must link to second test HTML");
+        assertTrue(indexHtml.contains("href=\"" + listener1.getLastBaseFileName() + ".html\""), "Must link to first test HTML");
 
         // Verify ordering in HTML source
-        final int posThird = indexHtml.indexOf("ThirdTest_testC_fr.html");
-        final int posSecond = indexHtml.indexOf("SecondTest_testB_de.html");
-        final int posFirst = indexHtml.indexOf("FirstTest_testA_us.html");
+        final int posThird = indexHtml.indexOf(listener3.getLastBaseFileName() + ".html");
+        final int posSecond = indexHtml.indexOf(listener2.getLastBaseFileName() + ".html");
+        final int posFirst = indexHtml.indexOf(listener1.getLastBaseFileName() + ".html");
         assertTrue(posThird < posSecond && posSecond < posFirst, "HTML table rows must be in reverse-chronological order (newest first)");
+    }
+
+    @Test
+    @DisplayName("Verify compound step sub-step hierarchy during replay when composite parent executes children")
+    public void testReplayCompoundStepSubStepHierarchy() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-replay-substeps");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("VerlaAutoTranslateCheckoutIntegrationTest");
+        listener.getReport().setTestMethod("testCheckoutReplayGerman");
+
+        // Step 1: Open homepage
+        final PlaybookStep step1 = new PlaybookStep("Öffne https://localhost:8543/verla-normal/index.html");
+        bus.dispatch(new StepStartedEvent(step1, 0));
+        bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.SUCCESS));
+
+        // Step 2: Open region selector
+        final PlaybookStep step2 = new PlaybookStep("Öffne die Regionsauswahl.");
+        bus.dispatch(new StepStartedEvent(step2, 1));
+        bus.dispatch(new StepFinishedEvent(step2, PlaybookStepStatus.SUCCESS));
+
+        // Step 3: Click 'Germany'
+        final PlaybookStep step3 = new PlaybookStep("Klicke auf 'Deutschland'.");
+        bus.dispatch(new StepStartedEvent(step3, 2));
+        bus.dispatch(new StepFinishedEvent(step3, PlaybookStepStatus.SUCCESS));
+
+        // Step 4: Compound step with 3 recorded sub-steps (deserialized from recording JSON)
+        final PlaybookStep step4 = new PlaybookStep("Suche eine Produktkarte, klicke auf 'In den Warenkorb' und wähle eine verfügbare Größe.");
+        final PlaybookStep sub41 = new PlaybookStep("Suche eine Produktkarte");
+        sub41.setParent(step4);
+        final PlaybookStep sub42 = new PlaybookStep("Klicke auf 'In den Warenkorb'");
+        sub42.setParent(step4);
+        final PlaybookStep sub43 = new PlaybookStep("Wähle eine verfügbare Größe");
+        sub43.setParent(step4);
+        step4.getSubSteps().addAll(List.of(sub41, sub42, sub43));
+
+        // Replay lifecycle: Step 4 starts
+        bus.dispatch(new StepStartedEvent(step4, 3));
+
+        // Sub 4.1 runs
+        bus.dispatch(new StepStartedEvent(sub41, 3));
+        bus.dispatch(new ActionExecutedEvent(new Action("CLICK", "#product-1", List.of(), "Click card", "Select"), true));
+        bus.dispatch(new StepFinishedEvent(sub41, PlaybookStepStatus.SUCCESS));
+
+        // Sub 4.2 runs
+        bus.dispatch(new StepStartedEvent(sub42, 3));
+        bus.dispatch(new ActionExecutedEvent(new Action("CLICK", "#add-to-cart", List.of(), "Add to cart", "Cart"), true));
+        bus.dispatch(new StepFinishedEvent(sub42, PlaybookStepStatus.SUCCESS));
+
+        // Sub 4.3 runs
+        bus.dispatch(new StepStartedEvent(sub43, 3));
+        bus.dispatch(new ActionExecutedEvent(new Action("CLICK", ".size-btn", List.of(), "Select size", "Size"), true));
+        bus.dispatch(new StepFinishedEvent(sub43, PlaybookStepStatus.SUCCESS));
+
+        // Step 4 finishes
+        bus.dispatch(new StepFinishedEvent(step4, PlaybookStepStatus.SUCCESS));
+
+        // Step 5: Assert mini-cart
+        final PlaybookStep step5 = new PlaybookStep("Die Anzahl im Mini-Warenkorb ist jetzt 1.");
+        bus.dispatch(new StepStartedEvent(step5, 4));
+        bus.dispatch(new StepFinishedEvent(step5, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new SessionFinishedEvent(6000, true));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        assertEquals(5, root.get("steps").size(), "Report must contain exactly 5 top-level steps");
+
+        // Verify Step 3 has 0 sub-steps
+        assertEquals(0, root.get("steps").get(2).get("subSteps").size(), "Step 3 ('Deutschland') must have 0 sub-steps");
+
+        // Verify Step 4 has 3 sub-steps
+        final JsonNode step4Node = root.get("steps").get(3);
+        assertEquals(3, step4Node.get("subSteps").size(), "Step 4 must contain all 3 sub-steps");
+        assertEquals("Suche eine Produktkarte", step4Node.get("subSteps").get(0).get("instruction").asText());
+        assertEquals("Klicke auf 'In den Warenkorb'", step4Node.get("subSteps").get(1).get("instruction").asText());
+        assertEquals("Wähle eine verfügbare Größe", step4Node.get("subSteps").get(2).get("instruction").asText());
+
+        // Verify Step 5 has 0 sub-steps
+        assertEquals(0, root.get("steps").get(4).get("subSteps").size(), "Step 5 (Mini-cart) must have 0 sub-steps");
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("#4.1"));
+        assertTrue(html.contains("#4.2"));
+        assertTrue(html.contains("#4.3"));
+        assertFalse(html.contains("#3.1"), "Step #3 must not have #3.1");
     }
 }

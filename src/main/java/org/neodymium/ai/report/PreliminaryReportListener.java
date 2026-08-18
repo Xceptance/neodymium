@@ -25,9 +25,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,6 +68,7 @@ import org.slf4j.LoggerFactory;
 public final class PreliminaryReportListener implements ExecutionListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PreliminaryReportListener.class);
+    private static final SimpleDateFormat FILE_TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
 
     private final Path outputDirectory;
     private final Set<DiskReportFormat> formats;
@@ -77,6 +81,7 @@ public final class PreliminaryReportListener implements ExecutionListener
 
     private TestExecutionReport.ReportStepEntry currentStep;
     private final AtomicBoolean reportFlushed = new AtomicBoolean(false);
+    private String lastBaseFileName;
 
     /**
      * Constructs a PreliminaryReportListener reading defaults from {@link AiConfiguration}.
@@ -104,14 +109,14 @@ public final class PreliminaryReportListener implements ExecutionListener
     /**
      * Constructs a PreliminaryReportListener with explicit directory, formats, and enabled flag.
      *
-     * @param outputDirectory output folder path
-     * @param formats set of active report formats
-     * @param enabled whether reporting is active
+     * @param outputDirectory the target folder where preliminary report files are stored
+     * @param formats the set of report formats to produce (HTML, Markdown, JSON)
+     * @param enabled whether report emission is active
      */
     public PreliminaryReportListener(final Path outputDirectory, final Set<DiskReportFormat> formats, final boolean enabled)
     {
         this.outputDirectory = outputDirectory != null ? outputDirectory : Paths.get("target/ai-reports");
-        this.formats = formats != null && !formats.isEmpty() ? formats : Collections.singleton(DiskReportFormat.HTML);
+        this.formats = formats != null ? formats : Set.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON);
         this.enabled = enabled;
         this.report.setStartTimeMs(System.currentTimeMillis());
     }
@@ -136,6 +141,16 @@ public final class PreliminaryReportListener implements ExecutionListener
         return this.report;
     }
 
+    /**
+     * Returns the base filename of the most recently written report (without extension).
+     *
+     * @return the last generated base filename, or {@code null} if not yet flushed
+     */
+    public String getLastBaseFileName()
+    {
+        return this.lastBaseFileName;
+    }
+
     @Override
     public void onEvent(final ExecutionEvent event)
     {
@@ -156,13 +171,14 @@ public final class PreliminaryReportListener implements ExecutionListener
 
     private void handleEvent(final ExecutionEvent event)
     {
+        final ExecutionContext activeCtx = ExecutionContext.getActiveContext();
+
         if (event instanceof StepStartedEvent stepStarted)
         {
             final PlaybookStep pbStep = stepStarted.getStep();
-            String rawInstruction = pbStep != null ? pbStep.getInstruction() : "Step " + (stepStarted.getStepIndex() + 1);
+            final String rawInstruction = pbStep != null ? pbStep.getInstruction() : null;
             String resolvedInstruction = rawInstruction;
 
-            final ExecutionContext activeCtx = ExecutionContext.getActiveContext();
             if (activeCtx != null && activeCtx.getSessionData() != null && rawInstruction != null)
             {
                 try
@@ -222,25 +238,45 @@ public final class PreliminaryReportListener implements ExecutionListener
                     }
                 }
 
-                if (parentEntry != null)
+                if (parentEntry == null)
                 {
-                    // If an intermediate parent container was added to parentEntry, remove it in favor of leaf sub-steps
-                    if (pbStep.getParent() != rootPb && pbStep.getParent().getInstruction() != null)
+                    // Reconstruct parent root entry if not present yet
+                    final String pRaw = rootPb.getInstruction();
+                    String pResolved = pRaw;
+                    if (activeCtx != null && activeCtx.getSessionData() != null && pRaw != null)
                     {
-                        final String intermediateInstruction = pbStep.getParent().getInstruction();
-                        parentEntry.removeSubStepIf(sub -> intermediateInstruction.equals(sub.getInstruction()) || intermediateInstruction.equals(sub.getRawInstruction()));
+                        try
+                        {
+                            pResolved = activeCtx.getSessionData().resolveVariables(pRaw);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
                     }
+                    parentEntry = new TestExecutionReport.ReportStepEntry(this.report.getSteps().size(), pResolved);
+                    parentEntry.setRawInstruction(pRaw);
+                    parentEntry.setSourceFile(rootPb.getSourceFile());
+                    parentEntry.setLineNumber(rootPb.getLineNumber());
+                    parentEntry.setStatus("SUCCESS");
+                    parentEntry.setBug(rootPb.isBug());
+                    parentEntry.setBugDetails(rootPb.getBugDetails());
+                    parentEntry.setOptional(rootPb.isOptional());
+                    parentEntry.setContinueOnError(rootPb.isContinueOnError());
+                    parentEntry.setNoHealing(rootPb.isNoHealing());
+                    parentEntry.setVisual(rootPb.isVisualStep());
+                    this.report.addStep(parentEntry);
+                }
 
-                    parentEntry.addSubStep(stepEntry);
-                    this.currentStep = stepEntry;
-                    return;
-                }
-                else if (!this.report.getSteps().isEmpty())
+                // If an intermediate parent container was added to parentEntry, remove it in favor of leaf sub-steps
+                if (pbStep.getParent() != rootPb && pbStep.getParent().getInstruction() != null)
                 {
-                    this.report.getSteps().get(this.report.getSteps().size() - 1).addSubStep(stepEntry);
-                    this.currentStep = stepEntry;
-                    return;
+                    final String intermediateInstruction = pbStep.getParent().getInstruction();
+                    parentEntry.removeSubStepIf(sub -> intermediateInstruction.equals(sub.getInstruction()) || intermediateInstruction.equals(sub.getRawInstruction()));
                 }
+
+                parentEntry.addSubStep(stepEntry);
+                this.currentStep = stepEntry;
+                return;
             }
 
             this.report.addStep(stepEntry);
@@ -830,6 +866,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
 
             final String baseFileName = computeBaseFileName();
+            this.lastBaseFileName = baseFileName;
 
             for (final DiskReportFormat format : this.formats)
             {
@@ -893,8 +930,26 @@ public final class PreliminaryReportListener implements ExecutionListener
             sb.append("_").append(this.report.getDatasetId());
         }
 
-        final String raw = sb.toString();
-        return raw.replaceAll("[^a-zA-Z0-9._-]", "_");
+        final long startTs = this.report.getStartTimeMs() > 0 ? this.report.getStartTimeMs() : System.currentTimeMillis();
+        final String tsStr;
+        synchronized (FILE_TIMESTAMP_FORMAT)
+        {
+            tsStr = FILE_TIMESTAMP_FORMAT.format(new Date(startTs));
+        }
+        sb.append("_").append(tsStr);
+
+        final String raw = sb.toString().replaceAll("[^a-zA-Z0-9._-]", "_");
+
+        String candidate = raw;
+        int counter = 1;
+        while (Files.exists(this.outputDirectory.resolve(candidate + ".html"))
+            || Files.exists(this.outputDirectory.resolve(candidate + ".json"))
+            || Files.exists(this.outputDirectory.resolve(candidate + ".md")))
+        {
+            candidate = raw + "_" + counter++;
+        }
+
+        return candidate;
     }
 
     private static String extractSimpleClassName(final String fqcn)

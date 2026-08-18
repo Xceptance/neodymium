@@ -352,11 +352,12 @@ public final class HtmlReportGenerator
                 {
                     dataSrc = "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + dataSrc;
                 }
+                final String scName = sc.getName() != null ? sc.getName() : "Screenshot #" + (s + 1);
                 sb.append("      <div class=\"screenshot-card\">\n");
-                sb.append("        <div class=\"screenshot-header\">").append(escapeHtml(sc.getName() != null ? sc.getName() : "Screenshot #" + (s + 1))).append("</div>\n");
+                sb.append("        <div class=\"screenshot-header\">").append(escapeHtml(scName)).append("</div>\n");
                 if (dataSrc != null)
                 {
-                    sb.append("        <img src=\"").append(dataSrc).append("\" alt=\"Captured screenshot\" class=\"screenshot-img\" loading=\"lazy\" onclick=\"window.open(this.src)\" title=\"Click to view full size\" />\n");
+                    sb.append("        <img src=\"").append(dataSrc).append("\" alt=\"Captured screenshot\" class=\"screenshot-img\" loading=\"lazy\" onclick=\"openLightbox(this.src, '").append(escapeAttr(scName)).append("')\" title=\"Click to view full size\" />\n");
                 }
                 sb.append("      </div>\n");
             }
@@ -370,6 +371,22 @@ public final class HtmlReportGenerator
         sb.append("  </footer>\n");
 
         sb.append("</div>\n");
+
+        // 10. Interactive Screenshot Lightbox Modal
+        sb.append("  <div class=\"lightbox-overlay\" id=\"reportLightbox\" onclick=\"handleLightboxBackdropClick(event)\">\n");
+        sb.append("    <div class=\"lightbox-dialog\" role=\"dialog\" aria-modal=\"true\">\n");
+        sb.append("      <div class=\"lightbox-header\">\n");
+        sb.append("        <div class=\"lightbox-title\" id=\"lightboxTitle\">Screenshot Preview</div>\n");
+        sb.append("        <div class=\"lightbox-controls\">\n");
+        sb.append("          <a id=\"lightboxDownloadBtn\" class=\"lightbox-btn\" download=\"screenshot.png\" href=\"#\" title=\"Download Screenshot\">⬇️ Download</a>\n");
+        sb.append("          <button class=\"lightbox-btn lightbox-close\" onclick=\"closeLightbox()\" title=\"Close (Esc)\">✕</button>\n");
+        sb.append("        </div>\n");
+        sb.append("      </div>\n");
+        sb.append("      <div class=\"lightbox-body\">\n");
+        sb.append("        <img id=\"lightboxImg\" class=\"lightbox-img\" src=\"\" alt=\"Full size preview\" />\n");
+        sb.append("      </div>\n");
+        sb.append("    </div>\n");
+        sb.append("  </div>\n");
 
         // Embedded Step Data Island & Reactive Controller JS
         appendClientScript(sb, report);
@@ -471,7 +488,8 @@ public final class HtmlReportGenerator
                 final String dataSrc = sc.getBase64Data() != null && sc.getBase64Data().startsWith("data:")
                     ? sc.getBase64Data()
                     : "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + (sc.getBase64Data() != null ? sc.getBase64Data() : "");
-                sb.append("              <img src=\"").append(dataSrc).append("\" alt=\"Step screenshot preview\" class=\"preview-thumb\" onclick=\"event.stopPropagation(); window.open(this.src)\" title=\"").append(escapeHtml(sc.getName() != null ? sc.getName() : "Visual Screenshot")).append(" - Click to view full size\" loading=\"lazy\" />\n");
+                final String scName = sc.getName() != null ? sc.getName() : "Step #" + (index + 1) + " Screenshot";
+                sb.append("              <img src=\"").append(dataSrc).append("\" alt=\"Step screenshot preview\" class=\"preview-thumb\" onclick=\"event.stopPropagation(); openLightbox(this.src, '").append(escapeAttr(scName)).append("')\" title=\"").append(escapeHtml(scName)).append(" - Click to expand\" loading=\"lazy\" />\n");
             }
             if (step.getScreenshots().size() > 3)
             {
@@ -900,8 +918,8 @@ public final class HtmlReportGenerator
                         var img = document.createElement('img');
                         img.src = src;
                         img.className = 'screenshot-img';
-                        img.title = 'Click to open full size';
-                        img.onclick = function() { window.open(this.src); };
+                        img.title = 'Click to expand';
+                        img.onclick = function() { window.openLightbox(this.src, sc.name || ('Screenshot #' + (si + 1))); };
                         card.appendChild(img);
                         grid.appendChild(card);
                     });
@@ -935,10 +953,51 @@ public final class HtmlReportGenerator
                 if (!step.reasoning && !step.failureReason) {
                     var emptyDiv = document.createElement('div');
                     emptyDiv.className = 'empty-inspector-state';
-                    emptyDiv.textContent = 'No special reasoning notes or failure diagnostics recorded.';
+                    emptyDiv.textContent = 'No specific AI reasoning or error trace recorded for this step.';
                     reasPanel.appendChild(emptyDiv);
                 }
             };
+
+            // Lightbox Modal Functions
+            window.openLightbox = function(src, title) {
+                var overlay = document.getElementById('reportLightbox');
+                var img = document.getElementById('lightboxImg');
+                var titleEl = document.getElementById('lightboxTitle');
+                var downloadBtn = document.getElementById('lightboxDownloadBtn');
+                if (!overlay || !img) return;
+
+                img.src = src;
+                if (titleEl) {
+                    titleEl.textContent = title || 'Screenshot Preview';
+                }
+                if (downloadBtn) {
+                    downloadBtn.href = src;
+                    var cleanTitle = (title ? title.replace(/[^a-zA-Z0-9_-]/g, '_') : 'screenshot');
+                    downloadBtn.download = cleanTitle + '.png';
+                }
+                overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            };
+
+            window.closeLightbox = function() {
+                var overlay = document.getElementById('reportLightbox');
+                if (overlay) {
+                    overlay.classList.remove('active');
+                }
+                document.body.style.overflow = '';
+            };
+
+            window.handleLightboxBackdropClick = function(event) {
+                if (event && (event.target.id === 'reportLightbox' || event.target.classList.contains('lightbox-body') || event.target.classList.contains('lightbox-overlay'))) {
+                    window.closeLightbox();
+                }
+            };
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    window.closeLightbox();
+                }
+            });
 
             function createPromptSection(label, text, callIdx, fieldName) {
                 var sec = document.createElement('div');
@@ -1884,6 +1943,110 @@ public final class HtmlReportGenerator
                 text-align: center;
                 color: var(--text-muted);
             }
+            .lightbox-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(15, 23, 42, 0.85);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                z-index: 10000;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.2s ease-in-out;
+            }
+            .lightbox-overlay.active {
+                display: flex;
+                opacity: 1;
+            }
+            .lightbox-dialog {
+                max-width: 95vw;
+                max-height: 95vh;
+                display: flex;
+                flex-direction: column;
+                background: #0f172a;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+                animation: lightboxZoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            @keyframes lightboxZoomIn {
+                from { transform: scale(0.95); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+            .lightbox-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.75rem 1.25rem;
+                background: #1e293b;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                color: #f8fafc;
+            }
+            .lightbox-title {
+                font-size: 0.95rem;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+                color: #f8fafc;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                max-width: 70vw;
+            }
+            .lightbox-controls {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .lightbox-btn {
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                color: #f8fafc;
+                padding: 0.35rem 0.75rem;
+                border-radius: 6px;
+                font-size: 0.8rem;
+                font-weight: 600;
+                cursor: pointer;
+                text-decoration: none;
+                transition: all 0.15s;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.3rem;
+            }
+            .lightbox-btn:hover {
+                background: rgba(255, 255, 255, 0.2);
+                color: #ffffff;
+            }
+            .lightbox-close {
+                font-size: 1.1rem;
+                line-height: 1;
+                padding: 0.35rem 0.65rem;
+            }
+            .lightbox-close:hover {
+                background: #ef4444;
+                border-color: #ef4444;
+            }
+            .lightbox-body {
+                padding: 1rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: auto;
+                max-height: calc(95vh - 55px);
+                background: #020617;
+            }
+            .lightbox-img {
+                max-width: 90vw;
+                max-height: 82vh;
+                object-fit: contain;
+                border-radius: 6px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            }
         """);
     }
 
@@ -1898,5 +2061,18 @@ public final class HtmlReportGenerator
                    .replace(">", "&gt;")
                    .replace("\"", "&quot;")
                    .replace("'", "&#39;");
+    }
+
+    private static String escapeAttr(final String text)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+        return text.replace("&", "&amp;")
+                   .replace("\"", "&quot;")
+                   .replace("'", "\\'")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;");
     }
 }
