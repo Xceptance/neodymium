@@ -841,6 +841,7 @@ public class PreliminaryReportListenerTest
         listener1.getReport().setTestClass("com.example.FirstTest");
         listener1.getReport().setTestMethod("testA");
         listener1.getReport().setDatasetId("us");
+        listener1.getReport().setExecutionMode("REPLAY_STRICT");
         listener1.getReport().setStartTimeMs(1000000L);
         listener1.getReport().setDurationMs(1500L);
         final ExecutionEventBus bus1 = new ExecutionEventBus();
@@ -855,6 +856,7 @@ public class PreliminaryReportListenerTest
         listener2.getReport().setTestClass("com.example.SecondTest");
         listener2.getReport().setTestMethod("testB");
         listener2.getReport().setDatasetId("de");
+        listener2.getReport().setExecutionMode("FORCE_RECORDING");
         listener2.getReport().setStartTimeMs(2000000L);
         listener2.getReport().setDurationMs(3200L);
         final ExecutionEventBus bus2 = new ExecutionEventBus();
@@ -870,6 +872,7 @@ public class PreliminaryReportListenerTest
         listener3.getReport().setTestClass("com.example.ThirdTest");
         listener3.getReport().setTestMethod("testC");
         listener3.getReport().setDatasetId("fr");
+        listener3.getReport().setExecutionMode("REPLAY_WITH_HEALING");
         listener3.getReport().setStartTimeMs(3000000L);
         listener3.getReport().setDurationMs(2100L);
         final ExecutionEventBus bus3 = new ExecutionEventBus();
@@ -899,6 +902,14 @@ public class PreliminaryReportListenerTest
         assertTrue(indexHtml.contains("Passed (1)"), "Must count 1 passed test");
         assertTrue(indexHtml.contains("Failed (1)"), "Must count 1 failed test");
         assertTrue(indexHtml.contains("Healed (1)"), "Must count 1 healed test");
+
+        // Verify Mode Filter and Options
+        assertTrue(indexHtml.contains("id=\"modeFilter\""), "Must contain mode filter select");
+        assertTrue(indexHtml.contains("REPLAY_STRICT (1)"), "Must count 1 REPLAY_STRICT test");
+        assertTrue(indexHtml.contains("FORCE_RECORDING (1)"), "Must count 1 FORCE_RECORDING test");
+        assertTrue(indexHtml.contains("REPLAY_WITH_HEALING (1)"), "Must count 1 REPLAY_WITH_HEALING test");
+        assertTrue(indexHtml.contains("data-mode=\"REPLAY_STRICT\""), "Row must have data-mode attribute");
+        assertTrue(indexHtml.contains("filterByMode('REPLAY_STRICT')"), "Mode badge must have onclick filter handler");
 
         // Verify Report Links
         assertTrue(indexHtml.contains("href=\"" + listener3.getLastBaseFileName() + ".html\""), "Must link to third test HTML");

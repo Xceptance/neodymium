@@ -502,6 +502,7 @@ public final class HtmlIndexReportGenerator
         double totalCostUsd = 0.0;
         int totalLlmCalls = 0;
 
+        final Map<String, Integer> modeCounts = new LinkedHashMap<>();
         for (final IndexEntry e : safeEntries)
         {
             final String st = e.getStatus() != null ? e.getStatus().toUpperCase() : "";
@@ -520,6 +521,12 @@ public final class HtmlIndexReportGenerator
             else if (st.contains("SKIP"))
             {
                 skipped++;
+            }
+
+            if (e.getExecutionMode() != null && !e.getExecutionMode().isBlank())
+            {
+                final String modeName = e.getExecutionMode().trim();
+                modeCounts.put(modeName, modeCounts.getOrDefault(modeName, 0) + 1);
             }
 
             totalDurationMs += e.getDurationMs();
@@ -597,16 +604,37 @@ public final class HtmlIndexReportGenerator
 
         // Filter & Search Toolbar
         sb.append("    <section class=\"toolbar-section\">\n");
-        sb.append("      <div class=\"filter-tabs\">\n");
-        sb.append("        <button class=\"filter-tab active\" onclick=\"filterByStatus('ALL')\">All (").append(totalTests).append(")</button>\n");
-        sb.append("        <button class=\"filter-tab tab-pass\" onclick=\"filterByStatus('PASSED')\">Passed (").append(passed).append(")</button>\n");
-        sb.append("        <button class=\"filter-tab tab-heal\" onclick=\"filterByStatus('HEALED')\">Healed (").append(healed).append(")</button>\n");
-        sb.append("        <button class=\"filter-tab tab-fail\" onclick=\"filterByStatus('FAILED')\">Failed (").append(failed).append(")</button>\n");
+        sb.append("      <div class=\"toolbar-controls\">\n");
+        sb.append("        <div class=\"filter-tabs\">\n");
+        sb.append("          <button class=\"filter-tab active\" onclick=\"filterByStatus('ALL')\">All (").append(totalTests).append(")</button>\n");
+        sb.append("          <button class=\"filter-tab tab-pass\" onclick=\"filterByStatus('PASSED')\">Passed (").append(passed).append(")</button>\n");
+        sb.append("          <button class=\"filter-tab tab-heal\" onclick=\"filterByStatus('HEALED')\">Healed (").append(healed).append(")</button>\n");
+        sb.append("          <button class=\"filter-tab tab-fail\" onclick=\"filterByStatus('FAILED')\">Failed (").append(failed).append(")</button>\n");
         if (skipped > 0)
         {
-            sb.append("        <button class=\"filter-tab tab-skip\" onclick=\"filterByStatus('SKIPPED')\">Skipped (").append(skipped).append(")</button>\n");
+            sb.append("          <button class=\"filter-tab tab-skip\" onclick=\"filterByStatus('SKIPPED')\">Skipped (").append(skipped).append(")</button>\n");
         }
+        sb.append("        </div>\n");
+
+        sb.append("        <div class=\"filter-mode-group\">\n");
+        sb.append("          <label for=\"modeFilter\" class=\"filter-label\">⚙️ Mode:</label>\n");
+        sb.append("          <select id=\"modeFilter\" class=\"mode-select\" onchange=\"filterByMode(this.value)\">\n");
+        sb.append("            <option value=\"ALL\">All Modes (").append(totalTests).append(")</option>\n");
+        for (final Map.Entry<String, Integer> modeEntry : modeCounts.entrySet())
+        {
+            final String modeName = modeEntry.getKey();
+            final int count = modeEntry.getValue();
+            final String icon = modeName.contains("FORCE") ? "🔴"
+                : modeName.contains("STRICT") ? "🟢"
+                : modeName.contains("HEAL") ? "✨"
+                : modeName.contains("RECORD") ? "📹" : "⚙️";
+            sb.append("            <option value=\"").append(escapeAttr(modeName)).append("\">")
+              .append(icon).append(" ").append(escapeHtml(modeName)).append(" (").append(count).append(")</option>\n");
+        }
+        sb.append("          </select>\n");
+        sb.append("        </div>\n");
         sb.append("      </div>\n");
+
         sb.append("      <div class=\"search-wrapper\">\n");
         sb.append("        <input type=\"text\" id=\"searchInput\" placeholder=\"🔍 Search test, class, dataset...\" oninput=\"applyFilter()\" />\n");
         sb.append("      </div>\n");
@@ -619,7 +647,7 @@ public final class HtmlIndexReportGenerator
         sb.append("          <tr>\n");
         sb.append("            <th onclick=\"sortTable(0)\" style=\"cursor:pointer; width:95px;\">Status ⬍</th>\n");
         sb.append("            <th onclick=\"sortTable(1)\" style=\"cursor:pointer;\">Test Case & Details ⬍</th>\n");
-        sb.append("            <th style=\"width:105px;\">Mode</th>\n");
+        sb.append("            <th style=\"width:115px;\">Mode</th>\n");
         sb.append("            <th style=\"width:75px;\">Steps</th>\n");
         sb.append("            <th onclick=\"sortTable(4)\" style=\"cursor:pointer; width:90px;\">Duration ⬍</th>\n");
         sb.append("            <th style=\"width:125px;\">AI Usage</th>\n");
@@ -657,9 +685,11 @@ public final class HtmlIndexReportGenerator
                 final String formattedTime = TIME_PART_FORMAT.format(new Date(entry.getTimestamp()));
                 final String testTitle = entry.getTestName() != null ? entry.getTestName()
                     : (entry.getTestClass() != null ? extractSimpleClassName(entry.getTestClass()) + "." + (entry.getTestMethod() != null ? entry.getTestMethod() : "test") : entry.getBaseFileName());
+                final String modeStr = entry.getExecutionMode() != null ? entry.getExecutionMode().trim() : "";
 
                 sb.append("          <tr class=\"execution-row\" data-status=\"").append(statusCategory)
-                  .append("\" data-search=\"").append(escapeAttr((testTitle + " " + entry.getTestClass() + " " + entry.getTestMethod() + " " + entry.getDatasetId() + " " + entry.getFailureReason()).toLowerCase()))
+                  .append("\" data-mode=\"").append(escapeAttr(modeStr))
+                  .append("\" data-search=\"").append(escapeAttr((testTitle + " " + entry.getTestClass() + " " + entry.getTestMethod() + " " + entry.getDatasetId() + " " + modeStr + " " + entry.getFailureReason()).toLowerCase()))
                   .append("\">\n");
 
                 // Status Column
@@ -692,9 +722,9 @@ public final class HtmlIndexReportGenerator
 
                 // Execution Mode
                 sb.append("            <td>\n");
-                if (entry.getExecutionMode() != null)
+                if (entry.getExecutionMode() != null && !entry.getExecutionMode().isBlank())
                 {
-                    sb.append("              <span class=\"mode-badge\">").append(escapeHtml(entry.getExecutionMode())).append("</span>\n");
+                    sb.append("              <span class=\"mode-badge\" onclick=\"filterByMode('").append(escapeAttr(entry.getExecutionMode())).append("')\" style=\"cursor:pointer;\" title=\"Click to filter by mode: ").append(escapeAttr(entry.getExecutionMode())).append("\">").append(escapeHtml(entry.getExecutionMode())).append("</span>\n");
                 }
                 else
                 {
@@ -923,6 +953,44 @@ public final class HtmlIndexReportGenerator
                 gap: 1rem;
                 margin-bottom: 1rem;
             }
+            .toolbar-controls {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                flex-wrap: wrap;
+            }
+            .filter-mode-group {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                background: #f1f5f9;
+                padding: 0.25rem 0.55rem;
+                border-radius: 8px;
+                border: 1px solid var(--border);
+            }
+            .filter-label {
+                font-size: 0.8rem;
+                font-weight: 700;
+                color: var(--text-sub);
+                user-select: none;
+                white-space: nowrap;
+            }
+            .mode-select {
+                background: var(--card-bg);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.35rem 0.65rem;
+                font-size: 0.82rem;
+                font-weight: 600;
+                outline: none;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .mode-select:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+            }
             .filter-tabs {
                 display: flex;
                 gap: 0.4rem;
@@ -1022,88 +1090,86 @@ public final class HtmlIndexReportGenerator
                 align-items: center;
                 gap: 0.4rem;
                 flex-wrap: wrap;
-                margin-bottom: 0.15rem;
+                margin-bottom: 0.2rem;
             }
             .test-title-link {
-                font-size: 0.88rem;
+                color: var(--text);
                 font-weight: 700;
-                color: #0f172a;
+                font-size: 0.88rem;
                 text-decoration: none;
                 transition: color 0.15s;
-                word-break: break-word;
-                overflow-wrap: anywhere;
             }
-            .test-title-link:hover { color: var(--primary); text-decoration: underline; }
+            .test-title-link:hover {
+                color: var(--primary);
+                text-decoration: underline;
+            }
             .dataset-pill {
                 background: #f1f5f9;
-                color: #475569;
-                border: 1px solid #cbd5e1;
-                border-radius: 4px;
-                padding: 0.05rem 0.35rem;
-                font-size: 0.72rem;
-                font-family: var(--font-mono);
+                color: var(--text-sub);
+                font-size: 0.7rem;
                 font-weight: 600;
-                white-space: nowrap;
+                padding: 0.1rem 0.4rem;
+                border-radius: 4px;
+                border: 1px solid var(--border);
             }
             .bug-badge {
                 background: #fef2f2;
-                color: #dc2626;
-                border: 1px solid #fecaca;
-                border-radius: 4px;
-                padding: 0.05rem 0.35rem;
-                font-size: 0.72rem;
+                color: #b91c1c;
+                border: 1px solid #fca5a5;
+                font-size: 0.7rem;
                 font-weight: 700;
-                white-space: nowrap;
+                padding: 0.1rem 0.35rem;
+                border-radius: 4px;
             }
             .test-meta-line {
-                font-size: 0.74rem;
-                color: var(--text-muted);
                 font-family: var(--font-mono);
-                word-break: break-all;
-                overflow-wrap: anywhere;
-                line-height: 1.3;
+                font-size: 0.72rem;
+                color: var(--text-muted);
             }
             .failure-reason-snip {
                 font-size: 0.75rem;
                 color: var(--fail);
                 margin-top: 0.2rem;
-                font-weight: 500;
-                word-break: break-word;
-                overflow-wrap: anywhere;
+                max-width: 450px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             .mode-badge {
                 display: inline-block;
                 background: #f1f5f9;
-                color: #334155;
-                border: 1px solid var(--border);
-                border-radius: 4px;
-                padding: 0.15rem 0.4rem;
+                color: var(--text-sub);
                 font-size: 0.7rem;
-                font-family: var(--font-mono);
-                font-weight: 600;
+                font-weight: 700;
+                padding: 0.15rem 0.45rem;
+                border-radius: 4px;
+                border: 1px solid var(--border);
                 white-space: nowrap;
+                transition: transform 0.1s, box-shadow 0.1s;
             }
-            .mode-muted { color: var(--text-muted); }
-            .steps-count { font-weight: 600; font-size: 0.85rem; white-space: nowrap; }
-            .steps-sub { font-size: 0.7rem; margin-top: 0.15rem; white-space: nowrap; }
-            .llm-stat { font-weight: 600; font-size: 0.8rem; color: #1e293b; white-space: nowrap; }
-            .llm-tokens { font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; }
-            .llm-cost { color: #475569; }
-            .llm-muted { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
-            .timestamp-date { font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-sub); white-space: nowrap; }
-            .timestamp-time { font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+            .mode-badge:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            }
+            .mode-muted { color: var(--text-muted); opacity: 0.7; }
+            .steps-count { font-weight: 700; font-size: 0.82rem; }
+            .steps-sub { font-size: 0.7rem; margin-top: 0.1rem; }
+            .llm-stat { font-weight: 600; font-size: 0.78rem; color: var(--text); }
+            .llm-tokens { font-size: 0.7rem; color: var(--text-muted); }
+            .llm-cost { font-weight: 600; color: #0284c7; }
+            .llm-muted { font-size: 0.72rem; color: var(--text-muted); font-style: italic; }
+            .timestamp-date { font-weight: 600; font-size: 0.8rem; }
+            .timestamp-time { font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); }
             .btn-open-report {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.25rem;
-                background: var(--primary-light);
-                color: var(--primary);
-                border: 1px solid #bae6fd;
-                padding: 0.35rem 0.65rem;
-                border-radius: 5px;
+                display: inline-block;
+                background: #f1f5f9;
+                color: var(--text-sub);
+                padding: 0.35rem 0.7rem;
+                border-radius: 6px;
                 font-size: 0.78rem;
                 font-weight: 700;
                 text-decoration: none;
+                border: 1px solid var(--border);
                 transition: all 0.15s;
                 white-space: nowrap;
             }
@@ -1133,6 +1199,7 @@ public final class HtmlIndexReportGenerator
     {
         sb.append("""
             var currentStatusFilter = 'ALL';
+            var currentModeFilter = 'ALL';
 
             window.filterByStatus = function(status) {
                 currentStatusFilter = status;
@@ -1150,18 +1217,29 @@ public final class HtmlIndexReportGenerator
                 applyFilter();
             };
 
+            window.filterByMode = function(mode) {
+                currentModeFilter = mode || 'ALL';
+                var sel = document.getElementById('modeFilter');
+                if (sel && sel.value !== currentModeFilter) {
+                    sel.value = currentModeFilter;
+                }
+                applyFilter();
+            };
+
             window.applyFilter = function() {
                 var search = (document.getElementById('searchInput').value || '').trim().toLowerCase();
                 var rows = document.querySelectorAll('#executionsTable tbody tr.execution-row');
 
                 rows.forEach(function(row) {
                     var rowStatus = row.getAttribute('data-status') || '';
+                    var rowMode = row.getAttribute('data-mode') || '';
                     var rowSearch = row.getAttribute('data-search') || '';
 
                     var matchesStatus = (currentStatusFilter === 'ALL' || rowStatus === currentStatusFilter);
+                    var matchesMode = (currentModeFilter === 'ALL' || rowMode === currentModeFilter);
                     var matchesSearch = (!search || rowSearch.indexOf(search) !== -1);
 
-                    if (matchesStatus && matchesSearch) {
+                    if (matchesStatus && matchesMode && matchesSearch) {
                         row.style.display = '';
                     } else {
                         row.style.display = 'none';
