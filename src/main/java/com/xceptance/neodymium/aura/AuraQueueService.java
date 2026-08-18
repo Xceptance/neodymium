@@ -394,6 +394,11 @@ public final class AuraQueueService
                     broadcastLog("[INFO] ------------------------------------------------------------------------");
 
                     final ProcessBuilder pb = new ProcessBuilder(command);
+                    final String javaHome = System.getProperty("java.home");
+                    if (javaHome != null && !javaHome.isBlank())
+                    {
+                        pb.environment().put("JAVA_HOME", javaHome);
+                    }
                     pb.environment().put("MAVEN_OPTS",
                             "-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8");
                     pb.redirectErrorStream(true);
