@@ -68,14 +68,3 @@ tmp/
 # Neodymium Aura Manager sandbox folders
 /src/test/java/com/xceptance/neodymium/aura/sandbox/
 /target/aura-sandbox/
-
-# Aura Report Manager sub-project runtime and build outputs
-/aura-report-manager/target/
-/aura-report-manager/data/
-/aura-report-manager/storage/
-/aura-report-manager/storage1/
-/aura-report-manager/storage_was/
-*.mv.db
-*.lock.db
-*.trace.db
-
