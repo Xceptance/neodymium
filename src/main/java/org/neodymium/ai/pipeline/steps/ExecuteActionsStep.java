@@ -41,6 +41,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.executor.SutState;
@@ -526,6 +527,7 @@ public final class ExecuteActionsStep implements PipelineStep
                         if (postActionState != null)
                         {
                             context.getTransientData().put("KEY_POST_ACTION_STATE", postActionState);
+                            session.getEventBus().dispatch(new StateCapturedEvent(postActionState));
                         }
                     }
                     catch (final Exception e)
@@ -824,14 +826,27 @@ public final class ExecuteActionsStep implements PipelineStep
 
             if (session != null && session.getEventBus() != null)
             {
-                int stepIndex = 0;
-                if (step.getParent() != null && flatSteps != null)
+                int stepIndex = -1;
+                final PlaybookStep targetForIndex = step.getParent() != null ? step.getParent() : step;
+                if (flatSteps != null)
                 {
-                    stepIndex = flatSteps.indexOf(step.getParent());
-                }
-                else if (flatSteps != null)
-                {
-                    stepIndex = flatSteps.indexOf(step);
+                    for (int i = 0; i < flatSteps.size(); i++)
+                    {
+                        final PlaybookStep fs = flatSteps.get(i);
+                        if (fs == targetForIndex)
+                        {
+                            stepIndex = i;
+                            break;
+                        }
+                        if (fs.getInstruction() != null && fs.getInstruction().equals(targetForIndex.getInstruction()))
+                        {
+                            if (fs.getLineNumber() == targetForIndex.getLineNumber() || fs.getLineNumber() == -1 || targetForIndex.getLineNumber() == -1)
+                            {
+                                stepIndex = i;
+                                break;
+                            }
+                        }
+                    }
                 }
                 session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
             }
@@ -889,6 +904,11 @@ public final class ExecuteActionsStep implements PipelineStep
             final boolean isSplit = pesapPreStep.executePreStep(contextState);
             if (isSplit)
             {
+                step.setStatus(PlaybookStepStatus.SUCCESS);
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+                }
                 return;
             }
 
@@ -933,7 +953,7 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 // Replay mode: Stamp live DOM with data-ai attributes before executing step actions
                 standardFlow.add(c -> {
-                    final boolean isRecorded = step.getActions() != null;
+                    final boolean isRecorded = step.getActions() != null && !step.getActions().isEmpty();
                     final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
                     final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
                     if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite)

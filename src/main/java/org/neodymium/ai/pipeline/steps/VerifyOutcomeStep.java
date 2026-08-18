@@ -30,6 +30,7 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
@@ -284,6 +285,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                 finalState = executor.captureState(verificationLevel, isFullPageReq);
             }
             context.getTransientData().put("finalState", finalState);
+            if (session != null && session.getEventBus() != null && finalState != null)
+            {
+                session.getEventBus().dispatch(new StateCapturedEvent(finalState));
+            }
 
             // 5. Build system and user prompt messages using VerificationPrompt template
             final VerificationPrompt prompt = new VerificationPrompt();

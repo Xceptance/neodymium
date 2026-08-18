@@ -187,27 +187,56 @@ public final class PreliminaryReportListener implements ExecutionListener
                 stepEntry.setOptional(pbStep.isOptional());
                 stepEntry.setContinueOnError(pbStep.isContinueOnError());
                 stepEntry.setNoHealing(pbStep.isNoHealing());
+                stepEntry.setVisual(pbStep.isVisualStep());
 
                 if (pbStep.getReasoning() != null)
                 {
                     stepEntry.setReasoning(pbStep.getReasoning());
                 }
             }
+            else if (rawInstruction != null)
+            {
+                final boolean isVisualInstruction = PlaybookStep.VISUAL_PATTERN.matcher(rawInstruction).find()
+                    || PlaybookStep.LAYOUT_PATTERN.matcher(rawInstruction).find();
+                stepEntry.setVisual(isVisualInstruction);
+            }
 
             if (pbStep != null && pbStep.getParent() != null)
             {
+                final PlaybookStep rootPb = pbStep.getRootStep();
                 TestExecutionReport.ReportStepEntry parentEntry = null;
-                for (final TestExecutionReport.ReportStepEntry entry : this.report.getSteps())
+
+                // Match root parent from most recent steps backwards by instruction / rawInstruction
+                for (int i = this.report.getSteps().size() - 1; i >= 0; i--)
                 {
-                    if (entry.getStepIndex() == stepStarted.getStepIndex() || (pbStep.getParent().getInstruction() != null && (pbStep.getParent().getInstruction().equals(entry.getRawInstruction()) || pbStep.getParent().getInstruction().equals(entry.getInstruction()))))
+                    final TestExecutionReport.ReportStepEntry entry = this.report.getSteps().get(i);
+                    final boolean matchesInstruction = rootPb.getInstruction() != null
+                        && (rootPb.getInstruction().equals(entry.getRawInstruction())
+                            || rootPb.getInstruction().equals(entry.getInstruction()));
+
+                    if (matchesInstruction)
                     {
                         parentEntry = entry;
                         break;
                     }
                 }
+
                 if (parentEntry != null)
                 {
+                    // If an intermediate parent container was added to parentEntry, remove it in favor of leaf sub-steps
+                    if (pbStep.getParent() != rootPb && pbStep.getParent().getInstruction() != null)
+                    {
+                        final String intermediateInstruction = pbStep.getParent().getInstruction();
+                        parentEntry.removeSubStepIf(sub -> intermediateInstruction.equals(sub.getInstruction()) || intermediateInstruction.equals(sub.getRawInstruction()));
+                    }
+
                     parentEntry.addSubStep(stepEntry);
+                    this.currentStep = stepEntry;
+                    return;
+                }
+                else if (!this.report.getSteps().isEmpty())
+                {
+                    this.report.getSteps().get(this.report.getSteps().size() - 1).addSubStep(stepEntry);
                     this.currentStep = stepEntry;
                     return;
                 }
@@ -304,12 +333,25 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (stateCaptured.getState() != null && stateCaptured.getState().getAttachments() != null)
             {
                 final int stepIdx = this.currentStep != null ? this.currentStep.getStepIndex() : 0;
+                final boolean isVisual = this.currentStep != null && this.currentStep.isVisual();
+                final String label = "Step #" + (stepIdx + 1) + (isVisual ? " (Visual Verification)" : " Capture");
+
                 for (final SutAttachment attachment : stateCaptured.getState().getAttachments())
                 {
                     if (attachment != null && attachment.base64Data() != null && !attachment.base64Data().isEmpty())
                     {
+                        if (this.currentStep != null)
+                        {
+                            final boolean alreadyHas = this.currentStep.getScreenshots().stream()
+                                .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(attachment.base64Data()));
+                            if (alreadyHas)
+                            {
+                                continue;
+                            }
+                        }
+
                         final TestExecutionReport.ReportScreenshotEntry screenshot = new TestExecutionReport.ReportScreenshotEntry(
-                            "Step " + (stepIdx + 1) + " Capture",
+                            label,
                             stepIdx,
                             attachment.mediaType() != null ? attachment.mediaType() : "image/png",
                             attachment.base64Data(),
@@ -392,7 +434,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     step.setStatus("FAILED");
                 }
-                else if (allSubSuccess)
+                else if (allSubSuccess || (!step.getSubSteps().isEmpty() && !anySubFailed))
                 {
                     step.setStatus("SUCCESS");
                 }
@@ -737,16 +779,25 @@ public final class PreliminaryReportListener implements ExecutionListener
             for (int s = 0; s < stats.getSubStats().size(); s++)
             {
                 final StepStats sub = stats.getSubStats().get(s);
-                if (s < entry.getSubSteps().size())
+                TestExecutionReport.ReportStepEntry matchingSub = null;
+                for (final TestExecutionReport.ReportStepEntry existingSub : entry.getSubSteps())
                 {
-                    final TestExecutionReport.ReportStepEntry existingSub = entry.getSubSteps().get(s);
-                    mergeStepStats(existingSub, sub);
-                    if (existingSub.getStatus() == null || "PENDING".equalsIgnoreCase(existingSub.getStatus()) || "RUNNING".equalsIgnoreCase(existingSub.getStatus()))
+                    if (sub.getInstruction() != null && (sub.getInstruction().equals(existingSub.getInstruction()) || sub.getInstruction().equals(existingSub.getRawInstruction())))
                     {
-                        existingSub.setStatus(sub.getFailureReason() != null ? "FAILED" : "SUCCESS");
+                        matchingSub = existingSub;
+                        break;
                     }
                 }
-                else
+
+                if (matchingSub != null)
+                {
+                    mergeStepStats(matchingSub, sub);
+                    if (matchingSub.getStatus() == null || "PENDING".equalsIgnoreCase(matchingSub.getStatus()) || "RUNNING".equalsIgnoreCase(matchingSub.getStatus()))
+                    {
+                        matchingSub.setStatus(sub.getFailureReason() != null ? "FAILED" : "SUCCESS");
+                    }
+                }
+                else if (entry.getSubSteps().isEmpty())
                 {
                     final TestExecutionReport.ReportStepEntry subEntry = new TestExecutionReport.ReportStepEntry(
                         s,

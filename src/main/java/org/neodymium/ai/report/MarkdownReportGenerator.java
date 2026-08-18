@@ -204,6 +204,24 @@ public final class MarkdownReportGenerator
             sb.append("\n");
         }
 
+        // Global Screenshots
+        final List<TestExecutionReport.ReportScreenshotEntry> screenshots = report.getScreenshots();
+        if (!screenshots.isEmpty())
+        {
+            sb.append("## 📸 Captured Visual Screenshots\n\n");
+            sb.append("| # | Step | Name | Format | Timestamp |\n");
+            sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
+            for (int i = 0; i < screenshots.size(); i++)
+            {
+                final TestExecutionReport.ReportScreenshotEntry sc = screenshots.get(i);
+                sb.append("| ").append(i + 1).append(" | Step #").append(sc.getStepIndex() + 1).append(" | `")
+                    .append(escapeMarkdown(sc.getName() != null ? sc.getName() : "-")).append("` | `")
+                    .append(sc.getMediaType() != null ? sc.getMediaType() : "image/png").append("` | ")
+                    .append(sc.getTimestamp() > 0 ? NUMBER_FORMAT.format(sc.getTimestamp()) : "-").append(" |\n");
+            }
+            sb.append("\n");
+        }
+
         return sb.toString();
     }
 
@@ -244,6 +262,14 @@ public final class MarkdownReportGenerator
         if (step.isNoHealing())
         {
             sb.append("- **No Healing:** `true`\n");
+        }
+        if (step.isVisual())
+        {
+            sb.append("- **Visual Step:** `📸 true`\n");
+        }
+        if (!step.getScreenshots().isEmpty())
+        {
+            sb.append("- **Screenshots Captured:** ").append(step.getScreenshots().size()).append(" screenshot(s)\n");
         }
         if (step.getRawInstruction() != null && !step.getRawInstruction().equals(step.getInstruction()))
         {

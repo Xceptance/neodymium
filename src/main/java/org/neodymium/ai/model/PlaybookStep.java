@@ -553,6 +553,22 @@ public final class PlaybookStep
         this.parent = parent;
     }
 
+    /**
+     * Traverses up the parent hierarchy to find the top-most root playbook step.
+     *
+     * @return the top-most root playbook step, or this if this step has no parent
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public PlaybookStep getRootStep()
+    {
+        PlaybookStep current = this;
+        while (current.parent != null)
+        {
+            current = current.parent;
+        }
+        return current;
+    }
+
     public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:\\s*full\\s*\\)");
     public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)");
     public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");

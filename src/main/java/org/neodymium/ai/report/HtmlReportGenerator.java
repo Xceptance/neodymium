@@ -266,6 +266,7 @@ public final class HtmlReportGenerator
             sb.append("                <span class=\"step-status-pill\" id=\"inspStatusPill\">SUCCESS</span>\n");
             sb.append("                <span class=\"inspector-meta\" id=\"inspDuration\">0 ms</span>\n");
             sb.append("                <span class=\"context-badge\" id=\"inspContextBadge\" style=\"display:none;\"></span>\n");
+            sb.append("                <span class=\"badge-flag visual-badge\" id=\"inspVisualBadge\" style=\"display:none;\">📸 VISUAL</span>\n");
             sb.append("                <span class=\"badge-flag bug-badge\" id=\"inspBugBadge\" style=\"display:none;\">🐛 BUG EXPECTED</span>\n");
             sb.append("              </div>\n");
             sb.append("              <div class=\"inspector-header-controls\">\n");
@@ -419,6 +420,10 @@ public final class HtmlReportGenerator
             final String tooltip = step.getBugDetails() != null ? "Expected bug: " + escapeHtml(step.getBugDetails()) : "Expected bug";
             sb.append("              <span class=\"badge-flag bug-badge\" title=\"").append(tooltip).append("\">🐛 BUG EXPECTED</span>\n");
         }
+        if (step.isVisual())
+        {
+            sb.append("              <span class=\"badge-flag visual-badge\">📸 VISUAL</span>\n");
+        }
         if (step.isOptional())
         {
             sb.append("              <span class=\"badge-flag optional-badge\">OPTIONAL</span>\n");
@@ -457,15 +462,36 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"step-source-meta\">📄 ").append(escapeHtml(step.getSourceFile()))
               .append(step.getLineNumber() > 0 ? ":" + step.getLineNumber() : "").append("</div>\n");
         }
+        if (!step.getScreenshots().isEmpty())
+        {
+            sb.append("            <div class=\"step-card-screenshots-preview\">\n");
+            for (int scIdx = 0; scIdx < Math.min(3, step.getScreenshots().size()); scIdx++)
+            {
+                final TestExecutionReport.ReportScreenshotEntry sc = step.getScreenshots().get(scIdx);
+                final String dataSrc = sc.getBase64Data() != null && sc.getBase64Data().startsWith("data:")
+                    ? sc.getBase64Data()
+                    : "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + (sc.getBase64Data() != null ? sc.getBase64Data() : "");
+                sb.append("              <img src=\"").append(dataSrc).append("\" alt=\"Step screenshot preview\" class=\"preview-thumb\" onclick=\"event.stopPropagation(); window.open(this.src)\" title=\"").append(escapeHtml(sc.getName() != null ? sc.getName() : "Visual Screenshot")).append(" - Click to view full size\" loading=\"lazy\" />\n");
+            }
+            if (step.getScreenshots().size() > 3)
+            {
+                sb.append("              <span class=\"preview-more-badge\">+").append(step.getScreenshots().size() - 3).append(" more</span>\n");
+            }
+            sb.append("            </div>\n");
+        }
         sb.append("          </div>\n");
 
         // Render Action and LLM Summary tags
-        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty())
+        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty())
         {
             sb.append("          <div class=\"step-card-footer\">\n");
             if (!step.getActions().isEmpty())
             {
                 sb.append("            <span class=\"footer-tag\">🎯 ").append(step.getActions().size()).append(" action(s)</span>\n");
+            }
+            if (!step.getScreenshots().isEmpty())
+            {
+                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(index).append(", -1, 'visuals')\">📸 ").append(step.getScreenshots().size()).append(" screenshot(s)</span>\n");
             }
             final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls());
             if (llmCount > 0)
@@ -673,12 +699,12 @@ public final class HtmlReportGenerator
                 return parent;
             }
 
-            window.openAndSelectStep = function(parentIndex, subIndex) {
+            window.openAndSelectStep = function(parentIndex, subIndex, preferredTab) {
                 window.openInspector();
-                window.selectStep(parentIndex, subIndex);
+                window.selectStep(parentIndex, subIndex, preferredTab);
             };
 
-            window.selectStep = function(parentIndex, subIndex) {
+            window.selectStep = function(parentIndex, subIndex, preferredTab) {
                 if (parentIndex < 0 || parentIndex >= steps.length) return;
                 currentParentIdx = parentIndex;
                 currentSubIdx = (subIndex != null ? subIndex : -1);
@@ -736,6 +762,13 @@ public final class HtmlReportGenerator
                     bugBadge.style.display = 'none';
                 }
 
+                var visBadge = document.getElementById('inspVisualBadge');
+                if (step.visual) {
+                    visBadge.style.display = 'inline-block';
+                } else {
+                    visBadge.style.display = 'none';
+                }
+
                 var srcEl = document.getElementById('inspSourceFile');
                 if (step.sourceFile) {
                     srcEl.textContent = '📄 ' + step.sourceFile + (step.lineNumber ? ':' + step.lineNumber : '');
@@ -760,6 +793,13 @@ public final class HtmlReportGenerator
                 document.getElementById('tabLlmCount').textContent = llmCalls.length;
                 document.getElementById('tabActionsCount').textContent = actions.length;
                 document.getElementById('tabVisualsCount').textContent = visuals.length;
+
+                // Tab Auto-Selection
+                if (preferredTab) {
+                    window.switchInspectorTab(preferredTab);
+                } else if (step.visual || (visuals.length > 0 && llmCalls.length === 0)) {
+                    window.switchInspectorTab('visuals');
+                }
 
                 // 1. Render LLM Panel (Safe Text Rendering via DOM textContent)
                 var llmPanel = document.getElementById('panel-llm');
@@ -1791,6 +1831,42 @@ public final class HtmlReportGenerator
                 height: auto;
                 display: block;
                 cursor: pointer;
+            }
+            .visual-badge {
+                background: #fdf2f8;
+                color: #db2777;
+                border-color: #fbcfe8;
+            }
+            .step-card-screenshots-preview {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                margin-top: 0.6rem;
+                align-items: center;
+            }
+            .preview-thumb {
+                width: 90px;
+                height: 60px;
+                object-fit: cover;
+                border-radius: 4px;
+                border: 1px solid var(--border);
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                cursor: pointer;
+                transition: transform 0.15s ease, box-shadow 0.15s ease;
+            }
+            .preview-thumb:hover {
+                transform: scale(1.08);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                border-color: var(--primary);
+            }
+            .preview-more-badge {
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: var(--text-muted);
+                background: #f1f5f9;
+                padding: 0.2rem 0.5rem;
+                border-radius: 4px;
+                border: 1px solid var(--border);
             }
             .report-footer {
                 text-align: center;

@@ -308,6 +308,7 @@ public final class TestExecutionReport
         private boolean optional;
         private boolean continueOnError;
         private boolean noHealing;
+        private boolean visual;
 
         public ReportStepEntry()
         {
@@ -535,6 +536,14 @@ public final class TestExecutionReport
             }
         }
 
+        public void removeSubStepIf(final java.util.function.Predicate<ReportStepEntry> filter)
+        {
+            if (filter != null)
+            {
+                this.subSteps.removeIf(filter);
+            }
+        }
+
         public List<ReportLlmCallEntry> getLlmCalls()
         {
             return Collections.unmodifiableList(this.llmCalls);
@@ -619,6 +628,16 @@ public final class TestExecutionReport
         public void setNoHealing(final boolean noHealing)
         {
             this.noHealing = noHealing;
+        }
+
+        public boolean isVisual()
+        {
+            return this.visual;
+        }
+
+        public void setVisual(final boolean visual)
+        {
+            this.visual = visual;
         }
     }
 

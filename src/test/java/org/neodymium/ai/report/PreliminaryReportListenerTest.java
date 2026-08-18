@@ -69,6 +69,13 @@ public class PreliminaryReportListenerTest
     @TempDir
     Path tempFolder;
 
+    @org.junit.jupiter.api.BeforeEach
+    @org.junit.jupiter.api.AfterEach
+    public void resetContext()
+    {
+        ExecutionContext.setActiveContext(null);
+    }
+
     @Test
     @DisplayName("Verify parsing and normalization of DiskReportFormat enum")
     public void testDiskReportFormatParser()
@@ -473,6 +480,193 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
+    @DisplayName("Verify sub-steps attach strictly to their respective parent step and never to Step #1")
+    public void testSubStepsAttachedToCorrectLaterStep() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-multistep-parent");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("VerlaGuestCheckout_Us_German");
+        listener.getReport().setTestMethod("testCheckoutLivePerfect");
+
+        // Step 1: Open URL
+        final PlaybookStep step1 = new PlaybookStep("Öffne https://localhost:8543/verla-perfect/index.html");
+        bus.dispatch(new StepStartedEvent(step1, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("NAVIGATE", "https://localhost:8543", Collections.emptyList(), "Navigate", "Open site"), true));
+        bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.SUCCESS));
+
+        // Step 2: Go to checkout
+        final PlaybookStep step2 = new PlaybookStep("Klicke auf 'Kasse'");
+        bus.dispatch(new StepStartedEvent(step2, 1));
+        bus.dispatch(new ActionExecutedEvent(new Action("CLICK", "#checkout-btn", Collections.emptyList(), "Checkout", "Proceed"), true));
+        bus.dispatch(new StepFinishedEvent(step2, PlaybookStepStatus.SUCCESS));
+
+        // Step 3: Compound step (Payment details)
+        final PlaybookStep step3 = new PlaybookStep("Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.");
+        bus.dispatch(new StepStartedEvent(step3, 2));
+
+        // Sub-step 3.1
+        final PlaybookStep sub31 = new PlaybookStep("Kartennummer ist '4111 1111 1111 1111'");
+        sub31.setParent(step3);
+        bus.dispatch(new StepStartedEvent(sub31, 0)); // Note: stepStarted with index 0 to simulate unindexed sub-step
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#cardNumber", List.of("4111111111111111"), "Type card", "Card"), true));
+        bus.dispatch(new StepFinishedEvent(sub31, PlaybookStepStatus.SUCCESS));
+
+        // Sub-step 3.2
+        final PlaybookStep sub32 = new PlaybookStep("Ablaufdatum '12/29' und CVV ist '111'");
+        sub32.setParent(step3);
+        bus.dispatch(new StepStartedEvent(sub32, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#cardExpiry", List.of("12/29"), "Type expiry", "Expiry"), true));
+        bus.dispatch(new StepFinishedEvent(sub32, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepFinishedEvent(step3, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(10000, true));
+
+        final Path jsonPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.json");
+        final Path htmlPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        assertEquals(3, root.get("steps").size(), "Report must contain exactly 3 top-level steps");
+
+        // Verify Step 1 has NO sub-steps
+        assertEquals(0, root.get("steps").get(0).get("subSteps").size(), "Step 1 (Open URL) must NOT have any sub-steps attached");
+
+        // Verify Step 2 has NO sub-steps
+        assertEquals(0, root.get("steps").get(1).get("subSteps").size(), "Step 2 (Checkout) must NOT have any sub-steps attached");
+
+        // Verify Step 3 HAS the 2 sub-steps
+        final JsonNode step3Node = root.get("steps").get(2);
+        assertEquals(2, step3Node.get("subSteps").size(), "Step 3 (Payment) must contain the 2 sub-steps");
+        assertEquals("Kartennummer ist '4111 1111 1111 1111'", step3Node.get("subSteps").get(0).get("instruction").asText());
+        assertEquals("Ablaufdatum '12/29' und CVV ist '111'", step3Node.get("subSteps").get(1).get("instruction").asText());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("#3.1"));
+        assertTrue(html.contains("#3.2"));
+        assertFalse(html.contains("#1.1"), "HTML must NOT contain #1.1 sub-step under Step #1");
+    }
+
+    @Test
+    @DisplayName("Verify recursive JIT step splitting correctly flattens leaf sub-steps into the root step without creating stray root steps")
+    public void testRecursiveCompoundStepSplittingHierarchy() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-recursive-split");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("VerlaGuestCheckout_Us_German");
+        listener.getReport().setTestMethod("testCheckoutLivePerfect");
+
+        // Root Step 1: Open URL
+        final PlaybookStep root1 = new PlaybookStep("Öffne https://localhost:8543/verla-perfect/index.html");
+        bus.dispatch(new StepStartedEvent(root1, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("NAVIGATE", "https://localhost:8543", Collections.emptyList(), "Navigate", "Open site"), true));
+        bus.dispatch(new StepFinishedEvent(root1, PlaybookStepStatus.SUCCESS));
+
+        // Root Step 2 (Step 21): Compound Name & Email
+        final PlaybookStep root2 = new PlaybookStep("Gib 'Mario' als Vorname, 'Meier' als Nachname und die E-Mail-Adresse 'foo@varmail.net' ein.");
+        bus.dispatch(new StepStartedEvent(root2, 1));
+
+        // Level 1: Sub-step A (Compound Name)
+        final PlaybookStep subA = new PlaybookStep("Gib 'Mario' als Vorname, 'Meier' als Nachname ein");
+        subA.setParent(root2);
+        bus.dispatch(new StepStartedEvent(subA, 0));
+
+        // Level 2: Sub-step A1 (First Name)
+        final PlaybookStep subA1 = new PlaybookStep("Gib 'Mario' als Vorname ein");
+        subA1.setParent(subA);
+        bus.dispatch(new StepStartedEvent(subA1, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#firstName", List.of("Mario"), "Type first name", "Name"), true));
+        bus.dispatch(new StepFinishedEvent(subA1, PlaybookStepStatus.SUCCESS));
+
+        // Level 2: Sub-step A2 (Last Name)
+        final PlaybookStep subA2 = new PlaybookStep("Gib 'Meier' als Nachname ein");
+        subA2.setParent(subA);
+        bus.dispatch(new StepStartedEvent(subA2, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#lastName", List.of("Meier"), "Type last name", "Last name"), true));
+        bus.dispatch(new StepFinishedEvent(subA2, PlaybookStepStatus.SUCCESS));
+
+        // Level 1: Sub-step B (Email)
+        final PlaybookStep subB = new PlaybookStep("Gib die E-Mail-Adresse 'foo@varmail.net' ein");
+        subB.setParent(root2);
+        bus.dispatch(new StepStartedEvent(subB, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#email", List.of("foo@varmail.net"), "Type email", "Email"), true));
+        bus.dispatch(new StepFinishedEvent(subB, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepFinishedEvent(root2, PlaybookStepStatus.SUCCESS));
+
+        // Root Step 3 (Step 22): Address details
+        final PlaybookStep root3 = new PlaybookStep("Gib '123 Main St' als Straße, 'Manchester' als Stadt und '12345' als Postleitzahl ein.");
+        bus.dispatch(new StepStartedEvent(root3, 2));
+
+        final PlaybookStep subC1 = new PlaybookStep("Gib '123 Main St' als Straße ein");
+        subC1.setParent(root3);
+        bus.dispatch(new StepStartedEvent(subC1, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#street", List.of("123 Main St"), "Type street", "Street"), true));
+        bus.dispatch(new StepFinishedEvent(subC1, PlaybookStepStatus.SUCCESS));
+
+        final PlaybookStep subC2 = new PlaybookStep("Gib 'Manchester' als Stadt ein");
+        subC2.setParent(root3);
+        bus.dispatch(new StepStartedEvent(subC2, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#city", List.of("Manchester"), "Type city", "City"), true));
+        bus.dispatch(new StepFinishedEvent(subC2, PlaybookStepStatus.SUCCESS));
+
+        final PlaybookStep subC3 = new PlaybookStep("Gib '12345' als Postleitzahl ein");
+        subC3.setParent(root3);
+        bus.dispatch(new StepStartedEvent(subC3, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("TYPE", "#postcode", List.of("12345"), "Type zip", "Zip"), true));
+        bus.dispatch(new StepFinishedEvent(subC3, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepFinishedEvent(root3, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(12000, true));
+
+        final Path jsonPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.json");
+        final Path htmlPath = reportDir.resolve("VerlaGuestCheckout_Us_German_testCheckoutLivePerfect.html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        assertEquals(3, root.get("steps").size(), "Must contain exactly 3 top-level steps, not 5 or 6");
+
+        // Verify Step 1
+        assertEquals("SUCCESS", root.get("steps").get(0).get("status").asText());
+        assertEquals(0, root.get("steps").get(0).get("subSteps").size());
+
+        // Verify Step 2 (contains exactly the 3 executable leaf sub-steps)
+        final JsonNode step2Node = root.get("steps").get(1);
+        assertEquals("SUCCESS", step2Node.get("status").asText(), "Step 2 must have status SUCCESS and not RUNNING");
+        assertEquals(3, step2Node.get("subSteps").size(), "Step 2 must have exactly 3 leaf sub-steps");
+        assertEquals("Gib 'Mario' als Vorname ein", step2Node.get("subSteps").get(0).get("instruction").asText());
+        assertEquals("Gib 'Meier' als Nachname ein", step2Node.get("subSteps").get(1).get("instruction").asText());
+        assertEquals("Gib die E-Mail-Adresse 'foo@varmail.net' ein", step2Node.get("subSteps").get(2).get("instruction").asText());
+
+        // Verify Step 3 (contains the 3 address sub-steps)
+        final JsonNode step3Node = root.get("steps").get(2);
+        assertEquals("SUCCESS", step3Node.get("status").asText(), "Step 3 must have status SUCCESS");
+        assertEquals(3, step3Node.get("subSteps").size(), "Step 3 must have exactly 3 sub-steps");
+        assertEquals("Gib '123 Main St' als Straße ein", step3Node.get("subSteps").get(0).get("instruction").asText());
+        assertEquals("Gib 'Manchester' als Stadt ein", step3Node.get("subSteps").get(1).get("instruction").asText());
+        assertEquals("Gib '12345' als Postleitzahl ein", step3Node.get("subSteps").get(2).get("instruction").asText());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("#2.1"));
+        assertTrue(html.contains("#2.2"));
+        assertTrue(html.contains("#2.3"));
+        assertTrue(html.contains("#3.1"));
+        assertTrue(html.contains("#3.2"));
+        assertTrue(html.contains("#3.3"));
+    }
+
+    @Test
     @DisplayName("Verify variable resolution in step instructions from SessionData")
     public void testVariableResolutionInStepInstructions() throws Exception
     {
@@ -580,5 +774,56 @@ public class PreliminaryReportListenerTest
 
         final File[] files = reportDir.toFile().listFiles();
         assertTrue(files == null || files.length == 0);
+    }
+
+    @Test
+    @DisplayName("Verify visual step screenshots are properly captured, tagged, and rendered across all reports")
+    public void testVisualStepScreenshotCaptureAndAssociation() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-visual");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("OrderSummaryTest");
+        listener.getReport().setTestMethod("testVisualVerification");
+
+        final PlaybookStep visualStep = new PlaybookStep("Assert that the order confirmation summary is displayed (visual)");
+        assertTrue(visualStep.isVisualStep());
+
+        bus.dispatch(new StepStartedEvent(visualStep, 0));
+
+        final String dummyBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        final MockSutState state = new MockSutState(
+            "<html><body>Order Confirmed</body></html>",
+            List.of(new SutAttachment("image/png", null, dummyBase64)),
+            "hash123"
+        );
+        bus.dispatch(new StateCapturedEvent(state));
+        bus.dispatch(new StepFinishedEvent(visualStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(2500, true));
+
+        final Path jsonPath = reportDir.resolve("OrderSummaryTest_testVisualVerification.json");
+        final Path htmlPath = reportDir.resolve("OrderSummaryTest_testVisualVerification.html");
+        final Path mdPath = reportDir.resolve("OrderSummaryTest_testVisualVerification.md");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+        assertTrue(Files.exists(mdPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        assertTrue(root.get("steps").get(0).get("visual").asBoolean(), "Step must be marked as visual");
+        assertEquals(1, root.get("steps").get(0).get("screenshots").size(), "Step must have 1 attached screenshot");
+        assertEquals(1, root.get("screenshots").size(), "Global report must contain 1 screenshot");
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("📸 VISUAL"), "HTML report must include VISUAL badge");
+        assertTrue(html.contains("📸 1 screenshot(s)") || html.contains("screenshot-img"), "HTML report must render screenshot elements");
+        assertTrue(html.contains(dummyBase64), "HTML report must contain base64 image data");
+
+        final String md = Files.readString(mdPath);
+        assertTrue(md.contains("📸 Captured Visual Screenshots"), "Markdown report must have Screenshots section");
+        assertTrue(md.contains("📸 true"), "Markdown report must mark step as visual");
     }
 }
