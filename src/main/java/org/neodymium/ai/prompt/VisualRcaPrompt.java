@@ -64,9 +64,7 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     {
         return String.format("""
             Failed Instruction: %s
-            Failure Details/Exception: %s
-
-            Examine the screenshot of the SUT page attached to this request and output the brief natural language explanation of the visual root cause.
+            Failure Details: %s
             """,
             this.failedInstruction != null ? this.failedInstruction : "(Unknown instruction)",
             this.errorMessage != null ? this.errorMessage : "(No error message)"
