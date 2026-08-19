@@ -50,7 +50,7 @@ def analyze_and_generate_run_json(run_dir_path):
     execution_files = []
     for root, _, files in os.walk(run_dir):
         for file in files:
-            if file.endswith(".json") and file != "run.json":
+            if file.endswith(".json") and file not in ("run.json", "batch.json"):
                 full_path = Path(root) / file
                 rel_path = full_path.relative_to(run_dir)
                 execution_files.append((rel_path, full_path))
@@ -75,17 +75,14 @@ def analyze_and_generate_run_json(run_dir_path):
     for rel_path, full_path in execution_files:
         parts = rel_path.parts
         if len(parts) >= 3:
-            area_folder = parts[0]
-            class_folder = parts[1]
-            exec_filename = parts[2]
+            folder_area = parts[0]
+            folder_class = parts[1]
         elif len(parts) == 2:
-            area_folder = parts[0]
-            class_folder = "DefaultClass"
-            exec_filename = parts[1]
+            folder_area = ""
+            folder_class = parts[0]
         else:
-            area_folder = "General"
-            class_folder = "GeneralClass"
-            exec_filename = parts[0]
+            folder_area = ""
+            folder_class = ""
 
         try:
             with open(full_path, "r", encoding="utf-8") as f:
@@ -118,23 +115,82 @@ def analyze_and_generate_run_json(run_dir_path):
         else:
             summary_counts["pass"] += 1
 
-        # Populate area/class hierarchy
-        area_name = exec_data.get("areaName", area_folder)
-        test_class_name = exec_data.get("testClass", class_folder)
+        # Determine area/category and test class
+        test_class_name = exec_data.get("testClass")
+        if test_class_name and (test_class_name.endswith(".json") or test_class_name == full_path.name):
+            test_class_name = None
+
+        if not test_class_name or not test_class_name.strip() or test_class_name in ["GeneralClass", "DefaultClass"]:
+            if folder_class:
+                test_class_name = folder_class
+            elif exec_data.get("testFile"):
+                tf = exec_data.get("testFile")
+                if "#" in tf:
+                    tf = tf.split("#")[0]
+                if "." in tf:
+                    test_class_name = tf.split(".")[-1]
+                else:
+                    test_class_name = tf
+            elif exec_data.get("testId"):
+                test_class_name = exec_data.get("testId").replace(" ", "")
+            else:
+                test_class_name = "DefaultClass"
+        else:
+            test_class_name = test_class_name.strip()
+
+        raw_area = exec_data.get("areaName") or exec_data.get("category")
+        if raw_area and (raw_area == folder_class or raw_area == full_path.name or raw_area == test_class_name or raw_area == "General"):
+            raw_area = None
+
+        if not raw_area or raw_area.strip() in ["", "General"]:
+            if folder_area and folder_area != "General":
+                area_name = folder_area
+            else:
+                area_name = "Browsing (default)"
+        else:
+            area_name = raw_area.strip()
+
+        exec_data["areaName"] = area_name
+        exec_data["testClass"] = test_class_name
+
+        # Ensure file is moved to target area and test class folder on disk if needed
+        target_dir = run_dir / area_name / test_class_name
+        target_file = target_dir / full_path.name
+
+        if full_path.resolve() != target_file.resolve():
+            target_dir.mkdir(parents=True, exist_ok=True)
+            with open(target_file, "w", encoding="utf-8") as out_f:
+                json.dump(exec_data, out_f, indent=2)
+            try:
+                old_parent = full_path.parent
+                full_path.unlink()
+                if old_parent.exists() and not any(old_parent.iterdir()):
+                    old_parent.rmdir()
+                    if old_parent.parent.exists() and old_parent.parent != run_dir and not any(old_parent.parent.iterdir()):
+                        old_parent.parent.rmdir()
+            except Exception:
+                pass
+            full_path = target_file
+
+        area_folder = area_name
+        class_folder = test_class_name
+        exec_filename = full_path.name
 
         if area_folder not in areas_map:
+            clean_group = area_folder.replace(" ", "").replace("(", "").replace(")", "").replace("@", "")
             areas_map[area_folder] = {
                 "areaName": area_name,
-                "areaGroup": f"areaGroup{area_folder}",
+                "areaGroup": f"areaGroup{clean_group}",
                 "folder": area_folder,
                 "classes": {}
             }
 
         class_map = areas_map[area_folder]["classes"]
         if class_folder not in class_map:
+            clean_container = class_folder.replace(".", "").replace(" ", "")
             class_map[class_folder] = {
                 "className": test_class_name,
-                "classContainer": f"classContainer{class_folder}",
+                "classContainer": f"classContainer{clean_container}",
                 "folder": class_folder,
                 "executions": []
             }

@@ -865,6 +865,16 @@ public final class PreliminaryReportListener implements ExecutionListener
                 Files.createDirectories(this.outputDirectory);
             }
 
+            final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
+            final String testClassFolder = this.report.getTestClass() != null && !this.report.getTestClass().isBlank()
+                ? extractSimpleClassName(this.report.getTestClass())
+                : "DefaultTestClass";
+            final Path structuredOutputDir = this.outputDirectory.resolve(runFolder).resolve(testClassFolder);
+            if (!Files.exists(structuredOutputDir))
+            {
+                Files.createDirectories(structuredOutputDir);
+            }
+
             final String baseFileName = computeBaseFileName();
             this.lastBaseFileName = baseFileName;
 
@@ -876,18 +886,24 @@ public final class PreliminaryReportListener implements ExecutionListener
                         final String htmlContent = this.htmlGenerator.generate(this.report);
                         final Path htmlFile = this.outputDirectory.resolve(baseFileName + ".html");
                         Files.writeString(htmlFile, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                        final Path structuredHtmlFile = structuredOutputDir.resolve(baseFileName + ".html");
+                        Files.writeString(structuredHtmlFile, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("📊 Preliminary HTML report written: {}", htmlFile.toAbsolutePath());
                     }
                     case MARKDOWN -> {
                         final String mdContent = this.markdownGenerator.generate(this.report);
                         final Path mdFile = this.outputDirectory.resolve(baseFileName + ".md");
                         Files.writeString(mdFile, mdContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                        final Path structuredMdFile = structuredOutputDir.resolve(baseFileName + ".md");
+                        Files.writeString(structuredMdFile, mdContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("📝 Preliminary Markdown report written: {}", mdFile.toAbsolutePath());
                     }
                     case JSON -> {
                         final String jsonContent = this.jsonGenerator.generate(this.report);
                         final Path jsonFile = this.outputDirectory.resolve(baseFileName + ".json");
                         Files.writeString(jsonFile, jsonContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                        final Path structuredJsonFile = structuredOutputDir.resolve(baseFileName + ".json");
+                        Files.writeString(structuredJsonFile, jsonContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("💾 Preliminary JSON report written: {}", jsonFile.toAbsolutePath());
                     }
                     case ALL -> {

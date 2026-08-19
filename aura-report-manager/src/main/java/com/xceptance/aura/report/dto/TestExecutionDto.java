@@ -59,7 +59,7 @@ public final class TestExecutionDto
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "passed-clean", "Java", "US", "Chrome", "NONE", new ArrayList<>(), null, "General", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null);
+        this("", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null);
     }
 
     @JsonCreator
@@ -83,28 +83,144 @@ public final class TestExecutionDto
         @JsonProperty("dataBindings") final Map<String, String> dataBindings,
         @JsonProperty("localDataBindings") final Map<String, String> localDataBindings,
         @JsonProperty("blocks") final JsonNode blocks,
-        @JsonProperty("steps") final JsonNode steps)
+        @JsonProperty("steps") final JsonNode steps,
+        @JsonProperty("testId") final String testId,
+        @JsonProperty("datasetId") final String datasetId)
     {
-        this.id = id != null ? id : "";
+        final String effectiveTestClass;
+        if (testClass != null && !testClass.trim().isEmpty())
+        {
+            effectiveTestClass = testClass.trim();
+        }
+        else if (testFile != null && !testFile.trim().isEmpty())
+        {
+            String tf = testFile.trim();
+            if (tf.contains("#"))
+            {
+                tf = tf.substring(0, tf.indexOf('#'));
+            }
+            if (tf.contains("."))
+            {
+                tf = tf.substring(tf.lastIndexOf('.') + 1);
+            }
+            effectiveTestClass = !tf.trim().isEmpty() ? tf.trim() : "DefaultClass";
+        }
+        else if (junitTags != null && !junitTags.isEmpty() && !junitTags.get(0).trim().isEmpty())
+        {
+            effectiveTestClass = junitTags.get(0).trim();
+        }
+        else
+        {
+            effectiveTestClass = "DefaultClass";
+        }
+        this.testClass = effectiveTestClass;
+
+        if (id != null && !id.trim().isEmpty())
+        {
+            this.id = id.trim();
+        }
+        else if (testId != null && !testId.trim().isEmpty())
+        {
+            this.id = testId.trim();
+        }
+        else if (datasetId != null && !datasetId.trim().isEmpty())
+        {
+            this.id = datasetId.trim();
+        }
+        else
+        {
+            this.id = "";
+        }
+
+        if (title != null && !title.trim().isEmpty())
+        {
+            this.title = title.trim();
+        }
+        else if (datasetId != null && !datasetId.trim().isEmpty())
+        {
+            this.title = datasetId.trim();
+        }
+        else if (testId != null && !testId.trim().isEmpty())
+        {
+            this.title = testId.trim();
+        }
+        else
+        {
+            this.title = "";
+        }
+
         this.runId = runId != null ? runId : "";
-        this.testClass = testClass != null ? testClass : "";
-        this.title = title != null ? title : "";
         this.testName = (testName != null && !testName.isEmpty()) ? testName : (this.testClass + " " + this.title).trim();
         this.playbookFile = playbookFile != null ? playbookFile : "";
         this.testFile = testFile != null ? testFile : "";
         this.status = status != null ? status : "passed-clean";
         this.engine = engine != null ? engine : "Java";
-        this.location = location != null ? location : "US";
-        this.browser = browser != null ? browser : "Chrome";
+        this.location = (location != null && !location.trim().isEmpty()) ? location.trim() : "UNKNOWN";
+
+        final String effectiveBrowser;
+        if (browser != null && !browser.trim().isEmpty())
+        {
+            final String b = browser.trim();
+            if ("chrome".equalsIgnoreCase(b))
+            {
+                effectiveBrowser = "Chrome";
+            }
+            else if ("firefox".equalsIgnoreCase(b))
+            {
+                effectiveBrowser = "Firefox";
+            }
+            else if ("edge".equalsIgnoreCase(b))
+            {
+                effectiveBrowser = "Edge";
+            }
+            else if ("safari".equalsIgnoreCase(b))
+            {
+                effectiveBrowser = "Safari";
+            }
+            else
+            {
+                effectiveBrowser = Character.toUpperCase(b.charAt(0)) + b.substring(1);
+            }
+        }
+        else
+        {
+            effectiveBrowser = "Unknown";
+        }
+        this.browser = effectiveBrowser;
         this.failure = failure != null ? failure : "NONE";
         this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
         this.comment = comment;
-        this.areaName = (areaName != null && !areaName.trim().isEmpty()) ? areaName.trim() : "General";
+        this.areaName = (areaName != null && !areaName.trim().isEmpty() && !"General".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Browsing (default)";
         this.junitTags = junitTags != null ? new ArrayList<>(junitTags) : new ArrayList<>();
         this.dataBindings = dataBindings != null ? new HashMap<>(dataBindings) : new HashMap<>();
         this.localDataBindings = localDataBindings != null ? new HashMap<>(localDataBindings) : new HashMap<>();
         this.blocks = blocks;
         this.steps = steps;
+    }
+
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String title,
+        final String testName,
+        final String playbookFile,
+        final String testFile,
+        final String status,
+        final String engine,
+        final String location,
+        final String browser,
+        final String failure,
+        final List<String> bugs,
+        final String comment,
+        final String areaName,
+        final List<String> junitTags,
+        final Map<String, String> dataBindings,
+        final Map<String, String> localDataBindings,
+        final JsonNode blocks,
+        final JsonNode steps)
+    {
+        this(id, runId, testClass, title, testName, playbookFile, testFile, status, engine, location, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null);
     }
 
     public TestExecutionDto(
@@ -118,7 +234,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, title, testClass + " " + title, "", "", status, engine, location, browser, failure, bugs, null, "General", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null);
+        this(id, "", testClass, title, testClass + " " + title, "", "", status, engine, location, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null);
     }
 
     public String getId()
@@ -207,7 +323,7 @@ public final class TestExecutionDto
 
     public String getAreaName()
     {
-        return (areaName != null && !areaName.trim().isEmpty()) ? areaName.trim() : "General";
+        return (areaName != null && !areaName.trim().isEmpty() && !"General".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Browsing (default)";
     }
 
     public List<String> getJunitTags()

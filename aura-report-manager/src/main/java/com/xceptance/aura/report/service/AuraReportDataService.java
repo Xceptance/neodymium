@@ -314,9 +314,9 @@ public class AuraReportDataService
             .collect(Collectors.groupingBy(
                 v -> {
                     String area = v.getAreaTag();
-                    if (area == null || area.trim().isEmpty())
+                    if (area == null || area.trim().isEmpty() || "@General".equalsIgnoreCase(area.trim()))
                     {
-                        return "@General";
+                        return "@Browsing (default)";
                     }
                     if (!area.startsWith("@"))
                     {
@@ -643,25 +643,7 @@ public class AuraReportDataService
             final List<TestExecutionDto> executions = liveRunBuffer.getOrDefault(runId, List.of());
             try
             {
-                final String jsonContent = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(Map.of(
-                    "runId", runId,
-                    "batchName", run.getBatchName(),
-                    "environment", run.getEnvironment(),
-                    "trigger", run.getTriggerSource(),
-                    "timestamp", run.getTimestampLabel(),
-                    "summary", Map.of(
-                        "total", run.getTotalTests(),
-                        "pass", run.getPassedCount(),
-                        "fixed", run.getSucceededFixedCount(),
-                        "known", run.getFailedKnownCount(),
-                        "unknown", run.getFailedUnknownCount(),
-                        "ignored", run.getIgnoredCount(),
-                        "passRate", run.getPassRate()
-                    ),
-                    "executions", executions
-                ));
-
-                localRunJsonStorageService.writeRunJson(runId, jsonContent);
+                localRunJsonStorageService.generateRunJsonFromTestExecutions(localRunJsonStorageService.getRunDir(runId).toFile(), runId);
                 run.setRunJsonPath("storage/runs/" + runId + "/run.json");
                 runRepository.save(run);
 
@@ -808,30 +790,16 @@ public class AuraReportDataService
             final int total = report.getTotalCount();
             final double passRate = total > 0 ? Math.round((report.getPassCount() + report.getFixedCount()) * 100.0 / total * 10.0) / 10.0 : 0.0;
 
-            final String jsonContent = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(Map.of(
-                "runId", runId,
-                "batchName", batchName,
-                "environment", env,
-                "duration", duration,
-                "summary", Map.of(
-                    "total", total,
-                    "passed", report.getPassCount(),
-                    "fixed", report.getFixedCount(),
-                    "known", report.getKnownCount(),
-                    "unknown", report.getUnknownCount(),
-                    "ignored", report.getIgnoredCount(),
-                    "passRate", passRate
-                ),
-                "executions", report.getExecutions()
-            ));
-            localRunJsonStorageService.writeRunJson(runId, jsonContent);
+            final Path runDir = localRunJsonStorageService.getRunDir(runId);
+            Files.createDirectories(runDir);
 
-            for (final TestExecutionDto exec : report.getExecutions())
+            if (report.getExecutions() != null && !report.getExecutions().isEmpty())
             {
-                localRunJsonStorageService.updateExecutionInRun(runId, exec.getId(), node -> {
-                    if (node instanceof com.fasterxml.jackson.databind.node.ObjectNode objNode)
-                    {
-                        objNode.put("status", exec.getStatus());
+                int index = 1;
+                for (final TestExecutionDto exec : report.getExecutions())
+                {
+                    final boolean updated = localRunJsonStorageService.updateExecutionInRun(runId, exec.getId(), node -> {
+                        node.put("status", exec.getStatus());
                         final com.fasterxml.jackson.databind.node.ArrayNode bugsArray = objectMapper.createArrayNode();
                         if (exec.getBugs() != null)
                         {
@@ -840,10 +808,43 @@ public class AuraReportDataService
                                 bugsArray.add(bug);
                             }
                         }
-                        objNode.set("bugs", bugsArray);
+                        node.set("bugs", bugsArray);
+                        if (exec.getComment() != null)
+                        {
+                            node.put("comment", exec.getComment());
+                        }
+                        if (exec.getAreaName() != null && !exec.getAreaName().trim().isEmpty())
+                        {
+                            node.put("areaName", exec.getAreaName().trim());
+                        }
+                        if (exec.getTestClass() != null && !exec.getTestClass().trim().isEmpty())
+                        {
+                            node.put("testClass", exec.getTestClass().trim());
+                        }
+                    });
+
+                    if (!updated)
+                    {
+                        final String area = (exec.getAreaName() != null && !exec.getAreaName().trim().isEmpty() && !"General".equalsIgnoreCase(exec.getAreaName().trim()))
+                                            ? exec.getAreaName().trim() : "Browsing (default)";
+                        final String testCls = (exec.getTestClass() != null && !exec.getTestClass().trim().isEmpty())
+                                               ? exec.getTestClass().trim() : "DefaultClass";
+                        final Path execDir = runDir.resolve(area).resolve(testCls);
+                        Files.createDirectories(execDir);
+
+                        final String filename = "console-execution-" + index + ".json";
+                        final Path execFile = execDir.resolve(filename);
+
+                        final ObjectNode execNode = objectMapper.valueToTree(exec);
+                        execNode.put("areaName", area);
+                        execNode.put("testClass", testCls);
+                        objectMapper.writerWithDefaultPrettyPrinter().writeValue(execFile.toFile(), execNode);
                     }
-                });
+                    index++;
+                }
             }
+
+            localRunJsonStorageService.generateRunJsonFromTestExecutions(runDir.toFile(), runId);
         }
         catch (final Exception e)
         {
@@ -1028,11 +1029,11 @@ public class AuraReportDataService
         final Map<String, List<TestClassSummaryDto>> byArea = testClasses.stream()
             .collect(Collectors.groupingBy(
                 tc -> {
-                    if (!tc.getExecutions().isEmpty() && tc.getExecutions().get(0).getAreaName() != null)
+                    if (!tc.getExecutions().isEmpty() && tc.getExecutions().get(0).getAreaName() != null && !"General".equalsIgnoreCase(tc.getExecutions().get(0).getAreaName()))
                     {
                         return tc.getExecutions().get(0).getAreaName();
                     }
-                    return "General";
+                    return "Browsing (default)";
                 },
                 LinkedHashMap::new,
                 Collectors.toList()

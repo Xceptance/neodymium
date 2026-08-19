@@ -199,4 +199,29 @@ public class InteractiveConsoleEngineTest
 
         assertTrue(stateJson.contains("\"browser\":\"Chrome_1024x768\""), "Top-level state JSON should contain browser property");
     }
+
+    @Test
+    public void testBuildStateJsonSerializesExecutionModeAndStepOrigin()
+    {
+        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+        context.getTransientData().put(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_WITH_HEALING);
+
+        final org.neodymium.ai.model.PlaybookStep step1 = new org.neodymium.ai.model.PlaybookStep();
+        step1.setInstruction("Replayed step");
+        step1.setSourceFile("playbook.json");
+        step1.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+
+        final org.neodymium.ai.model.PlaybookStep step2 = new org.neodymium.ai.model.PlaybookStep();
+        step2.setInstruction("Healed step");
+        step2.setSourceFile("playbook.json");
+        step2.setStatus(org.neodymium.ai.model.PlaybookStepStatus.HEALED);
+
+        context.getTransientData().put("playbook.flatSteps", java.util.List.of(step1, step2));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-origin", 0, "running");
+
+        assertTrue(stateJson.contains("\"executionMode\":\"REPLAY_WITH_HEALING\""), "Top-level state JSON should contain executionMode");
+        assertTrue(stateJson.contains("\"origin\":\"PLAYBOOK\""), "Replayed step origin should be PLAYBOOK");
+        assertTrue(stateJson.contains("\"origin\":\"HEALED\""), "Healed step origin should be HEALED");
+    }
 }

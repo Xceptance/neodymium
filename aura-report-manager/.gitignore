@@ -2,6 +2,7 @@ target/
 data/
 storage/
 storage1/
+storage2/
 storage_was/
 *.db
 !.mvn/wrapper/maven-wrapper.jar
@@ -29,3 +30,4 @@ storage_was/
 ### OS ###
 .DS_Store
 Thumbs.db
+/bin/

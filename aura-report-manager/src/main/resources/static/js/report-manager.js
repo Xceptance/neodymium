@@ -493,19 +493,23 @@ function applyRunReportFilters() {
     const bugMenu = document.getElementById('bugMultiselectMenu');
     const failureMenu = document.getElementById('failureMultiselectMenu');
 
-    const selectedLocs = locMenu ? Array.from(locMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.toUpperCase()) : [];
-    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
+    const selectedLocs = locMenu ? Array.from(locMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
+    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
     const selectedBugs = bugMenu ? Array.from(bugMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
     const selectedFailures = failureMenu ? Array.from(failureMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
 
     document.querySelectorAll('#runReportSubTabAllTests .test-row').forEach(row => {
-        const loc = (row.getAttribute('data-location') || '').toUpperCase();
-        const browser = row.getAttribute('data-browser') || '';
+        let loc = (row.getAttribute('data-location') || '').trim().toUpperCase();
+        if (!loc) loc = 'UNKNOWN';
+
+        let browser = (row.getAttribute('data-browser') || '').trim().toUpperCase();
+        if (!browser) browser = 'UNKNOWN';
+
         const bugs = (row.getAttribute('data-bugs') || '').split(',');
         const failure = row.getAttribute('data-failure') || 'NONE';
 
         const matchLoc = selectedLocs.length === 0 || selectedLocs.includes(loc);
-        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.includes(browser);
+        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.some(b => b === browser || browser.includes(b) || b.includes(browser));
 
         let matchBug = selectedBugs.length === 0;
         if (!matchBug) {
@@ -749,6 +753,12 @@ function recalculateRunReportMetrics() {
         else if (st === 'ignored') ignored++;
     });
 
+    const totalExecutions = pass + fixed + known + unknown + ignored;
+    const wholeTotalChip = document.getElementById('wholeExecutionTotalCountChip');
+    if (wholeTotalChip) {
+        wholeTotalChip.innerText = `${totalExecutions} Executions`;
+    }
+
     const elPass = document.getElementById('metricValPassed');
     const elFixed = document.getElementById('metricValSucceeded');
     const elKnown = document.getElementById('metricValKnownFail');
@@ -772,10 +782,9 @@ function recalculateRunReportMetrics() {
         `;
     }
 
-    // Recalculate Area Breakdown and Pie Charts on Overview tab
+    // Recalculate Area Breakdown and Pie Charts on Overview tab & Area Group Headers on All Tests tab
     document.querySelectorAll('#runReportSubTabAllTests .area-group').forEach(areaGroup => {
-        let areaName = areaGroup.getAttribute('data-area') || '';
-        if (areaName === 'Authentication') areaName = 'Auth';
+        const areaName = areaGroup.getAttribute('data-area') || '';
         const areaRows = areaGroup.querySelectorAll('.test-row');
 
         let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0;
@@ -788,54 +797,65 @@ function recalculateRunReportMetrics() {
             else if (st === 'ignored') aIgnored++;
         });
 
-        const areaSummaryContainer = document.getElementById(`area${areaName}SummaryBadges`);
-        if (areaSummaryContainer) {
-            areaSummaryContainer.innerHTML = `
-                <span class="badge-status badge-pass clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('passed-clean');" data-status-type="passed-clean" data-status-key="passed-clean">${aPass}</span>
-                <span class="badge-status badge-fixed clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('succeeded-fixed');" data-status-type="succeeded-fixed" data-status-key="succeeded-fixed">${aFixed}</span>
-                <span class="badge-status badge-known-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-known');" data-status-type="failed-known" data-status-key="failed-known">${aKnown}</span>
-                <span class="badge-status badge-unknown-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-unknown');" data-status-type="failed-unknown" data-status-key="failed-unknown">${aUnknown}</span>
-                <span class="badge-status badge-ignored clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('ignored');" data-status-type="ignored" data-status-key="ignored">${aIgnored}</span>
-            `;
+        const totalArea = aPass + aFixed + aKnown + aUnknown + aIgnored;
+
+        // 1. Update Area Group Header Badges & Count Chip in "All Tests" tab
+        const areaExecChip = areaGroup.querySelector('.area-exec-count-chip');
+        if (areaExecChip) {
+            areaExecChip.innerText = `${totalArea} Executions`;
         }
 
-        const piePass = document.getElementById(`pieValPassed${areaName}`);
-        const pieFixed = document.getElementById(`pieValSucceeded${areaName}`);
-        const pieKnown = document.getElementById(`pieValKnownFail${areaName}`);
-        const pieUnknown = document.getElementById(`pieValUnknownFail${areaName}`);
-        const pieIgnored = document.getElementById(`pieValIgnored${areaName}`);
+        const areaBadgesContainer = areaGroup.querySelector('.area-summary-badges') || areaGroup.querySelector('.area-group-header .flex-gap-2');
+        if (areaBadgesContainer) {
+            let badgesHtml = '';
+            if (aPass > 0) badgesHtml += `<span class="badge-status badge-pass clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('passed-clean');" data-status-type="passed-clean" data-status-key="passed-clean">${aPass}</span>`;
+            if (aFixed > 0) badgesHtml += `<span class="badge-status badge-fixed clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('succeeded-fixed');" data-status-type="succeeded-fixed" data-status-key="succeeded-fixed">${aFixed}</span>`;
+            if (aKnown > 0) badgesHtml += `<span class="badge-status badge-known-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-known');" data-status-type="failed-known" data-status-key="failed-known">${aKnown}</span>`;
+            if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-unknown');" data-status-type="failed-unknown" data-status-key="failed-unknown">${aUnknown}</span>`;
+            if (aIgnored > 0) badgesHtml += `<span class="badge-status badge-ignored clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('ignored');" data-status-type="ignored" data-status-key="ignored">${aIgnored}</span>`;
+            areaBadgesContainer.innerHTML = badgesHtml;
+        }
 
-        if (piePass) piePass.innerText = aPass;
-        if (pieFixed) pieFixed.innerText = aFixed;
-        if (pieKnown) pieKnown.innerText = aKnown;
-        if (pieUnknown) pieUnknown.innerText = aUnknown;
-        if (pieIgnored) pieIgnored.innerText = aIgnored;
+        // 2. Update corresponding Area Pie Card on Overview tab
+        const pieCard = document.querySelector(`.area-pie-card[data-area="${CSS.escape(areaName)}"]`);
+        if (pieCard) {
+            const valPass = pieCard.querySelector('.val-pass');
+            const valFixed = pieCard.querySelector('.val-fixed');
+            const valKnown = pieCard.querySelector('.val-known');
+            const valUnknown = pieCard.querySelector('.val-unknown');
+            const valIgnored = pieCard.querySelector('.val-ignored');
 
-        const total = aPass + aFixed + aKnown + aUnknown + aIgnored;
-        const svgWrapper = document.getElementById(`pieChartSvgWrapper${areaName}`);
-        if (svgWrapper && total > 0) {
-            const pPass = (aPass / total) * 100;
-            const pFixed = (aFixed / total) * 100;
-            const pKnown = (aKnown / total) * 100;
-            const pUnknown = (aUnknown / total) * 100;
-            const pIgnored = (aIgnored / total) * 100;
+            if (valPass) valPass.innerText = aPass;
+            if (valFixed) valFixed.innerText = aFixed;
+            if (valKnown) valKnown.innerText = aKnown;
+            if (valUnknown) valUnknown.innerText = aUnknown;
+            if (valIgnored) valIgnored.innerText = aIgnored;
 
-            const cPass = `${pPass} ${100 - pPass}`;
-            const cFixed = `${pFixed} ${100 - pFixed}`;
-            const cKnown = `${pKnown} ${100 - pKnown}`;
-            const cUnknown = `${pUnknown} ${100 - pUnknown}`;
-            const cIgnored = `${pIgnored} ${100 - pIgnored}`;
+            const svgWrapper = pieCard.querySelector('.pie-chart-wrapper');
+            if (svgWrapper && totalArea > 0) {
+                const pPass = (aPass / totalArea) * 100;
+                const pFixed = (aFixed / totalArea) * 100;
+                const pKnown = (aKnown / totalArea) * 100;
+                const pUnknown = (aUnknown / totalArea) * 100;
+                const pIgnored = (aIgnored / totalArea) * 100;
 
-            svgWrapper.innerHTML = `
-                <svg width="100%" height="100%" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#059669" stroke-width="5" stroke-dasharray="${cPass}" stroke-dashoffset="25"/>
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#2563eb" stroke-width="5" stroke-dasharray="${cFixed}" stroke-dashoffset="${25 - pPass}"/>
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ea580c" stroke-width="5" stroke-dasharray="${cKnown}" stroke-dashoffset="${25 - pPass - pFixed}"/>
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#dc2626" stroke-width="5" stroke-dasharray="${cUnknown}" stroke-dashoffset="${25 - pPass - pFixed - pKnown}"/>
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#64748b" stroke-width="5" stroke-dasharray="${cIgnored}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown}"/>
-                </svg>
-            `;
+                const cPass = `${pPass} ${100 - pPass}`;
+                const cFixed = `${pFixed} ${100 - pFixed}`;
+                const cKnown = `${pKnown} ${100 - pKnown}`;
+                const cUnknown = `${pUnknown} ${100 - pUnknown}`;
+                const cIgnored = `${pIgnored} ${100 - pIgnored}`;
+
+                svgWrapper.innerHTML = `
+                    <svg width="100%" height="100%" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#059669" stroke-width="5" stroke-dasharray="${cPass}" stroke-dashoffset="25"/>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#2563eb" stroke-width="5" stroke-dasharray="${cFixed}" stroke-dashoffset="${25 - pPass}"/>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ea580c" stroke-width="5" stroke-dasharray="${cKnown}" stroke-dashoffset="${25 - pPass - pFixed}"/>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#dc2626" stroke-width="5" stroke-dasharray="${cUnknown}" stroke-dashoffset="${25 - pPass - pFixed - pKnown}"/>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#64748b" stroke-width="5" stroke-dasharray="${cIgnored}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown}"/>
+                    </svg>
+                `;
+            }
         }
     });
 
@@ -1349,15 +1369,18 @@ function applyTestBaseFilters() {
 
     if (!locMenu && !browserMenu) return;
 
-    const selectedLocs = locMenu ? Array.from(locMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.toUpperCase()) : [];
-    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
+    const selectedLocs = locMenu ? Array.from(locMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
+    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
 
     document.querySelectorAll('#pageTestBase .tb-entry-row').forEach(row => {
-        const loc = (row.getAttribute('data-location') || '').toUpperCase();
-        const browser = row.getAttribute('data-browser') || '';
+        let loc = (row.getAttribute('data-location') || '').trim().toUpperCase();
+        if (!loc) loc = 'UNKNOWN';
+
+        let browser = (row.getAttribute('data-browser') || '').trim().toUpperCase();
+        if (!browser) browser = 'UNKNOWN';
 
         const matchLoc = selectedLocs.length === 0 || selectedLocs.includes(loc);
-        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.includes(browser);
+        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.some(b => b === browser || browser.includes(b) || b.includes(browser));
 
         row.style.display = (matchLoc && matchBrowser) ? '' : 'none';
     });

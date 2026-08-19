@@ -75,7 +75,7 @@
 
                     <div class="area-pie-grid">
                         <!-- DYNAMIC AREA PIE CARDS -->
-                        <div th:each="area : ${report?.areaSummaries}" class="area-pie-card">
+                        <div th:each="area : ${report?.areaSummaries}" class="area-pie-card" th:data-area="${area.areaName}">
                             <div class="area-pie-card-header">
                                 <div class="area-pie-title">
                                     <span class="material-symbols-outlined text-accent">folder</span>
@@ -94,11 +94,11 @@
                                 </div>
 
                                 <div class="pie-breakdown-list">
-                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-pass);"></div> Successful</div><div class="val" style="color: var(--status-pass);" th:text="${area.passCount}">0</div></div>
-                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed Failed</div><div class="val" style="color: var(--status-fixed);" th:text="${area.fixedCount}">0</div></div>
-                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Failed</div><div class="val" style="color: var(--status-known-fail);" th:text="${area.knownCount}">0</div></div>
-                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div><div class="val" style="color: var(--status-unknown-fail);" th:text="${area.unknownCount}">0</div></div>
-                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored / Skipped</div><div class="val" style="color: var(--status-ignored);" th:text="${area.ignoredCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-pass);"></div> Successful</div><div class="val val-pass" style="color: var(--status-pass);" th:text="${area.passCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed Failed</div><div class="val val-fixed" style="color: var(--status-fixed);" th:text="${area.fixedCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Failed</div><div class="val val-known" style="color: var(--status-known-fail);" th:text="${area.knownCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div><div class="val val-unknown" style="color: var(--status-unknown-fail);" th:text="${area.unknownCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored / Skipped</div><div class="val val-ignored" style="color: var(--status-ignored);" th:text="${area.ignoredCount}">0</div></div>
                                 </div>
                             </div>
                         </div>
@@ -182,10 +182,10 @@
                                 <span class="material-symbols-outlined area-chevron">chevron_right</span>
                                 <span class="material-symbols-outlined text-accent">folder_open</span>
                                 <span>Area: @<span th:text="${area.areaName}">Checkout</span></span>
-                                <span class="tag-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
+                                <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
                             </div>
                             
-                            <div class="flex-gap-2">
+                            <div class="flex-gap-2 area-summary-badges">
                                 <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" th:text="${area.passCount}">1</span>
                                 <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" th:text="${area.fixedCount}">1</span>
                                 <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" th:text="${area.knownCount}">1</span>
