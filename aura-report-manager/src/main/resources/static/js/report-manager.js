@@ -7,142 +7,15 @@
 let currentActiveRowId = null;
 let currentExecutionIsFailed = true;
 let activeTryMap = {}; 
-let currentTestNameStr = 'CheckoutProcessTest';
-let currentDataSetStr = '[Data Set 1: US CreditCard]';
-let currentActiveRunId = '1049';
-let activeBatchName = 'US Nightly Regression';
+let currentTestNameStr = '';
+let currentDataSetStr = '';
+let currentActiveRunId = '#RUN_ID';
+let activeBatchName = 'Unknown';
 
-const executionCommentsMap = {
-    'row-ds-1': 'Investigated by QA: Known ZIP verification API bug under tracking.'
-};
-
-const executionBugMap = {
-    'row-ds-1': ['#BUG-4821', '#BUG-5102'],
-    'row-ds-2': ['#BUG-4109'],
-    'row-auth-2': ['#BUG-3012']
-};
-
-const executionStepsMap = {
-    'row-ds-1': {
-        retried: true,
-        totalTries: 2,
-        tries: {
-            1: {
-                engineOrigin: 'Java',
-                error: "org.openqa.selenium.NoSuchElementException: Element #btn-checkout-v1 not found within 2000ms timeout on Try #1.\n  at com.xceptance.neodymium.tests.CheckoutProcessTest.clickCheckout(CheckoutProcessTest.java:112)",
-                beforeSteps: [
-                    { num: 1, title: 'Initialize Web Driver & Open Store Homepage', engine: 'Java', duration: '1.0s', timestamp: '14:22:08.010', passed: true, actions: [{ name: 'NAVIGATE', target: 'url="https://demo.xceptance.com/shop"' }] }
-                ],
-                coreSteps: [
-                    { num: 2, title: 'Click Legacy Checkout Button #btn-checkout-v1', engine: 'Java', duration: '2.0s', timestamp: '14:22:09.010', passed: false, reasoning: 'Element #btn-checkout-v1 was absent in build #1049 DOM snapshot.', error: "NoSuchElementException: #btn-checkout-v1 not found.", actions: [{ name: 'CLICK', target: '#btn-checkout-v1' }] }
-                ],
-                afterSteps: []
-            },
-            2: {
-                engineOrigin: 'Healed',
-                error: "com.xceptance.neodymium.exceptions.ZipCodeInvalidException: Provided ZIP '90210' failed validation for US_WEST region.\n  at com.xceptance.neodymium.tests.CheckoutProcessTest.validateZip(CheckoutProcessTest.java:142)\n  at com.xceptance.neodymium.tests.CheckoutProcessTest.run(CheckoutProcessTest.java:88)",
-                beforeSteps: [
-                    { num: 1, title: 'Initialize Web Driver & Open Store Homepage', engine: 'Java', duration: '1.2s', timestamp: '14:22:10.102', passed: true, actions: [{ name: 'CLEAR_COOKIES', target: 'ClearCookiesAction.java' }, { name: 'NAVIGATE', target: 'url="https://demo.xceptance.com/shop"' }] },
-                    { num: 2, title: 'Accept Cookie Consent Banner', engine: 'Java', duration: '450ms', timestamp: '14:22:11.302', passed: true, actions: [{ name: 'CLICK', target: '#btn-accept-all-cookies' }] }
-                ],
-                coreSteps: [
-                    { 
-                        num: 3, 
-                        title: 'Type \'Neodymium\' in the Search input field', 
-                        engine: 'AI', 
-                        duration: '2.8s', 
-                        tokens: '5204 in / 130 out', 
-                        timestamp: '14:22:11.752', 
-                        passed: true, 
-                        reasoning: 'The instruction is to type \'Neodymium\' into the search input field. I identified the search input field using its unique and stable \'id\' attribute, \'searchInput\', and generated a TYPE action.', 
-                        subSteps: [
-                            { num: '3.1', title: 'Locate search input element #searchInput', engine: 'AI', duration: '1.1s', timestamp: '14:22:11.752', passed: true, reasoning: 'Scanned DOM tree using selector #searchInput. Found matching visible input field.', actions: [{ name: 'LOCATE', target: '#searchInput' }] },
-                            { num: '3.2', title: 'Type "Neodymium" into input field & submit', engine: 'AI', duration: '1.7s', timestamp: '14:22:12.852', passed: true, reasoning: 'Dispatched keyboard TYPE sequence "Neodymium" followed by Key.ENTER trigger.', actions: [{ name: 'TYPE', target: '#searchInput = Neodymium' }, { name: 'KEYPRESS', target: 'Key.ENTER' }] }
-                        ]
-                    },
-                    { 
-                        num: 4, 
-                        title: 'Proceed to Checkout & Enter Shipping Info', 
-                        engine: 'Healed', 
-                        duration: '3.4s', 
-                        tokens: '4120 in / 95 out', 
-                        timestamp: '14:22:14.552', 
-                        passed: true, 
-                        reasoning: 'Primary CSS selector #btn-checkout-v1 failed due to DOM refactoring in build #1049. Aura dHash & visual tree matcher identified target element #submit-checkout-btn with 98.6% visual confidence and automatically re-anchored locator.', 
-                        subSteps: [
-                            { num: '4.1', title: 'Self-heal checkout button locator', engine: 'Healed', duration: '1.8s', timestamp: '14:22:14.552', passed: true, reasoning: 'Re-anchored broken locator #btn-checkout-v1 to #submit-checkout-btn via visual dHash graph.', actions: [{ name: 'HEAL_LOCATOR', target: '#submit-checkout-btn' }] },
-                            { num: '4.2', title: 'Fill first name & last name fields', engine: 'Java', duration: '1.6s', timestamp: '14:22:16.352', passed: true, reasoning: 'Entered parameter value "John" into input[name="firstName"].', actions: [{ name: 'TYPE', target: 'input[name="firstName"] = John' }] }
-                        ]
-                    },
-                    { 
-                        num: 5, 
-                        title: 'Validate ZIP Code & Submit Order', 
-                        engine: 'Playbook', 
-                        duration: '400ms', 
-                        timestamp: '14:22:17.952', 
-                        passed: false, 
-                        reasoning: 'Executed Playbook block US_WEST_Zip_Validation_Flow. Assertion failed when API rejected ZIP parameter.', 
-                        error: "com.xceptance.neodymium.exceptions.ZipCodeInvalidException: Provided ZIP '90210' failed validation for US_WEST region.\n  at com.xceptance.neodymium.tests.CheckoutProcessTest.validateZip(CheckoutProcessTest.java:142)\n  at com.xceptance.neodymium.tests.CheckoutProcessTest.run(CheckoutProcessTest.java:88)", 
-                        actions: [{ name: 'TYPE', target: 'input[name="zip"] = 90210' }, { name: 'ASSERT', target: 'TextEquals US_WEST' }] 
-                    }
-                ],
-                afterSteps: [
-                    { num: 6, title: 'Capture Attachments & Teardown Driver', engine: 'Java', duration: '300ms', timestamp: '14:22:18.352', passed: true, actions: [{ name: 'STORE', target: 'failure_screenshot_step3.png' }] }
-                ]
-            }
-        }
-    },
-    'row-ds-2': {
-        engineOrigin: 'AI Driven',
-        beforeSteps: [
-            { num: 1, title: 'Initialize Web Driver & Open Store Homepage', engine: 'Java', duration: '1.1s', timestamp: '11:15:00.050', passed: true, actions: [{ name: 'CLEAR_COOKIES', target: 'ClearCookiesAction.java' }, { name: 'NAVIGATE', target: 'url="https://demo.xceptance.com/shop"' }] },
-            { num: 2, title: 'Accept Cookie Consent Banner', engine: 'Java', duration: '380ms', timestamp: '11:15:01.150', passed: true, actions: [{ name: 'CLICK', target: '#btn-accept-all-cookies' }] }
-        ],
-        coreSteps: [
-            { num: 3, title: 'Select PayPal Express Payment Gateway', engine: 'AI', duration: '2.4s', tokens: '3810 in / 112 out', timestamp: '11:15:01.530', passed: true, reasoning: 'AI Agent identified PayPal visual emblem and interactive iframe button dynamically across multi-tenant locale variations.', actions: [{ name: 'CLICK', target: '#paypal-express-btn' }] },
-            { num: 4, title: 'Authenticate PayPal Sandbox & Approve Transaction', engine: 'Playbook', duration: '1.9s', timestamp: '11:15:03.930', passed: true, reasoning: 'Playbook rule PayPal_Sandbox_Auth executed successfully.', actions: [{ name: 'TYPE', target: 'input[name="paypalUser"] = buyer@xceptance.com' }, { name: 'CLICK', target: '#paypal-submit-btn' }] }
-        ],
-        afterSteps: [
-            { num: 5, title: 'Close Session & Teardown Driver', engine: 'Java', duration: '250ms', timestamp: '11:15:05.830', passed: true, actions: [{ name: 'CLEAR_COOKIES', target: 'ClearCookiesAction.java' }] }
-        ]
-    },
-    'row-ds-3': {
-        engineOrigin: 'Playbook',
-        beforeSteps: [
-            { num: 1, title: 'Initialize Web Driver & Open Store Homepage', engine: 'Java', duration: '1.0s', timestamp: '18:30:00.100', passed: true, actions: [{ name: 'NAVIGATE', target: 'url="https://demo.xceptance.com/shop"' }] }
-        ],
-        coreSteps: [
-            { num: 2, title: 'Execute Express Checkout Fast Path', engine: 'Playbook', duration: '1.5s', timestamp: '18:30:01.100', passed: true, reasoning: 'Playbook block Express_Checkout_FastPath executed without errors.', actions: [{ name: 'CLICK', target: '#express-btn' }] },
-            { num: 3, title: 'Verify Order Confirmation ID', engine: 'Playbook', duration: '350ms', timestamp: '18:30:02.600', passed: false, reasoning: 'Playbook assertion for Order Confirmation ID failed due to NullPointer in response payload.', error: "java.lang.NullPointerException: Cannot read field 'orderId' because 'response' is null\n  at com.xceptance.neodymium.tests.CheckoutProcessTest.verifyOrder(CheckoutProcessTest.java:198)", actions: [{ name: 'ASSERT', target: 'NotNull orderId' }] }
-        ],
-        afterSteps: [
-            { num: 4, title: 'Capture Failure Screenshot & Teardown', engine: 'Java', duration: '280ms', timestamp: '18:30:02.950', passed: true, actions: [{ name: 'STORE', target: 'failure_screenshot.png' }] }
-        ]
-    }
-};
-
-const batchRunStatsRegistry = {
-    'US Nightly Regression': {
-        runIds: ['1045', '1046', '1047', '1048', '1049'],
-        maxTests: 8,
-        stats: {
-            '1045': { x: 50, title: 'Run #1045 (3 days ago)', pass: 1, fixed: 1, known: 2, unknown: 1, ignored: 1, total: '6 Tests', rate: '16.7%' },
-            '1046': { x: 230, title: 'Run #1046 (2 days ago)', pass: 3, fixed: 1, known: 1, unknown: 1, ignored: 1, total: '7 Tests', rate: '42.9%' },
-            '1047': { x: 420, title: 'Run #1047 (Yesterday)', pass: 2, fixed: 2, known: 1, unknown: 1, ignored: 1, total: '7 Tests', rate: '28.6%' },
-            '1048': { x: 610, title: 'Run #1048 (Today 11:15)', pass: 4, fixed: 2, known: 1, unknown: 0, ignored: 1, total: '8 Tests', rate: '50.0%' },
-            '1049': { x: 800, title: 'Run #1049 (Latest)', pass: 3, fixed: 2, known: 1, unknown: 1, ignored: 1, total: '8 Tests', rate: '37.5%' }
-        }
-    },
-    'EU Smoke Suite': {
-        runIds: ['1042', '1043', '1044'],
-        maxTests: 12,
-        stats: {
-            '1042': { x: 50, title: 'Run #1042 (2 days ago)', pass: 8, fixed: 1, known: 1, unknown: 0, ignored: 0, total: '10 Tests', rate: '80.0%' },
-            '1043': { x: 420, title: 'Run #1043 (Yesterday)', pass: 9, fixed: 1, known: 1, unknown: 0, ignored: 0, total: '11 Tests', rate: '81.8%' },
-            '1044': { x: 800, title: 'Run #1044 (Latest)', pass: 10, fixed: 1, known: 1, unknown: 0, ignored: 0, total: '12 Tests', rate: '83.3%' }
-        }
-    }
-};
+const executionCommentsMap = {};
+const executionBugMap = {};
+const executionStepsMap = {};
+const batchRunStatsRegistry = {};
 
 const activeClassFilters = {};
 const activeAreaFilters = {};
@@ -171,7 +44,7 @@ function showRunsList() {
 }
 
 function openBatchHistoryOverview(batchName, latestRunId) {
-    activeBatchName = batchName || 'US Nightly Regression';
+    activeBatchName = batchName || 'Unknown';
     
     // Show Batch History Overview view state inside batch-overview fragment
     const pageRunsList = document.getElementById('pageRunsList');
@@ -228,7 +101,9 @@ function handleTrendChartHover(event) {
     const tooltip = document.getElementById('trendHoverTooltip');
     if (!svg || !guide || !tooltip) return;
 
-    const registry = batchRunStatsRegistry[activeBatchName] || batchRunStatsRegistry['US Nightly Regression'];
+    const registry = batchRunStatsRegistry[activeBatchName] || (Object.values(batchRunStatsRegistry)[0] || { runIds: [], stats: {} });
+    if (!registry || !registry.runIds || registry.runIds.length === 0) return;
+
     const rect = svg.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
     const svgWidth = rect.width;
@@ -240,7 +115,9 @@ function handleTrendChartHover(event) {
     let minDist = 99999;
 
     runIds.forEach(id => {
-        const dist = Math.abs(viewBoxX - registry.stats[id].x);
+        const stat = registry.stats[id];
+        if (!stat) return;
+        const dist = Math.abs(viewBoxX - stat.x);
         if (dist < minDist) {
             minDist = dist;
             closestRun = id;
@@ -248,6 +125,7 @@ function handleTrendChartHover(event) {
     });
 
     const stat = registry.stats[closestRun];
+    if (!stat) return;
 
     guide.setAttribute('x1', stat.x);
     guide.setAttribute('x2', stat.x);
@@ -263,21 +141,21 @@ function handleTrendChartHover(event) {
         activeCircle.style.filter = 'url(#glow)';
     }
 
-    const runTitle = document.getElementById('ttRunTitle');
+    const runTitle = document.getElementById('ttRunTitle') || document.getElementById('trendTooltipTitle');
     if (runTitle) runTitle.innerText = stat.title;
     const passRate = document.getElementById('ttPassRate');
     if (passRate) passRate.innerText = `${stat.rate} Pass`;
     const totalVal = document.getElementById('ttTotalVal');
     if (totalVal) totalVal.innerText = stat.total;
-    const passVal = document.getElementById('ttPassVal');
+    const passVal = document.getElementById('ttPassVal') || document.getElementById('trendTooltipPass');
     if (passVal) passVal.innerText = stat.pass;
-    const fixedVal = document.getElementById('ttFixedVal');
+    const fixedVal = document.getElementById('ttFixedVal') || document.getElementById('trendTooltipFixed');
     if (fixedVal) fixedVal.innerText = stat.fixed;
-    const knownVal = document.getElementById('ttKnownVal');
+    const knownVal = document.getElementById('ttKnownVal') || document.getElementById('trendTooltipKnown');
     if (knownVal) knownVal.innerText = stat.known;
-    const unknownVal = document.getElementById('ttUnknownVal');
+    const unknownVal = document.getElementById('ttUnknownVal') || document.getElementById('trendTooltipUnknown');
     if (unknownVal) unknownVal.innerText = stat.unknown;
-    const ignoredVal = document.getElementById('ttIgnoredVal');
+    const ignoredVal = document.getElementById('ttIgnoredVal') || document.getElementById('trendTooltipIgnored');
     if (ignoredVal) ignoredVal.innerText = stat.ignored;
 
     let ttLeft = (stat.x / 800) * svgWidth + 15;
@@ -300,34 +178,120 @@ function hideTrendChartHover() {
         c.setAttribute('r', '6');
         c.style.filter = '';
     });
-    const registry = batchRunStatsRegistry[activeBatchName] || batchRunStatsRegistry['US Nightly Regression'];
+    const registry = batchRunStatsRegistry[activeBatchName] || (Object.values(batchRunStatsRegistry)[0] || { runIds: [] });
+    if (!registry || !registry.runIds || registry.runIds.length === 0) return;
     const latestId = registry.runIds[registry.runIds.length - 1];
     const lastCircle = document.querySelector(`#trendPoint-${latestId} circle`);
     if (lastCircle) lastCircle.setAttribute('r', '7');
 }
 
 function renderDynamicTrendChart(targetBatchName) {
-    const batchName = targetBatchName || activeBatchName || 'US Nightly Regression';
-    const registry = batchRunStatsRegistry[batchName] || batchRunStatsRegistry['US Nightly Regression'];
-    
+    const batchName = targetBatchName || activeBatchName || 'Unknown';
     const svg = document.getElementById('mainTrendSvg');
     if (!svg) return;
 
-    const runIds = registry.runIds;
-    const maxTests = registry.maxTests;
+    // Collect runs from DOM table
+    let rowElements = Array.from(document.querySelectorAll('#batchRunsHistoryTableBody tr.run-history-row'));
+    if (rowElements.length === 0) {
+        rowElements = Array.from(document.querySelectorAll('#batchSpecificRunsTableBody tr'));
+    }
+    if (rowElements.length === 0) {
+        rowElements = Array.from(document.querySelectorAll('#overviewRunsTableBody .run-directory-row'));
+    }
+
+    // In tables, rows are typically displayed newest to oldest. For trend charts, sort oldest to newest (left-to-right).
+    const runsData = [];
+    rowElements.slice().reverse().forEach(row => {
+        const rowBatch = row.querySelector('.tag-batch')?.innerText.trim() || '';
+        if (targetBatchName && rowBatch && !rowBatch.includes(targetBatchName) && !targetBatchName.includes(rowBatch)) {
+            return;
+        }
+        const runId = row.getAttribute('data-run-id') || row.querySelector('strong.text-mono')?.innerText.replace('#', '').trim() || '#RUN_ID';
+        const pass = parseInt(row.getAttribute('data-pass') || row.querySelector('.seg-pass')?.innerText.trim() || '0', 10) || 0;
+        const fixed = parseInt(row.getAttribute('data-fixed') || row.querySelector('.seg-fixed')?.innerText.trim() || '0', 10) || 0;
+        const known = parseInt(row.getAttribute('data-known') || row.querySelector('.seg-known')?.innerText.trim() || '0', 10) || 0;
+        const unknown = parseInt(row.getAttribute('data-unknown') || row.querySelector('.seg-unknown')?.innerText.trim() || '0', 10) || 0;
+        const ignored = parseInt(row.getAttribute('data-ignored') || row.querySelector('.seg-ignored')?.innerText.trim() || '0', 10) || 0;
+        const total = parseInt(row.getAttribute('data-total') || row.querySelector('td.text-mono:nth-of-type(4)')?.innerText.trim() || '0', 10) || (pass + fixed + known + unknown + ignored) || 1;
+        const rate = row.getAttribute('data-rate') || (row.querySelector('.badge-status')?.innerText.trim() || '0%');
+        const time = row.getAttribute('data-time') || row.querySelector('td.text-muted')?.innerText.trim() || 'Recently';
+
+        runsData.push({ runId, pass, fixed, known, unknown, ignored, total, rate, time });
+    });
+
+    if (runsData.length === 0) {
+        batchRunStatsRegistry[batchName] = { runIds: [], maxTests: 0, stats: {} };
+        ['trendLayerIgnored', 'trendLayerUnknown', 'trendLayerKnown', 'trendLayerFixed', 'trendLayerPass', 'trendTopStroke'].forEach(id => {
+            document.getElementById(id)?.setAttribute('d', '');
+        });
+        const dotsGroup = document.getElementById('trendSvgDots');
+        if (dotsGroup) dotsGroup.innerHTML = '';
+        return;
+    }
+
+    const runIds = runsData.map(r => r.runId);
+    const maxTests = Math.max(1, ...runsData.map(r => r.total));
     const svgHeight = 160;
     const baseScale = svgHeight / maxTests;
 
-    const coords = runIds.map(id => {
-        const s = registry.stats[id];
+    const stats = {};
+    const count = runsData.length;
+    const coords = runsData.map((r, idx) => {
+        const x = count === 1 ? 400 : 50 + (idx / (count - 1)) * 750;
+        stats[r.runId] = {
+            x,
+            title: `Run #${r.runId} (${r.time})`,
+            pass: r.pass,
+            fixed: r.fixed,
+            known: r.known,
+            unknown: r.unknown,
+            ignored: r.ignored,
+            total: `${r.total} Tests`,
+            rate: r.rate
+        };
+
         const y0 = 190;
-        const y1 = y0 - (s.ignored * baseScale);
-        const y2 = y1 - (s.unknown * baseScale);
-        const y3 = y2 - (s.known * baseScale);
-        const y4 = y3 - (s.fixed * baseScale);
-        const y5 = y4 - (s.pass * baseScale);
-        return { x: s.x, y0, y1, y2, y3, y4, y5, id };
+        const y1 = y0 - (r.ignored * baseScale);
+        const y2 = y1 - (r.unknown * baseScale);
+        const y3 = y2 - (r.known * baseScale);
+        const y4 = y3 - (r.fixed * baseScale);
+        const y5 = y4 - (r.pass * baseScale);
+        return { x, y0, y1, y2, y3, y4, y5, id: r.runId };
     });
+
+    batchRunStatsRegistry[batchName] = { runIds, maxTests, stats };
+
+    if (coords.length === 1) {
+        const c = coords[0];
+        const halfWidth = 30;
+        const leftX = Math.max(50, c.x - halfWidth);
+        const rightX = Math.min(800, c.x + halfWidth);
+
+        const pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 190 L ${leftX} 190 Z`;
+        const pathL2 = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
+        const pathL3 = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
+        const pathL4 = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
+        const pathL5 = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+
+        document.getElementById('trendLayerIgnored')?.setAttribute('d', pathL1);
+        document.getElementById('trendLayerUnknown')?.setAttribute('d', pathL2);
+        document.getElementById('trendLayerKnown')?.setAttribute('d', pathL3);
+        document.getElementById('trendLayerFixed')?.setAttribute('d', pathL4);
+        document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
+        document.getElementById('trendTopStroke')?.setAttribute('d', `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`);
+
+        const dotsGroup = document.getElementById('trendSvgDots');
+        if (dotsGroup) {
+            dotsGroup.innerHTML = `
+                <g class="trend-click-col" id="trendPoint-${c.id}" 
+                   hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                    <circle cx="${c.x}" cy="${c.y5}" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                </g>
+            `;
+            if (window.htmx) htmx.process(dotsGroup);
+        }
+        return;
+    }
 
     function buildBezierTopPath(yProp) {
         let d = `M ${coords[0].x} ${coords[0][yProp]}`;
@@ -371,13 +335,16 @@ function renderDynamicTrendChart(targetBatchName) {
     document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
     document.getElementById('trendTopStroke')?.setAttribute('d', buildBezierTopPath('y5'));
 
-    coords.forEach(c => {
-        const circle = document.querySelector(`#trendPoint-${c.id} circle`);
-        if (circle) {
-            circle.setAttribute('cx', c.x);
-            circle.setAttribute('cy', c.y5);
-        }
-    });
+    const dotsGroup = document.getElementById('trendSvgDots');
+    if (dotsGroup) {
+        dotsGroup.innerHTML = coords.map(c => `
+            <g class="trend-click-col" id="trendPoint-${c.id}" 
+               hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                <circle cx="${c.x}" cy="${c.y5}" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+            </g>
+        `).join('');
+        if (window.htmx) htmx.process(dotsGroup);
+    }
 }
 
 function switchRunReportSubTab(subTabId, btn) {
@@ -599,9 +566,9 @@ function toggleRunCommentFormBox() {
 }
 
 function saveBugTicketLink() {
-    const inputVal = document.getElementById('bugTicketInput')?.value || '#BUG-4821';
+    const inputVal = document.getElementById('bugTicketInput')?.value || '';
     const parsedBugs = inputVal.split(/[, ]+/).map(s => s.trim()).filter(s => s.length > 0);
-    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '1049';
+    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
 
     if (currentActiveRowId) {
         if (parsedBugs.length > 0) {
@@ -657,7 +624,7 @@ function removeSpecificBugTicketLink(bugToRemove) {
         delete executionBugMap[currentActiveRowId];
     }
 
-    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '1049';
+    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
     fetch(`/fragments/test-side-panel/bugs?runId=${encodeURIComponent(activeRunId)}&rowId=${encodeURIComponent(currentActiveRowId)}&bugTicket=${encodeURIComponent(bugToRemove)}`, {
         method: 'DELETE',
         headers: { 'HX-Request': 'true' }
@@ -931,8 +898,8 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         }
     }
 
-    const activeRunId = runId || activeRow?.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '1049';
-    const activeRowId = rowId || activeRow?.getAttribute('data-row-id') || activeRow?.id || 'row-ds-1';
+    const activeRunId = runId || activeRow?.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const activeRowId = rowId || activeRow?.getAttribute('data-row-id') || activeRow?.id || '';
 
     // Synchronize form inputs for bug ticket entry
     const bugRunInput = document.querySelector('#bugTicketFormBox input[name="runId"]');
@@ -961,7 +928,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         if (singleRunControls) singleRunControls.style.display = 'none';
         testBaseControls.style.display = 'flex';
 
-        const loc = activeRow?.getAttribute('data-location') || 'US';
+        const loc = activeRow?.getAttribute('data-location') || 'Unknown';
         const browser = activeRow?.getAttribute('data-browser') || 'Chrome';
 
         const locBadge = document.getElementById('tbSideLocaleBadge');
@@ -1036,7 +1003,7 @@ function renderStepsForExecution(activeRow) {
             paramsHtml = `
                 <tr>
                     <td class="param-key">location</td>
-                    <td class="param-val">${activeRow.getAttribute('data-location') || 'US'}</td>
+                    <td class="param-val">${activeRow.getAttribute('data-location') || 'Unknown'}</td>
                 </tr>
                 <tr>
                     <td class="param-key">browser</td>
@@ -1451,7 +1418,7 @@ function bindGlobalListeners() {
 
     // Automatically update header title & breadcrumb if Single Run Report view is loaded
     if (document.getElementById('runReportSubTabOverview')) {
-        const runIdLabel = document.querySelector('.run-id-label')?.innerText || '1049';
+        const runIdLabel = document.querySelector('.run-id-label')?.innerText || '#RUN_ID';
         const headerTitle = document.getElementById('pageTitle');
         if (headerTitle) headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">science</span> ${activeBatchName} <span style="font-size: 0.875rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">(Run #${runIdLabel})</span>`;
 
@@ -1479,12 +1446,12 @@ function bindGlobalListeners() {
 
 function handleRowClick(e) {
     const row = e.currentTarget;
-    const testName = row.getAttribute('data-test-name') || 'TestClass';
-    const dataSet = row.getAttribute('data-dataset') || 'Data Set';
+    const testName = row.getAttribute('data-test-name') || '';
+    const dataSet = row.getAttribute('data-dataset') || '';
     const statusKey = row.getAttribute('data-status') || 'passed-clean';
     const issueTag = row.getAttribute('data-bugs') || '';
     const rowId = row.getAttribute('data-row-id') || row.id;
-    const runId = row.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '1049';
+    const runId = row.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
 
     openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId);
 }

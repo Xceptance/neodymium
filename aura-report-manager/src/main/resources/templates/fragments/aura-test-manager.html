@@ -51,7 +51,6 @@
                         <div style="min-width: 280px; max-width: 380px;">
                             <select name="suiteName" class="form-select" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border-radius: 6px;" title="Select a test class or suite from src/test/java">
                                 <option value="ALL">All Test Classes (*Test)</option>
-                                <option value="EU Smoke Suite">EU Smoke Suite</option>
                                 <optgroup label="Detected Test Classes in src/test/java">
                                     <option th:each="cls : ${detectedTestClasses}" 
                                             th:value="${cls.fullyQualifiedName}" 

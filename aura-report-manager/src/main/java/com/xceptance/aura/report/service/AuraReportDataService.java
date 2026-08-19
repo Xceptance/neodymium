@@ -416,7 +416,7 @@ public class AuraReportDataService
         if (effectiveRunId.isEmpty())
         {
             return new RunReportDto(
-                "", "No Batch", "N/A", "0s",
+                "", "Unknown", "N/A", "0s",
                 0, 0, 0, 0, 0, 0,
                 List.of(), List.of()
             );
@@ -425,11 +425,11 @@ public class AuraReportDataService
         final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
         final TestRunEntity runEntity = runOpt.orElseGet(() -> new TestRunEntity(
             effectiveRunId,
-            "Unknown Batch",
+            "Unknown",
             "COMPLETED",
-            "Manual",
-            "Staging",
-            "US",
+            "Unknown",
+            "Unknown",
+            "Unknown",
             "Chrome",
             "Recently",
             System.currentTimeMillis()
@@ -567,12 +567,12 @@ public class AuraReportDataService
 
         final TestRunEntity newRun = new TestRunEntity(
             runId,
-            batchName != null ? batchName : "US Nightly Regression",
+            batchName != null ? batchName : "Unknown",
             "IN_PROGRESS",
-            triggerSource != null ? triggerSource : "Manual Trigger",
-            environment != null ? environment : "Staging",
-            "US, EU, DE",
-            "Chrome, Firefox, Edge",
+            triggerSource != null ? triggerSource : "Unknown",
+            environment != null ? environment : "Unknown",
+            "Unknown",
+            "Chrome",
             timestampLabel,
             System.currentTimeMillis()
         );
@@ -927,7 +927,7 @@ public class AuraReportDataService
         if (runEntity == null)
         {
             return new RunReportDto(
-                "", "No Batch", "N/A", "0s",
+                "", "Unknown", "N/A", "0s",
                 0, 0, 0, 0, 0, 0,
                 List.of(), List.of()
             );

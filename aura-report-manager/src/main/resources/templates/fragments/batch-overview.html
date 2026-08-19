@@ -83,19 +83,19 @@
                      th:data-locales="${#strings.arrayJoin(b.locales, ',')}" 
                      th:data-browsers="${#strings.arrayJoin(b.browsers, ',')}">
                     <div class="batch-card-header">
-                        <div class="batch-card-title"><span class="material-symbols-outlined text-accent">layers</span> <span th:text="${b.name}">US Nightly Regression</span></div>
-                        <span class="badge-status badge-pass" style="font-family: var(--font-family);" th:text="${b.passRate}">92% Pass</span>
+                        <div class="batch-card-title"><span class="material-symbols-outlined text-accent">layers</span> <span th:text="${b.name}">Unknown</span></div>
+                        <span class="badge-status badge-pass" style="font-family: var(--font-family);" th:text="${b.passRate}">0% Pass</span>
                     </div>
                     
                     <div style="font-size: 0.825rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.2rem; background: #eff6ff; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid #bfdbfe;">
-                        <div>Description: <strong style="color: #2563eb;" th:text="${b.description}">Batch suite</strong></div>
-                        <div>Status: <strong style="color: #2563eb;" th:text="${b.activeBugs}">1 Active Bug</strong></div>
+                        <div>Description: <strong style="color: #2563eb;" th:text="${b.description}"></strong></div>
+                        <div>Status: <strong style="color: #2563eb;" th:text="${b.activeBugs}">0 Active Bugs</strong></div>
                     </div>
 
                     <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.35rem;">
-                        <div><span class="material-symbols-outlined text-accent">dns</span> <strong>Environment:</strong> <span th:text="${b.environment}">Staging</span></div>
-                        <div><span class="material-symbols-outlined text-accent">public</span> <strong>Locales:</strong> <span th:text="${#strings.arrayJoin(b.locales, ', ')}">US, EU, DE</span></div>
-                        <div><span class="material-symbols-outlined text-accent">web</span> <strong>Browsers:</strong> <span th:text="${#strings.arrayJoin(b.browsers, ', ')}">Chrome, Firefox, Edge</span></div>
+                        <div><span class="material-symbols-outlined text-accent">dns</span> <strong>Environment:</strong> <span th:text="${b.environment}">Unknown</span></div>
+                        <div><span class="material-symbols-outlined text-accent">public</span> <strong>Locales:</strong> <span th:text="${#strings.arrayJoin(b.locales, ', ')}">Unknown</span></div>
+                        <div><span class="material-symbols-outlined text-accent">web</span> <strong>Browsers:</strong> <span th:text="${#strings.arrayJoin(b.browsers, ', ')}">Chrome</span></div>
                     </div>
 
                     <!-- LAST EXECUTION PIE CHART SECTION -->
@@ -210,24 +210,33 @@
                             hx-target="#mainViewContainer" 
                             hx-swap="innerHTML" 
                             hx-push-url="true">
-                            <td><strong class="text-mono" th:text="'#' + ${r.id}">#1049</strong></td>
-                            <td><span class="tag-batch" th:text="${r.batchName}">US Nightly Regression</span></td>
-                            <td><span class="tag-trigger" th:text="${r.triggerSource}">Jenkins CI</span></td>
-                            <td><span class="tag-env" th:text="${r.environment}">Staging</span></td>
-                            <td th:text="${r.localesCsv}">US, EU, DE</td>
-                            <td th:text="${r.browsersCsv}">Chrome, Firefox, Edge</td>
-                            <td class="text-mono" th:text="${r.totalTests}">8</td>
+                            <td><strong class="text-mono" th:text="'#' + ${r.id}">#RUN_ID</strong></td>
+                            <td>
+                                <span class="tag-batch" 
+                                      th:attr="hx-get=@{/batch-history(batchName=${r.batchName})}" 
+                                      hx-target="#mainViewContainer" 
+                                      hx-swap="innerHTML" 
+                                      hx-push-url="true" 
+                                      onclick="event.stopPropagation();" 
+                                      style="cursor: pointer;" 
+                                      th:text="${r.batchName}">Unknown</span>
+                            </td>
+                            <td><span class="tag-trigger" th:text="${r.triggerSource}">Unknown</span></td>
+                            <td><span class="tag-env" th:text="${r.environment}">Unknown</span></td>
+                            <td th:text="${r.localesCsv}">Unknown</td>
+                            <td th:text="${r.browsersCsv}">Chrome</td>
+                            <td class="text-mono" th:text="${r.totalTests}">0</td>
                             <td style="min-width: 220px; vertical-align: middle;">
                                 <div class="status-stacked-bar">
-                                    <div th:if="${r.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(r.passedPct, 1, 2)} + '%;'" th:title="${r.passedTooltip}" th:text="${r.passedLabel}">3</div>
-                                    <div th:if="${r.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(r.fixedPct, 1, 2)} + '%;'" th:title="${r.fixedTooltip}" th:text="${r.fixedLabel}">2</div>
-                                    <div th:if="${r.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(r.knownPct, 1, 2)} + '%;'" th:title="${r.knownTooltip}" th:text="${r.knownLabel}">1</div>
-                                    <div th:if="${r.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(r.unknownPct, 1, 2)} + '%;'" th:title="${r.unknownTooltip}" th:text="${r.unknownLabel}">1</div>
-                                    <div th:if="${r.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(r.ignoredPct, 1, 2)} + '%;'" th:title="${r.ignoredTooltip}" th:text="${r.ignoredLabel}">1</div>
+                                    <div th:if="${r.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(r.passedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.passedTooltip}" th:text="${r.passedLabel}">0</div>
+                                    <div th:if="${r.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(r.fixedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.fixedTooltip}" th:text="${r.fixedLabel}">0</div>
+                                    <div th:if="${r.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(r.knownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.knownTooltip}" th:text="${r.knownLabel}">0</div>
+                                    <div th:if="${r.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(r.unknownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.unknownTooltip}" th:text="${r.unknownLabel}">0</div>
+                                    <div th:if="${r.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(r.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.ignoredTooltip}" th:text="${r.ignoredLabel}">0</div>
                                 </div>
                             </td>
-                            <td><span class="badge-status badge-pass" th:text="${r.passRate + '% Pass'}">37.5% Pass</span></td>
-                            <td class="text-muted" th:text="${r.timestampLabel}">Today, 14:22:10</td>
+                            <td><span class="badge-status badge-pass" th:text="${r.passRate + '% Pass'}">0% Pass</span></td>
+                            <td class="text-muted" th:text="${r.timestampLabel}">Recently</td>
                             <td>
                                 <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML">
                                     <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
@@ -251,7 +260,7 @@
             <div class="panel-header">
                 <div>
                     <div class="panel-title"><span class="material-symbols-outlined text-accent">trending_up</span> Batch History Overview & Trend Analysis</div>
-                    <div class="panel-subtitle">Comprehensive run execution metrics, pass rates, and history graphs for <strong id="batchOverviewTitle" style="color: var(--accent-color);">US Nightly Regression</strong></div>
+                    <div class="panel-subtitle">Comprehensive run execution metrics, pass rates, and history graphs for <strong id="batchOverviewTitle" style="color: var(--accent-color);">Unknown</strong></div>
                 </div>
                 <button class="btn-secondary" style="font-size: 0.825rem;" onclick="showRunsList()">
                     <span class="material-symbols-outlined">arrow_back</span> Back to Directory
@@ -287,7 +296,7 @@
 
                     <!-- HOVER TOOLTIP FLOATING CONTAINER -->
                     <div id="trendHoverTooltip" class="trend-tooltip" style="display: none;">
-                        <div id="trendTooltipTitle" style="font-weight: 700; font-size: 0.825rem; color: var(--text-main); margin-bottom: 0.4rem;">Run #1049</div>
+                        <div id="trendTooltipTitle" style="font-weight: 700; font-size: 0.825rem; color: var(--text-main); margin-bottom: 0.4rem;">Run #RUN_ID</div>
                         <div style="display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem;">
                             <div class="flex-between"><span class="text-pass"><span class="material-symbols-outlined" style="font-size: 0.8rem;">check_circle</span> Passed Clean:</span> <strong id="trendTooltipPass">3</strong></div>
                             <div class="flex-between"><span class="text-fixed"><span class="material-symbols-outlined" style="font-size: 0.8rem;">build</span> Succeeded Fixed:</span> <strong id="trendTooltipFixed">2</strong></div>

@@ -124,10 +124,12 @@
                         <div class="multiselect-menu" id="locationMultiselectMenu">
                             <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="locationMultiselectMenu" value="ALL" checked> <strong>Select All Locations</strong></label>
                             <div class="multiselect-divider"></div>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="US" checked> US (United States)</label>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="EU" checked> EU (Europe)</label>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="DE" checked> DE (Germany)</label>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" value="UNKNOWN" checked> Unknown Location</label>
+                            <label th:each="loc : ${report?.filterLocations}" class="multiselect-option">
+                                <input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" th:value="${loc}" th:attr="data-value=${loc}" checked> <span th:text="${loc}">Location</span>
+                            </label>
+                            <div th:if="${report == null or report.filterLocations == null or report.filterLocations.isEmpty()}" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
+                                No locations found
+                            </div>
                         </div>
                     </div>
 
@@ -140,9 +142,12 @@
                         <div class="multiselect-menu" id="browserMultiselectMenu">
                             <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="browserMultiselectMenu" value="ALL" checked> <strong>Select All Browsers</strong></label>
                             <div class="multiselect-divider"></div>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" value="Chrome" checked> Chrome</label>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" value="Firefox" checked> Firefox</label>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" value="Edge" checked> Edge</label>
+                            <label th:each="b : ${report?.filterBrowsers}" class="multiselect-option">
+                                <input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" th:value="${b}" th:attr="data-value=${b}" checked> <span th:text="${b}">Browser</span>
+                            </label>
+                            <div th:if="${report == null or report.filterBrowsers == null or report.filterBrowsers.isEmpty()}" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
+                                No browsers found
+                            </div>
                         </div>
                     </div>
 
@@ -157,7 +162,7 @@
                         <div>
                             <div class="panel-title">
                                 <span class="material-symbols-outlined text-accent">fact_check</span>
-                                <span>All Tests Executed in Run #<span class="run-id-label" th:text="${report?.runId ?: '1049'}">1049</span></span>
+                                <span>All Tests Executed in Run #<span class="run-id-label" th:text="${report?.runId ?: '#RUN_ID'}">#RUN_ID</span></span>
                                 <span class="tag-chip" id="wholeExecutionTotalCountChip" style="margin-left: 0.5rem; vertical-align: middle;" th:text="${report?.totalCount + ' Executions'}">8 Executions</span>
                             </div>
                             <div class="panel-subtitle">

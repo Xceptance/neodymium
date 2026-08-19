@@ -12,18 +12,16 @@
             <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">dns</span>
             <div>
                 <div class="env-meta-label">Assigned Environment (Single)</div>
-                <div style="color: #2563eb; font-weight: 700;" th:text="${batchName == 'EU Smoke Suite' ? 'Production Pre-flight' : 'Staging (us-west-2.shop.xceptance.com)'}">Staging (us-west-2.shop.xceptance.com)</div>
+                <div style="color: #2563eb; font-weight: 700;" th:text="${batchEnvironment ?: 'Unknown'}">Unknown</div>
             </div>
         </div>
         <div class="env-meta-item">
             <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">public</span>
             <div>
                 <div class="env-meta-label">Locales Contained in Batch</div>
-                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem;">
-                    <span class="tag-chip" th:if="${batchName != 'EU Smoke Suite'}">US</span>
-                    <span class="tag-chip">EU</span>
-                    <span class="tag-chip">DE</span>
-                    <span class="tag-chip" th:if="${batchName != 'EU Smoke Suite'}">Unknown</span>
+                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem; flex-wrap: wrap;">
+                    <span th:each="loc : ${batchLocales}" class="tag-chip" th:text="${loc}">Unknown</span>
+                    <span th:if="${batchLocales == null || batchLocales.isEmpty()}" class="tag-chip">Unknown</span>
                 </div>
             </div>
         </div>
@@ -31,10 +29,9 @@
             <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">web</span>
             <div>
                 <div class="env-meta-label">Browsers Contained in Batch</div>
-                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem;">
-                    <span class="tag-chip"><span class="material-symbols-outlined">language</span> Chrome</span>
-                    <span class="tag-chip"><span class="material-symbols-outlined">language</span> Firefox</span>
-                    <span class="tag-chip" th:if="${batchName != 'EU Smoke Suite'}"><span class="material-symbols-outlined">language</span> Edge</span>
+                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem; flex-wrap: wrap;">
+                    <span th:each="b : ${batchBrowsers}" class="tag-chip"><span class="material-symbols-outlined">language</span> <span th:text="${b}">Chrome</span></span>
+                    <span th:if="${batchBrowsers == null || batchBrowsers.isEmpty()}" class="tag-chip"><span class="material-symbols-outlined">language</span> Chrome</span>
                 </div>
             </div>
         </div>
@@ -44,7 +41,7 @@
     <div class="allure-trend-card">
         <div class="trend-chart-header">
             <div>
-                <span class="material-symbols-outlined text-accent">trending_up</span> HISTORY TREND FOR WHOLE BATCH: <span id="batchOverviewTitle" th:text="${batchName ?: 'US NIGHTLY REGRESSION'}">US NIGHTLY REGRESSION</span>
+                <span class="material-symbols-outlined text-accent">trending_up</span> HISTORY TREND FOR WHOLE BATCH: <span id="batchOverviewTitle" th:text="${batchName ?: 'Unknown'}">Unknown</span>
                 <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 400; margin-top: 0.25rem;">
                     Stacked area trend for the whole batch. <strong style="color: var(--status-fixed);"><span class="material-symbols-outlined">touch_app</span> On click on any history trend point below, the corresponding report for the batch will open.</strong>
                 </div>
@@ -102,46 +99,26 @@
 
                 <line id="trendHoverGuide" x1="-100" y1="10" x2="-100" y2="190" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3 3" style="display: none;" />
 
-                <!-- CLICKABLE RUN DATA POINTS -->
-                <g class="trend-click-col" id="trendPoint-1045" 
-                   hx-get="/run-report?runId=1045" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="50" cy="70" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                <!-- CLICKABLE RUN DATA POINTS & DYNAMIC LABELS -->
+                <g id="trendSvgDots">
+                    <g th:each="r, iterStat : ${runs}" class="trend-click-col" th:id="'trendPoint-' + ${r.id}"
+                       th:attr="hx-get=@{/run-report(runId=${r.id})}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
+                        <circle cx="50" cy="70" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                    </g>
                 </g>
-                <g class="trend-click-col" id="trendPoint-1046"
-                   hx-get="/run-report?runId=1046" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="230" cy="50" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
-                </g>
-                <g class="trend-click-col" id="trendPoint-1047"
-                   hx-get="/run-report?runId=1047" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="420" cy="50" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
-                </g>
-                <g class="trend-click-col" id="trendPoint-1048"
-                   hx-get="/run-report?runId=1048" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="610" cy="30" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
-                </g>
-                <g class="trend-click-col" id="trendPoint-1049"
-                   hx-get="/run-report?runId=1049" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="800" cy="30" r="7" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
-                </g>
-
-                <text x="50" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1045</text>
-                <text x="230" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1046</text>
-                <text x="420" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1047</text>
-                <text x="610" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1048</text>
-                <text x="800" y="210" fill="#64748b" font-size="11" font-family="JetBrains Mono" text-anchor="middle">#1049 (Latest)</text>
             </svg>
 
             <div id="trendHoverTooltip" style="display: none; position: absolute; top: 10px; left: 10px; background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 0.9rem; box-shadow: 0 10px 25px rgba(0,0,0,0.15); pointer-events: none; z-index: 40; font-size: 0.78rem; width: 210px; flex-direction: column; gap: 0.35rem;">
                 <div class="flex-between" style="border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin-bottom: 0.25rem;">
-                    <strong style="color: var(--text-main); font-size: 0.85rem;" id="ttRunTitle">Run #1049</strong>
-                    <span class="tag-chip" id="ttPassRate" style="background: #ecfdf5; color: var(--status-pass); font-weight: 700;">62.5% Pass</span>
+                    <strong style="color: var(--text-main); font-size: 0.85rem;" id="ttRunTitle" th:text="${runs != null and !runs.empty ? 'Run #' + runs[0].id : 'Run #RUN_ID'}">Run #RUN_ID</strong>
+                    <span class="tag-chip" id="ttPassRate" style="background: #ecfdf5; color: var(--status-pass); font-weight: 700;" th:text="${runs != null and !runs.empty ? runs[0].passRate + '% Pass' : '0% Pass'}">0% Pass</span>
                 </div>
-                <div class="flex-between"><span><span class="material-symbols-outlined text-accent">fact_check</span> Total Executed:</span><strong class="text-mono" id="ttTotalVal">8 Tests</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#6ee7b7;"></div> Passed Clean:</span><strong class="text-mono" style="color:var(--status-pass)" id="ttPassVal">3</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#93c5fd;"></div> Succeeded (Bug):</span><strong class="text-mono" style="color:var(--status-fixed)" id="ttFixedVal">2</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fdba74;"></div> Failed (Bug):</span><strong class="text-mono" style="color:var(--status-known-fail)" id="ttKnownVal">1</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fca5a5;"></div> Failed (Unknown):</span><strong class="text-mono" style="color:var(--status-unknown-fail)" id="ttUnknownVal">1</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#cbd5e1;"></div> Ignored / Skipped:</span><strong class="text-mono" style="color:var(--status-ignored)" id="ttIgnoredVal">1</strong></div>
+                <div class="flex-between"><span><span class="material-symbols-outlined text-accent">fact_check</span> Total Executed:</span><strong class="text-mono" id="ttTotalVal" th:text="${runs != null and !runs.empty ? runs[0].totalTests + ' Tests' : '0 Tests'}">0 Tests</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#6ee7b7;"></div> Passed Clean:</span><strong class="text-mono" style="color:var(--status-pass)" id="ttPassVal" th:text="${runs != null and !runs.empty ? runs[0].passedCount : 0}">0</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#93c5fd;"></div> Succeeded (Bug):</span><strong class="text-mono" style="color:var(--status-fixed)" id="ttFixedVal" th:text="${runs != null and !runs.empty ? runs[0].succeededFixedCount : 0}">0</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fdba74;"></div> Failed (Bug):</span><strong class="text-mono" style="color:var(--status-known-fail)" id="ttKnownVal" th:text="${runs != null and !runs.empty ? runs[0].failedKnownCount : 0}">0</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fca5a5;"></div> Failed (Unknown):</span><strong class="text-mono" style="color:var(--status-unknown-fail)" id="ttUnknownVal" th:text="${runs != null and !runs.empty ? runs[0].failedUnknownCount : 0}">0</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#cbd5e1;"></div> Ignored / Skipped:</span><strong class="text-mono" style="color:var(--status-ignored)" id="ttIgnoredVal" th:text="${runs != null and !runs.empty ? runs[0].ignoredCount : 0}">0</strong></div>
             </div>
         </div>
     </div>
@@ -218,24 +195,31 @@
                         <th>Action</th>
                     </tr>
                 </thead>
-                <tbody id="batchSpecificRunsTableBody">
+                <tbody id="batchRunsHistoryTableBody">
                     <tr th:each="run, iterStat : ${runs}" class="clickable-row" 
-                        th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML">
+                        th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML"
+                        th:data-run-id="${run.id}"
+                        th:data-pass="${run.passedCount}"
+                        th:data-fixed="${run.succeededFixedCount}"
+                        th:data-known="${run.failedKnownCount}"
+                        th:data-unknown="${run.failedUnknownCount}"
+                        th:data-ignored="${run.ignoredCount}"
+                        th:data-rate="${run.passRate}">
                         <td>
-                            <strong class="text-mono text-accent" style="font-size: 0.95rem;" th:text="'#' + ${run.id}">#1049</strong> 
+                            <strong class="text-mono text-accent" style="font-size: 0.95rem;" th:text="'#' + ${run.id}">#RUN_ID</strong> 
                             <span class="tag-chip" style="background: #ecfdf5; color: var(--status-pass); border-color: var(--status-pass-border);" th:if="${iterStat.first}">LATEST</span>
                         </td>
-                        <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">US Nightly Regression</span></span></td>
-                        <td th:text="${run.timestampLabel}">Today, 14:22:10</td>
-                        <td><span class="material-symbols-outlined">smart_toy</span> <span th:text="${run.triggerSource}">Jenkins CI</span></td>
+                        <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">Unknown</span></span></td>
+                        <td th:text="${run.timestampLabel}">Recently</td>
+                        <td><span class="material-symbols-outlined">smart_toy</span> <span th:text="${run.triggerSource}">Unknown</span></td>
                         <td><strong class="text-mono" th:text="${run.totalTests != null ? run.totalTests + ' Tests' : '0 Tests'}">8 Tests</strong></td>
                         <td style="min-width: 220px; vertical-align: middle;">
                             <div class="status-stacked-bar">
-                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 2)} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
-                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 2)} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
-                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 2)} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
-                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 2)} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
-                                <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 2)} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
+                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
+                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
+                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
+                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
+                                <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
                             </div>
                         </td>
                         <td><span class="badge-status badge-pass" th:text="${run.passRate + '% Pass'}">37.5% Pass</span></td>

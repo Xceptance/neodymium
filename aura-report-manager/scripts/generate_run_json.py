@@ -26,14 +26,14 @@ def analyze_and_generate_run_json(run_dir_path):
     # Default metadata if run.json doesn't exist yet
     meta = {
         "runId": run_id,
-        "batchName": "NA Integration STG" if run_id in ["1047", "1048", "1049"] else "EU Smoke Suite",
-        "timestamp": "Today, 14:22:10",
-        "duration": "1m 42s",
-        "trigger": "Scheduled Cron",
-        "environment": "Staging (us-west-2.shop.xceptance.com)",
-        "locales": ["US"],
+        "batchName": "Unknown",
+        "timestamp": "Recently",
+        "duration": "0s",
+        "trigger": "Unknown",
+        "environment": "Unknown",
+        "locales": ["Unknown"],
         "browsers": ["Chrome"],
-        "threadsCount": 2
+        "threadsCount": 1
     }
 
     if existing_run_json_path.exists():

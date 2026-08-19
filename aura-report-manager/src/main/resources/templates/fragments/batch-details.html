@@ -55,11 +55,11 @@
                         <td class="font-mono fw-bold" th:text="${run.totalTests}">7</td>
                         <td style="min-width: 220px; vertical-align: middle;">
                             <div class="status-stacked-bar">
-                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 2)} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
-                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 2)} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
-                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 2)} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
-                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 2)} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
-                                <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 2)} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
+                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
+                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
+                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
+                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
+                                <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
                             </div>
                         </td>
                         <td>

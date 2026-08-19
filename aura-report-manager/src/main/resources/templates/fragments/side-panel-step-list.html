@@ -7,8 +7,8 @@
 <div th:fragment="stepListPanel" class="allure-side-page-panel" id="testSidePagePanel">
     <div class="side-page-header">
         <div>
-            <div class="side-page-title" id="sidePageTestName">CheckoutProcessTest</div>
-            <div class="text-mono" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;" id="sidePageTestDataSet">[Data Set 1: US CreditCard]</div>
+            <div class="side-page-title" id="sidePageTestName"></div>
+            <div class="text-mono" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;" id="sidePageTestDataSet"></div>
         </div>
         <button class="side-page-close js-close-side-panel" onclick="closeSidePanelInspector()"><span class="material-symbols-outlined">close</span></button>
     </div>
@@ -18,9 +18,9 @@
         <div id="sidePageTestBaseVariationControls" style="display: none; flex-direction: column; gap: 1rem;">
             <!-- VARIATION BADGES ROW -->
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                <span class="location-highlight-badge" id="tbSideLocaleBadge"><span class="material-symbols-outlined">location_on</span> US</span>
+                <span class="location-highlight-badge" id="tbSideLocaleBadge"><span class="material-symbols-outlined">location_on</span> Unknown</span>
                 <span class="tag-chip" id="tbSideBrowserBadge"><span class="material-symbols-outlined text-accent">language</span> Chrome</span>
-                <span class="badge-status badge-pass" id="tbSideBatchBadge" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;"><span class="material-symbols-outlined">layers</span> US Nightly Regression</span>
+                <span class="badge-status badge-pass" id="tbSideBatchBadge" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;"><span class="material-symbols-outlined">layers</span> Unknown</span>
             </div>
 
             <!-- SECTION TITLE & BATCH FILTER -->
@@ -37,8 +37,10 @@
                         <div class="multiselect-menu" id="tbSideBatchMultiselectMenu">
                             <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="tbSideBatchMultiselectMenu" value="ALL" checked> <strong>Select All Batches</strong></label>
                             <div class="multiselect-divider"></div>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="tbSideBatchMultiselectMenu" value="US Nightly Regression" checked> US Nightly Regression</label>
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="tbSideBatchMultiselectMenu" value="EU Smoke Suite" checked> EU Smoke Suite</label>
+                            <label class="multiselect-option" th:each="b : ${filterBatches}">
+                                <input type="checkbox" class="js-chk-option" data-menu-id="tbSideBatchMultiselectMenu" th:value="${b}" checked> <span th:text="${b}">Batch</span>
+                            </label>
+                            <div th:if="${#lists.isEmpty(filterBatches)}" class="p-2 text-muted text-center" style="font-size: 0.8rem;">No Batches Available</div>
                         </div>
                     </div>
                 </div>
@@ -56,50 +58,7 @@
                             </tr>
                         </thead>
                         <tbody id="tbVariationHistoryTableBody">
-                            <tr class="clickable-row" hx-get="/run-report?runId=1049" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
-                                <td><strong class="text-mono text-accent">#1049</strong></td>
-                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
-                                <td><span class="badge-status badge-mode-ai"><span class="material-symbols-outlined">auto_awesome</span> AI Driven</span></td>
-                                <td>Today, 14:22:10</td>
-                                <td>
-                                    <span class="badge-status badge-known-fail" style="font-size: 0.75rem;">Failed (Known Issue)</span>
-                                    <div style="font-size: 0.72rem; margin-top: 0.2rem;"><span class="badge-status badge-known-fail"><span class="material-symbols-outlined">bug_report</span> #BUG-4821</span> <span class="badge-status badge-known-fail"><span class="material-symbols-outlined">bug_report</span> #BUG-5102</span></div>
-                                </td>
-                            </tr>
-                            <tr class="clickable-row" hx-get="/run-report?runId=1048" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
-                                <td><strong class="text-mono text-accent">#1048</strong></td>
-                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
-                                <td><span class="badge-status badge-mode-ai"><span class="material-symbols-outlined">auto_awesome</span> AI Driven</span></td>
-                                <td>Today, 11:15:00</td>
-                                <td><span class="badge-status badge-pass" style="font-size: 0.75rem;">Passed Clean</span></td>
-                            </tr>
-                            <tr class="clickable-row" hx-get="/run-report?runId=1047" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
-                                <td><strong class="text-mono text-accent">#1047</strong></td>
-                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
-                                <td><span class="badge-status badge-mode-healed"><span class="material-symbols-outlined">healing</span> Healed</span></td>
-                                <td>Yesterday, 18:30:00</td>
-                                <td>
-                                    <span class="badge-status badge-unknown-fail" style="font-size: 0.75rem;">Failed (Without Issue Info)</span>
-                                    <div style="font-size: 0.72rem; color: #dc2626; margin-top: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 0.75rem;">circle</span> ZipCodeInvalidException</div>
-                                </td>
-                            </tr>
-                            <tr class="clickable-row" hx-get="/run-report?runId=1046" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
-                                <td><strong class="text-mono text-accent">#1046</strong></td>
-                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
-                                <td><span class="badge-status badge-mode-playbook"><span class="material-symbols-outlined">menu_book</span> Playbook</span></td>
-                                <td>2 days ago</td>
-                                <td><span class="badge-status badge-pass" style="font-size: 0.75rem;">Passed Clean</span></td>
-                            </tr>
-                            <tr class="clickable-row" hx-get="/run-report?runId=1045" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true">
-                                <td><strong class="text-mono text-accent">#1045</strong></td>
-                                <td><span style="color: #2563eb; font-weight: 600;">US Nightly Regression</span></td>
-                                <td><span class="badge-status badge-mode-java"><span class="material-symbols-outlined">code</span> Java</span></td>
-                                <td>3 days ago</td>
-                                <td>
-                                    <span class="badge-status badge-known-fail" style="font-size: 0.75rem;">Failed (Known Issue)</span>
-                                    <div style="font-size: 0.72rem; margin-top: 0.2rem;"><span class="badge-status badge-known-fail"><span class="material-symbols-outlined">bug_report</span> #BUG-4821</span></div>
-                                </td>
-                            </tr>
+                            <!-- Populated dynamically from test base run variations -->
                         </tbody>
                     </table>
                 </div>
@@ -120,7 +79,7 @@
                     <span th:each="bug : ${exec?.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family);">
                         <span class="material-symbols-outlined">bug_report</span> <span th:text="${bug.startsWith('#') ? bug : '#' + bug}">#BUG-4821</span>
                         <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${bug}"
-                                th:hx-delete="|/fragments/test-side-panel/bugs?runId=${runId ?: '1049'}&rowId=${exec?.id ?: rowId ?: 'row-ds-1'}&bugTicket=${#uris.escapeQueryParam(bug)}|"
+                                th:hx-delete="|/fragments/test-side-panel/bugs?runId=${runId ?: '#RUN_ID'}&rowId=${exec?.id ?: rowId ?: 'row-ds-1'}&bugTicket=${#uris.escapeQueryParam(bug)}|"
                                 hx-target="#sidePageStatusBadge" hx-swap="outerHTML">
                             <span class="material-symbols-outlined">delete</span>
                         </button>
@@ -161,14 +120,6 @@
                             </tr>
                         </thead>
                         <tbody id="testDataParamsTbody">
-                            <tr>
-                                <td class="param-key">location</td>
-                                <td class="param-val">US</td>
-                            </tr>
-                            <tr>
-                                <td class="param-key">browser</td>
-                                <td class="param-val">Chrome</td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -181,7 +132,7 @@
                     <span class="scope-badge-batch"><span class="material-symbols-outlined">layers</span> PERSISTENT OVER BATCH</span>
                 </div>
                 <form hx-post="/fragments/test-side-panel/bugs" hx-target="#sidePageStatusBadge" hx-swap="outerHTML" class="flex-gap-2">
-                    <input type="hidden" name="runId" th:value="${runId ?: '1049'}">
+                    <input type="hidden" name="runId" th:value="${runId ?: '#RUN_ID'}">
                     <input type="hidden" name="rowId" th:value="${exec?.id ?: rowId ?: 'row-ds-1'}">
                     <input type="text" class="action-input" name="bugTicket" id="bugTicketInput" value="" placeholder="e.g. #BUG-4821">
                     <button type="submit" class="btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;"><span class="material-symbols-outlined">check</span> Save Bugs</button>
@@ -215,7 +166,7 @@
                     <span><span class="material-symbols-outlined">warning</span> Failure / Exception Details</span>
                     <span class="tag-chip" style="background: #fef2f2; color: #dc2626; border-color: #fecaca;">FAILED</span>
                 </div>
-                <pre class="error-box-top-text" id="sidePageErrorText">com.xceptance.neodymium.exceptions.ZipCodeInvalidException: Provided ZIP '90210' failed validation for US_WEST region.</pre>
+                <pre class="error-box-top-text" id="sidePageErrorText"></pre>
             </div>
 
             <!-- TOP IGNORED REASON DISPLAY BOX -->
@@ -224,7 +175,7 @@
                     <span><span class="material-symbols-outlined">block</span> Test Ignored / Skipped Reason</span>
                     <span class="tag-chip" style="background: #f1f5f9; color: #475569; border-color: #cbd5e1;">IGNORED</span>
                 </div>
-                <pre class="ignored-box-top-text" id="sidePageIgnoredText">@Disabled("Feature under refactoring for Q3 release - ticket #JIRA-9921")</pre>
+                <pre class="ignored-box-top-text" id="sidePageIgnoredText"></pre>
             </div>
 
             <!-- DYNAMIC STEP EXECUTION LIST CONTAINER -->

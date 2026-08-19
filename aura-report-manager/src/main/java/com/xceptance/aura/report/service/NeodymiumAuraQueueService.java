@@ -21,6 +21,7 @@ package com.xceptance.aura.report.service;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,7 +49,7 @@ public class NeodymiumAuraQueueService
     private static final Pattern STATS_PATTERN = Pattern
         .compile("Tests run:\\s*(\\d+),\\s*Failures:\\s*(\\d+),\\s*Errors:\\s*(\\d+)(?:,\\s*Skipped:\\s*(\\d+))?");
 
-    private static final String NEODYMIUM_WORK_DIR = "/home/olha/git/neodymium";
+    private static final String NEODYMIUM_WORK_DIR = Paths.get("").toAbsolutePath().toString();
 
     private final List<String> liveLogBuffer = Collections.synchronizedList(new ArrayList<>());
     private final AtomicReference<Process> activeProcess = new AtomicReference<>(null);

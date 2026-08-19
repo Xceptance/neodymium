@@ -54,7 +54,7 @@
     </nav>
 
     <div class="run-context-card" id="sidebarContextCard">
-        <div class="context-symbolic-icon" title="Active Context: US Nightly Regression">
+        <div class="context-symbolic-icon" title="Active Context">
             <span class="material-symbols-outlined">science</span>
         </div>
         <div class="context-full-details">
@@ -62,10 +62,10 @@
                 <div class="pulse-dot"></div>
                 <span>Active Run Context</span>
             </div>
-            <div style="font-weight: 700; color: var(--text-main); margin-top: 0.2rem;">US Nightly Regression</div>
+            <div style="font-weight: 700; color: var(--text-main); margin-top: 0.2rem;" id="sidebarActiveBatchName" th:text="${activeBatchName ?: 'Unknown'}">Unknown</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
-                <span>Run #1049</span>
-                <span class="tag-chip">STG</span>
+                <span id="sidebarActiveRunId" th:text="${activeRunId != null ? 'Run #' + activeRunId : 'Run #RUN_ID'}">Run #RUN_ID</span>
+                <span class="tag-chip" id="sidebarActiveEnv" th:text="${activeEnv ?: 'Unknown'}">Unknown</span>
             </div>
         </div>
     </div>

@@ -31,7 +31,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class NeodymiumAuraSettingsService
 {
-    private String selectedEnvironment = "STG - Staging (eu-central.shop.xceptance.de)";
+    private String selectedEnvironment = "Unknown";
     private String selectedBrowser = "Chrome";
     private boolean headless = true;
     private int threadCount = 4;
@@ -44,9 +44,10 @@ public class NeodymiumAuraSettingsService
         settings.put("headless", headless);
         settings.put("threadCount", threadCount);
         settings.put("availableEnvironments", List.of(
-            "STG - Staging (eu-central.shop.xceptance.de)",
-            "PROD - Production Pre-flight (eu-central.shop.xceptance.de)",
-            "DEV - Local Sandbox (localhost:8080)"
+            "Unknown",
+            "DEV - Local Sandbox",
+            "STG - Staging",
+            "PROD - Production"
         ));
         settings.put("availableBrowsers", List.of("Chrome", "Firefox", "Edge", "Safari", "HeadlessChrome"));
         return settings;
