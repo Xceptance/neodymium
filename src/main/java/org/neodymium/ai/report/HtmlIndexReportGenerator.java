@@ -731,7 +731,7 @@ public final class HtmlIndexReportGenerator
         sb.append("            <th style=\"width:100px;\">Mode</th>\n");
         sb.append("            <th onclick=\"sortTable(4)\" style=\"cursor:pointer; width:60px;\">Steps ⬍</th>\n");
         sb.append("            <th onclick=\"sortTable(5)\" style=\"cursor:pointer; width:75px;\">Duration ⬍</th>\n");
-        sb.append("            <th style=\"width:105px;\">AI Usage</th>\n");
+        sb.append("            <th style=\"width:125px;\">AI Usage</th>\n");
         sb.append("            <th style=\"width:40px; text-align:center;\">Report</th>\n");
         sb.append("          </tr>\n");
         sb.append("        </thead>\n");
@@ -805,7 +805,9 @@ public final class HtmlIndexReportGenerator
                 }
                 if (entry.getFailureReason() != null && !entry.getFailureReason().isBlank())
                 {
-                    sb.append("              <div class=\"failure-reason-snip\">⚠️ ").append(escapeHtml(entry.getFailureReason())).append("</div>\n");
+                    final String fullReason = entry.getFailureReason();
+                    final String snip = fullReason.length() > 130 ? fullReason.substring(0, 127) + "..." : fullReason;
+                    sb.append("              <div class=\"failure-reason-snip\" title=\"").append(escapeAttr(fullReason)).append("\">⚠️ ").append(escapeHtml(snip)).append("</div>\n");
                 }
                 sb.append("            </td>\n");
 
@@ -998,16 +1000,16 @@ public final class HtmlIndexReportGenerator
             }
             .btn-refresh:hover { background: #334155; }
             .container {
-                max-width: 1600px;
+                max-width: 1280px;
                 width: 100%;
                 margin: 1.25rem auto;
-                padding: 0 1.25rem;
+                padding: 0 1rem;
             }
             .kpi-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                gap: 1rem;
-                margin-bottom: 1.5rem;
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                gap: 0.75rem;
+                margin-bottom: 1.25rem;
             }
             .kpi-card {
                 background: var(--card-bg);
@@ -1209,19 +1211,15 @@ public final class HtmlIndexReportGenerator
                 font-family: var(--font-mono);
                 font-size: 0.72rem;
                 color: var(--text-muted);
-                max-width: 400px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
+                word-break: break-word;
             }
             .failure-reason-snip {
                 font-size: 0.75rem;
                 color: var(--fail);
                 margin-top: 0.2rem;
-                max-width: 350px;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
+                line-height: 1.35;
+                word-break: break-word;
+                overflow-wrap: break-word;
             }
             .mode-badge {
                 display: inline-block;
@@ -1241,9 +1239,9 @@ public final class HtmlIndexReportGenerator
             }
             .mode-muted { color: var(--text-muted); opacity: 0.7; }
             .steps-count { font-weight: 700; font-size: 0.82rem; }
-            .steps-sub { font-size: 0.7rem; margin-top: 0.1rem; }
-            .llm-stat { font-weight: 600; font-size: 0.78rem; color: var(--text); }
-            .llm-tokens { font-size: 0.7rem; color: var(--text-muted); }
+            .steps-sub { font-size: 0.7rem; margin-top: 0.1rem; white-space: nowrap; }
+            .llm-stat { font-weight: 600; font-size: 0.76rem; color: var(--text); white-space: nowrap; }
+            .llm-tokens { font-size: 0.70rem; color: var(--text-muted); white-space: nowrap; }
             .llm-cost { font-weight: 600; color: #0284c7; }
             .llm-muted { font-size: 0.72rem; color: var(--text-muted); font-style: italic; }
             .timestamp-date { font-weight: 600; font-size: 0.8rem; }
