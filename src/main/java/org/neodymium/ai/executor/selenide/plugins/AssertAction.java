@@ -80,17 +80,34 @@ public final class AssertAction implements BrowserActionPlugin
 
             try
             {
-                // Wait until the current page URL or title updates and matches/contains the expected string
-                Selenide.Wait().until(d -> (d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected))
-                        || (d.getTitle() != null && d.getTitle().contains(expected)));
-                LOG.debug("   ✅ URL/Title Assertion passed for: '{}'", expected);
+                if (action.isRegex())
+                {
+                    final Pattern pattern = Pattern.compile(cleanRegexPattern(expected), Pattern.DOTALL | Pattern.MULTILINE);
+                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && pattern.matcher(d.getCurrentUrl()).find())
+                            || (d.getTitle() != null && pattern.matcher(d.getTitle()).find()));
+                    LOG.debug("   ✅ URL/Title Regex Assertion passed for: '{}'", expected);
+                }
+                else
+                {
+                    // Wait until the current page URL or title updates and matches/contains the expected string
+                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected))
+                            || (d.getTitle() != null && d.getTitle().contains(expected)));
+                    LOG.debug("   ✅ URL/Title Assertion passed for: '{}'", expected);
+                }
             }
             catch (final TimeoutException e)
             {
                 final String actualUrl = WebDriverRunner.url();
                 SelenideAddons.wrapAssertionError(() ->
                 {
-                    throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+                    if (action.isRegex())
+                    {
+                        throw new AssertionError(String.format("Assertion failed: Expected URL to match regex '%s' but was '%s'", expected, actualUrl), e);
+                    }
+                    else
+                    {
+                        throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+                    }
                 });
             }
             return;
@@ -106,15 +123,31 @@ public final class AssertAction implements BrowserActionPlugin
 
             try
             {
-                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().contains(expected));
-                LOG.debug("   ✅ Title Assertion passed for: '{}'", expected);
+                if (action.isRegex())
+                {
+                    final Pattern pattern = Pattern.compile(cleanRegexPattern(expected), Pattern.DOTALL | Pattern.MULTILINE);
+                    Selenide.Wait().until(d -> d.getTitle() != null && pattern.matcher(d.getTitle()).find());
+                    LOG.debug("   ✅ Title Regex Assertion passed for: '{}'", expected);
+                }
+                else
+                {
+                    Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().contains(expected));
+                    LOG.debug("   ✅ Title Assertion passed for: '{}'", expected);
+                }
             }
             catch (final TimeoutException e)
             {
                 final String actualTitle = Selenide.title();
                 SelenideAddons.wrapAssertionError(() ->
                 {
-                    throw new AssertionError(String.format("Assertion failed: Expected Title to contain '%s' but was '%s'", expected, actualTitle), e);
+                    if (action.isRegex())
+                    {
+                        throw new AssertionError(String.format("Assertion failed: Expected Title to match regex '%s' but was '%s'", expected, actualTitle), e);
+                    }
+                    else
+                    {
+                        throw new AssertionError(String.format("Assertion failed: Expected Title to contain '%s' but was '%s'", expected, actualTitle), e);
+                    }
                 });
             }
             return;
@@ -369,6 +402,29 @@ public final class AssertAction implements BrowserActionPlugin
     }
 
 
+    /**
+     * Sanitizes and normalizes a regular expression string for LLM-produced patterns.
+     * Strips leading/trailing slashes, cleans over-escaped dollar signs, and escapes unescaped currency amounts.
+     *
+     * @param regex the raw regex pattern
+     * @return cleaned regex pattern
+     */
+    public static String cleanRegexPattern(final String regex)
+    {
+        String cleanRegex = regex != null ? regex : "";
+        if (cleanRegex.startsWith("/") && cleanRegex.endsWith("/") && cleanRegex.length() > 2)
+        {
+            cleanRegex = cleanRegex.substring(1, cleanRegex.length() - 1);
+        }
+        if (cleanRegex.contains("\\\\$"))
+        {
+            cleanRegex = cleanRegex.replace("\\\\$", "\\$");
+        }
+        // Escape unescaped currency dollar signs (e.g. $27.58) so regex matching handles literal amounts
+        cleanRegex = cleanRegex.replaceAll("(?<!\\\\)\\$(\\d)", "\\\\\\$$1");
+        return cleanRegex;
+    }
+
     private static final class RegexMatch extends WebElementCondition
     {
         private final Pattern pattern;
@@ -376,17 +432,7 @@ public final class AssertAction implements BrowserActionPlugin
         public RegexMatch(final String regex)
         {
             super("RegexMatch");
-            String cleanRegex = regex != null ? regex : "";
-            if (cleanRegex.startsWith("/") && cleanRegex.endsWith("/") && cleanRegex.length() > 2)
-            {
-                cleanRegex = cleanRegex.substring(1, cleanRegex.length() - 1);
-            }
-            if (cleanRegex.contains("\\\\$"))
-            {
-                cleanRegex = cleanRegex.replace("\\\\$", "\\$");
-            }
-            // Escape unescaped currency dollar signs (e.g. $27.58) so regex matching handles literal amounts
-            cleanRegex = cleanRegex.replaceAll("(?<!\\\\)\\$(\\d)", "\\\\\\$$1");
+            final String cleanRegex = cleanRegexPattern(regex);
             this.pattern = Pattern.compile(cleanRegex, Pattern.DOTALL | Pattern.MULTILINE);
         }
 
