@@ -28,10 +28,10 @@ import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.runner.StateMachineRunner;
-import org.neodymium.common.browser.BrowserMethodData;
-import org.neodymium.common.browser.BrowserRunner;
-import org.neodymium.common.browser.configuration.BrowserConfiguration;
-import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import com.xceptance.neodymium.common.browser.BrowserMethodData;
+import com.xceptance.neodymium.common.browser.BrowserRunner;
+import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
-import org.neodymium.common.browser.SuppressBrowsers;
+import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.util.Neodymium;
 import com.codeborne.selenide.Configuration;
@@ -127,7 +127,7 @@ public abstract class BaseAiTest extends BaseLlmTest
     @SuppressBrowsers
     public final void cleanUpActiveBrowser()
     {
-        if (Neodymium.getWebDriverStateContainer() != null)
+        if (com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer() != null)
         {
             final String profileName = Neodymium.getBrowserProfileName();
             if (profileName != null)
@@ -135,7 +135,7 @@ public abstract class BaseAiTest extends BaseLlmTest
                 final BrowserRunner runner = new BrowserRunner();
                 runner.teardown(false, true,
                     new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                    Neodymium.getWebDriverStateContainer());
+                    com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer());
             }
         }
     }
@@ -151,7 +151,7 @@ public abstract class BaseAiTest extends BaseLlmTest
             final BrowserRunner runner = new BrowserRunner();
             runner.teardown(false, true,
                 new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                Neodymium.getWebDriverStateContainer());
+                com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer());
             try
             {
                 Thread.sleep(1000);

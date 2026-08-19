@@ -122,4 +122,67 @@ public class NeodymiumAiRunnerTest
         Assertions.assertEquals(1, ds.value().length);
         Assertions.assertEquals("modern-bad", ds.value()[0]);
     }
+
+    /**
+     * Sample test class decorated with multiple @Browser annotations to verify multiplication.
+     */
+    @com.xceptance.neodymium.common.browser.Browser("Chrome_1024x768")
+    @com.xceptance.neodymium.common.browser.Browser("Firefox_1024x768")
+    public static class MultiBrowserTestClass
+    {
+        @Test
+        @AiInlinePlaybook("name: multi-browser\nsteps:\n  - instruction: Open homepage\n")
+        public void testMultiBrowser()
+        {
+        }
+    }
+
+    private static org.junit.jupiter.api.extension.ExtensionContext createMockExtensionContext(final Class<?> testClass, final java.lang.reflect.Method method)
+    {
+        return (org.junit.jupiter.api.extension.ExtensionContext) java.lang.reflect.Proxy.newProxyInstance(
+            org.junit.jupiter.api.extension.ExtensionContext.class.getClassLoader(),
+            new Class<?>[]{org.junit.jupiter.api.extension.ExtensionContext.class},
+            (proxy, m, args) -> {
+                if ("getTestClass".equals(m.getName()))
+                {
+                    return java.util.Optional.ofNullable(testClass);
+                }
+                if ("getRequiredTestClass".equals(m.getName()))
+                {
+                    return testClass;
+                }
+                if ("getTestMethod".equals(m.getName()))
+                {
+                    return java.util.Optional.ofNullable(method);
+                }
+                if ("getRequiredTestMethod".equals(m.getName()))
+                {
+                    return method;
+                }
+                if (m.getReturnType().equals(java.util.Optional.class))
+                {
+                    return java.util.Optional.empty();
+                }
+                return null;
+            }
+        );
+    }
+
+    /**
+     * Goal: Verifies that NeodymiumAiRunner multiplies test template invocation contexts across all specified browser profiles.
+     */
+    @Test
+    public void testProvideTestTemplateInvocationContextsWithMultipleBrowsers() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final java.lang.reflect.Method method = MultiBrowserTestClass.class.getMethod("testMultiBrowser");
+        final org.junit.jupiter.api.extension.ExtensionContext extensionContext = createMockExtensionContext(MultiBrowserTestClass.class, method);
+
+        final java.util.List<org.junit.jupiter.api.extension.TestTemplateInvocationContext> contexts =
+            runner.provideTestTemplateInvocationContexts(extensionContext).collect(java.util.stream.Collectors.toList());
+
+        Assertions.assertEquals(2, contexts.size());
+        Assertions.assertTrue(contexts.get(0).getDisplayName(1).contains("Chrome_1024x768"));
+        Assertions.assertTrue(contexts.get(1).getDisplayName(2).contains("Firefox_1024x768"));
+    }
 }

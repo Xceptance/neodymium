@@ -25,7 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browser;
 
 /**
  * Unit test for {@link AssertAction} verifying support for all DOM element states.

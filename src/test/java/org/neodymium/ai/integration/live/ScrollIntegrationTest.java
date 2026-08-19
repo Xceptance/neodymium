@@ -21,7 +21,7 @@ package org.neodymium.ai.integration.live;
 import static com.codeborne.selenide.Selenide.$;
 
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browser;
 
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.junit.AiDataSet;

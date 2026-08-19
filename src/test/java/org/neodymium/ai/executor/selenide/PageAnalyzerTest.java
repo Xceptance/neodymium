@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browser;
 
 /**
  * Dedicated unit tests for {@link PageAnalyzer}.

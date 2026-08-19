@@ -21,7 +21,7 @@ package org.neodymium.ai.integration.mock;
 import static com.codeborne.selenide.Selenide.$;
 
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browser;
 
 import java.io.File;
 import java.io.IOException;

@@ -28,7 +28,7 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
-import org.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browser;
 
 /**
  * External integration test executing search workflows against blog.xceptance.com

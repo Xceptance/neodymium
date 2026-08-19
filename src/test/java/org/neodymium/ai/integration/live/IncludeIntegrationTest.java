@@ -30,7 +30,7 @@ import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browser;
 
 /**
  * Live integration test for playbook inclusion (standalone steps, positional includes, and conditional includes inside IF-THEN / IF-ELSE branches).

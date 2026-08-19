@@ -36,7 +36,7 @@ import org.neodymium.ai.model.PlaybookRecording;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.browser.Browser;
 
 /**
  * Integration test validating programmatic playbook execution with include statements,
