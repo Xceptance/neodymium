@@ -433,9 +433,17 @@ public final class YamlPlaybookParser implements PlaybookParser
             {
                 if (stepItem instanceof String)
                 {
-                    final PlaybookStep step = new PlaybookStep((String) stepItem);
-                    initStepLocation(step, fileName, fileContent, (String) stepItem);
-                    outSteps.add(step);
+                    final String str = (String) stepItem;
+                    if (str.contains("\n"))
+                    {
+                        parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                    }
+                    else
+                    {
+                        final PlaybookStep step = new PlaybookStep(str);
+                        initStepLocation(step, fileName, fileContent, str);
+                        outSteps.add(step);
+                    }
                 }
                 else if (stepItem instanceof Map)
                 {
@@ -489,10 +497,14 @@ public final class YamlPlaybookParser implements PlaybookParser
                             + ". Expected string step, 'include' map, or 'instruction' map, but found map keys: " + mapStep.keySet());
                     }
                 }
+                else if (stepItem instanceof List)
+                {
+                    parseStepBlock(stepItem, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                }
                 else
                 {
                     throw new IllegalArgumentException("Invalid playbook step item type in file: " + fileName 
-                        + ". Expected string or map, but found: " + (stepItem != null ? stepItem.getClass().getName() : "null"));
+                        + ". Expected string, map, or nested list, but found: " + (stepItem != null ? stepItem.getClass().getName() : "null"));
                 }
             }
         }
