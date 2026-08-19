@@ -19,9 +19,11 @@
 package org.neodymium.ai.pipeline.steps;
 
 import java.io.IOException;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
@@ -63,10 +65,21 @@ public final class CaptureStateStep implements PipelineStep
         {
             try
             {
-                final org.neodymium.ai.model.ContextLevel level = (org.neodymium.ai.model.ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) BEFORE executing actions", level);
+                final ContextLevel level = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                final boolean verificationEnabled = AiConfiguration.getInstance().isSemanticVerificationEnabled();
+                final ContextLevel captureLevel;
+                if (verificationEnabled && (level == null || level == ContextLevel.MINIMAL || level == ContextLevel.LEAN))
+                {
+                    captureLevel = ContextLevel.VISUAL_LEAN;
+                }
+                else
+                {
+                    captureLevel = level != null ? level : ContextLevel.MINIMAL;
+                }
+
+                LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) BEFORE executing actions", captureLevel);
                 final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
-                final SutState state = executor.captureState(level, isFullPageReq);
+                final SutState state = executor.captureState(captureLevel, isFullPageReq);
                 context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
                 session.getEventBus().dispatch(new StateCapturedEvent(state));
             }

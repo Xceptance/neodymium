@@ -1086,7 +1086,8 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                 });
 
-                final LlmCapability capability = (initialLevel != null && initialLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
+                final ContextLevel targetCapLevel = effectiveLevel != null ? effectiveLevel : baseLevel;
+                final LlmCapability capability = (targetCapLevel != null && targetCapLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                 final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
                 standardFlow.add(llmStep);
                 if (AiConfiguration.getInstance().isJudgeEnabled())
