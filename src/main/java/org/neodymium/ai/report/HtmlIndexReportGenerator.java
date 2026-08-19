@@ -842,7 +842,7 @@ public final class HtmlIndexReportGenerator
                 sb.append("            </td>\n");
 
                 // 5. Duration
-                sb.append("            <td data-sort=\"").append(entry.getDurationMs()).append("\">").append(escapeHtml(formatDuration(entry.getDurationMs()))).append("</td>\n");
+                sb.append("            <td data-sort=\"").append(entry.getDurationMs()).append("\"><span class=\"duration-stat\">").append(escapeHtml(formatDuration(entry.getDurationMs()))).append("</span></td>\n");
 
                 // 6. AI / LLM Usage
                 sb.append("            <td>\n");
@@ -1240,6 +1240,7 @@ public final class HtmlIndexReportGenerator
             .mode-muted { color: var(--text-muted); opacity: 0.7; }
             .steps-count { font-weight: 700; font-size: 0.82rem; }
             .steps-sub { font-size: 0.7rem; margin-top: 0.1rem; white-space: nowrap; }
+            .duration-stat { font-weight: 600; font-size: 0.80rem; color: var(--text); white-space: nowrap; }
             .llm-stat { font-weight: 600; font-size: 0.76rem; color: var(--text); white-space: nowrap; }
             .llm-tokens { font-size: 0.70rem; color: var(--text-muted); white-space: nowrap; }
             .llm-cost { font-weight: 600; color: #0284c7; }
