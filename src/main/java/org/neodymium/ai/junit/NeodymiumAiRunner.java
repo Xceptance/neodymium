@@ -760,9 +760,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
             }
-            System.out.println("browserProfile "+browserProfile);
-            System.out.println("browserName "+Neodymium.getBrowserName());
-
             if (browserProfile != null && !browserProfile.isEmpty())
             {
                 executionContext.getTransientData().put("browser", browserProfile);
