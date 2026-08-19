@@ -29,7 +29,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,7 +128,8 @@ public class LocalRunJsonStorageService
                 return;
             }
 
-            final ArrayNode execsArray = objectMapper.createArrayNode();
+            final Map<String, Map<String, List<String>>> areasMap = new LinkedHashMap<>();
+            int totalExecsCount = 0;
             int pass = 0, fixed = 0, known = 0, unknown = 0, ignoredCount = 0;
 
             final BatchInfo batchInfo = resolveOrCreateBatchJson(runDir, testExecJsonFiles);
@@ -161,23 +164,95 @@ public class LocalRunJsonStorageService
                         if (node instanceof ObjectNode objNode)
                         {
                             final Path relPath = runDir.toPath().relativize(f.toPath());
-                            if (relPath.getNameCount() >= 2)
+                            String folderArea = "";
+                            String folderClass = "";
+                            if (relPath.getNameCount() >= 3)
                             {
-                                final String folderArea = relPath.getName(0).toString();
-                                final String folderClass = relPath.getName(1).toString();
-                                objNode.put("areaName", folderArea);
-                                if (!objNode.has("testClass") || objNode.path("testClass").asText().isEmpty())
-                                {
-                                    objNode.put("testClass", folderClass);
-                                }
+                                folderArea = relPath.getName(0).toString();
+                                folderClass = relPath.getName(1).toString();
+                            }
+                            else if (relPath.getNameCount() == 2)
+                            {
+                                folderArea = "";
+                                folderClass = relPath.getName(0).toString();
                             }
 
-                            final String testClass = objNode.path("testClass").asText("");
+                            String rawClass = objNode.has("testClass") ? objNode.path("testClass").asText("") : "";
+                            if (rawClass.endsWith(".json") || rawClass.equalsIgnoreCase(f.getName()))
+                            {
+                                rawClass = "";
+                            }
+                            if (rawClass.isEmpty() || "GeneralClass".equalsIgnoreCase(rawClass) || "DefaultClass".equalsIgnoreCase(rawClass))
+                            {
+                                if (!folderClass.isEmpty())
+                                {
+                                    rawClass = folderClass;
+                                }
+                                else if (objNode.has("testFile") && !objNode.path("testFile").asText().isEmpty())
+                                {
+                                    String tf = objNode.path("testFile").asText();
+                                    if (tf.contains("#"))
+                                    {
+                                        tf = tf.substring(0, tf.indexOf('#'));
+                                    }
+                                    if (tf.contains("."))
+                                    {
+                                        tf = tf.substring(tf.lastIndexOf('.') + 1);
+                                    }
+                                    rawClass = tf;
+                                }
+                                else if (objNode.has("testId") && !objNode.path("testId").asText().isEmpty())
+                                {
+                                    rawClass = objNode.path("testId").asText().replaceAll("\\s+", "");
+                                }
+                                else
+                                {
+                                    rawClass = "DefaultClass";
+                                }
+                            }
+                            final String testClass = rawClass.trim();
+
+                            String rawArea = objNode.has("areaName") ? objNode.path("areaName").asText("") : (objNode.has("category") ? objNode.path("category").asText("") : "");
+                            if (rawArea.equalsIgnoreCase(folderClass) || rawArea.equalsIgnoreCase(f.getName()) || rawArea.equalsIgnoreCase(testClass))
+                            {
+                                rawArea = "";
+                            }
+                            if (rawArea.isEmpty() || "General".equalsIgnoreCase(rawArea))
+                            {
+                                if (!folderArea.isEmpty() && !"General".equalsIgnoreCase(folderArea))
+                                {
+                                    rawArea = folderArea;
+                                }
+                                else
+                                {
+                                    rawArea = "Browsing (default)";
+                                }
+                            }
+                            final String areaName = rawArea.trim();
+
+                            objNode.put("areaName", areaName);
+                            objNode.put("testClass", testClass);
+
                             final String title = objNode.path("title").asText("");
-                            final String areaName = objNode.path("areaName").asText("General");
                             final String location = objNode.path("location").asText("US");
                             final String browser = objNode.path("browser").asText("Chrome");
                             final String engine = objNode.path("engine").asText("Java");
+
+                            if (!objNode.has("id") || objNode.path("id").asText().isEmpty())
+                            {
+                                if (objNode.has("testId") && !objNode.path("testId").asText().isEmpty())
+                                {
+                                    objNode.put("id", objNode.path("testId").asText());
+                                }
+                                else if (objNode.has("datasetId") && !objNode.path("datasetId").asText().isEmpty())
+                                {
+                                    objNode.put("id", objNode.path("datasetId").asText());
+                                }
+                                else
+                                {
+                                    objNode.put("id", f.getName().replaceAll("\\.json$", ""));
+                                }
+                            }
 
                             if (!objNode.has("runId") || objNode.path("runId").asText().isEmpty())
                             {
@@ -258,16 +333,60 @@ public class LocalRunJsonStorageService
                                 objNode.set("blocks", blocksNode);
                             }
 
-                            try
+                            // Relocate file on disk if not currently in runDir / areaName / testClass / f.getName()
+                            final Path targetDir = runDir.toPath().resolve(areaName).resolve(testClass);
+                            final Path targetFilePath = targetDir.resolve(f.getName());
+                            File targetFile = f;
+
+                            if (!f.toPath().toAbsolutePath().equals(targetFilePath.toAbsolutePath()))
                             {
-                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, objNode);
+                                Files.createDirectories(targetDir);
+                                final Path oldParent = f.toPath().getParent();
+                                targetFile = targetFilePath.toFile();
+                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
+                                try
+                                {
+                                    Files.deleteIfExists(f.toPath());
+                                    if (oldParent != null && Files.exists(oldParent) && !oldParent.equals(runDir.toPath()))
+                                    {
+                                        try (final var entries = Files.list(oldParent))
+                                        {
+                                            if (entries.findFirst().isEmpty())
+                                            {
+                                                Files.deleteIfExists(oldParent);
+                                                final Path oldGrandParent = oldParent.getParent();
+                                                if (oldGrandParent != null && Files.exists(oldGrandParent) && !oldGrandParent.equals(runDir.toPath()))
+                                                {
+                                                    try (final var grandEntries = Files.list(oldGrandParent))
+                                                    {
+                                                        if (grandEntries.findFirst().isEmpty())
+                                                        {
+                                                            Files.deleteIfExists(oldGrandParent);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
                             }
-                            catch (final Exception ignored)
+                            else
                             {
+                                try
+                                {
+                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
                             }
+                            areasMap.computeIfAbsent(areaName, k -> new LinkedHashMap<>()).computeIfAbsent(testClass, k -> new ArrayList<>()).add(targetFile.getName());
                         }
 
-                        execsArray.add(node);
+                        totalExecsCount++;
                         final String rawStatus = node.path("status").asText("passed-clean");
                         switch (rawStatus)
                         {
@@ -285,7 +404,7 @@ public class LocalRunJsonStorageService
                 }
             }
 
-            final int total = execsArray.size();
+            final int total = totalExecsCount;
             final double passRate = total > 0 ? (double)(pass + fixed) / total * 100.0 : 0.0;
 
             final ObjectNode rootNode = objectMapper.createObjectNode();
@@ -304,8 +423,40 @@ public class LocalRunJsonStorageService
             summaryNode.put("ignored", ignoredCount);
             summaryNode.put("passRate", Math.round(passRate * 10.0) / 10.0);
 
+            final ArrayNode areasArray = objectMapper.createArrayNode();
+            for (final Map.Entry<String, Map<String, List<String>>> areaEntry : areasMap.entrySet())
+            {
+                final String aName = areaEntry.getKey();
+                final ObjectNode areaObj = objectMapper.createObjectNode();
+                areaObj.put("areaName", aName);
+                final String cleanGroup = aName.replaceAll("[\\s()@]+", "");
+                areaObj.put("areaGroup", "areaGroup" + cleanGroup);
+                areaObj.put("folder", aName);
+
+                final ArrayNode testClassesArray = objectMapper.createArrayNode();
+                for (final Map.Entry<String, List<String>> classEntry : areaEntry.getValue().entrySet())
+                {
+                    final String cName = classEntry.getKey();
+                    final ObjectNode classObj = objectMapper.createObjectNode();
+                    classObj.put("className", cName);
+                    final String cleanContainer = cName.replaceAll("[\\s.]+", "");
+                    classObj.put("classContainer", "classContainer" + cleanContainer);
+                    classObj.put("folder", cName);
+
+                    final ArrayNode executionsArray = objectMapper.createArrayNode();
+                    for (final String execName : classEntry.getValue())
+                    {
+                        executionsArray.add(execName);
+                    }
+                    classObj.set("executions", executionsArray);
+                    testClassesArray.add(classObj);
+                }
+                areaObj.set("testClasses", testClassesArray);
+                areasArray.add(areaObj);
+            }
+
             rootNode.set("summary", summaryNode);
-            rootNode.set("executions", execsArray);
+            rootNode.set("areas", areasArray);
 
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(runJsonFile, rootNode);
             LOG.info("Generated/Updated run.json for runId={} from {} test execution JSON files (Total: {}, Pass: {}, Known: {}, Unknown: {}).",
@@ -373,7 +524,7 @@ public class LocalRunJsonStorageService
             {
                 scanForTestExecJsonFiles(f, results);
             }
-            else if (f.getName().endsWith(".json") && !"run.json".equalsIgnoreCase(f.getName()))
+            else if (f.getName().endsWith(".json") && !"run.json".equalsIgnoreCase(f.getName()) && !"batch.json".equalsIgnoreCase(f.getName()))
             {
                 results.add(f);
             }
@@ -496,20 +647,53 @@ public class LocalRunJsonStorageService
                             for (final JsonNode execFileNode : executionsNode)
                             {
                                 final String execFileName = execFileNode.asText();
-                                final Path execFilePath = runDir.resolve(areaFolder).resolve(classFolder).resolve(execFileName);
+                                final Path execFilePath = resolveExecutionFilePath(runDir, areaFolder, classFolder, execFileName);
 
-                                if (Files.exists(execFilePath))
+                                if (execFilePath != null && Files.exists(execFilePath))
                                 {
                                     final JsonNode execNode = objectMapper.readTree(execFilePath.toFile());
                                     if (execNode instanceof ObjectNode execObj)
                                     {
-                                        if (!areaFolder.isEmpty())
+                                        final String areaToUse = (!areaFolder.isEmpty() && !"General".equalsIgnoreCase(areaFolder)) ? areaFolder : "Browsing (default)";
+                                        execObj.put("areaName", areaToUse);
+
+                                        String classToUse = classFolder;
+                                        if (classToUse.isEmpty())
                                         {
-                                            execObj.put("areaName", areaFolder);
+                                            classToUse = extractClassNameFromExecObj(execObj);
                                         }
-                                        if (!classFolder.isEmpty() && (!execObj.has("testClass") || execObj.path("testClass").asText().isEmpty()))
+                                        execObj.put("testClass", classToUse);
+
+                                        if (!execObj.has("id") || execObj.path("id").asText().isEmpty())
                                         {
-                                            execObj.put("testClass", classFolder);
+                                            if (execObj.has("testId") && !execObj.path("testId").asText().isEmpty())
+                                            {
+                                                execObj.put("id", execObj.path("testId").asText());
+                                            }
+                                            else if (execObj.has("datasetId") && !execObj.path("datasetId").asText().isEmpty())
+                                            {
+                                                execObj.put("id", execObj.path("datasetId").asText());
+                                            }
+                                            else
+                                            {
+                                                execObj.put("id", execFileName.replaceAll("\\.json$", ""));
+                                            }
+                                        }
+
+                                        if (!execObj.has("title") || execObj.path("title").asText().isEmpty())
+                                        {
+                                            if (execObj.has("datasetId") && !execObj.path("datasetId").asText().isEmpty())
+                                            {
+                                                execObj.put("title", execObj.path("datasetId").asText());
+                                            }
+                                            else if (execObj.has("testId") && !execObj.path("testId").asText().isEmpty())
+                                            {
+                                                execObj.put("title", execObj.path("testId").asText());
+                                            }
+                                            else if (execObj.has("testName") && !execObj.path("testName").asText().isEmpty())
+                                            {
+                                                execObj.put("title", execObj.path("testName").asText());
+                                            }
                                         }
                                     }
                                     mergedExecutions.add(execNode);
@@ -521,12 +705,75 @@ public class LocalRunJsonStorageService
             }
         }
 
-        if (!root.has("executions") || root.get("executions").isEmpty())
+        if (!root.has("executions") || root.get("executions") == null || root.get("executions").isNull() || root.get("executions").isEmpty())
         {
             root.set("executions", mergedExecutions);
         }
 
         return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+    }
+
+    private Path resolveExecutionFilePath(final Path runDir, final String areaFolder, final String classFolder, final String execFileName)
+    {
+        Path path = runDir.resolve(areaFolder).resolve(classFolder).resolve(execFileName);
+        if (Files.exists(path))
+        {
+            return path;
+        }
+        path = runDir.resolve(classFolder).resolve(execFileName);
+        if (Files.exists(path))
+        {
+            return path;
+        }
+        path = runDir.resolve(execFileName);
+        if (Files.exists(path))
+        {
+            return path;
+        }
+        try (var stream = Files.walk(runDir))
+        {
+            return stream.filter(Files::isRegularFile)
+                         .filter(p -> p.getFileName().toString().equals(execFileName))
+                         .findFirst()
+                         .orElse(null);
+        }
+        catch (final Exception ignored)
+        {
+        }
+        return null;
+    }
+
+    private String extractClassNameFromExecObj(final ObjectNode execObj)
+    {
+        if (execObj.has("testClass") && !execObj.path("testClass").asText().isEmpty())
+        {
+            return execObj.path("testClass").asText();
+        }
+        if (execObj.has("testFile") && !execObj.path("testFile").asText().isEmpty())
+        {
+            String tf = execObj.path("testFile").asText();
+            if (tf.contains("#"))
+            {
+                tf = tf.substring(0, tf.indexOf('#'));
+            }
+            if (tf.contains("."))
+            {
+                tf = tf.substring(tf.lastIndexOf('.') + 1);
+            }
+            if (!tf.trim().isEmpty())
+            {
+                return tf.trim();
+            }
+        }
+        if (execObj.has("junitTags") && execObj.path("junitTags").isArray() && execObj.path("junitTags").size() > 0)
+        {
+            final String firstTag = execObj.path("junitTags").get(0).asText();
+            if (!firstTag.trim().isEmpty())
+            {
+                return firstTag.trim();
+            }
+        }
+        return "DefaultClass";
     }
 
     public void deleteRunJson(final String runId)
@@ -565,12 +812,49 @@ public class LocalRunJsonStorageService
                 for (final Path jsonPath : jsonFiles)
                 {
                     final JsonNode node = objectMapper.readTree(jsonPath.toFile());
-                    if (node instanceof ObjectNode objNode && rowId.equalsIgnoreCase(objNode.path("id").asText()))
+                    if (node instanceof ObjectNode objNode)
                     {
-                        updater.accept(objNode);
-                        objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
-                        LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
-                        return true;
+                        final String nodeId = objNode.has("id") ? objNode.path("id").asText() : "";
+                        final String nodeTestId = objNode.has("testId") ? objNode.path("testId").asText() : "";
+                        final String nodeDatasetId = objNode.has("datasetId") ? objNode.path("datasetId").asText() : "";
+                        final String fileNameNoExt = jsonPath.getFileName().toString().replaceAll("\\.json$", "");
+
+                        final boolean matches = (rowId != null && !rowId.isEmpty() && (
+                            rowId.equalsIgnoreCase(nodeId)
+                            || rowId.equalsIgnoreCase(nodeTestId)
+                            || rowId.equalsIgnoreCase(nodeDatasetId)
+                            || rowId.equalsIgnoreCase(fileNameNoExt)
+                        )) || (jsonFiles.size() == 1);
+
+                        if (matches)
+                        {
+                            if (!objNode.has("id") || objNode.path("id").asText().isEmpty())
+                            {
+                                objNode.put("id", rowId != null && !rowId.isEmpty() ? rowId : fileNameNoExt);
+                            }
+                            updater.accept(objNode);
+
+                            final String areaName = objNode.has("areaName") && !objNode.path("areaName").asText().trim().isEmpty() ? objNode.path("areaName").asText().trim() : "Browsing (default)";
+                            final String testClass = objNode.has("testClass") && !objNode.path("testClass").asText().trim().isEmpty() ? objNode.path("testClass").asText().trim() : "DefaultClass";
+                            final Path targetDir = runDir.resolve(areaName).resolve(testClass);
+                            final Path targetFilePath = targetDir.resolve(jsonPath.getFileName().toString());
+
+                            if (!jsonPath.toAbsolutePath().equals(targetFilePath.toAbsolutePath()))
+                            {
+                                Files.createDirectories(targetDir);
+                                final Path oldParent = jsonPath.getParent();
+                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFilePath.toFile(), objNode);
+                                Files.deleteIfExists(jsonPath);
+                                cleanEmptyParentDirectories(oldParent, runDir);
+                                LOG.info("Updated and relocated execution JSON on disk: {} -> {}", jsonPath.toAbsolutePath(), targetFilePath.toAbsolutePath());
+                            }
+                            else
+                            {
+                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
+                                LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
+                            }
+                            return true;
+                        }
                     }
                 }
             }
@@ -623,5 +907,29 @@ public class LocalRunJsonStorageService
             }
         }
         Files.delete(path);
+    }
+
+    private void cleanEmptyParentDirectories(final Path dir, final Path stopDir)
+    {
+        Path current = dir;
+        while (current != null && Files.exists(current) && !current.equals(stopDir))
+        {
+            try (final var entries = Files.list(current))
+            {
+                if (entries.findFirst().isEmpty())
+                {
+                    Files.deleteIfExists(current);
+                    current = current.getParent();
+                }
+                else
+                {
+                    break;
+                }
+            }
+            catch (final Exception e)
+            {
+                break;
+            }
+        }
     }
 }

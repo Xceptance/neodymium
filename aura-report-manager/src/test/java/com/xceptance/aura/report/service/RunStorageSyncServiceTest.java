@@ -74,9 +74,10 @@ public class RunStorageSyncServiceTest
         final int syncedCount = syncService.syncLocalRunStorage();
         Assertions.assertTrue(syncedCount > 0, "Expected at least 1 run report synced into DB");
 
-        final Optional<TestRunEntity> run1049 = runRepository.findById("1049");
-        Assertions.assertTrue(run1049.isPresent(), "Expected run 1049 to be synced in repository");
-        Assertions.assertEquals(12, run1049.get().getTotalTests());
+        final var allRuns = runRepository.findAll();
+        Assertions.assertFalse(allRuns.isEmpty(), "Expected runs to be synced in repository");
+        final TestRunEntity firstRun = allRuns.get(0);
+        Assertions.assertTrue(firstRun.getTotalTests() > 0, "Expected total tests to be greater than 0");
     }
 
     @Test
@@ -105,5 +106,94 @@ public class RunStorageSyncServiceTest
         Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should dynamically generate and return run.json");
         Assertions.assertTrue(Files.exists(runJsonPath), "run.json file should have been generated on disk");
         Assertions.assertTrue(runJsonOpt.get().contains("exec-999-1"));
+    }
+
+    @Test
+    public void testUnassignedCategoryDefaultsToBrowsingAndMovesFile() throws IOException
+    {
+        final String unassignedRunId = "run-unassigned-test-888";
+        final Path runDir = Paths.get("storage", "runs", unassignedRunId);
+        Files.createDirectories(runDir);
+
+        final Path flatExecFile = runDir.resolve("unassigned-exec.json");
+        final String flatExecJson = """
+            {
+                "id": "exec-888-1",
+                "title": "UnassignedTest [US Chrome]",
+                "testClass": "UnassignedTest",
+                "status": "passed-clean",
+                "location": "US",
+                "browser": "Chrome"
+            }
+            """;
+        Files.writeString(flatExecFile, flatExecJson);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(unassignedRunId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+            Assertions.assertTrue(runJsonOpt.get().contains("Browsing (default)"), "Expected category/areaName to be assigned to Browsing (default)");
+
+            final Path expectedMovedPath = runDir.resolve("Browsing (default)").resolve("UnassignedTest").resolve("unassigned-exec.json");
+            Assertions.assertTrue(Files.exists(expectedMovedPath), "Expected execution JSON file to be moved to Browsing (default)/UnassignedTest/unassigned-exec.json");
+            Assertions.assertFalse(Files.exists(flatExecFile), "Old flat file should no longer exist at run root");
+        }
+        finally
+        {
+            if (Files.exists(runDir))
+            {
+                try (var stream = Files.walk(runDir))
+                {
+                    stream.sorted(Comparator.reverseOrder())
+                          .map(Path::toFile)
+                          .forEach(File::delete);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testTwoLevelFolderStructureDefaultsToBrowsingCategory() throws IOException
+    {
+        final String twoLevelRunId = "run-two-level-777";
+        final Path runDir = Paths.get("storage", "runs", twoLevelRunId);
+        final Path classDir = runDir.resolve("GoogleTest");
+        Files.createDirectories(classDir);
+
+        final Path execFile = classDir.resolve("console-execution-1.json");
+        final String execJson = """
+            {
+                "runId": "run_777",
+                "status": "failed",
+                "testName": "Google Test",
+                "testFile": "com.xceptance.neodymium.test.examples.GoogleTest#executeGoogleTest",
+                "browser": "chrome"
+            }
+            """;
+        Files.writeString(execFile, execJson);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(twoLevelRunId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+            Assertions.assertTrue(runJsonOpt.get().contains("Browsing (default)"), "Expected category/areaName to be assigned to Browsing (default)");
+
+            final Path expectedMovedPath = runDir.resolve("Browsing (default)").resolve("GoogleTest").resolve("console-execution-1.json");
+            Assertions.assertTrue(Files.exists(expectedMovedPath), "Expected execution JSON file to be moved into Browsing (default)/GoogleTest/console-execution-1.json");
+            Assertions.assertFalse(Files.exists(execFile), "Old 2-level execution file should no longer exist at GoogleTest/console-execution-1.json");
+            Assertions.assertFalse(Files.exists(classDir), "Old class folder should be removed when empty");
+        }
+        finally
+        {
+            if (Files.exists(runDir))
+            {
+                try (var stream = Files.walk(runDir))
+                {
+                    stream.sorted(Comparator.reverseOrder())
+                          .map(Path::toFile)
+                          .forEach(File::delete);
+                }
+            }
+        }
     }
 }

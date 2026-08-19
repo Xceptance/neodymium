@@ -72,7 +72,7 @@ public final class AreaSummaryDto
         final int unknownCount,
         final int ignoredCount)
     {
-        this(areaName, areaGroup, "General", passCount + fixedCount + knownCount + unknownCount + ignoredCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, testClasses);
+        this(areaName, areaGroup, "Browsing (default)", passCount + fixedCount + knownCount + unknownCount + ignoredCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, testClasses);
     }
 
     public String getAreaName()

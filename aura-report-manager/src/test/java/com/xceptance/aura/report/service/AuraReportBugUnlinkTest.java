@@ -48,6 +48,9 @@ public class AuraReportBugUnlinkTest
     @Autowired
     private TestBaseBugRepository bugRepository;
 
+    @Autowired
+    private LocalRunJsonStorageService storageService;
+
     private static final String TEST_RUN_ID = "run-unlink-test-101";
 
     @BeforeEach
@@ -116,13 +119,14 @@ public class AuraReportBugUnlinkTest
     }
 
     @Test
-    public void testLinkAndUnlinkBugTicket()
+    public void testLinkAndUnlinkBugTicket() throws java.io.IOException
     {
         // 1. Initial State: 1 failed-unknown execution
         final RunReportDto initialReport = dataService.getRunReport(TEST_RUN_ID);
         Assertions.assertEquals(1, initialReport.getUnknownCount());
         Assertions.assertEquals(0, initialReport.getKnownCount());
         Assertions.assertEquals("failed-unknown", initialReport.getExecutions().get(0).getStatus());
+        Assertions.assertEquals(1, countExecJsonFiles(TEST_RUN_ID));
 
         // 2. Link Bug Ticket: BUG-9999
         final TestExecutionDto linkedExec = dataService.addBugToExecution(TEST_RUN_ID, "row-unlink-1", "BUG-9999");
@@ -132,6 +136,7 @@ public class AuraReportBugUnlinkTest
         final RunReportDto reportAfterLink = dataService.getRunReport(TEST_RUN_ID);
         Assertions.assertEquals(0, reportAfterLink.getUnknownCount());
         Assertions.assertEquals(1, reportAfterLink.getKnownCount());
+        Assertions.assertEquals(1, countExecJsonFiles(TEST_RUN_ID));
 
         // 3. Unlink Bug Ticket: BUG-9999
         final TestExecutionDto unlinkedExec = dataService.removeBugFromExecution(TEST_RUN_ID, "row-unlink-1", "BUG-9999");
@@ -141,5 +146,53 @@ public class AuraReportBugUnlinkTest
         final RunReportDto reportAfterUnlink = dataService.getRunReport(TEST_RUN_ID);
         Assertions.assertEquals(1, reportAfterUnlink.getUnknownCount());
         Assertions.assertEquals(0, reportAfterUnlink.getKnownCount());
+        Assertions.assertEquals(1, countExecJsonFiles(TEST_RUN_ID));
+    }
+
+    @Test
+    public void testFirstBugLinkOnRawExecutionWithoutId() throws java.io.IOException
+    {
+        final String rawRunId = "run-raw-no-id-99";
+        final TestRunEntity runEntity = new TestRunEntity(
+            rawRunId, "Raw Run Batch", "COMPLETED", "Raw test", "Staging", "en_US", "Chrome", "2026-08-17 12:00:00", System.currentTimeMillis()
+        );
+        runRepository.save(runEntity);
+
+        // Manually create a raw execution JSON file WITHOUT an "id" field
+        final java.nio.file.Path runDir = storageService.getRunDir(rawRunId);
+        final java.nio.file.Path rawExecDir = runDir.resolve("Browsing (default)").resolve("RawTest");
+        java.nio.file.Files.createDirectories(rawExecDir);
+        final java.nio.file.Path rawFile = rawExecDir.resolve("console-execution-1.json");
+
+        final com.fasterxml.jackson.databind.node.ObjectNode rawNode = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+        rawNode.put("testClass", "RawTest");
+        rawNode.put("title", "executeRawTest");
+        rawNode.put("status", "failed");
+        rawNode.put("areaName", "Browsing (default)");
+        new com.fasterxml.jackson.databind.ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(rawFile.toFile(), rawNode);
+
+        Assertions.assertEquals(1, countExecJsonFiles(rawRunId));
+
+        // First Bug Link
+        final TestExecutionDto linkedExec = dataService.addBugToExecution(rawRunId, "console-execution-1", "BUG-101");
+        Assertions.assertNotNull(linkedExec);
+        Assertions.assertTrue(linkedExec.getBugs().contains("BUG-101"));
+
+        // Verify exactly 1 execution JSON file exists (no duplicate file created on first bug link!)
+        Assertions.assertEquals(1, countExecJsonFiles(rawRunId));
+    }
+
+    private long countExecJsonFiles(final String runId) throws java.io.IOException
+    {
+        final java.nio.file.Path runDir = storageService.getRunDir(runId);
+        if (!java.nio.file.Files.exists(runDir))
+        {
+            return 0;
+        }
+        try (final var stream = java.nio.file.Files.walk(runDir))
+        {
+            return stream.filter(p -> p.toString().endsWith(".json") && !p.getFileName().toString().equals("run.json") && !p.getFileName().toString().equals("batch.json"))
+                         .count();
+        }
     }
 }

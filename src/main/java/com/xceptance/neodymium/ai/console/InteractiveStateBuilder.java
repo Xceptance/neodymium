@@ -196,6 +196,28 @@ public final class InteractiveStateBuilder
             state.addProperty("browser", browser);
         }
 
+        // Execution mode
+        Object modeObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE) : null;
+        if (modeObj == null && context != null)
+        {
+            modeObj = context.getTransientData().get("executionMode");
+        }
+        if (modeObj == null)
+        {
+            try
+            {
+                modeObj = org.neodymium.ai.config.AiConfiguration.getInstance().getExecutionMode();
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+        if (modeObj != null)
+        {
+            final String modeStr = modeObj.toString();
+            state.addProperty("executionMode", modeStr);
+        }
+
         // Data bindings from SessionData
         if (context != null && context.getSessionData() != null)
         {
@@ -368,23 +390,27 @@ public final class InteractiveStateBuilder
             : null;
 
         String stepEngine = "llm";
+        String origin = "LLM";
+
         if (step.getStatus() == PlaybookStepStatus.HEALED)
         {
             stepEngine = "healed";
+            origin = "HEALED";
         }
-        else if (mode != null && mode.isReplay())
+        else if (step.getSourceFile() != null && step.getSourceFile().endsWith(".java"))
+        {
+            stepEngine = "java";
+            origin = "JAVA";
+        }
+        else if ((mode != null && mode.isReplay())
+            || (context != null && Boolean.TRUE.equals(context.getTransientData().get("isReplayRun")))
+            || (step.getSourceFile() != null && step.getSourceFile().endsWith(".json")))
         {
             stepEngine = "recording";
-        }
-        else if (context != null && Boolean.TRUE.equals(context.getTransientData().get("isReplayRun")))
-        {
-            stepEngine = "recording";
-        }
-        else if (step.getSourceFile() != null && step.getSourceFile().endsWith(".json"))
-        {
-            stepEngine = "recording";
+            origin = "PLAYBOOK";
         }
         obj.addProperty("source", stepEngine);
+        obj.addProperty("origin", origin);
 
         PlaybookStepStatus status = step.getStatus();
         if (status == null || status == PlaybookStepStatus.PENDING)

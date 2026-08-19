@@ -97,6 +97,66 @@ public final class InteractiveConsoleEngine {
 
     private static final long DEFAULT_TIMEOUT_MS = TimeUnit.HOURS.toMillis(1);
     private static final Gson GSON = new Gson();
+    private static final String RUN_FOLDER = initializeRunFolder();
+
+    private static String initializeRunFolder()
+    {
+        final String sysRunId = System.getProperty("neodymium.runId", System.getProperty("aura.runId"));
+        if (sysRunId != null && !sysRunId.isBlank())
+        {
+            return (sysRunId.startsWith("run_") || sysRunId.startsWith("run-")) ? sysRunId : "run_" + sysRunId;
+        }
+        return "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+    }
+
+    public static String getRunFolder()
+    {
+        return RUN_FOLDER;
+    }
+
+    public static String extractTestClassFolder(final JsonObject json)
+    {
+        if (json != null)
+        {
+            if (json.has("testFile") && !json.get("testFile").isJsonNull())
+            {
+                String tf = json.get("testFile").getAsString();
+                if (tf != null && !tf.isBlank())
+                {
+                    if (tf.contains("#"))
+                    {
+                        tf = tf.substring(0, tf.indexOf('#'));
+                    }
+                    if (tf.contains("."))
+                    {
+                        tf = tf.substring(tf.lastIndexOf('.') + 1);
+                    }
+                    return tf;
+                }
+            }
+            if (json.has("testName") && !json.get("testName").isJsonNull())
+            {
+                String tn = json.get("testName").getAsString();
+                if (tn != null && !tn.isBlank() && !"Live Test Run".equals(tn))
+                {
+                    if (tn.contains(" · "))
+                    {
+                        tn = tn.substring(0, tn.indexOf(" · "));
+                    }
+                    else if (tn.contains(" "))
+                    {
+                        tn = tn.substring(0, tn.indexOf(' '));
+                    }
+                    if (tn.contains("."))
+                    {
+                        tn = tn.substring(tn.lastIndexOf('.') + 1);
+                    }
+                    return tn;
+                }
+            }
+        }
+        return "DefaultTestClass";
+    }
 
     /** A unique identifier for the currently active test run. */
 
@@ -260,8 +320,32 @@ public final class InteractiveConsoleEngine {
                 final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
                 final String executionKey = extractExecutionKey(parsedState);
                 final int index = getExecutionIndex(executionKey);
+
+                // 1. Root file for compatibility
                 final File executionJson = new File(resultsDir, "console-execution-" + index + ".json");
                 Files.writeString(executionJson.toPath(), minified, StandardCharsets.UTF_8);
+
+                // 2. Structured run and test class folders
+                final String testClassFolder = extractTestClassFolder(parsedState);
+                final String runFolder = getRunFolder();
+                final File structuredDir = new File(resultsDir, runFolder + "/" + testClassFolder);
+                if (!structuredDir.exists())
+                {
+                    structuredDir.mkdirs();
+                }
+                final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
+                Files.writeString(structuredJson.toPath(), minified, StandardCharsets.UTF_8);
+
+                // 3. Structured copy in target/ai-reports
+                final String reportsDirPath = AiConfiguration.getInstance().getDiskReportDirectory();
+                final File reportsDir = new File(reportsDirPath);
+                final File reportsStructuredDir = new File(reportsDir, runFolder + "/" + testClassFolder);
+                if (!reportsStructuredDir.exists())
+                {
+                    reportsStructuredDir.mkdirs();
+                }
+                final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
+                Files.writeString(reportsStructuredJson.toPath(), minified, StandardCharsets.UTF_8);
             }
             catch (final Exception e)
             {

@@ -73,7 +73,7 @@ public final class TestClassSummaryDto
         final int ignoredCount,
         final List<TestExecutionDto> executions)
     {
-        this(className, classContainer, "General", totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions);
+        this(className, classContainer, "Browsing (default)", totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions);
     }
 
     public String getClassName()
