@@ -78,8 +78,18 @@ public class AdvancedScreenshotTest
         // compare them
         List<Attachment> attachments = getAllureResultAttachments();
 
-        Assertions.assertFalse(compareImage(new File("allure-results/" + attachments.get(0).getSource()),
-                                            new File("allure-results/" + attachments.get(1).getSource())),
+        File file1 = new File("allure-results/" + attachments.get(0).getSource());
+        if (!file1.exists())
+        {
+            file1 = new File("target/allure-results/" + attachments.get(0).getSource());
+        }
+        File file2 = new File("allure-results/" + attachments.get(1).getSource());
+        if (!file2.exists())
+        {
+            file2 = new File("target/allure-results/" + attachments.get(1).getSource());
+        }
+
+        Assertions.assertFalse(compareImage(file1, file2),
                                "blurred and not blurred images should not be the same");
     }
 

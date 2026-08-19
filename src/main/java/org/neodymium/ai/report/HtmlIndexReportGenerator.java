@@ -645,14 +645,14 @@ public final class HtmlIndexReportGenerator
         sb.append("      <table class=\"executions-table\" id=\"executionsTable\">\n");
         sb.append("        <thead>\n");
         sb.append("          <tr>\n");
-        sb.append("            <th onclick=\"sortTable(0)\" style=\"cursor:pointer; width:95px;\">Status ⬍</th>\n");
-        sb.append("            <th onclick=\"sortTable(1)\" style=\"cursor:pointer;\">Test Case & Details ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(0)\" style=\"cursor:pointer; width:100px;\">Timestamp ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(1)\" style=\"cursor:pointer; width:95px;\">Status ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(2)\" style=\"cursor:pointer;\">Test Case & Details ⬍</th>\n");
         sb.append("            <th style=\"width:115px;\">Mode</th>\n");
-        sb.append("            <th style=\"width:75px;\">Steps</th>\n");
-        sb.append("            <th onclick=\"sortTable(4)\" style=\"cursor:pointer; width:90px;\">Duration ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(4)\" style=\"cursor:pointer; width:65px;\">Steps ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(5)\" style=\"cursor:pointer; width:90px;\">Duration ⬍</th>\n");
         sb.append("            <th style=\"width:125px;\">AI Usage</th>\n");
-        sb.append("            <th onclick=\"sortTable(6)\" style=\"cursor:pointer; width:110px;\">Timestamp ⬍</th>\n");
-        sb.append("            <th style=\"width:105px; text-align:right;\">Report</th>\n");
+        sb.append("            <th style=\"width:45px; text-align:center;\">Report</th>\n");
         sb.append("          </tr>\n");
         sb.append("        </thead>\n");
         sb.append("        <tbody>\n");
@@ -692,10 +692,16 @@ public final class HtmlIndexReportGenerator
                   .append("\" data-search=\"").append(escapeAttr((testTitle + " " + entry.getTestClass() + " " + entry.getTestMethod() + " " + entry.getDatasetId() + " " + modeStr + " " + entry.getFailureReason()).toLowerCase()))
                   .append("\">\n");
 
-                // Status Column
+                // 0. Timestamp (Compact 2-line layout)
+                sb.append("            <td data-sort=\"").append(entry.getTimestamp()).append("\">\n");
+                sb.append("              <div class=\"timestamp-date\">").append(formattedDate).append("</div>\n");
+                sb.append("              <div class=\"timestamp-time\">").append(formattedTime).append("</div>\n");
+                sb.append("            </td>\n");
+
+                // 1. Status Column
                 sb.append("            <td><span class=\"status-pill ").append(pillClass).append("\">").append(statusEmoji).append(" ").append(escapeHtml(st)).append("</span></td>\n");
 
-                // Test Case Column
+                // 2. Test Case Column
                 sb.append("            <td>\n");
                 sb.append("              <div class=\"test-name-line\">\n");
                 sb.append("                <a href=\"").append(escapeAttr(entry.getHtmlFileName())).append("\" class=\"test-title-link\">").append(escapeHtml(testTitle)).append("</a>\n");
@@ -720,7 +726,7 @@ public final class HtmlIndexReportGenerator
                 }
                 sb.append("            </td>\n");
 
-                // Execution Mode
+                // 3. Execution Mode
                 sb.append("            <td>\n");
                 if (entry.getExecutionMode() != null && !entry.getExecutionMode().isBlank())
                 {
@@ -732,9 +738,9 @@ public final class HtmlIndexReportGenerator
                 }
                 sb.append("            </td>\n");
 
-                // Steps Count
-                sb.append("            <td>\n");
-                sb.append("              <span class=\"steps-count\">").append(entry.getStepCount()).append(" steps</span>\n");
+                // 4. Steps Count
+                sb.append("            <td data-sort=\"").append(entry.getStepCount()).append("\">\n");
+                sb.append("              <span class=\"steps-count\">").append(entry.getStepCount()).append("</span>\n");
                 if (entry.getHealedSteps() > 0 || entry.getFailedSteps() > 0)
                 {
                     sb.append("              <div class=\"steps-sub\">");
@@ -750,10 +756,10 @@ public final class HtmlIndexReportGenerator
                 }
                 sb.append("            </td>\n");
 
-                // Duration
+                // 5. Duration
                 sb.append("            <td data-sort=\"").append(entry.getDurationMs()).append("\">").append(NUMBER_FORMAT.format(entry.getDurationMs())).append(" ms</td>\n");
 
-                // AI / LLM Usage
+                // 6. AI / LLM Usage
                 sb.append("            <td>\n");
                 if (entry.getLlmCalls() > 0 || entry.getTotalTokens() > 0)
                 {
@@ -766,15 +772,9 @@ public final class HtmlIndexReportGenerator
                 }
                 sb.append("            </td>\n");
 
-                // Timestamp (Compact 2-line layout)
-                sb.append("            <td data-sort=\"").append(entry.getTimestamp()).append("\">\n");
-                sb.append("              <div class=\"timestamp-date\">").append(formattedDate).append("</div>\n");
-                sb.append("              <div class=\"timestamp-time\">").append(formattedTime).append("</div>\n");
-                sb.append("            </td>\n");
-
-                // Action Links
-                sb.append("            <td style=\"text-align:right;\">\n");
-                sb.append("              <a href=\"").append(escapeAttr(entry.getHtmlFileName())).append("\" class=\"btn-open-report\">📊 Report ↗</a>\n");
+                // 7. Action Links (Icon-only report button)
+                sb.append("            <td style=\"text-align:center;\">\n");
+                sb.append("              <a href=\"").append(escapeAttr(entry.getHtmlFileName())).append("\" class=\"btn-open-report\" title=\"Open detailed report for ").append(escapeAttr(testTitle)).append("\" aria-label=\"Open Report\">📊</a>\n");
                 sb.append("            </td>\n");
 
                 sb.append("          </tr>\n");
@@ -1161,22 +1161,26 @@ public final class HtmlIndexReportGenerator
             .timestamp-date { font-weight: 600; font-size: 0.8rem; }
             .timestamp-time { font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); }
             .btn-open-report {
-                display: inline-block;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 2rem;
+                height: 2rem;
                 background: #f1f5f9;
                 color: var(--text-sub);
-                padding: 0.35rem 0.7rem;
                 border-radius: 6px;
-                font-size: 0.78rem;
-                font-weight: 700;
+                font-size: 0.95rem;
                 text-decoration: none;
                 border: 1px solid var(--border);
-                transition: all 0.15s;
-                white-space: nowrap;
+                transition: all 0.15s ease;
+                user-select: none;
             }
             .btn-open-report:hover {
                 background: var(--primary);
                 color: #ffffff;
-                box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);
+                border-color: var(--primary);
+                box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+                transform: translateY(-1px);
             }
             .empty-row td {
                 text-align: center;

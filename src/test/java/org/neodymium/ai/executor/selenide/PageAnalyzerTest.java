@@ -229,4 +229,33 @@ public class PageAnalyzerTest extends BaseAiTest
             com.codeborne.selenide.Selenide.closeWebDriver();
         }
     }
+
+    @Test
+    public void testCaptureSimplifiedDomPreservesLastLocator() throws Exception
+    {
+        final org.neodymium.ai.util.EmbeddedHtmlServer server = new org.neodymium.ai.util.EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            com.codeborne.selenide.Selenide.open("http://localhost:" + server.getPort() + "/verla-normal/index.html");
+            final org.openqa.selenium.By targetLocator = org.openqa.selenium.By.cssSelector("h1");
+            org.neodymium.util.Neodymium.setLastUsedLocator(targetLocator);
+
+            final PageAnalyzer analyzer = new PageAnalyzer(com.codeborne.selenide.WebDriverRunner.getWebDriver());
+            final String dom = analyzer.captureSimplifiedDom(ContextLevel.STANDARD);
+
+            assertNotNull(dom, "DOM should be captured");
+            assertTrue(org.neodymium.util.Neodymium.hasLastUsedElement(), "Should retain last used element");
+            org.junit.jupiter.api.Assertions.assertEquals(targetLocator, org.neodymium.util.Neodymium.getLastUsedLocator(),
+                    "DOM analysis should not overwrite the test's lastUsedLocator");
+
+            final String cleanScreenshot = analyzer.captureScreenshot("test_capture", ContextLevel.STANDARD, false, null);
+            assertNotNull(cleanScreenshot, "Clean screenshot should be captured");
+        }
+        finally
+        {
+            server.stop();
+            com.codeborne.selenide.Selenide.closeWebDriver();
+        }
+    }
 }

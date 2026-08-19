@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.neodymium.common.ScreenshotWriter;
+import org.neodymium.util.Neodymium;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
@@ -751,7 +752,7 @@ public class PageAnalyzer
             final boolean forceFullPage = isFullPage || (level != null && level.isFullPageScreenshot());
             return ScreenshotWriter.doScreenshot(
                     title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
-                    ScreenshotWriter.getFormatedReportsPath(), false, false, forceFullPage);
+                    ScreenshotWriter.getFormatedReportsPath(), false, false, forceFullPage, true);
         }
         finally
         {
@@ -917,53 +918,72 @@ public class PageAnalyzer
             return result;
         }
 
-        final String currentWindow = driver.getWindowHandle();
+        final By savedLocator = Neodymium.hasDriver() ? Neodymium.getLastUsedLocator() : null;
+        final WebElement savedElement = Neodymium.hasDriver() ? Neodymium.getLastParentUsedElement() : null;
         int totalElements = 0;
         int windowCount = 0;
-
-        boolean showFrameId = true;
         try {
-            final java.util.Set<String> windowHandles = driver.getWindowHandles();
-            if (windowHandles.size() == 1 && driver.findElements(By.cssSelector("iframe, frame")).isEmpty()) {
-                showFrameId = false;
-            }
-        } catch (final Exception e) {
-            // fallback
-        }
+            final String currentWindow = driver.getWindowHandle();
 
-        try {
-            final Set<String> windowHandles = driver.getWindowHandles();
-            final List<String> windowList = new ArrayList<>(windowHandles);
-            windowCount = windowList.size();
-            for (int i = 0; i < windowList.size(); i++) {
-                final String windowHandle = windowList.get(i);
-                final String logicalWindowName = "win_" + i;
-                driver.switchTo().window(windowHandle);
-
-                if (showFrameId || windowList.size() > 1) {
-                    dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
-                    dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
-                    dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+            boolean showFrameId = true;
+            try {
+                final java.util.Set<String> windowHandles = driver.getWindowHandles();
+                if (windowHandles.size() == 1) {
+                    if (driver instanceof final JavascriptExecutor js) {
+                        final Object frameCount = js.executeScript("return document.querySelectorAll('iframe, frame').length;");
+                        if (frameCount instanceof final Number n && n.intValue() == 0) {
+                            showFrameId = false;
+                        }
+                    } else if (driver.findElements(By.cssSelector("iframe, frame")).isEmpty()) {
+                        showFrameId = false;
+                    }
                 }
-                totalElements += captureFrameTree(dom, level, logicalWindowName, "main", showFrameId, driver);
-            }
-        } catch (final Exception e) {
-            LOG.warn("Error capturing full frame tree: {}", e.getMessage());
-        } finally {
-            try {
-                driver.switchTo().window(currentWindow);
-                driver.switchTo().defaultContent();
             } catch (final Exception e) {
+                // fallback
             }
-        }
 
-        if (totalElements == 0 && driver instanceof final JavascriptExecutor js) {
             try {
-                final Object readyState = js.executeScript("return document.readyState");
-                final Object childCount = js.executeScript("return document.body ? document.body.children.length : 0");
-                LOG.warn("   ⚠️ [DOM Extraction Failure Diagnostic] Captured 0 elements! URL: '{}' | Title: '{}' | ReadyState: '{}' | Body Children: {}",
-                        url, title, readyState, childCount);
-            } catch (final Exception ignored) {
+                final Set<String> windowHandles = driver.getWindowHandles();
+                final List<String> windowList = new ArrayList<>(windowHandles);
+                windowCount = windowList.size();
+                for (int i = 0; i < windowList.size(); i++) {
+                    final String windowHandle = windowList.get(i);
+                    final String logicalWindowName = "win_" + i;
+                    driver.switchTo().window(windowHandle);
+
+                    if (showFrameId || windowList.size() > 1) {
+                        dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
+                        dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
+                        dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+                    }
+                    totalElements += captureFrameTree(dom, level, logicalWindowName, "main", showFrameId, driver);
+                }
+            } catch (final Exception e) {
+                LOG.warn("Error capturing full frame tree: {}", e.getMessage());
+            } finally {
+                try {
+                    driver.switchTo().window(currentWindow);
+                    driver.switchTo().defaultContent();
+                } catch (final Exception e) {
+                }
+            }
+
+            if (totalElements == 0 && driver instanceof final JavascriptExecutor js) {
+                try {
+                    final Object readyState = js.executeScript("return document.readyState");
+                    final Object childCount = js.executeScript("return document.body ? document.body.children.length : 0");
+                    LOG.warn("   ⚠️ [DOM Extraction Failure Diagnostic] Captured 0 elements! URL: '{}' | Title: '{}' | ReadyState: '{}' | Body Children: {}",
+                            url, title, readyState, childCount);
+                } catch (final Exception ignored) {
+                }
+            }
+        } finally {
+            if (Neodymium.hasDriver()) {
+                if (savedElement != null) {
+                    Neodymium.setLastUsedLocator(savedElement, savedLocator);
+                } else if (savedLocator != null) {
+                    Neodymium.setLastUsedLocator(savedLocator);
+                }
             }
         }
 

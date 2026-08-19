@@ -771,6 +771,26 @@ public class Neodymium
         }
     }
 
+    /**
+     * Returns the last used locator.
+     *
+     * @return last used locator or null if nothing was set
+     */
+    public static By getLastUsedLocator()
+    {
+        return getContext().lastLocator;
+    }
+
+    /**
+     * Returns the parent element under which the last used locator was searched.
+     *
+     * @return last parent element or null if not set
+     */
+    public static WebElement getLastParentUsedElement()
+    {
+        return getContext().lastUsedElement;
+    }
+
 
 
     public static void expectFailure(final String bugId, final Runnable runnable)

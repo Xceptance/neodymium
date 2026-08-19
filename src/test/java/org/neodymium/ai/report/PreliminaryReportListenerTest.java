@@ -916,6 +916,13 @@ public class PreliminaryReportListenerTest
         assertTrue(indexHtml.contains("href=\"" + listener2.getLastBaseFileName() + ".html\""), "Must link to second test HTML");
         assertTrue(indexHtml.contains("href=\"" + listener1.getLastBaseFileName() + ".html\""), "Must link to first test HTML");
 
+        // Verify Table Column Structure and Styling
+        assertTrue(indexHtml.contains("onclick=\"sortTable(0)\" style=\"cursor:pointer; width:100px;\">Timestamp ⬍</th>"), "Timestamp must be the first column");
+        assertTrue(indexHtml.contains("<span class=\"steps-count\">1</span>"), "Steps column must not repeat the word 'steps'");
+        assertFalse(indexHtml.contains("<span class=\"steps-count\">1 steps</span>"), "Must not contain '1 steps'");
+        assertTrue(indexHtml.contains(">📊</a>"), "Report button must be an icon-only button");
+        assertFalse(indexHtml.contains("📊 Report ↗"), "Report button must not contain 'Report' text");
+
         // Verify ordering in HTML source
         final int posThird = indexHtml.indexOf(listener3.getLastBaseFileName() + ".html");
         final int posSecond = indexHtml.indexOf(listener2.getLastBaseFileName() + ".html");
