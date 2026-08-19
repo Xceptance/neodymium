@@ -28,6 +28,7 @@ import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.runner.StateMachineRunner;
+import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.BrowserMethodData;
 import org.neodymium.common.browser.BrowserRunner;
 import org.neodymium.common.browser.configuration.BrowserConfiguration;
@@ -67,6 +68,7 @@ public abstract class BaseAiTest extends BaseLlmTest
     @BeforeAll
     public static void startServer() throws IOException
     {
+        Configuration.headless = true;
         if (System.getProperty("selenide.headless") != null)
         {
             Configuration.headless = Boolean.parseBoolean(System.getProperty("selenide.headless"));
@@ -116,6 +118,33 @@ public abstract class BaseAiTest extends BaseLlmTest
             if (config != null)
             {
                 Configuration.headless = config.isHeadless();
+            }
+        }
+        else
+        {
+            // Resolve @Browser annotation directly when running standalone without Neodymium extension
+            Browser browserAnnotation = null;
+            if (testInfo.getTestMethod().isPresent())
+            {
+                browserAnnotation = testInfo.getTestMethod().get().getAnnotation(Browser.class);
+            }
+            if (browserAnnotation == null && testInfo.getTestClass().isPresent())
+            {
+                browserAnnotation = testInfo.getTestClass().get().getAnnotation(Browser.class);
+            }
+            if (browserAnnotation != null)
+            {
+                final String profile = browserAnnotation.value();
+                final BrowserConfiguration config = MultibrowserConfiguration.getInstance()
+                    .getBrowserProfiles().get(profile);
+                if (config != null)
+                {
+                    Configuration.headless = config.isHeadless();
+                }
+                else if (profile != null && profile.toLowerCase().contains("headless"))
+                {
+                    Configuration.headless = true;
+                }
             }
         }
     }
