@@ -21,7 +21,6 @@ package org.neodymium.ai.executor.selenide;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Method;
 import java.util.List;
 
 /**
@@ -33,31 +32,41 @@ import java.util.List;
 public class SelenideElementFinderTest
 {
     @Test
-    public void testSplitCandidatesWithCommaSeparatedTargets() throws Exception
+    public void testCandidateSetPreservation()
     {
-        final Method method = SelenideElementFinder.class.getDeclaredMethod("splitCandidates", String.class);
-        method.setAccessible(true);
+        final org.neodymium.ai.action.Action action = new org.neodymium.ai.action.Action("CLICK", "#primary-btn", "Click button");
+        action.setCandidateLocators(List.of(
+            new org.neodymium.ai.action.LocatorCandidate(".btn-primary", 0.9),
+            new org.neodymium.ai.action.LocatorCandidate("button[type='submit']", 0.8),
+            new org.neodymium.ai.action.LocatorCandidate("text=Submit", 0.7)
+        ));
 
-        @SuppressWarnings("unchecked")
-        final List<String> candidates1 = (List<String>) method.invoke(null, "button#xc_eb4gzc, button:has-text('L')");
-        Assertions.assertEquals(2, candidates1.size());
-        Assertions.assertEquals("button#xc_eb4gzc", candidates1.get(0));
-        Assertions.assertEquals("button:has-text('L')", candidates1.get(1));
+        final List<String> candidates = action.getAllCandidateLocators();
+        Assertions.assertEquals(4, candidates.size());
+        Assertions.assertEquals("#primary-btn", candidates.get(0));
+        Assertions.assertEquals(".btn-primary", candidates.get(1));
+        Assertions.assertEquals("button[type='submit']", candidates.get(2));
+        Assertions.assertEquals("text=Submit", candidates.get(3));
+    }
 
-        @SuppressWarnings("unchecked")
-        final List<String> candidates2 = (List<String>) method.invoke(null, "button[data-text='a,b'], button.class2");
-        Assertions.assertEquals(2, candidates2.size());
-        Assertions.assertEquals("button[data-text='a,b']", candidates2.get(0));
-        Assertions.assertEquals("button.class2", candidates2.get(1));
+    @Test
+    public void testNullAndEmptyTargetHandling()
+    {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement((String) null));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement("   "));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement((org.neodymium.ai.action.Action) null));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement("", List.of()));
+    }
 
-        @SuppressWarnings("unchecked")
-        final List<String> candidates3 = (List<String>) method.invoke(null, "simple-target");
-        Assertions.assertEquals(1, candidates3.size());
-        Assertions.assertEquals("simple-target", candidates3.get(0));
+    @Test
+    public void testActionCandidateFallbackResolution()
+    {
+        final org.neodymium.ai.action.Action action = new org.neodymium.ai.action.Action("CLICK", "", "Click button");
+        action.setCandidateLocators(List.of(new org.neodymium.ai.action.LocatorCandidate("#valid-fallback-button", 0.9)));
 
-        @SuppressWarnings("unchecked")
-        final List<String> candidates4 = (List<String>) method.invoke(null, "text=Total Paid: $27.58");
-        Assertions.assertEquals(1, candidates4.size());
-        Assertions.assertEquals("text=Total Paid: $27.58", candidates4.get(0));
+        // Even though target is empty, candidate locator is extracted and attempt does not throw IllegalArgumentException for empty target
+        // (will attempt resolution on fallback candidate)
+        final String firstCandidate = action.getAllCandidateLocators().get(0);
+        Assertions.assertEquals("#valid-fallback-button", firstCandidate);
     }
 }

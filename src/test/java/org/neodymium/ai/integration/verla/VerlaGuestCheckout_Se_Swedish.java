@@ -70,6 +70,7 @@ public class VerlaGuestCheckout_Se_Swedish extends BaseAiTest
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
 
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
         if (methodName.contains("WithJudge"))

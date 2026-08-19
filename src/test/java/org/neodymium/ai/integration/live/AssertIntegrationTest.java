@@ -35,7 +35,7 @@ import com.codeborne.selenide.Selenide;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;

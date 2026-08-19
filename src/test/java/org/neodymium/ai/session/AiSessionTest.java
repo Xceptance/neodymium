@@ -273,7 +273,7 @@ public class AiSessionTest
     @DisplayName("execute(String) with embedded datasets automatically seeds the first dataset when no sessionData is specified")
     public void testExecuteInlineYamlAutoSelectsFirstDataSet() throws Exception
     {
-        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        try (final AiSession session = AiSession.mock())
         {
             final PlaybookRecording recording = session.execute("""
                 steps: |

@@ -112,7 +112,7 @@ public final class BranchAction implements BrowserActionPlugin
         {
             final boolean pathUnpopulated = conditionMet
                 ? (action.getThen() == null || action.getThen().isEmpty())
-                : (action.getElseActions() == null || action.getElseActions().isEmpty());
+                : (action.hasElse() && (action.getElseActions() == null || action.getElseActions().isEmpty()));
 
             if (pathUnpopulated)
             {

@@ -70,6 +70,7 @@ public class VerlaGuestCheckout_CaFr_French extends BaseAiTest
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
 
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
         if (methodName.contains("WithJudge"))
@@ -96,6 +97,22 @@ public class VerlaGuestCheckout_CaFr_French extends BaseAiTest
     @AiDataSet("perfect")
     @AiPlaybook(recordingMethod = "testCheckoutLivePerfect")
     public void testCheckoutReplayPerfect()
+    {
+    }
+
+    @Order(3)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook
+    public void testCheckoutLivePerfectWithJudge()
+    {
+    }
+
+    @Order(4)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePerfectWithJudge")
+    public void testCheckoutReplayPerfectWithJudge()
     {
     }
 }

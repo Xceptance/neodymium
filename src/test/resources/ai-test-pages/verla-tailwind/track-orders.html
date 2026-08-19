@@ -1,0 +1,23 @@
+<div class="auth-card">
+    <h2 class="font-serif text-2xl md:text-3xl font-semibold text-center mb-6 text-neutral-900">${lang_trackOrders}</h2>
+
+    <!-- HTMX order lookup form -->
+    <form hx-post="api/order/lookup" hx-target="#order-lookup-result" hx-swap="innerHTML">
+        <div class="form-group">
+            <label for="orderNumber" class="form-label">${lang_orderNumber}</label>
+            <input type="text" id="orderNumber" name="orderNumber" class="form-control" placeholder="V-102931-DE" required>
+        </div>
+
+        <div class="form-group mb-6">
+            <label for="zipCode" class="form-label">${lang_zipCode}</label>
+            <input type="text" id="zipCode" name="zipCode" class="form-control" placeholder="12345" required>
+        </div>
+
+        <button type="submit" class="btn-primary w-full justify-center py-3 text-xs uppercase tracking-wider mb-5">
+            ${lang_lookup}
+        </button>
+    </form>
+
+    <!-- Result container -->
+    <div id="order-lookup-result" class="mt-5"></div>
+</div>

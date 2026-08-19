@@ -22,11 +22,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
@@ -38,7 +42,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.neodymium.common.ScreenshotWriter;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.util.Neodymium;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.LocatorCascadeResolver;
 
 /**
  * Captures page context (screenshot + simplified DOM) for the LLM. The DOM is
@@ -267,108 +274,6 @@ public class PageAnalyzer
                     return results;
                 }
 
-                // Builds a highly unique, compact CSS selector for the element to serve as alternative locator
-                function generateSelector(el) {
-                    // Helper to check if a selector matches exactly one element in the current DOM scope
-                    function isUnique(sel) {
-                        try {
-                            return document.querySelectorAll(sel).length === 1;
-                        } catch (e) {
-                            return false;
-                        }
-                    }
-
-                    // Helper to safely escape special CSS characters (such as dots or colons in IDs or class names)
-                    function escapeIdentifier(str) {
-                        if (typeof CSS !== 'undefined' && CSS.escape) {
-                            return CSS.escape(str);
-                        }
-                        return str;
-                    }
-
-                    // Step 1: Check for unique immediate attributes (ID or Name or data-testid) to keep selectors minimal
-                    if (el.id) {
-                        var idSel = '#' + escapeIdentifier(el.id);
-                        if (isUnique(idSel)) {
-                            return idSel;
-                        }
-                    }
-
-                    var tag = el.tagName ? el.tagName.toLowerCase() : '';
-                    var name = el.getAttribute ? el.getAttribute('name') : null;
-                    if (name) {
-                        var nameSel = tag + "[name='" + name.replaceAll("'", "\\\\'") + "']";
-                        if (isUnique(nameSel)) {
-                            return nameSel;
-                        }
-                    }
-
-                    var testId = el.getAttribute ? (el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa')) : null;
-                    if (testId) {
-                        var testSel = tag + "[data-testid='" + testId.replaceAll("'", "\\\\'") + "']";
-                        if (isUnique(testSel)) {
-                            return testSel;
-                        }
-                    }
-
-                    // Step 2: Climb the DOM hierarchy to construct a deterministic unique path
-                    var path = [];
-                    var current = el;
-
-                    // Walk upwards until we hit body/html or an ancestor with a unique ID
-                    while (current && current.nodeType === 1) { // 1 represents Node.ELEMENT_NODE
-                        var currentTag = current.tagName ? current.tagName.toLowerCase() : '';
-
-                        // If we reach body or html, append and terminate
-                        if (currentTag === 'body' || currentTag === 'html') {
-                            path.unshift(currentTag);
-                            break;
-                        }
-
-                        // Terminate early if the ancestor has a globally unique ID
-                        if (current.id) {
-                            var idSel = '#' + escapeIdentifier(current.id);
-                            if (isUnique(idSel)) {
-                                path.unshift(idSel);
-                                break;
-                            }
-                        }
-
-                        // Construct current path segment starting with tag name
-                        var segment = currentTag;
-
-                        // Append class names to segment to increase specificity
-                        var className = current.className;
-                        if (typeof className === 'string' && className.trim()) {
-                            var classes = className.trim().split(new RegExp('\\s+')).filter(Boolean);
-                            if (classes.length > 0) {
-                                segment += '.' + classes.map(escapeIdentifier).join('.');
-                            }
-                        }
-
-                        // Disambiguate among siblings sharing the same tag using :nth-of-type(index)
-                        if (current.parentNode && current.parentNode.children) {
-                            var siblings = Array.from(current.parentNode.children);
-                            var sameTagSiblings = siblings.filter(function(s) {
-                                return s.tagName === current.tagName;
-                            });
-                            if (sameTagSiblings.length > 1) {
-                                var index = sameTagSiblings.indexOf(current) + 1;
-                                segment += ':nth-of-type(' + index + ')';
-                            }
-                        }
-
-                        // Insert the computed segment at the beginning of the path
-                        path.unshift(segment);
-
-                        // Walk up to parent node
-                        current = current.parentNode;
-                    }
-
-                    // Return final constructed path
-                    return path.join(' > ');
-                }
-
                 // Captures structured information for matched DOM elements (inputs, links, buttons, etc.)
                 function captureElements(cssSelector, label) {
                     var results = [];
@@ -415,7 +320,6 @@ public class PageAnalyzer
                                 multiple: el.hasAttribute('multiple') ? 'true' : null,
                                 value: getElementValue(el, label),
                                 options: options,
-                                selector: generateSelector(el),
                                 automationId: autoId,
                                 domElement: el
                             });
@@ -472,7 +376,6 @@ public class PageAnalyzer
                                 multiple: el.hasAttribute('multiple') ? 'true' : null,
                                 value: getElementValue(el, label),
                                 options: options,
-                                selector: generateSelector(el),
                                 automationId: autoId,
                                 domElement: el
                             });
@@ -632,7 +535,6 @@ public class PageAnalyzer
                             ariaLabel: el.getAttribute('aria-label'),
                             value: getElementValue(el, tag),
                             options: options,
-                            selector: generateSelector(el),
                             automationId: autoId,
                             parentText: el.getAttribute('data-parent-text') || null
                         };
@@ -667,7 +569,6 @@ public class PageAnalyzer
                         var autoIdContainer = assignId(el);
                         return {
                             nodeType: 'container',
-                            nodeType: 'container',
                             tagName: tag,
                             id: el.id || null,
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
@@ -699,7 +600,6 @@ public class PageAnalyzer
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
                             text: textContent,
                             id: el.id || null,
-                            selector: generateSelector(el),
                             automationId: autoId
                         };
                         if (includesRich) {
@@ -852,7 +752,7 @@ public class PageAnalyzer
             final boolean forceFullPage = isFullPage || (level != null && level.isFullPageScreenshot());
             return ScreenshotWriter.doScreenshot(
                     title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
-                    ScreenshotWriter.getFormatedReportsPath(), false, false, forceFullPage);
+                    ScreenshotWriter.getFormatedReportsPath(), false, false, forceFullPage, true);
         }
         finally
         {
@@ -1018,53 +918,72 @@ public class PageAnalyzer
             return result;
         }
 
-        final String currentWindow = driver.getWindowHandle();
+        final By savedLocator = Neodymium.hasDriver() ? Neodymium.getLastUsedLocator() : null;
+        final WebElement savedElement = Neodymium.hasDriver() ? Neodymium.getLastParentUsedElement() : null;
         int totalElements = 0;
         int windowCount = 0;
-
-        boolean showFrameId = true;
         try {
-            final java.util.Set<String> windowHandles = driver.getWindowHandles();
-            if (windowHandles.size() == 1 && driver.findElements(By.cssSelector("iframe, frame")).isEmpty()) {
-                showFrameId = false;
-            }
-        } catch (final Exception e) {
-            // fallback
-        }
+            final String currentWindow = driver.getWindowHandle();
 
-        try {
-            final Set<String> windowHandles = driver.getWindowHandles();
-            final List<String> windowList = new ArrayList<>(windowHandles);
-            windowCount = windowList.size();
-            for (int i = 0; i < windowList.size(); i++) {
-                final String windowHandle = windowList.get(i);
-                final String logicalWindowName = "win_" + i;
-                driver.switchTo().window(windowHandle);
-
-                if (showFrameId || windowList.size() > 1) {
-                    dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
-                    dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
-                    dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+            boolean showFrameId = true;
+            try {
+                final java.util.Set<String> windowHandles = driver.getWindowHandles();
+                if (windowHandles.size() == 1) {
+                    if (driver instanceof final JavascriptExecutor js) {
+                        final Object frameCount = js.executeScript("return document.querySelectorAll('iframe, frame').length;");
+                        if (frameCount instanceof final Number n && n.intValue() == 0) {
+                            showFrameId = false;
+                        }
+                    } else if (driver.findElements(By.cssSelector("iframe, frame")).isEmpty()) {
+                        showFrameId = false;
+                    }
                 }
-                totalElements += captureFrameTree(dom, level, logicalWindowName, "main", showFrameId, driver);
-            }
-        } catch (final Exception e) {
-            LOG.warn("Error capturing full frame tree: {}", e.getMessage());
-        } finally {
-            try {
-                driver.switchTo().window(currentWindow);
-                driver.switchTo().defaultContent();
             } catch (final Exception e) {
+                // fallback
             }
-        }
 
-        if (totalElements == 0 && driver instanceof final JavascriptExecutor js) {
             try {
-                final Object readyState = js.executeScript("return document.readyState");
-                final Object childCount = js.executeScript("return document.body ? document.body.children.length : 0");
-                LOG.warn("   ⚠️ [DOM Extraction Failure Diagnostic] Captured 0 elements! URL: '{}' | Title: '{}' | ReadyState: '{}' | Body Children: {}",
-                        url, title, readyState, childCount);
-            } catch (final Exception ignored) {
+                final Set<String> windowHandles = driver.getWindowHandles();
+                final List<String> windowList = new ArrayList<>(windowHandles);
+                windowCount = windowList.size();
+                for (int i = 0; i < windowList.size(); i++) {
+                    final String windowHandle = windowList.get(i);
+                    final String logicalWindowName = "win_" + i;
+                    driver.switchTo().window(windowHandle);
+
+                    if (showFrameId || windowList.size() > 1) {
+                        dom.append("=== Window: ").append(logicalWindowName).append(" ===\n");
+                        dom.append("URL: ").append(driver.getCurrentUrl()).append("\n");
+                        dom.append("Title: ").append(driver.getTitle()).append("\n\n");
+                    }
+                    totalElements += captureFrameTree(dom, level, logicalWindowName, "main", showFrameId, driver);
+                }
+            } catch (final Exception e) {
+                LOG.warn("Error capturing full frame tree: {}", e.getMessage());
+            } finally {
+                try {
+                    driver.switchTo().window(currentWindow);
+                    driver.switchTo().defaultContent();
+                } catch (final Exception e) {
+                }
+            }
+
+            if (totalElements == 0 && driver instanceof final JavascriptExecutor js) {
+                try {
+                    final Object readyState = js.executeScript("return document.readyState");
+                    final Object childCount = js.executeScript("return document.body ? document.body.children.length : 0");
+                    LOG.warn("   ⚠️ [DOM Extraction Failure Diagnostic] Captured 0 elements! URL: '{}' | Title: '{}' | ReadyState: '{}' | Body Children: {}",
+                            url, title, readyState, childCount);
+                } catch (final Exception ignored) {
+                }
+            }
+        } finally {
+            if (Neodymium.hasDriver()) {
+                if (savedElement != null) {
+                    Neodymium.setLastUsedLocator(savedElement, savedLocator);
+                } else if (savedLocator != null) {
+                    Neodymium.setLastUsedLocator(savedLocator);
+                }
             }
         }
 
@@ -1341,14 +1260,6 @@ public class PageAnalyzer
     }
 
     /**
-     * Escapes special CSS characters in an identifier to match the CSS.escape
-     * specification.
-     */
-    private String escapeCssIdentifier(final String str) {
-        return str.replaceAll("([!\"#$%&'()*+,./:;<=>?@\\[\\]^`{|}~])", "\\\\$1");
-    }
-
-    /**
      * Appends an attribute name and its escaped double-quoted value to the dom
      * builder if present.
      */
@@ -1403,6 +1314,357 @@ public class PageAnalyzer
         {
             throw new RuntimeException("Failed to load resource: " + resourceName, e);
         }
+    }
+
+    /**
+     * Extracts all visible interactive elements across windows, frames, and shadow DOM roots
+     * as structured {@link DomFeatureVector} objects for sub-millisecond local similarity matching.
+     *
+     * @return list of extracted DOM feature vectors
+     */
+    public List<DomFeatureVector> extractFeatureVectors()
+    {
+        return extractFeatureVectors(resolveDriver(null));
+    }
+
+    /**
+     * Extracts all visible interactive elements as structured {@link DomFeatureVector} objects
+     * using the specified explicit WebDriver instance.
+     *
+     * @param explicitDriver the WebDriver instance to evaluate against
+     * @return list of extracted DOM feature vectors
+     */
+    public List<DomFeatureVector> extractFeatureVectors(final WebDriver explicitDriver)
+    {
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null)
+        {
+            return Collections.emptyList();
+        }
+
+        final String script = """
+            return (function() {
+                var roots = [document];
+                function collectRoots(root) {
+                    try {
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].shadowRoot) {
+                                roots.push(all[i].shadowRoot);
+                                collectRoots(all[i].shadowRoot);
+                            }
+                        }
+                    } catch(e) {}
+                }
+                collectRoots(document);
+
+                var results = [];
+                for (var r = 0; r < roots.length; r++) {
+                    try {
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, [role], [onclick], [data-testid], [data-test], [data-qa]');
+                        for (var i = 0; i < els.length; i++) {
+                            var el = els[i];
+                            if (el.closest && el.closest('.neodymium-ai-hud')) continue;
+                            var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                            var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                            var classes = Array.from(el.classList || []);
+                            var attrMap = {};
+                            if (el.attributes) {
+                                for (var a = 0; a < el.attributes.length; a++) {
+                                    var attr = el.attributes[a];
+                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                        attrMap[attr.name] = attr.value;
+                                    }
+                                }
+                            }
+                            var role = el.getAttribute('role') || '';
+                            var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
+                            var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
+                            var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                            var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : {left: 0, top: 0, width: 0, height: 0};
+                            results.push({
+                                tag: tag,
+                                text: text,
+                                classes: classes,
+                                attributes: attrMap,
+                                role: role,
+                                accessibleName: accessibleName ? accessibleName.trim() : '',
+                                parentTag: parentTag,
+                                siblingIndex: siblingIndex >= 0 ? siblingIndex : 0,
+                                x: Math.round(rect.left),
+                                y: Math.round(rect.top),
+                                width: Math.round(rect.width),
+                                height: Math.round(rect.height)
+                            });
+                        }
+                    } catch(e) {}
+                }
+                return JSON.stringify(results);
+            })();
+            """;
+
+        try
+        {
+            final Object response = ((JavascriptExecutor) driver).executeScript(script);
+            if (response instanceof String jsonStr && !jsonStr.isBlank())
+            {
+                final ObjectMapper mapper = new ObjectMapper();
+                final TypeReference<List<DomFeatureVector>> typeRef = new TypeReference<>() {};
+                return mapper.readValue(jsonStr, typeRef);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to extract DOM Feature Vectors: {}", e.getMessage());
+        }
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * Extracts a structured {@link DomFeatureVector} for a specific target {@link WebElement}.
+     *
+     * @param element the WebElement to extract features from
+     * @return the extracted DomFeatureVector, or null if element is invalid
+     */
+    public DomFeatureVector extractFeatureVector(final WebElement element)
+    {
+        return extractFeatureVector(resolveDriver(null), element);
+    }
+
+    /**
+     * Extracts a structured {@link DomFeatureVector} for a specific target {@link WebElement}
+     * using the specified explicit WebDriver instance.
+     *
+     * @param explicitDriver the WebDriver instance to evaluate against
+     * @param element        the WebElement to extract features from
+     * @return the extracted DomFeatureVector, or null if element is invalid
+     */
+    public DomFeatureVector extractFeatureVector(final WebDriver explicitDriver, final WebElement element)
+    {
+        if (element == null)
+        {
+            return null;
+        }
+
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null)
+        {
+            return null;
+        }
+
+        final String script = """
+            return (function(el) {
+                if (!el) return null;
+                var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                var classes = Array.from(el.classList || []);
+                var attrMap = {};
+                if (el.attributes) {
+                    for (var a = 0; a < el.attributes.length; a++) {
+                        var attr = el.attributes[a];
+                        if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                            attrMap[attr.name] = attr.value;
+                        }
+                    }
+                }
+                var role = el.getAttribute('role') || '';
+                var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
+                var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
+                var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : {left: 0, top: 0, width: 0, height: 0};
+                return JSON.stringify({
+                    tag: tag,
+                    text: text,
+                    classes: classes,
+                    attributes: attrMap,
+                    role: role,
+                    accessibleName: accessibleName ? accessibleName.trim() : '',
+                    parentTag: parentTag,
+                    siblingIndex: siblingIndex >= 0 ? siblingIndex : 0,
+                    x: Math.round(rect.left),
+                    y: Math.round(rect.top),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height)
+                });
+            })(arguments[0]);
+            """;
+
+        try
+        {
+            final Object response = ((JavascriptExecutor) driver).executeScript(script, element);
+            if (response instanceof String jsonStr && !jsonStr.isBlank())
+            {
+                final ObjectMapper mapper = new ObjectMapper();
+                return mapper.readValue(jsonStr, DomFeatureVector.class);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to extract DOM Feature Vector for element: {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Finds the live interactive WebElement matching a recorded {@link DomFeatureVector}
+     * with similarity score exceeding the given minimum threshold.
+     *
+     * @param explicitDriver the WebDriver instance
+     * @param recordedVector the target recorded DomFeatureVector
+     * @param minScore       the minimum required similarity score (e.g. 0.80)
+     * @return the matched WebElement, or null if no candidate met the threshold
+     */
+    public WebElement findLiveElementByFeatureVector(final WebDriver explicitDriver, final DomFeatureVector recordedVector, final double minScore)
+    {
+        if (recordedVector == null)
+        {
+            return null;
+        }
+
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null)
+        {
+            return null;
+        }
+
+        final String script = """
+            return (function() {
+                var roots = [document];
+                function collectRoots(root) {
+                    try {
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].shadowRoot) {
+                                roots.push(all[i].shadowRoot);
+                                collectRoots(all[i].shadowRoot);
+                            }
+                        }
+                    } catch(e) {}
+                }
+                collectRoots(document);
+
+                var elements = [];
+                var vectorData = [];
+                for (var r = 0; r < roots.length; r++) {
+                    try {
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, [role], [onclick], [data-testid], [data-test], [data-qa]');
+                        for (var i = 0; i < els.length; i++) {
+                            var el = els[i];
+                            if (el.closest && el.closest('.neodymium-ai-hud')) continue;
+                            var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                            var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
+                            var classes = Array.from(el.classList || []);
+                            var attrMap = {};
+                            if (el.attributes) {
+                                for (var a = 0; a < el.attributes.length; a++) {
+                                    var attr = el.attributes[a];
+                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                        attrMap[attr.name] = attr.value;
+                                    }
+                                }
+                            }
+                            var role = el.getAttribute('role') || '';
+                            var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
+                            var parentTag = el.parentElement ? (el.parentElement.tagName ? el.parentElement.tagName.toLowerCase() : '') : '';
+                            var siblingIndex = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+                            var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : {left: 0, top: 0, width: 0, height: 0};
+                            elements.push(el);
+                            vectorData.push({
+                                tag: tag,
+                                text: text,
+                                classes: classes,
+                                attributes: attrMap,
+                                role: role,
+                                accessibleName: accessibleName ? accessibleName.trim() : '',
+                                parentTag: parentTag,
+                                siblingIndex: siblingIndex >= 0 ? siblingIndex : 0,
+                                x: Math.round(rect.left),
+                                y: Math.round(rect.top),
+                                width: Math.round(rect.width),
+                                height: Math.round(rect.height)
+                            });
+                        }
+                    } catch(e) {}
+                }
+                window.__neo_candidate_elements = elements;
+                return JSON.stringify(vectorData);
+            })();
+            """;
+
+        try
+        {
+            final Object response = ((JavascriptExecutor) driver).executeScript(script);
+            if (response instanceof String jsonStr && !jsonStr.isBlank())
+            {
+                final ObjectMapper mapper = new ObjectMapper();
+                final TypeReference<List<DomFeatureVector>> typeRef = new TypeReference<>() {};
+                final List<DomFeatureVector> candidates = mapper.readValue(jsonStr, typeRef);
+                if (LOG.isTraceEnabled())
+                {
+                    LOG.trace("🧬 Evaluating {} candidate elements against target vector: {}", candidates.size(), recordedVector.toSummaryString());
+                }
+
+                int bestIndex = -1;
+                double bestScore = -1.0;
+                for (int i = 0; i < candidates.size(); i++)
+                {
+                    final DomFeatureVector candidate = candidates.get(i);
+                    final double baseScore = LocatorCascadeResolver.computeSimilarity(recordedVector, candidate);
+                    double tieBreaker = 0.0;
+                    if (recordedVector.getParentTag() != null && candidate.getParentTag() != null
+                        && recordedVector.getParentTag().equalsIgnoreCase(candidate.getParentTag()))
+                    {
+                        tieBreaker += 0.005;
+                    }
+                    final int indexDiff = Math.abs(recordedVector.getSiblingIndex() - candidate.getSiblingIndex());
+                    tieBreaker += Math.max(0.0, 0.005 * (1.0 - (indexDiff / 10.0)));
+
+                    final double totalScore = baseScore + tieBreaker;
+                    final boolean isMatch = baseScore >= (minScore - 1e-5);
+                    if (isMatch && totalScore > bestScore)
+                    {
+                        bestScore = totalScore;
+                        bestIndex = i;
+                    }
+
+                    if (LOG.isTraceEnabled())
+                    {
+                        final String matchBadge = isMatch ? " ★ CANDIDATE" : "";
+                        LOG.trace("   ├─ Candidate #{} [Score: {} / Min: {}] (base: {}, tie: +{}){}",
+                            i + 1, String.format("%.4f", totalScore), minScore, String.format("%.4f", baseScore), String.format("%.4f", tieBreaker), matchBadge);
+                        for (final String line : candidate.toFormattedLines("   │  ", "   │  "))
+                        {
+                            LOG.trace(line);
+                        }
+                    }
+                }
+
+                if (bestIndex >= 0)
+                {
+                    LOG.trace("   └─ ✅ Matched Candidate #{} with score {} (>= minScore {})", bestIndex + 1, String.format("%.4f", bestScore), minScore);
+                    final Object elResponse = ((JavascriptExecutor) driver).executeScript(
+                        "var el = (window.__neo_candidate_elements && window.__neo_candidate_elements[" + bestIndex + "]) ? window.__neo_candidate_elements[" + bestIndex + "] : null; "
+                        + "delete window.__neo_candidate_elements; return el;");
+                    if (elResponse instanceof WebElement webElement)
+                    {
+                        return webElement;
+                    }
+                }
+                else
+                {
+                    LOG.trace("   └─ ❌ No candidate met minimum score threshold {}", minScore);
+                    ((JavascriptExecutor) driver).executeScript("delete window.__neo_candidate_elements;");
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to find live element by DOM feature vector: {}", e.getMessage());
+        }
+
+        return null;
     }
 
     private static boolean isImplicitRole(final String tag, final String role)

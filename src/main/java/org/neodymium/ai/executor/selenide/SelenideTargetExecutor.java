@@ -43,6 +43,7 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.executor.selenide.plugins.BackAction;
 import org.neodymium.ai.executor.selenide.plugins.AssertAction;
 import org.neodymium.ai.executor.selenide.plugins.BrowserActionPlugin;
@@ -135,7 +136,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
     @Override
     public SutState captureState(final ContextLevel level) throws IOException
     {
-        return captureState(level, false);
+        return captureState(level, level != null && level.isFullPageScreenshot());
     }
 
     @Override
@@ -157,7 +158,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             String base64Data = null;
             try
             {
-                final boolean forceFullPage = isFullPage || activeLevel.isFullPageScreenshot();
+                final boolean forceFullPage = isFullPage;
                 base64Data = new PageAnalyzer(WebDriverRunner.getWebDriver())
                         .captureScreenshot("capture_" + System.currentTimeMillis(), activeLevel, forceFullPage, null);
             }

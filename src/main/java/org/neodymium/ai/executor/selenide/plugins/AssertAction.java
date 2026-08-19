@@ -127,7 +127,7 @@ public final class AssertAction implements BrowserActionPlugin
                 || "not_exists".equalsIgnoreCase(expected) || "[not_exists]".equalsIgnoreCase(expected)
                 || "invisible".equalsIgnoreCase(expected) || "[invisible]".equalsIgnoreCase(expected);
 
-        final SelenideElement element = SelenideElementFinder.findElement(action.getTarget());
+        final SelenideElement element = SelenideElementFinder.findElement(action);
 
         if (isAbsenceCheck)
         {

@@ -20,6 +20,8 @@ package org.neodymium.ai.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.action.Action;
 
@@ -125,9 +127,24 @@ public final class PlaybookStep
     private String sourceYamlHash;
 
     /**
+     * The target automation framework for which this step was recorded (e.g., SELENIUM_SELENIDE or PLAYWRIGHT).
+     */
+    private String targetFramework = "SELENIUM_SELENIDE";
+
+    /**
+     * The semantic context or intent description of this step.
+     */
+    private String semanticContext;
+
+    /**
+     * The DOM Feature Vector snapshot of the target interactive element.
+     */
+    private DomFeatureVector domFeatureVector;
+
+    /**
      * The schema version of the recorded playbook step.
      */
-    private String schemaVersion = "2.0";
+    private String schemaVersion = "3.0";
 
     /**
      * The context level (e.g. VISUAL_LEAN, LEAN) recorded for this step during execution.
@@ -138,6 +155,16 @@ public final class PlaybookStep
      * AI reasoning explanation generated for this step.
      */
     private String reasoning;
+
+    /**
+     * The recorded execution duration in milliseconds.
+     */
+    private Long durationMs;
+
+    /**
+     * The recorded pre-step delay in milliseconds.
+     */
+    private Long delayMs;
 
     /**
      * Returns the recorded context level for this step.
@@ -527,6 +554,42 @@ public final class PlaybookStep
     }
 
     /**
+     * Traverses up the parent hierarchy to find the top-most root playbook step.
+     *
+     * @return the top-most root playbook step, or this if this step has no parent
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public PlaybookStep getRootStep()
+    {
+        PlaybookStep current = this;
+        while (current.parent != null)
+        {
+            current = current.parent;
+        }
+        return current;
+    }
+
+    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:\\s*full\\s*\\)");
+    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)");
+    public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
+    public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
+
+    /**
+     * Checks if this step provides an explicit selector hint.
+     *
+     * @return true if the instruction contains (hint: <selector>), false otherwise
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isHintStep()
+    {
+        if (this.instruction == null)
+        {
+            return false;
+        }
+        return HINT_PATTERN.matcher(this.instruction).find();
+    }
+
+    /**
      * Checks if this step is a visual-only or layout verification step.
      *
      * @return true if the instruction indicates a visual verification, false otherwise
@@ -538,14 +601,13 @@ public final class PlaybookStep
         {
             return false;
         }
-        final String lower = this.instruction.toLowerCase();
-        return lower.contains("(visual") || lower.contains("(layout)");
+        return VISUAL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
     }
 
     /**
      * Checks if this step explicitly requests full-page visual context.
      *
-     * @return true if the instruction contains (visual: full), (visual:full), (visual-full), or (visual_full), false otherwise
+     * @return true if the instruction contains (visual: full), (visual:full), false otherwise
      */
     @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isFullPageVisualStep()
@@ -554,8 +616,7 @@ public final class PlaybookStep
         {
             return false;
         }
-        final String lower = this.instruction.toLowerCase();
-        return lower.contains("(visual: full)") || lower.contains("(visual:full)") || lower.contains("(visual-full)") || lower.contains("(visual_full)");
+        return VISUAL_FULL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
     }
 
     /**
@@ -689,6 +750,66 @@ public final class PlaybookStep
     }
 
     /**
+     * Returns the target automation framework for which this step was recorded.
+     *
+     * @return the target framework name (e.g. SELENIUM_SELENIDE or PLAYWRIGHT)
+     */
+    public String getTargetFramework()
+    {
+        return this.targetFramework;
+    }
+
+    /**
+     * Sets the target automation framework for which this step was recorded.
+     *
+     * @param targetFramework the target framework name to set
+     */
+    public void setTargetFramework(final String targetFramework)
+    {
+        this.targetFramework = targetFramework;
+    }
+
+    /**
+     * Returns the semantic context or intent description of this step.
+     *
+     * @return the semantic context description
+     */
+    public String getSemanticContext()
+    {
+        return this.semanticContext;
+    }
+
+    /**
+     * Sets the semantic context or intent description of this step.
+     *
+     * @param semanticContext the semantic context description to set
+     */
+    public void setSemanticContext(final String semanticContext)
+    {
+        this.semanticContext = semanticContext;
+    }
+
+    /**
+     * Returns the DOM Feature Vector snapshot for this step's target element.
+     *
+     * @return the DOM feature vector
+     */
+    public DomFeatureVector getDomFeatureVector()
+    {
+        return this.domFeatureVector;
+    }
+
+    /**
+     * Sets the DOM Feature Vector snapshot for this step's target element.
+     *
+     * @param domFeatureVector the DOM feature vector to set
+     */
+    public void setDomFeatureVector(final DomFeatureVector domFeatureVector)
+    {
+        this.domFeatureVector = domFeatureVector;
+    }
+
+    /**
      * Returns the schema version of this recorded step.
      *
      * @return the schema version string
@@ -726,5 +847,65 @@ public final class PlaybookStep
     public void setReasoning(final String reasoning)
     {
         this.reasoning = reasoning;
+    }
+
+    /**
+     * Returns the recorded execution duration in milliseconds.
+     *
+     * @return the execution duration in milliseconds, or {@code null} if not recorded
+     */
+    public Long getDurationMs()
+    {
+        return this.durationMs;
+    }
+
+    /**
+     * Sets the recorded execution duration in milliseconds.
+     *
+     * @param durationMs the execution duration in milliseconds
+     */
+    public void setDurationMs(final Long durationMs)
+    {
+        this.durationMs = durationMs;
+    }
+
+    /**
+     * Sets the recorded execution duration in milliseconds.
+     *
+     * @param durationMs the execution duration in milliseconds
+     */
+    public void setDurationMs(final long durationMs)
+    {
+        this.durationMs = durationMs;
+    }
+
+    /**
+     * Returns the recorded pre-step delay in milliseconds.
+     *
+     * @return the delay in milliseconds, or {@code null} if not recorded
+     */
+    public Long getDelayMs()
+    {
+        return this.delayMs;
+    }
+
+    /**
+     * Sets the recorded pre-step delay in milliseconds.
+     *
+     * @param delayMs the delay in milliseconds
+     */
+    public void setDelayMs(final Long delayMs)
+    {
+        this.delayMs = delayMs;
+    }
+
+    /**
+     * Sets the recorded pre-step delay in milliseconds.
+     *
+     * @param delayMs the delay in milliseconds
+     */
+    public void setDelayMs(final long delayMs)
+    {
+        this.delayMs = delayMs;
     }
 }

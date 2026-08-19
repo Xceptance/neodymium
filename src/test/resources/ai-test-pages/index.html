@@ -127,9 +127,14 @@
                         </svg>
                     </a>
                     <ul class="dropdown-menu">
+                        <li><a href="verla-tailwind/index.html">VÉRLA Tailwind</a></li>
+                        <li><a href="verla-tailwind-by-claude/index.html">VÉRLA Tailwind (by Claude)</a></li>
                         <li><a href="verla-perfect/index.html">VÉRLA Perfect</a></li>
                         <li><a href="verla-normal/index.html">VÉRLA Normal</a></li>
                         <li><a href="verla-bad/index.html">VÉRLA Bad</a></li>
+                        <li><a href="verla-modern-bad/index.html">VÉRLA Modern Bad (WCAG)</a></li>
+                        <li><a href="verla-modern-bad-nowcag/index.html">VÉRLA Modern Bad (No WCAG)</a></li>
+                        <li><a href="verla-pwa-chaos/index.html">VÉRLA PWA Chaos</a></li>
                     </ul>
                 </li>
                 <li><a href="AuraGlanceTest/shop/sandbox/index.html">Playground</a></li>
@@ -196,7 +201,7 @@
                     <span class="badge badge-cyan">AJAX & HTMX</span>
                 </div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Simulates modern Single Page Applications (SPAs) with initial loading suspense skeletons, async AJAX lists, and HTMX dynamic HTML swaps. Perfect for wait-assertion audits.</p>
-                <a href="AuraGlanceTest/spa/index.html" class="app-link">Launch React SPA &rarr;</a>
+                <a href="spa/index.html" class="app-link">Launch React SPA &rarr;</a>
             </div>
 
             <!-- Card 6: Escalation Challenge -->
@@ -244,10 +249,10 @@
 
         <h2 style="margin-top: 3.5rem; margin-bottom: 1rem; font-size: 1.75rem; font-weight: 700;">Dynamic VÉRLA Storefronts</h2>
         <p style="color: var(--text-secondary); margin-bottom: 2rem; max-width: 800px; font-size: 0.95rem;">
-            The dynamic e-commerce demo storefront served under three distinct HTML/CSS markup configurations. Used to test self-healing, selector resilience, and visual AI catalog/checkout operations.
+            The dynamic e-commerce demo storefront served under multiple HTML/CSS markup configurations. Used to test self-healing, selector resilience, PWA state machines, and visual AI catalog/checkout operations.
         </p>
 
-        <div class="aura-grid-3" style="margin-bottom: 2.5rem;">
+        <div class="aura-grid-3" style="margin-bottom: 1.5rem;">
             <!-- Perfect Quality -->
             <div class="aura-card" style="border-color: hsla(145, 80%, 45%, 0.25);">
                 <div class="card-header-flex">
@@ -268,6 +273,28 @@
                 <a href="verla-normal/index.html" class="app-link" style="margin-top: 0;">Launch Normal Store &rarr;</a>
             </div>
 
+            <!-- Tailwind Version -->
+            <div class="aura-card" style="border-color: #38bdf8;">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Tailwind</h3>
+                    <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #0284c7; border: 1px solid rgba(56, 189, 248, 0.3);">Tailwind CSS</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Identical to normal quality, fully styled using modern Tailwind CSS utility classes and custom design tokens.</p>
+                <a href="verla-tailwind/index.html" class="app-link" style="margin-top: 0; background: #0284c7; color: white;">Launch Tailwind Store &rarr;</a>
+            </div>
+
+            <!-- Tailwind Version, utility-first rebuild -->
+            <div class="aura-card" style="border-color: #0ea5e9;">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Tailwind (by Claude)</h3>
+                    <span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #0369a1; border: 1px solid rgba(14, 165, 233, 0.3);">Utility-First</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Strict utility-first rebuild of normal quality: locally built Tailwind v4 stylesheet, no CDN, no semantic classes, no inline styles, state via data attributes.</p>
+                <a href="verla-tailwind-by-claude/index.html" class="app-link" style="margin-top: 0; background: #0369a1; color: white;">Launch Utility-First Store &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-grid-3" style="margin-bottom: 1.5rem;">
             <!-- Bad Quality -->
             <div class="aura-card" style="border-color: hsla(355, 85%, 55%, 0.25);">
                 <div class="card-header-flex">
@@ -276,6 +303,37 @@
                 </div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Duplicate IDs, randomized class selectors, styled divs with inline click triggers, and zero accessibility tags.</p>
                 <a href="verla-bad/index.html" class="app-link" style="margin-top: 0;">Launch Bad Store &rarr;</a>
+            </div>
+
+        <div class="aura-grid-3" style="margin-bottom: 2.5rem;">
+            <!-- Modern Bad Quality (WCAG) -->
+            <div class="aura-card" style="border-color: hsla(210, 85%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Modern Bad (WCAG)</h3>
+                    <span class="badge badge-purple">Tailwind & Semantic</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Heavy Tailwind CSS class soups and deep wrapper hierarchies, but retains full ARIA accessibility labels and button tags.</p>
+                <a href="verla-modern-bad/index.html" class="app-link" style="margin-top: 0;">Launch Modern Bad Store &rarr;</a>
+            </div>
+
+            <!-- Modern Bad Quality (No WCAG) -->
+            <div class="aura-card" style="border-color: hsla(0, 85%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Modern Bad (No WCAG)</h3>
+                    <span class="badge badge-purple" style="background: rgba(239, 68, 68, 0.15); color: hsl(355, 85%, 55%); border: 1px solid rgba(239, 68, 68, 0.25);">Tailwind Div Soup</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Tailwind utility class noise, randomized React-style IDs, clickable divs replacing buttons and links, and zero ARIA tags.</p>
+                <a href="verla-modern-bad-nowcag/index.html" class="app-link" style="margin-top: 0;">Launch Modern Bad (No WCAG) &rarr;</a>
+            </div>
+
+            <!-- PWA Chaos Edition -->
+            <div class="aura-card" style="border-color: #E80070; background: linear-gradient(135deg, rgba(0,86,153,0.05) 0%, rgba(232,0,112,0.08) 100%);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600; color: #005699;">VÉRLA PWA Chaos</h3>
+                    <span class="badge" style="background: #E80070; color: #fff;">Bath &amp; Body Works</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Chakra UI / Emotion CSS, Zag.js marquee ticker, rotating search prompts, VideoJS MEDIA_ERR_DECODE modal, OneTrust banner, and slide-over cart drawer.</p>
+                <a href="verla-pwa-chaos/index.html" class="app-link" style="margin-top: 0; background: #005699; color: #fff; text-align: center; border-radius: 4px; padding: 8px 16px;">Launch PWA Chaos Store &rarr;</a>
             </div>
         </div>
 

@@ -46,6 +46,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
+@AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class RegisterTest extends BaseAiTest
 {

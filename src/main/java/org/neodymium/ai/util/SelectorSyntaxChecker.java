@@ -18,17 +18,18 @@
  */
 package org.neodymium.ai.util;
 
-import java.util.regex.Pattern;
 import javax.xml.xpath.XPathFactory;
 
+import org.jsoup.select.QueryParser;
+import org.jsoup.select.Selector.SelectorParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Utility class for syntax classification of target locator candidates into CSS, XPath, or Plain Text.
+ * Fast offline utility for syntax validation and classification of CSS and XPath selectors.
  * <p>
- * Combines structural CSS pattern analysis and JDK {@link XPathFactory} (for XPath syntax validation)
- * to prevent structured CSS/XPath locators from falling back to literal text content searching in element finders.
+ * Uses jsoup {@link QueryParser} for offline CSS AST validation and JDK {@link XPathFactory}
+ * for XPath syntax validation.
  * </p>
  *
  * @author AI-generated: Gemini 3.5 Pro
@@ -37,9 +38,6 @@ import org.slf4j.LoggerFactory;
 public final class SelectorSyntaxChecker
 {
     private static final Logger LOG = LoggerFactory.getLogger(SelectorSyntaxChecker.class);
-
-    private static final Pattern STRUCTURAL_CSS_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-\\*\n\r\t ]*([#\\.\\[\\:>]).*$");
-    private static final Pattern PSEUDO_CLASS_PATTERN = Pattern.compile(":[a-zA-Z\\-]+\\b");
 
     /**
      * Enumeration of candidate target locator types.
@@ -82,7 +80,7 @@ public final class SelectorSyntaxChecker
             return SelectorType.CSS;
         }
 
-        // 2. CSS Syntax Validation via structural indicators
+        // 2. CSS Syntax Validation via jsoup QueryParser
         if (isCssSelector(clean))
         {
             return SelectorType.CSS;
@@ -98,10 +96,10 @@ public final class SelectorSyntaxChecker
     }
 
     /**
-     * Checks whether a candidate string is syntactically a CSS selector using structural checks.
+     * Checks whether a candidate string is syntactically a valid CSS selector using jsoup {@link QueryParser}.
      *
-     * @param candidate the cleaned string candidate
-     * @return true if candidate is a CSS selector; false otherwise
+     * @param candidate the string candidate to check
+     * @return true if candidate is a valid CSS selector; false otherwise
      */
     public static boolean isCssSelector(final String candidate)
     {
@@ -112,35 +110,73 @@ public final class SelectorSyntaxChecker
 
         final String clean = candidate.trim();
 
-        // Explicit CSS indicators (ID, class, attribute, prefix)
-        if (clean.startsWith("#") || clean.startsWith(".") || clean.startsWith("[") || clean.startsWith("css=") || clean.startsWith("[data-ai="))
+        if (clean.startsWith("css=") || clean.startsWith("[data-ai="))
         {
             return true;
         }
 
-        // Plain text with colon punctuation (e.g., "Search Results for: neodymium")
-        if (clean.contains(": ") && !clean.startsWith(":") && !clean.contains(">") && !clean.contains("#") && !clean.contains("."))
+        // Plain text heuristics (sentences, punctuation, prices)
+        if (clean.contains(": ") || clean.contains(". ") || clean.endsWith(".")
+            || clean.contains("$") || clean.contains("€") || clean.contains("£") || clean.contains("¥") || clean.contains("zł")
+            || clean.contains("!") || clean.contains("?"))
         {
             return false;
         }
 
-        // Must contain structural CSS tokens (#, ., [, >, or pseudo-class :[a-z])
-        if (!clean.contains("#") && !clean.contains(".") && !clean.contains("[") && !clean.contains(">"))
+        // Reject invalid combinator sequences (e.g. "> >", leading/trailing combinators)
+        if (clean.matches(".*[>+~]\\s*[>+~].*") || clean.startsWith(">") || clean.startsWith("+") || clean.startsWith("~")
+                || clean.endsWith(">") || clean.endsWith("+") || clean.endsWith("~"))
         {
-            final boolean hasPseudoClass = PSEUDO_CLASS_PATTERN.matcher(clean).find() && !clean.contains(": ");
-            if (!hasPseudoClass)
-            {
-                return false;
-            }
+            return false;
         }
 
-        return STRUCTURAL_CSS_PATTERN.matcher(clean).matches();
+        // Must contain structural CSS tokens (#, ., [, >, ~, +, or pseudo-class :[a-z])
+        // to avoid single words (like "Submit", "Login") from being parsed as bare tag selectors
+        final boolean hasId = clean.contains("#");
+        final boolean hasBracket = clean.contains("[") && clean.contains("]");
+        final boolean hasCombinator = clean.contains(">") || clean.contains("~") || clean.contains("+");
+        final boolean hasClassDot = clean.matches(".*(^|[\\s>+~])\\.[a-zA-Z_][a-zA-Z0-9_\\-]*.*");
+        final boolean hasPseudoClass = clean.matches(".*:[a-zA-Z\\-]+.*");
+
+        if (!hasId && !hasBracket && !hasCombinator && !hasClassDot && !hasPseudoClass)
+        {
+            return false;
+        }
+
+        String toValidate = clean;
+        if (toValidate.toLowerCase().startsWith("css="))
+        {
+            toValidate = toValidate.substring(4).trim();
+        }
+
+        // Normalize browser UI state pseudo-classes/elements not modeled in jsoup DOM
+        final String normalized = toValidate.replaceAll(":(hover|focus|focus-visible|focus-within|active|visited|target|disabled|enabled|checked|selected|indeterminate|before|after)\\b", "").trim();
+        if (normalized.isEmpty() || "*".equals(normalized))
+        {
+            return true;
+        }
+
+        try
+        {
+            QueryParser.parse(normalized);
+            return true;
+        }
+        catch (final SelectorParseException e)
+        {
+            LOG.trace("Candidate '{}' failed jsoup QueryParser check: {}", clean, e.getMessage());
+            return false;
+        }
+        catch (final Exception e)
+        {
+            LOG.trace("Candidate '{}' caused unexpected error during CSS parse: {}", clean, e.getMessage());
+            return false;
+        }
     }
 
     /**
-     * Checks whether a candidate string is syntactically a valid XPath expression using JDK XPathFactory.
+     * Checks whether a candidate string is syntactically a valid XPath expression using JDK {@link XPathFactory}.
      *
-     * @param candidate the cleaned string candidate
+     * @param candidate the string candidate to check
      * @return true if candidate is a valid XPath expression; false otherwise
      */
     public static boolean isXpathExpression(final String candidate)
@@ -172,7 +208,7 @@ public final class SelectorSyntaxChecker
         }
         catch (final Exception e)
         {
-            LOG.trace("Candidate '{}' failed XPathFactory syntax compile check: {}", clean, e.getMessage());
+            LOG.trace("Candidate '{}' failed XPathFactory check: {}", clean, e.getMessage());
             return false;
         }
     }

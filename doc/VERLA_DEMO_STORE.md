@@ -8,13 +8,18 @@ For detailed information on the sandbox architecture, multi-port server configur
 
 ## 1. Quality-Level Dimensions (SUT Variations)
 
-To benchmark SUT robustness, selector resilience, and visual regression capabilities, the VÉRLA storefront is served under three distinct paths. Each path represents the same visual storefront but contains radically different underlying DOM and HTML/CSS markup qualities.
+To benchmark SUT robustness, selector resilience, and visual regression capabilities, the VÉRLA storefront is served under several distinct paths. Each path represents the same visual storefront but contains radically different underlying DOM and HTML/CSS markup qualities.
 
 ```mermaid
 graph TD
     A[VÉRLA Storefront] --> B["Perfect (/verla-perfect/)"]
     A --> C["Normal (/verla-normal/)"]
-    A --> D["Bad (/verla-bad/)"]
+    A --> D["Tailwind (/verla-tailwind/)"]
+    A --> D2["Tailwind by Claude (/verla-tailwind-by-claude/)"]
+    A --> E["Bad (/verla-bad/)"]
+    A --> F["Modern Bad - WCAG (/verla-modern-bad/)"]
+    A --> G["Modern Bad - No WCAG (/verla-modern-bad-nowcag/)"]
+    A --> H["PWA Chaos (/verla-pwa-chaos/)"]
 ```
 
 ### 1.1. Perfect Quality (`/verla-perfect/`)
@@ -27,10 +32,39 @@ graph TD
 - **Locators & Selectors**: Uses generic, inconsistent, or partially structured class and ID attributes (e.g., `id="inp_email"`, `class="cb-cat"`).
 - **Accessibility (a11y)**: All `aria-*` elements are omitted. Form inputs lack explicit `<label>` tags and rely exclusively on `placeholder` attributes.
 
-### 1.3. Bad Quality (`/verla-bad/`)
+### 1.3. Tailwind Version (`/verla-tailwind/`)
+- **Tailwind CSS Utility Styling**: Fully styled using modern Tailwind CSS utility classes and design tokens matching the VÉRLA terracotta theme.
+- **Normal Quality Compatibility**: Identical to `verla-normal` in selectors, form names, dynamic HTMX endpoints, and business logic.
+
+### 1.3.1. Tailwind Utility-First (`/verla-tailwind-by-claude/`)
+
+A strict, from-scratch Tailwind rebuild of `verla-normal`. Where `/verla-tailwind/` is a hybrid (CDN plus a large hand-written semantic stylesheet), this variant is what a real Tailwind codebase looks like:
+
+- **No remote resources, no Node at runtime**: the stylesheet is a Tailwind v4 build committed at `ai-test-pages/shared/verla-tailwind.css` and served as a static file. `verla-tailwind-by-claude/build.sh` regenerates it and is development-only; nothing in the test path invokes Node.
+- **No semantic class names**: every element - including the fragments rendered from `EmbeddedHtmlServer` (product cards, mini cart, cart table, search suggestions, address fields) - carries utilities only. There is no `.product-card`, `.form-control`, or `.btn-primary`.
+- **No inline styles and no embedded `<style>` block**: the layout links one stylesheet and nothing else.
+- **State as data attributes**: open/active/added states are `data-open`, `data-active`, `data-state`, `data-show`, styled with `data-[open=true]:visible`-style variants, plus `group-hover:` / `group-focus-within:` for the quick-add reveal and mini cart. JS toggles attributes, never style properties.
+- **Design tokens in `@theme`**: the terracotta/sand palette, serif/sans families, and keyframes are Tailwind theme variables, so they generate real utilities (`bg-terracotta-500`, `text-muted`, `font-serif`, `animate-fade-in`).
+- **Mobile-first responsive**: breakpoints are min-width `sm:`/`md:`/`lg:` variants rather than the max-width media queries used by `verla-normal`.
+- **Deliberately no `container` utility**: the layout uses explicit `mx-auto w-full max-w-7xl px-6`, avoiding a collision with Tailwind's own `container`.
+
+This makes it a useful contrast case for the locator pipeline: identical business logic and IDs to `verla-normal`, but zero semantic class signal to latch onto.
+
+### 1.4. Bad Quality (`/verla-bad/`)
 - **DOM Structure**: No semantic tags or standard form structures are used. Buttons and interactive inputs are constructed via styled generic tags (e.g. `div` or `span`) equipped with inline JS `onclick` attributes.
 - **Locators & Selectors**: Missing standard IDs, duplicate IDs across page sections (e.g., multiple `id="prod-info"`), or randomized/obfuscated class names (e.g. `class="c-772x9"`), forcing brittle, deep-relative XPath lookups.
 - **Accessibility (a11y)**: Total absence of labels, placeholder attributes, roles, and alternative image descriptions (`alt` tags).
+
+### 1.4. Modern Bad - WCAG (`/verla-modern-bad/`)
+- **Modern CSS Framework Noise**: Heavy Tailwind CSS utility classes and deep wrapper trees simulating modern Single Page App architectures.
+- **Accessibility (a11y)**: Retains full WCAG semantic elements (`<button>`, `<a href>`, `aria-label`, `<label>`).
+
+### 1.5. Modern Bad - No WCAG (`/verla-modern-bad-nowcag/`)
+- **React Div Soup**: Massive Tailwind utility classes, randomized React-style dynamic IDs (`react-div-719x`, `v-btn-992a`), and styled clickable divs replacing buttons/links with zero accessibility semantics.
+
+### 1.6. PWA Chaos (`/verla-pwa-chaos/`)
+- **Bath & Body Works Architecture**: Replicates complex real-world headless PWA anti-patterns.
+- **DOM & Styling**: Chakra UI / Emotion CSS-in-JS class hashes (`emotion-jvwy60`, `emotion-1ss52ls`), Wick Design System components (`wick-linkbox`, `wick-stack`, `wick-marquee__root`), Zag.js state machines (`data-scope="marquee"`), rotating reveal search prompt, VideoJS `MEDIA_ERR_DECODE` error modal dialog, OneTrust cookie banner, delayed 20% discount marketing popup, and slide-over mini-cart drawer.
 
 ---
 

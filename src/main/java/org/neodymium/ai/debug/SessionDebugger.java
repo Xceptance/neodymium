@@ -143,6 +143,13 @@ public final class SessionDebugger
             result.put("judge", judge);
         }
 
+        // 6. Extract Visual RCA token metrics
+        final TokenUsage rca = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
+        if (rca != null)
+        {
+            result.put("rca", rca);
+        }
+
         return Collections.unmodifiableMap(result);
     }
 

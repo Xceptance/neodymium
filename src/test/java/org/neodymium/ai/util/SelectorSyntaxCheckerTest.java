@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.neodymium.ai.util.SelectorSyntaxChecker.SelectorType;
 
 /**
- * Unit tests validating combined CSS (jsoup QueryParser) and XPath (JDK XPathFactory)
+ * Unit tests validating combined structural CSS grammar and XPath (JDK XPathFactory)
  * selector syntax classification in {@link SelectorSyntaxChecker}.
  *
  * @author AI-generated: Gemini 3.5 Pro
@@ -63,6 +63,16 @@ public class SelectorSyntaxCheckerTest
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Thank you for your purchase!"));
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType(null));
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("  "));
+
+        // Plain text containing periods, numbers, abbreviations, and currencies
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Dr. Oetker Pizza"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Total 1.234,00 EUR"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Vielen Dank. Ihre Bestellung"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Order No. 12345"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("26.99 CAD $"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Canada (FR)"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Art.-Nr. 123"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("z.B. Test"));
     }
 
     @Test
@@ -73,6 +83,34 @@ public class SelectorSyntaxCheckerTest
         assertTrue(SelectorSyntaxChecker.isCssSelector("header > div.logo"));
         assertFalse(SelectorSyntaxChecker.isCssSelector("Plain text string"));
         assertFalse(SelectorSyntaxChecker.isCssSelector("//div[@id='foo']"));
+
+        // Standard attribute presence selectors
+        assertTrue(SelectorSyntaxChecker.isCssSelector("input.form-control[required]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".btn[disabled]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("a.link[href]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("button.btn-primary[disabled]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("form.checkout-form[novalidate]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("div.card[data-theme]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("span.author[itemprop]"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("details[open]"));
+
+        // Standard pseudo-classes and state classes
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".active:hover"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".disabled:focus"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".active:nth-child(2)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".active:not(.hidden)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("button.btn.active:focus-visible"));
+
+        // Functional pseudo-classes with comma-separated selector lists
+        assertTrue(SelectorSyntaxChecker.isCssSelector("button:not(.a, .b)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector(".card:is(.x, .y)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("div:has(> span, > em)"));
+        assertTrue(SelectorSyntaxChecker.isCssSelector("#a, #b"));
+
+        // Malformed CSS rejection via structural syntax checker
+        assertFalse(SelectorSyntaxChecker.isCssSelector("button:not(.a"));
+        assertFalse(SelectorSyntaxChecker.isCssSelector("div[required"));
+        assertFalse(SelectorSyntaxChecker.isCssSelector("div > > span"));
     }
 
     @Test

@@ -111,7 +111,7 @@ public class PlaybookRecorderTest
         {
             final String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(json.contains("\"sourceYamlHash\" : \"abc123def456\""), "JSON output should serialize sourceYamlHash.");
-            assertTrue(json.contains("\"schemaVersion\" : \"2.0\""), "JSON output should serialize schemaVersion.");
+            assertTrue(json.contains("\"schemaVersion\" : \"3.0\""), "JSON output should serialize schemaVersion.");
         }
     }
 }

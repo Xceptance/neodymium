@@ -1,0 +1,78 @@
+<div class="flex flex-col flex-wrap items-stretch gap-10 md:flex-row md:items-start">
+    <!-- Sidebar Refinements -->
+    <aside class="w-full flex-1 rounded-lg border border-sand-200 bg-sand-50 p-6 md:sticky md:top-25 md:min-w-60">
+        <h3 class="mb-6 border-b border-sand-200 pb-3 font-serif text-lg font-semibold">${lang_refinements}</h3>
+
+        <!-- Category refinement filters -->
+        <div class="mb-2">
+            <h4 class="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">${lang_categories}</h4>
+            <ul class="flex flex-col gap-2.5 text-sm">
+                <li><a href="plp.html" class="transition-colors hover:text-terracotta-500 ${all_active_class}">${lang_all}</a></li>
+                <li><a href="c/tops.html" class="transition-colors hover:text-terracotta-500 ${tops_active_class}">${lang_tops}</a></li>
+                <li><a href="c/bottoms.html" class="transition-colors hover:text-terracotta-500 ${bottoms_active_class}">${lang_bottoms}</a></li>
+                <li><a href="c/outerwear.html" class="transition-colors hover:text-terracotta-500 ${outerwear_active_class}">${lang_outerwear}</a></li>
+                <li><a href="c/footwear.html" class="transition-colors hover:text-terracotta-500 ${footwear_active_class}">${lang_footwear}</a></li>
+                <li><a href="c/accessories.html" class="transition-colors hover:text-terracotta-500 ${accessories_active_class}">${lang_accessories}</a></li>
+            </ul>
+        </div>
+
+        <form id="refinement-form" hx-get="${filter_url}" hx-target="#plp-product-grid" hx-trigger="change" hx-include="#sort-select" class="mt-6">
+            <!-- Color Refinement -->
+            <div class="mb-6 border-t border-sand-200 pt-4">
+                <h4 class="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Color</h4>
+                <ul class="flex flex-col gap-2 text-[13px]">
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="off-white" class="accent-terracotta-500" ${color_off_white_checked}> Off-White</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="charcoal" class="accent-terracotta-500" ${color_charcoal_checked}> Charcoal</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="olive" class="accent-terracotta-500" ${color_olive_checked}> Olive</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="sand" class="accent-terracotta-500" ${color_sand_checked}> Sand</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="navy" class="accent-terracotta-500" ${color_navy_checked}> Navy</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="taupe" class="accent-terracotta-500" ${color_taupe_checked}> Taupe</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="sage" class="accent-terracotta-500" ${color_sage_checked}> Sage</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="color" value="terracotta" class="accent-terracotta-500" ${color_terracotta_checked}> Terracotta</label></li>
+                </ul>
+            </div>
+
+            <!-- Price Refinement -->
+            <div class="mb-6 border-t border-sand-200 pt-4">
+                <h4 class="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">${lang_price}</h4>
+                <ul class="flex flex-col gap-2 text-[13px]">
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="price" value="0-50" class="accent-terracotta-500" ${price_0_50_checked}> ${lang_under50}</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="price" value="50-100" class="accent-terracotta-500" ${price_50_100_checked}> ${lang_range50to100}</label></li>
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="price" value="100-200" class="accent-terracotta-500" ${price_100_200_checked}> ${lang_over100}</label></li>
+                </ul>
+            </div>
+
+            <!-- Sale Refinement -->
+            <div class="mb-6 border-t border-sand-200 pt-4">
+                <h4 class="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Offer</h4>
+                <ul class="flex flex-col gap-2 text-[13px]">
+                    <li><label class="flex cursor-pointer items-center gap-2"><input type="checkbox" name="sale" value="true" class="accent-terracotta-500" ${sale_checked}> On Sale</label></li>
+                </ul>
+            </div>
+        </form>
+    </aside>
+
+    <!-- Product Grid Listing -->
+    <section class="min-w-75 flex-[3]">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <h2 class="font-serif text-3xl font-semibold">${plp_heading}</h2>
+            <div class="flex items-center gap-5">
+                <span class="text-[13px] font-normal text-muted" id="product-count-display">${total_products_count} ${lang_products}</span>
+                <!-- Sorting filter (HTMX dynamic swap in upper right) -->
+                <div class="flex items-center gap-2">
+                    <label for="sort-select" class="whitespace-nowrap text-[13px] text-muted">${lang_sort}:</label>
+                    <select name="sort" id="sort-select" class="cursor-pointer rounded-lg border border-sand-200 bg-white px-4 py-2 text-[13px] outline-none focus:border-terracotta-500"
+                            hx-get="${filter_url}" hx-target="#plp-product-grid" hx-include="#refinement-form, #sort-select">
+                        <option value="default" ${sort_default_selected}>${lang_sortDefault}</option>
+                        <option value="price-asc" ${sort_asc_selected}>${lang_priceLowHigh}</option>
+                        <option value="price-desc" ${sort_desc_selected}>${lang_priceHighLow}</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="plp-product-grid" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-7.5">
+            ${plp_products}
+        </div>
+    </section>
+</div>

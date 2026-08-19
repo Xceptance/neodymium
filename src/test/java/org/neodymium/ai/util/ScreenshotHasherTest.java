@@ -93,6 +93,21 @@ final class ScreenshotHasherTest
         assertTrue(score < 0.80, "Visually different images should have low SSIM score, got: " + score);
     }
 
+    @Test
+    void testComputeTileSsimMatrix_andCalculateSsim() throws IOException
+    {
+        final BufferedImage img = createCheckerboardImage(200, 200);
+        final String base64 = encodeToBase64Png(img);
+
+        final String tile1 = ScreenshotHasher.computeTileSsimMatrix(base64, 50, 50, 32);
+        final String tile2 = ScreenshotHasher.computeTileSsimMatrix(base64, 50, 50, 32);
+        final String tileDiff = ScreenshotHasher.computeTileSsimMatrix(base64, 150, 150, 32);
+
+        assertNotNull(tile1);
+        assertEquals(tile1, tile2);
+        assertEquals(1.0, ScreenshotHasher.calculateSsim(tile1, tile2), 0.001);
+    }
+
     private BufferedImage createSolidColorImage(final Color color, final int width, final int height)
 
     {

@@ -53,17 +53,17 @@ public final class SystemPromptAddonTest
     }
 
     /**
-     * Verifies that flat top-level prompt add-on properties are parsed correctly.
+     * Verifies that flat canonical promptAddon properties are parsed correctly.
      *
      * @throws IOException if parsing fails
      */
     @Test
-    public void testYamlParsingFlatProperties() throws IOException
+    public void testYamlParsingCanonicalPromptAddonFlat() throws IOException
     {
         final String yamlContent = """
-            systemPromptAddon: "Default general prompt addon"
-            systemPromptAddon.pesap: "Specific pesap addon"
-            systemPromptAddon.general: "Specific general addon"
+            promptAddon: "Default general prompt addon"
+            promptAddon.pesap: "Specific pesap addon"
+            promptAddon.general: "Specific general addon"
             steps: |
               Step 1
             """;
@@ -75,7 +75,7 @@ public final class SystemPromptAddonTest
         final Playbook playbook = parser.parse("test-playbook.yaml", manager);
         assertNotNull(playbook);
 
-        final Map<String, String> addons = playbook.getSystemPromptAddons();
+        final Map<String, String> addons = playbook.getPromptAddons();
         assertNotNull(addons);
         assertEquals("Default general prompt addon", addons.get("default"));
         assertEquals("Specific pesap addon", addons.get("pesap"));
@@ -83,15 +83,15 @@ public final class SystemPromptAddonTest
     }
 
     /**
-     * Verifies that nested systemPromptAddon map is parsed correctly.
+     * Verifies that nested canonical promptAddon map is parsed correctly.
      *
      * @throws IOException if parsing fails
      */
     @Test
-    public void testYamlParsingNestedMap() throws IOException
+    public void testYamlParsingCanonicalPromptAddonMap() throws IOException
     {
         final String yamlContent = """
-            systemPromptAddon:
+            promptAddon:
               pesap: "Nested pesap rule"
               general: "Nested general rule"
             steps: |
@@ -105,75 +105,84 @@ public final class SystemPromptAddonTest
         final Playbook playbook = parser.parse("test-playbook.yaml", manager);
         assertNotNull(playbook);
 
-        final Map<String, String> addons = playbook.getSystemPromptAddons();
+        final Map<String, String> addons = playbook.getPromptAddons();
         assertNotNull(addons);
         assertEquals("Nested pesap rule", addons.get("pesap"));
         assertEquals("Nested general rule", addons.get("general"));
     }
 
     /**
-     * Verifies that plural systemPromptAddons map is parsed correctly.
-     *
-     * @throws IOException if parsing fails
+     * Verifies that prompt add-ons accumulate across model, playbook, and dataset layers.
      */
     @Test
-    public void testYamlParsingPluralMap() throws IOException
+    public void testMultiLayerAccumulation()
     {
-        final String yamlContent = """
-            systemPromptAddons:
-              verification: "Nested verification rule"
-              rca: "Nested rca rule"
-            steps: |
-              Step 1
-            """;
-
-        final PlaybookParser parser = new YamlPlaybookParser();
-        final InMemoryResourceManager manager = new InMemoryResourceManager();
-        manager.write("test-playbook.yaml", yamlContent);
-
-        final Playbook playbook = parser.parse("test-playbook.yaml", manager);
-        assertNotNull(playbook);
-
-        final Map<String, String> addons = playbook.getSystemPromptAddons();
-        assertNotNull(addons);
-        assertEquals("Nested verification rule", addons.get("verification"));
-        assertEquals("Nested rca rule", addons.get("rca"));
-    }
-
-    /**
-     * Verifies system prompt add-on resolution and precedence rules.
-     */
-    @Test
-    public void testResolutionAndPrecedence()
-    {
-        // 1. Setup ExecutionContext with SessionData (representing dataset layer)
+        // 1. Setup ExecutionContext with SessionData (Dataset layer)
         final Map<String, SessionData.DataEntry> staticData = new HashMap<>();
-        staticData.put("systemPromptAddon", new SessionData.DataEntry("Dataset default addon", false));
-        staticData.put("systemPromptAddon.pesap", new SessionData.DataEntry("Dataset pesap addon", false));
+        staticData.put("promptAddon", new SessionData.DataEntry("Dataset general rule", false));
+        staticData.put("promptAddon.pesap", new SessionData.DataEntry("Dataset pesap rule", false));
         final SessionData sessionData = new SessionData(staticData);
         final ExecutionContext context = new ExecutionContext(sessionData);
 
-        // 2. Setup Playbook systemPromptAddons map in transient data
+        // 2. Setup Playbook layer in transient data
         final Map<String, String> yamlAddons = new HashMap<>();
-        yamlAddons.put("default", "YAML default addon");
-        yamlAddons.put("pesap", "YAML pesap addon");
-        yamlAddons.put("general", "YAML general addon");
-        context.getTransientData().put("playbook.systemPromptAddons", yamlAddons);
+        yamlAddons.put("default", "Playbook general rule");
+        yamlAddons.put("pesap", "Playbook pesap rule");
+        context.getTransientData().put("playbook.promptAddons", yamlAddons);
 
-        // A. Dataset specific overrides all (pesap query)
-        assertEquals("Dataset pesap addon", SystemPromptAddonHelper.getAddon("pesap", context));
+        // For pesap query: Playbook general + Playbook pesap + Dataset general + Dataset pesap
+        final String pesapAddon = SystemPromptAddonHelper.getAddon("pesap", context);
+        assertNotNull(pesapAddon);
+        final String expectedPesap = "Playbook general rule\n\nPlaybook pesap rule\n\nDataset general rule\n\nDataset pesap rule";
+        assertEquals(expectedPesap, pesapAddon);
 
-        // B. Dataset general fallback overrides YAML specific/general (general query)
-        // Since dataset has systemPromptAddon, it overrides YAML general
-        assertEquals("Dataset default addon", SystemPromptAddonHelper.getAddon("general", context));
+        // For general query: Playbook general + Dataset general
+        final String generalAddon = SystemPromptAddonHelper.getAddon("general", context);
+        assertNotNull(generalAddon);
+        final String expectedGeneral = "Playbook general rule\n\nDataset general rule";
+        assertEquals(expectedGeneral, generalAddon);
+    }
 
-        // C. If no dataset overrides exist, fallback to YAML specific (verification query)
-        final SessionData emptySessionData = new SessionData(Collections.emptyMap());
-        final ExecutionContext contextNoDataset = new ExecutionContext(emptySessionData);
-        contextNoDataset.getTransientData().put("playbook.systemPromptAddons", yamlAddons);
+    /**
+     * Verifies that ${variable} placeholders in prompt add-ons are dynamically interpolated.
+     */
+    @Test
+    public void testVariableInterpolationInPromptAddon()
+    {
+        // Setup Dataset variables
+        final Map<String, SessionData.DataEntry> staticData = new HashMap<>();
+        staticData.put("targetLocale", new SessionData.DataEntry("French (Canada)", false));
+        staticData.put("userName", new SessionData.DataEntry("Jean Dupont", false));
+        staticData.put("promptAddon", new SessionData.DataEntry("Dataset user: ${userName}", false));
+        final SessionData sessionData = new SessionData(staticData);
+        final ExecutionContext context = new ExecutionContext(sessionData);
 
-        assertEquals("YAML default addon", SystemPromptAddonHelper.getAddon("verification", contextNoDataset));
-        assertEquals("YAML general addon", SystemPromptAddonHelper.getAddon("general", contextNoDataset));
+        // Setup Playbook add-on with variable reference
+        final Map<String, String> yamlAddons = new HashMap<>();
+        yamlAddons.put("default", "Translate text to ${targetLocale}");
+        context.getTransientData().put("playbook.promptAddons", yamlAddons);
+
+        final String result = SystemPromptAddonHelper.getAddon("general", context);
+        assertNotNull(result);
+        assertEquals("Translate text to French (Canada)\n\nDataset user: Jean Dupont", result);
+    }
+
+    /**
+     * Verifies that unresolvable ${variable} placeholder throws IllegalArgumentException.
+     */
+    @Test
+    public void testUnresolvableVariableThrowsException()
+    {
+        final SessionData emptyData = new SessionData(Collections.emptyMap());
+        final ExecutionContext context = new ExecutionContext(emptyData);
+
+        final Map<String, String> yamlAddons = new HashMap<>();
+        yamlAddons.put("default", "Hello ${nonExistentVariable}");
+        context.getTransientData().put("playbook.promptAddons", yamlAddons);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            SystemPromptAddonHelper.getAddon("general", context);
+        });
     }
 
     /**
@@ -185,7 +194,7 @@ public final class SystemPromptAddonTest
         final Map<String, String> yamlAddons = new HashMap<>();
         yamlAddons.put("general", "My custom rule");
         final ExecutionContext context = new ExecutionContext(new SessionData(Collections.emptyMap()));
-        context.getTransientData().put("playbook.systemPromptAddons", yamlAddons);
+        context.getTransientData().put("playbook.promptAddons", yamlAddons);
 
         final String basePrompt = "Base system prompt instructions";
         final String combined = SystemPromptAddonHelper.appendAddon(basePrompt, "general", context);
@@ -220,10 +229,37 @@ public final class SystemPromptAddonTest
         yamlAddons.put("general", longAddon);
 
         final ExecutionContext context = new ExecutionContext(new SessionData(Collections.emptyMap()));
-        context.getTransientData().put("playbook.systemPromptAddons", yamlAddons);
+        context.getTransientData().put("playbook.promptAddons", yamlAddons);
 
         assertThrows(IllegalArgumentException.class, () -> {
             SystemPromptAddonHelper.getAddon("general", context);
         });
+    }
+
+    /**
+     * Verifies that when multilingual guidance is enabled, Language Universality is appended.
+     */
+    @Test
+    public void testMultilingualAddonInjection()
+    {
+        final Map<String, SessionData.DataEntry> data = new HashMap<>();
+        data.put("neodymium.ai.multilingual", new SessionData.DataEntry("true", false));
+        final ExecutionContext context = new ExecutionContext(new SessionData(data));
+
+        final String pesapAddon = SystemPromptAddonHelper.getAddon("pesap", context);
+        assertNotNull(pesapAddon);
+        assertTrue(pesapAddon.contains("Language Universality"));
+        assertTrue(pesapAddon.contains("sub-steps"));
+
+        final String generalAddon = SystemPromptAddonHelper.getAddon("general", context);
+        assertNotNull(generalAddon);
+        assertTrue(generalAddon.contains("Language Universality"));
+        assertTrue(generalAddon.contains("button texts, labels"));
+
+        final String basePrompt = "Base system prompt instructions";
+        final String combined = SystemPromptAddonHelper.appendAddon(basePrompt, "pesap", context);
+        assertNotNull(combined);
+        assertTrue(combined.contains("Language Universality"));
+        assertTrue(combined.contains("CRITICAL REMINDER"));
     }
 }

@@ -84,7 +84,7 @@ public final class ScrollAction implements BrowserActionPlugin
                  !"document".equalsIgnoreCase(target.trim()))
         {
             LOGGER.debug("Scroll element into view: {}", target);
-            SelenideElementFinder.findElement(target).scrollIntoView("{behavior: 'instant', block: 'start', inline: 'nearest'}");
+            SelenideElementFinder.findElement(action).scrollIntoView("{behavior: 'instant', block: 'start', inline: 'nearest'}");
         }
         else
         {

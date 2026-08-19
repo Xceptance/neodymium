@@ -44,9 +44,9 @@ public final class Playbook
     private final List<Map<String, SessionData.DataEntry>> dataSets;
 
     /**
-     * The unmodifiable map of custom system prompt add-ons by type.
+     * The unmodifiable map of custom prompt add-ons by type.
      */
-    private final Map<String, String> systemPromptAddons;
+    private final Map<String, String> promptAddons;
 
     /**
      * Constructs an immutable Playbook with defensive copies of steps and datasets.
@@ -60,13 +60,13 @@ public final class Playbook
     }
 
     /**
-     * Constructs an immutable Playbook with defensive copies of steps, datasets, and custom system prompt add-ons.
+     * Constructs an immutable Playbook with defensive copies of steps, datasets, and custom prompt add-ons.
      *
      * @param steps the list of logical playbook steps
      * @param dataSets the list of dataset parameters maps
-     * @param systemPromptAddons the map of custom system prompt add-ons by type
+     * @param promptAddons the map of custom prompt add-ons by type
      */
-    public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> systemPromptAddons)
+    public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons)
     {
         // Defensive copy of steps
         this.steps = steps != null ? new ArrayList<>(steps) : new ArrayList<>();
@@ -84,7 +84,7 @@ public final class Playbook
             }
         }
         this.dataSets = Collections.unmodifiableList(datasetsCopy);
-        this.systemPromptAddons = systemPromptAddons != null ? Collections.unmodifiableMap(new HashMap<>(systemPromptAddons)) : Collections.emptyMap();
+        this.promptAddons = promptAddons != null ? Collections.unmodifiableMap(new HashMap<>(promptAddons)) : Collections.emptyMap();
     }
 
     /**
@@ -108,13 +108,13 @@ public final class Playbook
     }
 
     /**
-     * Returns the unmodifiable map of custom system prompt add-ons by type.
+     * Returns the unmodifiable map of custom prompt add-ons by type.
      *
-     * @return the unmodifiable system prompt add-ons map
+     * @return the unmodifiable prompt add-ons map
      */
-    public Map<String, String> getSystemPromptAddons()
+    public Map<String, String> getPromptAddons()
     {
-        return this.systemPromptAddons;
+        return this.promptAddons;
     }
 
     /**
@@ -134,7 +134,7 @@ public final class Playbook
     {
         private final List<PlaybookStep> steps = new ArrayList<>();
         private final List<Map<String, SessionData.DataEntry>> dataSets = new ArrayList<>();
-        private final Map<String, String> systemPromptAddons = new HashMap<>();
+        private final Map<String, String> promptAddons = new HashMap<>();
 
         private Builder()
         {
@@ -227,13 +227,40 @@ public final class Playbook
         }
 
         /**
+         * Adds a custom prompt add-on for a specific capability type.
+         *
+         * @param type the prompt capability type (e.g. general, pesap, verification)
+         * @param addon the custom prompt add-on text
+         * @return this builder instance
+         */
+        public Builder promptAddon(final String type, final String addon)
+        {
+            if (type != null && addon != null)
+            {
+                this.promptAddons.put(type, addon);
+            }
+            return this;
+        }
+
+        /**
+         * Adds a general custom prompt add-on.
+         *
+         * @param addon the general custom prompt add-on text
+         * @return this builder instance
+         */
+        public Builder promptAddon(final String addon)
+        {
+            return promptAddon("default", addon);
+        }
+
+        /**
          * Builds and returns the immutable {@link Playbook} instance.
          *
          * @return a new Playbook
          */
         public Playbook build()
         {
-            return new Playbook(this.steps, this.dataSets, this.systemPromptAddons);
+            return new Playbook(this.steps, this.dataSets, this.promptAddons);
         }
     }
 }

@@ -18,9 +18,9 @@
  */
 package org.neodymium.ai.telemetry;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,9 +28,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.TokenUsage;
@@ -51,27 +50,45 @@ import org.neodymium.ai.model.PlaybookStepStatus;
  */
 public class MetricsCollectorTest
 {
-    @Rule
-    public TemporaryFolder tempFolder = new TemporaryFolder();
+    @TempDir
+    Path tempFolder;
 
     @Test
-    public void testCostCalculationForFlashAndProModels()
+    public void testCostCalculationForSupportedGeminiModels()
     {
-        final TokenUsage usage = new TokenUsage(1_000_000, 100_000, 500_000);
+        final TokenUsage usage = new TokenUsage(1_000_000, 100_000, 1_600_000, 500_000);
 
-        // Flash pricing: (1M * 0.075) + (0.1M * 0.300) + (0.5M * 0.01875) = 0.075 + 0.030 + 0.009375 = 0.114375
-        final double flashCost = MetricsCollector.calculateCost(usage, "gemini-1.5-flash");
-        assertEquals(0.114375, flashCost, 0.00001);
+        // gemini-3.5-flash-lite: (1M * 0.30) + (0.1M * 2.50) + (0.5M * 0.075) = 0.30 + 0.25 + 0.0375 = 0.5875
+        final double flashLiteCost = MetricsCollector.calculateCost(usage, "gemini-3.5-flash-lite");
+        assertEquals(0.5875, flashLiteCost, 0.00001);
 
-        // Pro pricing: (1M * 1.25) + (0.1M * 5.00) + (0.5M * 0.3125) = 1.25 + 0.50 + 0.15625 = 1.90625
-        final double proCost = MetricsCollector.calculateCost(usage, "gemini-1.5-pro");
-        assertEquals(1.90625, proCost, 0.00001);
+        // gemini-2.5-flash-lite: (1M * 0.10) + (0.1M * 0.40) + (0.5M * 0.025) = 0.10 + 0.04 + 0.0125 = 0.1525
+        final double flashLite25Cost = MetricsCollector.calculateCost(usage, "gemini-2.5-flash-lite");
+        assertEquals(0.1525, flashLite25Cost, 0.00001);
+
+        // gemini-3.7-flash: (1M * 0.75) + (0.1M * 3.75) + (0.5M * 0.1875) = 0.75 + 0.375 + 0.09375 = 1.21875
+        final double flash37Cost = MetricsCollector.calculateCost(usage, "gemini-3.7-flash");
+        assertEquals(1.21875, flash37Cost, 0.00001);
+
+        // gemini-3.5-flash: (1M * 0.50) + (0.1M * 3.00) + (0.5M * 0.125) = 0.50 + 0.30 + 0.0625 = 0.8625
+        final double flash35Cost = MetricsCollector.calculateCost(usage, "gemini-3.5-flash");
+        assertEquals(0.8625, flash35Cost, 0.00001);
+
+        // gemini-3.6-flash: (1M * 0.50) + (0.1M * 3.00) + (0.5M * 0.125) = 0.50 + 0.30 + 0.0625 = 0.8625
+        final double flash36Cost = MetricsCollector.calculateCost(usage, "gemini-3.6-flash");
+        assertEquals(0.8625, flash36Cost, 0.00001);
+
+        // Unknown model: should return 0.0 and skip price calculation
+        final double unknownCost = MetricsCollector.calculateCost(usage, "custom-unknown-model");
+        assertEquals(0.0, unknownCost, 0.00001);
     }
 
     @Test
     public void testMetricsCollectorEventAccumulationAndFileExport() throws Exception
     {
-        final Path auditFile = this.tempFolder.newFolder("ai-audit").toPath().resolve("session-telemetry.json");
+        final Path auditDir = this.tempFolder.resolve("ai-audit");
+        Files.createDirectories(auditDir);
+        final Path auditFile = auditDir.resolve("session-telemetry.json");
         final MetricsCollector collector = new MetricsCollector(auditFile);
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         eventBus.registerListener(collector);
@@ -92,8 +109,8 @@ public class MetricsCollectorTest
 
         // LLM call
         final LlmRequest request = new LlmRequest("System", "User", List.of(), null, 0.2, 30);
-        final TokenUsage usage = new TokenUsage(100_000, 10_000, 20_000);
-        final LlmResponse response = new LlmResponse("{\"action\":\"CLICK\"}", usage, "gemini-1.5-flash");
+        final TokenUsage usage = new TokenUsage(100_000, 10_000, 130_000, 20_000);
+        final LlmResponse response = new LlmResponse("{\"action\":\"CLICK\"}", usage, "gemini-3.5-flash-lite");
 
         eventBus.dispatch(new LlmRequestSentEvent(request, "ACTION_EXTRACTION"));
         eventBus.dispatch(new LlmResponseReceivedEvent(request, response, 450, "ACTION_EXTRACTION"));

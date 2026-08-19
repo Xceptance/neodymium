@@ -81,12 +81,17 @@ public class ScreenshotWriter {
 
     public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot, boolean attach, boolean forceFullPage)
             throws IOException {
+        return doScreenshot(filename, pathname, didSelenideScreenshot, attach, forceFullPage, false);
+    }
+
+    public static String doScreenshot(String filename, String pathname, boolean didSelenideScreenshot, boolean attach, boolean forceFullPage, boolean cleanScreenshot)
+            throws IOException {
         String base64Image = null;
 
         // do viewport first otherwise the screen may be moved
         // viewport: !didSelenideScreenshot && enableViewportScreenshot
         if (!forceFullPage && !didSelenideScreenshot && Neodymium.configuration().enableViewportScreenshot()) {
-            String vpBase64 = takeScreenshot(filename, pathname, Capture.VIEWPORT, attach);
+            String vpBase64 = takeScreenshot(filename, pathname, Capture.VIEWPORT, attach, cleanScreenshot);
             if (vpBase64 != null) {
                 base64Image = vpBase64;
             }
@@ -95,7 +100,7 @@ public class ScreenshotWriter {
         // full page logic block
         if (forceFullPage || (Neodymium.configuration().enableAdvancedScreenShots()
                 && Neodymium.configuration().enableFullPageCapture())) {
-            String fpBase64 = takeScreenshot(filename, pathname, Capture.FULL, attach);
+            String fpBase64 = takeScreenshot(filename, pathname, Capture.FULL, attach, cleanScreenshot);
             if (fpBase64 != null) {
                 base64Image = fpBase64;
             }
@@ -105,6 +110,11 @@ public class ScreenshotWriter {
     }
 
     private static String takeScreenshot(String filename, String pathname, Capture captureMode, boolean attach)
+            throws IOException {
+        return takeScreenshot(filename, pathname, captureMode, attach, false);
+    }
+
+    private static String takeScreenshot(String filename, String pathname, Capture captureMode, boolean attach, boolean cleanScreenshot)
             throws IOException {
         // If no driver is available, we cannot take a screenshot
         if (!Neodymium.hasDriver()) {
@@ -144,7 +154,7 @@ public class ScreenshotWriter {
             File outputfile = new File(imagePath);
 
             // Logic for highlighting/blurring
-            if (Capture.FULL.equals(captureMode) && (highlightViewPort() || blurFullPageScreenshot())) {
+            if (!cleanScreenshot && Capture.FULL.equals(captureMode) && (highlightViewPort() || blurFullPageScreenshot())) {
                 double devicePixelRatio = Double.parseDouble(
                         ((JavascriptExecutor) driver).executeScript("return window.devicePixelRatio") + "");
                 int offsetY = (int) (Double.parseDouble(((JavascriptExecutor) driver)
@@ -174,7 +184,7 @@ public class ScreenshotWriter {
                 }
             }
 
-            if (Neodymium.configuration().enableHighlightLastElement() && Neodymium.hasLastUsedElement()) {
+            if (!cleanScreenshot && Neodymium.configuration().enableHighlightLastElement() && Neodymium.hasLastUsedElement()) {
                 WebElement lastUsedElement = Neodymium.getLastUsedElement();
                 if (lastUsedElement != null) {
                     try {
@@ -232,9 +242,9 @@ public class ScreenshotWriter {
         devTools.createSessionIfThereIsNotOne(devtoolsDriver.getWindowHandle());
 
         long fullWidth = (long) devtoolsDriver.executeScript(
-                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, document.body.offsetWidth, document.documentElement.offsetWidth, document.body.clientWidth, document.documentElement.clientWidth)");
+                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, window.innerWidth, window.outerWidth)");
         long fullHeight = (long) devtoolsDriver.executeScript(
-                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight, document.body.clientHeight, document.documentElement.clientHeight)");
+                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight)");
 
         long viewWidth = (long) devtoolsDriver.executeScript("return window.innerWidth");
         long viewHeight = (long) devtoolsDriver.executeScript("return window.innerHeight");
@@ -257,9 +267,9 @@ public class ScreenshotWriter {
             WD cdpDriver,
             OutputType<ResultType> outputType) {
         long fullWidth = (long) cdpDriver.executeScript(
-                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, document.body.offsetWidth, document.documentElement.offsetWidth, document.body.clientWidth, document.documentElement.clientWidth)");
+                "return Math.max(document.body.scrollWidth, document.documentElement.scrollWidth, window.innerWidth, window.outerWidth)");
         long fullHeight = (long) cdpDriver.executeScript(
-                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight, document.body.clientHeight, document.documentElement.clientHeight)");
+                "return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight)");
 
         long viewWidth = (long) cdpDriver.executeScript("return window.innerWidth");
         long viewHeight = (long) cdpDriver.executeScript("return window.innerHeight");

@@ -521,6 +521,75 @@ public final class AiConfiguration
         return getBoolean("neodymium.ai.judge.enabled", false);
     }
 
+    /**
+     * Checks if multilingual prompt guidance is enabled.
+     *
+     * @return true if neodymium.ai.multilingual is set to true (default: false)
+     */
+    public boolean isMultilingual()
+    {
+        return getBoolean("neodymium.ai.multilingual", false);
+    }
+
+    /**
+     * Checks if replay execution should respect recorded delays and pacing.
+     *
+     * @return true if neodymium.ai.replay.useRecordedDelays is set to true (default: false)
+     */
+    public boolean isUseRecordedDelays()
+    {
+        return getBoolean("neodymium.ai.replay.useRecordedDelays", false);
+    }
+
+    /**
+     * Returns the speed scaling multiplier applied to recorded delays during replay.
+     * For example, 1.0 is real-time, 0.5 is 2x speed, 2.0 is half speed.
+     *
+     * @return the delay scale factor (default: 1.0)
+     */
+    public double getReplayDelayScale()
+    {
+        return getDouble("neodymium.ai.replay.delayScale", 1.0);
+    }
+    /**
+     * Returns the minimum structural similarity index (SSIM) score required for visual assertion matches.
+     *
+     * @return minimum SSIM score threshold (default: 0.99)
+     */
+    public double getVisualSsimMinScore()
+    {
+        return getDouble("neodymium.ai.ssim.minScore", 0.99);
+    }
+
+    /**
+     * Returns the polling interval in milliseconds between consecutive frame captures during visual stability detection.
+     *
+     * @return interval in milliseconds (default: 1000L / 1 second)
+     */
+    public long getVisualStabilityIntervalMs()
+    {
+        return getLong("neodymium.ai.visual.stabilityIntervalMs", 1000L);
+    }
+
+    /**
+     * Returns the maximum number of attempts allowed for temporal frame-to-frame visual stability settling.
+     *
+     * @return maximum settling attempts (default: 5)
+     */
+    public int getVisualStabilityMaxAttempts()
+    {
+        return getInt("neodymium.ai.visual.stabilityMaxAttempts", 5);
+    }
+
+    /**
+     * Returns the minimum inter-frame SSIM score required to consider the SUT visually quiescent/settled.
+     *
+     * @return stability threshold (default: 0.999)
+     */
+    public double getVisualStabilityThreshold()
+    {
+        return getDouble("neodymium.ai.visual.stabilityThreshold", 0.999);
+    }
 
     /**
      * Resolves the execution mode for the LLM Quality Judge.
@@ -672,5 +741,43 @@ public final class AiConfiguration
     public int getTokenBudgetOutput()
     {
         return getInt("neodymium.ai.tokenBudget.output", -1);
+    }
+
+    /**
+     * Checks if preliminary disk reporting is enabled for test runs.
+     * Default is true.
+     *
+     * @return true if preliminary disk report listener is enabled, false otherwise
+     */
+    public boolean isDiskReportEnabled()
+    {
+        return getBoolean("neodymium.ai.report.disk.enabled", true);
+    }
+
+    /**
+     * Resolves the target directory path where preliminary disk reports are stored.
+     * Default is "target/ai-reports".
+     *
+     * @return disk report target directory path
+     */
+    public String getDiskReportDirectory()
+    {
+        return getProperty("neodymium.ai.report.disk.directory", "target/ai-reports");
+    }
+
+    /**
+     * Resolves the output formats for preliminary disk reporting.
+     * Default is "ALL" (generates HTML, Markdown, and JSON).
+     *
+     * @return comma-delimited or keyword format string
+     */
+    public String getDiskReportFormat()
+    {
+        final String primary = getProperty("neodymium.ai.report.disk.format", null);
+        if (primary != null && !primary.isBlank())
+        {
+            return primary;
+        }
+        return getProperty("neodymium.ai.report.disk.formats", "ALL");
     }
 }

@@ -24,16 +24,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.client.SutAttachment;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
+import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
+import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.session.AiSession;
 
 /**
@@ -105,5 +113,158 @@ public class ExecuteActionsStepTest
 
         assertNotNull(context);
         assertEquals(actions, context.getTransientData().get("KEY_CURRENT_STEP_ACTIONS"));
+    }
+
+    /**
+     * Verifies that mapping and executing a step in REPLAY_STRICT mode throws ConclusiveFailureException
+     * when the step has no recorded actions and is not a visual/composite step.
+     */
+    @Test
+    public void testReplayStrictThrowsWhenStepHasNoRecordedActions()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new org.neodymium.ai.prompt.ActionExtractionPrompt());
+
+        final org.neodymium.ai.model.PlaybookStep emptyStep = new org.neodymium.ai.model.PlaybookStep();
+        emptyStep.setInstruction("Click the checkout button");
+
+        final org.neodymium.ai.pipeline.PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(emptyStep, session, context);
+
+        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () -> {
+            pipelineStep.execute(context);
+            // Execute any pushed sequence steps
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(ex.getMessage().contains("No recorded actions found for step"));
+    }
+
+    @Test
+    public void testReplayStrictSucceedsWhenRecordedStepCompletedWithZeroActions() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new org.neodymium.ai.prompt.ActionExtractionPrompt());
+
+        final org.neodymium.ai.model.PlaybookStep recordedStep = new org.neodymium.ai.model.PlaybookStep();
+        recordedStep.setInstruction("When this string '' is not empty, enter '' as state.");
+        recordedStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+
+        final org.neodymium.ai.pipeline.PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, context);
+
+        // Must succeed without throwing ConclusiveFailureException
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS, recordedStep.getStatus());
+    }
+
+    @Test
+    public void testExecuteActionsInscribesTargetFramework() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING);
+
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep();
+        step.setInstruction("Click submit");
+        context.getTransientData().put("KEY_CURRENT_PLAYBOOK_STEP", step);
+
+        final List<Action> actions = List.of(
+            new Action("CLICK", "#submit-btn", null, "Click submit", "Reason")
+        );
+        context.getTransientData().put("KEY_CURRENT_STEP_ACTIONS", actions);
+
+        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
+        executeStep.execute(context);
+
+        assertEquals("SELENIUM_SELENIDE", step.getTargetFramework());
+    }
+
+    @Test
+    public void testVisualStepExecutionDispatchesStateCapturedEvent() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final String base64Png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", base64Png);
+        final MockSutState visualState = new MockSutState("<html><body>Visual Layout</body></html>", List.of(screenshot), "hash-vis-1");
+        executor.enqueueState(visualState);
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        // 1. PESAP response predicting VISUAL context
+        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
+        // 2. Action extraction response returning a NONE action (pure visual verification passing)
+        mockProvider.addResponse(new LlmResponse("[{\"action\": \"NONE\", \"target\": \"\", \"value\": \"Visual layout verified\"}]", new TokenUsage(200, 30, 230, 0), "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AtomicBoolean stateCapturedReceived = new AtomicBoolean(false);
+        eventBus.registerListener(event -> {
+            if (event instanceof StateCapturedEvent sce)
+            {
+                if (sce.getState() != null && sce.getState().getAttachments() != null && !sce.getState().getAttachments().isEmpty())
+                {
+                    stateCapturedReceived.set(true);
+                }
+            }
+        });
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.LLM_RECORDING);
+
+        final PlaybookStep visualStep = new PlaybookStep();
+        visualStep.setInstruction("There are data input forms on the left and order summary on the right (visual).");
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertTrue(stateCapturedReceived.get(), "StateCapturedEvent with screenshot attachment must be dispatched during visual step execution");
     }
 }

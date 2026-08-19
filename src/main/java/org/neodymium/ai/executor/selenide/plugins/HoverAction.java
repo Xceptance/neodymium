@@ -49,7 +49,7 @@ public final class HoverAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            SelenideElementFinder.findElement(action.getTarget()).hover();
+            SelenideElementFinder.findElement(action).hover();
         }
     }
 }

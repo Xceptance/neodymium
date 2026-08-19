@@ -44,7 +44,6 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
-import org.neodymium.ai.client.CachingLlmProvider;
 import org.neodymium.ai.client.InMemoryLlmCache;
 import org.neodymium.ai.client.LlmCacheHelper;
 import org.neodymium.ai.client.LlmRegistry;
@@ -813,40 +812,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else
                 {
-                    boolean yamlExists = false;
-                    if (playbookPath != null)
-                    {
-                        try (final java.io.InputStream in = manager.read(playbookPath))
-                        {
-                            if (in != null)
-                            {
-                                yamlExists = true;
-                            }
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
-                    }
-
-                    if (yamlExists)
-                    {
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn(
-                            "⚠️ No companion recorded JSON file found for '{}'. Falling back to YAML playbook '{}'.",
-                            playbookPath, playbookPath);
-                        resolvedPlaybookPath = playbookPath;
-                    }
-                    else
-                    {
-                        final String msg = String.format(
-                            "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s",
-                            this.mode,
-                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
-                            method != null ? method.getName() : "unknownMethod",
-                            String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
-                        );
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
-                        throw new java.io.FileNotFoundException(msg);
-                    }
+                    final String msg = String.format(
+                        "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s\n"
+                        + "Please run the live recording test first to generate the recording.",
+                        this.mode,
+                        testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                        method != null ? method.getName() : "unknownMethod",
+                        String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
+                    );
+                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
+                    throw new java.io.FileNotFoundException(msg);
                 }
             }
             else if (this.mode.isLive())
@@ -1014,9 +989,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            if (playbook.getSystemPromptAddons() != null)
+            if (playbook.getPromptAddons() != null)
             {
-                executionContext.getTransientData().put("playbook.systemPromptAddons", playbook.getSystemPromptAddons());
+                executionContext.getTransientData().put("playbook.promptAddons", playbook.getPromptAddons());
             }
 
             executionContext.getTransientData().put("playbook.resolvedPath", resolvedPlaybookPath);
@@ -1026,7 +1001,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_PARSER, parser);
             executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, mode);
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId != null ? this.datasetId : "default");
-            executionContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.executor.selenide.ContextLevel.MINIMAL);
+            executionContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.model.ContextLevel.MINIMAL);
             executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
             executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
             executionContext.getTransientData().put("junit.testInstance", context.getRequiredTestInstance());

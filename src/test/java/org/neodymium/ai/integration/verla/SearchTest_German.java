@@ -41,6 +41,7 @@ import org.neodymium.util.Neodymium;
  */
 @Browser("Chrome_1500x1000_headless")
 @NeodymiumAiTest
+@AiPlaybook(value = "verla/SearchTest_German.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class SearchTest_German extends BaseAiTest
 {
@@ -51,6 +52,7 @@ public final class SearchTest_German extends BaseAiTest
     public void setup()
     {
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 
     /**

@@ -3,6 +3,15 @@
     {
       "code": "US",
       "name": "United States",
+      "names": {
+        "en": "United States",
+        "fr": "États-Unis",
+        "de": "Vereinigte Staaten",
+        "pl": "Stany Zjednoczone",
+        "se": "USA",
+        "fi": "Yhdysvallat",
+        "ja": "アメリカ合衆国"
+      },
       "locale": "en",
       "currency": "USD",
       "symbol": "$",
@@ -12,6 +21,15 @@
     {
       "code": "UK",
       "name": "United Kingdom",
+      "names": {
+        "en": "United Kingdom",
+        "fr": "Royaume-Uni",
+        "de": "Vereinigtes Königreich",
+        "pl": "Wielka Brytania",
+        "se": "Storbritannien",
+        "fi": "Yhdistynyt kuningaskunta",
+        "ja": "イギリス"
+      },
       "locale": "en",
       "currency": "GBP",
       "symbol": "£",
@@ -21,6 +39,15 @@
     {
       "code": "CA_EN",
       "name": "Canada (EN)",
+      "names": {
+        "en": "Canada (EN)",
+        "fr": "Canada (EN)",
+        "de": "Kanada (EN)",
+        "pl": "Kanada (EN)",
+        "se": "Kanada (EN)",
+        "fi": "Kanada (EN)",
+        "ja": "カナダ (EN)"
+      },
       "locale": "en",
       "currency": "CAD",
       "symbol": "CAD $",
@@ -30,6 +57,15 @@
     {
       "code": "CA_FR",
       "name": "Canada (FR)",
+      "names": {
+        "en": "Canada (FR)",
+        "fr": "Canada (FR)",
+        "de": "Kanada (FR)",
+        "pl": "Kanada (FR)",
+        "se": "Kanada (FR)",
+        "fi": "Kanada (FR)",
+        "ja": "カナダ (FR)"
+      },
       "locale": "fr",
       "currency": "CAD",
       "symbol": "CAD $",
@@ -39,6 +75,15 @@
     {
       "code": "DE",
       "name": "Germany",
+      "names": {
+        "en": "Germany",
+        "fr": "Allemagne",
+        "de": "Deutschland",
+        "pl": "Niemcy",
+        "se": "Tyskland",
+        "fi": "Saksa",
+        "ja": "ドイツ"
+      },
       "locale": "de",
       "currency": "EUR",
       "symbol": "€",
@@ -48,6 +93,15 @@
     {
       "code": "PL",
       "name": "Poland",
+      "names": {
+        "en": "Poland",
+        "fr": "Pologne",
+        "de": "Polen",
+        "pl": "Polska",
+        "se": "Polen",
+        "fi": "Puola",
+        "ja": "ポーランド"
+      },
       "locale": "pl",
       "currency": "PLN",
       "symbol": "zł",
@@ -57,6 +111,15 @@
     {
       "code": "SE",
       "name": "Sweden",
+      "names": {
+        "en": "Sweden",
+        "fr": "Suède",
+        "de": "Schweden",
+        "pl": "Szwecja",
+        "se": "Sverige",
+        "fi": "Ruotsi",
+        "ja": "スウェーデン"
+      },
       "locale": "se",
       "currency": "SEK",
       "symbol": "kr",
@@ -66,6 +129,15 @@
     {
       "code": "FI",
       "name": "Finland",
+      "names": {
+        "en": "Finland",
+        "fr": "Finlande",
+        "de": "Finnland",
+        "pl": "Finlandia",
+        "se": "Finland",
+        "fi": "Suomi",
+        "ja": "フィンランド"
+      },
       "locale": "fi",
       "currency": "EUR",
       "symbol": "€",
@@ -75,6 +147,15 @@
     {
       "code": "JP",
       "name": "Japan",
+      "names": {
+        "en": "Japan",
+        "fr": "Japon",
+        "de": "Japan",
+        "pl": "Japonia",
+        "se": "Japan",
+        "fi": "Japani",
+        "ja": "日本"
+      },
       "locale": "ja",
       "currency": "JPY",
       "symbol": "¥",
