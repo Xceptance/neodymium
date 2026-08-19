@@ -20,7 +20,7 @@ package org.neodymium.ai.util;
 
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 
 /**

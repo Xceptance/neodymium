@@ -237,6 +237,7 @@ public final class PlaybookRecording
         final Integer verifCalls = (Integer) this.metadata.getOrDefault("verificationCallCount", 0);
         final Integer pesapCalls = (Integer) this.metadata.getOrDefault("pesapCallCount", 0);
         final Integer judgeCalls = (Integer) this.metadata.getOrDefault("judgeCallCount", 0);
+        final Integer rcaCalls = (Integer) this.metadata.getOrDefault("rcaCallCount", 0);
         final Integer replays = (Integer) this.metadata.getOrDefault("totalReplays", 0);
         final Integer cacheHits = (Integer) this.metadata.getOrDefault("internalCacheHits", 0);
         final Integer escalations = (Integer) this.metadata.getOrDefault("totalEscalations", 0);
@@ -251,6 +252,7 @@ public final class PlaybookRecording
             verifCalls != null ? verifCalls : 0,
             pesapCalls != null ? pesapCalls : 0,
             judgeCalls != null ? judgeCalls : 0,
+            rcaCalls != null ? rcaCalls : 0,
             getStepCount(),
             (int) getHealedStepCount(),
             (int) getSoftFailedStepCount(),

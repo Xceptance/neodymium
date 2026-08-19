@@ -69,6 +69,47 @@ public class ActionTest
     }
 
     @Test
+    public void testIsRegexFullRoundTripSerialization() throws Exception
+    {
+        final Action original = new Action("ASSERT", "#order-summary", List.of("V-[0-9]+-US"),
+                "Verify order pattern", "Regex assertion on order number", true);
+
+        final String serializedJson = this.mapper.writeValueAsString(original);
+        // Verify that the serialized JSON contains the exact key "isRegex": true (not "regex": true)
+        assertTrue(serializedJson.contains("\"isRegex\":true") || serializedJson.contains("\"isRegex\" : true"),
+                "Serialized JSON must use 'isRegex' property name, but was: " + serializedJson);
+        assertFalse(serializedJson.contains("\"regex\":true") || serializedJson.contains("\"regex\" : true"),
+                "Serialized JSON should not contain legacy/JavaBean 'regex' property name: " + serializedJson);
+
+        final Action deserialized = this.mapper.readValue(serializedJson, Action.class);
+        assertEquals("ASSERT", deserialized.getType());
+        assertEquals("#order-summary", deserialized.getTarget());
+        assertEquals("V-[0-9]+-US", deserialized.getValue());
+        assertTrue(deserialized.isRegex());
+    }
+
+    @Test
+    public void testIsRegexAliasCompatibility() throws Exception
+    {
+        // Support legacy or alternative JSON payloads containing "regex": true
+        final String legacyJson = """
+            {
+              "type": "ASSERT",
+              "target": "[data-ai='xcuulzml']",
+              "value": "V-[0-9]+-US",
+              "regex": true,
+              "reasoning": "Legacy property key"
+            }
+            """;
+
+        final Action action = this.mapper.readValue(legacyJson, Action.class);
+        assertEquals("ASSERT", action.getType());
+        assertEquals("[data-ai='xcuulzml']", action.getTarget());
+        assertEquals("V-[0-9]+-US", action.getValue());
+        assertTrue(action.isRegex(), "Action should recognize 'regex' as an alias for 'isRegex'");
+    }
+
+    @Test
     public void testDurationAndDelayFields() throws Exception
     {
         final Action action = new Action("CLICK", "#submit", "Click submit");

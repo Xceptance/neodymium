@@ -28,8 +28,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
-import org.neodymium.ai.executor.selenide.ContextLevel;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.ToLevelEscalationException;
@@ -67,7 +68,7 @@ public final class ActionExtractionPromptTest
         assertTrue(userMessage.contains("## Execution Context"));
         assertTrue(userMessage.contains("[INSTRUCTION]      Verify free gift item"));
         assertTrue(userMessage.contains("[CURRENT_LEVEL]    RICH"));
-        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL_RICH"));
+        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL_LEAN"));
     }
 
     /**
@@ -148,8 +149,8 @@ public final class ActionExtractionPromptTest
             prompt.parseResponse(rawJson, context);
         });
 
-        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL_RICH
-        assertEquals("VISUAL_RICH", ex.getTargetLevel());
+        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL_LEAN
+        assertEquals("VISUAL_LEAN", ex.getTargetLevel());
     }
 
     /**
@@ -239,5 +240,65 @@ public final class ActionExtractionPromptTest
         {
             assertFalse(systemMsg.contains("## Candidate Locators & Ambiguity Evaluation"), "System prompt must omit candidate locators rule when judge is disabled.");
         }
+    }
+
+    /**
+     * Verifies that parseResponse deserializes domFeatureVector if present in action JSON.
+     */
+    @Test
+    public void testParseResponseWithDomFeatureVector() throws Exception
+    {
+        final String rawJson = """
+            {
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#apply-btn",
+                  "value": "",
+                  "reasoning": "Click Apply button",
+                  "domFeatureVector": {
+                    "tag": "button",
+                    "text": "Apply",
+                    "classes": ["btn", "btn-primary"],
+                    "attributes": {"id": "apply-btn", "type": "submit"},
+                    "role": "button",
+                    "accessibleName": "Apply",
+                    "parentTag": "form",
+                    "siblingIndex": 3,
+                    "x": 100,
+                    "y": 200,
+                    "width": 80,
+                    "height": 30
+                  }
+                }
+              ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+        final Action action = actions.get(0);
+        assertEquals("CLICK", action.getType());
+        assertEquals("#apply-btn", action.getTarget());
+
+        final DomFeatureVector vector = action.getDomFeatureVector();
+        assertNotNull(vector, "DomFeatureVector must be deserialized into action.");
+        assertEquals("button", vector.getTag());
+        assertEquals("Apply", vector.getText());
+        assertEquals("button", vector.getRole());
+        assertEquals("Apply", vector.getAccessibleName());
+        assertEquals("form", vector.getParentTag());
+        assertEquals(3, vector.getSiblingIndex());
+        assertEquals(100, vector.getX());
+        assertEquals(200, vector.getY());
+        assertEquals(80, vector.getWidth());
+        assertEquals(30, vector.getHeight());
+        assertTrue(vector.getClasses().contains("btn-primary"));
+        assertEquals("submit", vector.getAttributes().get("type"));
+        assertTrue(vector.toDetailString().contains("tag=<button>"));
     }
 }

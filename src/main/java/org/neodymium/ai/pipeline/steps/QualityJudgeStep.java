@@ -26,7 +26,10 @@ import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
@@ -99,20 +102,32 @@ public final class QualityJudgeStep implements PipelineStep
         if ("ON_AMBIGUITY".equals(judgeMode) && !isRetry)
         {
             final List<LocatorCandidate> candidates = proposedAction.getCandidateLocators();
-            if (candidates == null || candidates.size() < 2)
+            if (candidates == null || candidates.isEmpty())
             {
-                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY but only {} candidate(s) found (requires at least 2). Skipping.",
-                    candidates != null ? candidates.size() : 0);
+                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY but no candidates found. Skipping.");
                 return;
             }
             final double score1 = candidates.get(0).getScore();
-            final double score2 = candidates.get(1).getScore();
-            if ((score1 - score2) >= 0.15)
+            if (score1 < 0.85)
             {
-                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Clear candidate winner found (diff: {}). Skipping.", String.format("%.2f", score1 - score2));
+                LOGGER.info("⚖️ Quality Judge triggered due to low top candidate score ({} < 0.85).", String.format("%.2f", score1));
+            }
+            else if (candidates.size() >= 2)
+            {
+                final double score2 = candidates.get(1).getScore();
+                if ((score1 - score2) >= 0.15)
+                {
+                    LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Clear high-confidence candidate winner found (score: {}, diff: {}). Skipping.",
+                        String.format("%.2f", score1), String.format("%.2f", score1 - score2));
+                    return;
+                }
+                LOGGER.info("⚖️ Quality Judge triggered due to ambiguous top candidate scores (diff: {}).", String.format("%.2f", score1 - score2));
+            }
+            else
+            {
+                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. High confidence single candidate found (score: {}). Skipping.", String.format("%.2f", score1));
                 return;
             }
-            LOGGER.info("⚖️ Quality Judge triggered due to ambiguous top candidate scores (diff: {}).", String.format("%.2f", score1 - score2));
         }
 
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
@@ -154,13 +169,13 @@ public final class QualityJudgeStep implements PipelineStep
         {
             final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
             LOGGER.debug("💬 [Quality Judge] Calling LLM provider '{}'", provider.getClass().getSimpleName());
-            session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmRequestSentEvent(request, "JUDGE"));
+            session.getEventBus().dispatch(new LlmRequestSentEvent(request, "JUDGE"));
             final long startTime = System.currentTimeMillis();
 
             final LlmResponse response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;
 
-            session.getEventBus().dispatch(new org.neodymium.ai.event.llm.LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
+            session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
             LOGGER.debug("Quality Judge LLM response received in {} ms (length: {} chars)",
                     durationMs, response != null && response.content() != null ? response.content().length() : 0);
 
@@ -174,13 +189,13 @@ public final class QualityJudgeStep implements PipelineStep
             final Integer judgeCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0);
             context.getTransientData().put(ExecutionContext.KEY_JUDGE_CALL_COUNT, judgeCalls + 1);
 
-            final org.neodymium.ai.client.TokenUsage newUsage = response != null ? response.tokenUsage() : null;
+            final TokenUsage newUsage = response != null ? response.tokenUsage() : null;
             if (newUsage != null)
             {
-                final org.neodymium.ai.client.TokenUsage existing = (org.neodymium.ai.client.TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+                final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
                 if (existing != null)
                 {
-                    context.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new org.neodymium.ai.client.TokenUsage(
+                    context.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new TokenUsage(
                             existing.inputTokenCount() + newUsage.inputTokenCount(),
                             existing.outputTokenCount() + newUsage.outputTokenCount(),
                             existing.totalTokenCount() + newUsage.totalTokenCount()

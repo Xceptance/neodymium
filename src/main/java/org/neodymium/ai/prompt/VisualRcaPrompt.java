@@ -55,7 +55,8 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
-        return SystemPromptAddonHelper.appendAddon("You are an expert QA visual debugger. You are analyzing a screenshot of a failed System Under Test (SUT) web page. Explain in clear natural language why the action/test step failed (e.g., if there is a blocking cookies popup, overlapping elements, or validation error on the page). Be concise.", "rca", context);
+        final String basePrompt = AiAgentPrompts.getVisualRcaPrompt();
+        return SystemPromptAddonHelper.appendAddon(basePrompt, "rca", context);
     }
 
     @Override
@@ -63,9 +64,7 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     {
         return String.format("""
             Failed Instruction: %s
-            Failure Details/Exception: %s
-
-            Examine the screenshot of the SUT page attached to this request and output the brief natural language explanation of the visual root cause.
+            Failure Details: %s
             """,
             this.failedInstruction != null ? this.failedInstruction : "(Unknown instruction)",
             this.errorMessage != null ? this.errorMessage : "(No error message)"

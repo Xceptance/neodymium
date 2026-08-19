@@ -23,7 +23,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 
 /**
  * Annotation specifying context level (e.g. FULL, LEAN, VISUAL, MINIMAL) for Neodymium AI tests.

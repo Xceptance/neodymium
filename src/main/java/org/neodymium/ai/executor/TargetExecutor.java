@@ -38,7 +38,7 @@ public interface TargetExecutor
      * @return the captured SUT state
      * @throws IOException if state capture fails
      */
-    SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException;
+    SutState captureState(final org.neodymium.ai.model.ContextLevel level) throws IOException;
 
     /**
      * Captures the current state of the SUT with optional full-page screenshot override.
@@ -48,7 +48,7 @@ public interface TargetExecutor
      * @return the captured SUT state
      * @throws IOException if state capture fails
      */
-    default SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level, final boolean isFullPage) throws IOException
+    default SutState captureState(final org.neodymium.ai.model.ContextLevel level, final boolean isFullPage) throws IOException
     {
         return captureState(level);
     }
@@ -61,7 +61,7 @@ public interface TargetExecutor
      */
     default SutState captureState() throws IOException
     {
-        return captureState(org.neodymium.ai.executor.selenide.ContextLevel.LEAN);
+        return captureState(org.neodymium.ai.model.ContextLevel.LEAN);
     }
 
     /**
@@ -87,5 +87,15 @@ public interface TargetExecutor
     default boolean supportsLocatorImprovement()
     {
         return false;
+    }
+
+    /**
+     * Retrieves the framework name of this executor (e.g. "SELENIUM_SELENIDE", "REST", "CLI").
+     *
+     * @return the framework name string
+     */
+    default String getFrameworkName()
+    {
+        return "SELENIUM_SELENIDE";
     }
 }

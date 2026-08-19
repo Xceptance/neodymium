@@ -1163,6 +1163,7 @@ public final class EmbeddedHtmlServer
                 
                 if ("snippets/products".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateProductFilter();
                     final String reqUri = exchange.getRequestURI().toString();
                     final String cat = getQueryParam(reqUri, "category");
                     final String sort = getQueryParam(reqUri, "sort");
@@ -1280,6 +1281,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/add".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartAdd();
                     String productId = params.get("productId");
                     final String size = params.get("size");
                     if (productId != null)
@@ -1297,6 +1299,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/update".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartUpdate();
                     final String productId = params.get("productId");
                     final int qty = Integer.parseInt(params.getOrDefault("quantity", "0"));
                     if (productId != null)
@@ -1315,6 +1318,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/remove".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartRemove();
                     final String productId = params.get("productId");
                     if (productId != null)
                     {
@@ -1332,6 +1336,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/coupon".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartCoupon();
                     final String coupon = params.getOrDefault("couponCode", "").trim();
                     if (coupon.isEmpty())
                     {
@@ -1355,11 +1360,13 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/dropdown".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateCartDropdown();
                     sendResponse(exchange, 200, "text/html", getCartDropdownHtml(cart, trans, activeCountry, qualitySuffix));
                     return;
                 }
                 else if ("search/suggest".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateSearchSuggest();
                     final String query = params.getOrDefault("q", "").trim().toLowerCase();
                     if (query.isEmpty())
                     {
@@ -1428,6 +1435,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("auth/login".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateAuthLogin();
                     final String email = params.getOrDefault("email", "").trim();
                     final String password = params.getOrDefault("password", "");
                     
@@ -1457,6 +1465,7 @@ public final class EmbeddedHtmlServer
                         sendResponse(exchange, 405, "text/plain", "Method Not Allowed: Registration requires PUT");
                         return;
                     }
+                    VerlaConfiguration.getInstance().simulateAuthRegister();
                     if (LOG.isDebugEnabled())
                     {
                         LOG.debug("Processing registration: email={}", params.get("email"));
@@ -1594,15 +1603,8 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("checkout/purchase".equals(apiMethod))
                 {
-                    // Simulate server response time deterministically
-                    try
-                    {
-                        Thread.sleep(50L);
-                    }
-                    catch (final InterruptedException e)
-                    {
-                        Thread.currentThread().interrupt();
-                    }
+                    // Simulate payment gateway and order processing latency
+                    VerlaConfiguration.getInstance().simulatePurchase();
 
                     // Checkout processing logic
                     final String firstName = params.getOrDefault("firstName", "").trim();
@@ -1748,6 +1750,7 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("order/lookup".equals(apiMethod))
                 {
+                    VerlaConfiguration.getInstance().simulateOrderLookup();
                     final String orderNumber = params.getOrDefault("orderNumber", "").trim();
                     final String zipCode = params.getOrDefault("zipCode", "").trim();
                     
@@ -1829,6 +1832,11 @@ public final class EmbeddedHtmlServer
             else
             {
                 pageResource = pagePath;
+            }
+
+            if ("plp.html".equals(pageResource) && exchange.getRequestURI().getQuery() != null && exchange.getRequestURI().getQuery().contains("q="))
+            {
+                VerlaConfiguration.getInstance().simulateSearchQuery();
             }
 
             final String templateHtml = renderTemplate(qualitySuffix, pageResource, new HashMap<>(), activeCountry, trans, currentUser, cart, exchange.getRequestURI().toString(), isHtmx, hxTarget, isPwaRouter);
@@ -3085,7 +3093,7 @@ public final class EmbeddedHtmlServer
 
         final StringBuilder sb = new StringBuilder();
         sb.append("<div id=\"cart-content-wrapper\">")
-          .append("  <h1 style=\"font-family: var(--font-family-serif); font-size: 32px; font-weight: 600; margin-bottom: 30px;\">").append(trans.getOrDefault("cart", "Cart")).append("</h1>")
+          .append("  <h1 class=\"cart-page-title\" style=\"font-family: var(--font-family-serif); font-size: 32px; font-weight: 600; margin-bottom: 30px;\">").append(trans.getOrDefault("cart", "Cart")).append("</h1>")
           .append("  <div class=\"cart-container\">")
           .append("    <div class=\"cart-main\">")
           .append("      <div class=\"cart-table-wrapper\">")
@@ -3132,24 +3140,24 @@ public final class EmbeddedHtmlServer
             }
             final String encKey = tempKey;
 
-            sb.append("        <tr style=\"border-bottom: 1px solid var(--color-border);\">")
+            sb.append("        <tr class=\"cart-item-row\" data-product-id=\"").append(p.id).append("\" style=\"border-bottom: 1px solid var(--color-border);\">")
               .append("          <td style=\"padding: 20px 0; display: flex; align-items: center; gap: 16px;\">")
               .append("            <div style=\"width: 60px; height: 60px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); display: flex; align-items: center; justify-content: center;\">")
               .append("              <svg viewBox=\"0 0 100 100\" style=\"width:70%;height:70%;color:var(--color-accent);\">").append(p.svgPath).append("</svg>")
               .append("            </div>")
               .append("            <div>")
-              .append("              <h4 style=\"font-size: 15px; font-weight: 500;\">").append(displayName).append("</h4>")
-              .append("              <div style=\"font-size: 13px; color: var(--color-text-secondary);\">").append(formatPrice(price, country)).append("</div>")
+              .append("              <h4 class=\"product-title cart-product-title\" style=\"font-size: 15px; font-weight: 500;\">").append(displayName).append("</h4>")
+              .append("              <div class=\"cart-item-price\" style=\"font-size: 13px; color: var(--color-text-secondary);\">").append(formatPrice(price, country)).append("</div>")
               .append("            </div>")
               .append("          </td>")
               .append("          <td style=\"padding: 20px 0; text-align: center;\">")
-              .append("            <div style=\"display: inline-flex; align-items: center; border: 1px solid var(--color-border); border-radius: var(--border-radius);\">")
-              .append("              <button style=\"padding: 6px 12px;\" hx-post=\"api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() - 1).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">&minus;</button>")
-              .append("              <span style=\"padding: 0 12px; font-weight: 600;\">").append(entry.getValue()).append("</span>")
-              .append("              <button style=\"padding: 6px 12px;\" hx-post=\"api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() + 1).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">&plus;</button>")
+              .append("            <div class=\"cart-qty-picker\" style=\"display: inline-flex; align-items: center; border: 1px solid var(--color-border); border-radius: var(--border-radius);\">")
+              .append("              <button class=\"cart-qty-btn qty-decrease\" aria-label=\"Decrease quantity of ").append(escapeHtml(displayName)).append("\" style=\"padding: 6px 12px;\" hx-post=\"api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() - 1).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">&minus;</button>")
+              .append("              <span class=\"cart-qty-value\" style=\"padding: 0 12px; font-weight: 600;\">").append(entry.getValue()).append("</span>")
+              .append("              <button class=\"cart-qty-btn qty-increase\" aria-label=\"Increase quantity of ").append(escapeHtml(displayName)).append("\" style=\"padding: 6px 12px;\" hx-post=\"api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() + 1).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\">&plus;</button>")
               .append("            </div>")
               .append("            <div style=\"margin-top: 6px;\">")
-              .append("              <button hx-post=\"api/cart/remove?productId=").append(encKey).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" style=\"color: var(--color-error); font-size: 11px;\">").append(trans.getOrDefault("remove", "Remove")).append("</button>")
+              .append("              <button class=\"cart-remove-btn\" aria-label=\"Remove ").append(escapeHtml(displayName)).append(" from cart\" hx-post=\"api/cart/remove?productId=").append(encKey).append("\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" style=\"color: var(--color-error); font-size: 11px;\">").append(trans.getOrDefault("remove", "Remove")).append("</button>")
               .append("            </div>")
               .append("          </td>")
               .append("          <td style=\"padding: 20px 0; text-align: right; font-weight: 600;\">").append(formatPrice(rowTotal, country)).append("</td>")
@@ -3163,12 +3171,12 @@ public final class EmbeddedHtmlServer
           .append("    </div>")
           .append("  </div>")
           .append("  <div class=\"cart-sidebar\">")
-          .append("    <h3 style=\"font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;\">").append(trans.getOrDefault("orderSummary", "Order Summary")).append("</h3>")
-          .append("    <form hx-post=\"api/cart/coupon\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" style=\"margin-bottom: 24px;\">")
+          .append("    <h3 class=\"order-summary-title\" style=\"font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;\">").append(trans.getOrDefault("orderSummary", "Order Summary")).append("</h3>")
+          .append("    <form id=\"promo-code-form\" hx-post=\"api/cart/coupon\" hx-target=\"#cart-content-wrapper\" hx-swap=\"outerHTML\" style=\"margin-bottom: 24px;\">")
           .append("      <label for=\"couponCode\" class=\"form-label\" style=\"font-size:11px;\">").append(trans.getOrDefault("promoCode", "Promo Code")).append("</label>")
           .append("      <div style=\"display:flex; gap:8px;\">")
           .append("        <input type=\"text\" id=\"couponCode\" name=\"couponCode\" class=\"form-control\" placeholder=\"10p-off\" style=\"padding: 8px 12px;\" value=\"").append(cart.coupon != null ? cart.coupon : "").append("\">")
-          .append("        <button type=\"submit\" class=\"btn-secondary\" style=\"padding: 8px 16px; font-size: 11px;\">").append(trans.getOrDefault("apply", "Apply")).append("</button>")
+          .append("        <button type=\"submit\" id=\"apply-promo-btn\" class=\"btn-secondary\" style=\"padding: 8px 16px; font-size: 11px;\">").append(trans.getOrDefault("apply", "Apply")).append("</button>")
           .append("      </div>")
           .append("    </form>");
 

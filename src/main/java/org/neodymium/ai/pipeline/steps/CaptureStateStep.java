@@ -63,7 +63,7 @@ public final class CaptureStateStep implements PipelineStep
         {
             try
             {
-                final org.neodymium.ai.executor.selenide.ContextLevel level = (org.neodymium.ai.executor.selenide.ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                final org.neodymium.ai.model.ContextLevel level = (org.neodymium.ai.model.ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                 LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) BEFORE executing actions", level);
                 final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
                 final SutState state = executor.captureState(level, isFullPageReq);

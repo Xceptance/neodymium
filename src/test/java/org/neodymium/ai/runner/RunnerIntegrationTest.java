@@ -44,6 +44,8 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.MockSutState;
@@ -58,6 +60,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.steps.CallLlmStep;
 import org.neodymium.ai.pipeline.steps.CaptureStateStep;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
@@ -400,7 +403,7 @@ public final class RunnerIntegrationTest
             }
 
             @Override
-            public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level)
+            public SutState captureState(final org.neodymium.ai.model.ContextLevel level)
             {
                 return null;
             }
@@ -740,9 +743,15 @@ public final class RunnerIntegrationTest
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
         final ExecutionContext context = session.getExecutionContext();
 
-        // Collect DiagnosticErrorEvents dispatched during execution
+        // Collect events dispatched during execution
         final List<org.neodymium.ai.event.ExecutionEvent> events = new ArrayList<>();
         eventBus.registerListener(e -> events.add(e));
+
+        // Inject StepStats for the failing step
+        final StepStats stepStats = new StepStats("Click the checkout button", System.currentTimeMillis());
+        final List<StepStats> stepStatsList = new ArrayList<>();
+        stepStatsList.add(stepStats);
+        context.getTransientData().put("execution.stepStatsList", stepStatsList);
 
         // Inject a step that throws a conclusive failure
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
@@ -757,6 +766,29 @@ public final class RunnerIntegrationTest
         final boolean hasRcaEvent = events.stream()
             .anyMatch(e -> e instanceof org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent);
         assertTrue(hasRcaEvent, "A DiagnosticErrorEvent with Visual RCA should have been dispatched");
+
+        // Verify LLM request/response events were dispatched for Visual RCA
+        assertTrue(events.stream().anyMatch(e -> e instanceof LlmRequestSentEvent sent && "VISUAL_RCA".equals(sent.getCapability())));
+        assertTrue(events.stream().anyMatch(e -> e instanceof LlmResponseReceivedEvent recv && "VISUAL_RCA".equals(recv.getCapability())));
+
+        // Verify context tracking
+        assertEquals(1, context.getTransientData().get(ExecutionContext.KEY_TOTAL_LLM_CALLS));
+        assertEquals(1, context.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT));
+        final TokenUsage rcaUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
+        assertNotNull(rcaUsage);
+        assertEquals(10, rcaUsage.inputTokenCount());
+        assertEquals(10, rcaUsage.outputTokenCount());
+        assertEquals("A cookie consent popup is blocking the page content.", context.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION));
+        assertEquals("A cookie consent popup is blocking the page content.", context.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_SUMMARY));
+
+        // Verify StepStats was updated with RCA metrics
+        assertEquals(1, stepStats.getRcaCalls());
+        assertEquals(10, stepStats.getRcaInputTokens());
+        assertEquals(10, stepStats.getRcaOutputTokens());
+
+        // Verify ExecutionMetrics from session
+        assertEquals(1, session.getMetrics().getRcaCallCount());
+        assertEquals(1, session.getMetrics().getLlmCallCount());
     }
 
     /**
@@ -774,7 +806,7 @@ public final class RunnerIntegrationTest
             private boolean failed = false;
 
             @Override
-            public SutState captureState(final org.neodymium.ai.executor.selenide.ContextLevel level) throws IOException
+            public SutState captureState(final org.neodymium.ai.model.ContextLevel level) throws IOException
             {
                 return delegate.captureState(level);
             }
@@ -830,5 +862,23 @@ public final class RunnerIntegrationTest
         final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
         assertNotNull(lastState, "KEY_LAST_STATE must be populated by CaptureStateStep during replay healing");
         assertEquals("healed-hash", lastState.getContentHash());
+    }
+
+    /**
+     * Verifies that {@link StateMachineRunner#maskApiKeyHint(String)} masks API keys and variable hints
+     * correctly, retaining the prefix and at least the last 4 characters.
+     */
+    @Test
+    public void testMaskApiKeyHint()
+    {
+        assertEquals("None", StateMachineRunner.maskApiKeyHint(null));
+        assertEquals("None", StateMachineRunner.maskApiKeyHint(""));
+        assertEquals("None", StateMachineRunner.maskApiKeyHint("   "));
+        assertEquals("****", StateMachineRunner.maskApiKeyHint("abc"));
+        assertEquals("****", StateMachineRunner.maskApiKeyHint("abcd"));
+        assertEquals("1....2345", StateMachineRunner.maskApiKeyHint("12345"));
+        assertEquals("12....3456", StateMachineRunner.maskApiKeyHint("123456"));
+        assertEquals("AQ....1234", StateMachineRunner.maskApiKeyHint("AQ.secret_gemini_key_1234"));
+        assertEquals("${....KEY}", StateMachineRunner.maskApiKeyHint("${GEMINI_API_KEY}"));
     }
 }

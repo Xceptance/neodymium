@@ -32,8 +32,12 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -140,7 +144,8 @@ public final class SelenideElementFinder
                 }
             }
         }
-        return findElement(action.getTarget(), fallbacks);
+        final DomFeatureVector vector = action.getDomFeatureVector();
+        return findElement(action.getTarget(), fallbacks, vector);
     }
 
     /**
@@ -154,28 +159,38 @@ public final class SelenideElementFinder
      */
     public static SelenideElement findElement(final String target, final List<String> fallbackCandidates)
     {
-        final Set<String> candidateSet = new LinkedHashSet<>();
-        if (target != null && !target.isBlank())
-        {
-            candidateSet.add(target.trim());
-        }
-        if (fallbackCandidates != null)
-        {
-            for (final String fallback : fallbackCandidates)
-            {
-                if (fallback != null && !fallback.isBlank())
-                {
-                    candidateSet.add(fallback.trim());
-                }
-            }
-        }
+        return findElement(target, fallbackCandidates, null);
+    }
 
-        if (candidateSet.isEmpty())
+    /**
+     * Resolves and returns a {@link SelenideElement} based on target locator, fallback candidates,
+     * and optional DOM feature vector proximity scoring.
+     *
+     * @param target             the primary target locator or text content
+     * @param fallbackCandidates optional fallback candidate locators attempted in order
+     * @param recordedVector     optional recorded feature vector for proximity fallback
+     * @return the resolved {@link SelenideElement}
+     * @throws IllegalArgumentException if {@code target} is null or blank
+     */
+    public static SelenideElement findElement(
+        final String target,
+        final List<String> fallbackCandidates,
+        final DomFeatureVector recordedVector)
+    {
+        if (target == null || target.isBlank())
         {
             throw new IllegalArgumentException("Target cannot be empty");
         }
 
-        final List<String> allCandidates = new ArrayList<>(candidateSet);
+        final List<String> allCandidates = new ArrayList<>();
+        final Set<String> candidateSet = new LinkedHashSet<>();
+        candidateSet.add(target);
+        if (fallbackCandidates != null)
+        {
+            candidateSet.addAll(fallbackCandidates);
+        }
+
+        allCandidates.addAll(candidateSet);
         final long start = System.currentTimeMillis();
         final long timeoutMs = Configuration.timeout;
 
@@ -187,6 +202,27 @@ public final class SelenideElementFinder
                 if (found != null)
                 {
                     return found;
+                }
+            }
+
+            // Feature proximity matching fallback when recorded vector is available
+            if (recordedVector != null)
+            {
+                try
+                {
+                    LOG.trace("   🧬 Attempting DomFeatureVector proximity match for target '{}': {}", target, recordedVector.toSummaryString());
+                    final WebElement matchedWebElement = new PageAnalyzer().findLiveElementByFeatureVector(
+                        WebDriverRunner.getWebDriver(),
+                        recordedVector,
+                        0.80);
+                    if (matchedWebElement != null)
+                    {
+                        LOG.trace("   ✅ Proximity match found live element for target '{}'", target);
+                        return Selenide.$(matchedWebElement);
+                    }
+                }
+                catch (final Exception ignored)
+                {
                 }
             }
 

@@ -195,11 +195,64 @@ public final class MetricsCollector implements ExecutionListener
     }
 
     /**
+     * Immutable rate specification for token cost calculations per 1,000,000 tokens.
+     *
+     * @param inputRatePerMillion cost per 1M input tokens in USD
+     * @param outputRatePerMillion cost per 1M output tokens in USD
+     * @param cachedRatePerMillion cost per 1M cached prompt tokens in USD
+     */
+    public record ModelRate(double inputRatePerMillion, double outputRatePerMillion, double cachedRatePerMillion)
+    {
+    }
+
+    /**
+     * Resolves the token price rates for a given model.
+     * Supported models: gemini-3.5-flash-lite, gemini-2.5-flash-lite, gemini-3.7-flash, gemini-3.5-flash, gemini-3.6-flash.
+     * For any unknown model, a warning is logged and {@code null} is returned.
+     *
+     * @param modelName the model identifier
+     * @return the resolved ModelRate, or {@code null} if the model is unknown
+     */
+    public static ModelRate getModelRate(final String modelName)
+    {
+        if (modelName == null || modelName.isBlank())
+        {
+            return null;
+        }
+
+        final String normalized = modelName.toLowerCase().replace('_', '-').trim();
+
+        if (normalized.contains("3.5-flash-lite"))
+        {
+            return new ModelRate(0.30, 2.50, 0.075);
+        }
+        if (normalized.contains("2.5-flash-lite"))
+        {
+            return new ModelRate(0.10, 0.40, 0.025);
+        }
+        if (normalized.contains("3.7-flash"))
+        {
+            return new ModelRate(0.75, 3.75, 0.1875);
+        }
+        if (normalized.contains("3.6-flash"))
+        {
+            return new ModelRate(0.50, 3.00, 0.125);
+        }
+        if (normalized.contains("3.5-flash"))
+        {
+            return new ModelRate(0.50, 3.00, 0.125);
+        }
+
+        LOGGER.warn("⚠️ Unknown model '{}' encountered for cost estimation. Cost calculation skipped (set to $0.00).", modelName);
+        return null;
+    }
+
+    /**
      * Helper method to compute estimated USD cost based on token counts and model pricing rules.
      *
      * @param usage the token usage
      * @param modelName the model identifier
-     * @return estimated cost in USD
+     * @return estimated cost in USD, or 0.0 if usage is null or model is unknown
      */
     public static double calculateCost(final TokenUsage usage, final String modelName)
     {
@@ -208,28 +261,15 @@ public final class MetricsCollector implements ExecutionListener
             return 0.0;
         }
 
-        final double inputRatePerMillion;
-        final double outputRatePerMillion;
-        final double cachedRatePerMillion;
-
-        final String normalizedModel = modelName != null ? modelName.toLowerCase() : "";
-        if (normalizedModel.contains("pro"))
+        final ModelRate rate = getModelRate(modelName);
+        if (rate == null)
         {
-            inputRatePerMillion = 1.25;
-            outputRatePerMillion = 5.00;
-            cachedRatePerMillion = 0.3125;
-        }
-        else
-        {
-            // Gemini Flash standard default rate
-            inputRatePerMillion = 0.075;
-            outputRatePerMillion = 0.300;
-            cachedRatePerMillion = 0.01875;
+            return 0.0;
         }
 
-        final double inputCost = (usage.inputTokenCount() / 1_000_000.0) * inputRatePerMillion;
-        final double outputCost = (usage.outputTokenCount() / 1_000_000.0) * outputRatePerMillion;
-        final double cachedCost = (usage.cachedTokenCount() / 1_000_000.0) * cachedRatePerMillion;
+        final double inputCost = (usage.inputTokenCount() / 1_000_000.0) * rate.inputRatePerMillion();
+        final double outputCost = (usage.outputTokenCount() / 1_000_000.0) * rate.outputRatePerMillion();
+        final double cachedCost = (usage.cachedTokenCount() / 1_000_000.0) * rate.cachedRatePerMillion();
 
         return inputCost + outputCost + cachedCost;
     }

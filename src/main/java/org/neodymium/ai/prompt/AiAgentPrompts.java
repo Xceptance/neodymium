@@ -90,4 +90,24 @@ public final class AiAgentPrompts
     {
         return getPrompt("action-extraction-prompt.md");
     }
+
+    /**
+     * Loads the verification system prompt template.
+     *
+     * @return the verification system prompt
+     */
+    public static String getVerificationPrompt()
+    {
+        return getPrompt("verification-prompt.md");
+    }
+
+    /**
+     * Loads the visual RCA system prompt template.
+     *
+     * @return the visual RCA system prompt
+     */
+    public static String getVisualRcaPrompt()
+    {
+        return getPrompt("visual-rca-prompt.md");
+    }
 }

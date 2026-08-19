@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.executor.selenide;
+package org.neodymium.ai.model;
 
 /**
  * Defines the amount of page context sent to the LLM for a given instruction step.
@@ -27,7 +27,7 @@ package org.neodymium.ai.executor.selenide;
  * Escalation does <em>not</em> count against the retry budget — it is a
  * different strategy, not a repeated attempt with the same data.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
 public enum ContextLevel
@@ -94,7 +94,7 @@ public enum ContextLevel
             case MINIMAL -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> RICH;
-            case RICH -> VISUAL_RICH;
+            case RICH -> VISUAL_LEAN;
             case VISUAL -> VISUAL_LEAN;
             case VISUAL_LEAN -> VISUAL_RICH;
             case VISUAL_RICH -> null;
@@ -119,7 +119,7 @@ public enum ContextLevel
      */
     public boolean isFullPageScreenshot()
     {
-        return this == VISUAL_LEAN || this == VISUAL_RICH;
+        return this == VISUAL || this == VISUAL_LEAN || this == VISUAL_RICH;
     }
 
     /**

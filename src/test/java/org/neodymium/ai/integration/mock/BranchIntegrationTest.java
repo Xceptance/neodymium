@@ -73,8 +73,8 @@ public class BranchIntegrationTest extends BaseAiTest
               "actions": [
                 {
                   "action": "NAVIGATE",
-                  "locator": "",
-                  "value": "%s",
+                  "locator": "%s",
+                  "value": "",
                   "reasoning": "Navigate to branch test page"
                 }
               ]
@@ -117,7 +117,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
+    @AiPlaybook(value = "programmatic", name = "custom_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchMock(final AiSession session) throws Exception
     {
@@ -150,13 +150,13 @@ public class BranchIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Tests that an unpopulated branch path fails with UnpopulatedBranchAssertionError in strict replay mode.
+     * Tests that a 1-way if statement with a false condition succeeds as a no-op in strict replay mode.
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "unpopulated_branch_playbook")
+    @AiPlaybook(value = "programmatic", name = "oneway_false_noop_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    public void testBranchUnpopulatedStrictMock(final AiSession session) throws Exception
+    public void testBranchOneWayFalseNoOpStrictMock(final AiSession session) throws Exception
     {
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         try
@@ -210,6 +210,168 @@ public class BranchIntegrationTest extends BaseAiTest
                       "reasoning": "Click accept button"
                     }
                   ]
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            data:
+              - testId: branchData
+            steps: |
+              Open ${branch.test.url} in the browser
+              If #cookie-banner is visible, click #btn-accept
+            """);
+    }
+
+    /**
+     * Tests that a 2-way if-else branch with unpopulated 'else' actions fails with UnpopulatedBranchAssertionError in strict replay mode.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "unpopulated_else_branch_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchUnpopulatedElseStrictMock(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check with expected else branch",
+                  "hasElse": true,
+                  "condition": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#btn-accept",
+                      "value": "hidden",
+                      "reasoning": "Check if button is hidden (which it isn't)"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-accept",
+                      "value": "",
+                      "reasoning": "Click accept button"
+                    }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) session.getExecutionContext().getTransientData().get(org.neodymium.ai.pipeline.ExecutionContext.KEY_EXECUTION_MODE);
+
+        if (mode == ExecutionMode.REPLAY_STRICT)
+        {
+            org.junit.jupiter.api.Assertions.assertThrows(UnpopulatedBranchAssertionError.class, () -> {
+                session.execute( """
+                    data:
+                      - testId: branchData
+                    steps: |
+                      Open ${branch.test.url} in the browser
+                      If #cookie-banner is visible, click #btn-accept, else click #btn-main-action
+                    """);
+            });
+        }
+        else
+        {
+            session.execute( """
+                data:
+                  - testId: branchData
+                steps: |
+                  Open ${branch.test.url} in the browser
+                  If #cookie-banner is visible, click #btn-accept, else click #btn-main-action
+                """);
+        }
+    }
+
+    /**
+     * Tests that an unpopulated 'then' branch fails with UnpopulatedBranchAssertionError in strict replay mode when condition is true.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "unpopulated_then_branch_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchUnpopulatedThenStrictMock(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check where condition is true but then is empty",
+                  "condition": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#cookie-banner",
+                      "value": "visible",
+                      "reasoning": "Check if cookie banner is visible (it is)"
+                    }
+                  ],
+                  "then": []
                 }
               ]
             }
@@ -323,6 +485,7 @@ public class BranchIntegrationTest extends BaseAiTest
                 final Action branchAct = new Action("BRANCH", "", "");
                 branchAct.setCondition(java.util.Collections.singletonList(new Action("ASSERT", "#btn-accept", java.util.Collections.singletonList("hidden"), "", "")));
                 branchAct.setThen(java.util.Collections.singletonList(new Action("CLICK", "#btn-accept", "")));
+                branchAct.setHasElse(true);
 
                 org.junit.jupiter.api.Assertions.assertThrows(org.neodymium.ai.pipeline.HealingRequiredException.class, () -> {
                     branchAction.execute(branchAct);

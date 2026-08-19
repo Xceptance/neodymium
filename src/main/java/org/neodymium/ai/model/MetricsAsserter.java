@@ -21,7 +21,7 @@ package org.neodymium.ai.model;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Assertions;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.executor.selenide.ContextLevel;
+import org.neodymium.ai.model.ContextLevel;
 
 /**
  * Fluent assertion helper providing chainable validations and conditional mode lambdas
@@ -288,6 +288,35 @@ public final class MetricsAsserter
         Assertions.assertTrue(
             actual >= min && actual <= max,
             String.format("Expected judge LLM call count between %d and %d, but was %d.", min, max, actual)
+        );
+        return this;
+    }
+
+    /**
+     * Asserts that Visual RCA LLM calls equal the expected value.
+     *
+     * @param expected expected RCA call count
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasRcaCalls(final int expected)
+    {
+        Assertions.assertEquals(expected, this.metrics.getRcaCallCount(), "Unexpected Visual RCA LLM call count.");
+        return this;
+    }
+
+    /**
+     * Asserts that Visual RCA LLM calls fall within the expected inclusive range [min, max].
+     *
+     * @param min minimum expected RCA call count
+     * @param max maximum expected RCA call count
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasRcaCalls(final int min, final int max)
+    {
+        final int actual = this.metrics.getRcaCallCount();
+        Assertions.assertTrue(
+            actual >= min && actual <= max,
+            String.format("Expected Visual RCA LLM call count between %d and %d, but was %d.", min, max, actual)
         );
         return this;
     }

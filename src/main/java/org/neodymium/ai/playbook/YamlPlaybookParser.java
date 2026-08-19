@@ -18,14 +18,17 @@
  */
 package org.neodymium.ai.playbook;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.Playbook;
@@ -35,6 +38,7 @@ import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -55,7 +59,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class YamlPlaybookParser implements PlaybookParser
 {
     private static final Logger LOG = LoggerFactory.getLogger(YamlPlaybookParser.class);
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
      * Constructs a default YamlPlaybookParser.
@@ -160,7 +164,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 if (in != null)
                 {
                     final byte[] bytes = in.readAllBytes();
-                    final String fileContent = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                    final String fileContent = new String(bytes, StandardCharsets.UTF_8);
                     final Yaml yaml = new Yaml();
                     final Map<String, Object> loadedMap = yaml.load(fileContent);
                     promptAddons = parsePromptAddons(loadedMap);
@@ -180,12 +184,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                 throw new IOException("Failed to load playbook: resource stream is null for " + identifier);
             }
             final byte[] bytes = in.readAllBytes();
-            final String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
+            final String content = new String(bytes, StandardCharsets.UTF_8).trim();
             if (content.startsWith("["))
             {
                 try
                 {
-                    final List<PlaybookStep> parsedSteps = MAPPER.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
+                    final List<PlaybookStep> parsedSteps = MAPPER.readValue(content, new TypeReference<List<PlaybookStep>>(){});
                     if (parsedSteps != null)
                     {
                         if (parsedSteps.isEmpty())
@@ -205,12 +209,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                     // Fall back to legacy Action list parsing
                 }
 
-                final List<org.neodymium.ai.action.Action> actions = MAPPER.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
-                final String fileName = new java.io.File(identifier).getName();
+                final List<Action> actions = MAPPER.readValue(content, new TypeReference<List<Action>>(){});
+                final String fileName = new File(identifier).getName();
                 PlaybookStep currentStep = null;
                 if (actions != null)
                 {
-                    for (final org.neodymium.ai.action.Action action : actions)
+                    for (final Action action : actions)
                     {
                         final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
                             ? action.getStepInstruction()
@@ -223,8 +227,8 @@ public final class YamlPlaybookParser implements PlaybookParser
                         final int stepLine = action.getStepLine();
 
                         if (currentStep != null 
-                            && java.util.Objects.equals(currentStep.getInstruction(), stepDesc)
-                            && java.util.Objects.equals(currentStep.getSourceFile(), stepFile)
+                            && Objects.equals(currentStep.getInstruction(), stepDesc)
+                            && Objects.equals(currentStep.getSourceFile(), stepFile)
                             && currentStep.getLineNumber() == stepLine)
                         {
                             currentStep.getActions().add(action);
@@ -341,8 +345,8 @@ public final class YamlPlaybookParser implements PlaybookParser
             }
 
             final byte[] bytes = in.readAllBytes();
-            final String fileContent = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-            final String fileName = new java.io.File(identifier).getName();
+            final String fileContent = new String(bytes, StandardCharsets.UTF_8);
+            final String fileName = new File(identifier).getName();
 
             final Yaml yaml = new Yaml();
             final Map<String, Object> loadedMap = yaml.load(fileContent);
@@ -450,9 +454,11 @@ public final class YamlPlaybookParser implements PlaybookParser
 
                         outSteps.add(includeStep);
                     }
-                    else if (mapStep.containsKey("instruction"))
+                    else if (mapStep.containsKey("instruction") || mapStep.containsKey("promptLine") || mapStep.containsKey("step"))
                     {
-                        final String instruction = String.valueOf(mapStep.get("instruction"));
+                        final String instruction = mapStep.containsKey("instruction")
+                            ? String.valueOf(mapStep.get("instruction"))
+                            : (mapStep.containsKey("promptLine") ? String.valueOf(mapStep.get("promptLine")) : String.valueOf(mapStep.get("step")));
                         final PlaybookStep step = new PlaybookStep(instruction);
                         initStepLocation(step, fileName, fileContent, instruction);
 
@@ -575,7 +581,7 @@ public final class YamlPlaybookParser implements PlaybookParser
         final List<PlaybookStep> yamlSteps = yamlPlaybook.getSteps();
 
         // 2. Parse the JSON actions
-        final List<org.neodymium.ai.action.Action> actions;
+        final List<Action> actions;
         try (final InputStream in = manager.read(jsonIdentifier))
         {
             if (in == null)
@@ -583,13 +589,13 @@ public final class YamlPlaybookParser implements PlaybookParser
                 return yamlPlaybook;
             }
             final byte[] bytes = in.readAllBytes();
-            final String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
-            final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            final String content = new String(bytes, StandardCharsets.UTF_8).trim();
+            final ObjectMapper mapper = new ObjectMapper();
             if (content.startsWith("["))
             {
                 try
                 {
-                    final List<PlaybookStep> jsonSteps = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<PlaybookStep>>(){});
+                    final List<PlaybookStep> jsonSteps = mapper.readValue(content, new TypeReference<List<PlaybookStep>>(){});
                     return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons());
                 }
                 catch (final Exception e)
@@ -598,12 +604,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                     // Fall back to legacy merge logic
                 }
             }
-            actions = mapper.readValue(content, new com.fasterxml.jackson.core.type.TypeReference<List<org.neodymium.ai.action.Action>>(){});
+            actions = mapper.readValue(content, new TypeReference<List<Action>>(){});
         }
 
         // 3. Merge actions into YAML steps sequentially
         int yamlIndex = 0;
-        for (final org.neodymium.ai.action.Action action : actions)
+        for (final Action action : actions)
         {
             final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
                 ? action.getStepInstruction()

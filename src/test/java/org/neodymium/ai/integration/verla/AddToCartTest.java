@@ -23,6 +23,7 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
@@ -58,13 +59,17 @@ public final class AddToCartTest extends BaseAiTest
     }
 
     /**
-     * Setup method to inject dynamic server URLs.
+     * Setup method to inject dynamic server URLs and baseline AI configurations.
      */
     @BeforeEach
     public void setup()
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
+        AiConfiguration.resetInstance();
     }
 
     /**

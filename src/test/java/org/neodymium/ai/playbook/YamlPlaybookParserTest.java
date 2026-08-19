@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 
 /**
@@ -164,5 +165,187 @@ public class YamlPlaybookParserTest
         assertEquals("Open https://www.example.com", playbook.getSteps().get(0).getInstruction());
         assertEquals("Select English", playbook.getSteps().get(1).getInstruction());
         assertEquals("Click button", playbook.getSteps().get(2).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithBeforeStepsAndAfter() throws IOException
+    {
+        final String yamlContent = """
+            before: |
+              Open https://www.example.com
+              Accept cookies
+            steps: |
+              Search for product
+              Add to cart
+            after: |
+              Clear cookies
+              Close banner
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("lifecycle-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("lifecycle-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(6, playbook.getSteps().size());
+        assertEquals("Open https://www.example.com", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Accept cookies", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Search for product", playbook.getSteps().get(2).getInstruction());
+        assertEquals("Add to cart", playbook.getSteps().get(3).getInstruction());
+        assertEquals("Clear cookies", playbook.getSteps().get(4).getInstruction());
+        assertEquals("Close banner", playbook.getSteps().get(5).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithAllBeforeAliases() throws IOException
+    {
+        final String yamlContent = """
+            before: |
+              Step before
+            beforeEach: |
+              Step beforeEach
+            _beforeEach: |
+              Step _beforeEach
+            _beforeAll: |
+              Step _beforeAll
+            steps: |
+              Main step
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("before-aliases.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("before-aliases.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(5, playbook.getSteps().size());
+        assertEquals("Step before", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Step beforeEach", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Step _beforeEach", playbook.getSteps().get(2).getInstruction());
+        assertEquals("Step _beforeAll", playbook.getSteps().get(3).getInstruction());
+        assertEquals("Main step", playbook.getSteps().get(4).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithAllAfterAliases() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              Main step
+            after: |
+              Step after
+            afterEach: |
+              Step afterEach
+            _afterEach: |
+              Step _afterEach
+            _afterAll: |
+              Step _afterAll
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("after-aliases.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("after-aliases.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(5, playbook.getSteps().size());
+        assertEquals("Main step", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Step after", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Step afterEach", playbook.getSteps().get(2).getInstruction());
+        assertEquals("Step _afterEach", playbook.getSteps().get(3).getInstruction());
+        assertEquals("Step _afterAll", playbook.getSteps().get(4).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithStructuredActionsInBeforeAndAfter() throws IOException
+    {
+        final String yamlContent = """
+            before:
+              - instruction: "Open home page"
+                actions:
+                  - type: "NAVIGATE"
+                    target: "https://example.com"
+            steps:
+              - instruction: "Click login button"
+                actions:
+                  - type: "CLICK"
+                    target: "#login-btn"
+            after:
+              - instruction: "Clear session"
+                actions:
+                  - type: "CLEAR_COOKIES"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("structured-lifecycle.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("structured-lifecycle.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size());
+        assertEquals("Open home page", playbook.getSteps().get(0).getInstruction());
+        assertEquals(1, playbook.getSteps().get(0).getActions().size());
+        assertEquals("NAVIGATE", playbook.getSteps().get(0).getActions().get(0).getType());
+
+        assertEquals("Click login button", playbook.getSteps().get(1).getInstruction());
+        assertEquals(1, playbook.getSteps().get(1).getActions().size());
+        assertEquals("CLICK", playbook.getSteps().get(1).getActions().get(0).getType());
+
+        assertEquals("Clear session", playbook.getSteps().get(2).getInstruction());
+        assertEquals(1, playbook.getSteps().get(2).getActions().size());
+        assertEquals("CLEAR_COOKIES", playbook.getSteps().get(2).getActions().get(0).getType());
+    }
+
+    @Test
+    public void testParsePlaybookWithIncludesInBeforeAndAfter() throws IOException
+    {
+        final String mainYaml = """
+            before: |
+              _include: setup.yaml
+            steps: |
+              Main step
+            after: |
+              _include: teardown.yaml
+            """;
+
+        final String setupYaml = """
+            steps: |
+              Setup step 1
+              Setup step 2
+            """;
+
+        final String teardownYaml = """
+            steps: |
+              Teardown step 1
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("main.yaml", mainYaml);
+        manager.write("setup.yaml", setupYaml);
+        manager.write("teardown.yaml", teardownYaml);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("main.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size());
+
+        final PlaybookStep beforeInclude = playbook.getSteps().get(0);
+        assertEquals("_include: setup.yaml", beforeInclude.getInstruction());
+        assertEquals(2, beforeInclude.getSubSteps().size());
+        assertEquals("Setup step 1", beforeInclude.getSubSteps().get(0).getInstruction());
+        assertEquals("Setup step 2", beforeInclude.getSubSteps().get(1).getInstruction());
+
+        assertEquals("Main step", playbook.getSteps().get(1).getInstruction());
+
+        final PlaybookStep afterInclude = playbook.getSteps().get(2);
+        assertEquals("_include: teardown.yaml", afterInclude.getInstruction());
+        assertEquals(1, afterInclude.getSubSteps().size());
+        assertEquals("Teardown step 1", afterInclude.getSubSteps().get(0).getInstruction());
     }
 }

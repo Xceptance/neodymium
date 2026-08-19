@@ -1,6 +1,6 @@
 steps: |
   Open ${verla.url}/verla-${quality}/index.html
-  The country currently selected is US.
+  Validate that United States as country is selected.
   The homepage has a top banner with some advertising (visual)
   The homepage has a menu that features the "VERLA." logo, categories, a search bar, a country selector, a login button, and a cart section (visual)
   The cart currently display 0 items.
