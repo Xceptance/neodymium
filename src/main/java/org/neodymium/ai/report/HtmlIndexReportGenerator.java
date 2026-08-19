@@ -452,6 +452,86 @@ public final class HtmlIndexReportGenerator
         }
     }
 
+    /**
+     * Refreshes and rebuilds the report index files ({@code index-data.json} and {@code index.html})
+     * by scanning the target directory for all report JSON files.
+     *
+     * @param outputDirectory the target directory containing test reports
+     */
+    public synchronized void refreshIndex(final Path outputDirectory)
+    {
+        if (outputDirectory == null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!Files.exists(outputDirectory))
+            {
+                return;
+            }
+
+            final Path registryPath = outputDirectory.resolve(REGISTRY_FILE);
+            final Map<String, IndexEntry> entriesByBase = new LinkedHashMap<>();
+
+            // 1. Read existing index registry if present
+            if (Files.exists(registryPath))
+            {
+                try
+                {
+                    final List<IndexEntry> existing = OBJECT_MAPPER.readValue(registryPath.toFile(), new TypeReference<List<IndexEntry>>() {});
+                    if (existing != null)
+                    {
+                        for (final IndexEntry e : existing)
+                        {
+                            if (e.getBaseFileName() != null)
+                            {
+                                entriesByBase.put(e.getBaseFileName(), e);
+                            }
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Could not parse existing index registry file {}, rebuilding from scratch: {}", registryPath, e.getMessage());
+                }
+            }
+
+            // 2. Discover/scan any unindexed *.json reports in the output directory
+            scanDirectoryForReports(outputDirectory, entriesByBase);
+
+            // 3. Sort entries reverse-chronologically (newest on top)
+            final List<IndexEntry> sortedEntries = new ArrayList<>(entriesByBase.values());
+            sortedEntries.sort(Comparator.comparingLong(IndexEntry::getTimestamp).reversed());
+
+            // 4. Persist registry JSON
+            OBJECT_MAPPER.writeValue(registryPath.toFile(), sortedEntries);
+
+            // 5. Generate and write index.html
+            final String htmlContent = generateIndexHtml(sortedEntries);
+            final Path indexPath = outputDirectory.resolve(INDEX_HTML_FILE);
+            Files.writeString(indexPath, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+
+            LOGGER.info("📑 Test execution index refreshed: {}", indexPath.toAbsolutePath());
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to refresh test execution index in {}: {}", outputDirectory, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * CLI entry point for refreshing index.html in the specified or default target/ai-reports directory.
+     *
+     * @param args optional target directory path
+     */
+    public static void main(final String[] args)
+    {
+        final Path dir = args != null && args.length > 0 ? Path.of(args[0]) : Path.of("target/ai-reports");
+        new HtmlIndexReportGenerator().refreshIndex(dir);
+    }
+
     private static void scanDirectoryForReports(final Path outputDirectory, final Map<String, IndexEntry> targetMap)
     {
         final File dir = outputDirectory.toFile();
@@ -645,14 +725,14 @@ public final class HtmlIndexReportGenerator
         sb.append("      <table class=\"executions-table\" id=\"executionsTable\">\n");
         sb.append("        <thead>\n");
         sb.append("          <tr>\n");
-        sb.append("            <th onclick=\"sortTable(0)\" style=\"cursor:pointer; width:100px;\">Timestamp ⬍</th>\n");
-        sb.append("            <th onclick=\"sortTable(1)\" style=\"cursor:pointer; width:95px;\">Status ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(0)\" style=\"cursor:pointer; width:90px;\">Timestamp ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(1)\" style=\"cursor:pointer; width:85px;\">Status ⬍</th>\n");
         sb.append("            <th onclick=\"sortTable(2)\" style=\"cursor:pointer;\">Test Case & Details ⬍</th>\n");
-        sb.append("            <th style=\"width:115px;\">Mode</th>\n");
-        sb.append("            <th onclick=\"sortTable(4)\" style=\"cursor:pointer; width:65px;\">Steps ⬍</th>\n");
-        sb.append("            <th onclick=\"sortTable(5)\" style=\"cursor:pointer; width:90px;\">Duration ⬍</th>\n");
-        sb.append("            <th style=\"width:125px;\">AI Usage</th>\n");
-        sb.append("            <th style=\"width:45px; text-align:center;\">Report</th>\n");
+        sb.append("            <th style=\"width:100px;\">Mode</th>\n");
+        sb.append("            <th onclick=\"sortTable(4)\" style=\"cursor:pointer; width:60px;\">Steps ⬍</th>\n");
+        sb.append("            <th onclick=\"sortTable(5)\" style=\"cursor:pointer; width:75px;\">Duration ⬍</th>\n");
+        sb.append("            <th style=\"width:105px;\">AI Usage</th>\n");
+        sb.append("            <th style=\"width:40px; text-align:center;\">Report</th>\n");
         sb.append("          </tr>\n");
         sb.append("        </thead>\n");
         sb.append("        <tbody>\n");
@@ -717,8 +797,11 @@ public final class HtmlIndexReportGenerator
                 sb.append("              </div>\n");
                 if (entry.getTestClass() != null)
                 {
-                    sb.append("              <div class=\"test-meta-line\">").append(escapeHtml(entry.getTestClass()))
-                      .append(entry.getTestMethod() != null ? "#" + escapeHtml(entry.getTestMethod()) : "").append("</div>\n");
+                    final String simpleClass = extractSimpleClassName(entry.getTestClass());
+                    final String methodPart = entry.getTestMethod() != null ? "#" + entry.getTestMethod() : "";
+                    final String simpleMeta = simpleClass + methodPart;
+                    final String fullMeta = entry.getTestClass() + methodPart;
+                    sb.append("              <div class=\"test-meta-line\" title=\"").append(escapeAttr(fullMeta)).append("\">").append(escapeHtml(simpleMeta)).append("</div>\n");
                 }
                 if (entry.getFailureReason() != null && !entry.getFailureReason().isBlank())
                 {
@@ -757,7 +840,7 @@ public final class HtmlIndexReportGenerator
                 sb.append("            </td>\n");
 
                 // 5. Duration
-                sb.append("            <td data-sort=\"").append(entry.getDurationMs()).append("\">").append(NUMBER_FORMAT.format(entry.getDurationMs())).append(" ms</td>\n");
+                sb.append("            <td data-sort=\"").append(entry.getDurationMs()).append("\">").append(escapeHtml(formatDuration(entry.getDurationMs()))).append("</td>\n");
 
                 // 6. AI / LLM Usage
                 sb.append("            <td>\n");
@@ -1050,7 +1133,7 @@ public final class HtmlIndexReportGenerator
             }
             .executions-table th {
                 background: #f8fafc;
-                padding: 0.65rem 0.75rem;
+                padding: 0.5rem 0.6rem;
                 font-size: 0.72rem;
                 font-weight: 700;
                 color: var(--text-muted);
@@ -1061,7 +1144,7 @@ public final class HtmlIndexReportGenerator
                 white-space: nowrap;
             }
             .executions-table td {
-                padding: 0.65rem 0.75rem;
+                padding: 0.5rem 0.6rem;
                 border-bottom: 1px solid var(--border);
                 vertical-align: middle;
             }
@@ -1073,9 +1156,9 @@ public final class HtmlIndexReportGenerator
                 display: inline-flex;
                 align-items: center;
                 gap: 0.25rem;
-                padding: 0.2rem 0.5rem;
+                padding: 0.2rem 0.45rem;
                 border-radius: 20px;
-                font-size: 0.72rem;
+                font-size: 0.70rem;
                 font-weight: 700;
                 letter-spacing: 0.02em;
                 white-space: nowrap;
@@ -1095,9 +1178,10 @@ public final class HtmlIndexReportGenerator
             .test-title-link {
                 color: var(--text);
                 font-weight: 700;
-                font-size: 0.88rem;
+                font-size: 0.85rem;
                 text-decoration: none;
                 transition: color 0.15s;
+                word-break: break-word;
             }
             .test-title-link:hover {
                 color: var(--primary);
@@ -1125,12 +1209,16 @@ public final class HtmlIndexReportGenerator
                 font-family: var(--font-mono);
                 font-size: 0.72rem;
                 color: var(--text-muted);
+                max-width: 400px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
             .failure-reason-snip {
                 font-size: 0.75rem;
                 color: var(--fail);
                 margin-top: 0.2rem;
-                max-width: 450px;
+                max-width: 350px;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
