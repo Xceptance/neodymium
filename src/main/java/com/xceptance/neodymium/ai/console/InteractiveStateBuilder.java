@@ -151,6 +151,51 @@ public final class InteractiveStateBuilder
         }
         state.add("junitTags", tags);
 
+        // Browser information
+        String browser = context != null ? (String) context.getTransientData().get("browser") : null;
+        if (browser == null || browser.isEmpty())
+        {
+            try
+            {
+                browser = com.xceptance.neodymium.util.Neodymium.getBrowserProfileName();
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+        if (browser == null || browser.isEmpty())
+        {
+            try
+            {
+                browser = com.xceptance.neodymium.util.Neodymium.getBrowserName();
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+        if (browser == null || browser.isEmpty())
+        {
+            if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+            {
+                try
+                {
+                    final org.openqa.selenium.WebDriver webDriver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
+                    if (webDriver instanceof org.openqa.selenium.HasCapabilities)
+                    {
+                        browser = ((org.openqa.selenium.HasCapabilities) webDriver).getCapabilities().getBrowserName();
+                    }
+                }
+                catch (final Throwable ignored)
+                {
+                }
+            }
+        }
+
+        if (browser != null && !browser.isEmpty())
+        {
+            state.addProperty("browser", browser);
+        }
+
         // Data bindings from SessionData
         if (context != null && context.getSessionData() != null)
         {
@@ -271,6 +316,33 @@ public final class InteractiveStateBuilder
             state.addProperty("reasoning", topReasoning);
         }
 
+        // Top-level failure error message
+        if ("failed".equalsIgnoreCase(runnerStatus))
+        {
+            String failureMessage = null;
+            if (context != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+                if (flatSteps != null)
+                {
+                    for (final PlaybookStep s : flatSteps)
+                    {
+                        if (s != null && s.getFailureReason() != null && !s.getFailureReason().isBlank())
+                        {
+                            failureMessage = s.getFailureReason();
+                            break;
+                        }
+                    }
+                }
+            }
+            if (failureMessage != null)
+            {
+                state.addProperty("error", failureMessage);
+                state.addProperty("failureReason", failureMessage);
+            }
+        }
+
         return GSON.toJson(state);
     }
 
@@ -351,6 +423,12 @@ public final class InteractiveStateBuilder
             case PENDING, SPLITTED -> "pending";
         };
         obj.addProperty("status", statusStr);
+
+        if (step.getFailureReason() != null && !step.getFailureReason().isBlank())
+        {
+            obj.addProperty("error", step.getFailureReason());
+            obj.addProperty("failureReason", step.getFailureReason());
+        }
 
         if (isCurrentSection && stepIndex == activeStepIndex && context != null)
         {

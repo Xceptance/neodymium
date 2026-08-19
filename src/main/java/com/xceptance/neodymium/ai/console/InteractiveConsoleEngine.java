@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Inet4Address;
@@ -25,13 +26,17 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -116,6 +121,9 @@ public final class InteractiveConsoleEngine {
      * Updated by the test runner before each pause.
      */
     private volatile String currentStateJson = "{}";
+
+    private static final Map<String, Integer> EXECUTION_INDEX_MAP = new ConcurrentHashMap<>();
+    private static final AtomicInteger EXECUTION_INDEX_COUNTER = new AtomicInteger(0);
 
     /** Active SSE client output streams. */
     private final CopyOnWriteArrayList<OutputStream> sseClients = new CopyOnWriteArrayList<>();
@@ -239,7 +247,70 @@ public final class InteractiveConsoleEngine {
             return;
         }
 
+        if (AiConfiguration.getInstance().isConsoleExecutionLogsEnabled())
+        {
+            try
+            {
+                final String resultsDirPath = System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results");
+                final File resultsDir = new File(resultsDirPath);
+                if (!resultsDir.exists())
+                {
+                    resultsDir.mkdirs();
+                }
+                final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
+                final String executionKey = extractExecutionKey(parsedState);
+                final int index = getExecutionIndex(executionKey);
+                final File executionJson = new File(resultsDir, "console-execution-" + index + ".json");
+                Files.writeString(executionJson.toPath(), minified, StandardCharsets.UTF_8);
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("[InteractiveConsole] Failed to save local console execution log: {}", e.getMessage());
+            }
+        }
+
         broadcastSseEvent("state", minified);
+    }
+
+    private String extractExecutionKey(final JsonObject json)
+    {
+        if (json == null)
+        {
+            return "default";
+        }
+        if (json.has("testName") && !json.get("testName").isJsonNull())
+        {
+            final String testName = json.get("testName").getAsString();
+            if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
+            {
+                return testName;
+            }
+        }
+        String key = "";
+        if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
+        {
+            key += json.get("playbookFile").getAsString();
+        }
+        if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
+        {
+            key += "_" + json.get("datasetId").getAsString();
+        }
+        return key.isEmpty() ? "default" : key;
+    }
+
+    private int getExecutionIndex(final String executionKey)
+    {
+        if (executionKey == null || executionKey.isEmpty())
+        {
+            return 1;
+        }
+        return EXECUTION_INDEX_MAP.computeIfAbsent(executionKey, k -> EXECUTION_INDEX_COUNTER.incrementAndGet());
+    }
+
+    public static void resetExecutionIndexes()
+    {
+        EXECUTION_INDEX_MAP.clear();
+        EXECUTION_INDEX_COUNTER.set(0);
     }
     
     public String getCurrentStateJson() {

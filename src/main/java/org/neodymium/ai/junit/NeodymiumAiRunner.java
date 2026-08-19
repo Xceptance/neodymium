@@ -711,8 +711,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             final boolean isInteractive = config.isInteractive();
             final boolean isManagerActive = config.isManagerActive();
+            final boolean isConsoleExecutionLogsEnabled = config.isConsoleExecutionLogsEnabled();
 
-            if (isInteractive || isManagerActive)
+            if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
             {
                 final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
                 final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
@@ -758,6 +759,21 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.datasetId != null)
             {
                 executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
+            }
+            System.out.println("browserProfile "+browserProfile);
+            System.out.println("browserName "+Neodymium.getBrowserName());
+
+            if (browserProfile != null && !browserProfile.isEmpty())
+            {
+                executionContext.getTransientData().put("browser", browserProfile);
+            }
+            else
+            {
+                final String browserName = Neodymium.getBrowserName();
+                if (browserName != null && !browserName.isEmpty())
+                {
+                    executionContext.getTransientData().put("browser", browserName);
+                }
             }
 
             final AiContext methodContextAnnot = method != null ? method.getAnnotation(AiContext.class) : null;

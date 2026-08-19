@@ -666,6 +666,17 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks whether console execution log files (console-execution-*.json) should be produced
+     * during test execution. Defaults to true.
+     *
+     * @return true if console execution log file writing is enabled
+     */
+    public boolean isConsoleExecutionLogsEnabled()
+    {
+        return getBoolean("neodymium.ai.consoleExecutionLogs", true);
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *
