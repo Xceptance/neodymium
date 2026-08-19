@@ -405,6 +405,11 @@ public final class AuraQueueService
                     {
                         command.add("-Dneodymium.testIdFilter=" + idFilterBuilder.toString());
                     }
+                    for (final String profile : targetProfiles)
+                    {
+                        command.add("-Dbrowserprofile." + profile + ".headless=" + req.headless);
+                    }
+                    command.add("-Dbrowserprofile.global.headless=" + req.headless);
                     command.add("-Dbrowserprofile.Default.headless=" + req.headless);
                     command.add("-Dselenide.headless=" + req.headless);
                     command.add("-Dneodymium.ai.interactive=" + req.interactive);
