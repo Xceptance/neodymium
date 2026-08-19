@@ -125,12 +125,12 @@ public class InteractiveConsoleListenerTest
         autoAction.addProperty("action", "AUTO");
         submitActionAsynchronously(autoAction);
 
-        eventBus.dispatch(new StepStartedEvent(step1, 0));
+        listener.pauseBeforeActionExecution(session.getExecutionContext(), step1);
 
         assertTrue(listener.isAutoRun());
 
         // Second step should not block because autoRun is now true
-        eventBus.dispatch(new StepStartedEvent(step2, 1));
+        listener.pauseBeforeActionExecution(session.getExecutionContext(), step2);
         assertEquals(0, consoleEngine.getCurrentStateJson().indexOf("{"));
     }
 
@@ -150,7 +150,7 @@ public class InteractiveConsoleListenerTest
         runAction.addProperty("action", "RUN");
         submitActionAsynchronously(runAction);
 
-        eventBus.dispatch(new StepStartedEvent(step1, 0));
+        listener.pauseBeforeActionExecution(session.getExecutionContext(), step1);
 
         assertFalse(listener.isAutoRun());
     }
@@ -171,7 +171,7 @@ public class InteractiveConsoleListenerTest
         submitActionAsynchronously(abortAction);
 
         assertThrows(RuntimeException.class, () -> {
-            eventBus.dispatch(new StepStartedEvent(step, 0));
+            listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
         });
     }
 
