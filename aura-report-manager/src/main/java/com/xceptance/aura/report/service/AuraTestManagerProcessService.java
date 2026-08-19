@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -38,8 +39,8 @@ public class AuraTestManagerProcessService
 {
     private static final Logger LOG = LoggerFactory.getLogger(AuraTestManagerProcessService.class);
 
-    private static final String SCRIPT_PATH = "/home/olha/git/neodymium/run-aura.sh";
-    private static final String WORK_DIR = "/home/olha/git/neodymium";
+    private static final String WORK_DIR = Paths.get("").toAbsolutePath().toString();
+    private static final String SCRIPT_PATH = Paths.get("").toAbsolutePath().resolve("run-aura.sh").toString();
     private static final int TARGET_PORT = 18080;
     private static final String MANAGER_URL = "http://localhost:" + TARGET_PORT;
 

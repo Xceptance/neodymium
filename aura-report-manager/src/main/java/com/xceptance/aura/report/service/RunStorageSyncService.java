@@ -152,8 +152,8 @@ public class RunStorageSyncService
             final String batchName = root.path("batchName").asText(batchInfo.name);
             final String env = root.path("environment").asText(batchInfo.environment);
             final String batchDesc = batchInfo.description;
-            final String trigger = root.path("trigger").asText(root.path("triggerSource").asText("Jenkins CI"));
-            final String timestamp = root.path("timestamp").asText(root.path("startTime").asText("Today, 14:22:10"));
+            final String trigger = root.path("trigger").asText(root.path("triggerSource").asText("Unknown"));
+            final String timestamp = root.path("timestamp").asText(root.path("startTime").asText("Recently"));
 
             final JsonNode summaryNode = root.path("summary");
             final int totalTests = summaryNode.path("total").asInt(0);
@@ -172,7 +172,7 @@ public class RunStorageSyncService
                 {
                     final String testClass = exec.path("testClass").asText("UnknownClass");
                     final String dataSet = exec.path("title").asText("");
-                    final String location = exec.path("location").asText("US");
+                    final String location = exec.path("location").asText("Unknown");
                     final String browser = exec.path("browser").asText("Chrome");
                     final String rawStatus = exec.path("status").asText("passed-clean");
 
@@ -214,8 +214,8 @@ public class RunStorageSyncService
                     "COMPLETED",
                     trigger,
                     env,
-                    "US, EU",
-                    "Chrome, Firefox",
+                    "Unknown",
+                    "Chrome",
                     timestamp,
                     System.currentTimeMillis()
                 );
@@ -249,9 +249,9 @@ public class RunStorageSyncService
                 batchRepository.save(new TestBatchEntity(
                     batchName,
                     env,
-                    batchDesc != null && !batchDesc.isEmpty() ? batchDesc : "Nightly regression and smoke test suite.",
-                    "US, EU, DE",
-                    "Chrome, Firefox, Edge",
+                    batchDesc != null && !batchDesc.isEmpty() ? batchDesc : "",
+                    "Unknown",
+                    "Chrome",
                     runId
                 ));
             }

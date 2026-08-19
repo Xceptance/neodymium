@@ -30,9 +30,12 @@ import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -113,16 +116,42 @@ public class AuraReportViewController
 
     @GetMapping({"/batch-history", "/fragments/batch-history"})
     public String batchHistory(
-        @RequestParam(name = "batchName", defaultValue = "US Nightly Regression") final String batchName,
+        @RequestParam(name = "batchName", defaultValue = "Unknown") final String batchName,
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
     {
         final List<TestRunEntity> runs = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
         final Optional<TestBatchEntity> batchOpt = batchRepository.findById(batchName);
 
+        final List<String> batchLocales = runs.stream()
+            .flatMap(r -> r.getLocalesCsv() != null ? Arrays.stream(r.getLocalesCsv().split(",")) : Stream.empty())
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        final List<String> batchBrowsers = runs.stream()
+            .flatMap(r -> r.getBrowsersCsv() != null ? Arrays.stream(r.getBrowsersCsv().split(",")) : Stream.empty())
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        final String batchEnvironment = batchOpt.map(TestBatchEntity::getEnvironment)
+            .orElseGet(() -> runs.stream()
+                .map(TestRunEntity::getEnvironment)
+                .filter(e -> e != null && !e.isBlank())
+                .findFirst()
+                .orElse("Unknown"));
+
         model.addAttribute("batchName", batchName);
         model.addAttribute("batch", batchOpt.orElse(null));
+        model.addAttribute("batchEnvironment", batchEnvironment);
         model.addAttribute("runs", runs);
+        model.addAttribute("batchLocales", batchLocales);
+        model.addAttribute("batchBrowsers", batchBrowsers);
         model.addAttribute("pageTitle", "Batch History Overview - " + batchName);
         model.addAttribute("activeTab", "BatchHistory");
         model.addAttribute("viewFragment", "fragments/batch-history :: batchHistory");
@@ -154,7 +183,7 @@ public class AuraReportViewController
 
     @GetMapping("/fragments/run-report/filtered-tests")
     public String filteredTestsPartial(
-        @RequestParam(name = "runId", defaultValue = "1049") final String runId,
+        @RequestParam(name = "runId", defaultValue = "#RUN_ID") final String runId,
         @RequestParam(name = "status", required = false) final String status,
         @RequestParam(name = "locations", required = false) final List<String> locations,
         @RequestParam(name = "browsers", required = false) final List<String> browsers,
@@ -196,8 +225,8 @@ public class AuraReportViewController
 
     @GetMapping("/test-side-panel")
     public String testSidePanelFragment(
-        @RequestParam(name = "runId", defaultValue = "1049") final String runId,
-        @RequestParam(name = "rowId", defaultValue = "row-ds-1") final String rowId,
+        @RequestParam(name = "runId", defaultValue = "#RUN_ID") final String runId,
+        @RequestParam(name = "rowId", defaultValue = "") final String rowId,
         @RequestParam(name = "testName", defaultValue = "") final String testName,
         @RequestParam(name = "dataSet", defaultValue = "") final String dataSet,
         final Model model)
@@ -222,8 +251,8 @@ public class AuraReportViewController
 
     @GetMapping("/fragments/test-side-panel/bugs")
     public String getBugSection(
-        @RequestParam(name = "runId", defaultValue = "1049") final String runId,
-        @RequestParam(name = "rowId", defaultValue = "row-ds-1") final String rowId,
+        @RequestParam(name = "runId", defaultValue = "#RUN_ID") final String runId,
+        @RequestParam(name = "rowId", defaultValue = "") final String rowId,
         final Model model)
     {
         final RunReportDto report = dataService.getRunReport(runId);

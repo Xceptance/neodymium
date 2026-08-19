@@ -50,9 +50,9 @@ public class ReportIngestionController
     @PostMapping("/runs/start")
     public ResponseEntity<Map<String, Object>> startRun(@RequestBody final Map<String, String> payload)
     {
-        final String batchName = payload.getOrDefault("batchName", "US Nightly Regression");
-        final String env = payload.getOrDefault("environment", "Staging");
-        final String trigger = payload.getOrDefault("triggerSource", "Jenkins CI");
+        final String batchName = payload.getOrDefault("batchName", "Unknown");
+        final String env = payload.getOrDefault("environment", "Unknown");
+        final String trigger = payload.getOrDefault("triggerSource", "Unknown");
         final String runId = reportDataService.startRun(batchName, env, trigger);
         return ResponseEntity.ok(Map.of("runId", runId, "status", "IN_PROGRESS", "message", "Run initialized successfully."));
     }

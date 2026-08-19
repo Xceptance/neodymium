@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -39,7 +40,7 @@ import org.springframework.stereotype.Service;
 public class NeodymiumAuraFileService
 {
     private static final Logger LOG = LoggerFactory.getLogger(NeodymiumAuraFileService.class);
-    private static final String DATA_DIR = "/home/olha/git/neodymium/src/main/resources/com/xceptance/neodymium/aura/data";
+    private static final String DATA_DIR = Paths.get("").toAbsolutePath().resolve("src/main/resources/com/xceptance/neodymium/aura/data").toString();
 
     public List<String> listTestDataFiles()
     {
@@ -56,7 +57,7 @@ public class NeodymiumAuraFileService
     {
         final List<TestClassInfoDto> results = new ArrayList<>();
         final List<File> testRoots = List.of(
-            new File("/home/olha/git/neodymium/src/test/java"),
+            Paths.get("").toAbsolutePath().resolve("src/test/java").toFile(),
             new File("./src/test/java")
         );
 

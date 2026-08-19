@@ -54,7 +54,7 @@ public class AuraReportBugUnlinkTest
     private static final String TEST_RUN_ID = "run-unlink-test-101";
 
     @BeforeEach
-    public void setUp()
+    public void setUp() throws java.io.IOException
     {
         bugRepository.deleteAll();
 
@@ -77,6 +77,23 @@ public class AuraReportBugUnlinkTest
         runEntity.setIgnoredCount(0);
         runEntity.setPassRate(0.0);
         runRepository.save(runEntity);
+
+        final java.nio.file.Path runDir = storageService.getRunDir(TEST_RUN_ID);
+        final java.nio.file.Path execDir = runDir.resolve("Checkout").resolve("CheckoutTest");
+        java.nio.file.Files.createDirectories(execDir);
+        final java.nio.file.Path execFile = execDir.resolve("exec-1.json");
+
+        final com.fasterxml.jackson.databind.node.ObjectNode execNode = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+        execNode.put("id", "row-unlink-1");
+        execNode.put("runId", TEST_RUN_ID);
+        execNode.put("testClass", "CheckoutTest");
+        execNode.put("title", "testCheckoutProcess");
+        execNode.put("status", "failed");
+        execNode.put("areaName", "Checkout");
+        execNode.put("location", "US-West");
+        execNode.put("browser", "Chrome");
+        execNode.put("failureReason", "AssertionError: Element not found");
+        new com.fasterxml.jackson.databind.ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(execFile.toFile(), execNode);
 
         final TestExecutionDto exec = new TestExecutionDto(
             "row-unlink-1",
@@ -116,6 +133,29 @@ public class AuraReportBugUnlinkTest
         );
 
         dataService.saveRunReportToDisk(TEST_RUN_ID, report);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    public void tearDown() throws java.io.IOException
+    {
+        for (final String runId : List.of(TEST_RUN_ID, "run-raw-no-id-99"))
+        {
+            final java.nio.file.Path runDir = storageService.getRunDir(runId);
+            if (java.nio.file.Files.exists(runDir))
+            {
+                try (final var stream = java.nio.file.Files.walk(runDir))
+                {
+                    stream.sorted(java.util.Comparator.reverseOrder())
+                          .map(java.nio.file.Path::toFile)
+                          .forEach(java.io.File::delete);
+                }
+            }
+            final java.nio.file.Path flatFile = storageService.getRunJsonPath(runId);
+            if (java.nio.file.Files.exists(flatFile) && !java.nio.file.Files.isDirectory(flatFile))
+            {
+                java.nio.file.Files.deleteIfExists(flatFile);
+            }
+        }
     }
 
     @Test

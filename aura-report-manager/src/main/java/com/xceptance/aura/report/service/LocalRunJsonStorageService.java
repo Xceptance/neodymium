@@ -135,8 +135,8 @@ public class LocalRunJsonStorageService
             final BatchInfo batchInfo = resolveOrCreateBatchJson(runDir, testExecJsonFiles);
             String batchName = batchInfo.name;
             String env = batchInfo.environment;
-            String trigger = "Jenkins CI";
-            String timestamp = "Today, 14:22:10";
+            String trigger = "Unknown";
+            String timestamp = "Recently";
 
             final File runJsonFile = new File(runDir, "run.json");
             if (runJsonFile.exists())
@@ -234,7 +234,7 @@ public class LocalRunJsonStorageService
                             objNode.put("testClass", testClass);
 
                             final String title = objNode.path("title").asText("");
-                            final String location = objNode.path("location").asText("US");
+                            final String location = objNode.path("location").asText("Unknown");
                             final String browser = objNode.path("browser").asText("Chrome");
                             final String engine = objNode.path("engine").asText("Java");
 
@@ -300,9 +300,6 @@ public class LocalRunJsonStorageService
                             if (!objNode.has("dataBindings") || objNode.path("dataBindings").isMissingNode() || objNode.path("dataBindings").isEmpty())
                             {
                                 final ObjectNode dataBind = objectMapper.createObjectNode();
-                                dataBind.put("neodymium.url", "https://staging.shop.xceptance.com");
-                                dataBind.put("neodymium.selenide.timeout", "3000");
-                                dataBind.put("neodymium.screenshots.enableOnSuccess", "true");
                                 dataBind.put("location", location);
                                 dataBind.put("browser", browser);
                                 objNode.set("dataBindings", dataBind);

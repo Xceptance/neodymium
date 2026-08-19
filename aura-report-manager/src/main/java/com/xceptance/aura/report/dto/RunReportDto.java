@@ -20,6 +20,7 @@ package com.xceptance.aura.report.dto;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Data transfer object representing a single run report.
@@ -143,5 +144,33 @@ public final class RunReportDto
     public List<AreaSummaryDto> getAreaSummaries()
     {
         return areaSummaries;
+    }
+
+    public List<String> getFilterLocations()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return List.of();
+        }
+        return executions.stream()
+            .map(TestExecutionDto::getLocation)
+            .filter(l -> l != null && !l.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+    }
+
+    public List<String> getFilterBrowsers()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return List.of();
+        }
+        return executions.stream()
+            .map(TestExecutionDto::getBrowser)
+            .filter(b -> b != null && !b.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
     }
 }
