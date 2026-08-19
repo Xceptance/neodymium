@@ -218,6 +218,14 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
+        if (!isEscalationRequested && ("FAILED".equalsIgnoreCase(status) || "ERROR".equalsIgnoreCase(status)) && actions.isEmpty())
+        {
+            if (activeLevel != null && activeLevel.ordinal() < org.neodymium.ai.model.ContextLevel.STANDARD.ordinal())
+            {
+                isEscalationRequested = true;
+            }
+        }
+
         if (isEscalationRequested)
         {
             String targetLevelStr = targetLevelCandidate != null ? targetLevelCandidate : "STANDARD";
