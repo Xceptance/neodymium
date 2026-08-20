@@ -4,7 +4,7 @@ import java.util.Properties;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.junit5.NeodymiumTest;
 
 public class BadProxyEnvironmentConfigurationJunit5
 {

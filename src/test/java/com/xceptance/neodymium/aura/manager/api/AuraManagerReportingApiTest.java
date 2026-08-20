@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;

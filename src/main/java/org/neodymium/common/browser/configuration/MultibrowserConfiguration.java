@@ -54,7 +54,7 @@ public class MultibrowserConfiguration
 
     private Properties browserProfileProperties;
 
-    private MultibrowserConfiguration(String temporaryConfigFile)
+    protected MultibrowserConfiguration(String temporaryConfigFile)
     {
         // setting up the test environment
         testEnvironmentProperties = new Properties();

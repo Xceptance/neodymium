@@ -3,8 +3,8 @@ package com.xceptance.neodymium.junit4.testclasses.data.folder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.testdata.DataFolder;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.testdata.DataFolder;
+import org.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
 @DataFolder("com/xceptance/neodymium/junit4/testclasses/data/folder/invalid_id")

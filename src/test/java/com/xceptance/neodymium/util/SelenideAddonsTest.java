@@ -33,10 +33,10 @@ import com.codeborne.selenide.logevents.LogEventListener;
 import com.codeborne.selenide.logevents.SelenideLog;
 import com.codeborne.selenide.logevents.SelenideLogger;
 import org.neodymium.ai.util.EmbeddedHtmlServer;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.SuppressBrowsers;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit4.NeodymiumRunner;
 
 @Retry(exceptions =
 {

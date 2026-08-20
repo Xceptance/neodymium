@@ -40,8 +40,8 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
 import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Layout regression test for the Aura Dashboard 4-state history column layout.

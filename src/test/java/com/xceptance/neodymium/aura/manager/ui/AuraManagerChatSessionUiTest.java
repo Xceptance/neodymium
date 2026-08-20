@@ -31,8 +31,8 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
 import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 /**
  * Selenide-based UI tests covering chat session handling in Aura Manager:
@@ -63,6 +63,7 @@ public class AuraManagerChatSessionUiTest extends BaseAuraManagerUiTest
         final String url = Neodymium.getData().get("auraManagerUrl");
         Selenide.open(url);
 
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
         $("#chatContainer").shouldBe(Condition.visible);
 
         final int initialSessionCount = $$("#chatSessionSelect option").size();
@@ -94,6 +95,7 @@ public class AuraManagerChatSessionUiTest extends BaseAuraManagerUiTest
         final String url = Neodymium.getData().get("auraManagerUrl");
         Selenide.open(url);
 
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
         $("#chatContainer").shouldBe(Condition.visible);
 
         // First Rename
@@ -123,6 +125,7 @@ public class AuraManagerChatSessionUiTest extends BaseAuraManagerUiTest
         final String url = Neodymium.getData().get("auraManagerUrl");
         Selenide.open(url);
 
+        $("#auraChatLauncher").shouldBe(Condition.visible).click();
         $("#chatContainer").shouldBe(Condition.visible);
 
         // Provision extra sessions first so we can delete twice

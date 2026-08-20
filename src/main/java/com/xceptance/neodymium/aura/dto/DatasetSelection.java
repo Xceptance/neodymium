@@ -18,6 +18,8 @@
  */
 package com.xceptance.neodymium.aura.dto;
 
+import java.util.List;
+
 /**
  * Data transfer object representing a selected dataset inside a YAML test file.
  *
@@ -28,6 +30,7 @@ public final class DatasetSelection
 {
     public String file;
     public String id; // testId or index
+    public List<String> browserProfiles; // null or empty means inherit global browser profiles
 
     public DatasetSelection()
     {
@@ -38,4 +41,12 @@ public final class DatasetSelection
         this.file = file;
         this.id = id;
     }
+
+    public DatasetSelection(final String file, final String id, final List<String> browserProfiles)
+    {
+        this.file = file;
+        this.id = id;
+        this.browserProfiles = browserProfiles;
+    }
 }
+

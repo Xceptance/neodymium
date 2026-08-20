@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit5.testclasses.data.folder;
 
 
-import com.xceptance.neodymium.common.testdata.DataFolder;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.testdata.DataFolder;
+import org.neodymium.junit5.NeodymiumTest;
 
 @DataFolder("com/xceptance/neodymium/junit5/testclasses/data/folder/unsupported")
 public class UnsupportedFileDataFolder

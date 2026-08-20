@@ -12,7 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
+import org.neodymium.common.testdata.util.YamlFileReader;
 
 public class YamlFileReaderTest
 {

@@ -6,9 +6,9 @@ import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.util.Neodymium;
 
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")

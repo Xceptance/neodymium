@@ -35,6 +35,7 @@ public final class ChatResponse
     public String filename;
     public String content;
     public List<DatasetSelection> selectedDatasets;
+    public List<String> selectedBrowserProfiles;
 
     public ChatResponse()
     {
@@ -43,6 +44,13 @@ public final class ChatResponse
     public ChatResponse(final String message, final String thinking, final String action, final List<String> files,
             final String filename, final String content, final List<DatasetSelection> selectedDatasets)
     {
+        this(message, thinking, action, files, filename, content, selectedDatasets, null);
+    }
+
+    public ChatResponse(final String message, final String thinking, final String action, final List<String> files,
+            final String filename, final String content, final List<DatasetSelection> selectedDatasets,
+            final List<String> selectedBrowserProfiles)
+    {
         this.message = message;
         this.thinking = thinking;
         this.action = action;
@@ -50,5 +58,6 @@ public final class ChatResponse
         this.filename = filename;
         this.content = content;
         this.selectedDatasets = selectedDatasets;
+        this.selectedBrowserProfiles = selectedBrowserProfiles;
     }
 }

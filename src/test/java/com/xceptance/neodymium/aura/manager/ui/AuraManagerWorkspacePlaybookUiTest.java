@@ -7,7 +7,7 @@ import org.neodymium.ai.junit.NeodymiumAiTest;
 
 import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
-import com.xceptance.neodymium.common.testdata.DataSet;
+import org.neodymium.common.testdata.DataSet;
 
 /**
  * Playbook-based UI test for Aura Manager workspace files management.

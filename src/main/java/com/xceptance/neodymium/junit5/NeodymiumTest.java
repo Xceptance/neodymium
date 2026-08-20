@@ -21,6 +21,7 @@ import io.qameta.allure.junit5.AllureJunit5;
   NeodymiumRunner.class, AllureJunit5.class
 
 })
+@Deprecated
 public @interface NeodymiumTest
 {
 

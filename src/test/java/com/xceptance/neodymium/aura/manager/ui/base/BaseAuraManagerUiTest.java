@@ -8,7 +8,7 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.neodymium.ai.config.AiConfiguration;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 
 /**
  * Abstract base class for Aura Manager UI tests.

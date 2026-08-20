@@ -12,12 +12,12 @@ import org.openqa.selenium.WebDriver;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.KeepBrowserOpen;
-import com.xceptance.neodymium.common.browser.WebDriverCache;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.KeepBrowserOpen;
+import org.neodymium.common.browser.WebDriverCache;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_1024x768")

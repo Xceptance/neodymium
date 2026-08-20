@@ -28,18 +28,24 @@ import org.slf4j.LoggerFactory;
 import org.neodymium.common.testdata.DataFile;
 import org.neodymium.common.testdata.DataFolder;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 import java.util.regex.Pattern;
 /**
  * Utility class for test data handling.
  * 
  * @author Hartmut Arlt (Xceptance Software Technologies GmbH)
  */
-public final class TestDataUtils
+public class TestDataUtils
 {
     /**
      * Class logger.
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(TestDataUtils.class);
+
+    protected TestDataUtils()
+    {
+
+    }
 
     /**
      * Returns the test data sets associated with the given test case class.
@@ -60,8 +66,8 @@ public final class TestDataUtils
             fileFilterPattern = Pattern.compile(Neodymium.configuration().getTestFileFilter());
         }
 
-        DataFile[] dataFiles = testClass.getAnnotationsByType(DataFile.class);
-        DataFolder[] dataFolders = testClass.getAnnotationsByType(DataFolder.class);
+        DataFile[] dataFiles = NeodymiumAnnotationUtils.getAnnotations(testClass, DataFile.class).toArray(new DataFile[0]);
+        DataFolder[] dataFolders = NeodymiumAnnotationUtils.getAnnotations(testClass, DataFolder.class).toArray(new DataFolder[0]);
 
         // If this is an AI Test Generator, do not read data sets but automatically create data folders if requested
         boolean isGenerator = false;

@@ -1,9 +1,9 @@
 package com.xceptance.neodymium.junit5.tests.recording.automatic;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.RecordingConfigurations;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.testclasses.recording.CustomRecordingTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import org.aeonbits.owner.ConfigFactory;

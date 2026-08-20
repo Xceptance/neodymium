@@ -20,8 +20,8 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.proxy.RequestMatcher.HttpMethod;
 import com.codeborne.selenide.proxy.RequestMatchers;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 
 @RunWith(NeodymiumRunner.class)

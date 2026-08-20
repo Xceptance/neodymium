@@ -4,11 +4,11 @@ import java.util.ArrayList;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.RandomBrowsers;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.RandomBrowsers;
+import org.neodymium.common.browser.SuppressBrowsers;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 @Browser("browser1")
 @Browser("browser2")

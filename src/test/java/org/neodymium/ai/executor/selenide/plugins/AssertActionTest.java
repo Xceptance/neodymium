@@ -90,4 +90,38 @@ public class AssertActionTest extends BaseAiTest
         // #welcome-message contains text: "Welcome to our web store!"
         plugin.execute(new Action("ASSERT", "#welcome-message", "Welcome", "check literal Welcome", "reasoning", false));
     }
+
+    @Test
+    @DisplayName("AssertAction handles URL and Title assertions with isRegex=true cleanly")
+    public void testAssertActionUrlAndTitleRegexMatching() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. URL regex match
+        plugin.execute(new Action("ASSERT", "url", ".*AssertActionTest/testAssertHappyPath\\.html", "check url regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "currentUrl", ".*/testAssertHappyPath\\.html.*", "check currentUrl regex", "reasoning", true));
+
+        // 2. Title regex match
+        plugin.execute(new Action("ASSERT", "title", ".*Assert.*Action.*Test.*", "check title regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "pageTitle", "^Assert.*Test$", "check pageTitle regex", "reasoning", true));
+    }
+
+    @Test
+    @DisplayName("AssertAction handles URL and Title assertions with isRegex=false literal contains cleanly")
+    public void testAssertActionUrlAndTitleLiteralContains() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. URL literal substring contains
+        plugin.execute(new Action("ASSERT", "url", "testAssertHappyPath.html", "check url contains", "reasoning", false));
+
+        // 2. Title literal substring contains
+        plugin.execute(new Action("ASSERT", "title", "Assert Action", "check title contains", "reasoning", false));
+    }
 }

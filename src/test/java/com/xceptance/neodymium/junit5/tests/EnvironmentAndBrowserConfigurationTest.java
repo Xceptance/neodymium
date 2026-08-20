@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.common.browser.configuration.BadProxyEnvironmentConfigurationJunit5;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.testclasses.multibrowser.BrowserWithoutAvailableEnvironment;
 import com.xceptance.neodymium.junit5.testclasses.multibrowser.EnvironmentAndBrowserConfiguration;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;

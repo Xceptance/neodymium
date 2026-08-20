@@ -48,8 +48,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide integration tests for the <em>standalone</em> Interactive View — that is, the

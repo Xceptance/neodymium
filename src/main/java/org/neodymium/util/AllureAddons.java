@@ -67,7 +67,7 @@ public class AllureAddons
 
     private static boolean neoVersionLogged = false;
 
-    static boolean customDataAdded = false;
+    public static boolean customDataAdded = false;
 
     private static final int MAX_RETRY_COUNT = 10;
 
@@ -377,7 +377,7 @@ public class AllureAddons
         addEnvironmentInformation(environmentValuesSet, EnvironmentInfoMode.REPLACE);
     }
 
-    static synchronized boolean lockEnvironmentInformationFile() throws IOException
+    public static synchronized boolean lockEnvironmentInformationFile() throws IOException
     {
         Path lockFilePath = getEnvironmentLockFile();
         boolean lock = false;
@@ -599,7 +599,7 @@ public class AllureAddons
         }
     }
 
-    static void unlockEnvironmentFile() throws IOException
+    public static void unlockEnvironmentFile() throws IOException
     {
         Files.delete(getEnvironmentLockFile());
     }

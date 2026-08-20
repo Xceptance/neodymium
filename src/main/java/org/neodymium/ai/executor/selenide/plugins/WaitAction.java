@@ -126,7 +126,15 @@ public final class WaitAction implements BrowserActionPlugin
                     }
                     else
                     {
-                        SelenideElementFinder.findElement(action).shouldHave(Condition.text(value), Duration.ofSeconds(10));
+                        if (action.isRegex())
+                        {
+                            final String cleanRegex = AssertAction.cleanRegexPattern(value);
+                            SelenideElementFinder.findElement(action).shouldHave(Condition.matchText(cleanRegex), Duration.ofSeconds(10));
+                        }
+                        else
+                        {
+                            SelenideElementFinder.findElement(action).shouldHave(Condition.text(value), Duration.ofSeconds(10));
+                        }
                     }
                 }
                 else

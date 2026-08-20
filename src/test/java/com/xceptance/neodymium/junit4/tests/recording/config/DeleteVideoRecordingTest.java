@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit4.tests.recording.config;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingDeletionTest;
 import org.junit.AfterClass;
 import org.junit.Assert;

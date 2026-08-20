@@ -77,6 +77,10 @@ function toggleExpandFile(file, targetEl) {
                     icon.classList.add('fa-chevron-right');
                 }
             }
+            const matIcon = listItem.querySelector('.item-main .material-symbols-outlined');
+            if (matIcon) {
+                matIcon.textContent = isHidden ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
+            }
         }
     }
     fetch('/api/files/toggle?file=' + encodeURIComponent(file), { method: 'POST' }).catch(() => {});

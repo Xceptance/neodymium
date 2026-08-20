@@ -13,10 +13,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_1024x768")

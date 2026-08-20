@@ -23,6 +23,7 @@ import java.lang.annotation.Target;
 {
   TYPE
 })
+@Deprecated
 public @interface DataFile
 {
     /**

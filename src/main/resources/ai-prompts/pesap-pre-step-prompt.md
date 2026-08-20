@@ -3,9 +3,9 @@ Predict minimal context level and metadata for the current step.
 ## Rules
 1. Context Level ('c'):
    - Explicit selector hint tag `(hint: ...)` -> HINT
-   - Element state or presence assertion (focused, checked, unchecked, disabled, enabled, selected, readonly, editable, present, absent, exists, visible) -> MINIMAL
+   - Interactive element state or presence assertion (focused, checked, unchecked, disabled, enabled, selected, readonly, editable, button/link present, exists, visible) -> MINIMAL
    - Scoped container section (modal, dialog, form, header, card) or standard form input action verb (typing text, filling fields, selecting options, submitting forms, logging in) -> LEAN
-   - General text validation, heading check, or pattern string assertion -> STANDARD
+   - General text validation, heading check, result count badge, or pattern string assertion -> STANDARD
    - Complex data grid, table validation, or multi-field calculation -> RICH
    - Visual assertion `(visual)` -> VISUAL 
    - Visual interaction -> VISUAL_LEAN

@@ -15,7 +15,7 @@ import org.junit.Test;
 
 import org.junit.runner.Result;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.testclasses.context.BrowserContextSetup;
 import com.xceptance.neodymium.junit4.testclasses.context.ContextGetsCleared;
 import com.xceptance.neodymium.junit4.testclasses.context.DefaultSelenideConfiguration;
@@ -24,7 +24,7 @@ import com.xceptance.neodymium.junit4.testclasses.context.OverrideNeodymiumConfi
 import com.xceptance.neodymium.junit4.testclasses.context.SelenideConfigurationShortcuts;
 import com.xceptance.neodymium.junit4.testclasses.context.WindowSizeTests;
 import com.xceptance.neodymium.junit4.testclasses.context.cucumbercontextclear.CucumberContextGetsCleared;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class NeodymiumContextTest extends NeodymiumTest
 {

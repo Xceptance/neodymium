@@ -33,7 +33,7 @@ public class WebDriverCache
      * neodymium.webDriver.keepBrowserOpen property is set to <code>false</code> in property file "browser.properties".
      * See config folder
      */
-    private WebDriverCache()
+    protected WebDriverCache()
     {
         Runtime.getRuntime().addShutdownHook(new WebDriverCacheCleanupHook());
     }

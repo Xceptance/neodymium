@@ -18,7 +18,7 @@ public class NeodymiumLocalization
 {
     private final Properties properties;
 
-    private NeodymiumLocalization(final Properties properties)
+    protected NeodymiumLocalization(final Properties properties)
     {
         this.properties = properties;
     }

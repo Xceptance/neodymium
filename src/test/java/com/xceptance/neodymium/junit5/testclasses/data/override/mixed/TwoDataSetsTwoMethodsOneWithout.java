@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit5.testclasses.data.override.mixed;
 
-import com.xceptance.neodymium.common.testdata.SuppressDataSets;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.testdata.SuppressDataSets;
+import org.neodymium.junit5.NeodymiumTest;
 
 public class TwoDataSetsTwoMethodsOneWithout
 {

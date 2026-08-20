@@ -23,6 +23,7 @@ import java.lang.annotation.Target;
 {
   ElementType.FIELD
 })
+@Deprecated
 public @interface DataItem
 {
     /**

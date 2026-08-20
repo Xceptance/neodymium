@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata;
 
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.AllureAddons;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.AllureAddons;
 
 import java.io.File;
 import java.util.Map;

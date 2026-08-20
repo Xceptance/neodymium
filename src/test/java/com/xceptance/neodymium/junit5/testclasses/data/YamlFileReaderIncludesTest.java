@@ -41,9 +41,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import com.xceptance.neodymium.common.testdata.util.MalformedPlaybookException;
-import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.util.MalformedPlaybookException;
+import org.neodymium.common.testdata.util.YamlFileReader;
+import org.neodymium.util.Neodymium;
 
 public final class YamlFileReaderIncludesTest
 {

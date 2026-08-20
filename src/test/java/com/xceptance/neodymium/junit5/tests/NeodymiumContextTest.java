@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.testclasses.context.BrowserContextSetup;
 import com.xceptance.neodymium.junit5.testclasses.context.ContextGetsCleared;
 import com.xceptance.neodymium.junit5.testclasses.context.DefaultSelenideConfiguration;
@@ -22,7 +22,7 @@ import com.xceptance.neodymium.junit5.testclasses.context.OverrideNeodymiumConfi
 import com.xceptance.neodymium.junit5.testclasses.context.SelenideConfigurationShortcuts;
 import com.xceptance.neodymium.junit5.testclasses.context.WindowSizeTests;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class NeodymiumContextTest extends AbstractNeodymiumTest
 {

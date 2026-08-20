@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.neodymium.common.Data;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 
 /**
  * Class to store information about maximal number of retries and expected errors for the specific test. Produces
@@ -78,10 +79,10 @@ public class RetryData
         List<T> annotations = new ArrayList<T>();
         while (type != null)
         {
-            T annotationsOfCurrentType = type.getDeclaredAnnotation(annotationClass);
-            if (annotationsOfCurrentType != null)
+            List<T> annotationsOfCurrentType = NeodymiumAnnotationUtils.getAnnotations(type, annotationClass);
+            if (!annotationsOfCurrentType.isEmpty())
             {
-                annotations.addAll(List.of(annotationsOfCurrentType));
+                annotations.addAll(annotationsOfCurrentType);
             }
             type = type.getSuperclass();
         }

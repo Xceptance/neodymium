@@ -34,7 +34,7 @@ import org.openqa.selenium.WrapsDriver;
 import org.openqa.selenium.interactions.Interactive;
 
 import com.codeborne.selenide.WebDriverRunner;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Utility helper class for Neodymium AI Interactive HUD integration tests.

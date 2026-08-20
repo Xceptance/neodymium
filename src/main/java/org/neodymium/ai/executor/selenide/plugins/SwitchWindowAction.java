@@ -21,6 +21,7 @@ package org.neodymium.ai.executor.selenide.plugins;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.WebDriver;
@@ -121,13 +122,22 @@ public final class SwitchWindowAction implements BrowserActionPlugin
                 }
             }
 
-            // Treat parameter as window title substring search
+            // Treat parameter as window title search (regex or substring)
+            final Pattern pattern = action.isRegex() ? Pattern.compile(AssertAction.cleanRegexPattern(param), Pattern.DOTALL | Pattern.MULTILINE) : null;
             for (final String handle : handleList)
             {
                 driver.switchTo().window(handle);
-                if (driver.getTitle().contains(param))
+                final String title = driver.getTitle();
+                if (title != null)
                 {
-                    return;
+                    if (pattern != null && pattern.matcher(title).find())
+                    {
+                        return;
+                    }
+                    else if (pattern == null && title.contains(param))
+                    {
+                        return;
+                    }
                 }
             }
 

@@ -54,7 +54,7 @@ import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.junit5.testclasses.data.folder.ValidDataFolder;
 import com.xceptance.neodymium.junit5.testclasses.data.folder.InvalidIdDataFolder;
 import com.xceptance.neodymium.junit5.testclasses.data.folder.UnsupportedFileDataFolder;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class TestDataStatementTest extends AbstractNeodymiumTest
 {

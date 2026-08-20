@@ -7,11 +7,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.GifRecordingConfigurations;
+import org.neodymium.common.recording.config.VideoRecordingConfigurations;
+import org.neodymium.junit4.NeodymiumRunner;
 
 @Browser("Chrome_headless")
 @RunWith(NeodymiumRunner.class)

@@ -421,7 +421,8 @@ public class NeodymiumRandom
         }
     }
 
-    public enum SeedState
+    @Deprecated
+public enum SeedState
     {
         INITIALIZED, RESEEDED, LOGGED;
     }

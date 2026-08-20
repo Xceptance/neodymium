@@ -5,9 +5,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
 import org.junit.jupiter.api.BeforeEach;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.SuppressBrowsers;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit5.NeodymiumTest;
 
 @Retry(exceptions =
 {

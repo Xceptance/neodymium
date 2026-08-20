@@ -107,19 +107,13 @@
         <!-- HORIZONTAL RESIZER -->
         <div class="resizer-h" id="sidebarResizer"></div>
         
-        <!-- RIGHT AREA -->
+        <!-- RIGHT AREA: RUN CONFIGURATION -->
         <div class="right-area" id="rightArea">
-            <!-- Insert Chat Assistant Panel Fragment -->
-            <div class="panel chat-container" id="chatContainer" th:fragment="chatContainer">
-                <div th:replace="~{fragments/chat :: chatContainerContent}"></div>
-            </div>
-            
-            <!-- Insert Configuration Panel Fragment -->
-            <div class="panel config-container">
+            <div class="panel config-container" style="display: flex; flex-direction: column; height: 100%;">
                 <div class="panel-header">
                     <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">tune</span> <span>Run Configuration</span></div>
                 </div>
-                <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel">
+                <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel" style="flex: 1; overflow-y: auto;">
                     <div th:replace="~{fragments/queue :: configPanelContent}"></div>
                 </div>
                 <div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
@@ -200,10 +194,88 @@
     </div>
 </div>
 
+<!-- FLOATING AURA AI CHAT LAUNCHER BUBBLE -->
+<div id="auraChatLauncher" class="aura-chat-launcher" onclick="toggleAuraChat()" title="Open Aura AI Assistant">
+    <div class="aura-chat-launcher-icon">
+        <span class="material-symbols-outlined">auto_awesome</span>
+    </div>
+    <span class="aura-chat-launcher-label">Aura AI</span>
+    <span class="aura-chat-launcher-badge" id="chatBadgeDot"></span>
+</div>
+
+<!-- FLOATING AURA AI CHAT OVERLAY -->
+<div id="auraChatOverlay" class="aura-chat-overlay" style="display: none;">
+    <div class="aura-chat-overlay-card">
+        <div class="panel chat-container" id="chatContainer" th:fragment="chatContainer">
+            <div th:replace="~{fragments/chat :: chatContainerContent}"></div>
+        </div>
+    </div>
+</div>
+
 <!-- MODALS -->
 <div th:replace="~{fragments/settings-modal :: settingsModal}"></div>
 <div th:replace="~{fragments/modals :: createTestModal}"></div>
 <div th:replace="~{fragments/modals :: deleteTestModal}"></div>
+
+<!-- PER-ITEM BROWSER PICKER MODAL -->
+<div class="modal-overlay" id="itemBrowserModal" style="display: none; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9999; backdrop-filter: blur(3px);">
+    <div class="modal-card" style="width: 380px; max-width: 92vw; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.6); padding: 18px; animation: modalSlideIn 0.2s ease-out;">
+        <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="color: var(--accent); font-size: 20px;">tune</span>
+                <span style="font-weight: 700; font-size: 14px;" id="itemBrowserHeaderTitle">Item #1 Profiles</span>
+            </div>
+            <button type="button" class="btn-edit" onclick="closeItemBrowserModal()" style="padding: 2px 6px; font-size: 12px; border: none; background: transparent; cursor: pointer;">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px;">
+            <span>Target:</span>
+            <span id="itemBrowserTargetFile" style="color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis;">file.yaml</span> 
+            <span id="itemBrowserTargetId" class="badge-dataset" style="margin-left: 2px;"></span>
+        </div>
+
+        <!-- Hidden input for tracking active target index -->
+        <input type="hidden" id="itemBrowserTargetIndex" value="-1"/>
+
+        <!-- Inherit Global Switch -->
+        <div class="config-row-wrapper" style="background: var(--bg-main); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px;">
+            <div class="config-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 12.5px; font-weight: 600;">Inherit Global Profiles</span>
+                <label class="switch" for="itemBrowserInheritSwitch">
+                    <input type="checkbox" id="itemBrowserInheritSwitch" onchange="toggleItemBrowserInherit()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span id="itemBrowserInheritHint" style="font-size: 11px; color: var(--text-secondary); display: block; margin-top: 4px;">Uses the global browser selection.</span>
+        </div>
+
+        <!-- Custom Profiles Checkbox List -->
+        <div id="itemBrowserCustomList" style="display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; margin-bottom: 14px; padding-right: 2px;">
+            <div th:each="p : ${availableBrowserProfiles}" class="item-profile-row profile-checkbox-row"
+                 th:data-profile-id="${p.id}"
+                 onclick="toggleItemProfileRow(this)">
+                <div class="profile-info" style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                    <input type="checkbox" class="item-profile-cb" th:value="${p.id}" style="pointer-events: none; accent-color: var(--accent); cursor: pointer; border-radius: 4px;"/>
+                    <span style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" th:text="${p.name}">Chrome 1024x768</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <span class="profile-res-tag" th:if="${p.res != null and !p.res.isEmpty()}" th:text="${p.res}">1024x768</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Status & Actions -->
+        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 12px;">
+            <span id="itemBrowserCountText" style="font-size: 11.5px; color: var(--text-secondary); font-weight: 500;">0 profiles selected</span>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn-edit" onclick="closeItemBrowserModal()" style="padding: 6px 12px; font-size: 12px;">Cancel</button>
+                <button type="button" class="btn-primary" onclick="saveItemBrowserModal()" style="padding: 6px 16px; font-size: 12px; font-weight: 600;">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- VIEW LOG MODAL -->
 <div class="modal-overlay neo-u-49" id="logModal">

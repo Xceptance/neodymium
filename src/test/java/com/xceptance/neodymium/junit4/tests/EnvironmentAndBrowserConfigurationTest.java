@@ -11,7 +11,7 @@ import org.junit.Test;
 import org.junit.runner.Result;
 
 import com.xceptance.neodymium.common.browser.configuration.BadProxyEnvironmentConfigurationJunit4;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.testclasses.multibrowser.BrowserWithoutAvailableEnvironment;
 import com.xceptance.neodymium.junit4.testclasses.multibrowser.EnvironmentAndBrowserConfiguration;
 

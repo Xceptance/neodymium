@@ -3,6 +3,7 @@ package org.neodymium.common.browser;
 import org.neodymium.common.Data;
 import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -251,7 +252,7 @@ public class BrowserData extends Data
     private BrowserMethodData addKeepBrowserOpenInformation(String browserTag, Method method)
     {
         BrowserMethodData browserMethodData = addKeepBrowserOpenInformationForBeforeOrAfter(browserTag, method);
-        boolean junit5 = method.getAnnotation(NeodymiumTest.class) != null;
+        boolean junit5 = NeodymiumAnnotationUtils.isAnnotationPresent(method, NeodymiumTest.class);
         List<Method> afterMethodsWithTestBrowser = Stream.of(testClass.getMethods())
                                                          .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
                                                                                         : classMethod.getAnnotation(After.class)) != null)
@@ -268,24 +269,24 @@ public class BrowserData extends Data
         if (Neodymium.configuration().startNewBrowserForSetUp())
         {
             separateBrowserForSetupRequired = Neodymium.configuration().startNewBrowserForSetUp()
-                                              && (testClass.getAnnotation(StartNewBrowserForSetUp.class) != null
+                                              && (NeodymiumAnnotationUtils.isAnnotationPresent(testClass, StartNewBrowserForSetUp.class)
                                                   || Stream.of(testClass.getMethods())
                                                            .anyMatch(classMethod -> (junit5 ? classMethod.getAnnotation(BeforeEach.class)
                                                                                             : classMethod.getAnnotation(Before.class)) != null
-                                                                                    && classMethod.getAnnotation(StartNewBrowserForSetUp.class) != null));
+                                                                                    && NeodymiumAnnotationUtils.isAnnotationPresent(classMethod, StartNewBrowserForSetUp.class)));
         }
         if (Neodymium.configuration().startNewBrowserForCleanUp())
         {
             List<Method> afterMethods = new ArrayList<Method>(afterMethodsWithTestBrowser);
             afterMethodsWithTestBrowser = new ArrayList<Method>();
-            if (testClass.getAnnotation(StartNewBrowserForCleanUp.class) == null)
+            if (!NeodymiumAnnotationUtils.isAnnotationPresent(testClass, StartNewBrowserForCleanUp.class))
             {
-                afterMethodsWithTestBrowser = afterMethods.stream().filter(classMethod -> classMethod.getAnnotation(StartNewBrowserForCleanUp.class) == null)
+                afterMethodsWithTestBrowser = afterMethods.stream().filter(classMethod -> !NeodymiumAnnotationUtils.isAnnotationPresent(classMethod, StartNewBrowserForCleanUp.class))
                                                           .collect(Collectors.toList());
             }
             else
             {
-                afterMethodsWithTestBrowser = afterMethods.stream().filter(classMethod -> classMethod.getAnnotation(SuppressBrowsers.class) != null)
+                afterMethodsWithTestBrowser = afterMethods.stream().filter(classMethod -> NeodymiumAnnotationUtils.isAnnotationPresent(classMethod, SuppressBrowsers.class))
                                                           .collect(Collectors.toList());
             }
             separateBrowserForCleanupRequired = afterMethodsWithTestBrowser.isEmpty() && !afterMethods.isEmpty();
@@ -314,39 +315,8 @@ public class BrowserData extends Data
         return browsers;
     }
 
-    @SuppressWarnings("unchecked")
     public static <T extends Annotation> List<T> getDeclaredAnnotations(AnnotatedElement object, Class<T> annotationClass)
     {
-        List<T> annotations = new LinkedList<>();
-        if (object == null || annotationClass == null)
-        {
-            return annotations;
-        }
-
-        // check if the annotation is repeatable
-        Repeatable repeatingAnnotation = annotationClass.getAnnotation(Repeatable.class);
-        Annotation annotation = (repeatingAnnotation == null) ? null : object.getDeclaredAnnotation(repeatingAnnotation.value());
-
-        if (annotation != null)
-        {
-            try
-            {
-                annotations.addAll(Arrays.asList((T[]) annotation.getClass().getMethod("value").invoke(annotation)));
-            }
-            catch (ReflectiveOperationException e)
-            {
-                throw new RuntimeException(e);
-            }
-        }
-        else
-        {
-            T anno = object.getDeclaredAnnotation(annotationClass);
-            if (anno != null)
-            {
-                annotations.add(anno);
-            }
-        }
-
-        return annotations;
+        return NeodymiumAnnotationUtils.getAnnotations(object, annotationClass);
     }
 }

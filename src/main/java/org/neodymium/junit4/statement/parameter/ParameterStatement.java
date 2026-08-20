@@ -135,7 +135,8 @@ public class ParameterStatement extends StatementBuilder<ParameterStatementData>
         for (FrameworkField parameterFrameworkField : statementData.getParameterFrameworkFields())
         {
             Field field = parameterFrameworkField.getField();
-            int parameterIndex = field.getAnnotation(Parameter.class).value();
+            Parameter parameterAnno = field.getAnnotation(Parameter.class);
+            int parameterIndex = parameterAnno != null ? parameterAnno.value() : 0;
 
             LOGGER.debug("Set parameter \"" + parameterFrameworkField.getName() + "\" to \"" + parameter[parameterIndex] + "\"");
             setField(field, parameter[parameterIndex]);

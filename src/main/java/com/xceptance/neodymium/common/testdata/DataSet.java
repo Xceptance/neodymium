@@ -29,6 +29,7 @@ import java.lang.annotation.Target;
   TYPE, METHOD
 })
 @Repeatable(DataSets.class)
+@Deprecated
 public @interface DataSet
 {
     /**

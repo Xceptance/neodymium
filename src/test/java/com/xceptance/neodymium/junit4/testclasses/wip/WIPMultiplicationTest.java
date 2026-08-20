@@ -3,9 +3,9 @@ package com.xceptance.neodymium.junit4.testclasses.wip;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.WorkInProgress;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.WorkInProgress;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit4.NeodymiumRunner;
 
 @Browser("Chrome_headless")
 @Browser("Chrome_1500x1000_headless")

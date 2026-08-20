@@ -873,6 +873,7 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 initialLevel = ContextLevel.HINT;
             }
+            final ContextLevel baseLevel = initialLevel;
 
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
@@ -1047,22 +1048,24 @@ public final class ExecuteActionsStep implements PipelineStep
             else
             {
                 // Live mode: Query LLM for actions
-                final boolean verificationEnabled = AiConfiguration.getInstance().isSemanticVerificationEnabled();
-                final ContextLevel captureLevel;
-                if (verificationEnabled && (initialLevel == ContextLevel.MINIMAL || initialLevel == ContextLevel.LEAN))
-                {
-                    captureLevel = ContextLevel.VISUAL_LEAN;
-                }
-                else
-                {
-                    captureLevel = initialLevel;
-                }
-
                 standardFlow.add(c -> {
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     try
                     {
                         final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                        final Object currentLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                        final ContextLevel currentLevel = currentLevelObj instanceof ContextLevel cl ? cl : baseLevel;
+                        final boolean verificationEnabled = AiConfiguration.getInstance().isSemanticVerificationEnabled();
+                        final ContextLevel captureLevel;
+                        if (verificationEnabled && (currentLevel == ContextLevel.MINIMAL || currentLevel == ContextLevel.LEAN))
+                        {
+                            captureLevel = ContextLevel.VISUAL_LEAN;
+                        }
+                        else
+                        {
+                            captureLevel = currentLevel;
+                        }
+
                         final SutState state = executor.captureState(captureLevel, isFullPageReq);
                         c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
                         if (session != null && session.getEventBus() != null && state != null)
@@ -1084,7 +1087,8 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                 });
 
-                final LlmCapability capability = (initialLevel != null && initialLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
+                final ContextLevel targetCapLevel = effectiveLevel != null ? effectiveLevel : baseLevel;
+                final LlmCapability capability = (targetCapLevel != null && targetCapLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
                 final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
                 standardFlow.add(llmStep);
                 if (AiConfiguration.getInstance().isJudgeEnabled())

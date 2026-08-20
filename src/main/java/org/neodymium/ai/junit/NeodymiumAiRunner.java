@@ -64,10 +64,9 @@ import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
-import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.BrowserData;
 import org.neodymium.common.browser.BrowserMethodData;
-import org.neodymium.common.browser.BrowserRunner;
-import org.neodymium.common.browser.Browsers;
+import org.neodymium.junit5.browser.BrowserExecutionCallback;
 import org.neodymium.util.Neodymium;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
@@ -77,10 +76,10 @@ import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
  * JUnit 5 {@link TestTemplateInvocationContextProvider} implementation for Neodymium AI tests.
  * Resolves playbooks, filters datasets, maps sequential executions, and manages lifecycle context.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider, BeforeEachCallback, AfterEachCallback, BeforeAllCallback, AfterAllCallback
+public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider, BeforeAllCallback, AfterAllCallback
 {
     /**
      * In-memory storage for inline playbooks registered at test runtime.
@@ -104,108 +103,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     public void afterAll(final ExtensionContext context) throws Exception
     {
         InMemoryLlmCache.clear();
-    }
-
-    @Override
-    public void beforeEach(final ExtensionContext context) throws Exception
-    {
-        if (context.getTestMethod().isPresent() && context.getTestClass().isPresent())
-        {
-            Neodymium.setTestName(
-                context.getRequiredTestClass().getSimpleName() + "." + context.getRequiredTestMethod().getName()
-            );
-        }
-
-        final Method method = context.getTestMethod().orElse(null);
-        if (method != null && !method.isAnnotationPresent(AiPlaybook.class) && !method.isAnnotationPresent(AiInlinePlaybook.class))
-        {
-            if (!Neodymium.hasDriver())
-            {
-                final String profileName = resolveBrowserAnnotation(context);
-                if (profileName != null)
-                {
-                    Neodymium.setBrowserProfileName(profileName);
-                    final BrowserRunner runner = new BrowserRunner();
-                    runner.setUpTest(
-                        new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                        Neodymium.getTestName()
-                    );
-                    if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
-                    {
-                        final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getDecoratedWebDriver() != null
-                            ? Neodymium.getWebDriverStateContainer().getDecoratedWebDriver()
-                            : Neodymium.getWebDriverStateContainer().getWebDriver();
-                        WebDriverRunner.setWebDriver(driver);
-                    }
-                }
-            }
-        }
-    }
-
-    @Override
-    public void afterEach(final ExtensionContext context) throws Exception
-    {
-        final Method method = context.getTestMethod().orElse(null);
-        if (method != null && !method.isAnnotationPresent(AiPlaybook.class) && !method.isAnnotationPresent(AiInlinePlaybook.class))
-        {
-            teardownBrowserProfile();
-        }
-    }
-
-    private static void teardownBrowserProfile()
-    {
-        try
-        {
-            org.neodymium.util.WebDriverUtils.preventReuseAndTearDown();
-        }
-        catch (final Exception e)
-        {
-            try
-            {
-                com.codeborne.selenide.Selenide.closeWebDriver();
-            }
-            catch (final Exception ignored)
-            {
-                // Ignore fallback closure errors
-            }
-        }
-    }
-
-    private static String resolveBrowserAnnotation(final ExtensionContext context)
-    {
-        if (context.getTestMethod().isPresent())
-        {
-            final Method method = context.getRequiredTestMethod();
-            if (method.isAnnotationPresent(Browser.class))
-            {
-                return method.getAnnotation(Browser.class).value();
-            }
-            if (method.isAnnotationPresent(Browsers.class))
-            {
-                final Browser[] bs = method.getAnnotation(Browsers.class).value();
-                if (bs.length > 0)
-                {
-                    return bs[0].value();
-                }
-            }
-        }
-        if (context.getTestClass().isPresent())
-        {
-            final Class<?> testClass = context.getRequiredTestClass();
-            if (testClass.isAnnotationPresent(Browser.class))
-            {
-                return testClass.getAnnotation(Browser.class).value();
-            }
-            if (testClass.isAnnotationPresent(Browsers.class))
-            {
-                final Browser[] bs = testClass.getAnnotation(Browsers.class).value();
-                if (bs.length > 0)
-                {
-                    return bs[0].value();
-                }
-            }
-        }
-        return null;
     }
 
     @Override
@@ -481,6 +378,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         final List<TestTemplateInvocationContext> invocationContexts = new ArrayList<>();
         final PlaybookParser parser = new YamlPlaybookParser();
 
+        final BrowserData browserData = new BrowserData(testClass);
+        final List<BrowserMethodData> browsers = browserData.createIterationData(method);
+        if (browsers.isEmpty())
+        {
+            browsers.add(null);
+        }
+
         for (final String playbookPath : resolvedPaths)
         {
             Playbook playbook;
@@ -540,28 +444,38 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            // Create template invocation context for Cartesian product of datasets and execution modes
-            for (final ExecutionMode mode : modes)
+            // Create template invocation context for Cartesian product of browsers, playbooks, datasets, and execution modes
+            for (final BrowserMethodData browser : browsers)
             {
-                for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
+                for (final ExecutionMode mode : modes)
                 {
-                    final String dsId = getDataSetId(dataset);
-                    invocationContexts.add(new TestTemplateInvocationContext()
+                    for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
                     {
-                        @Override
-                        public String getDisplayName(final int invocationIndex)
+                        final String dsId = getDataSetId(dataset);
+                        invocationContexts.add(new TestTemplateInvocationContext()
                         {
-                            final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
-                            final String datasetLabel = dsId != null ? dsId : "default";
-                            return String.format("[%d] playbook=%s, dataset=%s, mode=%s", invocationIndex, name, datasetLabel, mode);
-                        }
+                            @Override
+                            public String getDisplayName(final int invocationIndex)
+                            {
+                                final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
+                                final String datasetLabel = dsId != null ? dsId : "default";
+                                final String browserLabel = browser != null ? " :: Browser " + browser.getBrowserTag() : "";
+                                return String.format("[%d] playbook=%s, dataset=%s, mode=%s%s", invocationIndex, name, datasetLabel, mode, browserLabel);
+                            }
 
-                        @Override
-                        public List<Extension> getAdditionalExtensions()
-                        {
-                            return Collections.singletonList(new AiInvocationExtension(playbookPath, dataset, mode, dsId));
-                        }
-                    });
+                            @Override
+                            public List<Extension> getAdditionalExtensions()
+                            {
+                                final List<Extension> extensions = new ArrayList<>();
+                                if (browser != null)
+                                {
+                                    extensions.add(new BrowserExecutionCallback(browser, method.getName()));
+                                }
+                                extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser));
+                                return extensions;
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -652,6 +566,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final Map<String, SessionData.DataEntry> dataset;
         private final ExecutionMode mode;
         private final String datasetId;
+        private final BrowserMethodData browser;
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
@@ -660,13 +575,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final String playbookPath,
             final Map<String, SessionData.DataEntry> dataset,
             final ExecutionMode mode,
-            final String datasetId
+            final String datasetId,
+            final BrowserMethodData browser
         )
         {
             this.playbookPath = playbookPath;
             this.dataset = dataset;
             this.mode = mode;
             this.datasetId = datasetId;
+            this.browser = browser;
         }
 
         @Override
@@ -680,64 +597,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 com.xceptance.neodymium.util.Neodymium.setTestName(testName);
             }
 
-            // Resolve browser profile name from annotations if not already set
-            if (Neodymium.getBrowserProfileName() == null)
+            if (this.browser != null)
             {
-                final String annotBrowser;
-                final Method method = context.getRequiredTestMethod();
-                if (method.isAnnotationPresent(Browser.class))
-                {
-                    annotBrowser = method.getAnnotation(Browser.class).value();
-                }
-                else if (method.isAnnotationPresent(Browsers.class))
-                {
-                    final Browser[] bs = method.getAnnotation(Browsers.class).value();
-                    annotBrowser = bs.length > 0 ? bs[0].value() : null;
-                }
-                else
-                {
-                    final Class<?> testClass = context.getRequiredTestClass();
-                    if (testClass.isAnnotationPresent(Browser.class))
-                    {
-                        annotBrowser = testClass.getAnnotation(Browser.class).value();
-                    }
-                    else if (testClass.isAnnotationPresent(Browsers.class))
-                    {
-                        final Browser[] bs = testClass.getAnnotation(Browsers.class).value();
-                        annotBrowser = bs.length > 0 ? bs[0].value() : null;
-                    }
-                    else
-                    {
-                        annotBrowser = null;
-                    }
-                }
-                if (annotBrowser != null)
-                {
-                    Neodymium.setBrowserProfileName(annotBrowser);
-                    com.xceptance.neodymium.util.Neodymium.setBrowserProfileName(annotBrowser);
-                }
+                Neodymium.setBrowserProfileName(this.browser.getBrowserTag());
             }
 
-            if (!Neodymium.hasDriver())
+            if (Neodymium.hasDriver())
             {
-                final String profileName = Neodymium.getBrowserProfileName();
-                if (profileName != null)
+                final org.neodymium.common.browser.WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
+                if (legacyCont != null && legacyCont.getWebDriver() != null)
                 {
-                    final BrowserRunner runner = new BrowserRunner();
-                    runner.setUpTest(
-                        new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                        Neodymium.getTestName());
-                    if (Neodymium.getWebDriverStateContainer() != null && Neodymium.getWebDriverStateContainer().getWebDriver() != null)
-                    {
-                        final org.openqa.selenium.WebDriver driver = Neodymium.getWebDriverStateContainer().getDecoratedWebDriver() != null
-                            ? Neodymium.getWebDriverStateContainer().getDecoratedWebDriver()
-                            : Neodymium.getWebDriverStateContainer().getWebDriver();
-                        com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
-                        final com.xceptance.neodymium.common.browser.WebDriverStateContainer legacyCont = new com.xceptance.neodymium.common.browser.WebDriverStateContainer();
-                        legacyCont.setWebDriver(Neodymium.getWebDriverStateContainer().getWebDriver());
-                        legacyCont.setDecoratedWebDriver(driver);
-                        com.xceptance.neodymium.util.Neodymium.setWebDriverStateContainer(legacyCont);
-                    }
+                    final org.openqa.selenium.WebDriver driver = legacyCont.getDecoratedWebDriver() != null
+                        ? legacyCont.getDecoratedWebDriver()
+                        : legacyCont.getWebDriver();
+                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
                 }
             }
 
@@ -745,7 +618,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (context.getRequiredTestClass() != null)
             {
                 final String fqcn = context.getRequiredTestClass().getName();
-                if (fqcn.contains(".integration.mock."))
+                if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock."))
                 {
                     Neodymium.getData().put("neodymium.ai.global.provider", "mock");
                     Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
@@ -1322,7 +1195,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     InMemoryLlmCache.clear();
                 }
-                teardownBrowserProfile();
             }
         }
 

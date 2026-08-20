@@ -4,9 +4,9 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.openqa.selenium.remote.CapabilityType;
 
-import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.TestEnvironment;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.TestEnvironment;
 import com.xceptance.neodymium.junit4.tests.EnvironmentAndBrowserConfigurationTest;
 
 public class EnvironmentAndBrowserConfiguration

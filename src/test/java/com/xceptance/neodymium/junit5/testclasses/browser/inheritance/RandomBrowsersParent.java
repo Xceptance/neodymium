@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit5.testclasses.browser.inheritance;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.RandomBrowsers;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.RandomBrowsers;
 
 @Browser("Chrome_1024x768")
 @Browser("Chrome_1500x1000")

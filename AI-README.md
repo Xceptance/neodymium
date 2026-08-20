@@ -153,20 +153,95 @@ To prevent cross-framework execution hazards (e.g. attempting to execute unsuppo
 
 ### 2.1 The Structured Playbook Model & Replay Cache
 Instead of executing LLM calls dynamically on every run, the framework uses **Structured Playbooks**:
-* **YAML Playbook**: Contains natural language steps written either as a plain-text multiline block (`steps: |`) or a YAML list of step strings. Test scenarios support variables (`${username}`) and modular inclusions (`_include: ...`):
-  - **Multiline Block**:
+* **YAML Playbook**: Contains natural language steps written either as a plain-text multiline block (`steps: |`), a YAML list of step strings, or structured action maps. Test scenarios support parameterized variables (`${username}`), modular file inclusions (`include:` / `_include:`), lifecycle blocks (`before:`, `after:`), and intra-file YAML references/anchors (`&anchor` / `*alias`):
+
+  #### A. Natural Language Step Formats
+  - **Multiline Block Format (`steps: |`)**:
+    Natural language instructions written line-by-line as a clean multiline text block without bullet dashes:
     ```yaml
     steps: |
-      _include: common/setup.yaml
-      Open ${verla.url}/verla-${quality}/index.html
+      Open ${verla.url}/verla-${quality}/index.html in the browser
       Click login button
+      Type "${username}" into the email input field
     ```
-  - **YAML List**:
+
+  - **YAML List Format (`steps:`)**:
+    Standard YAML sequence of step strings:
     ```yaml
     steps:
-      - "Open store homepage"
+      - "Open ${verla.url}/verla-${quality}/index.html in the browser"
       - "Click login button"
+      - "Type \"${username}\" into the email input field"
     ```
+
+  #### B. Intra-File YAML References & Anchors (`&anchor` / `*alias`)
+  To avoid repeating common sequences of steps across multiple sections of the same playbook, you can define standard YAML anchors and reference them as aliases. Neodymium automatically flattens nested lists and multiline blocks into sequential test steps:
+
+  - **List Anchors (`&anchor` as a YAML sequence)**:
+    ```yaml
+    # Define reusable search routine
+    search: &search
+      - "Type \"${searchQuery}\" into search field"
+      - "A dropdown with search suggestions appears"
+      - "Click \"View All\" to see all search results"
+      - "Verify that the results page shows '${resultCount}' items"
+
+    steps:
+      - "Open ${verla.url}/verla-perfect/index.html"
+      - "Select country \"${country}\""
+      - *search
+
+      - "Open ${verla.url}/verla-normal/index.html"
+      - *search
+    ```
+
+  - **Block Scalar Anchors (`&anchor |` as a text block)**:
+    ```yaml
+    # Define reusable routine as a text block
+    search: &search |
+      Type "${searchQuery}" into search field
+      A dropdown with search suggestions appears
+      Click "View All" to see all search results
+      Verify that the results page shows '${resultCount}' items
+
+    steps:
+      - "Open ${verla.url}/verla-perfect/index.html"
+      - *search
+    ```
+
+  #### C. Modular File Inclusions (`include:` / `_include:`)
+  For cross-file reuse, split reusable step sequences into fragment files (e.g. `login_flow.yaml`, `setup.yaml`). Neodymium recursively resolves relative paths with cycle detection:
+
+  - **In Multiline Blocks**:
+    ```yaml
+    steps: |
+      include: includes/common_setup.yaml
+      Open ${verla.url}/verla-${quality}/index.html
+      include: includes/perform_search.yaml
+    ```
+
+  - **In YAML Lists**:
+    ```yaml
+    steps:
+      - include: includes/common_setup.yaml
+      - "Open ${verla.url}/verla-${quality}/index.html"
+      - include: includes/perform_search.yaml
+    ```
+
+  #### D. Lifecycle Blocks (`before:`, `after:`, `beforeEach:`, `afterEach:`)
+  Define automated setup and teardown blocks alongside your test steps:
+  ```yaml
+  before: |
+    Open ${verla.url}/verla-perfect/index.html
+    include: includes/accept_cookies.yaml
+
+  steps: |
+    Perform primary checkout workflow
+
+  after: |
+    Click logout button
+  ```
+
 * **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
 * **Recording Directory Configuration**: Companion `.json` recording output locations can be configured at the test class/method level or globally:

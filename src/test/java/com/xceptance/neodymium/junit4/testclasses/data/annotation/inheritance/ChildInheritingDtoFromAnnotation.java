@@ -3,7 +3,7 @@ package com.xceptance.neodymium.junit4.testclasses.data.annotation.inheritance;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.xceptance.neodymium.common.testdata.DataItem;
+import org.neodymium.common.testdata.DataItem;
 
 public class ChildInheritingDtoFromAnnotation extends ParentClassWithDtoFromAnnotation
 {

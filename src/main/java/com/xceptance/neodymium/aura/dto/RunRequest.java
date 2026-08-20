@@ -34,6 +34,7 @@ public final class RunRequest
     public boolean allure;
     public boolean video;
     public String executionMode = "REPLAY_WITH_HEALING";
+    public List<String> globalBrowserProfiles;
 
     public RunRequest()
     {
@@ -42,11 +43,18 @@ public final class RunRequest
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode)
     {
+        this(datasets, headless, interactive, allure, video, executionMode, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles)
+    {
         this.datasets = datasets;
         this.headless = headless;
         this.interactive = interactive;
         this.allure = allure;
         this.video = video;
         this.executionMode = executionMode != null ? executionMode : "REPLAY_WITH_HEALING";
+        this.globalBrowserProfiles = globalBrowserProfiles;
     }
 }

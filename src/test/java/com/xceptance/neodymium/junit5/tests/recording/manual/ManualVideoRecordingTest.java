@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit5.tests.recording.manual;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;

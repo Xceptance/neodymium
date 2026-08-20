@@ -23,7 +23,7 @@ import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import org.junit.jupiter.api.Assertions;
 import org.neodymium.ai.executor.selenide.plugins.AiMethod;
 import java.io.File;

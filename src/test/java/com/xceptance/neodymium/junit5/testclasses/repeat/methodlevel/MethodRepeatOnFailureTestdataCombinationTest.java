@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit5.testclasses.repeat.methodlevel;
 
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 import org.junit.Assert;
 
 import java.util.concurrent.atomic.AtomicInteger;

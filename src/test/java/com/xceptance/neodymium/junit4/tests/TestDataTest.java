@@ -14,8 +14,8 @@ import org.junit.runner.Result;
 import com.xceptance.neodymium.junit4.testclasses.datautils.TestDataHelperTests;
 import com.xceptance.neodymium.junit4.testclasses.datautils.TestDataTests;
 import com.xceptance.neodymium.junit4.testclasses.datautils.TestDataTestsXml;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumRandom;
 
 public class TestDataTest extends NeodymiumTest
 {

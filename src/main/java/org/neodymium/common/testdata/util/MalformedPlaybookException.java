@@ -26,7 +26,7 @@ package org.neodymium.common.testdata.util;
  * Exception thrown when a playbook contains invalid syntax, circular inclusions,
  * or unrecognized framework keys starting with an underscore.
  */
-public final class MalformedPlaybookException extends RuntimeException
+public class MalformedPlaybookException extends RuntimeException
 {
     private static final long serialVersionUID = 1L;
 

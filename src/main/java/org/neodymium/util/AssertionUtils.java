@@ -32,12 +32,12 @@ import java.util.List;
  * @author AI-generated: Gemini 3.1 Pro
  * @author Xceptance GmbH 2026
  */
-public final class AssertionUtils
+public class AssertionUtils
 {
     /**
      * Prevents instantiation.
      */
-    private AssertionUtils()
+    protected AssertionUtils()
     {
     }
 

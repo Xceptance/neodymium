@@ -25,7 +25,7 @@ import com.xceptance.neodymium.aura.dto.ChatMessageDto;
 import com.xceptance.neodymium.aura.dto.ChatRequest;
 import com.xceptance.neodymium.aura.dto.ChatResponse;
 import com.xceptance.neodymium.aura.dto.ChatSessionDto;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Controller handling chat operations, managing active chat session states,
@@ -40,13 +40,21 @@ public final class AuraManagerChatController
 
     private final AuraChatService chatService;
     private final AuraChatSessionService sessionService;
+    private final AuraManagerQueueController queueController;
     private final NeodymiumAuraManager manager;
 
     public AuraManagerChatController(final AuraChatService chatService, final AuraChatSessionService sessionService,
             final NeodymiumAuraManager manager)
     {
+        this(chatService, sessionService, null, manager);
+    }
+
+    public AuraManagerChatController(final AuraChatService chatService, final AuraChatSessionService sessionService,
+            final AuraManagerQueueController queueController, final NeodymiumAuraManager manager)
+    {
         this.chatService = chatService;
         this.sessionService = sessionService;
+        this.queueController = queueController;
         this.manager = manager;
     }
 
@@ -195,12 +203,19 @@ public final class AuraManagerChatController
             final ChatMessageDto assistantMsg = new ChatMessageDto("ai", response.message, response.thinking);
             sessionService.addMessage(session.id, assistantMsg);
 
+            // Apply browser profile selection if returned by AI
+            if (response.selectedBrowserProfiles != null && queueController != null)
+            {
+                queueController.setGlobalBrowserProfiles(response.selectedBrowserProfiles);
+            }
+
             // Set HX-Trigger header if an action needs to execute client-side
             if (response.action != null && !response.action.trim().isEmpty())
             {
                 final Map<String, Object> triggerPayload = new HashMap<>();
                 triggerPayload.put("action", response.action);
                 triggerPayload.put("selectedDatasets", response.selectedDatasets);
+                triggerPayload.put("selectedBrowserProfiles", response.selectedBrowserProfiles);
                 triggerPayload.put("files", response.files);
                 triggerPayload.put("filename", response.filename);
                 triggerPayload.put("content", response.content);

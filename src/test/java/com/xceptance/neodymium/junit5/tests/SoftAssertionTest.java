@@ -2,7 +2,7 @@ package com.xceptance.neodymium.junit5.tests;
 
 import com.xceptance.neodymium.junit5.testclasses.softassertion.UseSoftAssertions;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 

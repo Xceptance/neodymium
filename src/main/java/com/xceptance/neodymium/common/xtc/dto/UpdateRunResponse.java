@@ -1,25 +1,13 @@
 package com.xceptance.neodymium.common.xtc.dto;
 
-// Data Transfer Object for updating an existing test run in the XTC API.
-public class UpdateRunResponse
+/**
+ * @deprecated Use {@link org.neodymium.common.xtc.dto.UpdateRunResponse} instead.
+ */
+@Deprecated
+public class UpdateRunResponse extends org.neodymium.common.xtc.dto.UpdateRunResponse
 {
-    private final Boolean success;
-
-    private final ResponseData data;
-
-    public UpdateRunResponse(Boolean success, ResponseData data)
+    public UpdateRunResponse(java.lang.Boolean success, org.neodymium.common.xtc.dto.ResponseData data)
     {
-        this.success = success;
-        this.data = data;
-    }
-
-    public Boolean getSuccess()
-    {
-        return success;
-    }
-
-    public ResponseData getData()
-    {
-        return data;
+        super(success, data);
     }
 }

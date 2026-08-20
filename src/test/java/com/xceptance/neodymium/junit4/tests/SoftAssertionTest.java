@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit4.tests;
 
 import com.xceptance.neodymium.junit4.testclasses.softassertion.UseSoftAssertions;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import org.junit.After;
 import org.junit.Test;
 

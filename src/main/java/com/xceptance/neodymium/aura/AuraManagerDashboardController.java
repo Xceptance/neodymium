@@ -75,6 +75,11 @@ public final class AuraManagerDashboardController
         context.setVariable("executionMode", queueController.getExecutionMode());
         context.setVariable("interactive", queueController.isInteractive());
         context.setVariable("allure", queueController.isAllure());
+        context.setVariable("availableBrowserProfiles", queueController.getAvailableBrowserProfiles());
+        context.setVariable("globalBrowserProfiles", queueController.getGlobalBrowserProfiles());
+        context.setVariable("browserGroups", queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles()));
+        context.setVariable("totalRuns", queueController.getTotalExecutionRuns());
+        context.setVariable("queueController", queueController);
 
         // Inject chat session variables
         final List<ChatSessionDto> chatSessions = sessionService.getSessions();

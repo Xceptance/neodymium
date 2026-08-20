@@ -678,3 +678,187 @@ window.addEventListener('message', (event) => {
 
 window.addEventListener('pagehide', sendDisconnect);
 window.addEventListener('unload', sendDisconnect);
+
+// ============================================================================
+// Per-Queue-Item Browser Selection Modal Handler
+// ============================================================================
+
+function updateItemBrowserCount() {
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const countText = document.getElementById('itemBrowserCountText');
+    if (!countText) return;
+
+    if (inheritSwitch && inheritSwitch.checked) {
+        countText.textContent = "Inheriting global profiles";
+        return;
+    }
+    const checked = document.querySelectorAll('#itemBrowserCustomList .item-profile-cb:checked');
+    const cnt = checked.length;
+    countText.textContent = cnt + (cnt === 1 ? ' profile selected' : ' profiles selected');
+}
+
+function openItemBrowserModal(event, index, file, id, customProfilesCsv) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const modal = document.getElementById('itemBrowserModal');
+    if (!modal) return;
+
+    document.getElementById('itemBrowserTargetIndex').value = index;
+    const headerTitle = document.getElementById('itemBrowserHeaderTitle');
+    if (headerTitle) {
+        headerTitle.textContent = 'Item #' + (parseInt(index, 10) + 1) + ' Profiles';
+    }
+    document.getElementById('itemBrowserTargetFile').textContent = file || '';
+    document.getElementById('itemBrowserTargetId').textContent = id ? id : '';
+
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const customList = document.getElementById('itemBrowserCustomList');
+    const inheritHint = document.getElementById('itemBrowserInheritHint');
+
+    const customProfiles = (customProfilesCsv && customProfilesCsv.trim().length > 0) 
+        ? customProfilesCsv.split(',').map(s => s.trim()) 
+        : [];
+
+    const isInherited = (customProfiles.length === 0);
+    if (inheritSwitch) inheritSwitch.checked = isInherited;
+
+    // Set checkboxes based on customProfiles
+    const rows = document.querySelectorAll('.item-profile-row');
+    rows.forEach(row => {
+        const profId = row.getAttribute('data-profile-id');
+        const cb = row.querySelector('.item-profile-cb');
+        if (customProfiles.includes(profId)) {
+            if (cb) cb.checked = true;
+            row.classList.add('checked');
+        } else {
+            if (cb) cb.checked = false;
+            row.classList.remove('checked');
+        }
+    });
+
+    toggleItemBrowserInherit();
+    updateItemBrowserCount();
+    modal.style.display = 'flex';
+}
+window.openItemBrowserModal = openItemBrowserModal;
+
+function closeItemBrowserModal() {
+    const modal = document.getElementById('itemBrowserModal');
+    if (modal) modal.style.display = 'none';
+}
+window.closeItemBrowserModal = closeItemBrowserModal;
+
+function toggleItemBrowserInherit() {
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const customList = document.getElementById('itemBrowserCustomList');
+    const inheritHint = document.getElementById('itemBrowserInheritHint');
+
+    if (!inheritSwitch || !customList) return;
+
+    if (inheritSwitch.checked) {
+        customList.style.opacity = '0.35';
+        customList.style.pointerEvents = 'none';
+        if (inheritHint) inheritHint.textContent = "Inheriting browser selection from global Run Configuration.";
+    } else {
+        customList.style.opacity = '1';
+        customList.style.pointerEvents = 'auto';
+        if (inheritHint) inheritHint.textContent = "Custom profiles configured specifically for this test item.";
+    }
+    updateItemBrowserCount();
+}
+window.toggleItemBrowserInherit = toggleItemBrowserInherit;
+
+function toggleItemProfileRow(row) {
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    if (inheritSwitch && inheritSwitch.checked) return;
+
+    const cb = row.querySelector('.item-profile-cb');
+    if (cb) {
+        cb.checked = !cb.checked;
+        if (cb.checked) {
+            row.classList.add('checked');
+        } else {
+            row.classList.remove('checked');
+        }
+        updateItemBrowserCount();
+    }
+}
+window.toggleItemProfileRow = toggleItemProfileRow;
+
+async function saveItemBrowserModal() {
+    const index = document.getElementById('itemBrowserTargetIndex').value;
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const isInherit = inheritSwitch ? inheritSwitch.checked : true;
+
+    let selectedProfiles = [];
+    if (!isInherit) {
+        const checkedCbs = document.querySelectorAll('#itemBrowserCustomList .item-profile-cb:checked');
+        checkedCbs.forEach(cb => selectedProfiles.push(cb.value));
+    }
+
+    try {
+        const resp = await fetch('/api/queue/item-browser', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                index: index,
+                inherit: isInherit,
+                profiles: selectedProfiles.join(',')
+            })
+        });
+        if (resp.ok) {
+            const html = await resp.text();
+            const queueContainer = document.getElementById('queueListContainer');
+            if (queueContainer) {
+                queueContainer.innerHTML = html;
+                if (typeof htmx !== 'undefined') {
+                    htmx.process(queueContainer);
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Error saving item browser profiles:", err);
+    } finally {
+        closeItemBrowserModal();
+    }
+}
+window.saveItemBrowserModal = saveItemBrowserModal;
+
+// ============================================================================
+// Floating Aura AI Assistant Chat Bubble & Drawer Handlers
+// ============================================================================
+
+function toggleAuraChat() {
+    const overlay = document.getElementById('auraChatOverlay');
+    if (!overlay) return;
+    if (overlay.style.display === 'none' || !overlay.style.display) {
+        openAuraChat();
+    } else {
+        closeAuraChat();
+    }
+}
+window.toggleAuraChat = toggleAuraChat;
+
+function openAuraChat() {
+    const overlay = document.getElementById('auraChatOverlay');
+    const launcher = document.getElementById('auraChatLauncher');
+    if (overlay) {
+        overlay.style.display = 'block';
+        const input = document.getElementById('chatInput');
+        if (input) setTimeout(() => input.focus(), 150);
+    }
+    if (launcher) launcher.classList.add('active');
+}
+window.openAuraChat = openAuraChat;
+
+function closeAuraChat() {
+    const overlay = document.getElementById('auraChatOverlay');
+    const launcher = document.getElementById('auraChatLauncher');
+    if (overlay) overlay.style.display = 'none';
+    if (launcher) launcher.classList.remove('active');
+}
+window.closeAuraChat = closeAuraChat;
+
+

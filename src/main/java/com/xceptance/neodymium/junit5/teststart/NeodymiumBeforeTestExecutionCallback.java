@@ -1,21 +1,12 @@
 package com.xceptance.neodymium.junit5.teststart;
 
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
-import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
-
-import static com.xceptance.neodymium.util.NeodymiumRandom.reinitializeRandomSeed;
-
-public class NeodymiumBeforeTestExecutionCallback implements BeforeTestExecutionCallback
+/**
+ * @deprecated Use {@link org.neodymium.junit5.teststart.NeodymiumBeforeTestExecutionCallback} instead.
+ */
+@Deprecated
+public class NeodymiumBeforeTestExecutionCallback extends org.neodymium.junit5.teststart.NeodymiumBeforeTestExecutionCallback
 {
-    @Override
-    public void beforeTestExecution(ExtensionContext context) throws Exception
+    public NeodymiumBeforeTestExecutionCallback()
     {
-        // reset the random seed so every test starts with the same values for better reproducibility
-        reinitializeRandomSeed(NeodymiumRandom.SeedState.INITIALIZED);
-        
-        // exact unified test name calculation
-        Neodymium.setTestName(context.getRequiredTestClass().getCanonicalName() + " :: " + context.getDisplayName());
     }
 }

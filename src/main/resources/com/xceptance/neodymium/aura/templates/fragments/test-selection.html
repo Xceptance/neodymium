@@ -35,7 +35,7 @@
 
     <!-- Otherwise, render the list using Thymeleaf loop -->
     <th:block th:unless="${files == null or files.isEmpty()}">
-        <div class="file-container" th:each="item : ${files}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
+        <div class="file-container" th:each="item : ${files}" th:data-file="${item.file}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
             <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0"
                  th:data-file="${item.file}"
                  onclick="if(typeof toggleExpandFile==='function') toggleExpandFile(this.getAttribute('data-file'), this);">
