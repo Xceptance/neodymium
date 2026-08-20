@@ -21,6 +21,7 @@ package org.neodymium.ai.executor.selenide.plugins;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
@@ -82,9 +83,19 @@ public final class AssertAction implements BrowserActionPlugin
             {
                 if (action.isRegex())
                 {
-                    final Pattern pattern = Pattern.compile(cleanRegexPattern(expected), Pattern.DOTALL | Pattern.MULTILINE);
-                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && pattern.matcher(d.getCurrentUrl()).find())
-                            || (d.getTitle() != null && pattern.matcher(d.getTitle()).find()));
+                    final String cleanExpected = cleanRegexPattern(expected);
+                    Pattern pattern;
+                    try
+                    {
+                        pattern = Pattern.compile(cleanExpected, Pattern.DOTALL | Pattern.MULTILINE);
+                    }
+                    catch (final PatternSyntaxException e)
+                    {
+                        pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
+                    }
+                    final Pattern finalPattern = pattern;
+                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && (finalPattern.matcher(d.getCurrentUrl()).find() || d.getCurrentUrl().contains(cleanExpected)))
+                            || (d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected))));
                     LOG.debug("   ✅ URL/Title Regex Assertion passed for: '{}'", expected);
                 }
                 else
@@ -125,8 +136,18 @@ public final class AssertAction implements BrowserActionPlugin
             {
                 if (action.isRegex())
                 {
-                    final Pattern pattern = Pattern.compile(cleanRegexPattern(expected), Pattern.DOTALL | Pattern.MULTILINE);
-                    Selenide.Wait().until(d -> d.getTitle() != null && pattern.matcher(d.getTitle()).find());
+                    final String cleanExpected = cleanRegexPattern(expected);
+                    Pattern pattern;
+                    try
+                    {
+                        pattern = Pattern.compile(cleanExpected, Pattern.DOTALL | Pattern.MULTILINE);
+                    }
+                    catch (final PatternSyntaxException e)
+                    {
+                        pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
+                    }
+                    final Pattern finalPattern = pattern;
+                    Selenide.Wait().until(d -> d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected)));
                     LOG.debug("   ✅ Title Regex Assertion passed for: '{}'", expected);
                 }
                 else
@@ -403,8 +424,8 @@ public final class AssertAction implements BrowserActionPlugin
 
 
     /**
-     * Sanitizes and normalizes a regular expression string for LLM-produced patterns.
-     * Strips leading/trailing slashes, cleans over-escaped dollar signs, and escapes unescaped currency amounts.
+     * Sanitizes and normalizes a regular expression string for LLM-produced patterns in an application-agnostic manner.
+     * Strips enclosing slashes and normalizes over-escaped dollar signs.
      *
      * @param regex the raw regex pattern
      * @return cleaned regex pattern
@@ -420,39 +441,47 @@ public final class AssertAction implements BrowserActionPlugin
         {
             cleanRegex = cleanRegex.replace("\\\\$", "\\$");
         }
-        // Escape unescaped currency dollar signs (e.g. $27.58) so regex matching handles literal amounts
-        cleanRegex = cleanRegex.replaceAll("(?<!\\\\)\\$(\\d)", "\\\\\\$$1");
         return cleanRegex;
     }
 
     private static final class RegexMatch extends WebElementCondition
     {
+        private final String cleanText;
         private final Pattern pattern;
 
         public RegexMatch(final String regex)
         {
             super("RegexMatch");
-            final String cleanRegex = cleanRegexPattern(regex);
-            this.pattern = Pattern.compile(cleanRegex, Pattern.DOTALL | Pattern.MULTILINE);
+            this.cleanText = cleanRegexPattern(regex);
+            Pattern compiled;
+            try
+            {
+                compiled = Pattern.compile(this.cleanText, Pattern.DOTALL | Pattern.MULTILINE);
+            }
+            catch (final PatternSyntaxException e)
+            {
+                compiled = Pattern.compile(Pattern.quote(this.cleanText), Pattern.DOTALL | Pattern.MULTILINE);
+            }
+            this.pattern = compiled;
         }
 
         @Override
         public CheckResult check(final Driver driver, final WebElement element)
         {
             final String text = element.getText();
-            if (text != null && pattern.matcher(text).find())
+            if (matches(text))
             {
                 return new CheckResult(true, text);
             }
 
             final String textContent = element.getAttribute("textContent");
-            if (textContent != null && pattern.matcher(textContent).find())
+            if (matches(textContent))
             {
                 return new CheckResult(true, textContent);
             }
 
             final String value = element.getAttribute("value");
-            if (value != null && pattern.matcher(value).find())
+            if (matches(value))
             {
                 return new CheckResult(true, value);
             }
@@ -471,19 +500,33 @@ public final class AssertAction implements BrowserActionPlugin
                     for (final var entry : attributes.entrySet())
                     {
                         final String val = entry.getValue();
-                        if (val != null && pattern.matcher(val).find())
+                        if (matches(val))
                         {
                             return new CheckResult(true, String.format("attribute %s: %s", entry.getKey(), val));
                         }
                     }
                 }
             }
-            catch (final Exception e)
+            catch (final Exception ignored)
             {
-                // Ignore JS execution errors
             }
 
             return new CheckResult(false, null);
+        }
+
+        private boolean matches(final String actual)
+        {
+            if (actual == null)
+            {
+                return false;
+            }
+            // 1. Primary: match compiled regex
+            if (pattern.matcher(actual).find())
+            {
+                return true;
+            }
+            // 2. Fallback on match failure: check literal substring containment
+            return !cleanText.isEmpty() && actual.contains(cleanText);
         }
     }
 

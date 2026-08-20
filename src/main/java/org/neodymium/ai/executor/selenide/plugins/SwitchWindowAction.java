@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.WebDriver;
@@ -123,18 +124,31 @@ public final class SwitchWindowAction implements BrowserActionPlugin
             }
 
             // Treat parameter as window title search (regex or substring)
-            final Pattern pattern = action.isRegex() ? Pattern.compile(AssertAction.cleanRegexPattern(param), Pattern.DOTALL | Pattern.MULTILINE) : null;
+            final String cleanParam = AssertAction.cleanRegexPattern(param);
+            Pattern pattern = null;
+            if (action.isRegex())
+            {
+                try
+                {
+                    pattern = Pattern.compile(cleanParam, Pattern.DOTALL | Pattern.MULTILINE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(cleanParam), Pattern.DOTALL | Pattern.MULTILINE);
+                }
+            }
+
             for (final String handle : handleList)
             {
                 driver.switchTo().window(handle);
                 final String title = driver.getTitle();
                 if (title != null)
                 {
-                    if (pattern != null && pattern.matcher(title).find())
+                    if (pattern != null && (pattern.matcher(title).find() || title.contains(cleanParam)))
                     {
                         return;
                     }
-                    else if (pattern == null && title.contains(param))
+                    else if (pattern == null && (title.contains(param) || title.contains(cleanParam)))
                     {
                         return;
                     }

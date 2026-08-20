@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.junit.jupiter.api.Assertions;
 
@@ -105,14 +106,14 @@ public class TestStepListener implements LogEventListener
         // check URL is included
         if (this.includeList != null && !this.includeList.isEmpty())
         {
-            Assertions.assertTrue(this.includeList.stream().anyMatch(s -> Pattern.compile(s).matcher(currentUrl).find()),
+            Assertions.assertTrue(this.includeList.stream().anyMatch(s -> matchesUrl(s, currentUrl)),
                                   "Opened Link was outside permitted URLs: " + currentUrl + "did not match any of the include list: " + this.includeList);
         }
 
         // check URL is not excluded
         if (this.excludeList != null)
         {
-            Assertions.assertTrue(this.excludeList.stream().noneMatch(s -> Pattern.compile(s).matcher(currentUrl).find()),
+            Assertions.assertTrue(this.excludeList.stream().noneMatch(s -> matchesUrl(s, currentUrl)),
                                   "Opened Link was to forbidden site: " + currentUrl);
         }
 
@@ -126,6 +127,25 @@ public class TestStepListener implements LogEventListener
         }
 
         setLastUrl(currentUrl);
+    }
+
+    private static boolean matchesUrl(final String patternOrSubstring, final String currentUrl)
+    {
+        if (patternOrSubstring == null || currentUrl == null)
+        {
+            return false;
+        }
+        try
+        {
+            if (Pattern.compile(patternOrSubstring).matcher(currentUrl).find())
+            {
+                return true;
+            }
+        }
+        catch (final PatternSyntaxException ignored)
+        {
+        }
+        return currentUrl.contains(patternOrSubstring);
     }
 
     @Override
