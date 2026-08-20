@@ -67,6 +67,61 @@
 
         <!-- SINGLE RUN SPECIFIC CONTROLS CONTAINER -->
         <div id="sidePageSingleRunControls" style="display: flex; flex-direction: column; gap: 0.85rem;">
+            <!-- SINGLE RUN EXECUTION METRICS GRID -->
+            <div class="metrics-grid" id="sidePageMetricsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 0.25rem;">
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                    <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Duration</div>
+                    <div class="metric-value" id="sideMetricDuration" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);">0<span class="unit" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">ms</span></div>
+                    <div class="metric-sub" id="sideMetricStatus" style="font-size: 0.72rem; color: var(--text-muted);">Status: <strong class="status-pass">PASSED</strong></div>
+                </div>
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                    <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Playbook Steps</div>
+                    <div class="metric-value" id="sideMetricSteps" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);">0</div>
+                    <div class="metric-sub" id="sideMetricStepHealth" style="font-size: 0.72rem; color: var(--text-muted);">✨ Healed: 0 | ❌ Failed: 0</div>
+                </div>
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                    <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">LLM Invocations</div>
+                    <div class="metric-value" id="sideMetricLlmCalls" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);">0</div>
+                    <div class="metric-sub" id="sideMetricTokens" style="font-size: 0.72rem; color: var(--text-muted);">Tokens: 0 (Cached: 0)</div>
+                </div>
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                    <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Est. Cost</div>
+                    <div class="metric-value text-accent" id="sideMetricCost" style="font-size: 1.15rem; font-weight: 800; font-family: var(--font-mono);">$0.0000</div>
+                    <div class="metric-sub" id="sideMetricTokenInOut" style="font-size: 0.72rem; color: var(--text-muted);">In: 0 | Out: 0</div>
+                </div>
+            </div>
+
+            <!-- COLLAPSIBLE LLM RESPONSIBILITY & TOKEN ACCOUNTING SECTION -->
+            <div class="action-card-box" id="sidePageLlmAccountingBox" style="padding: 0.75rem;">
+                <div class="action-card-header" style="cursor: pointer; margin-bottom: 0.4rem;" onclick="toggleSidePanelLlmTable()">
+                    <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+                        🤖 AI LLM Responsibility & Token Accounting
+                    </span>
+                    <span class="material-symbols-outlined" id="sidePageLlmTableChevron" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                </div>
+                <div id="sidePageLlmTableContainer" style="display: none; margin-top: 0.5rem; overflow-x: auto;">
+                    <table class="data-params-table" style="width: 100%; font-size: 0.75rem;">
+                        <thead>
+                            <tr style="background: #f1f5f9;">
+                                <th style="text-align: left; padding: 0.4rem 0.6rem;">Category</th>
+                                <th style="text-align: center; padding: 0.4rem 0.6rem;">Calls</th>
+                                <th style="text-align: right; padding: 0.4rem 0.6rem;">Total Tokens</th>
+                                <th style="text-align: right; padding: 0.4rem 0.6rem;">Input</th>
+                                <th style="text-align: right; padding: 0.4rem 0.6rem;">Output</th>
+                                <th style="text-align: right; padding: 0.4rem 0.6rem;">Cached</th>
+                                <th style="text-align: right; padding: 0.4rem 0.6rem;">Est. Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sidePageLlmAccountingTbody">
+                            <!-- Populated dynamically by report-manager.js -->
+                        </tbody>
+                    </table>
+                    <div id="sidePageContextLevelBadges" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
+                        <!-- Context level chips e.g. MINIMAL: 6, LEAN: 2, etc. -->
+                    </div>
+                </div>
+            </div>
+
             <!-- RETRIED TEST TRIES SWITCHER BAR -->
             <div class="tries-switcher-bar" id="sidePageTriesBar" style="display: none;">
                 <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted);"><span class="material-symbols-outlined text-accent">refresh</span> Execution Tries:</span>
@@ -76,7 +131,7 @@
             <!-- Status Header Line & Action Buttons -->
             <div class="flex-between" style="flex-wrap: wrap; gap: 0.5rem; align-items: center;">
                 <div id="sidePageStatusBadge" th:fragment="sidePanelBugSection" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                    <span th:each="bug : ${exec?.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family);">
+                    <span th:each="bug : ${exec?.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family);" th:data-bug-ticket="${bug}">
                         <span class="material-symbols-outlined">bug_report</span> <span th:text="${bug.startsWith('#') ? bug : '#' + bug}">#BUG-4821</span>
                         <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${bug}"
                                 th:hx-delete="|/fragments/test-side-panel/bugs?runId=${runId ?: '#RUN_ID'}&rowId=${exec?.id ?: rowId ?: 'row-ds-1'}&bugTicket=${#uris.escapeQueryParam(bug)}|"

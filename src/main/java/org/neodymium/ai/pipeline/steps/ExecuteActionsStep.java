@@ -830,6 +830,7 @@ public final class ExecuteActionsStep implements PipelineStep
             final ExecutionMode executionMode = (ExecutionMode) contextState.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
             final boolean isReplayStats = executionMode != null && executionMode.isReplay() && !stepNoReplay;
             final long stepStartTime = System.currentTimeMillis();
+            step.setStartTimeMs(stepStartTime);
             contextState.getTransientData().put("KEY_STEP_START_TIME", stepStartTime);
 
             if (executionMode != null && !executionMode.isReplay())
@@ -1324,6 +1325,10 @@ public final class ExecuteActionsStep implements PipelineStep
                 }
                 step.setFailed(false);
                 step.setFailureReason(null);
+                if (step.getStartTimeMs() != null)
+                {
+                    step.setDurationMs(System.currentTimeMillis() - step.getStartTimeMs());
+                }
                 final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
                 if (statsObj instanceof StepStats stepStats)
                 {

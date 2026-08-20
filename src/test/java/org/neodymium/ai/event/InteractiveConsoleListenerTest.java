@@ -31,7 +31,10 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
@@ -233,6 +236,35 @@ public class InteractiveConsoleListenerTest
         assertEquals("EDIT", resultAction);
         assertEquals("Updated instruction via edit", step.getInstruction());
         assertTrue(Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get("KEY_STEP_EDITED")));
+    }
+
+    @Test
+    public void testReportMetricsAndLlmCallsSerializedInConsoleState()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Search product");
+        step.setLineNumber(1);
+        step.setSourceFile("search.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        eventBus.dispatch(new StepStartedEvent(step, 0));
+
+        final LlmRequest request = new LlmRequest("system prompt", "user prompt", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse response = new LlmResponse("response text", new org.neodymium.ai.client.TokenUsage(150, 50, 200, 20), "gemini-2.5-flash");
+        eventBus.dispatch(new LlmResponseReceivedEvent(request, response, 350L, "ACTION_EXTRACTION"));
+
+        eventBus.dispatch(new StepFinishedEvent(step, org.neodymium.ai.model.PlaybookStepStatus.SUCCESS));
+        eventBus.dispatch(new SessionFinishedEvent(1000, true, Collections.emptyList()));
+
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson);
+        assertTrue(stateJson.contains("\"metrics\""));
+        assertTrue(stateJson.contains("\"llmCalls\""));
+        assertTrue(stateJson.contains("\"tokenUsageInput\":150"));
+        assertTrue(stateJson.contains("\"tokenUsageOutput\":50"));
+        assertTrue(stateJson.contains("\"gemini-2.5-flash\""));
     }
 
     private void submitActionAsynchronously(final JsonObject actionObj)

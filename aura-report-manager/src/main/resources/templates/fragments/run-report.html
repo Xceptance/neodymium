@@ -33,35 +33,46 @@
                     <span class="material-symbols-outlined text-accent">touch_app</span> Click any status metric card below to filter and open <strong>All Tests</strong> grouped by areas for that specific status.
                 </div>
 
-                <div class="metrics-grid">
-                    <div class="metric-card" style="--card-accent: var(--status-pass)" onclick="filterAllTestsByStatus('passed-clean')">
-                        <div class="metric-label">Passed Clean</div>
-                        <div class="metric-val" style="color: var(--status-pass);" id="metricValPassed" th:text="${report?.passCount ?: 0}">0</div>
-                        <div class="metric-sub" style="color: var(--status-pass); font-weight: 600;">View all passed clean tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                <div class="kpi-grid">
+                    <div class="kpi-card" onclick="filterAllTestsByStatus('ALL')">
+                        <div class="kpi-label">Total Executions</div>
+                        <div class="kpi-value" id="overviewKpiTotal" th:text="${report?.totalCount ?: 0}">0</div>
+                        <div class="kpi-sub">Overall Test Runs</div>
                     </div>
-
-                    <div class="metric-card" style="--card-accent: var(--status-fixed)" onclick="filterAllTestsByStatus('succeeded-fixed')">
-                        <div class="metric-label">Succeeded (Known Bug)</div>
-                        <div class="metric-val" style="color: var(--status-fixed);" id="metricValSucceeded" th:text="${report?.fixedCount ?: 0}">0</div>
-                        <div class="metric-sub" style="color: var(--status-fixed); font-weight: 600;">View all fixed bug tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    <div class="kpi-card card-passed" onclick="filterAllTestsByStatus('PASSED')">
+                        <div class="kpi-label">Passed</div>
+                        <div class="kpi-value text-success" id="overviewKpiPassed" th:text="${report?.passCount ?: 0}">0</div>
+                        <div class="kpi-sub">Clean Executions</div>
                     </div>
-
-                    <div class="metric-card" style="--card-accent: var(--status-known-fail)" onclick="filterAllTestsByStatus('failed-known')">
-                        <div class="metric-label">Failed (Known Bug)</div>
-                        <div class="metric-val" style="color: var(--status-known-fail);" id="metricValKnownFail" th:text="${report?.knownCount ?: 0}">0</div>
-                        <div class="metric-sub" style="color: var(--status-known-fail); font-weight: 600;">View all known failed tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    <div class="kpi-card card-healed" onclick="filterAllTestsByStatus('SUCCEEDED_FIXED')">
+                        <div class="kpi-label">Succeeded-Fixed</div>
+                        <div class="kpi-value text-healed" id="overviewKpiFixed" th:text="${report?.fixedCount ?: (report?.healedCount ?: 0)}">0</div>
+                        <div class="kpi-sub">Tests with Linked Bugs</div>
                     </div>
-
-                    <div class="metric-card" style="--card-accent: var(--status-unknown-fail)" onclick="filterAllTestsByStatus('failed-unknown')">
-                        <div class="metric-label">Failed (Unknown)</div>
-                        <div class="metric-val" style="color: var(--status-unknown-fail);" id="metricValUnknownFail" th:text="${report?.unknownCount ?: 0}">0</div>
-                        <div class="metric-sub" style="color: var(--status-unknown-fail); font-weight: 600;">View all unknown failed tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    <div class="kpi-card card-known" onclick="filterAllTestsByStatus('FAILED_KNOWN')">
+                        <div class="kpi-label">Known Fail</div>
+                        <div class="kpi-value" id="overviewKpiKnown" style="color: var(--status-known-fail);" th:text="${report?.knownCount ?: 0}">0</div>
+                        <div class="kpi-sub">Failures with Bugs</div>
                     </div>
-
-                    <div class="metric-card" style="--card-accent: var(--status-ignored)" onclick="filterAllTestsByStatus('ignored')">
-                        <div class="metric-label">Ignored / Skipped</div>
-                        <div class="metric-val" style="color: var(--status-ignored);" id="metricValIgnored" th:text="${report?.ignoredCount ?: 0}">0</div>
-                        <div class="metric-sub" style="color: var(--status-ignored); font-weight: 600;">View all ignored tests <span class="material-symbols-outlined">arrow_forward</span></div>
+                    <div class="kpi-card card-failed" onclick="filterAllTestsByStatus('FAILED_UNKNOWN')">
+                        <div class="kpi-label">Unknown Fail</div>
+                        <div class="kpi-value text-fail" id="overviewKpiUnknown" th:text="${report?.unknownCount ?: 0}">0</div>
+                        <div class="kpi-sub">Failures without Bugs</div>
+                    </div>
+                    <div class="kpi-card card-ignored" onclick="filterAllTestsByStatus('SKIPPED')">
+                        <div class="kpi-label">Ignored</div>
+                        <div class="kpi-value" id="overviewKpiIgnored" style="color: var(--status-ignored);" th:text="${report?.ignoredCount ?: 0}">0</div>
+                        <div class="kpi-sub">Skipped Executions</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Duration</div>
+                        <div class="kpi-value" th:text="${report?.totalDurationFormatted ?: '0s'}">0s</div>
+                        <div class="kpi-sub">Wall Clock Execution</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total LLM Cost</div>
+                        <div class="kpi-value" style="color: #0284c7;" id="overviewKpiTotalLlmCost" th:text="${report?.totalLlmCostFormatted ?: '$0.0000'}">$0.0000</div>
+                        <div class="kpi-sub" id="overviewKpiTotalLlmSub" th:text="${(report?.totalLlmCalls ?: 0) + ' calls (' + (report?.totalLlmTokensFormatted ?: '0') + ' tokens)'}">0 calls (0 tokens)</div>
                     </div>
                 </div>
 
@@ -95,7 +106,7 @@
 
                                 <div class="pie-breakdown-list">
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-pass);"></div> Successful</div><div class="val val-pass" style="color: var(--status-pass);" th:text="${area.passCount}">0</div></div>
-                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed Failed</div><div class="val val-fixed" style="color: var(--status-fixed);" th:text="${area.fixedCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Succeeded-Fixed</div><div class="val val-fixed" style="color: var(--status-fixed);" th:text="${area.fixedCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Failed</div><div class="val val-known" style="color: var(--status-known-fail);" th:text="${area.knownCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div><div class="val val-unknown" style="color: var(--status-unknown-fail);" th:text="${area.unknownCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored / Skipped</div><div class="val val-ignored" style="color: var(--status-ignored);" th:text="${area.ignoredCount}">0</div></div>
@@ -110,51 +121,40 @@
             <div id="runReportSubTabAllTests" th:fragment="allTestsContent" class="view-state">
                 
                 <!-- GLOBAL EXECUTION FILTERS TOOLBAR -->
-                <div class="test-filters-toolbar" id="globalTestFiltersToolbar">
+                <div class="test-filters-toolbar" id="runReportFiltersToolbar">
                     <div style="font-weight: 700; font-size: 0.825rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
                         <span class="material-symbols-outlined text-accent">filter_alt</span> Execution Filters:
                     </div>
 
-                    <!-- MULTI-SELECT LOCATION DROPDOWN CHECKBOX -->
-                    <div class="multiselect-dropdown" id="locationMultiselect">
-                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="locationMultiselectMenu">
-                            <span><span class="material-symbols-outlined text-accent">public</span> Location: <strong class="js-selected-text">All Selected</strong></span>
-                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
-                        </button>
-                        <div class="multiselect-menu" id="locationMultiselectMenu">
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="locationMultiselectMenu" value="ALL" checked> <strong>Select All Locations</strong></label>
-                            <div class="multiselect-divider"></div>
-                            <label th:each="loc : ${report?.filterLocations}" class="multiselect-option">
-                                <input type="checkbox" class="js-chk-option" data-menu-id="locationMultiselectMenu" th:value="${loc}" th:attr="data-value=${loc}" checked> <span th:text="${loc}">Location</span>
-                            </label>
-                            <div th:if="${report == null or report.filterLocations == null or report.filterLocations.isEmpty()}" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
-                                No locations found
-                            </div>
-                        </div>
+                    <div class="filter-mode-group">
+                        <label class="filter-label" for="modeFilter" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem;">settings</span> Mode:</label>
+                        <select id="modeFilter" class="mode-select" onchange="filterByMode(this.value)">
+                            <option value="ALL">All Modes</option>
+                            <option th:each="m : ${report?.filterModes}" th:value="${m}" th:text="${m}">FORCE_RECORDING</option>
+                        </select>
                     </div>
 
-                    <!-- MULTI-SELECT BROWSER DROPDOWN CHECKBOX -->
-                    <div class="multiselect-dropdown" id="browserMultiselect">
-                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="browserMultiselectMenu">
-                            <span><span class="material-symbols-outlined text-accent">web</span> Browser: <strong class="js-selected-text">All Selected</strong></span>
-                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
-                        </button>
-                        <div class="multiselect-menu" id="browserMultiselectMenu">
-                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="browserMultiselectMenu" value="ALL" checked> <strong>Select All Browsers</strong></label>
-                            <div class="multiselect-divider"></div>
-                            <label th:each="b : ${report?.filterBrowsers}" class="multiselect-option">
-                                <input type="checkbox" class="js-chk-option" data-menu-id="browserMultiselectMenu" th:value="${b}" th:attr="data-value=${b}" checked> <span th:text="${b}">Browser</span>
-                            </label>
-                            <div th:if="${report == null or report.filterBrowsers == null or report.filterBrowsers.isEmpty()}" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
-                                No browsers found
-                            </div>
-                        </div>
+                    <div class="filter-mode-group">
+                        <label class="filter-label" for="browserFilter" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem;">language</span> Browser:</label>
+                        <select id="browserFilter" class="mode-select" onchange="applyFilter()">
+                            <option value="ALL">All Browsers</option>
+                        </select>
                     </div>
 
-                    <!-- RESET FILTERS BUTTON -->
-                    <button class="btn-secondary" style="padding: 0.4rem 0.65rem; font-size: 0.825rem;" title="Reset all filters" onclick="resetGlobalTestFilters()">
-                        <span class="material-symbols-outlined">restart_alt</span>
+                    <div class="filter-mode-group">
+                        <label class="filter-label" for="localeFilter" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem;">location_on</span> Locale:</label>
+                        <select id="localeFilter" class="mode-select" onchange="applyFilter()">
+                            <option value="ALL">All Locales</option>
+                        </select>
+                    </div>
+
+                    <button class="btn-secondary" style="padding: 0.4rem 0.65rem; font-size: 0.825rem;" title="Reset filters" onclick="resetGlobalTestFilters()">
+                        <span class="material-symbols-outlined text-accent">restart_alt</span>
                     </button>
+
+                    <div class="search-wrapper" style="margin-left: auto;">
+                        <input type="text" id="searchInput" onkeyup="applyFilter()" placeholder="Search test, class, dataset...">
+                    </div>
                 </div>
 
                 <div class="panel">
@@ -172,11 +172,11 @@
 
                         <!-- CLICKABLE EXECUTION-WIDE STATUS FILTER BADGES -->
                         <div class="flex-gap-2" id="wholeExecutionSummaryBadges">
-                            <span class="badge-status badge-pass clickable-badge js-filter-badge" data-status-key="passed-clean" th:text="${report?.passCount}">0</span>
-                            <span class="badge-status badge-fixed clickable-badge js-filter-badge" data-status-key="succeeded-fixed" th:text="${report?.fixedCount}">0</span>
-                            <span class="badge-status badge-known-fail clickable-badge js-filter-badge" data-status-key="failed-known" th:text="${report?.knownCount}">0</span>
-                            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="failed-unknown" th:text="${report?.unknownCount}">0</span>
-                            <span class="badge-status badge-ignored clickable-badge js-filter-badge" data-status-key="ignored" th:text="${report?.ignoredCount}">0</span>
+                            <span class="badge-status badge-pass clickable-badge js-filter-badge" data-status-key="PASSED" onclick="filterByGlobalStatusBadge('PASSED', this)" title="Filter Passed Clean">Passed: <span th:text="${report?.passCount}">0</span></span>
+                            <span class="badge-status badge-healed clickable-badge js-filter-badge" data-status-key="SUCCEEDED_FIXED" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" title="Filter Succeeded-Fixed">Succeeded-Fixed: <span th:text="${report?.fixedCount ?: (report?.healedCount ?: 0)}">0</span></span>
+                            <span class="badge-status badge-known-fail clickable-badge js-filter-badge" data-status-key="FAILED_KNOWN" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" title="Filter Known Fail">Known Fail: <span th:text="${report?.knownCount}">0</span></span>
+                            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="FAILED_UNKNOWN" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" title="Filter Unknown Fail">Unknown Fail: <span th:text="${report?.unknownCount}">0</span></span>
+                            <span class="badge-status badge-ignored clickable-badge js-filter-badge" data-status-key="SKIPPED" onclick="filterByGlobalStatusBadge('SKIPPED', this)" title="Filter Ignored/Skipped">Ignored: <span th:text="${report?.ignoredCount ?: 0}">0</span></span>
                         </div>
                     </div>
 
@@ -190,12 +190,12 @@
                                 <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
                             </div>
                             
-                            <div class="flex-gap-2 area-summary-badges">
-                                <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" th:text="${area.passCount}">1</span>
-                                <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" th:text="${area.fixedCount}">1</span>
-                                <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" th:text="${area.knownCount}">1</span>
-                                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" th:text="${area.unknownCount}">1</span>
-                                <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" th:text="${area.ignoredCount}">1</span>
+                            <div class="flex-gap-2 area-summary-badges" onclick="event.stopPropagation()">
+                                <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" onclick="filterAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Area" th:text="${'Passed: ' + area.passCount}">Passed: 1</span>
+                                <span class="badge-status badge-healed clickable-badge" th:if="${area.fixedCount > 0}" onclick="filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Area" th:text="${'Succeeded-Fixed: ' + area.fixedCount}">Succeeded-Fixed: 1</span>
+                                <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Area" th:text="${'Known: ' + area.knownCount}">Known: 1</span>
+                                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Area" th:text="${'Unknown: ' + area.unknownCount}">Unknown: 1</span>
+                                <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" onclick="filterAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Area" th:text="${'Ignored: ' + area.ignoredCount}">Ignored: 1</span>
                             </div>
                         </div>
 
@@ -209,61 +209,96 @@
                                         <span th:text="${cls.className}">CheckoutProcessTest</span>
                                         <span class="tag-chip class-exec-count-chip" style="margin-left: 0.5rem;" th:text="${cls.totalCount + ' Executions'}">4 Executions</span>
                                     </div>
-                                    <div class="flex-gap-2">
-                                        <span class="badge-status badge-pass clickable-badge" th:if="${cls.passCount > 0}" th:text="${cls.passCount}">1</span>
-                                        <span class="badge-status badge-fixed clickable-badge" th:if="${cls.fixedCount > 0}" th:text="${cls.fixedCount}">1</span>
-                                        <span class="badge-status badge-known-fail clickable-badge" th:if="${cls.knownCount > 0}" th:text="${cls.knownCount}">1</span>
-                                        <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" th:text="${cls.unknownCount}">1</span>
-                                        <span class="badge-status badge-ignored clickable-badge" th:if="${cls.ignoredCount > 0}" th:text="${cls.ignoredCount}">1</span>
+                                    <div class="flex-gap-2" onclick="event.stopPropagation()">
+                                        <span class="badge-status badge-pass clickable-badge" th:if="${cls.passCount > 0}" onclick="filterClassByStatusBadge(this, 'PASSED')" title="Filter Passed in Class" th:text="${'Passed: ' + cls.passCount}">Passed: 1</span>
+                                        <span class="badge-status badge-healed clickable-badge" th:if="${cls.fixedCount > 0}" onclick="filterClassByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Class" th:text="${'Succeeded-Fixed: ' + cls.fixedCount}">Succeeded-Fixed: 1</span>
+                                        <span class="badge-status badge-known-fail clickable-badge" th:if="${cls.knownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Class" th:text="${'Known: ' + cls.knownCount}">Known: 1</span>
+                                        <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Class" th:text="${'Unknown: ' + cls.unknownCount}">Unknown: 1</span>
+                                        <span class="badge-status badge-ignored clickable-badge" th:if="${cls.ignoredCount > 0}" onclick="filterClassByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Class" th:text="${'Ignored: ' + cls.ignoredCount}">Ignored: 1</span>
                                     </div>
                                 </div>
 
                                 <div class="test-class-executions">
                                     <div class="table-responsive">
-                                        <table class="aura-table">
+                                        <table class="executions-table aura-table" id="executionsTable">
                                             <thead>
                                                 <tr>
-                                                    <th>Data Set / Variation</th>
-                                                    <th>Engine Origin</th>
-                                                    <th>Browser</th>
-                                                    <th>Status</th>
-                                                    <th>Bug Issue / Info</th>
+                                                    <th onclick="sortTable(0)" style="cursor: pointer;">Timestamp <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                                                    <th onclick="sortTable(1)" style="cursor: pointer;">Status <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                                                    <th onclick="sortTable(2)" style="cursor: pointer;">Test Case & Details <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                                                    <th>Mode</th>
+                                                    <th onclick="sortTable(4)" style="cursor: pointer;">Steps <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                                                    <th onclick="sortTable(5)" style="cursor: pointer;">Duration <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                                                    <th>AI Usage</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr th:each="exec : ${cls.executions}" class="clickable-row test-row js-open-side-panel" 
+                                                <tr th:each="exec : ${cls.executions}" class="execution-row clickable-row test-row js-open-side-panel" 
                                                     th:id="${exec.id}" 
                                                     th:data-run-id="${report?.runId ?: runId}"
                                                     th:data-row-id="${exec.id}" 
                                                     th:data-test-name="${exec.testClass}" 
                                                     th:data-dataset="${exec.title}" 
-                                                    th:data-status="${exec.status}" 
+                                                    th:data-status="${(exec.status == 'succeeded-fixed' or exec.status == 'fixed' or exec.status == 'healed' or ((exec.status == 'passed-clean' or exec.status == 'passed' or exec.status == 'succeeded') and exec.bugs != null and !exec.bugs.isEmpty())) ? 'SUCCEEDED_FIXED' : ((exec.status == 'passed-clean' or exec.status == 'passed' or exec.status == 'succeeded') ? 'PASSED' : ((exec.bugs != null and !exec.bugs.isEmpty()) ? 'FAILED_KNOWN' : ((exec.status == 'ignored' or exec.status == 'skipped') ? 'SKIPPED' : 'FAILED_UNKNOWN')))}"
+                                                    th:data-status-raw="${exec.status}" 
+                                                    th:data-mode="${exec.executionMode ?: 'FORCE_RECORDING'}"
+                                                    th:data-search="${(exec.testClass ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.executionMode ?: '')}"
                                                     th:data-location="${exec.location}" 
                                                     th:data-browser="${exec.browser}" 
                                                     th:data-bugs="${exec.bugs != null && !exec.bugs.isEmpty() ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
                                                     th:data-failure="${exec.failure}"
+                                                    th:data-duration-ms="${exec.durationMs}"
+                                                    th:data-steps-total="${exec.totalStepsCount}"
+                                                    th:data-healed-count="${exec.healedStepsCount}"
+                                                    th:data-failed-count="${exec.failedStepsCount}"
+                                                    th:data-has-visual-changes="${exec.hasVisualChanges ?: false}"
+                                                    th:data-video="${exec.videoPath ?: ''}"
+                                                    th:data-log-path="${exec.logPath ?: ''}"
                                                     th:data-blocks="${exec.blocksJson}"
-                                                    th:data-steps="${exec.stepsJson}"
-                                                    th:data-local-bindings="${exec.localDataBindingsJson}"
-                                                    th:data-playbook-file="${exec.playbookFile}">
-                                                    <td>
-                                                        <span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${exec.location}">US</span></span>
-                                                        <strong class="text-mono" style="color: var(--text-main);" th:text="${exec.title != null && !exec.title.isEmpty() ? exec.title : exec.testClass}">CheckoutProcessTest [US CreditCard]</strong>
+                                                    th:data-steps="${exec.stepsJson}">
+                                                    
+                                                    <td th:attr="data-sort=${exec.timestampMs}">
+                                                        <div class="timestamp-date" th:text="${exec.dateFormatted != null && !exec.dateFormatted.isEmpty() ? exec.dateFormatted : (exec.startTimeDate ?: '2026-08-20')}">2026-08-20</div>
+                                                        <div class="timestamp-time" th:text="${exec.timeFormatted != null && !exec.timeFormatted.isEmpty() ? exec.timeFormatted : (exec.startTimeClock ?: '12:31:21')}">12:31:21</div>
                                                     </td>
-                                                    <td><span class="badge-status badge-mode-java"><span class="material-symbols-outlined">code</span> <span th:text="${exec.engine}">Java</span></span></td>
-                                                    <td><span class="material-symbols-outlined text-accent">language</span> <span th:text="${exec.browser}">Chrome</span></td>
+
                                                     <td class="col-status-badge">
-                                                        <span class="badge-status badge-pass" th:if="${exec.status == 'passed-clean'}">Passed Clean</span>
-                                                        <span class="badge-status badge-fixed" th:if="${exec.status == 'succeeded-fixed'}">Succeeded (Fixed)</span>
-                                                        <span class="badge-status badge-known-fail" th:if="${exec.status == 'failed-known'}">Failed (Known Issue)</span>
-                                                        <span class="badge-status badge-unknown-fail" th:if="${exec.status == 'failed-unknown'}">Failed (Unknown)</span>
-                                                        <span class="badge-status badge-ignored" th:if="${exec.status == 'ignored'}">Ignored / Skipped</span>
+                                                        <span class="badge-status badge-pass" th:if="${(exec.status == 'passed-clean' || exec.status == 'passed' || exec.status == 'succeeded') && (exec.bugs == null || exec.bugs.isEmpty())}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>
+                                                        <span class="badge-status badge-healed" th:if="${exec.status == 'succeeded-fixed' || exec.status == 'fixed' || exec.status == 'healed' || ((exec.status == 'passed-clean' || exec.status == 'passed' || exec.status == 'succeeded') && exec.bugs != null && !exec.bugs.isEmpty())}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED</span>
+                                                        <span class="badge-status badge-known-fail" th:if="${(exec.status == 'failed-known' || exec.status == 'known' || ((exec.status == 'failed' || exec.status == 'error') && exec.bugs != null && !exec.bugs.isEmpty())) && exec.status != 'succeeded-fixed' && exec.status != 'fixed' && exec.status != 'healed'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>
+                                                        <span class="badge-status badge-unknown-fail" th:if="${(exec.status == 'failed-unknown' || exec.status == 'unknown' || ((exec.status == 'failed' || exec.status == 'error') && (exec.bugs == null || exec.bugs.isEmpty()))) && exec.status != 'succeeded-fixed' && exec.status != 'fixed' && exec.status != 'healed'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>
+                                                        <span class="badge-status badge-ignored" th:if="${exec.status == 'ignored' || exec.status == 'skipped'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>
                                                     </td>
-                                                    <td class="col-bug-info">
-                                                        <span th:each="bug : ${exec.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family); margin-right: 0.25rem;">
-                                                            <span class="material-symbols-outlined">bug_report</span> <span th:text="'#' + ${bug}">#BUG-4821</span>
-                                                        </span>
-                                                        <span th:if="${exec.bugs == null || exec.bugs.isEmpty()}" style="color: var(--text-muted); font-size: 0.75rem;">None</span>
+
+                                                    <td>
+                                                        <div class="test-name-line">
+                                                            <a href="javascript:void(0)" class="test-title-link" th:text="${exec.title != null && !exec.title.isEmpty() ? exec.title : exec.testClass}">CheckoutProcessTest</a>
+                                                            <span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${exec.location}">US</span></span>
+                                                            <span class="badge-status badge-mode-java" style="font-size: 0.7rem;"><span class="material-symbols-outlined">language</span> <span th:text="${exec.browser}">Chrome</span></span>
+                                                        </div>
+                                                        <div class="test-meta-line" th:text="${exec.testClass}">com.xceptance.aura.CheckoutProcessTest</div>
+                                                        <div class="failure-reason-snip" th:if="${exec.failureSnippet != null && !exec.failureSnippet.isEmpty()}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: #ef4444;">warning</span> <span th:text="${exec.failureSnippet}">Element not found</span></div>
+                                                    </td>
+
+                                                    <td>
+                                                        <span class="mode-badge" onclick="event.stopPropagation(); filterByMode(this.innerText)" th:text="${exec.executionMode ?: 'FORCE_RECORDING'}">FORCE_RECORDING</span>
+                                                    </td>
+
+                                                    <td th:attr="data-sort=${exec.totalStepsCount}">
+                                                        <div class="steps-count" th:text="${exec.totalStepsCount + ' steps'}">12 steps</div>
+                                                        <div class="steps-sub text-fail" th:if="${exec.failedStepsCount > 0}" th:text="${exec.failedStepsCount + ' failed'}">1 failed</div>
+                                                    </td>
+
+                                                    <td th:attr="data-sort=${exec.durationMs}">
+                                                        <span class="text-mono" style="font-weight: 600;" th:text="${exec.durationFormatted ?: '0 ms'}">1,240 ms</span>
+                                                    </td>
+
+                                                    <td>
+                                                        <div th:if="${exec.llmCallsCount > 0}">
+                                                            <div class="llm-stat"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">smart_toy</span> <span th:text="${exec.llmCallsCount + ' call(s)'}">1 call(s)</span></div>
+                                                            <div class="llm-tokens" th:text="${exec.llmTotalTokens + ' toks ($' + exec.llmCostFormatted + ')'}">2,450 toks ($0.0012)</div>
+                                                        </div>
+                                                        <div class="llm-muted" th:if="${exec.llmCallsCount == 0}">—</div>
                                                     </td>
                                                 </tr>
                                             </tbody>

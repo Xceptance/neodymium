@@ -196,4 +196,108 @@ public class RunStorageSyncServiceTest
             }
         }
     }
+
+    @Test
+    public void testEarliestStartTimeInRunJson() throws IOException
+    {
+        final String runId = "run-earliest-time-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Browsing (default)").resolve("CartTest");
+        Files.createDirectories(execDir);
+
+        final String exec1Json = """
+            {
+                "id": "exec-later",
+                "testClass": "CartTest",
+                "status": "passed-clean",
+                "startTime": "2026-08-20 10:00:00"
+            }
+            """;
+        final String exec2Json = """
+            {
+                "id": "exec-earlier",
+                "testClass": "CartTest",
+                "status": "passed-clean",
+                "startTime": "2026-08-20 06:15:00"
+            }
+            """;
+
+        Files.writeString(execDir.resolve("exec-1.json"), exec1Json);
+        Files.writeString(execDir.resolve("exec-2.json"), exec2Json);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+
+            final String runJson = runJsonOpt.get();
+            Assertions.assertTrue(runJson.contains("2026-08-20 06:15:00"),
+                "Expected run.json to contain the earliest start time '2026-08-20 06:15:00' instead of later time");
+        }
+        finally
+        {
+            if (Files.exists(runDir))
+            {
+                try (var stream = Files.walk(runDir))
+                {
+                    stream.sorted(Comparator.reverseOrder())
+                          .map(Path::toFile)
+                          .forEach(File::delete);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testLocalesCollectedFromLocaleFieldInRunJson() throws IOException
+    {
+        final String runId = "run-locale-collection-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Browsing (default)").resolve("LocaleTest");
+        Files.createDirectories(execDir);
+
+        final String exec1Json = """
+            {
+                "id": "exec-de",
+                "testClass": "LocaleTest",
+                "status": "passed-clean",
+                "locale": "DE",
+                "browser": "Chrome"
+            }
+            """;
+        final String exec2Json = """
+            {
+                "id": "exec-fr",
+                "testClass": "LocaleTest",
+                "status": "passed-clean",
+                "locale": "FR",
+                "browser": "Firefox"
+            }
+            """;
+
+        Files.writeString(execDir.resolve("exec-1.json"), exec1Json);
+        Files.writeString(execDir.resolve("exec-2.json"), exec2Json);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+
+            final String runJson = runJsonOpt.get();
+            Assertions.assertTrue(runJson.contains("\"locales\" : [ \"DE\", \"FR\" ]") || (runJson.contains("\"DE\"") && runJson.contains("\"FR\"")),
+                "Expected run.json to contain locales array with DE and FR");
+        }
+        finally
+        {
+            if (Files.exists(runDir))
+            {
+                try (var stream = Files.walk(runDir))
+                {
+                    stream.sorted(Comparator.reverseOrder())
+                          .map(Path::toFile)
+                          .forEach(File::delete);
+                }
+            }
+        }
+    }
 }

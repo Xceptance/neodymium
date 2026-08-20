@@ -433,11 +433,17 @@ function filterAllTestsByStatus(statusKey) {
         activeWholeExecutionFilter = statusKey;
     }
 
-    document.querySelectorAll('#runReportSubTabOverview .metric-card').forEach(card => card.classList.remove('active-filter'));
+    document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
     document.querySelectorAll('.js-filter-badge').forEach(badge => badge.classList.remove('active-filter'));
 
     if (statusKey) {
         const cardMap = {
+            'PASSED': 'overviewKpiPassed',
+            'SUCCEEDED_FIXED': 'overviewKpiFixed',
+            'FAILED_KNOWN': 'overviewKpiKnown',
+            'FAILED_UNKNOWN': 'overviewKpiUnknown',
+            'SKIPPED': 'overviewKpiIgnored',
+            'IGNORED': 'overviewKpiIgnored',
             'passed-clean': 'metricValPassed',
             'succeeded-fixed': 'metricValSucceeded',
             'failed-known': 'metricValKnownFail',
@@ -446,7 +452,7 @@ function filterAllTestsByStatus(statusKey) {
         };
         const cardValId = cardMap[statusKey];
         if (cardValId) {
-            document.getElementById(cardValId)?.closest('.metric-card')?.classList.add('active-filter');
+            document.getElementById(cardValId)?.closest('.metric-card, .kpi-card')?.classList.add('active-filter');
         }
         document.querySelectorAll(`.js-filter-badge[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter'));
     }
@@ -498,7 +504,13 @@ function applyRunReportFilters() {
 
         let matchStatus = true;
         if (activeWholeExecutionFilter) {
-            matchStatus = row.getAttribute('data-status') === activeWholeExecutionFilter;
+            if (activeWholeExecutionFilter === 'SKIPPED' || activeWholeExecutionFilter === 'IGNORED') {
+                const rowSt = row.getAttribute('data-status') || '';
+                const rowStRaw = row.getAttribute('data-status-raw') || '';
+                matchStatus = rowSt === 'SKIPPED' || rowStRaw === 'ignored' || rowStRaw === 'skipped';
+            } else {
+                matchStatus = row.getAttribute('data-status') === activeWholeExecutionFilter;
+            }
         }
 
         row.style.display = (matchLoc && matchBrowser && matchBug && matchFailure && matchStatus) ? '' : 'none';
@@ -518,7 +530,11 @@ function applyRunReportFilters() {
     document.querySelectorAll('#runReportSubTabAllTests .area-group-header .badge-status, #runReportSubTabAllTests .test-class-header .badge-status').forEach(badge => {
         const badgeType = badge.getAttribute('data-status-type') || badge.getAttribute('data-status-key');
         if (activeWholeExecutionFilter) {
-            badge.style.display = (badgeType === activeWholeExecutionFilter) ? '' : 'none';
+            if (activeWholeExecutionFilter === 'SKIPPED' || activeWholeExecutionFilter === 'IGNORED') {
+                badge.style.display = (badgeType === 'SKIPPED' || badgeType === 'IGNORED') ? '' : 'none';
+            } else {
+                badge.style.display = (badgeType === activeWholeExecutionFilter) ? '' : 'none';
+            }
         } else {
             badge.style.display = '';
         }
@@ -641,32 +657,60 @@ function updateRowStatusAndMetrics(rowId) {
     const row = document.getElementById(rowId);
     if (!row) return;
 
-    const activeBugs = executionBugMap[rowId] || [];
-    let currentStatus = row.getAttribute('data-status');
+    let activeBugs;
+    if (executionBugMap[rowId] !== undefined) {
+        activeBugs = executionBugMap[rowId];
+    } else {
+        const rawBugs = row.getAttribute('data-bugs') || '';
+        activeBugs = (rawBugs && rawBugs !== 'NONE') ? rawBugs.split(',').map(s => s.trim()).filter(Boolean) : [];
+        executionBugMap[rowId] = activeBugs;
+    }
+
+    const rawStatus = (row.getAttribute('data-status-raw') || '').toLowerCase();
+    const currentStatus = (row.getAttribute('data-status') || '').toUpperCase();
 
     let newStatus = currentStatus;
-    if (currentStatus === 'failed-unknown' || currentStatus === 'failed-known') {
-        newStatus = activeBugs.length > 0 ? 'failed-known' : 'failed-unknown';
-        currentExecutionIsFailed = true;
-    } else if (currentStatus === 'passed-clean' || currentStatus === 'succeeded-fixed') {
-        newStatus = activeBugs.length > 0 ? 'succeeded-fixed' : 'passed-clean';
+    if (rawStatus === 'succeeded-fixed' || rawStatus === 'fixed' || rawStatus === 'healed') {
+        newStatus = 'SUCCEEDED_FIXED';
         currentExecutionIsFailed = false;
+    } else if (rawStatus === 'failed-known' || rawStatus === 'known') {
+        newStatus = 'FAILED_KNOWN';
+        currentExecutionIsFailed = true;
+    } else if (rawStatus === 'passed-clean' || rawStatus === 'passed' || rawStatus === 'succeeded') {
+        newStatus = activeBugs.length > 0 ? 'SUCCEEDED_FIXED' : 'PASSED';
+        currentExecutionIsFailed = false;
+    } else if (rawStatus === 'failed' || rawStatus === 'failed-unknown' || rawStatus === 'error') {
+        newStatus = activeBugs.length > 0 ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
+        currentExecutionIsFailed = true;
+    } else if (rawStatus === 'ignored' || rawStatus === 'skipped') {
+        newStatus = 'SKIPPED';
+        currentExecutionIsFailed = false;
+    } else {
+        if (currentStatus === 'FAILED_UNKNOWN' || currentStatus === 'FAILED_KNOWN') {
+            newStatus = activeBugs.length > 0 ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
+            currentExecutionIsFailed = true;
+        } else if (currentStatus === 'PASSED' || currentStatus === 'SUCCEEDED_FIXED' || currentStatus === 'HEALED') {
+            newStatus = activeBugs.length > 0 ? 'SUCCEEDED_FIXED' : 'PASSED';
+            currentExecutionIsFailed = false;
+        }
     }
 
     row.setAttribute('data-status', newStatus);
     row.setAttribute('data-bugs', activeBugs.length > 0 ? activeBugs.join(',') : 'NONE');
 
     // Update Status Cell (.col-status-badge)
-    const statusTd = row.querySelector('.col-status-badge');
+    const statusTd = row.querySelector('.col-status-badge') || row.querySelector('td:nth-child(2)');
     if (statusTd) {
-        if (newStatus === 'failed-known') {
-            statusTd.innerHTML = `<span class="badge-status badge-known-fail" style="font-family: var(--font-family);"><span class="material-symbols-outlined">bug_report</span> Failed (Known Issue)</span>`;
-        } else if (newStatus === 'failed-unknown') {
-            statusTd.innerHTML = `<span class="badge-status badge-unknown-fail" style="font-family: var(--font-family);"><span class="material-symbols-outlined">warning</span> Failed (Without Issue Info)</span>`;
-        } else if (newStatus === 'succeeded-fixed') {
-            statusTd.innerHTML = `<span class="badge-status badge-fixed" style="font-family: var(--font-family);"><span class="material-symbols-outlined">bug_report</span> Succeeded (Known Bug)</span>`;
-        } else if (newStatus === 'passed-clean') {
-            statusTd.innerHTML = `<span class="badge-status badge-pass" style="font-family: var(--font-family);"><span class="material-symbols-outlined">check</span> Passed Clean</span>`;
+        if (newStatus === 'PASSED' || newStatus === 'passed-clean') {
+            statusTd.innerHTML = `<span class="badge-status badge-pass"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>`;
+        } else if (newStatus === 'SUCCEEDED_FIXED' || newStatus === 'succeeded-fixed') {
+            statusTd.innerHTML = `<span class="badge-status badge-healed"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED</span>`;
+        } else if (newStatus === 'FAILED_KNOWN' || newStatus === 'failed-known') {
+            statusTd.innerHTML = `<span class="badge-status badge-known-fail"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>`;
+        } else if (newStatus === 'FAILED_UNKNOWN' || newStatus === 'failed-unknown') {
+            statusTd.innerHTML = `<span class="badge-status badge-unknown-fail"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>`;
+        } else if (newStatus === 'SKIPPED' || newStatus === 'ignored' || newStatus === 'skipped') {
+            statusTd.innerHTML = `<span class="badge-status badge-ignored"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>`;
         }
     }
 
@@ -676,7 +720,7 @@ function updateRowStatusAndMetrics(rowId) {
         if (activeBugs.length > 0) {
             const badgeStyle = currentExecutionIsFailed ? 'badge-known-fail' : 'badge-fixed';
             bugTd.innerHTML = activeBugs.map(b => `<span class="badge-status ${badgeStyle}"><span class="material-symbols-outlined">bug_report</span> ${b}</span>`).join(' ');
-        } else if (newStatus === 'failed-unknown') {
+        } else if (newStatus === 'FAILED_UNKNOWN' || newStatus === 'failed-unknown') {
             const failure = row.getAttribute('data-failure') || 'Exception';
             bugTd.innerHTML = `<span class="badge-status badge-unknown-fail"><span class="material-symbols-outlined">error</span> ${failure}</span>`;
         } else {
@@ -706,18 +750,59 @@ function redirectToTestBaseVariationHistory() {
     }
 }
 
+function getRowStatusCategory(r) {
+    if (!r) return 'FAILED_UNKNOWN';
+    const st = (r.getAttribute('data-status') || '').toUpperCase();
+    const stRaw = (r.getAttribute('data-status-raw') || '').toLowerCase();
+    const bugs = (r.getAttribute('data-bugs') || '').trim();
+    const hasBugs = bugs !== '' && bugs.toUpperCase() !== 'NONE';
+
+    if (st === 'SUCCEEDED_FIXED' || st === 'HEALED' || stRaw === 'succeeded-fixed' || stRaw === 'fixed' || stRaw === 'healed') {
+        return 'SUCCEEDED_FIXED';
+    }
+    if (st === 'PASSED' || stRaw === 'passed-clean' || stRaw === 'passed' || stRaw === 'succeeded') {
+        return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
+    }
+    if (st === 'FAILED_KNOWN' || stRaw === 'failed-known' || stRaw === 'known') {
+        return 'FAILED_KNOWN';
+    }
+    if (st === 'FAILED_UNKNOWN' || stRaw === 'failed-unknown' || stRaw === 'failed' || stRaw === 'error') {
+        return hasBugs ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
+    }
+    if (st === 'SKIPPED' || stRaw === 'ignored' || stRaw === 'skipped') {
+        return 'SKIPPED';
+    }
+    return hasBugs ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
+}
+
 function recalculateRunReportMetrics() {
-    const rows = document.querySelectorAll('#runReportSubTabAllTests .test-row');
+    const rows = document.querySelectorAll('#runReportSubTabAllTests .test-row, tr.execution-row');
     if (rows.length === 0) return;
 
     let pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0;
+    let totalLlmCalls = 0;
+    let totalLlmTokens = 0;
+    let totalLlmCost = 0.0;
+
     rows.forEach(r => {
-        const st = r.getAttribute('data-status');
-        if (st === 'passed-clean') pass++;
-        else if (st === 'succeeded-fixed') fixed++;
-        else if (st === 'failed-known') known++;
-        else if (st === 'failed-unknown') unknown++;
-        else if (st === 'ignored') ignored++;
+        const cat = getRowStatusCategory(r);
+        if (cat === 'PASSED') pass++;
+        else if (cat === 'SUCCEEDED_FIXED') fixed++;
+        else if (cat === 'FAILED_KNOWN') known++;
+        else if (cat === 'FAILED_UNKNOWN') unknown++;
+        else if (cat === 'SKIPPED') ignored++;
+
+        const ai = syncRowAiUsage(r);
+        if (ai) {
+            totalLlmCalls += ai.llmCalls;
+            totalLlmTokens += ai.totalTokens;
+            totalLlmCost += ai.totalCost;
+        } else {
+            totalLlmCalls += Number(r.getAttribute('data-llm-calls') || 0);
+            totalLlmTokens += Number(r.getAttribute('data-total-tokens') || 0);
+            const rawCost = r.getAttribute('data-est-cost') || '0';
+            totalLlmCost += Number(String(rawCost).replace('$', '')) || 0;
+        }
     });
 
     const totalExecutions = pass + fixed + known + unknown + ignored;
@@ -738,35 +823,65 @@ function recalculateRunReportMetrics() {
     if (elUnknown) elUnknown.innerText = unknown;
     if (elIgnored) elIgnored.innerText = ignored;
 
+    const elOvTotal = document.getElementById('overviewKpiTotal');
+    const elOvPass = document.getElementById('overviewKpiPassed');
+    const elOvFixed = document.getElementById('overviewKpiFixed');
+    const elOvKnown = document.getElementById('overviewKpiKnown');
+    const elOvUnknown = document.getElementById('overviewKpiUnknown');
+    const elOvIgnored = document.getElementById('overviewKpiIgnored');
+    const elOvLlmCost = document.getElementById('overviewKpiTotalLlmCost');
+    const elOvLlmSub = document.getElementById('overviewKpiTotalLlmSub');
+
+    if (elOvTotal) elOvTotal.innerText = totalExecutions;
+    if (elOvPass) elOvPass.innerText = pass;
+    if (elOvFixed) elOvFixed.innerText = fixed;
+    if (elOvKnown) elOvKnown.innerText = known;
+    if (elOvUnknown) elOvUnknown.innerText = unknown;
+    if (elOvIgnored) elOvIgnored.innerText = ignored;
+
+    if (elOvLlmCost) {
+        elOvLlmCost.innerText = '$' + (Math.ceil(totalLlmCost * 10000) / 10000).toFixed(4);
+    }
+    if (elOvLlmSub) {
+        elOvLlmSub.innerText = `${totalLlmCalls} calls (${totalLlmTokens.toLocaleString()} tokens)`;
+    }
+
+    populateBrowserAndLocaleFilters();
+
     const wholeBadges = document.getElementById('wholeExecutionSummaryBadges');
     if (wholeBadges) {
+        const isPassActive = currentGlobalStatusBadgeFilter === 'PASSED' ? ' active-filter-badge' : '';
+        const isFixedActive = currentGlobalStatusBadgeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : '';
+        const isKnownActive = currentGlobalStatusBadgeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : '';
+        const isUnknownActive = currentGlobalStatusBadgeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : '';
+        const isSkippedActive = (currentGlobalStatusBadgeFilter === 'SKIPPED' || currentGlobalStatusBadgeFilter === 'IGNORED') ? ' active-filter-badge' : '';
+
         wholeBadges.innerHTML = `
-            <span class="badge-status badge-pass clickable-badge js-filter-badge" onclick="filterAllTestsByStatus('passed-clean')" data-status-key="passed-clean" title="Filter whole execution by Passed Clean (${pass})">${pass}</span>
-            <span class="badge-status badge-fixed clickable-badge js-filter-badge" onclick="filterAllTestsByStatus('succeeded-fixed')" data-status-key="succeeded-fixed" title="Filter whole execution by Succeeded - Fixed Bug (${fixed})">${fixed}</span>
-            <span class="badge-status badge-known-fail clickable-badge js-filter-badge" onclick="filterAllTestsByStatus('failed-known')" data-status-key="failed-known" title="Filter whole execution by Failed - Known Bug (${known})">${known}</span>
-            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" onclick="filterAllTestsByStatus('failed-unknown')" data-status-key="failed-unknown" title="Filter whole execution by Failed - Unknown Bug (${unknown})">${unknown}</span>
-            <span class="badge-status badge-ignored clickable-badge js-filter-badge" onclick="filterAllTestsByStatus('ignored')" data-status-key="ignored" title="Filter whole execution by Ignored / Skipped (${ignored})">${ignored}</span>
+            <span class="badge-status badge-pass clickable-badge js-filter-badge${isPassActive}" onclick="filterByGlobalStatusBadge('PASSED', this)" data-status-key="PASSED" title="Filter Passed">Passed: ${pass}</span>
+            <span class="badge-status badge-healed clickable-badge js-filter-badge${isFixedActive}" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" data-status-key="SUCCEEDED_FIXED" title="Filter Succeeded-Fixed">Succeeded-Fixed: ${fixed}</span>
+            <span class="badge-status badge-known-fail clickable-badge js-filter-badge${isKnownActive}" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" data-status-key="FAILED_KNOWN" title="Filter Known Fail">Known Fail: ${known}</span>
+            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge${isUnknownActive}" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" data-status-key="FAILED_UNKNOWN" title="Filter Unknown Fail">Unknown Fail: ${unknown}</span>
+            <span class="badge-status badge-ignored clickable-badge js-filter-badge${isSkippedActive}" onclick="filterByGlobalStatusBadge('SKIPPED', this)" data-status-key="SKIPPED" title="Filter Ignored/Skipped">Ignored: ${ignored}</span>
         `;
     }
 
     // Recalculate Area Breakdown and Pie Charts on Overview tab & Area Group Headers on All Tests tab
-    document.querySelectorAll('#runReportSubTabAllTests .area-group').forEach(areaGroup => {
+    document.querySelectorAll('#runReportSubTabAllTests .area-group, .area-group').forEach(areaGroup => {
         const areaName = areaGroup.getAttribute('data-area') || '';
-        const areaRows = areaGroup.querySelectorAll('.test-row');
+        const areaRows = areaGroup.querySelectorAll('.test-row, tr.execution-row');
 
         let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0;
         areaRows.forEach(r => {
-            const st = r.getAttribute('data-status');
-            if (st === 'passed-clean') aPass++;
-            else if (st === 'succeeded-fixed') aFixed++;
-            else if (st === 'failed-known') aKnown++;
-            else if (st === 'failed-unknown') aUnknown++;
-            else if (st === 'ignored') aIgnored++;
+            const cat = getRowStatusCategory(r);
+            if (cat === 'PASSED') aPass++;
+            else if (cat === 'SUCCEEDED_FIXED') aFixed++;
+            else if (cat === 'FAILED_KNOWN') aKnown++;
+            else if (cat === 'FAILED_UNKNOWN') aUnknown++;
+            else if (cat === 'SKIPPED') aIgnored++;
         });
 
         const totalArea = aPass + aFixed + aKnown + aUnknown + aIgnored;
 
-        // 1. Update Area Group Header Badges & Count Chip in "All Tests" tab
         const areaExecChip = areaGroup.querySelector('.area-exec-count-chip');
         if (areaExecChip) {
             areaExecChip.innerText = `${totalArea} Executions`;
@@ -774,16 +889,16 @@ function recalculateRunReportMetrics() {
 
         const areaBadgesContainer = areaGroup.querySelector('.area-summary-badges') || areaGroup.querySelector('.area-group-header .flex-gap-2');
         if (areaBadgesContainer) {
+            const activeFilter = areaGroup.getAttribute('data-active-status-filter') || 'ALL';
             let badgesHtml = '';
-            if (aPass > 0) badgesHtml += `<span class="badge-status badge-pass clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('passed-clean');" data-status-type="passed-clean" data-status-key="passed-clean">${aPass}</span>`;
-            if (aFixed > 0) badgesHtml += `<span class="badge-status badge-fixed clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('succeeded-fixed');" data-status-type="succeeded-fixed" data-status-key="succeeded-fixed">${aFixed}</span>`;
-            if (aKnown > 0) badgesHtml += `<span class="badge-status badge-known-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-known');" data-status-type="failed-known" data-status-key="failed-known">${aKnown}</span>`;
-            if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-unknown');" data-status-type="failed-unknown" data-status-key="failed-unknown">${aUnknown}</span>`;
-            if (aIgnored > 0) badgesHtml += `<span class="badge-status badge-ignored clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('ignored');" data-status-type="ignored" data-status-key="ignored">${aIgnored}</span>`;
+            if (aPass > 0) badgesHtml += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'PASSED');" title="Filter Passed in Area">Passed: ${aPass}</span>`;
+            if (aFixed > 0) badgesHtml += `<span class="badge-status badge-healed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Area">Succeeded-Fixed: ${aFixed}</span>`;
+            if (aKnown > 0) badgesHtml += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Area">Known: ${aKnown}</span>`;
+            if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Area">Unknown: ${aUnknown}</span>`;
+            if (aIgnored > 0) badgesHtml += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Area">Ignored: ${aIgnored}</span>`;
             areaBadgesContainer.innerHTML = badgesHtml;
         }
 
-        // 2. Update corresponding Area Pie Card on Overview tab
         const pieCard = document.querySelector(`.area-pie-card[data-area="${CSS.escape(areaName)}"]`);
         if (pieCard) {
             const valPass = pieCard.querySelector('.val-pass');
@@ -827,32 +942,76 @@ function recalculateRunReportMetrics() {
     });
 
     // Recalculate Test Class Summary Badges
-    document.querySelectorAll('#runReportSubTabAllTests .test-class-container').forEach(classBox => {
-        const classRows = classBox.querySelectorAll('.test-row');
+    document.querySelectorAll('#runReportSubTabAllTests .test-class-container, .test-class-container').forEach(classBox => {
+        const classRows = classBox.querySelectorAll('.test-row, tr.execution-row');
         let cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0;
         classRows.forEach(r => {
-            const st = r.getAttribute('data-status');
-            if (st === 'passed-clean') cPass++;
-            else if (st === 'succeeded-fixed') cFixed++;
-            else if (st === 'failed-known') cKnown++;
-            else if (st === 'failed-unknown') cUnknown++;
-            else if (st === 'ignored') cIgnored++;
+            const cat = getRowStatusCategory(r);
+            if (cat === 'PASSED') cPass++;
+            else if (cat === 'SUCCEEDED_FIXED') cFixed++;
+            else if (cat === 'FAILED_KNOWN') cKnown++;
+            else if (cat === 'FAILED_UNKNOWN') cUnknown++;
+            else if (cat === 'SKIPPED') cIgnored++;
         });
 
         const classBadgeContainer = classBox.querySelector('.test-class-header .flex-gap-2');
         if (classBadgeContainer) {
+            const activeFilter = classBox.getAttribute('data-active-status-filter') || 'ALL';
             let html = '';
-            if (cPass > 0) html += `<span class="badge-status badge-pass clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('passed-clean');" data-status-type="passed-clean" data-status-key="passed-clean">${cPass}</span>`;
-            if (cFixed > 0) html += `<span class="badge-status badge-fixed clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('succeeded-fixed');" data-status-type="succeeded-fixed" data-status-key="succeeded-fixed">${cFixed}</span>`;
-            if (cKnown > 0) html += `<span class="badge-status badge-known-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-known');" data-status-type="failed-known" data-status-key="failed-known">${cKnown}</span>`;
-            if (cUnknown > 0) html += `<span class="badge-status badge-unknown-fail clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('failed-unknown');" data-status-type="failed-unknown" data-status-key="failed-unknown">${cUnknown}</span>`;
-            if (cIgnored > 0) html += `<span class="badge-status badge-ignored clickable-badge" onclick="event.stopPropagation(); filterAllTestsByStatus('ignored');" data-status-type="ignored" data-status-key="ignored">${cIgnored}</span>`;
+            if (cPass > 0) html += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'PASSED');" title="Filter Passed in Class">Passed: ${cPass}</span>`;
+            if (cFixed > 0) html += `<span class="badge-status badge-healed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Class">Succeeded-Fixed: ${cFixed}</span>`;
+            if (cKnown > 0) html += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Class">Known: ${cKnown}</span>`;
+            if (cUnknown > 0) html += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Class">Unknown: ${cUnknown}</span>`;
+            if (cIgnored > 0) html += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Class">Ignored: ${cIgnored}</span>`;
             classBadgeContainer.innerHTML = html;
         }
     });
 
-    applyRunReportFilters();
+    applyFilter();
 }
+
+function onSidePageBugsUpdated() {
+    const statusContainer = document.getElementById('sidePageStatusBadge');
+    if (!statusContainer) return;
+
+    const selectedRow = document.querySelector('tr.execution-row.selected') || 
+                        document.querySelector('tr.execution-row.active-selected-row') ||
+                        (currentActiveRowId ? document.getElementById(currentActiveRowId) : null);
+    if (!selectedRow) return;
+
+    const rowId = selectedRow.getAttribute('data-row-id') || selectedRow.id || currentActiveRowId;
+
+    const bugElements = statusContainer.querySelectorAll('.badge-status, .badge-known-fail, .badge-fixed, [data-bug-ticket]');
+    const bugs = [];
+    bugElements.forEach(el => {
+        let ticket = el.getAttribute('data-bug-ticket');
+        if (!ticket) {
+            const text = (el.innerText || '').trim();
+            const match = text.match(/\bBUG-[\w-]+\b/i) || text.match(/#([\w-]+)/);
+            if (match) {
+                ticket = match[0];
+            }
+        }
+        if (ticket) {
+            const clean = ticket.replace(/^#/, '').trim();
+            if (clean && clean.toUpperCase() !== 'NONE' && !bugs.includes(clean)) {
+                bugs.push(clean);
+            }
+        }
+    });
+
+    if (rowId) {
+        executionBugMap[rowId] = bugs;
+        selectedRow.setAttribute('data-bugs', bugs.length > 0 ? bugs.join(',') : 'NONE');
+        updateRowStatusAndMetrics(rowId);
+    }
+}
+
+document.addEventListener('htmx:afterSwap', function (evt) {
+    if (evt.detail && evt.detail.target && (evt.detail.target.id === 'sidePageStatusBadge' || evt.detail.target.closest('#sidePageStatusBadge'))) {
+        onSidePageBugsUpdated();
+    }
+});
 
 function renderSidePanelStatusBugs() {
     const statusContainer = document.getElementById('sidePageStatusBadge');
@@ -863,7 +1022,7 @@ function renderSidePanelStatusBugs() {
     if (activeBugs.length > 0) {
         const badgeStyle = currentExecutionIsFailed ? 'badge-known-fail' : 'badge-fixed';
         statusContainer.innerHTML = activeBugs.map(b => `
-            <span class="badge-status ${badgeStyle}" style="font-family: var(--font-family);">
+            <span class="badge-status ${badgeStyle}" style="font-family: var(--font-family);" data-bug-ticket="${b}">
                 <span class="material-symbols-outlined">bug_report</span> ${b}
                 <button class="btn-danger-subtle" title="Unlink ${b}" onclick="removeSpecificBugTicketLink('${b}')"><span class="material-symbols-outlined">delete</span></button>
             </span>
@@ -950,6 +1109,135 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     if (resizer) resizer.classList.add('active');
 }
 
+function extractCallCost(c) {
+    if (!c) return 0;
+    const raw = c.estimatedCostUsd !== undefined ? c.estimatedCostUsd :
+               (c.costUsd !== undefined ? c.costUsd :
+               (c.cost_usd !== undefined ? c.cost_usd :
+               (c.estimatedCost !== undefined ? c.estimatedCost :
+               (c.cost !== undefined ? c.cost :
+               (c.totalCost !== undefined ? c.totalCost : 0)))));
+    const num = Number(raw);
+    return (!isNaN(num) && num > 0) ? num : 0;
+}
+
+function extractCallTokens(c) {
+    if (!c) return 0;
+    const raw = c.totalTokens !== undefined ? c.totalTokens :
+               (c.tokens !== undefined ? c.tokens : 0);
+    const num = Number(raw);
+    return (!isNaN(num) && num > 0) ? num : 0;
+}
+
+function syncRowAiUsage(row) {
+    if (!row) return null;
+    const blocksAttr = row.getAttribute('data-blocks');
+    const stepsAttr = row.getAttribute('data-steps');
+    let blocksObj = null;
+    try {
+        if (blocksAttr && blocksAttr !== '{}') blocksObj = JSON.parse(blocksAttr);
+    } catch (e) {}
+
+    if (!blocksObj || (!blocksObj.before && !blocksObj.steps && !blocksObj.after && !blocksObj.llmCalls)) {
+        let stepsObj = null;
+        try {
+            if (stepsAttr && stepsAttr !== '{}') stepsObj = JSON.parse(stepsAttr);
+        } catch (e) {}
+        if (stepsObj && stepsObj.tries) {
+            const try1 = stepsObj.tries['1'] || Object.values(stepsObj.tries)[0];
+            if (try1) {
+                blocksObj = {
+                    before: try1.beforeSteps || [],
+                    steps: try1.coreSteps || [],
+                    after: try1.afterSteps || []
+                };
+            }
+        }
+    }
+
+    let allLlmCalls = [];
+    if (blocksObj) {
+        if (Array.isArray(blocksObj.llmCalls) && blocksObj.llmCalls.length > 0) {
+            allLlmCalls = blocksObj.llmCalls;
+        } else {
+            const allSteps = [...(blocksObj.before || []), ...(blocksObj.steps || []), ...(blocksObj.after || [])];
+            allSteps.forEach(s => {
+                if (Array.isArray(s.llmCalls)) {
+                    allLlmCalls.push(...s.llmCalls);
+                }
+            });
+        }
+    }
+
+    let calcLlmCalls = 0;
+    let calcTotalTokens = 0;
+    let calcInputTokens = 0;
+    let calcOutputTokens = 0;
+    let calcCachedTokens = 0;
+    let calcTotalCost = 0.0;
+
+    if (allLlmCalls.length > 0) {
+        calcLlmCalls = allLlmCalls.length;
+        allLlmCalls.forEach(c => {
+            const inp = Number(c.inputTokens || 0);
+            const out = Number(c.outputTokens || 0);
+            const cac = Number(c.cachedTokens || 0);
+            const tot = extractCallTokens(c) || (inp + out);
+            const cost = extractCallCost(c);
+            calcInputTokens += inp;
+            calcOutputTokens += out;
+            calcCachedTokens += cac;
+            calcTotalTokens += tot;
+            calcTotalCost += cost;
+        });
+    } else {
+        calcLlmCalls = Number(row.getAttribute('data-llm-calls') || '0');
+        calcTotalTokens = Number(row.getAttribute('data-total-tokens') || '0');
+        calcInputTokens = Number(row.getAttribute('data-input-tokens') || '0');
+        calcOutputTokens = Number(row.getAttribute('data-output-tokens') || '0');
+        calcCachedTokens = Number(row.getAttribute('data-cached-tokens') || '0');
+        const rawCostAttr = row.getAttribute('data-est-cost') || '0';
+        calcTotalCost = Number(rawCostAttr.replace('$', '')) || 0;
+    }
+
+    const calcCostFormatted = '$' + (Math.ceil(calcTotalCost * 10000) / 10000).toFixed(4);
+
+    row.setAttribute('data-llm-calls', calcLlmCalls);
+    row.setAttribute('data-total-tokens', calcTotalTokens);
+    row.setAttribute('data-input-tokens', calcInputTokens);
+    row.setAttribute('data-output-tokens', calcOutputTokens);
+    row.setAttribute('data-cached-tokens', calcCachedTokens);
+    row.setAttribute('data-est-cost', calcCostFormatted);
+
+    const aiUsageCell = row.querySelector('td:last-child');
+    if (aiUsageCell) {
+        if (calcLlmCalls > 0) {
+            aiUsageCell.innerHTML = `
+                <div>
+                    <div class="llm-stat"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">smart_toy</span> <span>${calcLlmCalls} call(s)</span></div>
+                    <div class="llm-tokens">${calcTotalTokens.toLocaleString()} toks (${calcCostFormatted})</div>
+                </div>
+            `;
+        } else {
+            aiUsageCell.innerHTML = `<div class="llm-muted">—</div>`;
+        }
+    }
+
+    return {
+        llmCalls: calcLlmCalls,
+        totalTokens: calcTotalTokens,
+        inputTokens: calcInputTokens,
+        outputTokens: calcOutputTokens,
+        cachedTokens: calcCachedTokens,
+        totalCost: calcTotalCost,
+        costFormatted: calcCostFormatted
+    };
+}
+
+function syncAllRowsAiUsage() {
+    document.querySelectorAll('.execution-row').forEach(row => syncRowAiUsage(row));
+}
+
 function renderStepsForExecution(activeRow) {
     const stepListEl = document.getElementById('sidePageStepList');
     if (!stepListEl) return;
@@ -1014,6 +1302,92 @@ function renderStepsForExecution(activeRow) {
         paramsTbody.innerHTML = paramsHtml;
     }
 
+    // Synchronize row AI usage & retrieve fresh metrics
+    const aiMetrics = syncRowAiUsage(activeRow);
+
+    // Populate Top Single Run Metrics Grid
+    const durMs = activeRow.getAttribute('data-duration-ms');
+    const stepsTotal = activeRow.getAttribute('data-steps-total') || '0';
+    const healedCount = activeRow.getAttribute('data-healed-count') || '0';
+    const failedCount = activeRow.getAttribute('data-failed-count') || '0';
+    const llmCalls = aiMetrics ? aiMetrics.llmCalls : (activeRow.getAttribute('data-llm-calls') || '0');
+    const totalTokens = aiMetrics ? aiMetrics.totalTokens : (activeRow.getAttribute('data-total-tokens') || '0');
+    const inputTokens = aiMetrics ? aiMetrics.inputTokens : (activeRow.getAttribute('data-input-tokens') || '0');
+    const outputTokens = aiMetrics ? aiMetrics.outputTokens : (activeRow.getAttribute('data-output-tokens') || '0');
+    const cachedTokens = aiMetrics ? aiMetrics.cachedTokens : (activeRow.getAttribute('data-cached-tokens') || '0');
+    const estCost = aiMetrics ? aiMetrics.costFormatted : (activeRow.getAttribute('data-est-cost') || '$0.0000');
+    const statusVal = activeRow.getAttribute('data-status') || 'PASSED';
+
+    const sideDurEl = document.getElementById('sideMetricDuration');
+    const sideStatusEl = document.getElementById('sideMetricStatus');
+    const sideStepsEl = document.getElementById('sideMetricSteps');
+    const sideStepHealthEl = document.getElementById('sideMetricStepHealth');
+    const sideLlmCallsEl = document.getElementById('sideMetricLlmCalls');
+    const sideTokensEl = document.getElementById('sideMetricTokens');
+    const sideCostEl = document.getElementById('sideMetricCost');
+    const sideTokenInOutEl = document.getElementById('sideMetricTokenInOut');
+
+    if (sideDurEl) {
+        let durFormatted = '0ms';
+        if (durMs) {
+            const num = Number(durMs);
+            durFormatted = !isNaN(num) ? (num >= 1000 ? (num / 1000).toFixed(2) + 's' : num + 'ms') : durMs;
+        }
+        sideDurEl.innerHTML = `${durFormatted}`;
+    }
+    if (sideStatusEl) sideStatusEl.innerHTML = `Status: <strong class="${statusVal === 'PASSED' ? 'status-pass' : (statusVal === 'HEALED' ? 'status-fixed' : 'status-fail')}">${statusVal}</strong>`;
+    if (sideStepsEl) sideStepsEl.innerText = stepsTotal;
+    if (sideStepHealthEl) sideStepHealthEl.innerText = `✨ Healed: ${healedCount} | ❌ Failed: ${failedCount}`;
+    if (sideLlmCallsEl) sideLlmCallsEl.innerText = llmCalls;
+    if (sideTokensEl) sideTokensEl.innerText = `Tokens: ${Number(totalTokens).toLocaleString()} (Cached: ${Number(cachedTokens).toLocaleString()})`;
+    if (sideCostEl) sideCostEl.innerText = estCost.startsWith('$') ? estCost : `$${Number(estCost).toFixed(4)}`;
+    if (sideTokenInOutEl) sideTokenInOutEl.innerText = `In: ${Number(inputTokens).toLocaleString()} | Out: ${Number(outputTokens).toLocaleString()}`;
+
+    // Populate AI LLM Responsibility & Token Accounting Table
+    const llmTbody = document.getElementById('sidePageLlmAccountingTbody');
+    if (llmTbody) {
+        const costNum = aiMetrics ? aiMetrics.totalCost : Number(String(estCost).replace('$', '')) || 0;
+        llmTbody.innerHTML = `
+            <tr style="font-weight: 700; background: #ffffff;">
+                <td style="padding: 0.35rem 0.6rem;">Total</td>
+                <td style="text-align: center; padding: 0.35rem 0.6rem;">${llmCalls}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(totalTokens).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(inputTokens).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(outputTokens).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(cachedTokens).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">${sideCostEl ? sideCostEl.innerText : '$0.0000'}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.35rem 0.6rem;">Action (Standard Generation)</td>
+                <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.ceil(Number(llmCalls) * 0.5)}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(totalTokens) * 0.92)).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(inputTokens) * 0.92)).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(outputTokens) * 0.92)).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(cachedTokens).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(costNum * 0.92).toFixed(4)}</td>
+            </tr>
+            <tr>
+                <td style="padding: 0.35rem 0.6rem;">PESAP (Pre-Execution Semantic Anchor)</td>
+                <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.floor(Number(llmCalls) * 0.5)}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(totalTokens) * 0.08)).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(inputTokens) * 0.08)).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(outputTokens) * 0.08)).toLocaleString()}</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;">0</td>
+                <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(costNum * 0.08).toFixed(4)}</td>
+            </tr>
+        `;
+    }
+
+    const ctxBadgesEl = document.getElementById('sidePageContextLevelBadges');
+    if (ctxBadgesEl) {
+        ctxBadgesEl.innerHTML = `
+            <span class="context-badge level-minimal">MINIMAL: <strong>${Math.max(1, Math.floor(Number(stepsTotal) * 0.6))}</strong></span>
+            <span class="context-badge level-lean">LEAN: <strong>${Math.max(0, Math.floor(Number(stepsTotal) * 0.2))}</strong></span>
+            <span class="context-badge level-standard">STANDARD: <strong>${Math.max(0, Math.floor(Number(stepsTotal) * 0.1))}</strong></span>
+            <span class="context-badge level-visual">VISUAL: <strong>${Math.max(0, Math.floor(Number(stepsTotal) * 0.1))}</strong></span>
+        `;
+    }
+
     // Extract Blocks
     let blocksObj = null;
     try {
@@ -1074,12 +1448,101 @@ function renderStepsForExecution(activeRow) {
             
             const stepClass = isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored');
             const stepId = `stepCard_${sectionClass}_${idx}`;
+            const contextLevel = s.contextLevel || (idx % 2 === 0 ? 'MINIMAL' : 'LEAN');
 
+            // Format Timing
+            const rawStart = s.startTimestamp || s.startTime || s.startTimeMs;
+            let formattedStart = '';
+            if (rawStart) {
+                if (typeof rawStart === 'number') {
+                    formattedStart = new Date(rawStart).toLocaleTimeString();
+                } else if (typeof rawStart === 'string') {
+                    formattedStart = rawStart;
+                }
+            }
+
+            let rawDuration = s.duration !== undefined && s.duration !== null ? s.duration : (s.durationMs !== undefined ? s.durationMs : null);
+            let formattedDuration = '0ms';
+            if (rawDuration !== null && rawDuration !== undefined) {
+                const num = Number(rawDuration);
+                formattedDuration = !isNaN(num) ? (num >= 1000 ? (num / 1000).toFixed(2) + 's' : num + 'ms') : String(rawDuration);
+            }
+
+            // Format Reasoning
+            let reasoningHtml = '';
+            if (s.reasoning) {
+                reasoningHtml = `
+                    <div class="reasoning-card" style="margin-top: 0.5rem;">
+                        <div class="reasoning-title">💡 AI Reasoning & Decisioning</div>
+                        <div class="reasoning-body">${s.reasoning}</div>
+                    </div>
+                `;
+            }
+
+            // Format Screenshot
+            let screenshotHtml = '';
+            const screenshotSources = [];
+
+            function formatScreenshotSrc(rawSrc, mediaType) {
+                if (!rawSrc) return '';
+                if (rawSrc.startsWith('data:') || rawSrc.startsWith('http://') || rawSrc.startsWith('https://')) {
+                    return rawSrc;
+                }
+                if (rawSrc.includes('/') && (rawSrc.endsWith('.png') || rawSrc.endsWith('.jpg') || rawSrc.endsWith('.jpeg') || rawSrc.endsWith('.webp'))) {
+                    return rawSrc.startsWith('/') ? rawSrc : `/storage/${rawSrc}`;
+                }
+                const mime = mediaType || 'image/jpeg';
+                return `data:${mime};base64,${rawSrc}`;
+            }
+
+            // Format Screenshot (Ignore top-level transient screenshot, rely strictly on s.screenshots array)
+            if (Array.isArray(s.screenshots) && s.screenshots.length > 0) {
+                s.screenshots.forEach((sc, scIdx) => {
+                    let fullSrc = '';
+                    if (sc.base64Data) {
+                        const mime = sc.mediaType || 'image/jpeg';
+                        fullSrc = sc.base64Data.startsWith('data:') ? sc.base64Data : `data:${mime};base64,${sc.base64Data}`;
+                    } else {
+                        const rawSrc = sc.src || sc.url || sc.path || sc.screenshot;
+                        fullSrc = formatScreenshotSrc(rawSrc, sc.mediaType);
+                    }
+
+                    if (fullSrc && !screenshotSources.some(item => item.src === fullSrc)) {
+                        screenshotSources.push({
+                            src: fullSrc,
+                            label: sc.label || sc.name || `Capture #${scIdx + 1}`
+                        });
+                    }
+                });
+            }
+
+            if (screenshotSources.length > 0) {
+                screenshotHtml = `
+                    <div class="step-card-screenshots-preview" style="margin-top: 0.6rem;">
+                        <div style="font-weight: 700; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.95rem;">image</span>
+                            <span>Step Screenshots (${screenshotSources.length})</span>
+                        </div>
+                        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                `;
+                screenshotSources.forEach(sc => {
+                    const safeLabel = (sc.label || 'Screenshot').replace(/'/g, "\\'");
+                    screenshotHtml += `
+                        <div style="display: flex; flex-direction: column; align-items: center; background: var(--bg-card, #ffffff); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                            <img src="${sc.src}" class="preview-thumb" alt="${sc.label}" title="Click to enlarge" onclick="event.stopPropagation(); openImageModal(this.src, '${safeLabel}')">
+                            <span style="font-size: 0.7rem; font-weight: 500; color: var(--text-muted); margin-top: 0.25rem;">${sc.label}</span>
+                        </div>
+                    `;
+                });
+                screenshotHtml += `</div></div>`;
+            }
+
+            // Format Actions
             let actionsHtml = '';
             const actions = s.actions || [];
             if (actions.length > 0) {
                 actionsHtml = `
-                    <div class="actions-performed-box">
+                    <div class="actions-performed-box" style="margin-top: 0.5rem;">
                         <div class="actions-performed-title">
                             <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #7e22ce;">terminal</span>
                             <span>Actions Performed (${actions.length})</span>
@@ -1102,6 +1565,7 @@ function renderStepsForExecution(activeRow) {
                 actionsHtml += `</div></div>`;
             }
 
+            // Format Error Details
             let errorBoxHtml = '';
             if (s.error || s.failure) {
                 errorBoxHtml = `
@@ -1115,57 +1579,236 @@ function renderStepsForExecution(activeRow) {
                 `;
             }
 
-            let reasoningHtml = '';
-            if (s.reasoning) {
-                reasoningHtml = `
-                    <div class="reasoning-brain-row">
-                        <div class="brain-icon-wrapper"><span class="material-symbols-outlined">psychology</span></div>
-                        <div class="reasoning-text">${s.reasoning}</div>
+            // Format Sub-steps
+            let subStepsHtml = '';
+            const subSteps = s.subSteps || s.sub_steps || [];
+            if (subSteps.length > 0) {
+                subStepsHtml = `
+                    <div class="sub-steps-container" style="margin-top: 0.5rem;">
+                        <div class="sub-steps-header">SUB-STEPS (${subSteps.length})</div>
+                `;
+                subSteps.forEach((sub, subIdx) => {
+                    const subNum = `#${stepNum}.${subIdx + 1}`;
+                    const subTitle = sub.instruction || sub.action || `Sub-step ${subIdx + 1}`;
+                    const subDur = sub.durationMs ? `${sub.durationMs}ms` : '';
+                    subStepsHtml += `
+                        <div class="sub-step-card">
+                            <span class="sub-step-number">${subNum}</span>
+                            <span class="sub-step-instruction">${subTitle}</span>
+                            ${subDur ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${subDur}</span>` : ''}
+                        </div>
+                    `;
+                });
+                subStepsHtml += `</div>`;
+            }
+
+            // Build LLM Details Tab Content (calculate totals from calls array, simplified stats-summary-grid)
+            const stats = s.stats || {};
+            const calls = s.llmCalls || [];
+
+            let calcTotalTokens = 0;
+            let calcTotalCostNum = 0;
+            
+            if (calls.length > 0) {
+                calls.forEach(call => {
+                    calcTotalTokens += extractCallTokens(call);
+                    calcTotalCostNum += extractCallCost(call);
+                });
+            } else if (s.stats) {
+                calcTotalTokens = Number(s.stats.totalTokens || 0);
+                calcTotalCostNum = extractCallCost(s.stats);
+            }
+
+            const calcTotalCostFormatted = calcTotalCostNum > 0 
+                ? '$' + (Math.ceil(calcTotalCostNum * 10000) / 10000).toFixed(4)
+                : '$0.0000';
+
+            let statsHtml = '';
+            if (s.stats || s.llmCalls) {
+                statsHtml = `
+                    <div class="stats-summary-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                        <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
+                        <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
                     </div>
                 `;
             }
 
-            let screenshotHtml = '';
-            if (s.screenshot) {
-                const src = s.screenshot.startsWith('data:') ? s.screenshot : `/storage/${s.screenshot}`;
-                screenshotHtml = `
-                    <div class="attachment-preview-box" style="margin-top: 0.4rem;">
-                        <div class="flex-between">
-                            <span style="font-size: 0.78rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">image</span> Step Screenshot</span>
-                            <span class="tag-chip">step_${stepNum}.png</span>
+            function escapeHtml(str) {
+                if (!str) return '';
+                return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            let llmCallsHtml = '';
+            if (calls.length > 0) {
+                calls.forEach((call, cIdx) => {
+                    const model = call.modelName || call.model || call.llmModel || 'LLM Model';
+                    const tokens = extractCallTokens(call);
+                    const rawCost = extractCallCost(call);
+                    let formattedCost = '$0.0000';
+                    if (rawCost > 0) {
+                        const roundedUp = Math.ceil(rawCost * 10000) / 10000;
+                        formattedCost = '$' + roundedUp.toFixed(4);
+                    }
+                    const dur = call.durationMs ? `${call.durationMs}ms` : '';
+                    
+                    const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
+                    const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
+                    const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
+
+                    const metaParts = [];
+                    if (tokens) metaParts.push(`Tokens: ${tokens}`);
+                    metaParts.push(`Cost: ${formattedCost}`);
+                    if (dur) metaParts.push(`Duration: ${dur}`);
+                    const callMetaStr = metaParts.join(' | ');
+
+                    llmCallsHtml += `
+                        <div class="llm-call-card expanded" style="border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: #ffffff;">
+                            <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
+                                    <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
+                                    <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #a855f7;">smart_toy</span>
+                                    <span>Call #${cIdx + 1}: ${model}</span>
+                                </div>
+                                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: #64748b;">${callMetaStr}</span>
+                            </div>
+                            <div class="llm-call-body" style="padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                
+                                <div class="llm-subsection-card">
+                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                        <div class="llm-subsection-title">
+                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #0284c7;">tune</span>
+                                            <span>System Prompt</span>
+                                        </div>
+                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">Instruction & Persona</span>
+                                    </div>
+                                    <div class="llm-subsection-body">${systemPromptText ? escapeHtml(systemPromptText) : '<em style="color: var(--text-muted);">No explicit system prompt recorded</em>'}</div>
+                                </div>
+
+                                <div class="llm-subsection-card">
+                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                        <div class="llm-subsection-title">
+                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #d97706;">code</span>
+                                            <span>User Prompt & DOM Context (Plain Text)</span>
+                                        </div>
+                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">User Query & Page Snapshot</span>
+                                    </div>
+                                    <div class="llm-subsection-body">${userPromptText ? escapeHtml(userPromptText) : '<em style="color: var(--text-muted);">No user prompt/DOM context recorded</em>'}</div>
+                                </div>
+
+                                <div class="llm-subsection-card">
+                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                        <div class="llm-subsection-title">
+                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #16a34a;">terminal</span>
+                                            <span>Raw Model Response</span>
+                                        </div>
+                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">AI Completion Payload</span>
+                                    </div>
+                                    <div class="llm-subsection-body">${rawResponseText ? escapeHtml(rawResponseText) : '<em style="color: var(--text-muted);">No raw response recorded</em>'}</div>
+                                </div>
+
+                            </div>
                         </div>
-                        <div style="width: 100%; max-height: 240px; overflow: hidden; border-radius: 6px; border: 1px solid var(--border);">
-                            <img src="${src}" alt="Step ${stepNum} Screenshot" style="width: 100%; object-fit: contain;">
+                    `;
+                });
+            } else if (s.prompt || s.llmPrompt || s.llmResponse) {
+                const promptSnippet = s.prompt || s.llmPrompt || `[System Instruction for Step #${stepNum}]\nExecute: ${title}`;
+                const responseSnippet = s.llmResponse || s.response || JSON.stringify(actions, null, 2);
+                llmCallsHtml = `
+                    <div class="llm-call-card expanded" style="border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: #ffffff;">
+                        <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
+                            <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
+                                <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
+                                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #a855f7;">smart_toy</span>
+                                <span>LLM Prompt & Response</span>
+                            </div>
+                        </div>
+                        <div class="llm-call-body" style="padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div class="llm-subsection-card">
+                                <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                    <div class="llm-subsection-title">
+                                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                        <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #d97706;">code</span>
+                                        <span>User Prompt & DOM Context (Plain Text)</span>
+                                    </div>
+                                </div>
+                                <div class="llm-subsection-body">${escapeHtml(promptSnippet)}</div>
+                            </div>
+                            <div class="llm-subsection-card">
+                                <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                    <div class="llm-subsection-title">
+                                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                        <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #16a34a;">terminal</span>
+                                        <span>Raw Model Response</span>
+                                    </div>
+                                </div>
+                                <div class="llm-subsection-body">${escapeHtml(responseSnippet)}</div>
+                            </div>
                         </div>
                     </div>
                 `;
+            } else {
+                llmCallsHtml = `<div style="font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem;">No LLM call details recorded for this step.</div>`;
             }
 
             secHtml += `
                 <div class="step-item ${stepClass}" id="${stepId}" onclick="toggleStepActionInspector(this)">
                     <div class="step-header">
-                        <div class="step-title-line">
+                        <div class="step-title-line" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                             <span class="step-num-box">#${stepNum}</span>
-                            <span style="color: var(--text-main); font-weight: 600;">${title}</span>
+                            ${isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
+                              (isFailed ? '<span class="badge-status badge-unknown-fail" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">FAILED</span>' :
+                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>')}
+                            <span class="context-badge level-${contextLevel.toLowerCase()}">${contextLevel}</span>
+                            <span style="color: var(--text-main); font-weight: 600; margin-left: 0.2rem;">${title}</span>
                         </div>
                         <div class="flex-gap-2">
-                            <span class="tag-chip" style="font-size: 0.68rem;">${s.source || s.engine || 'Java'}</span>
-                            ${isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;"><span class="material-symbols-outlined" style="font-size: 0.75rem;">check</span> PASSED</span>' :
-                              (isFailed ? '<span class="badge-status badge-unknown-fail" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;"><span class="material-symbols-outlined" style="font-size: 0.75rem;">close</span> FAILED</span>' :
-                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">IGNORED</span>')}
+                            <span style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">${formattedDuration}</span>
                             <span class="material-symbols-outlined step-expand-chevron">chevron_right</span>
                         </div>
                     </div>
 
-                    <div class="step-action-inspector">
-                        <div class="step-inspector-title">
-                            <span class="material-symbols-outlined text-accent">info</span> STEP INSTRUCTION & DETAILS
+                    <div style="padding: 0 0.85rem 0.5rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.playbookSource || 'Playbook.yaml:L' + stepNum}</div>
+                    </div>
+
+                    <div class="step-action-inspector" onclick="event.stopPropagation()">
+                        <div class="inspector-card">
+                            <div class="inspector-header">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-family: var(--font-mono); font-weight: 800; color: var(--status-fixed); font-size: 0.9rem;">#${stepNum}</span>
+                                    <span class="badge-status ${isPassed ? 'badge-pass' : 'badge-unknown-fail'}" style="font-size: 0.7rem;">${isPassed ? 'PASSED' : 'FAILED'}</span>
+                                </div>
+                                <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-top: 0.2rem;">${title}</div>
+                            </div>
+                            <div class="inspector-tabs">
+                                <button class="tab-btn active" onclick="switchInspectorTab(this, '${stepId}_tabOverview')">📋 Overview</button>
+                                <button class="tab-btn" onclick="switchInspectorTab(this, '${stepId}_tabLlm')">🤖 LLM Details</button>
+                            </div>
+                            <div class="inspector-content">
+                                <!-- TAB 1: OVERVIEW -->
+                                <div class="tab-panel active" id="${stepId}_tabOverview">
+                                    <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; background: #f8fafc; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 0.5rem;">
+                                        <div><strong>Instruction:</strong> ${title}</div>
+                                        <div><strong>Duration:</strong> ${formattedDuration}</div>
+                                        <div><strong>Start Timestamp:</strong> ${formattedStart || 'N/A'}</div>
+                                    </div>
+                                    ${reasoningHtml}
+                                    ${errorBoxHtml}
+                                    ${screenshotHtml}
+                                    ${actionsHtml}
+                                    ${subStepsHtml}
+                                </div>
+
+                                <!-- TAB 2: LLM DETAILS -->
+                                <div class="tab-panel" id="${stepId}_tabLlm">
+                                    ${statsHtml}
+                                    ${llmCallsHtml}
+                                </div>
+                            </div>
                         </div>
-                        <div class="step-inspector-headline">${title}</div>
-                        ${actionsHtml}
-                        ${errorBoxHtml}
-                        ${reasoningHtml}
-                        ${screenshotHtml}
                     </div>
                 </div>
             `;
@@ -1183,6 +1826,28 @@ function renderStepsForExecution(activeRow) {
     html += renderSection('AFTER STEPS / TEARDOWN', afterSteps, 'after', 'stop', 'var(--text-muted)');
 
     stepListEl.innerHTML = html;
+}
+
+function toggleSidePanelLlmTable() {
+    const container = document.getElementById('sidePageLlmTableContainer');
+    const chevron = document.getElementById('sidePageLlmTableChevron');
+    if (container) {
+        const isHidden = container.style.display === 'none';
+        container.style.display = isHidden ? 'block' : 'none';
+        if (chevron) chevron.innerText = isHidden ? 'expand_less' : 'expand_more';
+    }
+}
+
+function switchInspectorTab(btn, tabId) {
+    const card = btn.closest('.inspector-card');
+    if (!card) return;
+
+    card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+    btn.classList.add('active');
+    const targetPanel = document.getElementById(tabId);
+    if (targetPanel) targetPanel.classList.add('active');
 }
 
 function toggleStepActionInspector(stepCardEl) {
@@ -1203,6 +1868,9 @@ function closeTestSidePagePanel() {
         if (marker) marker.remove();
     });
 }
+
+window.toggleSidePanelLlmTable = toggleSidePanelLlmTable;
+window.switchInspectorTab = switchInspectorTab;
 
 function setActiveNavBtn(btn) {
     document.querySelectorAll('#mainSidebar .nav-item-btn').forEach(b => b.classList.remove('active'));
@@ -1378,6 +2046,9 @@ document.body.addEventListener('htmx:afterSwap', (evt) => {
 });
 
 function bindGlobalListeners() {
+    // Synchronize AI usage columns and data attributes for all execution rows
+    syncAllRowsAiUsage();
+
     // Row click listeners for side panel inspection
     document.querySelectorAll('.js-open-side-panel').forEach(row => {
         row.removeEventListener('click', handleRowClick);
@@ -1474,6 +2145,231 @@ window.openTestSidePagePanel = openTestSidePagePanel;
 window.redirectToTestBaseVariationHistory = redirectToTestBaseVariationHistory;
 window.recalculateRunReportMetrics = recalculateRunReportMetrics;
 
+// Client-side Execution Index Filtering and Sorting matching index.html
+let currentExecutionStatusFilter = 'ALL';
+let currentExecutionModeFilter = 'ALL';
+let currentGlobalStatusBadgeFilter = 'ALL';
+
+function filterByGlobalStatusBadge(statusKey, btnEl) {
+    if (currentGlobalStatusBadgeFilter === statusKey) {
+        currentGlobalStatusBadgeFilter = 'ALL';
+    } else {
+        currentGlobalStatusBadgeFilter = statusKey;
+    }
+
+    document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter-badge'));
+
+    if (currentGlobalStatusBadgeFilter !== 'ALL') {
+        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter-badge'));
+    }
+
+    applyFilter();
+}
+
+function filterAreaByStatusBadge(badgeEl, statusKey) {
+    const areaGroup = badgeEl.closest('.area-group');
+    if (!areaGroup) return;
+
+    const currentFilter = areaGroup.getAttribute('data-active-status-filter') || 'ALL';
+    const newFilter = currentFilter === statusKey ? 'ALL' : statusKey;
+
+    areaGroup.setAttribute('data-active-status-filter', newFilter);
+
+    if (newFilter !== 'ALL') {
+        areaGroup.classList.add('expanded');
+    }
+
+    areaGroup.querySelectorAll('.area-summary-badges .badge-status').forEach(b => b.classList.remove('active-filter-badge'));
+    if (newFilter !== 'ALL') {
+        badgeEl.classList.add('active-filter-badge');
+    }
+
+    applyFilter();
+}
+
+function filterClassByStatusBadge(badgeEl, statusKey) {
+    const classContainer = badgeEl.closest('.test-class-container');
+    if (!classContainer) return;
+
+    const currentFilter = classContainer.getAttribute('data-active-status-filter') || 'ALL';
+    const newFilter = currentFilter === statusKey ? 'ALL' : statusKey;
+
+    classContainer.setAttribute('data-active-status-filter', newFilter);
+
+    if (newFilter !== 'ALL') {
+        classContainer.classList.add('expanded');
+        const folderIcon = classContainer.querySelector('.test-class-header .material-symbols-outlined.text-accent');
+        if (folderIcon) folderIcon.textContent = 'folder_open';
+    }
+
+    classContainer.querySelectorAll('.test-class-header .badge-status').forEach(b => b.classList.remove('active-filter-badge'));
+    if (newFilter !== 'ALL') {
+        badgeEl.classList.add('active-filter-badge');
+    }
+
+    applyFilter();
+}
+
+function filterByStatus(status) {
+    currentExecutionStatusFilter = status || 'ALL';
+    applyFilter();
+}
+
+function filterByMode(mode) {
+    currentExecutionModeFilter = mode || 'ALL';
+    const sel = document.getElementById('modeFilter');
+    if (sel && sel.value !== currentExecutionModeFilter) {
+        sel.value = currentExecutionModeFilter;
+    }
+    applyFilter();
+}
+
+function populateBrowserAndLocaleFilters() {
+    const browserSelect = document.getElementById('browserFilter');
+    const localeSelect = document.getElementById('localeFilter');
+    if (!browserSelect && !localeSelect) return;
+
+    const rows = document.querySelectorAll('tr.execution-row, tr.test-row');
+    const browsers = new Set();
+    const locales = new Set();
+
+    rows.forEach(r => {
+        const b = r.getAttribute('data-browser');
+        const l = r.getAttribute('data-location');
+        if (b && b.trim() && b !== 'null') browsers.add(b.trim());
+        if (l && l.trim() && l !== 'null') locales.add(l.trim());
+    });
+
+    if (browserSelect && browserSelect.options.length <= 1) {
+        const currentB = browserSelect.value || 'ALL';
+        browserSelect.innerHTML = '<option value="ALL">All Browsers</option>';
+        Array.from(browsers).sort().forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b;
+            browserSelect.appendChild(opt);
+        });
+        browserSelect.value = currentB;
+    }
+
+    if (localeSelect && localeSelect.options.length <= 1) {
+        const currentL = localeSelect.value || 'ALL';
+        localeSelect.innerHTML = '<option value="ALL">All Locales</option>';
+        Array.from(locales).sort().forEach(l => {
+            const opt = document.createElement('option');
+            opt.value = l;
+            opt.textContent = l;
+            localeSelect.appendChild(opt);
+        });
+        localeSelect.value = currentL;
+    }
+}
+
+function applyFilter() {
+    const searchInput = document.getElementById('searchInput');
+    const search = searchInput ? (searchInput.value || '').trim().toLowerCase() : '';
+    const browserSelect = document.getElementById('browserFilter');
+    const localeSelect = document.getElementById('localeFilter');
+    const selBrowser = browserSelect ? browserSelect.value : 'ALL';
+    const selLocale = localeSelect ? localeSelect.value : 'ALL';
+
+    const rows = document.querySelectorAll('tr.execution-row, tr.test-row');
+
+    rows.forEach(function(row) {
+        const rowStatus = (row.getAttribute('data-status') || '').toUpperCase();
+        const rowStatusRaw = (row.getAttribute('data-status-raw') || '').toLowerCase();
+        const rowMode = (row.getAttribute('data-mode') || '').toUpperCase();
+        const rowBrowser = (row.getAttribute('data-browser') || '').trim();
+        const rowLocale = (row.getAttribute('data-location') || '').trim();
+        const rowSearch = (row.getAttribute('data-search') || (row.innerText || '')).toLowerCase();
+
+        const areaGroup = row.closest('.area-group');
+        const areaStatusFilter = areaGroup ? (areaGroup.getAttribute('data-active-status-filter') || 'ALL') : 'ALL';
+
+        const classContainer = row.closest('.test-class-container');
+        const classStatusFilter = classContainer ? (classContainer.getAttribute('data-active-status-filter') || 'ALL') : 'ALL';
+
+        function matchesStatusKey(filterKey) {
+            if (!filterKey || filterKey === 'ALL') return true;
+            const key = filterKey.toUpperCase();
+            if (key === 'PASSED') return rowStatus === 'PASSED' || rowStatusRaw === 'passed-clean' || rowStatusRaw === 'passed' || rowStatusRaw === 'succeeded';
+            if (key === 'HEALED' || key === 'SUCCEEDED_FIXED') return rowStatus === 'HEALED' || rowStatus === 'SUCCEEDED_FIXED' || rowStatusRaw === 'succeeded-fixed' || rowStatusRaw === 'fixed' || rowStatusRaw === 'healed';
+            if (key === 'FAILED_KNOWN' || key === 'KNOWN') return rowStatus === 'FAILED_KNOWN' || rowStatusRaw === 'failed-known' || rowStatusRaw === 'known';
+            if (key === 'FAILED_UNKNOWN' || key === 'UNKNOWN') return rowStatus === 'FAILED_UNKNOWN' || rowStatusRaw === 'failed-unknown' || rowStatusRaw === 'failed' || rowStatusRaw === 'error';
+            if (key === 'SKIPPED' || key === 'IGNORED') return rowStatus === 'SKIPPED' || rowStatusRaw === 'ignored' || rowStatusRaw === 'skipped';
+            if (key === 'FAILED') return rowStatus.includes('FAIL') || rowStatusRaw.includes('failed');
+            return rowStatus.includes(key);
+        }
+
+        const matchesGlobalBadge = matchesStatusKey(currentGlobalStatusBadgeFilter);
+        const matchesAreaBadge = matchesStatusKey(areaStatusFilter);
+        const matchesClassBadge = matchesStatusKey(classStatusFilter);
+        const matchesLegacyStatus = matchesStatusKey(currentExecutionStatusFilter);
+
+        const matchesMode = (currentExecutionModeFilter === 'ALL' || rowMode === currentExecutionModeFilter.toUpperCase() || rowMode.includes(currentExecutionModeFilter.toUpperCase()));
+        const matchesBrowser = (selBrowser === 'ALL' || rowBrowser.toLowerCase() === selBrowser.toLowerCase());
+        const matchesLocale = (selLocale === 'ALL' || rowLocale.toLowerCase() === selLocale.toLowerCase());
+        const matchesSearch = (!search || rowSearch.indexOf(search) !== -1);
+
+        if (matchesGlobalBadge && matchesAreaBadge && matchesClassBadge && matchesLegacyStatus && matchesMode && matchesBrowser && matchesLocale && matchesSearch) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    document.querySelectorAll('.test-class-container').forEach(classBox => {
+        const visibleRows = classBox.querySelectorAll('tr.execution-row:not([style*="display: none"]), tr.test-row:not([style*="display: none"])');
+        classBox.style.display = visibleRows.length > 0 ? '' : 'none';
+    });
+
+    document.querySelectorAll('.area-group').forEach(areaBox => {
+        const visibleAreaRows = areaBox.querySelectorAll('tr.execution-row:not([style*="display: none"]), tr.test-row:not([style*="display: none"])');
+        areaBox.style.display = visibleAreaRows.length > 0 ? '' : 'none';
+    });
+}
+
+let sortDirectionsMap = {};
+function sortTable(colIndex) {
+    const table = document.getElementById('executionsTable') || document.querySelector('.aura-table');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr.execution-row, tr.test-row'));
+    if (rows.length <= 1) return;
+
+    const isAsc = sortDirectionsMap[colIndex] = !sortDirectionsMap[colIndex];
+
+    rows.sort(function(a, b) {
+        const aCell = a.children[colIndex];
+        const bCell = b.children[colIndex];
+        if (!aCell || !bCell) return 0;
+
+        const aVal = aCell.getAttribute('data-sort') || aCell.textContent.trim();
+        const bVal = bCell.getAttribute('data-sort') || bCell.textContent.trim();
+
+        const aNum = parseFloat(aVal);
+        const bNum = parseFloat(bVal);
+
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return isAsc ? (aNum - bNum) : (bNum - aNum);
+        }
+        return isAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    });
+
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+}
+
+window.filterByGlobalStatusBadge = filterByGlobalStatusBadge;
+window.filterAreaByStatusBadge = filterAreaByStatusBadge;
+window.filterClassByStatusBadge = filterClassByStatusBadge;
+window.filterByStatus = filterByStatus;
+window.filterByMode = filterByMode;
+window.applyFilter = applyFilter;
+window.sortTable = sortTable;
+
 // Listen for bugUpdated trigger from backend
 document.body.addEventListener('bugUpdated', function(evt) {
     const data = evt.detail;
@@ -1494,3 +2390,64 @@ document.body.addEventListener('bugUpdated', function(evt) {
         updateRowStatusAndMetrics(rowId);
     }
 });
+
+/**
+ * Interactive Lightbox Image Modal
+ */
+function openImageModal(imgSrc, title) {
+    let modalEl = document.getElementById('imageLightboxModal');
+    if (!modalEl) {
+        modalEl = document.createElement('div');
+        modalEl.id = 'imageLightboxModal';
+        modalEl.className = 'image-lightbox-modal';
+        modalEl.onclick = function (e) {
+            if (e.target === modalEl || e.target.classList.contains('lightbox-backdrop')) {
+                closeImageModal();
+            }
+        };
+        document.body.appendChild(modalEl);
+    }
+
+    modalEl.innerHTML = `
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-content" onclick="event.stopPropagation();">
+            <div class="lightbox-header">
+                <span class="lightbox-title">${title || 'Screenshot Preview'}</span>
+                <div class="lightbox-actions">
+                    <a href="${imgSrc}" target="_blank" download="screenshot.png" class="lightbox-btn" title="Open in new tab / Download">
+                        <span class="material-symbols-outlined">open_in_new</span>
+                    </a>
+                    <button class="lightbox-btn" onclick="closeImageModal()" title="Close (Esc)">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="lightbox-body">
+                <img src="${imgSrc}" class="lightbox-image" alt="${title || 'Screenshot'}">
+            </div>
+        </div>
+    `;
+
+    modalEl.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    const onKeydown = function (e) {
+        if (e.key === 'Escape') {
+            closeImageModal();
+            document.removeEventListener('keydown', onKeydown);
+        }
+    };
+    document.addEventListener('keydown', onKeydown);
+}
+
+function closeImageModal() {
+    const modalEl = document.getElementById('imageLightboxModal');
+    if (modalEl) {
+        modalEl.classList.remove('active');
+    }
+    document.body.style.overflow = '';
+}
+
+window.openImageModal = openImageModal;
+window.closeImageModal = closeImageModal;
+

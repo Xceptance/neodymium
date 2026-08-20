@@ -134,6 +134,11 @@ public final class ExecutionContext
     private final Map<String, Object> recordingMetadata = new ConcurrentHashMap<>();
 
     /**
+     * The system time in milliseconds when this execution context was initialized.
+     */
+    private final long startTimeMs = System.currentTimeMillis();
+
+    /**
      * Constructs an ExecutionContext with the specified session variables.
      *
      * @param sessionData the active session data
@@ -141,6 +146,16 @@ public final class ExecutionContext
     public ExecutionContext(final SessionData sessionData)
     {
         this.sessionData = sessionData;
+    }
+
+    /**
+     * Returns the execution start timestamp in milliseconds.
+     *
+     * @return start timestamp in milliseconds
+     */
+    public long getStartTimeMs()
+    {
+        return this.startTimeMs;
     }
 
     /**

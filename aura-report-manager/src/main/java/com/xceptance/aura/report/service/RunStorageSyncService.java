@@ -164,6 +164,34 @@ public class RunStorageSyncService
             final int ignored = summaryNode.path("ignored").asInt(0);
             final double passRate = summaryNode.path("passRate").asDouble(totalTests > 0 ? (double) (pass + fixed) / totalTests * 100.0 : 0.0);
 
+            final List<String> localesList = new ArrayList<>();
+            final JsonNode localesArr = root.path("locales");
+            if (localesArr.isArray())
+            {
+                for (final JsonNode l : localesArr)
+                {
+                    if (!l.asText().trim().isEmpty())
+                    {
+                        localesList.add(l.asText().trim());
+                    }
+                }
+            }
+            final String localesCsv = !localesList.isEmpty() ? String.join(",", localesList) : "Unknown";
+
+            final List<String> browsersList = new ArrayList<>();
+            final JsonNode browsersArr = root.path("browsers");
+            if (browsersArr.isArray())
+            {
+                for (final JsonNode b : browsersArr)
+                {
+                    if (!b.asText().trim().isEmpty())
+                    {
+                        browsersList.add(b.asText().trim());
+                    }
+                }
+            }
+            final String browsersCsv = !browsersList.isEmpty() ? String.join(",", browsersList) : "Chrome";
+
             final JsonNode execArray = root.path("executions");
 
             if (execArray.isArray())
@@ -172,7 +200,7 @@ public class RunStorageSyncService
                 {
                     final String testClass = exec.path("testClass").asText("UnknownClass");
                     final String dataSet = exec.path("title").asText("");
-                    final String location = exec.path("location").asText("Unknown");
+                    final String location = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
                     final String browser = exec.path("browser").asText("Chrome");
                     final String rawStatus = exec.path("status").asText("passed-clean");
 
@@ -214,13 +242,15 @@ public class RunStorageSyncService
                     "COMPLETED",
                     trigger,
                     env,
-                    "Unknown",
-                    "Chrome",
+                    localesCsv,
+                    browsersCsv,
                     timestamp,
                     System.currentTimeMillis()
                 );
             }
 
+            runEntity.setLocalesCsv(localesCsv);
+            runEntity.setBrowsersCsv(browsersCsv);
             runEntity.setTotalTests(totalTests);
             runEntity.setPassedCount(pass);
             runEntity.setSucceededFixedCount(fixed);
@@ -238,6 +268,8 @@ public class RunStorageSyncService
                 final TestBatchEntity b = batchOpt.get();
                 b.setLatestRunId(runId);
                 b.setEnvironment(env);
+                b.setLocalesCsv(localesCsv);
+                b.setBrowsersCsv(browsersCsv);
                 if (batchDesc != null && !batchDesc.isEmpty())
                 {
                     b.setDescription(batchDesc);
@@ -250,8 +282,8 @@ public class RunStorageSyncService
                     batchName,
                     env,
                     batchDesc != null && !batchDesc.isEmpty() ? batchDesc : "",
-                    "Unknown",
-                    "Chrome",
+                    localesCsv,
+                    browsersCsv,
                     runId
                 ));
             }
