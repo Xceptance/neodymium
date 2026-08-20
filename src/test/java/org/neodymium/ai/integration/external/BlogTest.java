@@ -29,6 +29,7 @@ import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.Browser;
+import org.neodymium.util.Neodymium;
 
 /**
  * External integration test executing search workflows against blog.xceptance.com
@@ -44,7 +45,7 @@ import org.neodymium.common.browser.Browser;
 public class BlogTest
 {
     /**
-     * Configure judge execution properties before each test method execution.
+     * Set up dynamic test parameters and judge configuration before each run.
      *
      * @param testInfo the JUnit TestInfo context
      */
@@ -54,11 +55,11 @@ public class BlogTest
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
         if (methodName.contains("ExtraJudge"))
         {
-            System.setProperty("neodymium.ai.judge.enabled", "true");
+            Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
         }
         else
         {
-            System.setProperty("neodymium.ai.judge.enabled", "false");
+            Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
         }
         AiConfiguration.resetInstance();
     }

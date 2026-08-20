@@ -68,10 +68,10 @@ public final class VerlaProgrammaticDemoTest
     @BeforeAll
     public static void startServer() throws IOException
     {
-        System.setProperty("neodymium.ai.pesap.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
-        System.setProperty("neodymium.ai.semanticVerification.enabled", "false");
-        System.setProperty("neodymium.ai.visualRca.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
 
         server = new EmbeddedHtmlServer();
@@ -84,6 +84,11 @@ public final class VerlaProgrammaticDemoTest
     @AfterAll
     public static void stopServer()
     {
+        Neodymium.getData().remove("neodymium.ai.pesap.enabled");
+        Neodymium.getData().remove("neodymium.ai.judge.enabled");
+        Neodymium.getData().remove("neodymium.ai.semanticVerification.enabled");
+        Neodymium.getData().remove("neodymium.ai.visualRca.enabled");
+        AiConfiguration.resetInstance();
         server.stop();
     }
 

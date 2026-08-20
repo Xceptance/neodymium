@@ -54,8 +54,8 @@ public class FloatingLabelsSandboxMockTest extends BaseAiTest
     @org.junit.jupiter.api.BeforeAll
     public static void disableLiveLlm()
     {
-        System.setProperty("neodymium.ai.global.provider", "mock");
-        System.setProperty("neodymium.ai.pesap.enabled", "false");
+        org.neodymium.util.Neodymium.getData().put("neodymium.ai.global.provider", "mock");
+        org.neodymium.util.Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
     }
 
     /**

@@ -745,7 +745,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (context.getRequiredTestClass() != null)
             {
                 final String fqcn = context.getRequiredTestClass().getName();
-                if (fqcn.contains(".integration.mock."))
+                if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock."))
                 {
                     Neodymium.getData().put("neodymium.ai.global.provider", "mock");
                     Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
