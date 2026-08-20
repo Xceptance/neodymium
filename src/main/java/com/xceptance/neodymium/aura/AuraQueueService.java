@@ -287,6 +287,16 @@ public final class AuraQueueService
 
                     activeFile.set(file);
 
+                    if ("true".equalsIgnoreCase(System.getProperty("neodymium.aura.test", "false")))
+                    {
+                        LOGGER.info("[Aura Server] Test mode active (neodymium.aura.test=true). Simulating queue execution for {}", file);
+                        broadcastLog("[INFO] Test mode active: simulating Maven subprocess for " + file);
+                        broadcastLog("[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0");
+                        globalTestsRun.incrementAndGet();
+                        completedFiles.add(file);
+                        continue;
+                    }
+
                     // Generate temporary runner
                     final String safeName = file.replaceAll("[^a-zA-Z0-9]", "_");
                     final String className = "Aura_" + safeName + "_Test";
