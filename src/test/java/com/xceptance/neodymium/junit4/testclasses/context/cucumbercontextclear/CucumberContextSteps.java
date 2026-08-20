@@ -7,7 +7,7 @@ import org.junit.Assert;
 
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumConfiguration;
+import org.neodymium.util.NeodymiumConfiguration;
 import com.xceptance.neodymium.util.WebDriverUtils;
 
 import io.cucumber.java.After;

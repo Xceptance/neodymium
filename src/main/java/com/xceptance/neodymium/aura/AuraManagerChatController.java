@@ -25,7 +25,7 @@ import com.xceptance.neodymium.aura.dto.ChatMessageDto;
 import com.xceptance.neodymium.aura.dto.ChatRequest;
 import com.xceptance.neodymium.aura.dto.ChatResponse;
 import com.xceptance.neodymium.aura.dto.ChatSessionDto;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Controller handling chat operations, managing active chat session states,

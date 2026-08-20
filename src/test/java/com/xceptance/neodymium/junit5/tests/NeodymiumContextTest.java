@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.testclasses.context.BrowserContextSetup;
 import com.xceptance.neodymium.junit5.testclasses.context.ContextGetsCleared;
 import com.xceptance.neodymium.junit5.testclasses.context.DefaultSelenideConfiguration;

@@ -21,7 +21,7 @@ import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
 import com.xceptance.neodymium.common.browser.WebDriverCache;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;

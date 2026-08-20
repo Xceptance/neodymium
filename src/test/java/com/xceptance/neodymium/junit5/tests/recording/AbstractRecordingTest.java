@@ -12,8 +12,8 @@ import org.junit.jupiter.api.AfterAll;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 

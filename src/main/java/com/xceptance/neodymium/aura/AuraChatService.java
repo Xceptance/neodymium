@@ -29,7 +29,7 @@ import com.xceptance.neodymium.aura.dto.ChatRequest;
 import com.xceptance.neodymium.aura.dto.ChatResponse;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;

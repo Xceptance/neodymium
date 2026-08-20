@@ -30,8 +30,8 @@ import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.runner.StateMachineRunner;
 import com.xceptance.neodymium.common.browser.BrowserMethodData;
 import com.xceptance.neodymium.common.browser.BrowserRunner;
-import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;

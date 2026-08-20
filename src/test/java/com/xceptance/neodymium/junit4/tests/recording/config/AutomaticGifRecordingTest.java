@@ -2,7 +2,7 @@ package com.xceptance.neodymium.junit4.tests.recording.config;
 
 import org.junit.BeforeClass;
 
-import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
+import org.neodymium.common.recording.config.GifRecordingConfigurations;
 import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
 
 public class AutomaticGifRecordingTest extends AbstractRecordingTest

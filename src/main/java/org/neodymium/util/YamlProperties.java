@@ -27,7 +27,7 @@ public class YamlProperties
     /**
      * Don't publish the constructor
      */
-    private YamlProperties()
+    protected YamlProperties()
     {
     }
 

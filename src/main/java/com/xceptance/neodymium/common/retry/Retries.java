@@ -17,6 +17,7 @@ import java.lang.annotation.Target;
   TYPE, METHOD
 })
 @Inherited
+@Deprecated
 public @interface Retries
 {
     Retry[] value();

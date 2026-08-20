@@ -1,6 +1,6 @@
 package com.xceptance.neodymium.junit5.tests.recording.automatic;
 
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
+import org.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.recording.AbstractRecordingTest;
 import org.junit.Assert;

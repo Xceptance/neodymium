@@ -8,7 +8,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.testclasses.webDriver.DownloadFilesInDifferentWays;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 

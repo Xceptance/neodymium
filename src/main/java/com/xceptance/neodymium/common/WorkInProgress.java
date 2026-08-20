@@ -17,6 +17,7 @@ import java.lang.annotation.Target;
 {
   METHOD
 })
+@Deprecated
 public @interface WorkInProgress
 {
 }

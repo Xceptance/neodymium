@@ -22,6 +22,7 @@ import java.lang.annotation.Target;
  * <p>If it's set to "false" (default), the browser of every annotated test stays open.</p>
  * <p>If the annotation isn't used, the neodymium configuration property applies.</p>
  */
+@Deprecated
 public @interface KeepBrowserOpen
 {
     boolean onlyOnFailure() default false;

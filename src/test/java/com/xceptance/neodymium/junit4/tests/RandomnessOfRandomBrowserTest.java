@@ -10,7 +10,7 @@ import org.junit.Test;
 
 import org.junit.runner.Result;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.testclasses.browser.RandomnessOfRandomBrowser;
 
 public class RandomnessOfRandomBrowserTest extends NeodymiumTest

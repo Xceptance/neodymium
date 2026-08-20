@@ -4,9 +4,9 @@ import org.junit.jupiter.api.Assertions;
 import org.openqa.selenium.remote.CapabilityType;
 
 import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.TestEnvironment;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.TestEnvironment;
 import com.xceptance.neodymium.junit5.tests.EnvironmentAndBrowserConfigurationTest;
 
 public class EnvironmentAndBrowserConfiguration

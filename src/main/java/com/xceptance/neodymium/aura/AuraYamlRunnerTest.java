@@ -1,9 +1,9 @@
 package com.xceptance.neodymium.aura;
 
 import org.neodymium.ai.junit.NeodymiumAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.testdata.DataFolder;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.testdata.DataFolder;
+import org.neodymium.junit5.NeodymiumTest;
 
 @Browser()
 @DataFolder(".")

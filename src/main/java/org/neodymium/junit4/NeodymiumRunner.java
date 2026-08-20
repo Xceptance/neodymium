@@ -19,18 +19,16 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.internal.runners.statements.RunBefores;
 import org.junit.runner.Description;
+import org.junit.runner.RunWith;
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.BlockJUnit4ClassRunner;
+import org.junit.runners.JUnit4;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.Statement;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.codeborne.selenide.logevents.SelenideLogger;
-import com.google.common.collect.ImmutableMap;
 import org.neodymium.common.TestStepListener;
 import org.neodymium.common.WorkInProgress;
+import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.BrowserData;
 import org.neodymium.common.retry.RetryMethodData;
 import org.neodymium.junit4.order.DefaultStatementRunOrder;
@@ -39,7 +37,13 @@ import org.neodymium.junit4.statement.browser.BrowserRunBefores;
 import org.neodymium.util.AllureAddons;
 import org.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 import org.neodymium.util.NeodymiumRandom;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.codeborne.selenide.logevents.SelenideLogger;
+import com.google.common.collect.ImmutableMap;
 
 import io.qameta.allure.selenide.AllureSelenide;
 
@@ -257,14 +261,14 @@ public class NeodymiumRunner extends BlockJUnit4ClassRunner
         // from methodBlock
         List<Class<? extends StatementBuilder<?>>> statementRunOrder = new DefaultStatementRunOrder().getRunOrder();
         List<FrameworkMethod> computedMethods = super.computeTestMethods();
-        boolean wipMethod = computedMethods.stream().anyMatch(computedMethod -> computedMethod.getAnnotation(WorkInProgress.class) != null);
+        boolean wipMethod = computedMethods.stream().anyMatch(computedMethod -> NeodymiumAnnotationUtils.isAnnotationPresent(computedMethod.getMethod(), WorkInProgress.class));
 
         // super.computeTestMethods will return all methods that are annotated with @Test
         for (FrameworkMethod testAnnotatedMethod : super.computeTestMethods())
         {
             if (workInProgress)
             {
-                if (wipMethod && testAnnotatedMethod.getAnnotation(WorkInProgress.class) == null)
+                if (wipMethod && !NeodymiumAnnotationUtils.isAnnotationPresent(testAnnotatedMethod.getMethod(), WorkInProgress.class))
                 {
                     continue;
                 }

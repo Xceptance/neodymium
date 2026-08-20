@@ -20,7 +20,7 @@ package com.xceptance.neodymium.aura;
 
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;

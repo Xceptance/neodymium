@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import org.neodymium.common.Data;
 import org.neodymium.common.testdata.util.TestDataUtils;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 
 public class TestdataData extends Data
 {
@@ -40,7 +41,7 @@ public class TestdataData extends Data
         }
         packageTestData = TestDataUtils.getPackageTestData(testClass);
 
-        final boolean fromDataFolder = testClass.isAnnotationPresent(DataFolder.class) || testClass.isAnnotationPresent(DataFolders.class);
+        final boolean fromDataFolder = NeodymiumAnnotationUtils.isAnnotationPresent(testClass, DataFolder.class) || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, DataFolders.class);
         final List<TestdataContainer> iterations = new LinkedList<>();
         if (!dataSets.isEmpty() || !packageTestData.isEmpty())
         {
@@ -68,15 +69,15 @@ public class TestdataData extends Data
         }
         availableDataSets = iterations;
         classDataSetAnnotations = getAnnotations(testClass, DataSet.class);
-        classRandomDataSetAnnotation = testClass.getAnnotation(RandomDataSets.class);
-        classSuppressDataSetAnnotation = testClass.getAnnotation(SuppressDataSets.class);
+        classRandomDataSetAnnotation = NeodymiumAnnotationUtils.getAnnotations(testClass, RandomDataSets.class).stream().findFirst().orElse(null);
+        classSuppressDataSetAnnotation = NeodymiumAnnotationUtils.getAnnotations(testClass, SuppressDataSets.class).stream().findFirst().orElse(null);
     }
 
     public List<TestdataContainer> getTestDataForMethod(Method testMethod)
     {
         List<DataSet> methodDataSetAnnotation = getAnnotations(testMethod, DataSet.class);
-        RandomDataSets methodRandomDataSetAnnotation = testMethod.getAnnotation(RandomDataSets.class);
-        SuppressDataSets methodSuppressDataSetAnnotation = testMethod.getAnnotation(SuppressDataSets.class);
+        RandomDataSets methodRandomDataSetAnnotation = NeodymiumAnnotationUtils.getAnnotations(testMethod, RandomDataSets.class).stream().findFirst().orElse(null);
+        SuppressDataSets methodSuppressDataSetAnnotation = NeodymiumAnnotationUtils.getAnnotations(testMethod, SuppressDataSets.class).stream().findFirst().orElse(null);
         if (methodSuppressDataSetAnnotation != null)
         {
             return new LinkedList<>();

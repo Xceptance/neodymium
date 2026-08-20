@@ -1,25 +1,13 @@
 package com.xceptance.neodymium.common.xtc.dto;
 
-// Data Transfer Object for the response of creating a new test run in the XTC API.
-public class CreateRunResponse
+/**
+ * @deprecated Use {@link org.neodymium.common.xtc.dto.CreateRunResponse} instead.
+ */
+@Deprecated
+public class CreateRunResponse extends org.neodymium.common.xtc.dto.CreateRunResponse
 {
-    private final Boolean success;
-
-    private final ResponseData data;
-
-    public CreateRunResponse(Boolean success, ResponseData data)
+    public CreateRunResponse(java.lang.Boolean success, org.neodymium.common.xtc.dto.ResponseData data)
     {
-        this.success = success;
-        this.data = data;
-    }
-
-    public Boolean getSuccess()
-    {
-        return success;
-    }
-
-    public ResponseData getData()
-    {
-        return data;
+        super(success, data);
     }
 }

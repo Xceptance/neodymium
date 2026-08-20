@@ -49,7 +49,7 @@ import org.neodymium.util.Neodymium;
  * Utility class to read and parse YAML test scripts with support for dynamic and static inclusions,
  * variables resolution, and location tracing.
  */
-public final class YamlFileReader
+public class YamlFileReader
 {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 

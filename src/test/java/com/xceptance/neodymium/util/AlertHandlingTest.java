@@ -2,7 +2,7 @@ package com.xceptance.neodymium.util;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import org.junit.jupiter.api.Assertions;

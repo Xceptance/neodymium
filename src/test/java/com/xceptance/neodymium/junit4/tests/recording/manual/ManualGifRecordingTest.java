@@ -6,8 +6,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.GifRecordingConfigurations;
 import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
 
 public class ManualGifRecordingTest extends AbstractRecordingTest

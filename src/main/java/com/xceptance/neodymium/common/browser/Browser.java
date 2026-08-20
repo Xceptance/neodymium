@@ -23,6 +23,7 @@ import java.lang.annotation.Target;
 })
 @Inherited
 @Repeatable(Browsers.class)
+@Deprecated
 public @interface Browser
 {
     String value() default DEFAULT_BROWSER_ID;

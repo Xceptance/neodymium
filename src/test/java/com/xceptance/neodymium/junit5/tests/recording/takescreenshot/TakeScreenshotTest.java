@@ -8,8 +8,8 @@ import org.junit.Assert;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.TakeScreenshotsThread;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.TakeScreenshotsThread;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.Neodymium;
 

@@ -1,12 +1,12 @@
 package com.xceptance.neodymium.junit5.teststart;
 
-import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
-
-public class NeodymiumAfterTestExecutionCallback implements AfterTestExecutionCallback
+/**
+ * @deprecated Use {@link org.neodymium.junit5.teststart.NeodymiumAfterTestExecutionCallback} instead.
+ */
+@Deprecated
+public class NeodymiumAfterTestExecutionCallback extends org.neodymium.junit5.teststart.NeodymiumAfterTestExecutionCallback
 {
-    @Override
-    public void afterTestExecution(ExtensionContext context) throws Exception
+    public NeodymiumAfterTestExecutionCallback()
     {
     }
 }

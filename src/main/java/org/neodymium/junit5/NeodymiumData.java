@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-
 import org.neodymium.common.WorkInProgress;
 import org.neodymium.common.browser.BrowserData;
 import org.neodymium.common.browser.BrowserMethodData;
@@ -15,6 +14,7 @@ import org.neodymium.common.retry.RetryMethodData;
 import org.neodymium.common.testdata.TestdataContainer;
 import org.neodymium.common.testdata.TestdataData;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 
 public class NeodymiumData {
     private BrowserData browserData;
@@ -33,17 +33,17 @@ public class NeodymiumData {
         boolean workInProgress = Neodymium.configuration().workInProgress();
         boolean wipMethod = List.of(templateMethod.getDeclaringClass().getMethods()).stream()
                 .filter(method -> {
-                    return (method.getAnnotation(NeodymiumTest.class) != null
-                            || method.getAnnotation(NeodymiumTestGenerator.class) != null);
+                    return (NeodymiumAnnotationUtils.isAnnotationPresent(method, NeodymiumTest.class)
+                            || NeodymiumAnnotationUtils.isAnnotationPresent(method, NeodymiumTestGenerator.class));
                 })
-                .anyMatch(method -> method.getAnnotation(WorkInProgress.class) != null);
+                .anyMatch(method -> NeodymiumAnnotationUtils.isAnnotationPresent(method, WorkInProgress.class));
 
         List<TestTemplateInvocationContext> multiplicationResult = new ArrayList<>();
         List<BrowserMethodData> browsers = new ArrayList<BrowserMethodData>();
         List<TestdataContainer> dataSets = new ArrayList<TestdataContainer>();
         List<RetryMethodData> retryMethodData = new ArrayList<RetryMethodData>();
 
-        if (workInProgress && wipMethod && templateMethod.getAnnotation(WorkInProgress.class) == null) {
+        if (workInProgress && wipMethod && !NeodymiumAnnotationUtils.isAnnotationPresent(templateMethod, WorkInProgress.class)) {
             browsers.add(null);
             dataSets.add(null);
             retryMethodData.add(null);

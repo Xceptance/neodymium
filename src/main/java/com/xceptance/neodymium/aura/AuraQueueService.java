@@ -328,9 +328,9 @@ public final class AuraQueueService
 
                     tempRunnerDir.mkdirs();
                     final String runnerSource = "package com.xceptance.neodymium.aura.sandbox;\n\n" +
-                            "import com.xceptance.neodymium.common.browser.Browser;\n" +
-                            "import com.xceptance.neodymium.common.testdata.DataFolder;\n" +
-                            "import com.xceptance.neodymium.junit5.NeodymiumTest;\n" +
+                            "import org.neodymium.common.browser.Browser;\n" +
+                            "import org.neodymium.common.testdata.DataFolder;\n" +
+                            "import org.neodymium.junit5.NeodymiumTest;\n" +
                             "import org.neodymium.ai.junit.NeodymiumAiTest;\n" +
                             "import org.junit.jupiter.api.DisplayName;\n\n" +
                             browserAnnotations.toString() +

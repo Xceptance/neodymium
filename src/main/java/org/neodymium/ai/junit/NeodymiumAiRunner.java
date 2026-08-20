@@ -64,9 +64,9 @@ import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
-import com.xceptance.neodymium.common.browser.BrowserData;
-import com.xceptance.neodymium.common.browser.BrowserMethodData;
-import com.xceptance.neodymium.junit5.browser.BrowserExecutionCallback;
+import org.neodymium.common.browser.BrowserData;
+import org.neodymium.common.browser.BrowserMethodData;
+import org.neodymium.junit5.browser.BrowserExecutionCallback;
 import org.neodymium.util.Neodymium;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
@@ -600,12 +600,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.browser != null)
             {
                 Neodymium.setBrowserProfileName(this.browser.getBrowserTag());
-                com.xceptance.neodymium.util.Neodymium.setBrowserProfileName(this.browser.getBrowserTag());
             }
 
             if (Neodymium.hasDriver())
             {
-                final com.xceptance.neodymium.common.browser.WebDriverStateContainer legacyCont = com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer();
+                final org.neodymium.common.browser.WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
                 if (legacyCont != null && legacyCont.getWebDriver() != null)
                 {
                     final org.openqa.selenium.WebDriver driver = legacyCont.getDecoratedWebDriver() != null

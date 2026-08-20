@@ -73,7 +73,7 @@ import org.neodymium.util.Neodymium;
  * 
  * @author olha
  */
-public final class BrowserRunnerHelper
+public class BrowserRunnerHelper
 {
     private static final String CERT_PASSWORD = "xceptance";
 

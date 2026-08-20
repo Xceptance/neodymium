@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.neodymium.common.WorkInProgress;
 import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 
 public class WipTestMethodCallback implements ExecutionCondition
 {
@@ -19,12 +20,12 @@ public class WipTestMethodCallback implements ExecutionCondition
     {
         boolean workInProgress = Neodymium.configuration().workInProgress();
         boolean wipMethod = Stream.of(context.getRequiredTestClass().getMethods())
-                                  .filter(method -> method.getAnnotation(NeodymiumTest.class) != null || method.getAnnotation(org.neodymium.junit5.NeodymiumTestGenerator.class) != null)
-                                  .anyMatch(method -> method.getAnnotation(WorkInProgress.class) != null);
+                                  .filter(method -> NeodymiumAnnotationUtils.isAnnotationPresent(method, NeodymiumTest.class) || NeodymiumAnnotationUtils.isAnnotationPresent(method, org.neodymium.junit5.NeodymiumTestGenerator.class))
+                                  .anyMatch(method -> NeodymiumAnnotationUtils.isAnnotationPresent(method, WorkInProgress.class));
 
         String testNameFilterMessage = testExecutionRegex != null ? "method or test matching filter: '" + testExecutionRegex + "' " : "";
 
-        if (workInProgress && wipMethod && context.getRequiredTestMethod().getAnnotation(WorkInProgress.class) == null)
+        if (workInProgress && wipMethod && !NeodymiumAnnotationUtils.isAnnotationPresent(context.getRequiredTestMethod(), WorkInProgress.class))
         {
             return ConditionEvaluationResult.disabled(testNameFilterMessage + "not marked as WIP");
         }

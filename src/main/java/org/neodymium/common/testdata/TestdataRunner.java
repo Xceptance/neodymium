@@ -1,15 +1,16 @@
 package org.neodymium.common.testdata;
 
-import org.neodymium.util.Neodymium;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.commons.lang3.StringUtils;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TestdataRunner
 {
@@ -46,7 +47,7 @@ public class TestdataRunner
     {
         for (Field field : getFieldsFromSuperclasses(testClassInstance))
         {
-            DataItem dataAnnotation = field.getAnnotation(DataItem.class);
+            DataItem dataAnnotation = NeodymiumAnnotationUtils.getAnnotations(field, DataItem.class).stream().findFirst().orElse(null);
             if (dataAnnotation != null)
             {
                 boolean isFieldAccessable = field.canAccess(testClassInstance);

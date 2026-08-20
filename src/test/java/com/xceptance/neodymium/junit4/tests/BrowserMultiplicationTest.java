@@ -9,7 +9,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.testclasses.multiplication.browser.OneBrowserOneMethod;
 import com.xceptance.neodymium.junit4.testclasses.multiplication.browser.OneBrowserTwoMethods;
 import com.xceptance.neodymium.junit4.testclasses.multiplication.browser.TwoBrowserOneMethod;

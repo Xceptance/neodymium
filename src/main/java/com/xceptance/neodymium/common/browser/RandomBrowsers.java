@@ -25,6 +25,7 @@ import java.lang.annotation.Target;
   ElementType.TYPE, ElementType.METHOD
 })
 @Inherited
+@Deprecated
 public @interface RandomBrowsers
 {
     int value() default 1;

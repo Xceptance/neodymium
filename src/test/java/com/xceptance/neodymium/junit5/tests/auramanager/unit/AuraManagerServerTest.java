@@ -2,8 +2,8 @@ package com.xceptance.neodymium.junit5.tests.auramanager.unit;
 
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;

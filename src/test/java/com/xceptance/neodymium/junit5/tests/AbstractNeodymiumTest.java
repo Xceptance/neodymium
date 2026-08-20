@@ -28,7 +28,7 @@ import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
 import org.junit.platform.launcher.core.LauncherFactory;
 import org.opentest4j.AssertionFailedError;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.junit5.tests.utils.ResultAndDescriptionListener;
 import com.xceptance.neodymium.util.Neodymium;
@@ -142,6 +142,7 @@ public abstract class AbstractNeodymiumTest {
 	}
 
 	public NeodymiumTestExecutionSummary run(final Class<?> testClass) {
+		listener = new ResultAndDescriptionListener();
 		final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request().selectors(selectClass(testClass))
 				.build();
 		final Launcher launcher = LauncherFactory.create();
@@ -154,6 +155,8 @@ public abstract class AbstractNeodymiumTest {
 				&& summary.getFailures().stream()
 						.anyMatch(e -> e.getException() != null && e.getException().getMessage() != null
 								&& e.getException().getMessage().contains("Could not start a new session")); i++) {
+			listener = new ResultAndDescriptionListener();
+			launcher.registerTestExecutionListeners(listener);
 			launcher.execute(request);
 			summary = listener.getSummary();
 		}
@@ -162,6 +165,7 @@ public abstract class AbstractNeodymiumTest {
 	}
 
 	public List<String> getDescription(Class<?> testClass) {
+		listener = new ResultAndDescriptionListener();
 		LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request().selectors(selectClass(testClass))
 				.build();
 		Launcher launcher = LauncherFactory.create();

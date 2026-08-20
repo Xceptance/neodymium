@@ -15,7 +15,7 @@ import org.junit.Test;
 
 import org.junit.runner.Result;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.testclasses.context.BrowserContextSetup;
 import com.xceptance.neodymium.junit4.testclasses.context.ContextGetsCleared;
 import com.xceptance.neodymium.junit4.testclasses.context.DefaultSelenideConfiguration;

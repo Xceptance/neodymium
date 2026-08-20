@@ -69,14 +69,14 @@ public class Neodymium
     private final NeodymiumLocalization localization;
 
     // our data for anywhere access
-    private final org.neodymium.common.testdata.TestData data = new com.xceptance.neodymium.common.testdata.TestData();
+    private final org.neodymium.common.testdata.TestData data = new org.neodymium.common.testdata.TestData();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
 
     /**
      * Constructor
      */
-    private Neodymium()
+    protected Neodymium()
     {
         // the property needs to be a valid URI in order to satisfy the Owner framework
         if (null == ConfigFactory.getProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME))

@@ -2,8 +2,8 @@ package com.xceptance.neodymium.junit4.tests.recording;
 
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import org.aeonbits.owner.ConfigFactory;

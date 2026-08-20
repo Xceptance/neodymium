@@ -13,8 +13,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.common.recording.writers.Writer;
+import org.neodymium.common.recording.config.RecordingConfigurations;
+import org.neodymium.common.recording.writers.Writer;
 import com.xceptance.neodymium.util.TestImageGenerator;
 
 public abstract class AbstractWriterTest

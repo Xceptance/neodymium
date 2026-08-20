@@ -3,7 +3,7 @@ package com.xceptance.neodymium.util;
 import com.google.common.collect.ImmutableMap;
 import com.xceptance.neodymium.common.browser.SuppressBrowsers;
 import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.AllureAddons.EnvironmentInfoMode;
+import org.neodymium.util.AllureAddons.EnvironmentInfoMode;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;

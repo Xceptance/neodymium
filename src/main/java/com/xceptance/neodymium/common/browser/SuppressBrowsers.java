@@ -11,6 +11,7 @@ import java.lang.annotation.Target;
     {
         TYPE, METHOD
     })
+@Deprecated
 public @interface SuppressBrowsers
 {
 

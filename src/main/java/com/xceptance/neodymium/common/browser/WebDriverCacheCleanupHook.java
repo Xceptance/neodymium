@@ -1,17 +1,12 @@
 package com.xceptance.neodymium.common.browser;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-public class WebDriverCacheCleanupHook extends Thread
+/**
+ * @deprecated Use {@link org.neodymium.common.browser.WebDriverCacheCleanupHook} instead.
+ */
+@Deprecated
+public class WebDriverCacheCleanupHook extends org.neodymium.common.browser.WebDriverCacheCleanupHook
 {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(WebDriverCacheCleanupHook.class);
-
-    @Override
-    public void run()
+    public WebDriverCacheCleanupHook()
     {
-        LOGGER.debug("All tests finished. Quit cached browser");
-        WebDriverCache.quitCachedBrowsers();
     }
 }
