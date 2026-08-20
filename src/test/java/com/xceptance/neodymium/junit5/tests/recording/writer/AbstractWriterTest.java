@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import org.neodymium.common.recording.config.RecordingConfigurations;
 import org.neodymium.common.recording.writers.Writer;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.util.TestImageGenerator;
 
 public abstract class AbstractWriterTest

@@ -31,7 +31,7 @@ import org.opentest4j.AssertionFailedError;
 import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
 import com.xceptance.neodymium.junit5.tests.utils.ResultAndDescriptionListener;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public abstract class AbstractNeodymiumTest {
 	// holds files that will be deleted in @After method

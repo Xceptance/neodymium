@@ -4,11 +4,11 @@ import java.io.IOException;
 import java.util.UUID;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.GifRecordingConfigurations;
+import org.neodymium.common.recording.config.VideoRecordingConfigurations;
+import org.neodymium.junit5.NeodymiumTest;
 
 @Browser("Chrome_headless")
 public class CustomRecordingTest

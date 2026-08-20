@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit4.testclasses.repeat.classlevel;
 
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.util.Neodymium;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;

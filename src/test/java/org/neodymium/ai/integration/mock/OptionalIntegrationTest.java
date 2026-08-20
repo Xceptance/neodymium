@@ -19,7 +19,7 @@
 package org.neodymium.ai.integration.mock;
 
 import org.neodymium.ai.testing.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 
 import java.io.File;
 import java.io.IOException;

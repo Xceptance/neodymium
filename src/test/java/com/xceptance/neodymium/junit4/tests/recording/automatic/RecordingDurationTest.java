@@ -16,8 +16,8 @@ import org.junit.runner.RunWith;
 
 import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.testclasses.recording.AutomaticRecordingTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 

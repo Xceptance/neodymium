@@ -3,7 +3,7 @@ package com.xceptance.neodymium.junit5.tests;
 import com.xceptance.neodymium.junit5.testclasses.proxy.RunWithProxy;
 import com.xceptance.neodymium.junit5.testclasses.proxy.SetProxyForWebDriver;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

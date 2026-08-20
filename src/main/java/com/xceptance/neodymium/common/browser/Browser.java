@@ -1,6 +1,6 @@
 package com.xceptance.neodymium.common.browser;
 
-import static com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration.DEFAULT_BROWSER_ID;
+import static org.neodymium.common.browser.configuration.MultibrowserConfiguration.DEFAULT_BROWSER_ID;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Repeatable;

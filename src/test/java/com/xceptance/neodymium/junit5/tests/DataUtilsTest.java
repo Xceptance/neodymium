@@ -4,8 +4,8 @@ import com.xceptance.neodymium.junit5.testclasses.datautils.DataUtilsHelperTests
 import com.xceptance.neodymium.junit5.testclasses.datautils.DataUtilsTests;
 import com.xceptance.neodymium.junit5.testclasses.datautils.DataUtilsTestsXml;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumRandom;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

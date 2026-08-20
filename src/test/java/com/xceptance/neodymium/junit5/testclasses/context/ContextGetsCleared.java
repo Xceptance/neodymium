@@ -2,10 +2,10 @@ package com.xceptance.neodymium.junit5.testclasses.context;
 
 import org.junit.jupiter.api.Assertions;
 
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.common.testdata.SuppressDataSets;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.DataSet;
+import org.neodymium.common.testdata.SuppressDataSets;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 public class ContextGetsCleared
 {

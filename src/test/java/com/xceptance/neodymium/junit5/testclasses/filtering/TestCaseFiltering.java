@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit5.testclasses.filtering;
 
-import com.xceptance.neodymium.common.testdata.SuppressDataSets;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.SuppressDataSets;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 import io.cucumber.java.it.Data;
 import org.junit.Assert;
 

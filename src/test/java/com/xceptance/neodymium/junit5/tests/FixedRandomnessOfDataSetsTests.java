@@ -2,8 +2,8 @@ package com.xceptance.neodymium.junit5.tests;
 
 import com.xceptance.neodymium.junit5.testclasses.data.FixedRandomnessOfDataSets;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumRandom;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;

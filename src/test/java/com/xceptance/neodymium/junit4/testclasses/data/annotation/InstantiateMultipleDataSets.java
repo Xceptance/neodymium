@@ -4,10 +4,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.testdata.DataFile;
-import com.xceptance.neodymium.common.testdata.DataItem;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.testdata.DataFile;
+import org.neodymium.common.testdata.DataItem;
+import org.neodymium.common.testdata.DataSet;
+import org.neodymium.junit4.NeodymiumRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 

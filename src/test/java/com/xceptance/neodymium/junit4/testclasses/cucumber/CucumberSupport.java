@@ -6,10 +6,10 @@ import java.util.ArrayList;
 import org.junit.Assert;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
-import com.xceptance.neodymium.common.browser.BrowserMethodData;
-import com.xceptance.neodymium.junit4.NeodymiumCucumberRunListener;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.WebDriverUtils;
+import org.neodymium.common.browser.BrowserMethodData;
+import org.neodymium.junit4.NeodymiumCucumberRunListener;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.WebDriverUtils;
 
 import io.cucumber.java.After;
 import io.cucumber.java.Before;

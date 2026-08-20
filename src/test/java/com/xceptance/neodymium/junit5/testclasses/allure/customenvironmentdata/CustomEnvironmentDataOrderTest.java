@@ -2,8 +2,8 @@ package com.xceptance.neodymium.junit5.testclasses.allure.customenvironmentdata;
 
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.AllureAddons;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.AllureAddons;
+import org.neodymium.util.Neodymium;
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterAll;

@@ -3,7 +3,7 @@ package com.xceptance.neodymium.junit5.testclasses.multibrowser;
 import org.junit.jupiter.api.Assertions;
 import org.openqa.selenium.remote.CapabilityType;
 
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.common.browser.configuration.BrowserConfiguration;
 import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import org.neodymium.common.browser.configuration.TestEnvironment;

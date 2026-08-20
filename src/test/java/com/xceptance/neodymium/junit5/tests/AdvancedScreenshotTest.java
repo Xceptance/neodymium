@@ -24,10 +24,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.ScreenshotWriter;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.ScreenshotWriter;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;

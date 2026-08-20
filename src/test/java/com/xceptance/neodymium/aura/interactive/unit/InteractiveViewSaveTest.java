@@ -27,10 +27,10 @@ import com.codeborne.selenide.SelenideElement;
 import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.testing.BaseAiTest;
 import com.xceptance.neodymium.aura.interactive.util.InteractiveHudTestUtils;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.testdata.util.YamlFileReader;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 /**
  * E2E tests for the interactive view saving functionality.

@@ -28,8 +28,8 @@ import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.runner.StateMachineRunner;
-import com.xceptance.neodymium.common.browser.BrowserMethodData;
-import com.xceptance.neodymium.common.browser.BrowserRunner;
+import org.neodymium.common.browser.BrowserMethodData;
+import org.neodymium.common.browser.BrowserRunner;
 import org.neodymium.common.browser.configuration.BrowserConfiguration;
 import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
+import org.neodymium.common.browser.SuppressBrowsers;
 import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.util.Neodymium;
 import com.codeborne.selenide.Configuration;

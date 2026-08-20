@@ -20,11 +20,11 @@ import org.junit.jupiter.api.BeforeAll;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import org.neodymium.ai.util.EmbeddedHtmlServer;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.SuppressBrowsers;
+import org.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Class with tests verifying that download folder configuration works for any download type.

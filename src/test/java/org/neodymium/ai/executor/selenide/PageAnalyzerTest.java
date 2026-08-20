@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.testing.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 
 /**
  * Dedicated unit tests for {@link PageAnalyzer}.

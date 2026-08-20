@@ -18,8 +18,8 @@ import org.junit.runner.Result;
 import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.remote.CapabilityType;
 
-import com.xceptance.neodymium.common.Data;
-import com.xceptance.neodymium.common.browser.RandomBrowsers;
+import org.neodymium.common.Data;
+import org.neodymium.common.browser.RandomBrowsers;
 import org.neodymium.common.browser.configuration.BrowserConfiguration;
 import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit4.testclasses.browser.DisableRandomBrowserAnnotation;
@@ -55,7 +55,7 @@ import com.xceptance.neodymium.junit4.testclasses.browser.mixed.OverwriteBrowser
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.RandomBrowserMixed;
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.StartBrowserForCleanUp;
 import com.xceptance.neodymium.junit4.testclasses.browser.mixed.StartBrowserForSetUp;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class BrowserStatementTest extends NeodymiumTest
 {

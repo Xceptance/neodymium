@@ -4,9 +4,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.util.Neodymium;
 
 @Browser("Chrome_headless")
 public class BrowserContextSetup

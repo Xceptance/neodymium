@@ -7,11 +7,11 @@ import org.junit.BeforeClass;
 import org.junit.jupiter.api.AfterEach;
 import org.openqa.selenium.WebDriver;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.StartNewBrowserForCleanUp;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 @StartNewBrowserForCleanUp
 @Browser("Chrome_headless")
 public class NewBrowserIsNotStartedForCleanUp

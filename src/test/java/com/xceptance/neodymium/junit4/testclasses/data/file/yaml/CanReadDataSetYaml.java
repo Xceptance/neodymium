@@ -4,9 +4,9 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import com.xceptance.neodymium.common.testdata.DataFile;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.DataFile;
+import org.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.util.Neodymium;
 
 @RunWith(NeodymiumRunner.class)
 @DataFile("com/xceptance/neodymium/junit4/testclasses/data/set/yaml/CanReadDataSetYaml.yaml")

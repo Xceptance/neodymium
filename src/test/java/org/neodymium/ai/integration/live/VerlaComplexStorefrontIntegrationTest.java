@@ -22,7 +22,7 @@ import static com.codeborne.selenide.Condition.text;
 import static com.codeborne.selenide.Selenide.$;
 
 import org.neodymium.ai.testing.BaseAiTest;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
 import org.junit.jupiter.api.BeforeEach;

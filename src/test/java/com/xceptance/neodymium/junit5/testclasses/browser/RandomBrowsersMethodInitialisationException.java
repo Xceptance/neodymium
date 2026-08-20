@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit5.testclasses.browser;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.RandomBrowsers;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.RandomBrowsers;
+import org.neodymium.junit5.NeodymiumTest;
 
 public class RandomBrowsersMethodInitialisationException
 {

@@ -41,7 +41,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.util.EmbeddedHtmlServer;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
 /**

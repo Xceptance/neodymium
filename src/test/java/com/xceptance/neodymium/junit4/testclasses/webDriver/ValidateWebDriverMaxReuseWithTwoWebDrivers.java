@@ -14,13 +14,13 @@ import org.junit.runner.RunWith;
 import org.openqa.selenium.WebDriver;
 
 import com.browserup.bup.BrowserUpProxy;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.WebDriverCache;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.WebDriverCache;
 import org.neodymium.common.browser.WebDriverStateContainer;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /*
  * Validate that the reuse feature still works when there is more then one browser state within the cache.

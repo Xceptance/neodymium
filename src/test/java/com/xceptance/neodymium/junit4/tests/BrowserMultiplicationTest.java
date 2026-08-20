@@ -14,7 +14,7 @@ import com.xceptance.neodymium.junit4.testclasses.multiplication.browser.OneBrow
 import com.xceptance.neodymium.junit4.testclasses.multiplication.browser.OneBrowserTwoMethods;
 import com.xceptance.neodymium.junit4.testclasses.multiplication.browser.TwoBrowserOneMethod;
 import com.xceptance.neodymium.junit4.testclasses.multiplication.browser.TwoBrowserTwoMethods;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class BrowserMultiplicationTest extends NeodymiumTest
 {

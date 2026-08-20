@@ -30,8 +30,8 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide UI test to verify the copy button in the Aura Manager terminal output view,

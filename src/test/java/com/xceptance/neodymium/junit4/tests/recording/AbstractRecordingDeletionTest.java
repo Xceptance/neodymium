@@ -1,10 +1,10 @@
 package com.xceptance.neodymium.junit4.tests.recording;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.AfterClass;

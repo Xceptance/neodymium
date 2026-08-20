@@ -11,10 +11,10 @@ import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
 
 @Browser("Chrome_headless")

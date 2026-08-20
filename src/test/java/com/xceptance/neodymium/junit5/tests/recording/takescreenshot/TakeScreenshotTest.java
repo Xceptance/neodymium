@@ -7,11 +7,11 @@ import java.util.UUID;
 import org.junit.Assert;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.Browser;
 import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.recording.TakeScreenshotsThread;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 @Browser("Chrome_headless")
 public class TakeScreenshotTest

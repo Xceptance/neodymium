@@ -8,11 +8,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.openqa.selenium.WebDriver;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.StartNewBrowserForSetUp;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 @RunWith(NeodymiumRunner.class)
 @StartNewBrowserForSetUp
 @Browser("chrome")

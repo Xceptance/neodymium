@@ -36,8 +36,8 @@ import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide UI edge cases test to verify run queue error handling, rerun resilience, and execution failure recovery.

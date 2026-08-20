@@ -31,8 +31,8 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
 import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 /**
  * Selenide-based UI tests covering chat session handling in Aura Manager:

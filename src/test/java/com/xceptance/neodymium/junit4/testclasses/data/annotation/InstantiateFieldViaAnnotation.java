@@ -4,9 +4,9 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.testdata.DataItem;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.testdata.DataItem;
+import org.neodymium.common.testdata.DataSet;
+import org.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
 public class InstantiateFieldViaAnnotation

@@ -22,7 +22,7 @@ import com.xceptance.neodymium.junit5.testclasses.context.OverrideNeodymiumConfi
 import com.xceptance.neodymium.junit5.testclasses.context.SelenideConfigurationShortcuts;
 import com.xceptance.neodymium.junit5.testclasses.context.WindowSizeTests;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class NeodymiumContextTest extends AbstractNeodymiumTest
 {

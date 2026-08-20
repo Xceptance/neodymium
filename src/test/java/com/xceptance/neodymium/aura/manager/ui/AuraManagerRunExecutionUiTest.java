@@ -32,8 +32,8 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * UI test class to verify running and stopping the test execution queue
