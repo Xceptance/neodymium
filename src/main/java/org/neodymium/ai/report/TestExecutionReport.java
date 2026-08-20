@@ -703,7 +703,9 @@ public final class TestExecutionReport
     {
         private String type;
         private String target;
+        private String resolvedTarget;
         private String value;
+        private String resolvedValue;
         private String description;
         private String reasoning;
         private boolean success;
@@ -749,6 +751,16 @@ public final class TestExecutionReport
             this.target = target;
         }
 
+        public String getResolvedTarget()
+        {
+            return this.resolvedTarget;
+        }
+
+        public void setResolvedTarget(final String resolvedTarget)
+        {
+            this.resolvedTarget = resolvedTarget;
+        }
+
         public String getValue()
         {
             return this.value;
@@ -757,6 +769,16 @@ public final class TestExecutionReport
         public void setValue(final String value)
         {
             this.value = value;
+        }
+
+        public String getResolvedValue()
+        {
+            return this.resolvedValue;
+        }
+
+        public void setResolvedValue(final String resolvedValue)
+        {
+            this.resolvedValue = resolvedValue;
         }
 
         public String getDescription()

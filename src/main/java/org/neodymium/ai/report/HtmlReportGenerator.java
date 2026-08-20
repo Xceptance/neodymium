@@ -603,6 +603,16 @@ public final class HtmlReportGenerator
                 return "$" + Number(c).toFixed(4);
             }
 
+            function escapeHtml(str) {
+                if (str == null) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
             window.setInspectorWidth = function(widthPx) {
                 currentInspectorWidth = Math.max(380, Math.min(1200, widthPx));
                 var layout = document.getElementById('stepsSplitLayout');
@@ -706,7 +716,8 @@ public final class HtmlReportGenerator
             window.copyActionTarget = function(actionIndex, btn) {
                 var step = getActiveStepObject();
                 if (!step || !step.actions || !step.actions[actionIndex]) return;
-                var val = step.actions[actionIndex].target || '';
+                var act = step.actions[actionIndex];
+                var val = act.resolvedTarget || act.target || '';
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(val).then(function() {
                         var original = btn.textContent;
@@ -886,11 +897,25 @@ public final class HtmlReportGenerator
                         var resClass = a.success ? 'status-pass' : 'status-fail';
                         var resText = a.success ? 'SUCCESS' : 'FAILED';
 
+                        var displayTarget = a.resolvedTarget || a.target || '-';
+                        var hasTargetTpl = a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
+                        var targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
+                        if (hasTargetTpl) {
+                            targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                        }
+
+                        var displayValue = a.resolvedValue || a.value || '-';
+                        var hasValueTpl = a.value && a.resolvedValue && a.value !== a.resolvedValue;
+                        var valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
+                        if (hasValueTpl) {
+                            valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                        }
+
                         tr.innerHTML = '<td>' + (ai + 1) + '</td>' +
-                                       '<td><span class="badge-action">' + (a.type || '-') + '</span></td>' +
-                                       '<td><code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + (a.target || '-') + '</code></td>' +
-                                       '<td><code>' + (a.value || '-') + '</code></td>' +
-                                       '<td class="text-muted">' + (a.reasoning || a.description || '-') + '</td>' +
+                                       '<td><span class="badge-action">' + escapeHtml(a.type || '-') + '</span></td>' +
+                                       '<td>' + targetHtml + '</td>' +
+                                       '<td>' + valueHtml + '</td>' +
+                                       '<td class="text-muted">' + escapeHtml(a.reasoning || a.description || '-') + '</td>' +
                                        '<td><span class="' + resClass + '">' + resText + '</span></td>';
                         tbody.appendChild(tr);
                     });
@@ -1775,6 +1800,18 @@ public final class HtmlReportGenerator
             .code-selector:hover {
                 background: var(--accent-primary-light);
                 color: var(--accent-primary);
+            }
+            .action-tpl-note {
+                font-size: 0.72rem;
+                color: var(--text-sub, #64748b);
+                margin-top: 3px;
+                opacity: 0.85;
+            }
+            .action-tpl-note code {
+                font-size: 0.7rem;
+                background: #f1f5f9;
+                padding: 1px 4px;
+                border-radius: 3px;
             }
             .reasoning-card {
                 background: var(--accent-primary-light);

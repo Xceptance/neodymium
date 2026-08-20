@@ -337,9 +337,30 @@ public final class MarkdownReportGenerator
             {
                 final TestExecutionReport.ReportActionEntry act = step.getActions().get(a);
                 final String actResult = act.isSuccess() ? "✅ Success" : "❌ Failed";
+
+                final String targetStr;
+                if (act.getResolvedTarget() != null && act.getTarget() != null && !act.getResolvedTarget().equals(act.getTarget()))
+                {
+                    targetStr = act.getResolvedTarget() + " (Tpl: " + act.getTarget() + ")";
+                }
+                else
+                {
+                    targetStr = act.getResolvedTarget() != null ? act.getResolvedTarget() : (act.getTarget() != null ? act.getTarget() : "-");
+                }
+
+                final String valueStr;
+                if (act.getResolvedValue() != null && act.getValue() != null && !act.getResolvedValue().equals(act.getValue()))
+                {
+                    valueStr = act.getResolvedValue() + " (Tpl: " + act.getValue() + ")";
+                }
+                else
+                {
+                    valueStr = act.getResolvedValue() != null ? act.getResolvedValue() : (act.getValue() != null ? act.getValue() : "-");
+                }
+
                 sb.append("| ").append(a + 1).append(" | `").append(act.getType() != null ? act.getType() : "").append("` | `")
-                    .append(escapeMarkdown(act.getTarget() != null ? act.getTarget() : "-")).append("` | `")
-                    .append(escapeMarkdown(act.getValue() != null ? act.getValue() : "-")).append("` | ")
+                    .append(escapeMarkdown(targetStr)).append("` | `")
+                    .append(escapeMarkdown(valueStr)).append("` | ")
                     .append(actResult).append(" |\n");
             }
         }

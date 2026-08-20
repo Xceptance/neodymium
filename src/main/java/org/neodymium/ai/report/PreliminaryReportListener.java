@@ -338,6 +338,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (this.currentStep != null && actionExecuted.getAction() != null)
             {
                 final org.neodymium.ai.action.Action action = actionExecuted.getAction();
+                final org.neodymium.ai.action.Action resolvedAction = actionExecuted.getResolvedAction();
                 final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
                     action.getType(),
                     action.getTarget(),
@@ -346,6 +347,11 @@ public final class PreliminaryReportListener implements ExecutionListener
                     action.getReasoning(),
                     actionExecuted.isSuccess()
                 );
+                if (resolvedAction != null)
+                {
+                    actionEntry.setResolvedTarget(resolvedAction.getTarget());
+                    actionEntry.setResolvedValue(resolvedAction.getValue());
+                }
                 this.currentStep.addAction(actionEntry);
             }
         }
