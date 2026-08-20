@@ -70,8 +70,8 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
     @BeforeAll
     public static void configureMockLlm()
     {
-        System.setProperty("neodymium.ai.global.provider", "mock");
-        System.setProperty("neodymium.ai.pesap.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.global.provider", "mock");
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         setupCount = 0;
         testCount = 0;
         teardownCount = 0;
@@ -80,14 +80,13 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
     @AfterAll
     public static void clearMockLlm()
     {
-        System.clearProperty("neodymium.ai.global.provider");
-        System.clearProperty("neodymium.ai.pesap.enabled");
+        Neodymium.getData().remove("neodymium.ai.global.provider");
+        Neodymium.getData().remove("neodymium.ai.pesap.enabled");
     }
 
     public void initMock(final AiSession session)
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        System.setProperty("demo.url", pageUrl);
         Neodymium.getData().put("demo.url", pageUrl);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);

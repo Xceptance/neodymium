@@ -348,4 +348,78 @@ public class YamlPlaybookParserTest
         assertEquals(1, afterInclude.getSubSteps().size());
         assertEquals("Teardown step 1", afterInclude.getSubSteps().get(0).getInstruction());
     }
+
+    @Test
+    public void testParseYamlAnchorList() throws IOException
+    {
+        final String yamlContent = """
+            search: &search
+              - "Enter query into search box"
+              - "Click submit search"
+              - "Verify results page is shown"
+
+            steps:
+              - "Open homepage"
+              - *search
+              - "Open another page"
+              - *search
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("anchor-list-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("anchor-list-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(8, playbook.getSteps().size(), "Should expand nested list anchors into sequential steps");
+        assertEquals("Open homepage", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Enter query into search box", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Click submit search", playbook.getSteps().get(2).getInstruction());
+        assertEquals("Verify results page is shown", playbook.getSteps().get(3).getInstruction());
+        assertEquals("Open another page", playbook.getSteps().get(4).getInstruction());
+        assertEquals("Enter query into search box", playbook.getSteps().get(5).getInstruction());
+        assertEquals("Click submit search", playbook.getSteps().get(6).getInstruction());
+        assertEquals("Verify results page is shown", playbook.getSteps().get(7).getInstruction());
+    }
+
+    @Test
+    public void testParseYamlAnchorBlockScalar() throws IOException
+    {
+        final String yamlContent = """
+            search: &search |
+              Enter query into search box
+              Click submit search
+
+            steps:
+              - "Open homepage"
+              - *search
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("anchor-block-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("anchor-block-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size(), "Should split multiline block scalar in list into individual steps");
+        assertEquals("Open homepage", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Enter query into search box", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Click submit search", playbook.getSteps().get(2).getInstruction());
+    }
+
+    @Test
+    public void testParseSearchTestGermanYaml() throws IOException
+    {
+        final org.neodymium.ai.resources.ClasspathResourceManager manager = new org.neodymium.ai.resources.ClasspathResourceManager();
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("verla/SearchTest_German.yaml", manager);
+
+        assertNotNull(playbook);
+        // 4 initial steps + 7 search steps + 1 open step + 7 search steps + 1 open step + 7 search steps = 27 steps
+        assertEquals(27, playbook.getSteps().size());
+        assertEquals(3, playbook.getDataSets().size());
+        assertEquals("US", playbook.getDataSets().get(0).get("testId").value());
+    }
 }

@@ -2,14 +2,15 @@
 # @author AI-generated: Gemini 3.5 Flash
 # @author Xceptance GmbH 2026
 
-search: &search |
-  Gib "${searchQuery}" in das Suchfeld ein.
-  Ein Suchvorschlag-Dropdown ist sichtbar und enthält mindestens 6 Einträge.
-  Klicke auf "View All", um alle Suchergebnisse zu sehen.
-  Eine Suchergebnisseite wird angezeigt und zeigt die Suchergebnisse für "${searchQuery}".
-  Ein Feld für die Anzahl der Suchergebnisse wird angezeigt.
-  Die Anzahl der Ergebnisse '${resultCount}' ist zu sehen.
-  Auf der linken Seite wird eine Box mit Kategorien, Farben, Preis und Angebot angezeigt.
+# This demonstrates a YAML include feature.
+search: &search
+  - Gib "${searchQuery}" in das Suchfeld ein.
+  - Ein Suchvorschlag-Dropdown ist sichtbar und enthält mindestens 6 Einträge.
+  - Klicke auf "View All", um alle Suchergebnisse zu sehen.
+  - Eine Suchergebnisseite wird angezeigt und zeigt die Suchergebnisse für "${searchQuery}".
+  - Ein Feld für die Anzahl der Suchergebnisse wird angezeigt.
+  - Die Anzahl der Ergebnisse '${resultCount}' ist zu sehen.
+  - Auf der linken Seite wird eine Box mit Kategorien, Farben, Preis und Angebot angezeigt.
 
 steps:
   - Öffne ${verla.url}/verla-perfect/index.html

@@ -178,6 +178,30 @@ public final class ActionExtractionPromptTest
     }
 
     /**
+     * Verifies that parseResponse auto-escalates context to LEAN when status is FAILED, actions are empty,
+     * and current context level is MINIMAL (where static text elements are pruned from DOM).
+     */
+    @Test
+    public void testParseResponseFailedStatusAutoEscalatesAtMinimalContext()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.MINIMAL);
+
+        final String rawJson = """
+            {
+              "status": "FAILED",
+              "targetContextLevel": "MINIMAL",
+              "reasoning": "Looking at the DOM, there is no element displaying the count of search results.",
+              "actions": []
+            }
+            """;
+
+        final ToLevelEscalationException ex = assertThrows(ToLevelEscalationException.class, () -> prompt.parseResponse(rawJson, context));
+        assertEquals("LEAN", ex.getTargetLevel());
+    }
+
+    /**
      * Verifies system prompt compilation.
      */
     @Test

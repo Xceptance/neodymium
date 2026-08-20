@@ -238,7 +238,8 @@ public final class PesapPreStep implements PipelineStep
                     {
                         final ContextLevel predicted = ContextLevel.valueOf(pesapResult.contextLevel().toUpperCase().trim());
                         final ContextLevel currentLevel = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                        if (currentLevel != ContextLevel.VISUAL || predicted != ContextLevel.VISUAL_RICH)
+                        final boolean isExplicitTag = (currentLevel == ContextLevel.HINT || (currentLevel != null && currentLevel.includesScreenshot()));
+                        if (!isExplicitTag || (predicted.ordinal() > currentLevel.ordinal()))
                         {
                             context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, predicted);
                             this.step.setContextLevel(predicted.name());
