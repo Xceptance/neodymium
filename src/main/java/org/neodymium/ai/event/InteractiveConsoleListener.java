@@ -18,7 +18,9 @@
  */
 package org.neodymium.ai.event;
 
+import java.nio.file.Paths;
 import java.util.Collections;
+import java.util.Set;
 
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
@@ -34,6 +36,9 @@ import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.PesapPrompt;
+import org.neodymium.ai.report.DiskReportFormat;
+import org.neodymium.ai.report.PreliminaryReportListener;
+import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +63,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
     private final InteractiveConsoleEngine consoleEngine;
     private final AiSession session;
     private final boolean interactive;
+    private final PreliminaryReportListener reportListener;
     private volatile boolean autoRun;
 
     /**
@@ -77,6 +83,32 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.session = session;
         this.interactive = interactive;
         this.autoRun = false;
+        final AiConfiguration config = AiConfiguration.getInstance();
+        this.reportListener = new PreliminaryReportListener(
+            Paths.get(config.getDiskReportDirectory()),
+            DiskReportFormat.parseFormats(config.getDiskReportFormat()),
+            true
+        );
+    }
+
+    /**
+     * Returns the underlying PreliminaryReportListener instance.
+     *
+     * @return the report listener
+     */
+    public PreliminaryReportListener getReportListener()
+    {
+        return this.reportListener;
+    }
+
+    /**
+     * Returns the active TestExecutionReport aggregated by this listener.
+     *
+     * @return test execution report instance
+     */
+    public TestExecutionReport getReport()
+    {
+        return this.reportListener != null ? this.reportListener.getReport() : null;
     }
 
     /**
@@ -112,12 +144,26 @@ public final class InteractiveConsoleListener implements ExecutionListener
     @Override
     public void onEvent(final ExecutionEvent event)
     {
-        if (event == null || this.consoleEngine == null)
+        if (event == null)
         {
             return;
         }
 
         final ExecutionContext context = this.session != null ? this.session.getExecutionContext() : ExecutionContext.getActiveContext();
+
+        if (this.reportListener != null)
+        {
+            this.reportListener.onEvent(event);
+            if (context != null)
+            {
+                context.getTransientData().put("testExecutionReport", this.reportListener.getReport());
+            }
+        }
+
+        if (this.consoleEngine == null)
+        {
+            return;
+        }
 
         if (event instanceof StepStartedEvent stepStarted)
         {
@@ -147,7 +193,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
             }
 
             final String stateJson = InteractiveStateBuilder.buildStateJson(
-                this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null);
+                this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null, getReport());
 
             this.consoleEngine.pushState(stateJson);
         }
@@ -178,7 +224,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 }
             }
             final String stateJson = InteractiveStateBuilder.buildStateJson(
-                this.session, context, this.consoleEngine.getRunId(), stepIndex, "running");
+                this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null, getReport());
 
             this.consoleEngine.pushState(stateJson);
         }
@@ -192,7 +238,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 this.consoleEngine.registerPauseId(pauseId);
 
                 final String stateJson = InteractiveStateBuilder.buildStateJson(
-                    this.session, context, this.consoleEngine.getRunId(), 0, overallStatus, pauseId);
+                    this.session, context, this.consoleEngine.getRunId(), 0, overallStatus, pauseId, getReport());
 
                 this.consoleEngine.pushState(stateJson);
 
@@ -210,9 +256,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
             else
             {
                 final String stateJson = InteractiveStateBuilder.buildStateJson(
-                    this.session, context, this.consoleEngine.getRunId(), 0, overallStatus);
+                    this.session, context, this.consoleEngine.getRunId(), 0, overallStatus, null, getReport());
 
                 this.consoleEngine.pushState(stateJson);
+            }
+
+            if (AiConfiguration.getInstance().isDiskReportEnabled() && this.reportListener != null)
+            {
+                this.reportListener.flushReport();
             }
         }
         else if (event instanceof DiagnosticErrorEvent errorEvent)
@@ -253,7 +304,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.consoleEngine.registerPauseId(pauseId);
 
         final String stateJson = InteractiveStateBuilder.buildStateJson(
-            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId);
+            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId, getReport());
 
         this.consoleEngine.pushState(stateJson);
 
@@ -319,7 +370,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.consoleEngine.registerPauseId(pauseId);
 
         final String stateJson = InteractiveStateBuilder.buildStateJson(
-            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId);
+            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId, getReport());
 
         this.consoleEngine.pushState(stateJson);
 

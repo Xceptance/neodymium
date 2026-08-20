@@ -30,9 +30,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -129,8 +131,14 @@ public class LocalRunJsonStorageService
             }
 
             final Map<String, Map<String, List<String>>> areasMap = new LinkedHashMap<>();
+            final Set<String> localesSet = new LinkedHashSet<>();
+            final Set<String> browsersSet = new LinkedHashSet<>();
+            final List<String> existingLocales = new ArrayList<>();
+            final List<String> existingBrowsers = new ArrayList<>();
             int totalExecsCount = 0;
             int pass = 0, fixed = 0, known = 0, unknown = 0, ignoredCount = 0;
+            long earliestMs = Long.MAX_VALUE;
+            String earliestTimeStr = null;
 
             final BatchInfo batchInfo = resolveOrCreateBatchJson(runDir, testExecJsonFiles);
             String batchName = batchInfo.name;
@@ -148,6 +156,28 @@ public class LocalRunJsonStorageService
                     if (existingRoot.has("environment")) env = existingRoot.path("environment").asText(env);
                     if (existingRoot.has("trigger")) trigger = existingRoot.path("trigger").asText(trigger);
                     if (existingRoot.has("timestamp")) timestamp = existingRoot.path("timestamp").asText(timestamp);
+                    if (existingRoot.has("locales") && existingRoot.path("locales").isArray())
+                    {
+                        for (final JsonNode l : existingRoot.path("locales"))
+                        {
+                            final String val = l.asText("").trim();
+                            if (!val.isEmpty() && !"unknown".equalsIgnoreCase(val))
+                            {
+                                existingLocales.add(val);
+                            }
+                        }
+                    }
+                    if (existingRoot.has("browsers") && existingRoot.path("browsers").isArray())
+                    {
+                        for (final JsonNode b : existingRoot.path("browsers"))
+                        {
+                            final String val = b.asText("").trim();
+                            if (!val.isEmpty() && !"unknown".equalsIgnoreCase(val))
+                            {
+                                existingBrowsers.add(val);
+                            }
+                        }
+                    }
                 }
                 catch (final Exception ignored)
                 {
@@ -161,6 +191,23 @@ public class LocalRunJsonStorageService
                     final JsonNode node = objectMapper.readTree(f);
                     if (isTestExecutionJson(node))
                     {
+                        extractLocalesFromNode(node, localesSet);
+                        extractBrowsersFromNode(node, browsersSet);
+
+                        final ExecutionTime execTime = extractExecutionStartTime(node);
+                        if (execTime != null)
+                        {
+                            if (execTime.ms() < earliestMs)
+                            {
+                                earliestMs = execTime.ms();
+                                earliestTimeStr = execTime.timeStr();
+                            }
+                            else if (earliestTimeStr == null && execTime.timeStr() != null)
+                            {
+                                earliestTimeStr = execTime.timeStr();
+                            }
+                        }
+
                         if (node instanceof ObjectNode objNode)
                         {
                             final Path relPath = runDir.toPath().relativize(f.toPath());
@@ -404,12 +451,48 @@ public class LocalRunJsonStorageService
             final int total = totalExecsCount;
             final double passRate = total > 0 ? (double)(pass + fixed) / total * 100.0 : 0.0;
 
+            if (earliestTimeStr != null && !earliestTimeStr.isBlank() && !"Recently".equalsIgnoreCase(earliestTimeStr.trim()))
+            {
+                timestamp = earliestTimeStr;
+            }
+
             final ObjectNode rootNode = objectMapper.createObjectNode();
             rootNode.put("runId", runId);
             rootNode.put("batchName", batchName);
             rootNode.put("environment", env);
             rootNode.put("trigger", trigger);
             rootNode.put("timestamp", timestamp);
+            rootNode.put("startTime", timestamp);
+
+            final ArrayNode localesArray = objectMapper.createArrayNode();
+            if (!localesSet.isEmpty())
+            {
+                localesSet.stream().sorted().forEach(localesArray::add);
+            }
+            else if (!existingLocales.isEmpty())
+            {
+                existingLocales.forEach(localesArray::add);
+            }
+            else
+            {
+                localesArray.add("Unknown");
+            }
+            rootNode.set("locales", localesArray);
+
+            final ArrayNode browsersArray = objectMapper.createArrayNode();
+            if (!browsersSet.isEmpty())
+            {
+                browsersSet.stream().sorted().forEach(browsersArray::add);
+            }
+            else if (!existingBrowsers.isEmpty())
+            {
+                existingBrowsers.forEach(browsersArray::add);
+            }
+            else
+            {
+                browsersArray.add("Chrome");
+            }
+            rootNode.set("browsers", browsersArray);
 
             final ObjectNode summaryNode = objectMapper.createObjectNode();
             summaryNode.put("total", total);
@@ -928,5 +1011,162 @@ public class LocalRunJsonStorageService
                 break;
             }
         }
+    }
+
+    private void extractLocalesFromNode(final JsonNode node, final Set<String> localesSet)
+    {
+        extractStringOrArrayField(node, "locale", localesSet);
+        extractStringOrArrayField(node, "location", localesSet);
+        if (node.has("localDataBindings") && node.path("localDataBindings").isObject())
+        {
+            extractStringOrArrayField(node.path("localDataBindings"), "locale", localesSet);
+            extractStringOrArrayField(node.path("localDataBindings"), "location", localesSet);
+        }
+        if (node.has("dataBindings") && node.path("dataBindings").isObject())
+        {
+            extractStringOrArrayField(node.path("dataBindings"), "locale", localesSet);
+            extractStringOrArrayField(node.path("dataBindings"), "location", localesSet);
+        }
+    }
+
+    private void extractBrowsersFromNode(final JsonNode node, final Set<String> browsersSet)
+    {
+        extractStringOrArrayField(node, "browser", browsersSet);
+        if (node.has("localDataBindings") && node.path("localDataBindings").isObject())
+        {
+            extractStringOrArrayField(node.path("localDataBindings"), "browser", browsersSet);
+        }
+        if (node.has("dataBindings") && node.path("dataBindings").isObject())
+        {
+            extractStringOrArrayField(node.path("dataBindings"), "browser", browsersSet);
+        }
+    }
+
+    private void extractStringOrArrayField(final JsonNode parent, final String fieldName, final Set<String> targetSet)
+    {
+        if (parent == null || !parent.has(fieldName))
+        {
+            return;
+        }
+        final JsonNode fieldNode = parent.get(fieldName);
+        if (fieldNode.isArray())
+        {
+            for (final JsonNode item : fieldNode)
+            {
+                final String val = item.asText("").trim();
+                if (!val.isEmpty() && !"unknown".equalsIgnoreCase(val))
+                {
+                    targetSet.add(val);
+                }
+            }
+        }
+        else
+        {
+            final String val = fieldNode.asText("").trim();
+            if (!val.isEmpty() && !"unknown".equalsIgnoreCase(val))
+            {
+                targetSet.add(val);
+            }
+        }
+    }
+
+    private static final List<String> TIMESTAMP_CANDIDATES = List.of(
+        "startTime", "startTimeMs", "timestamp", "startDate", "time", "createdAt"
+    );
+
+    private record ExecutionTime(long ms, String timeStr) {}
+
+    private ExecutionTime extractExecutionStartTime(final JsonNode node)
+    {
+        String rawVal = null;
+        for (final String key : TIMESTAMP_CANDIDATES)
+        {
+            if (node.hasNonNull(key))
+            {
+                final String text = node.get(key).asText("").trim();
+                if (!text.isEmpty())
+                {
+                    rawVal = text;
+                    break;
+                }
+            }
+        }
+
+        if (rawVal == null)
+        {
+            if (node.has("localDataBindings") && node.path("localDataBindings").isObject())
+            {
+                for (final String key : TIMESTAMP_CANDIDATES)
+                {
+                    if (node.path("localDataBindings").hasNonNull(key))
+                    {
+                        final String text = node.path("localDataBindings").get(key).asText("").trim();
+                        if (!text.isEmpty())
+                        {
+                            rawVal = text;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (rawVal == null && node.has("dataBindings") && node.path("dataBindings").isObject())
+            {
+                for (final String key : TIMESTAMP_CANDIDATES)
+                {
+                    if (node.path("dataBindings").hasNonNull(key))
+                    {
+                        final String text = node.path("dataBindings").get(key).asText("").trim();
+                        if (!text.isEmpty())
+                        {
+                            rawVal = text;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (rawVal == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            double num = Double.parseDouble(rawVal);
+            if (num < 1e11)
+            {
+                num *= 1000.0;
+            }
+            final long ms = (long) num;
+            return new ExecutionTime(ms, rawVal);
+        }
+        catch (final NumberFormatException ignored)
+        {
+        }
+
+        try
+        {
+            final java.time.Instant instant = java.time.Instant.parse(rawVal);
+            return new ExecutionTime(instant.toEpochMilli(), rawVal);
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        for (final String pattern : List.of("yyyy-MM-dd HH:mm:ss.SSS", "yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyyMMdd_HHmmss"))
+        {
+            try
+            {
+                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(rawVal, java.time.format.DateTimeFormatter.ofPattern(pattern));
+                final long ms = ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+                return new ExecutionTime(ms, rawVal);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        return new ExecutionTime(Long.MAX_VALUE, rawVal);
     }
 }

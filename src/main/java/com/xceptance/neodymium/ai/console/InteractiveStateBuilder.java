@@ -18,14 +18,26 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.report.TestExecutionReport;
+import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
+import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
+import org.neodymium.ai.report.TestExecutionReport.ReportLlmCallEntry;
+import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
+import org.neodymium.ai.report.TestExecutionReport.ReportScreenshotEntry;
+import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
 import org.neodymium.ai.session.AiSession;
 
 import com.google.gson.Gson;
@@ -42,6 +54,80 @@ import com.google.gson.JsonObject;
 public final class InteractiveStateBuilder
 {
     private static final Gson GSON = new Gson();
+
+    private static final Set<String> KNOWN_LOCALE_CODES = new HashSet<>();
+
+    static
+    {
+        for (final String country : Locale.getISOCountries())
+        {
+            KNOWN_LOCALE_CODES.add(country.toUpperCase());
+            KNOWN_LOCALE_CODES.add(country.toLowerCase());
+        }
+        for (final String lang : Locale.getISOLanguages())
+        {
+            KNOWN_LOCALE_CODES.add(lang.toUpperCase());
+            KNOWN_LOCALE_CODES.add(lang.toLowerCase());
+        }
+        final String[] extraCodes = {
+            "UK", "uk", "GBR", "gbr", "USA", "usa", "DEU", "deu", "GER", "ger",
+            "ENG", "eng", "FRA", "fra", "FRE", "fre", "SPA", "spa", "ITA", "ita",
+            "JPN", "jpn", "ZHO", "zho", "CHI", "chi", "NLD", "nld", "DUT", "dut",
+            "POL", "pol", "SWE", "swe", "NOR", "nor", "DNK", "dnk", "FIN", "fin",
+            "RUS", "rus", "POR", "por", "AUS", "aus", "CAN", "can", "IND", "ind",
+            "KOR", "kor", "BRA", "bra", "MEX", "mex"
+        };
+        for (final String code : extraCodes)
+        {
+            KNOWN_LOCALE_CODES.add(code);
+        }
+    }
+
+    /**
+     * Guesses a locale or location indicator from a dataset ID / label.
+     *
+     * @param datasetId the dataset ID or dataset label (e.g. "homepage test DE", "guest checkout deu")
+     * @return guessed locale string (e.g. "DE", "deu", "en_US"), or null if none detected
+     */
+    public static String extractLocaleFromDatasetId(final String datasetId)
+    {
+        if (datasetId == null || datasetId.isBlank())
+        {
+            return null;
+        }
+
+        final String trimmed = datasetId.trim();
+
+        // 1. Check for compound locale pattern like "en_US", "de_DE", "fr-FR", "en_GB", "jp_JP"
+        final Pattern localePattern = Pattern.compile("(?i)(?:^|[^a-zA-Z0-9])([a-zA-Z]{2,3}[_-][a-zA-Z]{2,3})(?:$|[^a-zA-Z0-9])");
+        final Matcher matcher = localePattern.matcher(trimmed);
+        if (matcher.find())
+        {
+            final String match = matcher.group(1);
+            final String[] parts = match.split("[_-]");
+            if (parts.length == 2 && (KNOWN_LOCALE_CODES.contains(parts[0]) || KNOWN_LOCALE_CODES.contains(parts[1])))
+            {
+                return match;
+            }
+        }
+
+        // 2. Tokenize by non-alphanumeric characters and inspect tokens from right to left
+        final String[] tokens = trimmed.split("[^a-zA-Z0-9]+");
+        for (int i = tokens.length - 1; i >= 0; i--)
+        {
+            final String token = tokens[i];
+            if (token.isEmpty())
+            {
+                continue;
+            }
+            if (KNOWN_LOCALE_CODES.contains(token))
+            {
+                return token;
+            }
+        }
+
+        return null;
+    }
 
     private InteractiveStateBuilder()
     {
@@ -77,6 +163,26 @@ public final class InteractiveStateBuilder
         final String pauseId
     )
     {
+        final TestExecutionReport report = context != null
+            ? (TestExecutionReport) context.getTransientData().get("testExecutionReport")
+            : null;
+        return buildStateJson(session, context, runId, activeStepIndex, runnerStatus, pauseId, report);
+    }
+
+    public static String buildStateJson(
+        final AiSession session,
+        final ExecutionContext context,
+        final String runId,
+        final int activeStepIndex,
+        final String runnerStatus,
+        final String pauseId,
+        final TestExecutionReport report
+    )
+    {
+        final TestExecutionReport execReport = report != null
+            ? report
+            : (context != null ? (TestExecutionReport) context.getTransientData().get("testExecutionReport") : null);
+
         final JsonObject state = new JsonObject();
         state.addProperty("runId", runId != null ? runId : "live-run");
         state.addProperty("status", runnerStatus != null ? runnerStatus : "running");
@@ -92,7 +198,15 @@ public final class InteractiveStateBuilder
         {
             final String testClass = (String) context.getTransientData().get("testClass");
             final String testMethod = (String) context.getTransientData().get("testMethod");
-            final String datasetLabel = (String) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL);
+            String datasetLabel = (String) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL);
+            if (datasetLabel == null || datasetLabel.isEmpty())
+            {
+                datasetLabel = (String) context.getTransientData().get("datasetLabel");
+            }
+            if (datasetLabel == null || datasetLabel.isEmpty())
+            {
+                datasetLabel = (String) context.getTransientData().get("datasetId");
+            }
             final String yamlSource = (String) context.getTransientData().get("yamlSource");
             final String playbookFileRaw = (String) context.getTransientData().get("playbookFile");
             final String playbookRecordingFile = (String) context.getTransientData().get("playbookRecordingFile");
@@ -134,6 +248,16 @@ public final class InteractiveStateBuilder
             {
                 state.addProperty("testId", datasetLabel);
                 state.addProperty("datasetId", datasetLabel);
+            }
+
+            String locale = context != null ? (String) context.getTransientData().get("locale") : null;
+            if ((locale == null || locale.isEmpty()) && datasetLabel != null && !datasetLabel.isEmpty())
+            {
+                locale = extractLocaleFromDatasetId(datasetLabel);
+            }
+            if (locale != null && !locale.isEmpty())
+            {
+                state.addProperty("locale", locale);
             }
 
             if (testClass != null)
@@ -218,6 +342,10 @@ public final class InteractiveStateBuilder
             state.addProperty("executionMode", modeStr);
         }
 
+        // Test execution start time
+        final long testStartTimeMs = context != null ? context.getStartTimeMs() : System.currentTimeMillis();
+        state.addProperty("startTime", java.time.Instant.ofEpochMilli(testStartTimeMs).toString());
+
         // Data bindings from SessionData
         if (context != null && context.getSessionData() != null)
         {
@@ -276,7 +404,7 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < beforeSteps.size(); i++)
                 {
                     final PlaybookStep step = beforeSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "before", beforeActive, beforePassed);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "before", beforeActive, beforePassed, execReport);
                     beforeArray.add(stepObj);
                 }
             }
@@ -286,7 +414,7 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < flatSteps.size(); i++)
                 {
                     final PlaybookStep step = flatSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport);
                     stepsArray.add(stepObj);
                 }
             }
@@ -296,7 +424,7 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < afterSteps.size(); i++)
                 {
                     final PlaybookStep step = afterSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "after", afterActive, false);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "after", afterActive, false, execReport);
                     afterArray.add(stepObj);
                 }
             }
@@ -306,6 +434,37 @@ public final class InteractiveStateBuilder
         blocks.add("steps", stepsArray);
         blocks.add("after", afterArray);
         state.add("blocks", blocks);
+
+        // Enrich with TestExecutionReport data if available
+        if (execReport != null)
+        {
+            state.add("metrics", serializeMetrics(execReport.getMetrics()));
+            state.add("llmCalls", serializeLlmCalls(execReport.getLlmCalls()));
+            state.add("screenshots", serializeScreenshots(execReport.getScreenshots()));
+            state.add("warnings", serializeWarnings(execReport.getWarnings()));
+
+            if (execReport.getFailureReason() != null && !execReport.getFailureReason().isBlank())
+            {
+                state.addProperty("error", execReport.getFailureReason());
+                state.addProperty("failureReason", execReport.getFailureReason());
+            }
+            if (execReport.getFailureStackTrace() != null && !execReport.getFailureStackTrace().isBlank())
+            {
+                state.addProperty("failureStackTrace", execReport.getFailureStackTrace());
+            }
+            if (execReport.getVisualRcaExplanation() != null && !execReport.getVisualRcaExplanation().isBlank())
+            {
+                state.addProperty("visualRcaExplanation", execReport.getVisualRcaExplanation());
+            }
+            if (execReport.getDurationMs() > 0)
+            {
+                state.addProperty("duration", execReport.getDurationMs());
+            }
+            if (execReport.getEndTimeMs() > 0)
+            {
+                state.addProperty("endTime", java.time.Instant.ofEpochMilli(execReport.getEndTimeMs()).toString());
+            }
+        }
 
         // Top-level reasoning property for the active step
         String topReasoning = null;
@@ -338,8 +497,8 @@ public final class InteractiveStateBuilder
             state.addProperty("reasoning", topReasoning);
         }
 
-        // Top-level failure error message
-        if ("failed".equalsIgnoreCase(runnerStatus))
+        // Top-level failure error message fallback if not set by execReport
+        if ("failed".equalsIgnoreCase(runnerStatus) && !state.has("error"))
         {
             String failureMessage = null;
             if (context != null)
@@ -375,7 +534,8 @@ public final class InteractiveStateBuilder
         final ExecutionContext context,
         final String source,
         final boolean isCurrentSection,
-        final boolean isPastSection
+        final boolean isPastSection,
+        final TestExecutionReport report
     )
     {
         final JsonObject obj = new JsonObject();
@@ -450,6 +610,26 @@ public final class InteractiveStateBuilder
         };
         obj.addProperty("status", statusStr);
 
+        Long stepStart = step.getStartTimeMs();
+        if (stepStart == null && isCurrentSection && stepIndex == activeStepIndex && context != null)
+        {
+            stepStart = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
+        }
+        if (stepStart != null && stepStart > 0)
+        {
+            obj.addProperty("startTimestamp", java.time.Instant.ofEpochMilli(stepStart).toString());
+        }
+
+        Long stepDuration = step.getDurationMs();
+        if ((stepDuration == null || stepDuration == 0) && stepStart != null && stepStart > 0 && "running".equals(statusStr))
+        {
+            stepDuration = Math.max(0L, System.currentTimeMillis() - stepStart);
+        }
+        if (stepDuration != null)
+        {
+            obj.addProperty("duration", stepDuration);
+        }
+
         if (step.getFailureReason() != null && !step.getFailureReason().isBlank())
         {
             obj.addProperty("error", step.getFailureReason());
@@ -482,11 +662,72 @@ public final class InteractiveStateBuilder
                 }
             }
         }
-        obj.add("actions", actionsArray);
+
+        // Attach details from matching ReportStepEntry if report is available
+        ReportStepEntry reportStep = null;
+        if (report != null && report.getSteps() != null)
+        {
+            for (final ReportStepEntry entry : report.getSteps())
+            {
+                if (entry != null && entry.getStepIndex() == stepIndex)
+                {
+                    reportStep = entry;
+                    break;
+                }
+            }
+        }
+
+        if (reportStep != null)
+        {
+            if (reportStep.getRawInstruction() != null)
+            {
+                obj.addProperty("rawInstruction", reportStep.getRawInstruction());
+            }
+            obj.addProperty("bug", reportStep.isBug());
+            if (reportStep.getBugDetails() != null)
+            {
+                obj.addProperty("bugDetails", reportStep.getBugDetails());
+            }
+            obj.addProperty("optional", reportStep.isOptional());
+            obj.addProperty("continueOnError", reportStep.isContinueOnError());
+            obj.addProperty("noHealing", reportStep.isNoHealing());
+            obj.addProperty("visual", reportStep.isVisual());
+
+            if (!reportStep.getActions().isEmpty())
+            {
+                obj.add("actions", serializeReportActions(reportStep.getActions()));
+            }
+            else
+            {
+                obj.add("actions", actionsArray);
+            }
+
+            if (!reportStep.getScreenshots().isEmpty())
+            {
+                obj.add("screenshots", serializeScreenshots(reportStep.getScreenshots()));
+            }
+            if (!reportStep.getLlmCalls().isEmpty())
+            {
+                obj.add("llmCalls", serializeLlmCalls(reportStep.getLlmCalls()));
+            }
+            obj.add("stats", serializeStepStats(reportStep));
+            if (!reportStep.getSubSteps().isEmpty())
+            {
+                obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
+            }
+        }
+        else
+        {
+            obj.add("actions", actionsArray);
+        }
 
         if (step.getReasoning() != null && !step.getReasoning().isBlank())
         {
             obj.addProperty("reasoning", step.getReasoning());
+        }
+        else if (reportStep != null && reportStep.getReasoning() != null && !reportStep.getReasoning().isBlank())
+        {
+            obj.addProperty("reasoning", reportStep.getReasoning());
         }
         else if (step.getActions() != null && !step.getActions().isEmpty())
         {
@@ -509,5 +750,231 @@ public final class InteractiveStateBuilder
         }
 
         return obj;
+    }
+
+    private static JsonObject serializeMetrics(final ReportMetrics metrics)
+    {
+        final JsonObject obj = new JsonObject();
+        if (metrics == null)
+        {
+            return obj;
+        }
+        obj.addProperty("totalSteps", metrics.getTotalSteps());
+        obj.addProperty("healedSteps", metrics.getHealedSteps());
+        obj.addProperty("failedSteps", metrics.getFailedSteps());
+        obj.addProperty("skippedSteps", metrics.getSkippedSteps());
+        obj.addProperty("totalLlmCalls", metrics.getTotalLlmCalls());
+        obj.addProperty("tokenUsageInput", metrics.getTokenUsageInput());
+        obj.addProperty("tokenUsageOutput", metrics.getTokenUsageOutput());
+        obj.addProperty("tokenUsageCached", metrics.getTokenUsageCached());
+        obj.addProperty("totalTokens", metrics.getTotalTokens());
+        obj.addProperty("estimatedCostUsd", metrics.getEstimatedCostUsd());
+        obj.addProperty("totalReplays", metrics.getTotalReplays());
+        obj.addProperty("internalCacheHits", metrics.getInternalCacheHits());
+        obj.addProperty("totalEscalations", metrics.getTotalEscalations());
+
+        if (metrics.getContextLevelCounts() != null && !metrics.getContextLevelCounts().isEmpty())
+        {
+            final JsonObject ctxLevels = new JsonObject();
+            for (final Map.Entry<String, Integer> entry : metrics.getContextLevelCounts().entrySet())
+            {
+                ctxLevels.addProperty(entry.getKey(), entry.getValue());
+            }
+            obj.add("contextLevelCounts", ctxLevels);
+        }
+
+        final JsonObject categories = new JsonObject();
+        if (metrics.getAction() != null)
+        {
+            categories.add("action", serializeCategoryUsage(metrics.getAction()));
+        }
+        if (metrics.getPesap() != null)
+        {
+            categories.add("pesap", serializeCategoryUsage(metrics.getPesap()));
+        }
+        if (metrics.getJudge() != null)
+        {
+            categories.add("judge", serializeCategoryUsage(metrics.getJudge()));
+        }
+        if (metrics.getVerification() != null)
+        {
+            categories.add("verification", serializeCategoryUsage(metrics.getVerification()));
+        }
+        if (metrics.getVisualRca() != null)
+        {
+            categories.add("visualRca", serializeCategoryUsage(metrics.getVisualRca()));
+        }
+        if (metrics.getTotal() != null)
+        {
+            categories.add("total", serializeCategoryUsage(metrics.getTotal()));
+        }
+        obj.add("categories", categories);
+
+        return obj;
+    }
+
+    private static JsonObject serializeCategoryUsage(final CategoryTokenUsage usage)
+    {
+        final JsonObject obj = new JsonObject();
+        if (usage != null)
+        {
+            obj.addProperty("calls", usage.getCalls());
+            obj.addProperty("inputTokens", usage.getInputTokens());
+            obj.addProperty("outputTokens", usage.getOutputTokens());
+            obj.addProperty("cachedTokens", usage.getCachedTokens());
+            obj.addProperty("estimatedCostUsd", usage.getEstimatedCostUsd());
+        }
+        return obj;
+    }
+
+    private static JsonArray serializeLlmCalls(final List<ReportLlmCallEntry> calls)
+    {
+        final JsonArray arr = new JsonArray();
+        if (calls != null)
+        {
+            for (final ReportLlmCallEntry call : calls)
+            {
+                if (call != null)
+                {
+                    final JsonObject callObj = new JsonObject();
+                    callObj.addProperty("stepIndex", call.getStepIndex());
+                    callObj.addProperty("capability", call.getCapability());
+                    callObj.addProperty("modelName", call.getModelName());
+                    callObj.addProperty("durationMs", call.getDurationMs());
+                    callObj.addProperty("inputTokens", call.getInputTokens());
+                    callObj.addProperty("outputTokens", call.getOutputTokens());
+                    callObj.addProperty("cachedTokens", call.getCachedTokens());
+                    callObj.addProperty("totalTokens", call.getTotalTokens());
+                    callObj.addProperty("estimatedCostUsd", call.getEstimatedCostUsd());
+                    callObj.addProperty("systemPrompt", call.getSystemPrompt());
+                    callObj.addProperty("userPrompt", call.getUserPrompt());
+                    callObj.addProperty("responseContent", call.getResponseContent());
+                    arr.add(callObj);
+                }
+            }
+        }
+        return arr;
+    }
+
+    private static JsonArray serializeScreenshots(final List<ReportScreenshotEntry> screenshots)
+    {
+        final JsonArray arr = new JsonArray();
+        if (screenshots != null)
+        {
+            for (final ReportScreenshotEntry screenshot : screenshots)
+            {
+                if (screenshot != null)
+                {
+                    final JsonObject scObj = new JsonObject();
+                    scObj.addProperty("label", screenshot.getName());
+                    scObj.addProperty("name", screenshot.getName());
+                    scObj.addProperty("stepIndex", screenshot.getStepIndex());
+                    scObj.addProperty("mediaType", screenshot.getMediaType());
+                    scObj.addProperty("base64Data", screenshot.getBase64Data());
+                    scObj.addProperty("timestamp", screenshot.getTimestamp());
+                    arr.add(scObj);
+                }
+            }
+        }
+        return arr;
+    }
+
+    private static JsonArray serializeWarnings(final List<String> warnings)
+    {
+        final JsonArray arr = new JsonArray();
+        if (warnings != null)
+        {
+            for (final String warning : warnings)
+            {
+                if (warning != null)
+                {
+                    arr.add(warning);
+                }
+            }
+        }
+        return arr;
+    }
+
+    private static JsonArray serializeReportActions(final List<ReportActionEntry> actions)
+    {
+        final JsonArray arr = new JsonArray();
+        if (actions != null)
+        {
+            for (final ReportActionEntry action : actions)
+            {
+                if (action != null)
+                {
+                    final JsonObject actObj = new JsonObject();
+                    actObj.addProperty("type", action.getType() != null ? action.getType() : "");
+                    actObj.addProperty("target", action.getTarget() != null ? action.getTarget() : "");
+                    actObj.addProperty("value", action.getValue() != null ? action.getValue() : "");
+                    actObj.addProperty("description", action.getDescription() != null ? action.getDescription() : "");
+                    actObj.addProperty("reasoning", action.getReasoning() != null ? action.getReasoning() : "");
+                    actObj.addProperty("success", action.isSuccess());
+                    arr.add(actObj);
+                }
+            }
+        }
+        return arr;
+    }
+
+    private static JsonObject serializeStepStats(final ReportStepEntry step)
+    {
+        final JsonObject obj = new JsonObject();
+        if (step != null)
+        {
+            obj.addProperty("escalations", step.getEscalations());
+            obj.addProperty("contextLevels", step.getContextLevels());
+            obj.addProperty("pesapCalls", step.getPesapCalls());
+            obj.addProperty("pesapInputTokens", step.getPesapInputTokens());
+            obj.addProperty("pesapOutputTokens", step.getPesapOutputTokens());
+            obj.addProperty("pesapCachedTokens", step.getPesapCachedTokens());
+            obj.addProperty("standardCalls", step.getStandardCalls());
+            obj.addProperty("standardInputTokens", step.getStandardInputTokens());
+            obj.addProperty("standardOutputTokens", step.getStandardOutputTokens());
+            obj.addProperty("standardCachedTokens", step.getStandardCachedTokens());
+        }
+        return obj;
+    }
+
+    private static JsonArray serializeSubSteps(final List<ReportStepEntry> subSteps)
+    {
+        final JsonArray arr = new JsonArray();
+        if (subSteps != null)
+        {
+            for (final ReportStepEntry sub : subSteps)
+            {
+                if (sub != null)
+                {
+                    final JsonObject subObj = new JsonObject();
+                    subObj.addProperty("stepIndex", sub.getStepIndex());
+                    subObj.addProperty("instruction", sub.getInstruction() != null ? sub.getInstruction() : "");
+                    subObj.addProperty("rawInstruction", sub.getRawInstruction());
+                    subObj.addProperty("status", sub.getStatus());
+                    subObj.addProperty("startTimeMs", sub.getStartTimeMs());
+                    subObj.addProperty("durationMs", sub.getDurationMs());
+                    subObj.addProperty("reasoning", sub.getReasoning());
+                    subObj.addProperty("failureReason", sub.getFailureReason());
+                    if (!sub.getActions().isEmpty())
+                    {
+                        subObj.add("actions", serializeReportActions(sub.getActions()));
+                    }
+                    if (!sub.getScreenshots().isEmpty())
+                    {
+                        subObj.add("screenshots", serializeScreenshots(sub.getScreenshots()));
+                    }
+                    if (!sub.getLlmCalls().isEmpty())
+                    {
+                        subObj.add("llmCalls", serializeLlmCalls(sub.getLlmCalls()));
+                    }
+                    if (!sub.getSubSteps().isEmpty())
+                    {
+                        subObj.add("subSteps", serializeSubSteps(sub.getSubSteps()));
+                    }
+                    arr.add(subObj);
+                }
+            }
+        }
+        return arr;
     }
 }

@@ -20,6 +20,7 @@ package com.xceptance.neodymium.ai.console;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -223,5 +224,47 @@ public class InteractiveConsoleEngineTest
         assertTrue(stateJson.contains("\"executionMode\":\"REPLAY_WITH_HEALING\""), "Top-level state JSON should contain executionMode");
         assertTrue(stateJson.contains("\"origin\":\"PLAYBOOK\""), "Replayed step origin should be PLAYBOOK");
         assertTrue(stateJson.contains("\"origin\":\"HEALED\""), "Healed step origin should be HEALED");
+    }
+
+    @Test
+    public void testBuildStateJsonSerializesStartTimesAndStepDuration()
+    {
+        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep();
+        step.setInstruction("Timed step");
+        step.setStartTimeMs(1787140134811L);
+        step.setDurationMs(1250L);
+        step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+
+        context.getTransientData().put("playbook.flatSteps", java.util.List.of(step));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-timestamps", 0, "running");
+
+        assertTrue(stateJson.contains("\"startTime\":"), "Top-level state JSON should contain startTime");
+        assertTrue(stateJson.contains("\"startTimestamp\":"), "Step JSON should contain startTimestamp");
+        assertTrue(stateJson.contains("\"duration\":1250"), "Step JSON should contain duration");
+    }
+
+    @Test
+    public void testExtractLocaleFromDatasetId()
+    {
+        assertEquals("DE", InteractiveStateBuilder.extractLocaleFromDatasetId("homepage test DE"));
+        assertEquals("deu", InteractiveStateBuilder.extractLocaleFromDatasetId("guest checkout deu"));
+        assertEquals("en_US", InteractiveStateBuilder.extractLocaleFromDatasetId("checkout_en_US"));
+        assertEquals("FR", InteractiveStateBuilder.extractLocaleFromDatasetId("search_test_FR"));
+        assertEquals("uk", InteractiveStateBuilder.extractLocaleFromDatasetId("test.uk"));
+        assertNull(InteractiveStateBuilder.extractLocaleFromDatasetId("wikipedia_search_example_1"));
+    }
+
+    @Test
+    public void testBuildStateJsonSerializesLocale()
+    {
+        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+        context.getTransientData().put("datasetLabel", "homepage test DE");
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-locale", 0, "running");
+
+        assertTrue(stateJson.contains("\"locale\":\"DE\""), "Top-level state JSON should contain guessed locale 'DE'");
     }
 }

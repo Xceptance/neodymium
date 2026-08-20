@@ -173,4 +173,116 @@ public final class RunReportDto
             .sorted()
             .collect(Collectors.toList());
     }
+
+    public int getHealedCount()
+    {
+        return fixedCount;
+    }
+
+    public int getFailCount()
+    {
+        return knownCount + unknownCount;
+    }
+
+    public long getTotalDurationMs()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return 0L;
+        }
+
+        long minStartMs = Long.MAX_VALUE;
+        long maxStartMs = Long.MIN_VALUE;
+        TestExecutionDto latestExec = null;
+
+        for (final TestExecutionDto exec : executions)
+        {
+            final long startMs = exec.getTimestampMs();
+            if (startMs < minStartMs)
+            {
+                minStartMs = startMs;
+            }
+            if (startMs >= maxStartMs)
+            {
+                maxStartMs = startMs;
+                latestExec = exec;
+            }
+        }
+
+        if (latestExec == null)
+        {
+            return 0L;
+        }
+
+        return (maxStartMs - minStartMs) + latestExec.getDurationMs();
+    }
+
+    public String getTotalDurationFormatted()
+    {
+        final long totalMs = getTotalDurationMs();
+        if (totalMs <= 0)
+        {
+            return duration != null ? duration : "0s";
+        }
+        final long seconds = totalMs / 1000;
+        final long minutes = seconds / 60;
+        final double remSec = (totalMs % 60000) / 1000.0;
+        if (minutes > 0)
+        {
+            return String.format("%dm %.1fs", minutes, remSec);
+        }
+        return String.format("%.1fs", remSec);
+    }
+
+    public double getTotalLlmCost()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return 0.0;
+        }
+        return executions.stream().mapToDouble(TestExecutionDto::getLlmCost).sum();
+    }
+
+    public String getTotalLlmCostFormatted()
+    {
+        final double roundedUp = Math.ceil(getTotalLlmCost() * 10000.0) / 10000.0;
+        return String.format("$%.4f", roundedUp);
+    }
+
+    public int getTotalLlmCalls()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return 0;
+        }
+        return executions.stream().mapToInt(TestExecutionDto::getLlmCallsCount).sum();
+    }
+
+    public long getTotalLlmTokens()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return 0L;
+        }
+        return executions.stream().mapToLong(TestExecutionDto::getLlmTotalTokens).sum();
+    }
+
+    public String getTotalLlmTokensFormatted()
+    {
+        return String.format("%,d", getTotalLlmTokens());
+    }
+
+    public List<String> getFilterModes()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return List.of();
+        }
+        return executions.stream()
+            .map(TestExecutionDto::getExecutionMode)
+            .filter(m -> m != null && !m.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+    }
 }

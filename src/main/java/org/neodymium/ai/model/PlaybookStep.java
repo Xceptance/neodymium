@@ -162,6 +162,11 @@ public final class PlaybookStep
     private Long durationMs;
 
     /**
+     * The timestamp in milliseconds when step execution started.
+     */
+    private Long startTimeMs;
+
+    /**
      * The recorded pre-step delay in milliseconds.
      */
     private Long delayMs;
@@ -877,6 +882,36 @@ public final class PlaybookStep
     public void setDurationMs(final long durationMs)
     {
         this.durationMs = durationMs;
+    }
+
+    /**
+     * Returns the timestamp in milliseconds when step execution started.
+     *
+     * @return the start timestamp in milliseconds, or {@code null} if not recorded
+     */
+    public Long getStartTimeMs()
+    {
+        return this.startTimeMs;
+    }
+
+    /**
+     * Sets the timestamp in milliseconds when step execution started.
+     *
+     * @param startTimeMs the start timestamp in milliseconds
+     */
+    public void setStartTimeMs(final Long startTimeMs)
+    {
+        this.startTimeMs = startTimeMs;
+    }
+
+    /**
+     * Sets the timestamp in milliseconds when step execution started.
+     *
+     * @param startTimeMs the start timestamp in milliseconds
+     */
+    public void setStartTimeMs(final long startTimeMs)
+    {
+        this.startTimeMs = startTimeMs;
     }
 
     /**

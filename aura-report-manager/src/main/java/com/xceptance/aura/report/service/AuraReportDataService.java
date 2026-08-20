@@ -154,9 +154,34 @@ public class AuraReportDataService
 
                 final double overallPassRate = totalExecuted > 0 ? ((double) totalPassed / totalExecuted * 100.0) : (latestRun.getPassRate() != null ? latestRun.getPassRate() : 0.0);
                 passRateText = String.format("%.0f%% Pass", overallPassRate);
+
+                try
+                {
+                    final RunReportDto latestReport = getRunReport(latestRunId);
+                    if (latestReport != null && latestReport.getExecutions() != null)
+                    {
+                        for (final TestExecutionDto exec : latestReport.getExecutions())
+                        {
+                            if (exec.getBugs() != null)
+                            {
+                                for (final String bug : exec.getBugs())
+                                {
+                                    if (bug != null && !bug.trim().isEmpty())
+                                    {
+                                        activeBatchBugs.add(bug.trim());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOG.error("Failed to calculate active batch bugs for runId {}: {}", latestRunId, e.getMessage());
+                }
             }
 
-            final int batchBugCount = activeBatchBugs.size();
+            final int batchBugCount = !activeBatchBugs.isEmpty() ? activeBatchBugs.size() : latestKnown;
             final String activeBugsText = batchBugCount + " Active Bug" + (batchBugCount != 1 ? "s" : "");
 
             batches.add(new BatchSummaryDto(
@@ -465,12 +490,21 @@ public class AuraReportDataService
         for (final TestExecutionDto exec : rawExecutions)
         {
             final String varId = generateVariationId(exec.getTestClass(), exec.getTitle(), exec.getLocation(), exec.getBrowser());
-            final List<String> bugTickets = bugRepository.findByVariationIdAndEnvironmentIn(varId, List.of(runEnv, "ALL")).stream()
+            final List<String> dbBugTickets = bugRepository.findByVariationIdAndEnvironmentIn(varId, List.of(runEnv, "ALL")).stream()
                 .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(effectiveRunId, b.getLinkedRunId()))
                           && (b.getRemovedRunId() == null || !isRunAtOrAfter(effectiveRunId, b.getRemovedRunId())))
                 .map(TestBaseBugEntity::getBugTicket)
                 .distinct()
                 .collect(Collectors.toList());
+
+            final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
+            if (exec.getBugs() != null)
+            {
+                combinedBugs.addAll(exec.getBugs());
+            }
+            combinedBugs.addAll(dbBugTickets);
+
+            final List<String> bugTickets = new ArrayList<>(combinedBugs);
             exec.setBugs(bugTickets);
 
             final boolean hasBugs = !bugTickets.isEmpty();

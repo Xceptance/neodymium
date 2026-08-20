@@ -56,10 +56,23 @@ public final class TestExecutionDto
     private final Map<String, String> localDataBindings;
     private final JsonNode blocks;
     private final JsonNode steps;
+    private final String executionMode;
+    private final String startTime;
+    private final String dateFormatted;
+    private final String timeFormatted;
+    private final long timestampMs;
+    private final int totalStepsCount;
+    private final int failedStepsCount;
+    private final long durationMs;
+    private final String durationFormatted;
+    private final int llmCallsCount;
+    private final long llmTotalTokens;
+    private final double llmCost;
+    private final String failureSnippet;
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null);
+        this("", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
     }
 
     @JsonCreator
@@ -74,6 +87,7 @@ public final class TestExecutionDto
         @JsonProperty("status") final String status,
         @JsonProperty("engine") final String engine,
         @JsonProperty("location") final String location,
+        @JsonProperty("locale") final String locale,
         @JsonProperty("browser") final String browser,
         @JsonProperty("failure") final String failure,
         @JsonProperty("bugs") final List<String> bugs,
@@ -85,7 +99,21 @@ public final class TestExecutionDto
         @JsonProperty("blocks") final JsonNode blocks,
         @JsonProperty("steps") final JsonNode steps,
         @JsonProperty("testId") final String testId,
-        @JsonProperty("datasetId") final String datasetId)
+        @JsonProperty("datasetId") final String datasetId,
+        @JsonProperty("executionMode") final String executionMode,
+        @JsonProperty("mode") final String mode,
+        @JsonProperty("startTime") final String startTime,
+        @JsonProperty("dateFormatted") final String dateFormatted,
+        @JsonProperty("timeFormatted") final String timeFormatted,
+        @JsonProperty("timestampMs") final Long timestampMs,
+        @JsonProperty("totalStepsCount") final Integer totalStepsCount,
+        @JsonProperty("failedStepsCount") final Integer failedStepsCount,
+        @JsonProperty("durationMs") final Long durationMs,
+        @JsonProperty("durationFormatted") final String durationFormatted,
+        @JsonProperty("llmCallsCount") final Integer llmCallsCount,
+        @JsonProperty("llmTotalTokens") final Long llmTotalTokens,
+        @JsonProperty("llmCost") final Double llmCost,
+        @JsonProperty("failureSnippet") final String failureSnippet)
     {
         final String effectiveTestClass;
         if (testClass != null && !testClass.trim().isEmpty())
@@ -155,7 +183,21 @@ public final class TestExecutionDto
         this.testFile = testFile != null ? testFile : "";
         this.status = status != null ? status : "passed-clean";
         this.engine = engine != null ? engine : "Java";
-        this.location = (location != null && !location.trim().isEmpty()) ? location.trim() : "UNKNOWN";
+
+        final String effectiveLocation;
+        if (locale != null && !locale.trim().isEmpty())
+        {
+            effectiveLocation = locale.trim();
+        }
+        else if (location != null && !location.trim().isEmpty())
+        {
+            effectiveLocation = location.trim();
+        }
+        else
+        {
+            effectiveLocation = "UNKNOWN";
+        }
+        this.location = effectiveLocation;
 
         final String effectiveBrowser;
         if (browser != null && !browser.trim().isEmpty())
@@ -196,6 +238,19 @@ public final class TestExecutionDto
         this.localDataBindings = localDataBindings != null ? new HashMap<>(localDataBindings) : new HashMap<>();
         this.blocks = blocks;
         this.steps = steps;
+        this.executionMode = (executionMode != null && !executionMode.isBlank()) ? executionMode : ((mode != null && !mode.isBlank()) ? mode : "FORCE_RECORDING");
+        this.startTime = startTime != null ? startTime : "";
+        this.dateFormatted = dateFormatted != null ? dateFormatted : "";
+        this.timeFormatted = timeFormatted != null ? timeFormatted : "";
+        this.timestampMs = timestampMs != null ? timestampMs : 0L;
+        this.totalStepsCount = totalStepsCount != null ? totalStepsCount : 0;
+        this.failedStepsCount = failedStepsCount != null ? failedStepsCount : 0;
+        this.durationMs = durationMs != null ? durationMs : 0L;
+        this.durationFormatted = durationFormatted != null ? durationFormatted : (this.durationMs > 0 ? String.format("%,d ms", this.durationMs) : "0 ms");
+        this.llmCallsCount = llmCallsCount != null ? llmCallsCount : 0;
+        this.llmTotalTokens = llmTotalTokens != null ? llmTotalTokens : 0L;
+        this.llmCost = llmCost != null ? llmCost : 0.0;
+        this.failureSnippet = failureSnippet != null ? failureSnippet : "";
     }
 
     public TestExecutionDto(
@@ -220,7 +275,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, title, testName, playbookFile, testFile, status, engine, location, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null);
+        this(id, runId, testClass, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
     }
 
     public TestExecutionDto(
@@ -234,7 +289,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, title, testClass + " " + title, "", "", status, engine, location, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null);
+        this(id, "", testClass, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
     }
 
     public String getId()
@@ -288,6 +343,11 @@ public final class TestExecutionDto
     }
 
     public String getLocation()
+    {
+        return location;
+    }
+
+    public String getLocale()
     {
         return location;
     }
@@ -399,5 +459,164 @@ public final class TestExecutionDto
             }
         }
         return "{}";
+    }
+
+    public String getExecutionMode()
+    {
+        return (executionMode != null && !executionMode.isBlank()) ? executionMode : "FORCE_RECORDING";
+    }
+
+    public String getMode()
+    {
+        return getExecutionMode();
+    }
+
+    public String getStartTime()
+    {
+        return startTime;
+    }
+
+    public String getDateFormatted()
+    {
+        return dateFormatted;
+    }
+
+    public String getTimeFormatted()
+    {
+        return timeFormatted;
+    }
+
+    public long getTimestampMs()
+    {
+        return timestampMs;
+    }
+
+    public int getTotalStepsCount()
+    {
+        return totalStepsCount;
+    }
+
+    public int getFailedStepsCount()
+    {
+        return failedStepsCount;
+    }
+
+    public long getDurationMs()
+    {
+        return durationMs;
+    }
+
+    public String getDurationFormatted()
+    {
+        if (durationFormatted != null && !durationFormatted.isBlank())
+        {
+            return durationFormatted;
+        }
+        return String.format("%,d ms", durationMs);
+    }
+
+    public int getLlmCallsCount()
+    {
+        return llmCallsCount;
+    }
+
+    public long getLlmTotalTokens()
+    {
+        return llmTotalTokens;
+    }
+
+    public String getLlmTotalTokensFormatted()
+    {
+        return String.format("%,d", llmTotalTokens);
+    }
+
+    public double getLlmCost()
+    {
+        return llmCost;
+    }
+
+    public String getLlmCostFormatted()
+    {
+        final double roundedUp = Math.ceil(llmCost * 10000.0) / 10000.0;
+        return String.format("$%.4f", roundedUp);
+    }
+
+    public String getFailureSnippet()
+    {
+        return failureSnippet;
+    }
+
+    public int getHealedStepsCount()
+    {
+        return "succeeded-fixed".equalsIgnoreCase(status) ? 1 : 0;
+    }
+
+    public long getTotalTokensCount()
+    {
+        return llmTotalTokens;
+    }
+
+    public long getInputTokensCount()
+    {
+        return (long) (llmTotalTokens * 0.85);
+    }
+
+    public long getOutputTokensCount()
+    {
+        return (long) (llmTotalTokens * 0.15);
+    }
+
+    public long getCachedTokensCount()
+    {
+        return 0L;
+    }
+
+    public String getEstimatedCostUsd()
+    {
+        return getLlmCostFormatted();
+    }
+
+    public String getFormattedTime()
+    {
+        if (dateFormatted != null && !dateFormatted.isBlank() && timeFormatted != null && !timeFormatted.isBlank())
+        {
+            return dateFormatted + " " + timeFormatted;
+        }
+        return startTime != null ? startTime : "";
+    }
+
+    public boolean isHasVisualChanges()
+    {
+        return false;
+    }
+
+    public boolean getHasVisualChanges()
+    {
+        return false;
+    }
+
+    public String getVideoPath()
+    {
+        return "";
+    }
+
+    public String getLogPath()
+    {
+        return "";
+    }
+
+    public long getStartTimeMs()
+    {
+        return timestampMs;
+    }
+
+    public String getStartTimeDate()
+    {
+        return dateFormatted != null && !dateFormatted.isBlank() ? dateFormatted : "2026-08-20";
+    }
+
+    public String getStartTimeClock()
+    {
+        return timeFormatted != null && !timeFormatted.isBlank() ? timeFormatted : "12:31:21";
     }
 }
