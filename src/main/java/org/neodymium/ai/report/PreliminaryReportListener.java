@@ -310,6 +310,26 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setFailureReason(pbStep.getFailureReason());
                     }
+                    if (pbStep.getSsimScore() != null)
+                    {
+                        targetStep.setSsimScore(pbStep.getSsimScore());
+                    }
+                    if (pbStep.getSsimMinScore() != null)
+                    {
+                        targetStep.setSsimMinScore(pbStep.getSsimMinScore());
+                    }
+                    if (pbStep.getBaselineMatrixPng() != null)
+                    {
+                        targetStep.setBaselineMatrixPng(pbStep.getBaselineMatrixPng());
+                    }
+                    if (pbStep.getReplayMatrixPng() != null)
+                    {
+                        targetStep.setReplayMatrixPng(pbStep.getReplayMatrixPng());
+                    }
+                    if (pbStep.getScreenshotHashDim() != null)
+                    {
+                        targetStep.setScreenshotHashDim(pbStep.getScreenshotHashDim());
+                    }
                 }
             }
         }

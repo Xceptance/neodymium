@@ -23,7 +23,9 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
  * Represents a single logical instruction/step within a Playbook.
@@ -110,6 +112,36 @@ public final class PlaybookStep
      * The perceptual screenshot hash (dHash) of the page visual state.
      */
     private String screenshotHash;
+
+    /**
+     * The matrix dimension for the perceptual SSIM screenshot hash (e.g. 128 for 128x128 full-page or 64 for 64x64 tile/legacy).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer screenshotHashDim;
+
+    /**
+     * Evaluated SSIM score against baseline during replay.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Double ssimScore;
+
+    /**
+     * Minimum required SSIM score for visual gate pass.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Double ssimMinScore;
+
+    /**
+     * PNG data URI of the recorded baseline SSIM luminance matrix.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String baselineMatrixPng;
+
+    /**
+     * PNG data URI of the live replay SSIM luminance matrix.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String replayMatrixPng;
 
     /**
      * The line number in the source file where this step is defined.
@@ -720,6 +752,106 @@ public final class PlaybookStep
     }
 
     /**
+     * Returns the matrix dimension of the perceptual screenshot hash (e.g. 128 for 128x128, 64 for 64x64).
+     *
+     * @return the matrix dimension or null if unrecorded
+     */
+    public Integer getScreenshotHashDim()
+    {
+        return this.screenshotHashDim;
+    }
+
+    /**
+     * Sets the matrix dimension of the perceptual screenshot hash.
+     *
+     * @param screenshotHashDim the matrix dimension (e.g. 128 or 64)
+     */
+    public void setScreenshotHashDim(final Integer screenshotHashDim)
+    {
+        this.screenshotHashDim = screenshotHashDim;
+    }
+
+    /**
+     * Returns the evaluated SSIM score during replay.
+     *
+     * @return the SSIM score or null
+     */
+    public Double getSsimScore()
+    {
+        return this.ssimScore;
+    }
+
+    /**
+     * Sets the evaluated SSIM score during replay.
+     *
+     * @param ssimScore the SSIM score
+     */
+    public void setSsimScore(final Double ssimScore)
+    {
+        this.ssimScore = ssimScore;
+    }
+
+    /**
+     * Returns the minimum required SSIM score for this step.
+     *
+     * @return the minimum required SSIM score or null
+     */
+    public Double getSsimMinScore()
+    {
+        return this.ssimMinScore;
+    }
+
+    /**
+     * Sets the minimum required SSIM score for this step.
+     *
+     * @param ssimMinScore the minimum required SSIM score
+     */
+    public void setSsimMinScore(final Double ssimMinScore)
+    {
+        this.ssimMinScore = ssimMinScore;
+    }
+
+    /**
+     * Returns the PNG data URI of the recorded baseline SSIM luminance matrix.
+     *
+     * @return the baseline matrix PNG data URI or null
+     */
+    public String getBaselineMatrixPng()
+    {
+        return this.baselineMatrixPng;
+    }
+
+    /**
+     * Sets the PNG data URI of the recorded baseline SSIM luminance matrix.
+     *
+     * @param baselineMatrixPng the baseline matrix PNG data URI
+     */
+    public void setBaselineMatrixPng(final String baselineMatrixPng)
+    {
+        this.baselineMatrixPng = baselineMatrixPng;
+    }
+
+    /**
+     * Returns the PNG data URI of the live replay SSIM luminance matrix.
+     *
+     * @return the replay matrix PNG data URI or null
+     */
+    public String getReplayMatrixPng()
+    {
+        return this.replayMatrixPng;
+    }
+
+    /**
+     * Sets the PNG data URI of the live replay SSIM luminance matrix.
+     *
+     * @param replayMatrixPng the replay matrix PNG data URI
+     */
+    public void setReplayMatrixPng(final String replayMatrixPng)
+    {
+        this.replayMatrixPng = replayMatrixPng;
+    }
+
+    /**
      * Sets the screenshot hash (dHash) recorded for this step.
      *
      * @param screenshotHash the screenshot hash hex string to set
@@ -727,6 +859,14 @@ public final class PlaybookStep
     public void setScreenshotHash(final String screenshotHash)
     {
         this.screenshotHash = screenshotHash;
+        if (this.screenshotHash != null && !this.screenshotHash.isBlank() && this.screenshotHashDim == null)
+        {
+            final int inferredDim = ScreenshotHasher.getMatrixDimension(screenshotHash);
+            if (inferredDim > 0)
+            {
+                this.screenshotHashDim = inferredDim;
+            }
+        }
     }
 
     /**

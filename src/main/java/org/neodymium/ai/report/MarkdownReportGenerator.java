@@ -267,6 +267,15 @@ public final class MarkdownReportGenerator
         {
             sb.append("- **Visual Step:** `📸 true`\n");
         }
+        if (step.getSsimScore() != null)
+        {
+            final double score = step.getSsimScore();
+            final double min = step.getSsimMinScore() != null ? step.getSsimMinScore() : 0.99;
+            sb.append("- **Visual SSIM Score:** `").append(String.format("%.4f", score))
+                .append("` (Min Threshold: `").append(String.format("%.2f", min)).append("`")
+                .append(step.getScreenshotHashDim() != null ? ", Dim: `" + step.getScreenshotHashDim() + "x" + step.getScreenshotHashDim() + "`" : "")
+                .append(")\n");
+        }
         if (!step.getScreenshots().isEmpty())
         {
             sb.append("- **Screenshots Captured:** ").append(step.getScreenshots().size()).append(" screenshot(s)\n");

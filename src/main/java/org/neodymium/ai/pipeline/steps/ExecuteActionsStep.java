@@ -991,6 +991,14 @@ public final class ExecuteActionsStep implements PipelineStep
             final boolean isBypassed = visualBaselineGateStep.executeGate(contextState);
             if (isBypassed)
             {
+                step.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                contextState.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
+
+                step.setStatus(PlaybookStepStatus.SUCCESS);
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+                }
                 return;
             }
 

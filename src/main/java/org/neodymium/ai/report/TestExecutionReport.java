@@ -309,6 +309,11 @@ public final class TestExecutionReport
         private boolean continueOnError;
         private boolean noHealing;
         private boolean visual;
+        private Double ssimScore;
+        private Double ssimMinScore;
+        private String baselineMatrixPng;
+        private String replayMatrixPng;
+        private Integer screenshotHashDim;
 
         public ReportStepEntry()
         {
@@ -638,6 +643,56 @@ public final class TestExecutionReport
         public void setVisual(final boolean visual)
         {
             this.visual = visual;
+        }
+
+        public Double getSsimScore()
+        {
+            return this.ssimScore;
+        }
+
+        public void setSsimScore(final Double ssimScore)
+        {
+            this.ssimScore = ssimScore;
+        }
+
+        public Double getSsimMinScore()
+        {
+            return this.ssimMinScore;
+        }
+
+        public void setSsimMinScore(final Double ssimMinScore)
+        {
+            this.ssimMinScore = ssimMinScore;
+        }
+
+        public String getBaselineMatrixPng()
+        {
+            return this.baselineMatrixPng;
+        }
+
+        public void setBaselineMatrixPng(final String baselineMatrixPng)
+        {
+            this.baselineMatrixPng = baselineMatrixPng;
+        }
+
+        public String getReplayMatrixPng()
+        {
+            return this.replayMatrixPng;
+        }
+
+        public void setReplayMatrixPng(final String replayMatrixPng)
+        {
+            this.replayMatrixPng = replayMatrixPng;
+        }
+
+        public Integer getScreenshotHashDim()
+        {
+            return this.screenshotHashDim;
+        }
+
+        public void setScreenshotHashDim(final Integer screenshotHashDim)
+        {
+            this.screenshotHashDim = screenshotHashDim;
         }
     }
 

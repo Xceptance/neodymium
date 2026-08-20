@@ -46,11 +46,61 @@ public final class ScreenshotHasher
 
 
     /**
-     * Computes a 64x64 luminance matrix (4,096 bytes) for a Base64-encoded PNG screenshot,
-     * downscaled using bilinear interpolation, and encoded as a Base64 string.
+     * Default matrix dimension for full-page and viewport perceptual SSIM luminance matrices (128x128 = 16,384 bytes).
+     */
+    public static final int DEFAULT_SSIM_MATRIX_DIM = 128;
+
+    /**
+     * Tile matrix dimension for coordinate click perceptual SSIM luminance matrices (64x64 = 4,096 bytes).
+     */
+    public static final int TILE_SSIM_MATRIX_DIM = 64;
+
+    /**
+     * Progressively downsamples an image to the target dimension using multi-pass half-stepping
+     * to eliminate single-pass point-sampling aliasing on high-contrast text and UI elements.
+     *
+     * @param image the source BufferedImage
+     * @param targetDim the target square dimension (e.g. 128 or 64)
+     * @return a grayscale BufferedImage of size targetDim x targetDim
+     */
+    public static BufferedImage downsampleProgressive(final BufferedImage image, final int targetDim)
+    {
+        if (image == null)
+        {
+            return null;
+        }
+
+        BufferedImage current = image;
+        int w = image.getWidth();
+        int h = image.getHeight();
+
+        while (w > targetDim * 2 || h > targetDim * 2)
+        {
+            w = Math.max(targetDim, w / 2);
+            h = Math.max(targetDim, h / 2);
+            final BufferedImage step = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
+            final Graphics2D g = step.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(current, 0, 0, w, h, null);
+            g.dispose();
+            current = step;
+        }
+
+        final BufferedImage finalImg = new BufferedImage(targetDim, targetDim, BufferedImage.TYPE_BYTE_GRAY);
+        final Graphics2D g = finalImg.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(current, 0, 0, targetDim, targetDim, null);
+        g.dispose();
+
+        return finalImg;
+    }
+
+    /**
+     * Computes a 128x128 luminance matrix (16,384 bytes) for a Base64-encoded PNG screenshot,
+     * downscaled using progressive multi-pass bilinear half-stepping, and encoded as a Base64 string.
      *
      * @param base64Png the Base64-encoded PNG screenshot string
-     * @return the Base64-encoded 64x64 luminance matrix, or {@code null} if input is invalid
+     * @return the Base64-encoded 128x128 luminance matrix, or {@code null} if input is invalid
      */
     public static String computeSsimMatrix(final String base64Png)
     {
@@ -70,18 +120,17 @@ public final class ScreenshotHasher
                     return null;
                 }
 
-                final int matrixDim = 64;
-                final BufferedImage resized = new BufferedImage(matrixDim, matrixDim, BufferedImage.TYPE_BYTE_GRAY);
-                final Graphics2D g = resized.createGraphics();
-                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                g.drawImage(image, 0, 0, matrixDim, matrixDim, null);
-                g.dispose();
-
-                final byte[] matrixBytes = new byte[matrixDim * matrixDim];
-                int idx = 0;
-                for (int y = 0; y < matrixDim; y++)
+                final BufferedImage resized = downsampleProgressive(image, DEFAULT_SSIM_MATRIX_DIM);
+                if (resized == null)
                 {
-                    for (int x = 0; x < matrixDim; x++)
+                    return null;
+                }
+
+                final byte[] matrixBytes = new byte[DEFAULT_SSIM_MATRIX_DIM * DEFAULT_SSIM_MATRIX_DIM];
+                int idx = 0;
+                for (int y = 0; y < DEFAULT_SSIM_MATRIX_DIM; y++)
+                {
+                    for (int x = 0; x < DEFAULT_SSIM_MATRIX_DIM; x++)
                     {
                         matrixBytes[idx++] = (byte) (resized.getRaster().getSample(x, y, 0) & 0xFF);
                     }
@@ -131,19 +180,17 @@ public final class ScreenshotHasher
                 final int cropH = Math.max(1, Math.min(imgH - cropY, radius * 2));
 
                 final BufferedImage subImage = image.getSubimage(cropX, cropY, cropW, cropH);
-
-                final int matrixDim = 64;
-                final BufferedImage resized = new BufferedImage(matrixDim, matrixDim, BufferedImage.TYPE_BYTE_GRAY);
-                final Graphics2D g = resized.createGraphics();
-                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                g.drawImage(subImage, 0, 0, matrixDim, matrixDim, null);
-                g.dispose();
-
-                final byte[] matrixBytes = new byte[matrixDim * matrixDim];
-                int idx = 0;
-                for (int ty = 0; ty < matrixDim; ty++)
+                final BufferedImage resized = downsampleProgressive(subImage, TILE_SSIM_MATRIX_DIM);
+                if (resized == null)
                 {
-                    for (int tx = 0; tx < matrixDim; tx++)
+                    return null;
+                }
+
+                final byte[] matrixBytes = new byte[TILE_SSIM_MATRIX_DIM * TILE_SSIM_MATRIX_DIM];
+                int idx = 0;
+                for (int ty = 0; ty < TILE_SSIM_MATRIX_DIM; ty++)
+                {
+                    for (int tx = 0; tx < TILE_SSIM_MATRIX_DIM; tx++)
                     {
                         matrixBytes[idx++] = (byte) (resized.getRaster().getSample(tx, ty, 0) & 0xFF);
                     }
@@ -159,7 +206,74 @@ public final class ScreenshotHasher
     }
 
     /**
-     * Calculates the Mean SSIM score (0.0 to 1.0) between two Base64-encoded 64x64 luminance matrices.
+     * Determines the square dimension (e.g. 128 or 64) of a Base64-encoded SSIM luminance matrix.
+     *
+     * @param base64Matrix the Base64-encoded luminance matrix string
+     * @return the square matrix dimension, or 0 if invalid
+     */
+    public static int getMatrixDimension(final String base64Matrix)
+    {
+        if (base64Matrix == null || base64Matrix.isBlank())
+        {
+            return 0;
+        }
+
+        try
+        {
+            final byte[] bytes = Base64.getDecoder().decode(base64Matrix);
+            final int len = bytes.length;
+            final int dim = (int) Math.sqrt(len);
+            return (dim * dim == len) ? dim : 0;
+        }
+        catch (final Exception e)
+        {
+            return 0;
+        }
+    }
+
+    /**
+     * Converts a Base64-encoded SSIM luminance matrix into a viewable PNG data URI (e.g. data:image/png;base64,...).
+     *
+     * @param base64Matrix the Base64-encoded luminance matrix
+     * @return the PNG data URI string, or {@code null} if invalid
+     */
+    public static String matrixToDataUri(final String base64Matrix)
+    {
+        if (base64Matrix == null || base64Matrix.isBlank())
+        {
+            return null;
+        }
+
+        try
+        {
+            final byte[] bytes = Base64.getDecoder().decode(base64Matrix);
+            final int len = bytes.length;
+            final int dim = (int) Math.sqrt(len);
+            if (dim * dim != len || dim == 0)
+            {
+                return null;
+            }
+
+            final BufferedImage img = new BufferedImage(dim, dim, BufferedImage.TYPE_BYTE_GRAY);
+            final byte[] imgData = ((java.awt.image.DataBufferByte) img.getRaster().getDataBuffer()).getData();
+            System.arraycopy(bytes, 0, imgData, 0, len);
+
+            try (final java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream())
+            {
+                ImageIO.write(img, "png", baos);
+                return "data:image/png;base64," + Base64.getEncoder().encodeToString(baos.toByteArray());
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to convert SSIM matrix to PNG data URI", e);
+            return null;
+        }
+    }
+
+    /**
+     * Calculates the Mean SSIM score (0.0 to 1.0) between two Base64-encoded luminance matrices.
+     * Evaluates across 8x8 sliding blocks dynamically matching the square matrix dimension.
      *
      * @param base64Matrix1 the first Base64 luminance matrix
      * @param base64Matrix2 the second Base64 luminance matrix
@@ -177,13 +291,20 @@ public final class ScreenshotHasher
             final byte[] bytes1 = Base64.getDecoder().decode(base64Matrix1);
             final byte[] bytes2 = Base64.getDecoder().decode(base64Matrix2);
 
-            if (bytes1.length != bytes2.length || bytes1.length != 64 * 64)
+            if (bytes1.length != bytes2.length)
             {
                 return 0.0;
             }
 
-            final int width = 64;
-            final int height = 64;
+            final int totalLen = bytes1.length;
+            final int dim = (int) Math.sqrt(totalLen);
+            if (dim * dim != totalLen || dim < 8)
+            {
+                return 0.0;
+            }
+
+            final int width = dim;
+            final int height = dim;
             final int windowSize = 8;
             final double k1 = 0.01;
             final double k2 = 0.03;
