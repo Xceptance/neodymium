@@ -28,7 +28,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.neodymium.ai.junit.AiInlinePlaybook;
 import org.neodymium.ai.junit.AiLlmCache;
 import org.neodymium.ai.junit.AiMode;
@@ -104,10 +103,13 @@ public final class VerlaProgrammaticDemoTest
 
     /**
      * Concept 1: Fully Programmatic Java Object API using {@link PlaybookStep} and {@link Playbook}.
+     *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test1_FullyProgrammaticObjects() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test1_FullyProgrammaticObjects(final AiSession session) throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
@@ -117,52 +119,49 @@ public final class VerlaProgrammaticDemoTest
             .step("Press enter to submit search")
             .build();
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute(playbook);
-        }
+        session.execute(playbook);
     }
 
     /**
      * Concept 2a: Programmatic Text Block string execution with embedded YAML steps and data sections.
+     *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test2a_ProgrammaticTextBlockWithEmbeddedYamlData() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test2a_ProgrammaticTextBlockWithEmbeddedYamlData(final AiSession session) throws Exception
     {
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("""
-                steps: |
-                  Open ${verla.url}/verla-perfect/index.html in the browser
-                  Locate the search input field and type '${searchTerm}' into it
-                  Press enter to submit search
+        session.execute("""
+            steps: |
+              Open ${verla.url}/verla-perfect/index.html in the browser
+              Locate the search input field and type '${searchTerm}' into it
+              Press enter to submit search
 
-                data:
-                  - testId: "any"
-                    searchTerm: "Minimalist"
-                """);
-        }
+            data:
+              - testId: "any"
+                searchTerm: "Minimalist"
+            """);
     }
 
     /**
      * Concept 2b: Programmatic Text Block string execution seeded with SessionData container.
+     *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test2b_ProgrammaticTextBlockWithSessionData() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test2b_ProgrammaticTextBlockWithSessionData(final AiSession session) throws Exception
     {
         final SessionData sessionData = new SessionData();
         sessionData.set("searchTerm", "Minimalist");
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("""
-                Open ${verla.url}/verla-perfect/index.html in the browser
-                Locate the search input field and type '${searchTerm}' into it
-                Press enter to submit search
-                """, sessionData);
-        }
+        session.execute("""
+            Open ${verla.url}/verla-perfect/index.html in the browser
+            Locate the search input field and type '${searchTerm}' into it
+            Press enter to submit search
+            """, sessionData);
     }
 
     /**
@@ -187,39 +186,39 @@ public final class VerlaProgrammaticDemoTest
     }
 
     /**
-     * Concept 4: Pure Step-by-Step Java Debugging without Selenide calls.
+     * Concept 4: Pure Step-by-Step Java Debugging with runner-managed AiSession.
      * Allows setting breakpoints on individual Java statements to step through prompt execution.
+     *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test4_StepByStepJavaDebugging() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test4_StepByStepJavaDebugging(final AiSession session) throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("Open ${verla.url}/verla-perfect/index.html in the browser");
-            session.execute("Locate the search input field and type '${searchTerm}' into it");
-            session.execute("Press enter to submit search");
-        }
+        session.execute("Open ${verla.url}/verla-perfect/index.html in the browser");
+        session.execute("Locate the search input field and type '${searchTerm}' into it");
+        session.execute("Press enter to submit search");
     }
 
     /**
      * Concept 5: Mixing direct Java Selenide commands with AI prompt step executions.
+     *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test5_MixStepsAndSelenideCommands() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test5_MixStepsAndSelenideCommands(final AiSession session) throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
         open(Neodymium.getData().get("verla.url") + "/verla-perfect/index.html");
         $("#search-input").shouldBe(visible);
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("Locate the search input field and type '${searchTerm}' into it");
-        }
+        session.execute("Locate the search input field and type '${searchTerm}' into it");
 
         $("#search-input").pressEnter();
     }

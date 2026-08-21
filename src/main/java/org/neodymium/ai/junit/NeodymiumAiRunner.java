@@ -328,7 +328,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     resolvedPaths.add(path);
                 }
-                else if ("programmatic".equalsIgnoreCase(path))
+                else if (AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(path))
                 {
                     final String name = (methodPlaybook != null && !methodPlaybook.name().isEmpty()) ? methodPlaybook.name()
                                       : (classPlaybook != null && !classPlaybook.name().isEmpty()) ? classPlaybook.name()
