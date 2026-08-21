@@ -602,17 +602,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 Neodymium.setBrowserProfileName(this.browser.getBrowserTag());
             }
 
-            if (Neodymium.hasDriver())
-            {
-                final org.neodymium.common.browser.WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
-                if (legacyCont != null && legacyCont.getWebDriver() != null)
-                {
-                    final org.openqa.selenium.WebDriver driver = legacyCont.getDecoratedWebDriver() != null
-                        ? legacyCont.getDecoratedWebDriver()
-                        : legacyCont.getWebDriver();
-                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
-                }
-            }
+            syncWebDriverWithSelenide();
 
             // Automatically detect mock integration test package and apply thread-local overrides
             if (context.getRequiredTestClass() != null)
@@ -1074,10 +1064,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
         }
 
+        private void syncWebDriverWithSelenide()
+        {
+            if (Neodymium.hasDriver())
+            {
+                final org.neodymium.common.browser.WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
+                if (legacyCont != null && legacyCont.getWebDriver() != null)
+                {
+                    final org.openqa.selenium.WebDriver driver = legacyCont.getDecoratedWebDriver() != null
+                        ? legacyCont.getDecoratedWebDriver()
+                        : legacyCont.getWebDriver();
+                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
+                }
+            }
+        }
+
         private void runPlaybookForMethod(final Method method) throws Exception
         {
             if (method != null && method.isAnnotationPresent(AiPlaybook.class) && this.session != null)
             {
+                syncWebDriverWithSelenide();
                 final ExecutionContext execCtx = this.session.getExecutionContext();
                 if (execCtx != null && Boolean.TRUE.equals(execCtx.getTransientData().get("playbook.programmatic")))
                 {
@@ -1120,6 +1126,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             if (this.session != null && !this.session.getExecutionContext().getTransientData().containsKey("playbook.programmatic"))
             {
+                syncWebDriverWithSelenide();
                 @SuppressWarnings("unchecked")
                 final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) this.session.getExecutionContext().getTransientData().remove("playbook.mainSteps");
                 if (playbookSteps != null && !playbookSteps.isEmpty())
@@ -1158,6 +1165,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             finally
             {
+                if (!Neodymium.hasDriver() && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        com.codeborne.selenide.WebDriverRunner.closeWebDriver();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 if (context.getExecutionException().isPresent() && this.mode.isRecording() && this.recordingPath != null && this.resourceManager != null)
                 {
                     try

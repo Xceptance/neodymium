@@ -106,11 +106,14 @@ public class AuraManagerSettingsUiTest
         $("#settingsBtn").shouldBe(Condition.visible).click();
         $("#settingsModal").shouldBe(Condition.visible, Duration.ofSeconds(10));
 
+        // Wait for HTMX settings content swap to complete
+        $("#group-ai-properties").shouldBe(Condition.visible, Duration.ofSeconds(10));
+
         // Switch to Browser Configuration tab
-        $("#tabBtnBrowser").click();
+        $("#tabBtnBrowser").shouldBe(Condition.visible).click();
 
         // Browser tab content should be visible
-        $("#tabContentBrowser").shouldBe(Condition.visible);
+        $("#tabContentBrowser").shouldBe(Condition.visible, Duration.ofSeconds(10));
         $("#group-browser-0").should(Condition.exist);
     }
 

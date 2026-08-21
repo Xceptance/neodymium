@@ -452,11 +452,34 @@ function syncStateFromQueueContainer() {
     if (!container) return;
     const items = container.querySelectorAll('.queue-item');
     selectedDatasets = [];
+
+    const globalBadge = document.getElementById('globalProfileCountBadge');
+    let globalProfileCount = 1;
+    if (globalBadge) {
+        const parsed = parseInt(globalBadge.textContent);
+        if (!isNaN(parsed) && parsed > 0) {
+            globalProfileCount = parsed;
+        }
+    } else {
+        const checkedGlobal = document.querySelectorAll('.profile-checkbox-row.checked');
+        if (checkedGlobal.length > 0) {
+            globalProfileCount = checkedGlobal.length;
+        }
+    }
+
+    let calculatedTotalRuns = 0;
     items.forEach(item => {
         const file = item.getAttribute('data-file');
         const id = item.getAttribute('data-id');
+        const customProfilesStr = item.getAttribute('data-custom-profiles');
         if (file && id) {
             selectedDatasets.push({ file, id });
+            if (customProfilesStr && customProfilesStr.trim().length > 0) {
+                const profiles = customProfilesStr.split(',').filter(p => p.trim().length > 0);
+                calculatedTotalRuns += Math.max(1, profiles.length);
+            } else {
+                calculatedTotalRuns += Math.max(1, globalProfileCount);
+            }
         }
     });
     window.selectedDatasets = selectedDatasets;
@@ -470,7 +493,7 @@ function syncStateFromQueueContainer() {
     if (runQueueBtn) {
         const countSpan = runQueueBtn.querySelector('.badge-count');
         if (countSpan) {
-            countSpan.textContent = selectedDatasets.length;
+            countSpan.textContent = calculatedTotalRuns;
         }
         if (selectedDatasets.length > 0) {
             runQueueBtn.removeAttribute('disabled');

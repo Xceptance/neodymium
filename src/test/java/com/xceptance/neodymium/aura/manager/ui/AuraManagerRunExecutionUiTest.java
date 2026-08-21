@@ -22,11 +22,13 @@ import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 
 import java.io.IOException;
+import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.BeforeEach;
 
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
@@ -72,28 +74,16 @@ public final class AuraManagerRunExecutionUiTest
     {
         Selenide.open("http://localhost:" + this.port + "/");
 
-        // 1. Expand a file and select a dataset to populate the queue
-        final var fileContainers = $$("#yamlFileList .file-container");
-        SelenideElement checkbox = null;
-        final int fileCount = fileContainers.size();
-        for (int i = 0; i < fileCount; i++)
+        // 1. Expand a file if needed and select a dataset to populate the queue
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.sizeGreaterThan(0), Duration.ofSeconds(10));
+        final var container = $$("#yamlFileList .file-container").first();
+        if (!container.$(".dataset-list").isDisplayed())
         {
-            $$("#yamlFileList .file-container").get(i).$(".list-item").shouldBe(Condition.visible).click();
-            final var currentCheckboxes = $$("#yamlFileList .file-container").get(i).$$(".dataset-select-cb");
-            if (currentCheckboxes.size() >= 1)
-            {
-                checkbox = currentCheckboxes.first();
-                break;
-            }
-            $$("#yamlFileList .file-container").get(i).$(".list-item").shouldBe(Condition.visible).click();
+            container.$(".list-item").shouldBe(Condition.visible).click();
+            container.$(".dataset-list").shouldBe(Condition.visible);
         }
 
-        if (checkbox == null)
-        {
-            throw new IllegalStateException("No file container found with 1 or more datasets under #yamlFileList!");
-        }
-
-        checkbox.shouldBe(Condition.visible);
+        final var checkbox = container.$(".dataset-select-cb").shouldBe(Condition.visible);
         if (!checkbox.isSelected())
         {
             checkbox.click();
@@ -101,22 +91,17 @@ public final class AuraManagerRunExecutionUiTest
 
         // Verify the Run Queue button is enabled and has queue count
         final var runQueueBtn = $("#runQueueBtn");
-        runQueueBtn.shouldBe(Condition.visible).shouldHave(Condition.matchText("Run Queue[\\s\\(]*1[\\s\\)]*"));
+        runQueueBtn.shouldBe(Condition.visible).shouldHave(Condition.matchText("Run Queue[\\s\\(]*[1-9][0-9]*[\\s\\)]*"));
 
         // 2. Click "Run Queue" to start execution
         runQueueBtn.click();
 
         // 3. Verify execution was started and handled correctly
         final var stopQueueBtn = $("#stopQueueBtn");
-        final var statsPanel = $("#statsPanel");
-        statsPanel.shouldBe(Condition.visible, java.time.Duration.ofSeconds(15));
+        stopQueueBtn.shouldBe(Condition.visible, Duration.ofSeconds(15)).click();
+        stopQueueBtn.shouldBe(Condition.hidden, Duration.ofSeconds(15));
 
-        if (stopQueueBtn.is(Condition.visible))
-        {
-            stopQueueBtn.click();
-            stopQueueBtn.shouldBe(Condition.hidden, java.time.Duration.ofSeconds(15));
-        }
-
-        runQueueBtn.shouldBe(Condition.visible, java.time.Duration.ofSeconds(15));
+        $("#navWorkspace").shouldBe(Condition.visible).click();
+        runQueueBtn.shouldBe(Condition.visible, Duration.ofSeconds(15));
     }
 }

@@ -36,6 +36,7 @@ import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.junit5.NeodymiumTest;
+import org.openqa.selenium.Keys;
 
 /**
  * Selenide UI test suite to verify the Neodymium Aura Manager's reworked visual YAML Playbook Editor
@@ -162,7 +163,8 @@ public final class AuraManagerEditorUiTest
         // Modify first step row text
         final var stepContent = $("#stepsList .step-content").shouldBe(Condition.visible);
         stepContent.click();
-        Selenide.executeJavaScript("arguments[0].innerText = 'Open https://xceptance.com';", stepContent);
+        stepContent.clear();
+        stepContent.sendKeys("Open https://xceptance.com");
 
         // Click the Save button
         $("#saveYamlBtn").shouldBe(Condition.visible).click();
@@ -372,11 +374,14 @@ public final class AuraManagerEditorUiTest
         $("#openModalBtn").shouldBe(Condition.visible).click();
         $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
 
         // Edit step
-        final var stepContent = $$("#stepsList .step-content").first();
+        final var stepContent = $("#stepsList .step-content").shouldBe(Condition.visible);
         stepContent.click();
-        Selenide.executeJavaScript("arguments[0].innerText = 'Assert page contains \"Welcome\"';", stepContent);
+        stepContent.clear();
+        stepContent.sendKeys("Assert page contains \"Welcome\"");
 
         // Click Save
         $("#saveYamlBtn").shouldBe(Condition.visible).click();

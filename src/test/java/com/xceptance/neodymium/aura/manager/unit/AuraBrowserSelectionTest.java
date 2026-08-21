@@ -154,4 +154,24 @@ public final class AuraBrowserSelectionTest
             com.xceptance.neodymium.aura.NeodymiumAuraManager.stopServer(server);
         }
     }
+
+    @Test
+    public void testPerItemBrowserProfileOverrideAndTotalRunCounts()
+    {
+        // Set global browser profiles to 2 profiles
+        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "FF_1024x768"));
+
+        // Add 2 queue items
+        queueController.getSelectedQueue().add(new com.xceptance.neodymium.aura.dto.DatasetSelection("test1.yaml", "dataset1"));
+        queueController.getSelectedQueue().add(new com.xceptance.neodymium.aura.dto.DatasetSelection("test2.yaml", "dataset1"));
+
+        // Item 1 inherits global (2 profiles), Item 2 inherits global (2 profiles) -> Total runs = 4
+        Assertions.assertEquals(4, queueController.getTotalExecutionRuns());
+
+        // Override Item 2 with custom 3 profiles
+        queueController.getSelectedQueue().get(1).browserProfiles = List.of("Chrome_1024x768", "FF_1024x768", "Edge_1024x768");
+
+        // Item 1 (2 profiles) + Item 2 (3 profiles) -> Total runs = 5
+        Assertions.assertEquals(5, queueController.getTotalExecutionRuns());
+    }
 }

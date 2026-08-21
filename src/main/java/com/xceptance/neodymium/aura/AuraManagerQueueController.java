@@ -673,7 +673,7 @@ public final class AuraManagerQueueController
 
         final Context context = new Context();
         populateQueueContext(context);
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel", "queueListContainerContent", "runControls"), context);
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel", "queueListContainer", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -744,7 +744,7 @@ public final class AuraManagerQueueController
 
         final Context context = new Context();
         populateQueueContext(context);
-        final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel", "queueListContainerContent", "runControls"), context);
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel", "queueListContainer", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -988,10 +988,19 @@ public final class AuraManagerQueueController
         {
             for (final DatasetSelection selection : lastReq.datasets)
             {
-                final Map<String, String> m = new HashMap<>();
-                m.put("file", selection.file);
-                m.put("id", selection.id);
-                datasetsList.add(m);
+                final List<String> profiles = (selection.browserProfiles != null && !selection.browserProfiles.isEmpty())
+                        ? selection.browserProfiles
+                        : (lastReq.globalBrowserProfiles != null && !lastReq.globalBrowserProfiles.isEmpty()
+                                ? lastReq.globalBrowserProfiles
+                                : List.of("Chrome_1024x768"));
+                for (final String prof : profiles)
+                {
+                    final Map<String, String> m = new HashMap<>();
+                    m.put("file", selection.file);
+                    m.put("id", selection.id);
+                    m.put("browser", prof);
+                    datasetsList.add(m);
+                }
             }
         }
         status.put("tests", datasetsList);

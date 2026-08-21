@@ -495,4 +495,24 @@ public final class SelenideTargetExecutor implements TargetExecutor
         }
         return null;
     }
+
+    @Override
+    public void close() throws Exception
+    {
+        if (!org.neodymium.util.Neodymium.hasDriver() && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+        {
+            final boolean keepOpen = org.neodymium.util.Neodymium.configuration().keepBrowserOpen();
+            if (!keepOpen)
+            {
+                try
+                {
+                    com.codeborne.selenide.WebDriverRunner.closeWebDriver();
+                }
+                catch (final Exception e)
+                {
+                    org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).debug("Failed to close unmanaged Selenide WebDriver", e);
+                }
+            }
+        }
+    }
 }

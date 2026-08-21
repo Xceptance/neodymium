@@ -47,7 +47,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 3034,
+  "durationMs" : 2691,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -99,7 +99,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1726,
+  "durationMs" : 2017,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -151,7 +151,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1402,
+  "durationMs" : 1600,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -203,7 +203,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1493,
+  "durationMs" : 1577,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -255,7 +255,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 4877,
+  "durationMs" : 5863,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -307,7 +307,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1581,
+  "durationMs" : 2163,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -359,7 +359,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1603,
+  "durationMs" : 2216,
   "delayMs" : 0,
   "composite" : false
 } ]

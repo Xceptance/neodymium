@@ -60,7 +60,7 @@
                             <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">format_list_numbered</span> <span>Run Queue</span></div>
                         </div>
                         <div class="content-scroll">
-                            <div class="queue-list" id="queueListContainer" th:fragment="queueListContainer">
+                            <div class="queue-list" id="queueListContainer" th:fragment="queueListContainer" hx-swap-oob="true">
                                 <div th:replace="~{fragments/queue :: queueListContainerContent}"></div>
                             </div>
                         </div>
@@ -113,7 +113,7 @@
                 <div class="panel-header">
                     <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">tune</span> <span>Run Configuration</span></div>
                 </div>
-                <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel" style="flex: 1; overflow-y: auto;">
+                <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel">
                     <div th:replace="~{fragments/queue :: configPanelContent}"></div>
                 </div>
                 <div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">

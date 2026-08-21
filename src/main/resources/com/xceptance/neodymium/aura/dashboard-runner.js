@@ -230,6 +230,7 @@ function prepareClientForExecution() {
     updateRunButtons();
     if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
     hasShownStartMessage = false;
+    pollStatus();
 }
 window.prepareClientForExecution = prepareClientForExecution;
 
@@ -581,7 +582,11 @@ async function pollStatus() {
                         const sidebarBadge = document.getElementById('sidebarRunBadge');
                         if (sidebarBadge) {
                             sidebarBadge.style.display = 'flex';
-                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
+                            const parsedFinished = (statusData.passed || 0) + (statusData.failed || 0) + (statusData.skipped || 0);
+                            const completedFilesCount = (statusData.completedFiles && Array.isArray(statusData.completedFiles)) ? statusData.completedFiles.length : 0;
+                            const finishedCount = Math.max(parsedFinished, completedFilesCount);
+                            const totalCount = (statusData.tests && statusData.tests.length > 0) ? statusData.tests.length : (statusData.total || 0);
+                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${finishedCount}/${totalCount}`;
                         }
                     } else {
                         if (runSpinner) runSpinner.style.display = 'none';
@@ -639,7 +644,8 @@ async function pollStatus() {
     } finally {
         if (thisSession !== currentPollSession) return;
         if (!disconnected) {
-            pollingIntervalId = setTimeout(pollStatus, 2000);
+            const delay = isRunning ? 500 : 2000;
+            pollingIntervalId = setTimeout(pollStatus, delay);
         }
     }
 }
@@ -799,24 +805,16 @@ async function saveItemBrowserModal() {
     }
 
     try {
-        const resp = await fetch('/api/queue/item-browser', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                index: index,
-                inherit: isInherit,
-                profiles: selectedProfiles.join(',')
-            })
-        });
-        if (resp.ok) {
-            const html = await resp.text();
-            const queueContainer = document.getElementById('queueListContainer');
-            if (queueContainer) {
-                queueContainer.innerHTML = html;
-                if (typeof htmx !== 'undefined') {
-                    htmx.process(queueContainer);
+        if (typeof htmx !== 'undefined') {
+            htmx.ajax('POST', '/api/queue/item-browser', {
+                target: '#queueListContainer',
+                swap: 'innerHTML',
+                values: {
+                    index: index,
+                    inherit: isInherit,
+                    profiles: selectedProfiles.join(',')
                 }
-            }
+            });
         }
     } catch (err) {
         console.error("Error saving item browser profiles:", err);
