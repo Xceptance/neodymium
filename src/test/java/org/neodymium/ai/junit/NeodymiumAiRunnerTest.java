@@ -280,7 +280,10 @@ public class NeodymiumAiRunnerTest
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".json")), "JSON report must be generated");
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().equals("index.html")), "index.html must be updated");
 
-            final Path jsonPath = files.stream().filter(p -> p.getFileName().toString().endsWith(".json")).findFirst().orElseThrow();
+            final Path jsonPath = files.stream()
+                .filter(p -> p.getFileName().toString().endsWith(".json") && !p.getFileName().toString().equals("index-data.json"))
+                .findFirst()
+                .orElseThrow();
             final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
             Assertions.assertEquals("FAILED", root.get("status").asText());
             Assertions.assertEquals("REPLAY_STRICT", root.get("executionMode").asText());

@@ -652,7 +652,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 });
             }
 
-            final SessionData sessionData = new SessionData(new HashMap<>(dataset));
+            final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
             
             final LlmRegistry registry = new LlmRegistry();
             final AiConfiguration config = AiConfiguration.getInstance();
