@@ -702,7 +702,13 @@ public class LocalRunJsonStorageService
 
     private String buildFullRunJsonFromNestedDir(final String runId, final Path runJsonPath) throws IOException
     {
-        final ObjectNode root = (ObjectNode) objectMapper.readTree(runJsonPath.toFile());
+        final String content = Files.readString(runJsonPath, StandardCharsets.UTF_8);
+        if (!content.contains("\"areas\"") && content.contains("\"executions\""))
+        {
+            return content;
+        }
+
+        final ObjectNode root = (ObjectNode) objectMapper.readTree(content);
         final ArrayNode mergedExecutions = objectMapper.createArrayNode();
 
         final Path runDir = runJsonPath.getParent();

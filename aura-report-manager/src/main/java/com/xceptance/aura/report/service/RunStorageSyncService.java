@@ -201,7 +201,7 @@ public class RunStorageSyncService
                     final String testClass = exec.path("testClass").asText("UnknownClass");
                     final String dataSet = exec.path("title").asText("");
                     final String location = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
-                    final String browser = exec.path("browser").asText("Chrome");
+                    final String browser = AuraReportDataService.normalizeBrowser(exec.path("browser").asText("Chrome"));
                     final String rawStatus = exec.path("status").asText("passed-clean");
 
                     final String varId = generateVariationId(testClass, dataSet, location, browser);
@@ -301,10 +301,11 @@ public class RunStorageSyncService
 
     private String generateVariationId(final String testClass, final String dataSet, final String location, final String browser)
     {
+        final String normBrowser = AuraReportDataService.normalizeBrowser(browser);
         final String raw = (testClass != null ? testClass : "") + "|" +
                            (dataSet != null ? dataSet : "") + "|" +
                            (location != null ? location : "") + "|" +
-                           (browser != null ? browser : "");
+                           (normBrowser != null ? normBrowser : "");
         try
         {
             final MessageDigest md = MessageDigest.getInstance("SHA-256");

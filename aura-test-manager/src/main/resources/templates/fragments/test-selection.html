@@ -35,7 +35,7 @@
 
     <!-- Otherwise, render the list using Thymeleaf loop -->
     <th:block th:unless="${files == null or files.isEmpty()}">
-        <div class="file-container" th:each="item : ${files}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
+        <div class="file-container" th:each="item : ${files}" th:data-file="${item.file}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
             <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0"
                  th:data-file="${item.file}"
                  onclick="if(typeof toggleExpandFile==='function') toggleExpandFile(this.getAttribute('data-file'), this);">
@@ -49,13 +49,12 @@
                                th:data-indeterminate="${partiallySelectedFileKeys != null and partiallySelectedFileKeys.contains(item.file)}"
                                onchange="if(typeof toggleFileCheckboxesInstant==='function') toggleFileCheckboxesInstant(this);"
                                th:hx-post="@{/api/queue/toggleAll(file=${item.file})}"
-                               th:hx-vals="${'js:{checked: this.checked}'}"
                                hx-target="#queueListContainer" hx-swap="innerHTML">
                     </label>
                     <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:text="${item.file}">filename.yaml</span>
                 </div>
                 <button class="edit-icon-btn" th:data-file="${item.file}"
-                        hx-get="/api/editor" th:hx-vals="${'{\&quot;file\&quot;:\&quot;' + item.file + '\&quot;}'}"
+                        th:hx-get="@{/api/editor(file=${item.file})}"
                         hx-target="#editorPanel" hx-swap="outerHTML"
                         onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
                         style="padding: 4px 8px; color: var(--text-secondary);" 
@@ -72,7 +71,6 @@
                                    th:checked="${selectedKeys != null and selectedKeys.contains(item.file + '::' + dataset.id)}"
                                    onchange="if(typeof toggleDatasetCheckboxInstant==='function') toggleDatasetCheckboxInstant(this);"
                                    th:hx-post="@{/api/queue/toggle(file=${item.file},id=${dataset.id})}"
-                                   th:hx-vals="${'js:{checked: this.checked}'}"
                                    hx-target="#queueListContainer" hx-swap="innerHTML">
                         </label>
                         <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>

@@ -199,36 +199,7 @@ public final class TestExecutionDto
         }
         this.location = effectiveLocation;
 
-        final String effectiveBrowser;
-        if (browser != null && !browser.trim().isEmpty())
-        {
-            final String b = browser.trim();
-            if ("chrome".equalsIgnoreCase(b))
-            {
-                effectiveBrowser = "Chrome";
-            }
-            else if ("firefox".equalsIgnoreCase(b))
-            {
-                effectiveBrowser = "Firefox";
-            }
-            else if ("edge".equalsIgnoreCase(b))
-            {
-                effectiveBrowser = "Edge";
-            }
-            else if ("safari".equalsIgnoreCase(b))
-            {
-                effectiveBrowser = "Safari";
-            }
-            else
-            {
-                effectiveBrowser = Character.toUpperCase(b.charAt(0)) + b.substring(1);
-            }
-        }
-        else
-        {
-            effectiveBrowser = "Unknown";
-        }
-        this.browser = effectiveBrowser;
+        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
         this.failure = failure != null ? failure : "NONE";
         this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
         this.comment = comment;

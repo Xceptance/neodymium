@@ -84,6 +84,14 @@ public class AuraTestDashboardController
         model.addAttribute("headless", queueController.isHeadless());
         model.addAttribute("video", queueController.isVideo());
         model.addAttribute("executionMode", queueController.getExecutionMode());
+        model.addAttribute("interactive", queueController.isInteractive());
+        model.addAttribute("allure", queueController.isAllure());
+
+        model.addAttribute("availableBrowserProfiles", queueController.getAvailableBrowserProfiles());
+        model.addAttribute("globalBrowserProfiles", queueController.getGlobalBrowserProfiles());
+        model.addAttribute("browserGroups", queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles()));
+        model.addAttribute("totalRuns", queueController.getTotalExecutionRuns());
+        model.addAttribute("queueController", queueController);
 
         final List<ChatSessionDto> chatSessions = sessionService != null ? sessionService.getSessions() : List.of();
         final String currentSessionId = chatSessions.isEmpty() ? "" : chatSessions.get(0).id;

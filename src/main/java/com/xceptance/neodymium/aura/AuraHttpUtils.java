@@ -82,11 +82,12 @@ public final class AuraHttpUtils
             final String body = readBody(exchange);
             if (body != null && !body.trim().isEmpty())
             {
-                if (body.trim().startsWith("{"))
+                final String cleanBody = body.trim().replace("\\\"", "\"").replace("&quot;", "\"");
+                if (cleanBody.startsWith("{"))
                 {
                     try
                     {
-                        final com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
+                        final com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(cleanBody).getAsJsonObject();
                         for (final String key : json.keySet())
                         {
                             if (!json.get(key).isJsonNull())
@@ -112,7 +113,30 @@ public final class AuraHttpUtils
                         }
                         else if (pair.length == 1)
                         {
-                            params.put(java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8), "");
+                            final String rawKey = java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8);
+                            final String cleanKey = rawKey.replace("\\\"", "\"").replace("&quot;", "\"").trim();
+                            if (cleanKey.startsWith("{") && cleanKey.endsWith("}"))
+                            {
+                                try
+                                {
+                                    final com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(cleanKey).getAsJsonObject();
+                                    for (final String key : json.keySet())
+                                    {
+                                        if (!json.get(key).isJsonNull())
+                                        {
+                                            params.put(key, json.get(key).getAsString());
+                                        }
+                                    }
+                                }
+                                catch (final Exception e)
+                                {
+                                    params.put(rawKey, "");
+                                }
+                            }
+                            else
+                            {
+                                params.put(rawKey, "");
+                            }
                         }
                     }
                 }

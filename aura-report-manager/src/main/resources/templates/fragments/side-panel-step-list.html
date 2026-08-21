@@ -57,8 +57,22 @@
                                 <th>STATUS / BUGS</th>
                             </tr>
                         </thead>
-                        <tbody id="tbVariationHistoryTableBody">
-                            <!-- Populated dynamically from test base run variations -->
+                        <tbody id="tbVariationHistoryTableBody" th:fragment="variationHistoryRows">
+                            <tr th:each="exec : ${historyRuns}" class="history-var-row" th:data-batch="${exec.batchName}">
+                                <td>
+                                    <a th:href="@{/run-report(runId=${exec.runId})}" th:hx-get="@{/run-report(runId=${exec.runId})}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" th:text="${exec.runId}" class="text-mono text-accent" style="font-weight: 600; text-decoration: underline;">#RUN_ID</a>
+                                </td>
+                                <td><span th:text="${exec.batchName}">Batch Name</span></td>
+                                <td><span class="tag-chip" th:text="${exec.engine}">Java</span></td>
+                                <td><span class="text-muted font-mono" style="font-size: 0.8rem;" th:text="${exec.timestamp}">Recently</span></td>
+                                <td>
+                                    <span th:class="'badge-status ' + ${exec.statusClass}" th:text="${exec.statusLabel}">PASSED</span>
+                                    <span th:if="${exec.bugs != null and !exec.bugs.isEmpty()}" th:each="bug : ${exec.bugs}" class="tag-chip tag-bug ms-1" th:text="${bug}">BUG-123</span>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(historyRuns)}">
+                                <td colspan="5" class="text-center text-muted p-3" style="font-size: 0.82rem;">No execution history found for this variation across batches.</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>

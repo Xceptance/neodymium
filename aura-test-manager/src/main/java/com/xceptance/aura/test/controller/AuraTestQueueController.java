@@ -27,6 +27,8 @@ import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
+import com.xceptance.neodymium.aura.dto.BrowserGroupDto;
+import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
@@ -34,14 +36,19 @@ import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -80,6 +87,8 @@ public class AuraTestQueueController
 
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
 
+    private final Set<String> globalBrowserProfiles = Collections.synchronizedSet(new LinkedHashSet<>());
+
     private boolean headless = true;
 
     private boolean video = false;
@@ -99,6 +108,29 @@ public class AuraTestQueueController
         this.interactiveService = interactiveService;
         this.reportingService = reportingService;
         this.manager = manager;
+
+        final List<BrowserProfileDto> available = getAvailableBrowserProfiles();
+        if (!available.isEmpty())
+        {
+            boolean added = false;
+            for (final BrowserProfileDto p : available)
+            {
+                if ("Chrome_1024x768".equalsIgnoreCase(p.id))
+                {
+                    globalBrowserProfiles.add(p.id);
+                    added = true;
+                    break;
+                }
+            }
+            if (!added)
+            {
+                globalBrowserProfiles.add(available.get(0).id);
+            }
+        }
+        else
+        {
+            globalBrowserProfiles.add("Chrome_1024x768");
+        }
     }
 
     private void populateQueueModel(final Model model)
@@ -111,6 +143,11 @@ public class AuraTestQueueController
         model.addAttribute("allure", allure);
         model.addAttribute("executionMode", executionMode);
         model.addAttribute("selectedBrowser", "chrome");
+        model.addAttribute("globalBrowserProfiles", globalBrowserProfiles);
+        model.addAttribute("availableBrowserProfiles", getAvailableBrowserProfiles());
+        model.addAttribute("browserGroups", getGroupedBrowserProfiles(globalBrowserProfiles));
+        model.addAttribute("totalRuns", getTotalExecutionRuns());
+        model.addAttribute("queueController", this);
         model.addAttribute("activeEditingFile", fileService.getActiveEditingFile());
     }
 
@@ -130,27 +167,62 @@ public class AuraTestQueueController
             {
                 result.put(name, val);
             }
+            if (name != null && (name.startsWith("{") || name.contains("\"file\"")))
+            {
+                try
+                {
+                    final String cleanName = name.replace("\\\"", "\"").replace("&quot;", "\"");
+                    if (cleanName.startsWith("{") && cleanName.endsWith("}"))
+                    {
+                        final Map<?, ?> map = objectMapper.readValue(cleanName, Map.class);
+                        for (final Map.Entry<?, ?> entry : map.entrySet())
+                        {
+                            if (entry.getKey() != null && entry.getValue() != null && !result.containsKey(String.valueOf(entry.getKey())))
+                            {
+                                result.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                            }
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    // ignore
+                }
+            }
+        }
+        if (!result.containsKey("file") && request.getQueryString() != null)
+        {
+            for (final String pair : request.getQueryString().split("&"))
+            {
+                final String[] kv = pair.split("=", 2);
+                if (kv.length == 2)
+                {
+                    final String k = java.net.URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
+                    final String v = java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+                    if (!result.containsKey(k))
+                    {
+                        result.put(k, v);
+                    }
+                }
+            }
         }
         if (!result.containsKey("file"))
         {
             try
             {
-                final String contentType = request.getContentType();
-                if (contentType != null && contentType.toLowerCase().contains("application/json"))
+                final byte[] bytes = request.getInputStream().readAllBytes();
+                if (bytes.length > 0)
                 {
-                    final byte[] bytes = request.getInputStream().readAllBytes();
-                    if (bytes.length > 0)
+                    final String body = new String(bytes, StandardCharsets.UTF_8);
+                    final String cleanBody = body.trim().replace("\\\"", "\"").replace("&quot;", "\"");
+                    if (cleanBody.startsWith("{") && cleanBody.endsWith("}"))
                     {
-                        final String body = new String(bytes, StandardCharsets.UTF_8);
-                        if (body.trim().startsWith("{"))
+                        final Map<?, ?> map = objectMapper.readValue(cleanBody, Map.class);
+                        for (final Map.Entry<?, ?> entry : map.entrySet())
                         {
-                            final Map<?, ?> map = objectMapper.readValue(body, Map.class);
-                            for (final Map.Entry<?, ?> entry : map.entrySet())
+                            if (entry.getKey() != null && entry.getValue() != null && !result.containsKey(String.valueOf(entry.getKey())))
                             {
-                                if (entry.getKey() != null && entry.getValue() != null && !result.containsKey(String.valueOf(entry.getKey())))
-                                {
-                                    result.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
-                                }
+                                result.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
                             }
                         }
                     }
@@ -276,6 +348,157 @@ public class AuraTestQueueController
             }
         }
         return partialFiles;
+    }
+
+    public final Set<String> getGlobalBrowserProfiles()
+    {
+        return this.globalBrowserProfiles;
+    }
+
+    public final void setGlobalBrowserProfiles(final Collection<String> profiles)
+    {
+        synchronized (this.globalBrowserProfiles)
+        {
+            this.globalBrowserProfiles.clear();
+            if (profiles != null)
+            {
+                this.globalBrowserProfiles.addAll(profiles);
+            }
+        }
+    }
+
+    public final int getTotalExecutionRuns()
+    {
+        int total = 0;
+        final int globalCount = Math.max(1, globalBrowserProfiles.size());
+        synchronized (selectedQueue)
+        {
+            for (final DatasetSelection sel : selectedQueue)
+            {
+                if (sel.browserProfiles != null && !sel.browserProfiles.isEmpty())
+                {
+                    total += sel.browserProfiles.size();
+                }
+                else
+                {
+                    total += globalCount;
+                }
+            }
+        }
+        return total;
+    }
+
+    public List<BrowserProfileDto> getAvailableBrowserProfiles()
+    {
+        final MultibrowserConfiguration config = MultibrowserConfiguration.getInstance();
+        final Map<String, BrowserConfiguration> rawProfiles = config.getBrowserProfiles();
+        final List<BrowserProfileDto> list = new ArrayList<>();
+        if (rawProfiles != null)
+        {
+            for (final Map.Entry<String, BrowserConfiguration> entry : rawProfiles.entrySet())
+            {
+                final String tag = entry.getKey();
+                final BrowserConfiguration bc = entry.getValue();
+                if (tag == null || tag.trim().isEmpty() || "default".equalsIgnoreCase(tag) || "global".equalsIgnoreCase(tag))
+                {
+                    continue;
+                }
+                final String name = bc.getName() != null && !bc.getName().trim().isEmpty() ? bc.getName() : tag;
+                final String rawBrowserName = bc.getCapabilities() != null && bc.getCapabilities().getBrowserName() != null
+                        ? bc.getCapabilities().getBrowserName().toLowerCase()
+                        : "";
+                final String tagLower = tag.toLowerCase();
+                final String browser;
+                if (tagLower.contains("galaxy") || tagLower.contains("iphone") || tagLower.contains("pixel")
+                        || tagLower.contains("mobile") || tagLower.contains("nexus") || tagLower.contains("android")
+                        || tagLower.contains("ipad") || rawBrowserName.contains("android") || rawBrowserName.contains("iphone")
+                        || rawBrowserName.contains("ipad"))
+                {
+                    browser = "mobile";
+                }
+                else if (rawBrowserName.contains("chrome") || tagLower.startsWith("chrome") || tagLower.contains("_chrome")
+                        || tagLower.contains("chromium"))
+                {
+                    browser = "chrome";
+                }
+                else if (rawBrowserName.contains("firefox") || tagLower.startsWith("ff") || tagLower.contains("firefox")
+                        || tagLower.contains("_ff"))
+                {
+                    browser = "firefox";
+                }
+                else if (rawBrowserName.contains("safari") || tagLower.startsWith("safari") || tagLower.contains("_safari")
+                        || tagLower.contains("webkit"))
+                {
+                    browser = "safari";
+                }
+                else if (rawBrowserName.contains("edge") || rawBrowserName.contains("microsoftedge") || tagLower.startsWith("edge")
+                        || tagLower.contains("_edge"))
+                {
+                    browser = "edge";
+                }
+                else
+                {
+                    browser = "other";
+                }
+
+                final String res = (bc.getBrowserWidth() > 0 && bc.getBrowserHeight() > 0)
+                        ? bc.getBrowserWidth() + "x" + bc.getBrowserHeight()
+                        : "";
+                final boolean isHeadless = bc.isHeadless();
+
+                list.add(new BrowserProfileDto(tag, name, browser, res, isHeadless));
+            }
+        }
+        return list;
+    }
+
+    public List<BrowserGroupDto> getGroupedBrowserProfiles(final Set<String> activeProfiles)
+    {
+        final List<BrowserProfileDto> all = getAvailableBrowserProfiles();
+        final Map<String, BrowserGroupDto> groupMap = new LinkedHashMap<>();
+        groupMap.put("chrome", new BrowserGroupDto("chrome", "Google Chrome"));
+        groupMap.put("firefox", new BrowserGroupDto("firefox", "Mozilla Firefox"));
+        groupMap.put("safari", new BrowserGroupDto("safari", "Apple Safari"));
+        groupMap.put("edge", new BrowserGroupDto("edge", "Microsoft Edge"));
+        groupMap.put("mobile", new BrowserGroupDto("mobile", "Mobile Devices"));
+        groupMap.put("other", new BrowserGroupDto("other", "Other Profiles"));
+
+        for (final BrowserProfileDto p : all)
+        {
+            final String key = groupMap.containsKey(p.browser) ? p.browser : "other";
+            final BrowserGroupDto group = groupMap.get(key);
+            group.profiles.add(p);
+            if (activeProfiles != null && activeProfiles.contains(p.id))
+            {
+                group.selectedCount++;
+            }
+        }
+
+        final List<BrowserGroupDto> result = new ArrayList<>();
+        for (final BrowserGroupDto g : groupMap.values())
+        {
+            if (!g.profiles.isEmpty())
+            {
+                result.add(g);
+            }
+        }
+        return result;
+    }
+
+    public List<String> getBrowserTypesForProfiles(final List<String> profileIds)
+    {
+        final List<BrowserProfileDto> all = getAvailableBrowserProfiles();
+        final Set<String> targetIds = new HashSet<>(profileIds != null && !profileIds.isEmpty() ? profileIds : globalBrowserProfiles);
+        final Set<String> types = new LinkedHashSet<>();
+
+        for (final BrowserProfileDto p : all)
+        {
+            if (targetIds.contains(p.id))
+            {
+                types.add(p.browser);
+            }
+        }
+        return types.isEmpty() ? List.of("chrome") : new ArrayList<>(types);
     }
 
     public boolean isHeadless()
@@ -647,6 +870,134 @@ public class AuraTestQueueController
         return "fragments/queue :: configPanelContent";
     }
 
+    @PostMapping("/api/config/browser")
+    public String toggleBrowserProfile(final HttpServletRequest request, final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        final String profile = params.get("profile");
+        final String action = params.get("action");
+
+        if (profile != null && !profile.isBlank())
+        {
+            synchronized (globalBrowserProfiles)
+            {
+                if ("add".equalsIgnoreCase(action))
+                {
+                    globalBrowserProfiles.add(profile);
+                }
+                else if ("remove".equalsIgnoreCase(action))
+                {
+                    globalBrowserProfiles.remove(profile);
+                }
+                else
+                {
+                    if (globalBrowserProfiles.contains(profile))
+                    {
+                        globalBrowserProfiles.remove(profile);
+                    }
+                    else
+                    {
+                        globalBrowserProfiles.add(profile);
+                    }
+                }
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: configPanelContent";
+    }
+
+    @PostMapping("/api/config/browser/preset")
+    public String applyBrowserPreset(@RequestParam(value = "preset", required = false) final String preset, final Model model)
+    {
+        final List<BrowserProfileDto> all = getAvailableBrowserProfiles();
+        synchronized (globalBrowserProfiles)
+        {
+            globalBrowserProfiles.clear();
+            if ("chrome-ff".equalsIgnoreCase(preset))
+            {
+                for (final BrowserProfileDto p : all)
+                {
+                    if ("chrome".equalsIgnoreCase(p.browser) || "firefox".equalsIgnoreCase(p.browser))
+                    {
+                        globalBrowserProfiles.add(p.id);
+                    }
+                }
+            }
+            else if ("desktop".equalsIgnoreCase(preset))
+            {
+                for (final BrowserProfileDto p : all)
+                {
+                    if (!"mobile".equalsIgnoreCase(p.browser))
+                    {
+                        globalBrowserProfiles.add(p.id);
+                    }
+                }
+            }
+            else if ("mobile".equalsIgnoreCase(preset))
+            {
+                for (final BrowserProfileDto p : all)
+                {
+                    if ("mobile".equalsIgnoreCase(p.browser))
+                    {
+                        globalBrowserProfiles.add(p.id);
+                    }
+                }
+            }
+            else if ("all".equalsIgnoreCase(preset))
+            {
+                for (final BrowserProfileDto p : all)
+                {
+                    globalBrowserProfiles.add(p.id);
+                }
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: configPanelContent";
+    }
+
+    @PostMapping("/api/queue/item/browser")
+    public String setItemBrowserProfiles(final HttpServletRequest request, final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        int index = -1;
+        if (params.containsKey("index"))
+        {
+            try
+            {
+                index = Integer.parseInt(params.get("index"));
+            }
+            catch (final NumberFormatException ignored)
+            {
+            }
+        }
+
+        final String profilesStr = params.get("profiles");
+        final List<String> profiles = new ArrayList<>();
+        if (profilesStr != null && !profilesStr.isBlank())
+        {
+            for (final String s : profilesStr.split(","))
+            {
+                if (!s.trim().isEmpty())
+                {
+                    profiles.add(s.trim());
+                }
+            }
+        }
+
+        synchronized (selectedQueue)
+        {
+            if (index >= 0 && index < selectedQueue.size())
+            {
+                selectedQueue.get(index).browserProfiles = profiles;
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
     private String renderExecutionStatePanels(final Model model)
     {
         model.addAttribute("running", queueService.isRunningQueue());
@@ -715,6 +1066,11 @@ public class AuraTestQueueController
             req.executionMode = executionMode;
             req.interactive = interactive;
             req.allure = allure;
+        }
+
+        if (req.globalBrowserProfiles == null || req.globalBrowserProfiles.isEmpty())
+        {
+            req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
         }
 
         if (req.datasets == null || req.datasets.isEmpty())

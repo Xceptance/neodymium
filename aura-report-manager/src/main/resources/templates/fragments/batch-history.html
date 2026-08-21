@@ -225,7 +225,7 @@
                         <td><span class="badge-status badge-pass" th:text="${run.passRate + '% Pass'}">37.5% Pass</span></td>
                         <td>
                             <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;"
-                                    th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML">
+                                    th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" onclick="event.stopPropagation();">
                                 <span class="material-symbols-outlined">trending_up</span> Open Run Report
                             </button>
                         </td>
