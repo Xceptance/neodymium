@@ -420,6 +420,7 @@ public final class StateMachineRunner
             final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
             try
             {
+                context.getTransientData().put("sessionFinishedHandled", true);
                 this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
                 logFinalStatsSummary(context, durationMs, success, failureCause);
                 this.session.runPostHooks(success);

@@ -51,6 +51,7 @@ import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.InteractiveConsoleListener;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
@@ -570,6 +571,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
+        private boolean sessionFinishedHandled = false;
 
         public AiInvocationExtension(
             final String playbookPath,
@@ -588,6 +590,30 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
         @Override
         public void beforeEach(final ExtensionContext context) throws Exception
+        {
+            try
+            {
+                executeBeforeEach(context);
+            }
+            catch (final Throwable t)
+            {
+                handleEarlyFailure(context, t);
+                if (t instanceof Exception e)
+                {
+                    throw e;
+                }
+                else if (t instanceof Error err)
+                {
+                    throw err;
+                }
+                else
+                {
+                    throw new RuntimeException(t);
+                }
+            }
+        }
+
+        private void executeBeforeEach(final ExtensionContext context) throws Exception
         {
             // Set test name dynamically in the Neodymium context
             if (context.getRequiredTestMethod() != null && context.getRequiredTestClass() != null)
@@ -1147,6 +1173,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             try
             {
+                if (context.getExecutionException().isPresent())
+                {
+                    handleEarlyFailure(context, context.getExecutionException().get());
+                }
+
                 if (this.session != null)
                 {
                     final ExecutionContext execCtx = this.session.getExecutionContext();
@@ -1199,6 +1230,72 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     InMemoryLlmCache.clear();
                 }
+            }
+        }
+
+        private void handleEarlyFailure(final ExtensionContext context, final Throwable t)
+        {
+            if (this.sessionFinishedHandled)
+            {
+                return;
+            }
+            if (this.session != null && Boolean.TRUE.equals(this.session.getExecutionContext().getTransientData().get("sessionFinishedHandled")))
+            {
+                this.sessionFinishedHandled = true;
+                return;
+            }
+            this.sessionFinishedHandled = true;
+
+            try
+            {
+                if (this.session == null)
+                {
+                    final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
+                    final LlmRegistry registry = new LlmRegistry();
+                    final ExecutionEventBus eventBus = new ExecutionEventBus();
+                    final SelenideTargetExecutor executor = new SelenideTargetExecutor();
+                    this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
+                }
+
+                final ExecutionContext execCtx = this.session.getExecutionContext();
+                execCtx.getTransientData().put("sessionFinishedHandled", true);
+
+                final Class<?> testClass = context.getTestClass().orElse(null);
+                final Method method = context.getTestMethod().orElse(null);
+
+                if (testClass != null)
+                {
+                    execCtx.getTransientData().put("testClass", testClass.getName());
+                }
+                if (method != null)
+                {
+                    execCtx.getTransientData().put("testMethod", method.getName());
+                }
+                if (this.playbookPath != null)
+                {
+                    execCtx.getTransientData().put("playbookFile", this.playbookPath);
+                }
+                if (this.datasetId != null)
+                {
+                    execCtx.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
+                }
+                execCtx.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.mode);
+                execCtx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+
+                final ExecutionContext prev = ExecutionContext.getActiveContext();
+                try
+                {
+                    ExecutionContext.setActiveContext(execCtx);
+                    this.session.getEventBus().dispatch(new SessionFinishedEvent(0, false, Collections.emptyList()));
+                }
+                finally
+                {
+                    ExecutionContext.setActiveContext(prev);
+                }
+            }
+            catch (final Exception ex)
+            {
+                org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn("Failed to dispatch early failure event", ex);
             }
         }
 

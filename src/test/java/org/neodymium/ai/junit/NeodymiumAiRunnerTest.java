@@ -18,8 +18,22 @@
  */
 package org.neodymium.ai.junit;
 
+import java.io.FileNotFoundException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.Extension;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+import org.junit.jupiter.api.io.TempDir;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.util.Neodymium;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Unit test suite for {@link NeodymiumAiRunner} and associated JUnit 5 annotations.
@@ -139,6 +153,24 @@ public class NeodymiumAiRunnerTest
 
     private static org.junit.jupiter.api.extension.ExtensionContext createMockExtensionContext(final Class<?> testClass, final java.lang.reflect.Method method)
     {
+        final java.util.Map<Object, Object> storeMap = new java.util.HashMap<>();
+        final org.junit.jupiter.api.extension.ExtensionContext.Store mockStore = (org.junit.jupiter.api.extension.ExtensionContext.Store) java.lang.reflect.Proxy.newProxyInstance(
+            org.junit.jupiter.api.extension.ExtensionContext.Store.class.getClassLoader(),
+            new Class<?>[]{org.junit.jupiter.api.extension.ExtensionContext.Store.class},
+            (sp, sm, sargs) -> {
+                if ("put".equals(sm.getName()))
+                {
+                    storeMap.put(sargs[0], sargs[1]);
+                    return null;
+                }
+                if ("get".equals(sm.getName()))
+                {
+                    return storeMap.get(sargs[0]);
+                }
+                return null;
+            }
+        );
+
         return (org.junit.jupiter.api.extension.ExtensionContext) java.lang.reflect.Proxy.newProxyInstance(
             org.junit.jupiter.api.extension.ExtensionContext.class.getClassLoader(),
             new Class<?>[]{org.junit.jupiter.api.extension.ExtensionContext.class},
@@ -158,6 +190,14 @@ public class NeodymiumAiRunnerTest
                 if ("getRequiredTestMethod".equals(m.getName()))
                 {
                     return method;
+                }
+                if ("getRequiredTestInstance".equals(m.getName()))
+                {
+                    return testClass.getDeclaredConstructor().newInstance();
+                }
+                if ("getStore".equals(m.getName()))
+                {
+                    return mockStore;
                 }
                 if (m.getReturnType().equals(java.util.Optional.class))
                 {
@@ -184,5 +224,67 @@ public class NeodymiumAiRunnerTest
         Assertions.assertEquals(2, contexts.size());
         Assertions.assertTrue(contexts.get(0).getDisplayName(1).contains("Chrome_1024x768"));
         Assertions.assertTrue(contexts.get(1).getDisplayName(2).contains("Firefox_1024x768"));
+    }
+
+    /**
+     * Sample test class decorated with REPLAY_STRICT mode and nonexistent companion file.
+     */
+    public static class SampleReplayMissingCompanionClass
+    {
+        @Test
+        @AiMode(ExecutionMode.REPLAY_STRICT)
+        @AiInlinePlaybook("name: replay_sample\nsteps:\n  - step: Click search button\n")
+        @AiPlaybook(recordingMethod = "testNonExistentLive")
+        public void testMissingReplay()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that when a replay test fails early in beforeEach (e.g. missing companion JSON file),
+     * a failure report is still generated and registered in the test reports and index dashboard.
+     */
+    @Test
+    public void testEarlyFailureInReplayModeGeneratesReport(@TempDir final Path tempDir) throws Exception
+    {
+        final Path reportDir = tempDir.resolve("ai-reports-early-fail");
+        Neodymium.getData().put("neodymium.ai.report.disk.enabled", "true");
+        Neodymium.getData().put("neodymium.ai.report.disk.directory", reportDir.toString());
+        Neodymium.getData().put("neodymium.ai.report.disk.formats", "ALL");
+        AiConfiguration.resetInstance();
+
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final java.lang.reflect.Method method = SampleReplayMissingCompanionClass.class.getMethod("testMissingReplay");
+        final ExtensionContext extensionContext = createMockExtensionContext(SampleReplayMissingCompanionClass.class, method);
+
+        final List<TestTemplateInvocationContext> contexts =
+            runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+        Assertions.assertFalse(contexts.isEmpty());
+
+        final List<Extension> extensions = contexts.get(0).getAdditionalExtensions();
+        final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+
+        Assertions.assertThrows(FileNotFoundException.class, () -> {
+            beforeEach.beforeEach(extensionContext);
+        });
+
+        // Verify report files were generated despite the early failure
+        try (var stream = Files.list(reportDir))
+        {
+            final List<Path> files = stream.toList();
+            Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".html")), "HTML report must be generated");
+            Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".md")), "Markdown report must be generated");
+            Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".json")), "JSON report must be generated");
+            Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().equals("index.html")), "index.html must be updated");
+
+            final Path jsonPath = files.stream().filter(p -> p.getFileName().toString().endsWith(".json")).findFirst().orElseThrow();
+            final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+            Assertions.assertEquals("FAILED", root.get("status").asText());
+            Assertions.assertEquals("REPLAY_STRICT", root.get("executionMode").asText());
+            Assertions.assertTrue(root.get("failureReason").asText().contains("No recorded companion JSON file found"));
+        }
     }
 }

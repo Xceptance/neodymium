@@ -595,6 +595,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                         this.report.setFailureStackTrace(sw.toString());
                     }
                 }
+                else if (lastErr != null)
+                {
+                    this.report.setFailureReason(lastErr.toString());
+                }
             }
         }
 
