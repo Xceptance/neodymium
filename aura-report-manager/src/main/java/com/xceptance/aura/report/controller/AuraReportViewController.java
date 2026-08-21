@@ -21,6 +21,7 @@ package com.xceptance.aura.report.controller;
 import com.xceptance.aura.report.dto.BatchOverviewDataDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
+import com.xceptance.aura.report.dto.TestBaseVariationHistoryDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestBatchEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
@@ -221,6 +222,22 @@ public class AuraReportViewController
             return "fragments/test-base :: testBase";
         }
         return "index";
+    }
+
+    @GetMapping("/fragments/test-base/variation-history")
+    public String getVariationHistoryFragment(
+        @RequestParam(name = "testClass", defaultValue = "") final String testClass,
+        @RequestParam(name = "dataSet", defaultValue = "") final String dataSet,
+        @RequestParam(name = "location", defaultValue = "") final String location,
+        @RequestParam(name = "browser", defaultValue = "") final String browser,
+        final Model model)
+    {
+        final List<TestBaseVariationHistoryDto> historyRuns = dataService.getVariationHistory(
+            testClass, dataSet, location, browser
+        );
+
+        model.addAttribute("historyRuns", historyRuns);
+        return "fragments/side-panel-step-list :: variationHistoryRows";
     }
 
     @GetMapping("/test-side-panel")

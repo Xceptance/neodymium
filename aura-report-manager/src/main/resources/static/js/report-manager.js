@@ -1089,11 +1089,15 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
         const loc = activeRow?.getAttribute('data-location') || 'Unknown';
         const browser = activeRow?.getAttribute('data-browser') || 'Chrome';
+        const testClass = activeRow?.getAttribute('data-test-name') || testName || '';
+        const dataSetVal = activeRow?.getAttribute('data-dataset') || dataSet || '';
 
         const locBadge = document.getElementById('tbSideLocaleBadge');
         const browserBadge = document.getElementById('tbSideBrowserBadge');
         if (locBadge) locBadge.innerHTML = `<span class="material-symbols-outlined">location_on</span> ${loc}`;
         if (browserBadge) browserBadge.innerHTML = `<span class="material-symbols-outlined text-accent">language</span> ${browser}`;
+
+        loadTestBaseVariationHistory(testClass, dataSetVal, loc, browser);
     } else {
         if (testBaseControls) testBaseControls.style.display = 'none';
         if (singleRunControls) singleRunControls.style.display = 'flex';
@@ -1937,6 +1941,9 @@ document.addEventListener('change', (e) => {
         applyBatchDirectoryFilters();
         applyTestBaseFilters();
         applyRunReportFilters();
+        if (menuId === 'tbSideBatchMultiselectMenu') {
+            filterTbVariationHistoryTable();
+        }
     }
 });
 
@@ -2450,4 +2457,77 @@ function closeImageModal() {
 
 window.openImageModal = openImageModal;
 window.closeImageModal = closeImageModal;
+
+function escapeTextHelper(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function loadTestBaseVariationHistory(testClass, dataSet, location, browser) {
+    const tbody = document.getElementById('tbVariationHistoryTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted p-3" style="font-size: 0.82rem;"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Loading execution history...</td></tr>';
+
+    const url = `/fragments/test-base/variation-history?testClass=${encodeURIComponent(testClass)}&dataSet=${encodeURIComponent(dataSet)}&location=${encodeURIComponent(location)}&browser=${encodeURIComponent(browser)}`;
+
+    if (window.htmx) {
+        htmx.ajax('GET', url, { target: '#tbVariationHistoryTableBody', swap: 'innerHTML' }).then(() => {
+            populateTbSideBatchMultiselect();
+        });
+    } else {
+        fetch(url)
+            .then(res => res.text())
+            .then(html => {
+                tbody.innerHTML = html;
+                populateTbSideBatchMultiselect();
+            })
+            .catch(() => {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger p-3" style="font-size: 0.82rem;">Failed to load variation history.</td></tr>';
+            });
+    }
+}
+
+function populateTbSideBatchMultiselect() {
+    const menu = document.getElementById('tbSideBatchMultiselectMenu');
+    if (!menu) return;
+
+    const rows = document.querySelectorAll('#tbVariationHistoryTableBody tr.history-var-row');
+    const batches = new Set();
+    rows.forEach(r => {
+        const b = r.getAttribute('data-batch');
+        if (b) batches.add(b);
+    });
+
+    if (batches.size > 0) {
+        let html = '<label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="tbSideBatchMultiselectMenu" value="ALL" checked> <strong>Select All Batches</strong></label><div class="multiselect-divider"></div>';
+        batches.forEach(b => {
+            html += `<label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="tbSideBatchMultiselectMenu" value="${escapeTextHelper(b)}" checked> <span>${escapeTextHelper(b)}</span></label>`;
+        });
+        menu.innerHTML = html;
+    }
+}
+
+function filterTbVariationHistoryTable() {
+    const menu = document.getElementById('tbSideBatchMultiselectMenu');
+    if (!menu) return;
+
+    const checkedBoxes = Array.from(menu.querySelectorAll('.js-chk-option:checked')).map(cb => cb.value);
+    const allChecked = menu.querySelector('.js-chk-all')?.checked || false;
+
+    const rows = document.querySelectorAll('#tbVariationHistoryTableBody tr.history-var-row');
+    rows.forEach(r => {
+        const batch = r.getAttribute('data-batch') || '';
+        if (allChecked || checkedBoxes.includes(batch)) {
+            r.style.display = '';
+        } else {
+            r.style.display = 'none';
+        }
+    });
+}
+
+window.loadTestBaseVariationHistory = loadTestBaseVariationHistory;
+window.populateTbSideBatchMultiselect = populateTbSideBatchMultiselect;
+window.filterTbVariationHistoryTable = filterTbVariationHistoryTable;
+
 

@@ -51,13 +51,13 @@
             </button>
         </div>
         <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
-            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:-1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
+            <button th:hx-post="@{/api/queue/move(index=${iter.index},dir=-1)}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
                 <span class="material-symbols-outlined">keyboard_arrow_up</span>
             </button>
-            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
+            <button th:hx-post="@{/api/queue/move(index=${iter.index},dir=1)}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
                 <span class="material-symbols-outlined">keyboard_arrow_down</span>
             </button>
-            <button hx-post="/api/queue/remove" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;file\&quot;:\&quot;' + ds.file + '\&quot;,\&quot;id\&quot;:\&quot;' + ds.id + '\&quot;}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
+            <button th:hx-post="@{/api/queue/remove(index=${iter.index},file=${ds.file},id=${ds.id})}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
@@ -102,8 +102,7 @@
                 <div class="browser-group-content" style="display: flex; flex-direction: column; gap: 3px; padding: 4px 6px 6px 6px;">
                     <div th:each="p : ${grp.profiles}" class="profile-checkbox-row"
                          th:classappend="${globalBrowserProfiles != null and globalBrowserProfiles.contains(p.id) ? 'checked' : ''}"
-                         hx-post="/api/config/browser/toggle" 
-                         th:hx-vals="${'{\&quot;profile\&quot;:\&quot;' + p.id + '\&quot;}'}"
+                         th:hx-post="@{/api/config/browser/toggle(profile=${p.id})}"
                          hx-target="#configPanel"
                          hx-swap="outerHTML">
                         <div class="profile-info" style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">

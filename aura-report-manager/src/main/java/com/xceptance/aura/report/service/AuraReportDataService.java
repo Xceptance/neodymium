@@ -31,6 +31,7 @@ import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseAreaDto;
 import com.xceptance.aura.report.dto.TestBaseClassDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
+import com.xceptance.aura.report.dto.TestBaseVariationHistoryDto;
 import com.xceptance.aura.report.dto.TestClassSummaryDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
@@ -81,6 +82,7 @@ public class AuraReportDataService
     private final ObjectMapper objectMapper;
 
     private final Map<String, List<TestExecutionDto>> liveRunBuffer = new ConcurrentHashMap<>();
+    private final Map<String, RunReportDto> runReportCache = new ConcurrentHashMap<>();
 
     public AuraReportDataService(
         final TestRunRepository runRepository,
@@ -99,6 +101,11 @@ public class AuraReportDataService
         this.objectMapper = new ObjectMapper();
     }
 
+    public void clearCache()
+    {
+        runReportCache.clear();
+    }
+
     @Transactional
     public void clearAllDatabaseEntries()
     {
@@ -106,12 +113,21 @@ public class AuraReportDataService
         variationRepository.deleteAllInBatch();
         batchRepository.deleteAllInBatch();
         runRepository.deleteAllInBatch();
+        runReportCache.clear();
         LOG.info("Removed all entries from all database tables (TestBaseBug, TestBaseVariation, TestBatch, TestRun).");
     }
 
     public List<BatchSummaryDto> getAllBatches()
     {
-        final List<TestBatchEntity> batchEntities = batchRepository.findAll();
+        return getAllBatches(batchRepository.findAll(), runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc());
+    }
+
+    public List<BatchSummaryDto> getAllBatches(final List<TestBatchEntity> batchEntities, final List<TestRunEntity> allRuns)
+    {
+        final Map<String, List<TestRunEntity>> runsByBatch = allRuns.stream()
+            .filter(r -> r.getBatchName() != null)
+            .collect(Collectors.groupingBy(TestRunEntity::getBatchName));
+
         final List<BatchSummaryDto> batches = new ArrayList<>();
 
         for (final TestBatchEntity b : batchEntities)
@@ -119,7 +135,7 @@ public class AuraReportDataService
             String passRateText = "N/A";
             String lastExecutedText = "No runs";
 
-            final List<TestRunEntity> batchRuns = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(b.getBatchName());
+            final List<TestRunEntity> batchRuns = runsByBatch.getOrDefault(b.getBatchName(), List.of());
 
             final java.util.Set<String> activeBatchBugs = new java.util.HashSet<>();
             int totalPassed = 0;
@@ -208,14 +224,16 @@ public class AuraReportDataService
 
     public BatchOverviewDataDto getBatchOverviewData()
     {
-        final List<BatchSummaryDto> batches = getAllBatches();
-        final List<TestRunEntity> runs = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
+        final List<TestBatchEntity> allBatchEntities = batchRepository.findAll();
+        final List<TestRunEntity> allRunEntities = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
+
+        final List<BatchSummaryDto> batches = getAllBatches(allBatchEntities, allRunEntities);
 
         // 1. Dynamic Environments
-        final List<String> envsFromBatches = batchRepository.findAll().stream()
+        final List<String> envsFromBatches = allBatchEntities.stream()
             .map(TestBatchEntity::getEnvironment)
             .collect(Collectors.toList());
-        final List<String> envsFromRuns = runs.stream()
+        final List<String> envsFromRuns = allRunEntities.stream()
             .map(TestRunEntity::getEnvironment)
             .collect(Collectors.toList());
         final List<String> filterEnvs = Stream.concat(envsFromBatches.stream(), envsFromRuns.stream())
@@ -226,7 +244,7 @@ public class AuraReportDataService
 
         // 2. Dynamic Locales
         final List<String> filterLocales = new ArrayList<>();
-        batchRepository.findAll().forEach(b -> {
+        allBatchEntities.forEach(b -> {
             if (b.getLocalesCsv() != null)
             {
                 for (final String s : b.getLocalesCsv().split(","))
@@ -239,7 +257,7 @@ public class AuraReportDataService
                 }
             }
         });
-        runs.forEach(r -> {
+        allRunEntities.forEach(r -> {
             if (r.getLocalesCsv() != null)
             {
                 for (final String s : r.getLocalesCsv().split(","))
@@ -256,7 +274,7 @@ public class AuraReportDataService
 
         // 3. Dynamic Browsers
         final List<String> filterBrowsers = new ArrayList<>();
-        batchRepository.findAll().forEach(b -> {
+        allBatchEntities.forEach(b -> {
             if (b.getBrowsersCsv() != null)
             {
                 for (final String s : b.getBrowsersCsv().split(","))
@@ -269,7 +287,7 @@ public class AuraReportDataService
                 }
             }
         });
-        runs.forEach(r -> {
+        allRunEntities.forEach(r -> {
             if (r.getBrowsersCsv() != null)
             {
                 for (final String s : r.getBrowsersCsv().split(","))
@@ -286,7 +304,7 @@ public class AuraReportDataService
 
         return new BatchOverviewDataDto(
             batches,
-            runs,
+            allRunEntities,
             filterEnvs,
             filterLocales,
             filterBrowsers
@@ -447,6 +465,11 @@ public class AuraReportDataService
             );
         }
 
+        if (runReportCache.containsKey(effectiveRunId))
+        {
+            return runReportCache.get(effectiveRunId);
+        }
+
         final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
         final TestRunEntity runEntity = runOpt.orElseGet(() -> new TestRunEntity(
             effectiveRunId,
@@ -462,6 +485,7 @@ public class AuraReportDataService
 
         List<TestExecutionDto> rawExecutions = new ArrayList<>();
         final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(effectiveRunId);
+
         if (runJsonOpt.isPresent())
         {
             try
@@ -470,7 +494,10 @@ public class AuraReportDataService
                 final JsonNode execArray = root.path("executions");
                 if (execArray.isArray())
                 {
-                    rawExecutions = objectMapper.convertValue(execArray, new TypeReference<List<TestExecutionDto>>() {});
+                    rawExecutions = objectMapper.readValue(
+                        execArray.traverse(objectMapper),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, TestExecutionDto.class)
+                    );
                 }
             }
             catch (final Exception e)
@@ -487,20 +514,48 @@ public class AuraReportDataService
         final String runEnv = runEntity.getEnvironment() != null ? runEntity.getEnvironment() : "ALL";
         final List<TestExecutionDto> executions = new ArrayList<>();
 
+        final Map<String, Long> runStartTimes = runRepository.findAll().stream()
+            .collect(Collectors.toMap(
+                TestRunEntity::getId,
+                r -> r.getStartTimeMs() != null ? r.getStartTimeMs() : 0L,
+                (a, b) -> a
+            ));
+
+        final List<TestBaseBugEntity> allRunBugs = bugRepository.findByEnvironmentIn(List.of(runEnv, "ALL"));
+
+        final Map<String, List<String>> dbBugsByVarId = allRunBugs.stream()
+            .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(effectiveRunId, b.getLinkedRunId(), runStartTimes))
+                      && (b.getRemovedRunId() == null || !isRunAtOrAfter(effectiveRunId, b.getRemovedRunId(), runStartTimes)))
+            .collect(Collectors.groupingBy(
+                TestBaseBugEntity::getVariationId,
+                Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
+            ));
+
+        final Map<String, java.util.Set<String>> removedBugsByVarId = allRunBugs.stream()
+            .filter(b -> b.getRemovedRunId() != null && isRunAtOrAfter(effectiveRunId, b.getRemovedRunId(), runStartTimes))
+            .collect(Collectors.groupingBy(
+                TestBaseBugEntity::getVariationId,
+                Collectors.mapping(b -> normalizeTicket(b.getBugTicket()), Collectors.toSet())
+            ));
+
         for (final TestExecutionDto exec : rawExecutions)
         {
             final String varId = generateVariationId(exec.getTestClass(), exec.getTitle(), exec.getLocation(), exec.getBrowser());
-            final List<String> dbBugTickets = bugRepository.findByVariationIdAndEnvironmentIn(varId, List.of(runEnv, "ALL")).stream()
-                .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(effectiveRunId, b.getLinkedRunId()))
-                          && (b.getRemovedRunId() == null || !isRunAtOrAfter(effectiveRunId, b.getRemovedRunId())))
-                .map(TestBaseBugEntity::getBugTicket)
+            final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
                 .distinct()
                 .collect(Collectors.toList());
 
+            final java.util.Set<String> removedTickets = removedBugsByVarId.getOrDefault(varId, java.util.Set.of());
             final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
             if (exec.getBugs() != null)
             {
-                combinedBugs.addAll(exec.getBugs());
+                for (final String b : exec.getBugs())
+                {
+                    if (!removedTickets.contains(normalizeTicket(b)))
+                    {
+                        combinedBugs.add(b);
+                    }
+                }
             }
             combinedBugs.addAll(dbBugTickets);
 
@@ -525,7 +580,9 @@ public class AuraReportDataService
             executions.add(exec);
         }
 
-        return buildRunReportDto(runEntity, executions);
+        final RunReportDto report = buildRunReportDto(runEntity, executions);
+        runReportCache.put(effectiveRunId, report);
+        return report;
     }
 
     public RunReportDto getFilteredRunReport(
@@ -658,6 +715,7 @@ public class AuraReportDataService
             }
 
             LOG.info("Ingested test execution for runId={}: title={}, status={}", runId, dto.getTitle(), dto.getStatus());
+            runReportCache.remove(runId);
         }
         catch (final Exception e)
         {
@@ -699,6 +757,7 @@ public class AuraReportDataService
             }
 
             liveRunBuffer.remove(runId);
+            runReportCache.remove(runId);
             LOG.info("Finished run runId={} and persisted to disk.", runId);
         }
     }
@@ -737,6 +796,7 @@ public class AuraReportDataService
                     bugRepository.save(new TestBaseBugEntity(varId, cleanTicket, runEnv, runStartTime, runId));
                 }
 
+                runReportCache.remove(runId);
                 final RunReportDto updatedReport = getRunReport(runId);
                 saveRunReportToDisk(runId, updatedReport);
                 recalculateRunEntityStats(runId);
@@ -791,6 +851,7 @@ public class AuraReportDataService
                     }
                 }
 
+                runReportCache.remove(runId);
                 final RunReportDto updatedReport = getRunReport(runId);
                 saveRunReportToDisk(runId, updatedReport);
                 recalculateRunEntityStats(runId);
@@ -815,6 +876,7 @@ public class AuraReportDataService
         {
             return;
         }
+        runReportCache.remove(runId);
         try
         {
             final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
@@ -897,6 +959,11 @@ public class AuraReportDataService
 
     private boolean isRunAtOrAfter(final String currentRunId, final String refRunId)
     {
+        return isRunAtOrAfter(currentRunId, refRunId, Map.of());
+    }
+
+    private boolean isRunAtOrAfter(final String currentRunId, final String refRunId, final Map<String, Long> runStartTimes)
+    {
         if (currentRunId == null || refRunId == null)
         {
             return true;
@@ -905,24 +972,25 @@ public class AuraReportDataService
         {
             return true;
         }
-        try
+        final Long currentStart = runStartTimes.get(currentRunId);
+        final Long refStart = runStartTimes.get(refRunId);
+        if (currentStart != null && refStart != null)
         {
-            final long cId = Long.parseLong(currentRunId);
-            final long rId = Long.parseLong(refRunId);
-            return cId >= rId;
+            return currentStart >= refStart;
         }
-        catch (final NumberFormatException e)
+        if (currentRunId.matches("^\\d+$") && refRunId.matches("^\\d+$"))
         {
-            final Optional<TestRunEntity> currentRun = runRepository.findById(currentRunId);
-            final Optional<TestRunEntity> refRun = runRepository.findById(refRunId);
-            if (currentRun.isPresent() && refRun.isPresent()
-                && currentRun.get().getStartTimeMs() != null
-                && refRun.get().getStartTimeMs() != null)
+            try
             {
-                return currentRun.get().getStartTimeMs() >= refRun.get().getStartTimeMs();
+                final long cId = Long.parseLong(currentRunId);
+                final long rId = Long.parseLong(refRunId);
+                return cId >= rId;
             }
-            return currentRunId.compareTo(refRunId) >= 0;
+            catch (final NumberFormatException ignored)
+            {
+            }
         }
+        return currentRunId.compareTo(refRunId) >= 0;
     }
 
     private void recalculateRunEntityStats(final String runId)
@@ -967,46 +1035,7 @@ public class AuraReportDataService
             );
         }
 
-        final String runEnv = runEntity.getEnvironment() != null ? runEntity.getEnvironment() : "ALL";
-        final String runId = runEntity.getId();
 
-        // Enrich executions with database bug tickets and compute status dynamically
-        for (final TestExecutionDto e : executions)
-        {
-            final String varId = generateVariationId(e.getTestClass(), e.getTitle(), e.getLocation(), e.getBrowser());
-            final List<String> bugTickets = bugRepository.findByVariationIdAndEnvironmentIn(varId, List.of(runEnv, "ALL")).stream()
-                .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(runId, b.getLinkedRunId()))
-                          && (b.getRemovedRunId() == null || !isRunAtOrAfter(runId, b.getRemovedRunId())))
-                .map(TestBaseBugEntity::getBugTicket)
-                .filter(t -> t != null && !t.trim().isEmpty() && !"NONE".equalsIgnoreCase(t))
-                .distinct()
-                .collect(Collectors.toList());
-            e.setBugs(bugTickets);
-
-            final String currentStatus = e.getStatus();
-            if ("failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus) || "failed-known".equalsIgnoreCase(currentStatus))
-            {
-                if (!bugTickets.isEmpty())
-                {
-                    e.setStatus("failed-known");
-                }
-                else
-                {
-                    e.setStatus("failed-unknown");
-                }
-            }
-            else if ("passed".equalsIgnoreCase(currentStatus) || "succeeded-fixed".equalsIgnoreCase(currentStatus) || "passed-clean".equalsIgnoreCase(currentStatus))
-            {
-                if (!bugTickets.isEmpty())
-                {
-                    e.setStatus("succeeded-fixed");
-                }
-                else
-                {
-                    e.setStatus("passed-clean");
-                }
-            }
-        }
 
         int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0;
         for (final TestExecutionDto e : executions)
@@ -1107,26 +1136,192 @@ public class AuraReportDataService
         );
     }
 
+    private static final ThreadLocal<MessageDigest> SHA256_DIGEST = ThreadLocal.withInitial(() -> {
+        try
+        {
+            return MessageDigest.getInstance("SHA-256");
+        }
+        catch (final NoSuchAlgorithmException e)
+        {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    });
+
+    public static String normalizeBrowser(final String raw)
+    {
+        if (raw == null || raw.trim().isEmpty())
+        {
+            return "Chrome";
+        }
+        final String b = raw.trim();
+        final String bLower = b.toLowerCase();
+        if (bLower.startsWith("chrome"))
+        {
+            return "Chrome";
+        }
+        if (bLower.startsWith("firefox") || bLower.startsWith("ff"))
+        {
+            return "Firefox";
+        }
+        if (bLower.startsWith("edge"))
+        {
+            return "Edge";
+        }
+        if (bLower.startsWith("safari"))
+        {
+            return "Safari";
+        }
+        return Character.toUpperCase(b.charAt(0)) + b.substring(1);
+    }
+
+    public List<TestBaseVariationHistoryDto> getVariationHistory(
+        final String targetTestClass,
+        final String targetDataSet,
+        final String targetLocation,
+        final String targetBrowser)
+    {
+        final String normTargetBrowser = normalizeBrowser(targetBrowser);
+        final String cleanTargetDataSet = cleanDataSetString(targetDataSet);
+        final List<TestRunEntity> runs = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
+        final List<TestBaseVariationHistoryDto> historyList = new ArrayList<>();
+
+        for (final TestRunEntity run : runs)
+        {
+            final RunReportDto report = getRunReport(run.getId());
+            if (report == null || report.getExecutions() == null)
+            {
+                continue;
+            }
+
+            for (final TestExecutionDto exec : report.getExecutions())
+            {
+                final String execClass = exec.getTestClass();
+                if (targetTestClass != null && !targetTestClass.isEmpty() && execClass != null
+                    && !targetTestClass.equalsIgnoreCase(execClass.trim()))
+                {
+                    continue;
+                }
+
+                final String execData = cleanDataSetString(exec.getTitle());
+                if (!cleanTargetDataSet.isEmpty() && !execData.isEmpty()
+                    && !cleanTargetDataSet.equalsIgnoreCase(execData))
+                {
+                    continue;
+                }
+
+                if (targetLocation != null && !targetLocation.isEmpty() && !"Unknown".equalsIgnoreCase(targetLocation)
+                    && exec.getLocation() != null && !exec.getLocation().isEmpty()
+                    && !targetLocation.equalsIgnoreCase(exec.getLocation().trim()))
+                {
+                    continue;
+                }
+
+                final String execNormBrowser = normalizeBrowser(exec.getBrowser());
+                if (!normTargetBrowser.equalsIgnoreCase(execNormBrowser))
+                {
+                    continue;
+                }
+
+                final String rawStatus = exec.getStatus() != null ? exec.getStatus() : "passed-clean";
+                final String statusClass;
+                final String statusLabel;
+
+                switch (rawStatus.toLowerCase())
+                {
+                    case "succeeded-fixed", "healed" ->
+                    {
+                        statusClass = "badge-fixed";
+                        statusLabel = "HEALED / FIXED";
+                    }
+                    case "passed-clean", "passed", "succeeded" ->
+                    {
+                        statusClass = "badge-pass";
+                        statusLabel = "PASSED";
+                    }
+                    case "failed-known" ->
+                    {
+                        statusClass = "badge-known";
+                        statusLabel = "FAILED KNOWN";
+                    }
+                    case "failed-unknown", "failed", "error" ->
+                    {
+                        statusClass = "badge-fail";
+                        statusLabel = "FAILED";
+                    }
+                    case "ignored" ->
+                    {
+                        statusClass = "badge-ignored";
+                        statusLabel = "IGNORED";
+                    }
+                    default ->
+                    {
+                        statusClass = "badge-pass";
+                        statusLabel = rawStatus.toUpperCase();
+                    }
+                }
+
+                final String timestamp = run.getTimestampLabel() != null ? run.getTimestampLabel() : "Recently";
+                final String engine = exec.getEngine() != null ? exec.getEngine() : "Java";
+
+                historyList.add(new TestBaseVariationHistoryDto(
+                    run.getId(),
+                    run.getBatchName(),
+                    engine,
+                    timestamp,
+                    rawStatus,
+                    statusClass,
+                    statusLabel,
+                    exec.getBugs()
+                ));
+            }
+        }
+
+        return historyList;
+    }
+
+    private static String cleanDataSetString(final String raw)
+    {
+        if (raw == null)
+        {
+            return "";
+        }
+        String s = raw.trim();
+        if (s.startsWith("[Data Set:") && s.endsWith("]"))
+        {
+            s = s.substring(10, s.length() - 1).trim();
+        }
+        else if (s.startsWith("[") && s.endsWith("]"))
+        {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+        return s;
+    }
+
     private String generateVariationId(final String testClass, final String dataSet, final String location, final String browser)
     {
+        final String normBrowser = normalizeBrowser(browser);
         final String raw = (testClass != null ? testClass : "") + "|" +
                            (dataSet != null ? dataSet : "") + "|" +
                            (location != null ? location : "") + "|" +
-                           (browser != null ? browser : "");
+                           (normBrowser != null ? normBrowser : "");
         try
         {
-            final MessageDigest md = MessageDigest.getInstance("SHA-256");
+            final MessageDigest md = SHA256_DIGEST.get();
+            md.reset();
             final byte[] hash = md.digest(raw.getBytes(StandardCharsets.UTF_8));
-            final StringBuilder hex = new StringBuilder();
+            final StringBuilder hex = new StringBuilder(16);
             for (int i = 0; i < 8; i++)
             {
-                hex.append(String.format("%02x", hash[i]));
+                final int b = hash[i] & 0xff;
+                if (b < 16) hex.append('0');
+                hex.append(Integer.toHexString(b));
             }
             return "var_" + hex;
         }
-        catch (final NoSuchAlgorithmException e)
+        catch (final Exception e)
         {
             return "var_" + Math.abs(raw.hashCode());
         }
     }
 }
+

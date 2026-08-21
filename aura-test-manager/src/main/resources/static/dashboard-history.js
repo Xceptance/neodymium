@@ -262,7 +262,6 @@ async function loadHistory() {
 window.loadHistory = loadHistory;
 
 function renderHistoryTable() {
-    if (window.location.pathname !== '/history') return;
     htmx.ajax('GET', '/api/reporting/history', { target: '#allureHistoryList', swap: 'outerHTML' }).then(() => {
         loadHistory();
     });

@@ -3,10 +3,10 @@
 // ============================================================================
 
 function isDatasetSelected(file, id) {
-    if (!file) return false;
+    if (!file || id == null) return false;
     const strFile = String(file);
-    const strId = id != null ? String(id) : '';
-    return selectedDatasets.some(d => String(d.file) === strFile && String(d.id != null ? d.id : '') === strId);
+    const strId = String(id);
+    return selectedDatasets.some(d => String(d.file) === strFile && String(d.id) === strId);
 }
 window.isDatasetSelected = isDatasetSelected;
 
@@ -16,13 +16,13 @@ function isAllDatasetsChecked(fileDto) {
 }
 window.isAllDatasetsChecked = isAllDatasetsChecked;
 
-function toggleSelectDataset(file, id) {
-    htmx.ajax('POST', '/api/queue/toggle', { values: { file: file, id: id }, target: '#queueListContainer', swap: 'innerHTML' });
+function toggleSelectDataset(file, id, checked) {
+    htmx.ajax('POST', '/api/queue/toggle?file=' + encodeURIComponent(file) + '&id=' + encodeURIComponent(id), { target: '#queueListContainer', swap: 'innerHTML' });
 }
 window.toggleSelectDataset = toggleSelectDataset;
 
-function toggleSelectAllDatasets(file) {
-    htmx.ajax('POST', '/api/queue/toggleAll', { values: { file: file }, target: '#queueListContainer', swap: 'innerHTML' });
+function toggleSelectAllDatasets(file, checked) {
+    htmx.ajax('POST', '/api/queue/toggleAll?file=' + encodeURIComponent(file) + '&checked=' + checked, { target: '#queueListContainer', swap: 'innerHTML' });
 }
 window.toggleSelectAllDatasets = toggleSelectAllDatasets;
 
@@ -76,6 +76,10 @@ function toggleExpandFile(file, targetEl) {
                     icon.classList.remove('fa-chevron-down');
                     icon.classList.add('fa-chevron-right');
                 }
+            }
+            const matIcon = listItem.querySelector('.item-main .material-symbols-outlined');
+            if (matIcon) {
+                matIcon.textContent = isHidden ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
             }
         }
     }
@@ -439,13 +443,7 @@ window.openReportView = openReportView;
 function closeReportView() {
     const iframe = document.getElementById('reportIframe');
     if (iframe) iframe.src = 'about:blank';
-    if (typeof showView === 'function') {
-        if (window.location.pathname === '/history') {
-            showView('reportViewContainer');
-        } else {
-            showView('dashboardView');
-        }
-    }
+    if (typeof showView === 'function') showView('reportViewContainer');
 }
 window.closeReportView = closeReportView;
 
@@ -457,8 +455,8 @@ function syncStateFromQueueContainer() {
     items.forEach(item => {
         const file = item.getAttribute('data-file');
         const id = item.getAttribute('data-id');
-        if (file && id != null) {
-            selectedDatasets.push({ file, id: id || '' });
+        if (file && id) {
+            selectedDatasets.push({ file, id });
         }
     });
     window.selectedDatasets = selectedDatasets;
