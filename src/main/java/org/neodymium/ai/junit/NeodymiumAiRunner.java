@@ -289,6 +289,32 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             modes.add(AiConfiguration.getInstance().getExecutionMode());
         }
 
+        // 2b. Resolve Judge variations
+        final List<Boolean> judgeVariants = new ArrayList<>();
+        final AiJudge methodJudge = method.getAnnotation(AiJudge.class);
+        if (methodJudge != null)
+        {
+            for (final boolean j : methodJudge.value())
+            {
+                judgeVariants.add(j);
+            }
+        }
+        else
+        {
+            final AiJudge classJudge = testClass.getAnnotation(AiJudge.class);
+            if (classJudge != null)
+            {
+                for (final boolean j : classJudge.value())
+                {
+                    judgeVariants.add(j);
+                }
+            }
+        }
+        if (judgeVariants.isEmpty())
+        {
+            judgeVariants.add(null);
+        }
+
         // 3. Resolve dataset filters
         final List<AiDataSet> datasetFilters = new ArrayList<>();
         final AiDataSet methodDataSet = method.getAnnotation(AiDataSet.class);
@@ -445,37 +471,41 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            // Create template invocation context for Cartesian product of browsers, playbooks, datasets, and execution modes
+            // Create template invocation context for Cartesian product of browsers, playbooks, datasets, execution modes, and judge variations
             for (final BrowserMethodData browser : browsers)
             {
                 for (final ExecutionMode mode : modes)
                 {
-                    for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
+                    for (final Boolean judgeEnabled : judgeVariants)
                     {
-                        final String dsId = getDataSetId(dataset);
-                        invocationContexts.add(new TestTemplateInvocationContext()
+                        for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
                         {
-                            @Override
-                            public String getDisplayName(final int invocationIndex)
+                            final String dsId = getDataSetId(dataset);
+                            invocationContexts.add(new TestTemplateInvocationContext()
                             {
-                                final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
-                                final String datasetLabel = dsId != null ? dsId : "default";
-                                final String browserLabel = browser != null ? " :: Browser " + browser.getBrowserTag() : "";
-                                return String.format("[%d] playbook=%s, dataset=%s, mode=%s%s", invocationIndex, name, datasetLabel, mode, browserLabel);
-                            }
-
-                            @Override
-                            public List<Extension> getAdditionalExtensions()
-                            {
-                                final List<Extension> extensions = new ArrayList<>();
-                                if (browser != null)
+                                @Override
+                                public String getDisplayName(final int invocationIndex)
                                 {
-                                    extensions.add(new BrowserExecutionCallback(browser, method.getName()));
+                                    final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
+                                    final String datasetLabel = dsId != null ? dsId : "default";
+                                    final String browserLabel = browser != null ? " :: Browser " + browser.getBrowserTag() : "";
+                                    final String judgeLabel = judgeEnabled != null ? (judgeEnabled ? " [Judge: ON]" : " [Judge: OFF]") : "";
+                                    return String.format("[%d] playbook=%s, dataset=%s, mode=%s%s%s", invocationIndex, name, datasetLabel, mode, judgeLabel, browserLabel);
                                 }
-                                extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser));
-                                return extensions;
-                            }
-                        });
+
+                                @Override
+                                public List<Extension> getAdditionalExtensions()
+                                {
+                                    final List<Extension> extensions = new ArrayList<>();
+                                    if (browser != null)
+                                    {
+                                        extensions.add(new BrowserExecutionCallback(browser, method.getName()));
+                                    }
+                                    extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled));
+                                    return extensions;
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -568,6 +598,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final ExecutionMode mode;
         private final String datasetId;
         private final BrowserMethodData browser;
+        private final Boolean judgeEnabled;
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
@@ -578,7 +609,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final Map<String, SessionData.DataEntry> dataset,
             final ExecutionMode mode,
             final String datasetId,
-            final BrowserMethodData browser
+            final BrowserMethodData browser,
+            final Boolean judgeEnabled
         )
         {
             this.playbookPath = playbookPath;
@@ -586,6 +618,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.mode = mode;
             this.datasetId = datasetId;
             this.browser = browser;
+            this.judgeEnabled = judgeEnabled;
         }
 
         @Override
@@ -652,6 +685,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 });
             }
 
+            if (this.judgeEnabled != null)
+            {
+                Neodymium.getData().put("neodymium.ai.judge.enabled", String.valueOf(this.judgeEnabled));
+                com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.judge.enabled", String.valueOf(this.judgeEnabled));
+            }
+
             final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
             
             final LlmRegistry registry = new LlmRegistry();
@@ -663,6 +702,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final SelenideTargetExecutor executor = new SelenideTargetExecutor();
 
             this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
+            if (this.judgeEnabled != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.judge.enabled", String.valueOf(this.judgeEnabled), false);
+            }
             final ExecutionContext executionContext = this.session.getExecutionContext();
             executor.setExecutionContext(executionContext);
 

@@ -297,6 +297,19 @@ public void test3_InlinePlaybookTextBlocks(final AiSession session)
 }
 ```
 
+##### Pattern 4: Quality Judge Matrix Execution (`@AiJudge`)
+Runs test cases across Quality Judge variations (e.g. `{false, true}`) to evaluate second-opinion judge behavior with zero code duplication:
+```java
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+@AiJudge({false, true})
+@AiPlaybook
+public void test4_JudgeMatrix(final AiSession session)
+{
+    // Executed 4 times: [FORCE_RECORDING, Judge: OFF], [FORCE_RECORDING, Judge: ON],
+    //                   [REPLAY_STRICT, Judge: OFF],    [REPLAY_STRICT, Judge: ON]
+}
+```
+
 ---
 
 #### B. Programmatic & Debugging APIs
@@ -1321,7 +1334,7 @@ session.execute(playbook)
     .verifyMetrics()
     .hasStepCount(12)
     .hasNoSoftFailures()
-    .onLive(m -> m.hasStandardCalls(12).hasLlmCalls(12, 24))
+    .onLive(m -> m.hasActionCalls(12).hasLlmCalls(12, 24))
     .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed())
     .onMode(ExecutionMode.REPLAY_WITH_HEALING, m -> {
         if (m.isHealed()) {
@@ -1341,7 +1354,7 @@ asserter
     .hasStepCount(12)                // exact step count
     .hasStepCount(10, 15)            // range [10, 15]
     .hasLlmCalls(12, 24)             // total LLM calls between 12 and 24
-    .hasStandardCalls(12)            // exact standard action extraction calls
+    .hasActionCalls(12)            // exact standard action extraction calls
     .hasPesapCalls(0, 12)            // PESAP pre-step analysis calls
     .hasVerificationCalls(0)         // post-action verification calls
     .hasJudgeCalls(0)                // quality judge calls
@@ -1364,6 +1377,16 @@ asserter
     .hasContextLevelCount(ContextLevel.MINIMAL, 12)  // MINIMAL used 12 times
     .hasContextLevelCount(ContextLevel.LEAN, 0, 5)   // LEAN used between 0 and 5 times
     .hasContextLevelCount("MINIMAL", 12);            // String level overload
+```
+
+##### Quality Judge Conditional Assertions (`onJudge`, `onNoJudge`)
+
+When parameterized across Quality Judge variations using `@AiJudge({false, true})`, assertions can branch conditionally:
+
+```java
+asserter
+    .onJudge(m -> m.hasJudgeCalls(6))
+    .onNoJudge(m -> m.hasJudgeCalls(0));
 ```
 
 ##### Automated Mode Invariants (`matchesModeExpectations()`)

@@ -119,6 +119,8 @@ public class MetricsAsserterTest
 
         asserter
             .hasStepCount(10, 15)
+            .hasActionCalls(12)
+            .hasActionCalls(10, 14)
             .hasStandardCalls(12)
             .hasStandardCalls(10, 14)
             .hasPesapCalls(3)
@@ -157,5 +159,54 @@ public class MetricsAsserterTest
             .hasContextLevelCount(org.neodymium.ai.model.ContextLevel.LEAN, 2)
             .hasContextLevelCount("MINIMAL", 12)
             .hasContextLevelCount("LEAN", 1, 3);
+    }
+
+    @Test
+    @DisplayName("MetricsAsserter onJudge and onNoJudge conditionals execute correctly")
+    public void testJudgeAssertions()
+    {
+        final ExecutionMetrics metricsWithJudge = new ExecutionMetrics(
+            ExecutionMode.FORCE_RECORDING,
+            15, 10, 0, 0, 5, 10, 0, 0, 0, 0,
+            null
+        );
+        final MetricsAsserter asserterWithJudge = new MetricsAsserter(metricsWithJudge);
+
+        final java.util.concurrent.atomic.AtomicBoolean judgeExecuted = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final java.util.concurrent.atomic.AtomicBoolean noJudgeExecuted = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        Assertions.assertTrue(asserterWithJudge.isJudgeEnabled());
+
+        asserterWithJudge
+            .onJudge(m -> {
+                judgeExecuted.set(true);
+                m.hasJudgeCalls(5);
+            })
+            .onNoJudge(m -> noJudgeExecuted.set(true));
+
+        Assertions.assertTrue(judgeExecuted.get());
+        Assertions.assertFalse(noJudgeExecuted.get());
+
+        final ExecutionMetrics metricsNoJudge = new ExecutionMetrics(
+            ExecutionMode.FORCE_RECORDING,
+            10, 10, 0, 0, 0, 10, 0, 0, 0, 0,
+            null
+        );
+        final MetricsAsserter asserterNoJudge = new MetricsAsserter(metricsNoJudge);
+
+        final java.util.concurrent.atomic.AtomicBoolean judgeExecuted2 = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final java.util.concurrent.atomic.AtomicBoolean noJudgeExecuted2 = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        Assertions.assertFalse(asserterNoJudge.isJudgeEnabled());
+
+        asserterNoJudge
+            .onJudge(m -> judgeExecuted2.set(true))
+            .onNoJudge(m -> {
+                noJudgeExecuted2.set(true);
+                m.hasJudgeCalls(0);
+            });
+
+        Assertions.assertFalse(judgeExecuted2.get());
+        Assertions.assertTrue(noJudgeExecuted2.get());
     }
 }

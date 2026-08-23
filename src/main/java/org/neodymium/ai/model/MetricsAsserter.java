@@ -20,6 +20,7 @@ package org.neodymium.ai.model;
 
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Assertions;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.ContextLevel;
 
@@ -177,15 +178,45 @@ public final class MetricsAsserter
     }
 
     /**
+     * Asserts that action extraction LLM calls equal the expected value.
+     *
+     * @param expected expected action call count
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasActionCalls(final int expected)
+    {
+        Assertions.assertEquals(expected, this.metrics.getStandardCallCount(), "Unexpected action LLM call count.");
+        return this;
+    }
+
+    /**
+     * Asserts that action extraction LLM calls fall within the expected inclusive range [min, max].
+     *
+     * @param min minimum expected action call count
+     * @param max maximum expected action call count
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter hasActionCalls(final int min, final int max)
+    {
+        final int actual = this.metrics.getStandardCallCount();
+        Assertions.assertTrue(
+            actual >= min && actual <= max,
+            String.format("Expected action LLM call count between %d and %d, but was %d.", min, max, actual)
+        );
+        return this;
+    }
+
+    /**
      * Asserts that standard action extraction LLM calls equal the expected value.
      *
      * @param expected expected standard call count
      * @return this asserter instance for chaining
+     * @deprecated Use {@link #hasActionCalls(int)} instead.
      */
+    @Deprecated(forRemoval = true)
     public MetricsAsserter hasStandardCalls(final int expected)
     {
-        Assertions.assertEquals(expected, this.metrics.getStandardCallCount(), "Unexpected standard LLM call count.");
-        return this;
+        return hasActionCalls(expected);
     }
 
     /**
@@ -194,15 +225,12 @@ public final class MetricsAsserter
      * @param min minimum expected standard call count
      * @param max maximum expected standard call count
      * @return this asserter instance for chaining
+     * @deprecated Use {@link #hasActionCalls(int, int)} instead.
      */
+    @Deprecated(forRemoval = true)
     public MetricsAsserter hasStandardCalls(final int min, final int max)
     {
-        final int actual = this.metrics.getStandardCallCount();
-        Assertions.assertTrue(
-            actual >= min && actual <= max,
-            String.format("Expected standard LLM call count between %d and %d, but was %d.", min, max, actual)
-        );
-        return this;
+        return hasActionCalls(min, max);
     }
 
     /**
@@ -708,6 +736,46 @@ public final class MetricsAsserter
     public MetricsAsserter onMode(final ExecutionMode targetMode, final Consumer<MetricsAsserter> consumer)
     {
         if (this.metrics.getExecutionMode() == targetMode && consumer != null)
+        {
+            consumer.accept(this);
+        }
+        return this;
+    }
+
+    /**
+     * Checks if LLM Quality Judge was enabled during this execution.
+     *
+     * @return true if judge was active or judge calls > 0
+     */
+    public boolean isJudgeEnabled()
+    {
+        return this.metrics.getJudgeCallCount() > 0 || AiConfiguration.getInstance().isJudgeEnabled();
+    }
+
+    /**
+     * Executes the consumer lambda only if the Quality Judge was enabled for this execution.
+     *
+     * @param consumer assertion consumer
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter onJudge(final Consumer<MetricsAsserter> consumer)
+    {
+        if (isJudgeEnabled() && consumer != null)
+        {
+            consumer.accept(this);
+        }
+        return this;
+    }
+
+    /**
+     * Executes the consumer lambda only if the Quality Judge was disabled for this execution.
+     *
+     * @param consumer assertion consumer
+     * @return this asserter instance for chaining
+     */
+    public MetricsAsserter onNoJudge(final Consumer<MetricsAsserter> consumer)
+    {
+        if (!isJudgeEnabled() && consumer != null)
         {
             consumer.accept(this);
         }
