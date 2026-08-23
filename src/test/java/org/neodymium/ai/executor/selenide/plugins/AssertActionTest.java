@@ -21,6 +21,7 @@ package org.neodymium.ai.executor.selenide.plugins;
 import static com.codeborne.selenide.Selenide.$;
 
 import com.codeborne.selenide.Selenide;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
@@ -147,5 +148,89 @@ public class AssertActionTest extends BaseAiTest
 
         // 2. Title literal substring contains
         plugin.execute(new Action("ASSERT", "title", "Assert Action", "check title contains", "reasoning", false));
+    }
+
+    @Test
+    @DisplayName("AssertAction gracefully handles malformed regex patterns by falling back to literal matching")
+    public void testAssertActionMalformedRegexFallback() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        // Regex with surrounding slashes cleaned cleanly
+        plugin.execute(new Action("ASSERT", "#welcome-message", "/Welcome.*store!/", "regex with slashes", "reasoning", true));
+        // Regex on title with surrounding slashes
+        plugin.execute(new Action("ASSERT", "title", "/Assert Action Test/", "regex title with slashes", "reasoning", true));
+        // Regex on URL with surrounding slashes
+        plugin.execute(new Action("ASSERT", "url", "/testAssertHappyPath\\.html/", "regex url with slashes", "reasoning", true));
+        // Unclosed regex bracket on an element where text does not match throws AssertionError cleanly (not unhandled PatternSyntaxException)
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#welcome-message", "[unclosed-bracket", "malformed regex non-matching", "reasoning", true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction throws RuntimeException when URL or Title assertion has null value")
+    public void testAssertActionNullValueOnUrlAndTitleThrows() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        Assertions.assertThrows(RuntimeException.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "url", null, "check null url", "reasoning", false));
+        });
+        Assertions.assertThrows(RuntimeException.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "title", null, "check null title", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles asserting selected state on direct SELECT elements")
+    public void testAssertActionDirectSelectElement() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        plugin.execute(new Action("ASSERT", "#role-select", "selected", "check select element has selected option", "reasoning", false));
+    }
+
+    @Test
+    @DisplayName("AssertAction throws AssertionError on failed state assertions")
+    public void testAssertActionNegativeStates() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. Asserting disabled element is enabled
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#disabled-input", "enabled", "check enabled on disabled element", "reasoning", false));
+        });
+
+        // 2. Asserting unchecked box is checked
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#terms-opt", "checked", "check checked on unchecked box", "reasoning", false));
+        });
+
+        // 3. Asserting readonly input is editable
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#readonly-input", "editable", "check editable on readonly element", "reasoning", false));
+        });
+
+        // 4. Asserting unselected option is selected
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#opt-admin", "selected", "check selected on unselected option", "reasoning", false));
+        });
     }
 }

@@ -84,7 +84,7 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-de").shouldBe(selected);
@@ -113,7 +113,7 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#country-select").shouldHave(value("FR"));
@@ -142,7 +142,7 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-dis").shouldBe(disabled);
@@ -171,7 +171,7 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-tech").shouldBe(selected);
