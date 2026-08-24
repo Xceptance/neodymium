@@ -28,7 +28,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiInlinePlaybook;
@@ -104,18 +103,23 @@ public final class VerlaProgrammaticIncludesDemoTest
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
     }
 
     /**
      * Concept 1: Fully Programmatic Java Object API using {@link Playbook.Builder#include(String)} combining an included sub-playbook step with normal prompt steps.
      *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      * @throws Exception if execution fails
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test1_FullyProgrammaticObjectsWithIncludes() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test1_FullyProgrammaticObjectsWithIncludes(final AiSession session) throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
@@ -125,57 +129,52 @@ public final class VerlaProgrammaticIncludesDemoTest
             .step("Press enter to submit search")
             .build();
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute(playbook);
-        }
+        session.execute(playbook);
     }
 
     /**
      * Concept 2a: Programmatic Text Block string execution combining an {@code _include:} step with normal YAML prompt steps and data sections.
      *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      * @throws Exception if execution fails
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test2a_ProgrammaticTextBlockWithIncludesAndEmbeddedYamlData() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test2a_ProgrammaticTextBlockWithIncludesAndEmbeddedYamlData(final AiSession session) throws Exception
     {
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("""
-                steps: |
-                  _include: playbooks/integration/includes/verla_open_homepage.yaml
-                  Locate the search input field and type '${searchTerm}' into it
-                  Press enter to submit search
+        session.execute("""
+            steps: |
+              _include: playbooks/integration/includes/verla_open_homepage.yaml
+              Locate the search input field and type '${searchTerm}' into it
+              Press enter to submit search
 
-                data:
-                  - testId: "default"
-                    searchTerm: "Minimalist"
-                """);
-        }
+            data:
+              - testId: "default"
+                searchTerm: "Minimalist"
+            """);
     }
 
     /**
      * Concept 2b: Programmatic Text Block string execution combining an {@code _include:} step with normal prompt steps seeded with SessionData container.
      *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      * @throws Exception if execution fails
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test2b_ProgrammaticTextBlockWithIncludesAndSessionData() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test2b_ProgrammaticTextBlockWithIncludesAndSessionData(final AiSession session) throws Exception
     {
         final SessionData sessionData = new SessionData();
         sessionData.set("searchTerm", "Minimalist");
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("""
-                steps: |
-                  _include: playbooks/integration/includes/verla_open_homepage.yaml
-                  Locate the search input field and type '${searchTerm}' into it
-                  Press enter to submit search
-                """, sessionData);
-        }
+        session.execute("""
+            steps: |
+              _include: playbooks/integration/includes/verla_open_homepage.yaml
+              Locate the search input field and type '${searchTerm}' into it
+              Press enter to submit search
+            """, sessionData);
     }
 
     /**
@@ -203,40 +202,38 @@ public final class VerlaProgrammaticIncludesDemoTest
      * Concept 4: Pure Step-by-Step Java Debugging combining an {@code _include:} sub-playbook step with individual normal step executions.
      * Allows setting breakpoints on individual Java statements to step through prompt executions.
      *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      * @throws Exception if execution fails
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test4_StepByStepJavaDebuggingWithIncludes() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test4_StepByStepJavaDebuggingWithIncludes(final AiSession session) throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("_include: playbooks/integration/includes/verla_open_homepage.yaml");
-            session.execute("Locate the search input field and type '${searchTerm}' into it");
-            session.execute("Press enter to submit search");
-        }
+        session.execute("_include: playbooks/integration/includes/verla_open_homepage.yaml");
+        session.execute("Locate the search input field and type '${searchTerm}' into it");
+        session.execute("Press enter to submit search");
     }
 
     /**
      * Concept 5: Mixing direct Java Selenide commands with an {@code _include:} sub-playbook step execution.
      *
+     * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      * @throws Exception if execution fails
      */
-    @Test
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiLlmCache
-    public void test5_MixStepsAndSelenideCommandsWithIncludes() throws Exception
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    public void test5_MixStepsAndSelenideCommandsWithIncludes(final AiSession session) throws Exception
     {
         Neodymium.getData().put("searchTerm", "Minimalist");
 
         open(Neodymium.getData().get("verla.url") + "/verla-perfect/index.html");
         $("#search-input").shouldBe(visible);
 
-        try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-        {
-            session.execute("_include: playbooks/integration/includes/verla_search_product.yaml");
-        }
+        session.execute("_include: playbooks/integration/includes/verla_search_product.yaml");
 
         $("#search-input").pressEnter();
     }
