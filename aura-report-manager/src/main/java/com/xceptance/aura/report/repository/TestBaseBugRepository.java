@@ -38,7 +38,11 @@ public interface TestBaseBugRepository extends JpaRepository<TestBaseBugEntity, 
 
     List<TestBaseBugEntity> findByVariationIdAndEnvironmentIn(String variationId, Collection<String> environments);
 
+    List<TestBaseBugEntity> findByVariationIdAndBatchNameInAndEnvironmentIn(String variationId, Collection<String> batchNames, Collection<String> environments);
+
     List<TestBaseBugEntity> findByEnvironmentIn(Collection<String> environments);
+
+    List<TestBaseBugEntity> findByBatchNameInAndEnvironmentIn(Collection<String> batchNames, Collection<String> environments);
 
     @Transactional
     void deleteByVariationIdAndBugTicket(String variationId, String bugTicket);

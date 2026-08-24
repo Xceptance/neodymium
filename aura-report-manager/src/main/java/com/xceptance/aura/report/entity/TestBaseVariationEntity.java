@@ -22,6 +22,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 /**
@@ -65,6 +66,10 @@ public class TestBaseVariationEntity
     @Column(name = "last_executed_at")
     private Long lastExecutedAt;
 
+    @Lob
+    @Column(name = "history_links", columnDefinition = "CLOB")
+    private String historyLinks;
+
     public TestBaseVariationEntity()
     {
     }
@@ -73,7 +78,7 @@ public class TestBaseVariationEntity
     {
         this.id = id;
         this.testClassName = testClassName;
-        this.dataSetLabel = dataSetLabel;
+        this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
         this.areaTag = areaTag;
         this.location = location;
         this.browser = browser;
@@ -101,12 +106,12 @@ public class TestBaseVariationEntity
 
     public String getDataSetLabel()
     {
-        return dataSetLabel;
+        return (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel : "Default";
     }
 
     public void setDataSetLabel(final String dataSetLabel)
     {
-        this.dataSetLabel = dataSetLabel;
+        this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
     }
 
     public String getAreaTag()
@@ -167,5 +172,15 @@ public class TestBaseVariationEntity
     public void setLastExecutedAt(final Long lastExecutedAt)
     {
         this.lastExecutedAt = lastExecutedAt;
+    }
+
+    public String getHistoryLinks()
+    {
+        return historyLinks;
+    }
+
+    public void setHistoryLinks(final String historyLinks)
+    {
+        this.historyLinks = historyLinks;
     }
 }

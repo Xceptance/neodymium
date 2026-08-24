@@ -83,12 +83,6 @@ public class LocalRunJsonStorageService
     public Optional<String> readRunJson(final String runId)
     {
         final Path nestedRunJson = Paths.get(baseDir, runId, "run.json");
-        final Path runDir = Paths.get(baseDir, runId);
-
-        if (!Files.exists(nestedRunJson) && Files.exists(runDir) && Files.isDirectory(runDir))
-        {
-            generateRunJsonFromTestExecutions(runDir.toFile(), runId);
-        }
 
         if (Files.exists(nestedRunJson))
         {
@@ -115,10 +109,21 @@ public class LocalRunJsonStorageService
             }
         }
 
+        final Path runDir = Paths.get(baseDir, runId);
+        if (Files.exists(runDir) && Files.isDirectory(runDir))
+        {
+            return buildRunJsonContent(runDir.toFile(), runId);
+        }
+
         return Optional.empty();
     }
 
     public void generateRunJsonFromTestExecutions(final File runDir, final String runId)
+    {
+        buildRunJsonContent(runDir, runId);
+    }
+
+    public Optional<String> buildRunJsonContent(final File runDir, final String runId)
     {
         try
         {
@@ -127,9 +132,10 @@ public class LocalRunJsonStorageService
 
             if (testExecJsonFiles.isEmpty())
             {
-                return;
+                return Optional.empty();
             }
 
+            final ArrayNode mergedExecutions = objectMapper.createArrayNode();
             final Map<String, Map<String, List<String>>> areasMap = new LinkedHashMap<>();
             final Set<String> localesSet = new LinkedHashSet<>();
             final Set<String> browsersSet = new LinkedHashSet<>();
@@ -280,7 +286,27 @@ public class LocalRunJsonStorageService
                             objNode.put("areaName", areaName);
                             objNode.put("testClass", testClass);
 
-                            final String title = objNode.path("title").asText("");
+                            if (!objNode.has("title") || objNode.path("title").asText().trim().isEmpty())
+                            {
+                                if (objNode.has("datasetId") && !objNode.path("datasetId").asText().trim().isEmpty())
+                                {
+                                    objNode.put("title", objNode.path("datasetId").asText().trim());
+                                }
+                                else if (objNode.has("testId") && !objNode.path("testId").asText().trim().isEmpty())
+                                {
+                                    objNode.put("title", objNode.path("testId").asText().trim());
+                                }
+                                else if (objNode.has("testName") && !objNode.path("testName").asText().trim().isEmpty())
+                                {
+                                    objNode.put("title", objNode.path("testName").asText().trim());
+                                }
+                                else
+                                {
+                                    objNode.put("title", "Default");
+                                }
+                            }
+
+                            final String title = objNode.path("title").asText("Default");
                             final String location = objNode.path("location").asText("Unknown");
                             final String browser = objNode.path("browser").asText("Chrome");
                             final String engine = objNode.path("engine").asText("Java");
@@ -421,24 +447,61 @@ public class LocalRunJsonStorageService
                             {
                                 try
                                 {
-                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
+                                    if (!targetFile.exists())
+                                    {
+                                        objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
+                                    }
+                                    else
+                                    {
+                                        final JsonNode existingNode = objectMapper.readTree(targetFile);
+                                        if (!existingNode.equals(objNode))
+                                        {
+                                            objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
+                                        }
+                                    }
                                 }
                                 catch (final Exception ignored)
                                 {
                                 }
                             }
                             areasMap.computeIfAbsent(areaName, k -> new LinkedHashMap<>()).computeIfAbsent(testClass, k -> new ArrayList<>()).add(targetFile.getName());
+                            mergedExecutions.add(objNode);
                         }
 
                         totalExecsCount++;
                         final String rawStatus = node.path("status").asText("passed-clean");
-                        switch (rawStatus)
+                        final JsonNode bugsNode = node.path("bugs");
+                        final boolean hasBugs = bugsNode.isArray() && bugsNode.size() > 0;
+
+                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus))
                         {
-                            case "passed-clean", "passed", "succeeded" -> pass++;
-                            case "succeeded-fixed" -> fixed++;
-                            case "failed-known" -> known++;
-                            case "failed-unknown", "failed", "error" -> unknown++;
-                            case "ignored", "skipped" -> ignoredCount++;
+                            if (hasBugs)
+                            {
+                                known++;
+                            }
+                            else
+                            {
+                                unknown++;
+                            }
+                        }
+                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                        {
+                            if (hasBugs)
+                            {
+                                fixed++;
+                            }
+                            else
+                            {
+                                pass++;
+                            }
+                        }
+                        else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus))
+                        {
+                            ignoredCount++;
+                        }
+                        else
+                        {
+                            pass++;
                         }
                     }
                 }
@@ -536,16 +599,67 @@ public class LocalRunJsonStorageService
             }
 
             rootNode.set("summary", summaryNode);
+            rootNode.set("executions", mergedExecutions);
             rootNode.set("areas", areasArray);
 
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(runJsonFile, rootNode);
-            LOG.info("Generated/Updated run.json for runId={} from {} test execution JSON files (Total: {}, Pass: {}, Known: {}, Unknown: {}).",
-                runId, total, total, pass, known, unknown);
+            return Optional.of(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode));
         }
         catch (final Exception e)
         {
-            LOG.error("Failed to generate run.json for runId {}: {}", runId, e.getMessage(), e);
+            LOG.error("Failed to build run JSON content for runId {}: {}", runId, e.getMessage(), e);
         }
+        return Optional.empty();
+    }
+
+    public boolean updateRunJsonSummaryStats(final File runDir, final com.xceptance.aura.report.dto.RunReportDto report)
+    {
+        if (runDir == null || !runDir.exists() || report == null)
+        {
+            return false;
+        }
+
+        final File runJsonFile = new File(runDir, "run.json");
+        if (!runJsonFile.exists())
+        {
+            return false;
+        }
+
+        try
+        {
+            final JsonNode root = objectMapper.readTree(runJsonFile);
+            if (root instanceof ObjectNode rootObj)
+            {
+                final int total = report.getTotalCount();
+                final int pass = report.getPassCount();
+                final int fixed = report.getFixedCount();
+                final int known = report.getKnownCount();
+                final int unknown = report.getUnknownCount();
+                final int ignored = report.getIgnoredCount();
+                final double passRate = total > 0 ? Math.round((pass + fixed) * 100.0 / total * 10.0) / 10.0 : 0.0;
+
+                final ObjectNode summaryNode = objectMapper.createObjectNode();
+                summaryNode.put("total", total);
+                summaryNode.put("pass", pass);
+                summaryNode.put("fixed", fixed);
+                summaryNode.put("known", known);
+                summaryNode.put("unknown", unknown);
+                summaryNode.put("ignored", ignored);
+                summaryNode.put("passRate", passRate);
+
+                rootObj.set("summary", summaryNode);
+
+                objectMapper.writerWithDefaultPrettyPrinter().writeValue(runJsonFile, rootObj);
+                LOG.info("Adjusted summary stats in run.json for runDir={} (Total: {}, Pass: {}, Fixed: {}, Known: {}, Unknown: {}, PassRate: {}%).",
+                    runDir.getName(), total, pass, fixed, known, unknown, passRate);
+                return true;
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed updating summary stats in run.json for {}: {}", runDir.getAbsolutePath(), e.getMessage());
+        }
+
+        return false;
     }
 
     private void populateBlockSteps(final JsonNode sourceSteps, final ArrayNode targetArray, final String prefix, final String file, final String defaultEngine, final ObjectMapper mapper)
@@ -914,6 +1028,7 @@ public class LocalRunJsonStorageService
 
                         if (matches)
                         {
+                            final JsonNode beforeNode = objNode.deepCopy();
                             if (!objNode.has("id") || objNode.path("id").asText().isEmpty())
                             {
                                 objNode.put("id", rowId != null && !rowId.isEmpty() ? rowId : fileNameNoExt);
@@ -936,8 +1051,11 @@ public class LocalRunJsonStorageService
                             }
                             else
                             {
-                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
-                                LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
+                                if (!beforeNode.equals(objNode))
+                                {
+                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
+                                    LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
+                                }
                             }
                             return true;
                         }

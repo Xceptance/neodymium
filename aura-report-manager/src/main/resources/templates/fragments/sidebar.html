@@ -16,41 +16,32 @@
 
     <div class="nav-group-label">Report Manager</div>
     <nav>
-        <button class="nav-item-btn" id="navRunsList" 
-                th:classappend="${activeTab == 'Directory'} ? ' active' : ''"
-                hx-get="/batch-overview" 
-                hx-target="#mainViewContainer" 
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                onclick="setActiveNavBtn(this)"
-                title="Overview of Runs">
+        <a class="nav-item-btn" id="navRunsList" 
+           th:classappend="${activeTab == 'Directory'} ? ' active' : ''"
+           href="/" 
+           onclick="setActiveNavBtn(this)"
+           title="Overview of Runs">
             <span class="material-symbols-outlined">format_list_bulleted</span> <span>Overview of Runs</span>
-        </button>
+        </a>
 
-        <button class="nav-item-btn" id="navTestBase" 
-                th:classappend="${activeTab == 'TestBase'} ? ' active' : ''"
-                hx-get="/test-base" 
-                hx-target="#mainViewContainer" 
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                onclick="setActiveNavBtn(this)"
-                title="Comprehensive Test Base">
+        <a class="nav-item-btn" id="navTestBase" 
+           th:classappend="${activeTab == 'TestBase'} ? ' active' : ''"
+           href="/test-base" 
+           onclick="setActiveNavBtn(this)"
+           title="Comprehensive Test Base">
             <span class="material-symbols-outlined">database</span> <span>Test Base</span>
-        </button>
+        </a>
     </nav>
 
     <div class="nav-group-label" style="margin-top: 1rem;">Test Automation</div>
     <nav>
-        <button class="nav-item-btn" id="navAuraTestManager" 
-                th:classappend="${activeTab == 'AuraTestManager'} ? ' active' : ''"
-                hx-get="/aura-test-manager" 
-                hx-target="#mainViewContainer" 
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                onclick="setActiveNavBtn(this)"
-                title="Neodymium Aura Test Manager">
+        <a class="nav-item-btn" id="navAuraTestManager" 
+           th:classappend="${activeTab == 'AuraTestManager'} ? ' active' : ''"
+           href="/aura-test-manager" 
+           onclick="setActiveNavBtn(this)"
+           title="Neodymium Aura Test Manager">
             <span class="material-symbols-outlined">play_circle</span> <span>Aura Test Manager</span>
-        </button>
+        </a>
     </nav>
 
     <div class="run-context-card" id="sidebarContextCard">

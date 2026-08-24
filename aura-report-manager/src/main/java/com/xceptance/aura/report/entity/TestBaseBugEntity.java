@@ -35,7 +35,8 @@ import jakarta.persistence.Table;
 @Table(name = "test_base_bug", indexes = {
     @Index(name = "idx_tbb_variation_id", columnList = "variation_id"),
     @Index(name = "idx_tbb_bug_ticket", columnList = "bug_ticket"),
-    @Index(name = "idx_tbb_var_env", columnList = "variation_id, environment")
+    @Index(name = "idx_tbb_var_env", columnList = "variation_id, environment"),
+    @Index(name = "idx_tbb_batch_var", columnList = "batch_name, variation_id")
 })
 public class TestBaseBugEntity
 {
@@ -48,6 +49,9 @@ public class TestBaseBugEntity
 
     @Column(name = "bug_ticket", nullable = false, length = 80)
     private String bugTicket;
+
+    @Column(name = "batch_name", nullable = false, length = 255)
+    private String batchName = "ALL";
 
     @Column(name = "environment", nullable = false, length = 80)
     private String environment = "ALL";
@@ -70,18 +74,24 @@ public class TestBaseBugEntity
 
     public TestBaseBugEntity(final String variationId, final String bugTicket, final Long createdAtMs)
     {
-        this(variationId, bugTicket, "ALL", createdAtMs, null);
+        this(variationId, bugTicket, "ALL", "ALL", createdAtMs, null);
     }
 
     public TestBaseBugEntity(final String variationId, final String bugTicket, final String environment, final Long createdAtMs)
     {
-        this(variationId, bugTicket, environment, createdAtMs, null);
+        this(variationId, bugTicket, "ALL", environment, createdAtMs, null);
     }
 
     public TestBaseBugEntity(final String variationId, final String bugTicket, final String environment, final Long createdAtMs, final String linkedRunId)
     {
+        this(variationId, bugTicket, "ALL", environment, createdAtMs, linkedRunId);
+    }
+
+    public TestBaseBugEntity(final String variationId, final String bugTicket, final String batchName, final String environment, final Long createdAtMs, final String linkedRunId)
+    {
         this.variationId = variationId;
         this.bugTicket = bugTicket;
+        this.batchName = (batchName != null && !batchName.trim().isEmpty()) ? batchName.trim() : "ALL";
         this.environment = (environment != null && !environment.trim().isEmpty()) ? environment.trim() : "ALL";
         this.createdAtMs = createdAtMs;
         this.linkedRunId = linkedRunId;
@@ -115,6 +125,16 @@ public class TestBaseBugEntity
     public void setBugTicket(final String bugTicket)
     {
         this.bugTicket = bugTicket;
+    }
+
+    public String getBatchName()
+    {
+        return batchName;
+    }
+
+    public void setBatchName(final String batchName)
+    {
+        this.batchName = (batchName != null && !batchName.trim().isEmpty()) ? batchName.trim() : "ALL";
     }
 
     public String getEnvironment()

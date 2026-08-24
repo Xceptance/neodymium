@@ -166,11 +166,15 @@ public class AuraReportViewController
     @GetMapping({"/run-report", "/fragments/run-report"})
     public String runReport(
         @RequestParam(name = "runId", required = false) final String runId,
+        @RequestParam(name = "executionId", required = false) final String executionId,
+        @RequestParam(name = "testExecutionId", required = false) final String testExecutionId,
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
     {
+        final String targetExecutionId = executionId != null && !executionId.isEmpty() ? executionId : testExecutionId;
         final RunReportDto report = dataService.getRunReport(runId);
         model.addAttribute("runId", report.getRunId());
+        model.addAttribute("targetExecutionId", targetExecutionId);
         model.addAttribute("report", report);
         model.addAttribute("pageTitle", "Run Report #" + report.getRunId());
         model.addAttribute("activeTab", "RunReport");
@@ -202,6 +206,10 @@ public class AuraReportViewController
 
     @GetMapping({"/test-base", "/fragments/test-base"})
     public String testBase(
+        @RequestParam(name = "testName", required = false) final String testName,
+        @RequestParam(name = "dataSet", required = false) final String dataSet,
+        @RequestParam(name = "location", required = false) final String location,
+        @RequestParam(name = "browser", required = false) final String browser,
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
     {
@@ -214,6 +222,10 @@ public class AuraReportViewController
         model.addAttribute("bugsMap", testBaseData.getBugsMap());
         model.addAttribute("totalClassesCount", testBaseData.getTotalTestClassesCount());
         model.addAttribute("totalVariationsCount", testBaseData.getTotalVariationsCount());
+        model.addAttribute("targetTestName", testName);
+        model.addAttribute("targetDataSet", dataSet);
+        model.addAttribute("targetLocation", location);
+        model.addAttribute("targetBrowser", browser);
         model.addAttribute("pageTitle", "Comprehensive Test Base");
         model.addAttribute("activeTab", "TestBase");
         model.addAttribute("viewFragment", "fragments/test-base :: testBase");
