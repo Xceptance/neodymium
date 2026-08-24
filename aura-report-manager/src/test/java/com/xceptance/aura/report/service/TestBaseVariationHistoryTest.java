@@ -19,12 +19,14 @@
 package com.xceptance.aura.report.service;
 
 import com.xceptance.aura.report.dto.TestBaseVariationHistoryDto;
+import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,13 +71,13 @@ public class TestBaseVariationHistoryTest
     @Test
     public void testNormalizeBrowser()
     {
-        Assertions.assertEquals("Chrome", AuraReportDataService.normalizeBrowser("Chrome_1500x1000"));
+        Assertions.assertEquals("Chrome_1500x1000", AuraReportDataService.normalizeBrowser("Chrome_1500x1000"));
         Assertions.assertEquals("Chrome", AuraReportDataService.normalizeBrowser("chrome"));
         Assertions.assertEquals("Chrome", AuraReportDataService.normalizeBrowser("Chrome"));
-        Assertions.assertEquals("Chrome", AuraReportDataService.normalizeBrowser("chrome_headless"));
+        Assertions.assertEquals("Chrome_headless", AuraReportDataService.normalizeBrowser("chrome_headless"));
         Assertions.assertEquals("Firefox", AuraReportDataService.normalizeBrowser("firefox"));
-        Assertions.assertEquals("Firefox", AuraReportDataService.normalizeBrowser("ff_desktop"));
-        Assertions.assertEquals("Edge", AuraReportDataService.normalizeBrowser("edge_headless"));
+        Assertions.assertEquals("Ff_desktop", AuraReportDataService.normalizeBrowser("ff_desktop"));
+        Assertions.assertEquals("Edge_headless", AuraReportDataService.normalizeBrowser("edge_headless"));
         Assertions.assertEquals("Safari", AuraReportDataService.normalizeBrowser("safari"));
         Assertions.assertEquals("Chrome", AuraReportDataService.normalizeBrowser(null));
         Assertions.assertEquals("Chrome", AuraReportDataService.normalizeBrowser("   "));
@@ -84,7 +86,7 @@ public class TestBaseVariationHistoryTest
     @Test
     public void testGetVariationHistoryMatchingBrowserProfiles()
     {
-        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Manual", "Java", "Chrome", "10:00", 1000L);
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Manual", "Java", "Chrome_1500x1000", "10:00", 1000L);
         final TestRunEntity run2 = new TestRunEntity("RUN_2", "Batch B", "COMPLETED", "Main", "Manual", "Java", "Chrome", "11:00", 2000L);
 
         Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(run2, run1));
@@ -124,22 +126,89 @@ public class TestBaseVariationHistoryTest
         Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(java.util.Optional.of(jsonRun1));
         Mockito.when(storageService.readRunJson("RUN_2")).thenReturn(java.util.Optional.of(jsonRun2));
 
-        final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(
+        // Query history specifically for Chrome_1500x1000 -> should only match run1
+        final List<TestBaseVariationHistoryDto> historyProfile = dataService.getVariationHistory(
+            "HomepageTest",
+            "canyon_homepage_US",
+            "US",
+            "Chrome_1500x1000"
+        );
+
+        Assertions.assertNotNull(historyProfile);
+        Assertions.assertEquals(1, historyProfile.size());
+        Assertions.assertEquals("RUN_1", historyProfile.get(0).getRunId());
+        Assertions.assertEquals("e1", historyProfile.get(0).getExecutionId());
+        Assertions.assertEquals("Batch A", historyProfile.get(0).getBatchName());
+
+        // Query history specifically for generic Chrome -> should only match run2
+        final List<TestBaseVariationHistoryDto> historyChrome = dataService.getVariationHistory(
             "HomepageTest",
             "canyon_homepage_US",
             "US",
             "Chrome"
         );
 
+        Assertions.assertNotNull(historyChrome);
+        Assertions.assertEquals(1, historyChrome.size());
+        Assertions.assertEquals("RUN_2", historyChrome.get(0).getRunId());
+        Assertions.assertEquals("e2", historyChrome.get(0).getExecutionId());
+        Assertions.assertEquals("Batch B", historyChrome.get(0).getBatchName());
+    }
+
+    @Test
+    public void testGetVariationHistoryFromRepository()
+    {
+        final String testClass = "CheckoutTest";
+        final String dataSet = "Payment_VISA";
+        final String location = "US";
+        final String browser = "Chrome";
+        final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
+
+        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
+        // Test enriched relative URL with query parameters
+        varEntity.setHistoryLinks("/run-report?runId=RUN_100&executionId=exec-100&batch=Nightly+Regression&engine=Java&ts=Yesterday&status=passed-clean&bugs=BUG-1%3BBUG-2");
+
+        final TestRunEntity runEntity = new TestRunEntity("RUN_100", "Nightly Regression", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "Yesterday", 5000L);
+
+        Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(varEntity));
+        Mockito.when(runRepository.findAllById(List.of("RUN_100"))).thenReturn(List.of(runEntity));
+
+        final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, dataSet, location, browser);
+
         Assertions.assertNotNull(history);
-        Assertions.assertEquals(2, history.size());
+        Assertions.assertEquals(1, history.size());
+        Assertions.assertEquals("RUN_100", history.get(0).getRunId());
+        Assertions.assertEquals("exec-100", history.get(0).getExecutionId());
+        Assertions.assertEquals("Nightly Regression", history.get(0).getBatchName());
+        Assertions.assertEquals("HEALED / FIXED", history.get(0).getStatusLabel());
+        Assertions.assertEquals(List.of("BUG-1", "BUG-2"), history.get(0).getBugs());
+    }
 
-        final TestBaseVariationHistoryDto entry1 = history.get(0);
-        Assertions.assertEquals("RUN_2", entry1.getRunId());
-        Assertions.assertEquals("Batch B", entry1.getBatchName());
+    @Test
+    public void testGetVariationHistoryFailedKnownWithoutBugsNormalizesToFailedUnknown()
+    {
+        final String testClass = "LoginTest";
+        final String dataSet = "ValidUser";
+        final String location = "US";
+        final String browser = "Chrome";
+        final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
-        final TestBaseVariationHistoryDto entry2 = history.get(1);
-        Assertions.assertEquals("RUN_1", entry2.getRunId());
-        Assertions.assertEquals("Batch A", entry2.getBatchName());
+        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
+        // Link stored with status=failed-known but empty bugs parameter
+        varEntity.setHistoryLinks("/run-report?runId=RUN_200&executionId=exec-200&batch=Daily+Build&engine=Java&ts=Today&status=failed-known&bugs=");
+
+        final TestRunEntity runEntity = new TestRunEntity("RUN_200", "Daily Build", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "Today", 6000L);
+
+        Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(varEntity));
+        Mockito.when(runRepository.findAllById(List.of("RUN_200"))).thenReturn(List.of(runEntity));
+
+        final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, dataSet, location, browser);
+
+        Assertions.assertNotNull(history);
+        Assertions.assertEquals(1, history.size());
+        Assertions.assertEquals("RUN_200", history.get(0).getRunId());
+        Assertions.assertEquals("failed-unknown", history.get(0).getStatus());
+        Assertions.assertEquals("FAILED", history.get(0).getStatusLabel());
+        Assertions.assertTrue(history.get(0).getBugs().isEmpty());
     }
 }

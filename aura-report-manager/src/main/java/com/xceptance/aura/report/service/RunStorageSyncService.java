@@ -40,10 +40,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -73,6 +75,7 @@ public class RunStorageSyncService
     @Value("${aura.report.storage.runs.base-dir:storage/runs/}")
     private String baseDir;
 
+    @Autowired
     public RunStorageSyncService(
         final TestRunRepository runRepository,
         final TestBatchRepository batchRepository,
@@ -116,7 +119,6 @@ public class RunStorageSyncService
                 if (Files.isDirectory(entry))
                 {
                     final String runId = entry.getFileName().toString();
-                    localRunJsonStorageService.generateRunJsonFromTestExecutions(entry.toFile(), runId);
                     final boolean success = importOrUpdateRunReport(runId);
                     if (success)
                     {
@@ -130,10 +132,119 @@ public class RunStorageSyncService
             LOG.error("Error scanning storage directory {}: {}", baseDir, e.getMessage());
         }
 
+        upgradeLegacyHistoryLinks();
+
         return importedCount;
     }
 
-    private boolean importOrUpdateRunReport(final String runId)
+    @Transactional
+    public void upgradeLegacyHistoryLinks()
+    {
+        final List<TestBaseVariationEntity> variations = variationRepository.findAll();
+        for (final TestBaseVariationEntity varEntity : variations)
+        {
+            final String history = varEntity.getHistoryLinks();
+            if (history != null && history.contains("/run-report?") && !history.contains("&batch="))
+            {
+                final String[] links = history.split(",");
+                final List<String> upgradedLinks = new ArrayList<>();
+                boolean modified = false;
+
+                for (final String link : links)
+                {
+                    final String trimmed = link.trim();
+                    if (trimmed.isEmpty())
+                    {
+                        continue;
+                    }
+                    final Map<String, String> params = AuraReportDataService.parseQueryParams(trimmed);
+                    if (!params.containsKey("batch"))
+                    {
+                        final String rId = params.get("runId");
+                        final String eId = params.get("executionId");
+                        if (rId != null && !rId.isEmpty())
+                        {
+                            final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(rId);
+                            if (runJsonOpt.isPresent())
+                            {
+                                try
+                                {
+                                    final JsonNode root = objectMapper.readTree(runJsonOpt.get());
+                                    final File runDir = new File(baseDir, rId);
+                                    final LocalRunJsonStorageService.BatchInfo batchInfo = localRunJsonStorageService.resolveOrCreateBatchJson(runDir, null);
+                                    final String bName = root.path("batchName").asText(batchInfo.name);
+                                    final String ts = root.path("timestamp").asText(root.path("startTime").asText("Recently"));
+                                    final JsonNode execArray = root.path("executions");
+
+                                    if (execArray.isArray())
+                                    {
+                                        for (final JsonNode exec : execArray)
+                                        {
+                                            final String curExecId = exec.path("id").asText("");
+                                            if (eId == null || eId.isEmpty() || eId.equals(curExecId))
+                                            {
+                                                final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
+                                                final String rawStatus = exec.path("status").asText("passed-clean");
+                                                final List<String> bugList = new ArrayList<>();
+                                                if (exec.has("bugs") && exec.path("bugs").isArray())
+                                                {
+                                                    for (final JsonNode bugNode : exec.path("bugs"))
+                                                    {
+                                                        if (!bugNode.asText().trim().isEmpty())
+                                                        {
+                                                            bugList.add(bugNode.asText().trim());
+                                                        }
+                                                    }
+                                                }
+                                                final String bugsStr = !bugList.isEmpty() ? String.join(";", bugList) : "";
+
+                                                final String enrichedUrl = "/run-report?runId=" + java.net.URLEncoder.encode(rId, java.nio.charset.StandardCharsets.UTF_8)
+                                                    + (curExecId != null && !curExecId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(curExecId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
+                                                    + "&batch=" + java.net.URLEncoder.encode(bName, java.nio.charset.StandardCharsets.UTF_8)
+                                                    + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
+                                                    + "&ts=" + java.net.URLEncoder.encode(ts, java.nio.charset.StandardCharsets.UTF_8)
+                                                    + "&status=" + java.net.URLEncoder.encode(rawStatus, java.nio.charset.StandardCharsets.UTF_8)
+                                                    + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
+
+                                                upgradedLinks.add(enrichedUrl);
+                                                modified = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (final Exception e)
+                                {
+                                    upgradedLinks.add(trimmed);
+                                }
+                            }
+                            else
+                            {
+                                upgradedLinks.add(trimmed);
+                            }
+                        }
+                        else
+                        {
+                            upgradedLinks.add(trimmed);
+                        }
+                    }
+                    else
+                    {
+                        upgradedLinks.add(trimmed);
+                    }
+                }
+
+                if (modified && !upgradedLinks.isEmpty())
+                {
+                    varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                    variationRepository.save(varEntity);
+                }
+            }
+        }
+    }
+
+    @Transactional
+    public boolean importOrUpdateRunReport(final String runId)
     {
         try
         {
@@ -194,15 +305,83 @@ public class RunStorageSyncService
 
             final JsonNode execArray = root.path("executions");
 
+            int calcPass = 0;
+            int calcFixed = 0;
+            int calcKnown = 0;
+            int calcUnknown = 0;
+            int calcIgnored = 0;
+
             if (execArray.isArray())
             {
                 for (final JsonNode exec : execArray)
                 {
+                    final String execId = exec.path("id").asText("");
                     final String testClass = exec.path("testClass").asText("UnknownClass");
-                    final String dataSet = exec.path("title").asText("");
+                    String rawTitle = exec.path("title").asText("").trim();
+                    if (rawTitle.isEmpty())
+                    {
+                        rawTitle = exec.path("datasetId").asText("").trim();
+                    }
+                    if (rawTitle.isEmpty())
+                    {
+                        rawTitle = exec.path("testId").asText("").trim();
+                    }
+                    final String dataSet = !rawTitle.isEmpty() ? rawTitle : "Default";
                     final String location = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
                     final String browser = AuraReportDataService.normalizeBrowser(exec.path("browser").asText("Chrome"));
                     final String rawStatus = exec.path("status").asText("passed-clean");
+
+                    final List<String> bugList = new ArrayList<>();
+                    if (exec.has("bugs") && exec.path("bugs").isArray())
+                    {
+                        for (final JsonNode bugNode : exec.path("bugs"))
+                        {
+                            if (!bugNode.asText().trim().isEmpty())
+                            {
+                                bugList.add(bugNode.asText().trim());
+                            }
+                        }
+                    }
+                    final boolean hasBugs = !bugList.isEmpty();
+                    final String bugsStr = hasBugs ? String.join(";", bugList) : "";
+
+                    final String effectiveStatus;
+                    if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus))
+                    {
+                        if (hasBugs)
+                        {
+                            effectiveStatus = "failed-known";
+                            calcKnown++;
+                        }
+                        else
+                        {
+                            effectiveStatus = "failed-unknown";
+                            calcUnknown++;
+                        }
+                    }
+                    else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                    {
+                        if (hasBugs)
+                        {
+                            effectiveStatus = "succeeded-fixed";
+                            calcFixed++;
+                        }
+                        else
+                        {
+                            effectiveStatus = "passed-clean";
+                            calcPass++;
+                        }
+                    }
+                    else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus))
+                    {
+                        effectiveStatus = rawStatus;
+                        calcIgnored++;
+                    }
+                    else
+                    {
+                        effectiveStatus = rawStatus;
+                        calcPass++;
+                    }
 
                     final String varId = generateVariationId(testClass, dataSet, location, browser);
 
@@ -211,6 +390,10 @@ public class RunStorageSyncService
                     if (varOpt.isPresent())
                     {
                         varEntity = varOpt.get();
+                        if (dataSet != null && !dataSet.isBlank() && ("Default".equals(varEntity.getDataSetLabel()) || varEntity.getDataSetLabel() == null || varEntity.getDataSetLabel().isBlank()))
+                        {
+                            varEntity.setDataSetLabel(dataSet);
+                        }
                     }
                     else
                     {
@@ -218,8 +401,49 @@ public class RunStorageSyncService
                     }
 
                     varEntity.setTotalExecutionsCount(varEntity.getTotalExecutionsCount() + 1);
-                    varEntity.setLastStatus(rawStatus);
+                    varEntity.setLastStatus(effectiveStatus);
                     varEntity.setLastExecutedAt(System.currentTimeMillis());
+
+                    final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
+
+                    final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, java.nio.charset.StandardCharsets.UTF_8)
+                        + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
+                        + "&batch=" + java.net.URLEncoder.encode(batchName, java.nio.charset.StandardCharsets.UTF_8)
+                        + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
+                        + "&ts=" + java.net.URLEncoder.encode(timestamp, java.nio.charset.StandardCharsets.UTF_8)
+                        + "&status=" + java.net.URLEncoder.encode(effectiveStatus, java.nio.charset.StandardCharsets.UTF_8)
+                        + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
+
+                    final String currentHistory = varEntity.getHistoryLinks();
+                    if (currentHistory == null || currentHistory.trim().isEmpty())
+                    {
+                        varEntity.setHistoryLinks(relUrl);
+                    }
+                    else
+                    {
+                        final List<String> linksList = new ArrayList<>(List.of(currentHistory.split(",")));
+                        boolean replaced = false;
+                        for (int i = 0; i < linksList.size(); i++)
+                        {
+                            final String existing = linksList.get(i).trim();
+                            final Map<String, String> existingParams = AuraReportDataService.parseQueryParams(existing);
+                            final String existingRunId = existingParams.get("runId");
+                            final String existingExecId = existingParams.get("executionId");
+
+                            if (runId.equals(existingRunId) && java.util.Objects.equals(execId, existingExecId))
+                            {
+                                linksList.set(i, relUrl);
+                                replaced = true;
+                                break;
+                            }
+                        }
+                        if (!replaced && !linksList.contains(relUrl))
+                        {
+                            linksList.add(relUrl);
+                        }
+                        varEntity.setHistoryLinks(String.join(",", linksList));
+                    }
+
                     variationRepository.save(varEntity);
                 }
             }
@@ -249,15 +473,24 @@ public class RunStorageSyncService
                 );
             }
 
+            final boolean hasExecCounts = execArray.isArray() && execArray.size() > 0;
+            final int finalTotal = hasExecCounts ? execArray.size() : totalTests;
+            final int finalPass = hasExecCounts ? calcPass : pass;
+            final int finalFixed = hasExecCounts ? calcFixed : fixed;
+            final int finalKnown = hasExecCounts ? calcKnown : known;
+            final int finalUnknown = hasExecCounts ? calcUnknown : unknown;
+            final int finalIgnored = hasExecCounts ? calcIgnored : ignored;
+            final double finalPassRate = finalTotal > 0 ? (double)(finalPass + finalFixed) / finalTotal * 100.0 : passRate;
+
             runEntity.setLocalesCsv(localesCsv);
             runEntity.setBrowsersCsv(browsersCsv);
-            runEntity.setTotalTests(totalTests);
-            runEntity.setPassedCount(pass);
-            runEntity.setSucceededFixedCount(fixed);
-            runEntity.setFailedKnownCount(known);
-            runEntity.setFailedUnknownCount(unknown);
-            runEntity.setIgnoredCount(ignored);
-            runEntity.setPassRate(passRate);
+            runEntity.setTotalTests(finalTotal);
+            runEntity.setPassedCount(finalPass);
+            runEntity.setSucceededFixedCount(finalFixed);
+            runEntity.setFailedKnownCount(finalKnown);
+            runEntity.setFailedUnknownCount(finalUnknown);
+            runEntity.setIgnoredCount(finalIgnored);
+            runEntity.setPassRate(finalPassRate);
             runEntity.setAttachmentsSyncedToS3(true);
 
             runRepository.save(runEntity);

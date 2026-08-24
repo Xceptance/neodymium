@@ -4,7 +4,11 @@
 <body>
 
 <!-- Test Base Fragment -->
-<div th:fragment="testBase" class="d-flex flex-column gap-4" id="pageTestBase">
+<div th:fragment="testBase" class="d-flex flex-column gap-4" id="pageTestBase" 
+     th:data-target-test-name="${targetTestName}"
+     th:data-target-dataset="${targetDataSet}"
+     th:data-target-location="${targetLocation}"
+     th:data-target-browser="${targetBrowser}">
     <div class="panel">
         <div class="panel-header">
             <div>
@@ -125,7 +129,7 @@
                                     th:data-status="${var.lastStatus}" 
                                     th:data-location="${var.location}" 
                                     th:data-browser="${var.browser}">
-                                    <td><strong class="text-mono" th:text="${var.dataSetLabel}">[Data Set 1: US CreditCard]</strong></td>
+                                    <td><strong class="text-mono" th:text="${(var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default'}">[Data Set 1: US CreditCard]</strong></td>
                                     <td><span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${var.location}">US</span></span></td>
                                     <td><span class="material-symbols-outlined text-accent">language</span> <span th:text="${var.browser}">Chrome</span></td>
                                     <td>

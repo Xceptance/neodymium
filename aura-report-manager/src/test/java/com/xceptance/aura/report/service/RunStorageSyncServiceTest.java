@@ -100,11 +100,11 @@ public class RunStorageSyncServiceTest
         Files.writeString(execDir.resolve("exec-1.json"), execJson);
 
         final Path runJsonPath = runDir.resolve("run.json");
-        Assertions.assertFalse(Files.exists(runJsonPath), "run.json should not exist prior to read/generate");
+        Assertions.assertFalse(Files.exists(runJsonPath), "run.json should not exist prior to read");
 
         final Optional<String> runJsonOpt = storageService.readRunJson(TEST_RUN_ID);
-        Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should dynamically generate and return run.json");
-        Assertions.assertTrue(Files.exists(runJsonPath), "run.json file should have been generated on disk");
+        Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should dynamically assemble and return run JSON");
+        Assertions.assertFalse(Files.exists(runJsonPath), "run.json file should NOT be created on disk");
         Assertions.assertTrue(runJsonOpt.get().contains("exec-999-1"));
     }
 

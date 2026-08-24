@@ -9,6 +9,9 @@ let currentExecutionIsFailed = true;
 let activeTryMap = {}; 
 let currentTestNameStr = '';
 let currentDataSetStr = '';
+let currentDataSetRaw = '';
+let currentLocationStr = '';
+let currentBrowserStr = '';
 let currentActiveRunId = '#RUN_ID';
 let activeBatchName = 'Unknown';
 
@@ -54,11 +57,23 @@ function openBatchHistoryOverview(batchName, latestRunId) {
         pageRunsList.classList.remove('active');
         pageBatchHistory.classList.add('active');
     } else {
-        // If not currently loaded in DOM, fetch via HTMX
-        htmx.ajax('GET', '/fragments/batch-overview', { target: '#mainViewContainer', swap: 'innerHTML' }).then(() => {
-            document.getElementById('pageRunsList')?.classList.remove('active');
-            document.getElementById('pageBatchHistoryOverview')?.classList.add('active');
-        });
+        const container = document.getElementById('mainViewContainer');
+        if (container) {
+            fetch('/fragments/batch-overview', { headers: { 'HX-Request': 'true' } })
+                .then(res => res.text())
+                .then(html => {
+                    container.innerHTML = html;
+                    if (window.htmx) htmx.process(container);
+                    document.getElementById('pageRunsList')?.classList.remove('active');
+                    document.getElementById('pageBatchHistoryOverview')?.classList.add('active');
+                    bindGlobalListeners();
+                })
+                .catch(() => {
+                    window.location.href = '/';
+                });
+        } else {
+            window.location.href = '/';
+        }
     }
 
     const titleEl = document.getElementById('pageTitle');
@@ -482,7 +497,7 @@ function applyRunReportFilters() {
         const failure = row.getAttribute('data-failure') || 'NONE';
 
         const matchLoc = selectedLocs.length === 0 || selectedLocs.includes(loc);
-        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.some(b => b === browser || browser.includes(b) || b.includes(browser));
+        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.includes(browser);
 
         let matchBug = selectedBugs.length === 0;
         if (!matchBug) {
@@ -731,23 +746,27 @@ function updateRowStatusAndMetrics(rowId) {
     recalculateRunReportMetrics();
 }
 
+function cleanDataSetStringJS(raw) {
+    if (!raw) return '';
+    let s = raw.trim();
+    if (s.startsWith('[Data Set:') && s.endsWith(']')) {
+        s = s.substring(10, s.length - 1).trim();
+    } else if (s.startsWith('[') && s.endsWith(']')) {
+        s = s.substring(1, s.length - 1).trim();
+    }
+    return s;
+}
+
 function redirectToTestBaseVariationHistory() {
     closeTestSidePagePanel();
-    if (window.htmx) {
-        htmx.ajax('GET', '/test-base', { target: '#mainViewContainer', swap: 'innerHTML' }).then(() => {
-            if (window.history && window.history.pushState) {
-                window.history.pushState({}, '', '/test-base');
-            }
-            setTimeout(() => {
-                const targetRow = (currentTestNameStr ? document.querySelector(`#pageTestBase .tb-entry-row[data-test-name="${currentTestNameStr}"]`) : null) || document.querySelector('#pageTestBase .tb-entry-row');
-                if (targetRow) {
-                    targetRow.click();
-                }
-            }, 100);
-        });
-    } else {
-        window.location.href = '/test-base';
-    }
+    const params = new URLSearchParams();
+    if (currentTestNameStr) params.set('testName', currentTestNameStr);
+    if (currentDataSetRaw) params.set('dataSet', currentDataSetRaw);
+    if (currentLocationStr) params.set('location', currentLocationStr);
+    if (currentBrowserStr) params.set('browser', currentBrowserStr);
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    window.location.href = `/test-base${queryString}`;
 }
 
 function getRowStatusCategory(r) {
@@ -1036,8 +1055,20 @@ function renderSidePanelStatusBugs() {
 
 function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId) {
     currentActiveRowId = rowId || null;
-    currentTestNameStr = testName;
+    currentTestNameStr = testName || '';
+    currentDataSetRaw = dataSet || '';
     currentDataSetStr = dataSet ? (dataSet.startsWith('[') ? dataSet : `[Data Set: ${dataSet}]`) : '';
+
+    const activeRow = rowId ? document.getElementById(rowId) : null;
+    if (activeRow) {
+        if (!currentTestNameStr) currentTestNameStr = activeRow.getAttribute('data-test-name') || '';
+        if (!currentDataSetRaw) currentDataSetRaw = activeRow.getAttribute('data-dataset') || '';
+        currentLocationStr = activeRow.getAttribute('data-location') || '';
+        currentBrowserStr = activeRow.getAttribute('data-browser') || '';
+    } else {
+        currentLocationStr = '';
+        currentBrowserStr = '';
+    }
 
     document.querySelectorAll('tr.clickable-row').forEach(r => {
         r.classList.remove('selected', 'active-selected-row');
@@ -1045,7 +1076,6 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         if (marker) marker.remove();
     });
 
-    const activeRow = rowId ? document.getElementById(rowId) : null;
     if (activeRow) {
         activeRow.classList.add('selected', 'active-selected-row');
         const firstTd = activeRow.querySelector('td');
@@ -1059,6 +1089,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
     const activeRunId = runId || activeRow?.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
     const activeRowId = rowId || activeRow?.getAttribute('data-row-id') || activeRow?.id || '';
+    const isTestBaseRow = activeRow ? (activeRow.closest('#pageTestBase') !== null) : (document.getElementById('pageTestBase') !== null);
 
     // Synchronize form inputs for bug ticket entry
     const bugRunInput = document.querySelector('#bugTicketFormBox input[name="runId"]');
@@ -1066,8 +1097,8 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     if (bugRunInput) bugRunInput.value = activeRunId;
     if (bugRowInput) bugRowInput.value = activeRowId;
 
-    // Dynamically load live bug badge section for the selected execution
-    if (typeof htmx !== 'undefined' && document.getElementById('sidePageStatusBadge')) {
+    // Dynamically load live bug badge section for the selected execution (only for single run reports, not Test Base)
+    if (typeof htmx !== 'undefined' && document.getElementById('sidePageStatusBadge') && !isTestBaseRow && activeRunId !== '#RUN_ID') {
         htmx.ajax('GET', `/fragments/test-side-panel/bugs?runId=${encodeURIComponent(activeRunId)}&rowId=${encodeURIComponent(activeRowId)}`, {
             target: '#sidePageStatusBadge',
             swap: 'outerHTML'
@@ -1079,7 +1110,6 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     if (nameEl) nameEl.innerText = testName;
     if (dsEl) dsEl.innerText = currentDataSetStr;
 
-    const isTestBaseRow = activeRow ? (activeRow.closest('#pageTestBase') !== null) : (document.getElementById('pageTestBase') !== null);
     const singleRunControls = document.getElementById('sidePageSingleRunControls');
     const testBaseControls = document.getElementById('sidePageTestBaseVariationControls');
 
@@ -1108,8 +1138,14 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     }
 
     const panel = document.getElementById('testSidePagePanel');
-    const resizer = document.getElementById('allurePanelResizer');
-    if (panel) panel.classList.add('active');
+    const resizer = document.getElementById('allurePanelResizer') || document.getElementById('panelResizer');
+    if (panel) {
+        const savedWidth = localStorage.getItem('aura_side_panel_width');
+        if (savedWidth) {
+            panel.style.width = savedWidth + 'px';
+        }
+        panel.classList.add('active');
+    }
     if (resizer) resizer.classList.add('active');
 }
 
@@ -2022,7 +2058,7 @@ function applyTestBaseFilters() {
         if (!browser) browser = 'UNKNOWN';
 
         const matchLoc = selectedLocs.length === 0 || selectedLocs.includes(loc);
-        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.some(b => b === browser || browser.includes(b) || b.includes(browser));
+        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.includes(browser);
 
         row.style.display = (matchLoc && matchBrowser) ? '' : 'none';
     });
@@ -2039,10 +2075,13 @@ document.addEventListener('DOMContentLoaded', () => {
     bindGlobalListeners();
 });
 
+let lastHandledTargetExecutionId = null;
+
 document.body.addEventListener('htmx:afterSwap', (evt) => {
     const target = evt.detail && evt.detail.target;
     if (target && target.id === 'mainViewContainer') {
         closeTestSidePagePanel();
+        lastHandledTargetExecutionId = null;
     }
 
     bindGlobalListeners();
@@ -2053,6 +2092,9 @@ document.body.addEventListener('htmx:afterSwap', (evt) => {
 });
 
 function bindGlobalListeners() {
+    // Initialize panel resizer drag behavior
+    initPanelResizer();
+
     // Synchronize AI usage columns and data attributes for all execution rows
     syncAllRowsAiUsage();
 
@@ -2105,11 +2147,93 @@ function bindGlobalListeners() {
 
         const trail = document.getElementById('breadcrumbTrail');
         if (trail) {
-            trail.innerHTML = `<span>/</span> <a hx-get="/batch-history?batchName=${encodeURIComponent(activeBatchName)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer; text-decoration: underline;">${activeBatchName}</a> <span>/</span> <span class="text-main" style="font-weight: 600;">Run #${runIdLabel}</span>`;
-            htmx.process(trail);
+            trail.innerHTML = `<span>/</span> <a href="/batch-history?batchName=${encodeURIComponent(activeBatchName)}" style="cursor: pointer; text-decoration: none; font-weight: 600;">${activeBatchName}</a> <span>/</span> <span class="text-main" style="font-weight: 600;">Run #${runIdLabel}</span>`;
         }
 
         recalculateRunReportMetrics();
+
+        const targetExecId = document.querySelector('[data-target-execution-id]')?.getAttribute('data-target-execution-id')
+            || new URLSearchParams(window.location.search).get('executionId')
+            || new URLSearchParams(window.location.search).get('testExecutionId');
+
+        if (targetExecId && lastHandledTargetExecutionId !== targetExecId) {
+            focusAndInspectExecution(targetExecId);
+        }
+    }
+
+    // Automatically expand and select target test variation if Test Base page is loaded
+    const testBaseEl = document.getElementById('pageTestBase');
+    if (testBaseEl) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetTestName = testBaseEl.getAttribute('data-target-test-name') || urlParams.get('testName');
+        const targetDataSet = testBaseEl.getAttribute('data-target-dataset') || urlParams.get('dataSet');
+        const targetLocation = testBaseEl.getAttribute('data-target-location') || urlParams.get('location');
+        const targetBrowser = testBaseEl.getAttribute('data-target-browser') || urlParams.get('browser');
+
+        if (targetTestName) {
+            testBaseEl.removeAttribute('data-target-test-name');
+            testBaseEl.removeAttribute('data-target-dataset');
+            testBaseEl.removeAttribute('data-target-location');
+            testBaseEl.removeAttribute('data-target-browser');
+
+            setTimeout(() => {
+                const rows = Array.from(document.querySelectorAll(`#pageTestBase .tb-entry-row[data-test-name="${targetTestName}"]`));
+                let targetRow = null;
+
+                if (rows.length > 0) {
+                    if (targetDataSet || targetLocation || targetBrowser) {
+                        const targetCleanDs = cleanDataSetStringJS(targetDataSet);
+                        targetRow = rows.find(r => {
+                            const rDs = r.getAttribute('data-dataset') || '';
+                            const rCleanDs = cleanDataSetStringJS(rDs);
+                            const rLoc = r.getAttribute('data-location') || '';
+                            const rBrowser = r.getAttribute('data-browser') || '';
+
+                            let matchDs = true;
+                            if (targetDataSet) {
+                                matchDs = rDs === targetDataSet || rCleanDs === targetCleanDs || (targetCleanDs !== '' && (rDs.includes(targetCleanDs) || targetDataSet.includes(rCleanDs)));
+                            }
+                            let matchLoc = true;
+                            if (targetLocation) {
+                                matchLoc = rLoc.toLowerCase() === targetLocation.toLowerCase();
+                            }
+                            let matchBrowser = true;
+                            if (targetBrowser) {
+                                matchBrowser = rBrowser.toLowerCase() === targetBrowser.toLowerCase();
+                            }
+                            return matchDs && matchLoc && matchBrowser;
+                        }) || rows.find(r => {
+                            const rDs = r.getAttribute('data-dataset') || '';
+                            const rCleanDs = cleanDataSetStringJS(rDs);
+                            const targetCleanDs = cleanDataSetStringJS(targetDataSet);
+                            return targetDataSet && (rDs === targetDataSet || rCleanDs === targetCleanDs || (targetCleanDs !== '' && (rDs.includes(targetCleanDs) || targetDataSet.includes(rCleanDs))));
+                        }) || rows[0];
+                    } else {
+                        targetRow = rows[0];
+                    }
+                } else {
+                    targetRow = document.querySelector('#pageTestBase .tb-entry-row');
+                }
+
+                if (targetRow) {
+                    const pane = targetRow.closest('.test-base-area-pane');
+                    if (pane) {
+                        const paneId = pane.id;
+                        const tabBtn = document.querySelector(`[data-pane-id="${paneId}"]`);
+                        if (tabBtn) switchTestBaseAreaTab(paneId, tabBtn);
+                    }
+                    const classGroup = targetRow.closest('.test-class-container');
+                    if (classGroup) {
+                        classGroup.classList.add('expanded');
+                        classGroup.classList.remove('collapsed');
+                        const executionsDiv = classGroup.querySelector('.test-class-executions');
+                        if (executionsDiv) executionsDiv.style.display = 'block';
+                    }
+                    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    targetRow.click();
+                }
+            }, 100);
+        }
     }
 
     // Automatically update header title if Overview of Runs directory is loaded
@@ -2122,6 +2246,57 @@ function bindGlobalListeners() {
     }
 }
 
+function focusAndInspectExecution(targetExecId) {
+    if (!targetExecId) return;
+
+    lastHandledTargetExecutionId = targetExecId;
+    document.querySelector('[data-target-execution-id]')?.removeAttribute('data-target-execution-id');
+
+    const allTestsBtn = document.getElementById('runReportTabBtnAllTests');
+    if (allTestsBtn) {
+        switchRunReportSubTab('runReportSubTabAllTests', allTestsBtn);
+    }
+
+    setTimeout(() => {
+        let rowEl = null;
+        try {
+            rowEl = document.getElementById(targetExecId) || document.querySelector(`[data-row-id="${CSS.escape(targetExecId)}"]`);
+        } catch (e) {
+            rowEl = document.getElementById(targetExecId);
+        }
+        if (!rowEl) return;
+
+        let parent = rowEl.parentElement;
+        while (parent) {
+            if (parent.classList && parent.classList.contains('test-class-container')) {
+                parent.style.display = 'block';
+                parent.classList.remove('collapsed');
+            }
+            if (parent.classList && parent.classList.contains('area-group')) {
+                parent.style.display = 'block';
+                parent.classList.add('expanded');
+                parent.classList.remove('collapsed');
+            }
+            parent = parent.parentElement;
+        }
+
+        rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        rowEl.classList.add('highlight-execution-row');
+        setTimeout(() => {
+            rowEl.classList.remove('highlight-execution-row');
+        }, 3500);
+
+        const testName = rowEl.getAttribute('data-test-name') || '';
+        const dataSet = rowEl.getAttribute('data-dataset') || '';
+        const statusKey = rowEl.getAttribute('data-status') || 'passed-clean';
+        const issueTag = rowEl.getAttribute('data-bugs') || '';
+        const rowId = rowEl.getAttribute('data-row-id') || rowEl.id;
+        const runId = rowEl.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+
+        openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId);
+    }, 120);
+}
+
 function handleRowClick(e) {
     const row = e.currentTarget;
     const testName = row.getAttribute('data-test-name') || '';
@@ -2130,6 +2305,23 @@ function handleRowClick(e) {
     const issueTag = row.getAttribute('data-bugs') || '';
     const rowId = row.getAttribute('data-row-id') || row.id;
     const runId = row.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+
+    const isTestBasePage = document.getElementById('pageTestBase') !== null || row.closest('#pageTestBase') !== null;
+
+    if (rowId) {
+        lastHandledTargetExecutionId = rowId;
+    }
+    document.querySelector('[data-target-execution-id]')?.removeAttribute('data-target-execution-id');
+
+    if (!isTestBasePage && rowId && window.history && window.history.replaceState) {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('executionId', rowId);
+            window.history.replaceState({}, '', url.toString());
+        } catch (err) {
+            // Ignore URL parsing errors if any
+        }
+    }
 
     openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId);
 }
@@ -2149,6 +2341,7 @@ window.toggleSubStepInspector = toggleSubStepInspector;
 window.closeSidePanelInspector = closeSidePanelInspector;
 window.closeTestSidePagePanel = closeTestSidePagePanel;
 window.openTestSidePagePanel = openTestSidePagePanel;
+window.focusAndInspectExecution = focusAndInspectExecution;
 window.redirectToTestBaseVariationHistory = redirectToTestBaseVariationHistory;
 window.recalculateRunReportMetrics = recalculateRunReportMetrics;
 
@@ -2471,21 +2664,16 @@ function loadTestBaseVariationHistory(testClass, dataSet, location, browser) {
 
     const url = `/fragments/test-base/variation-history?testClass=${encodeURIComponent(testClass)}&dataSet=${encodeURIComponent(dataSet)}&location=${encodeURIComponent(location)}&browser=${encodeURIComponent(browser)}`;
 
-    if (window.htmx) {
-        htmx.ajax('GET', url, { target: '#tbVariationHistoryTableBody', swap: 'innerHTML' }).then(() => {
+    fetch(url, { headers: { 'HX-Request': 'true' } })
+        .then(res => res.text())
+        .then(html => {
+            tbody.innerHTML = html;
+            if (window.htmx) htmx.process(tbody);
             populateTbSideBatchMultiselect();
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger p-3" style="font-size: 0.82rem;">Failed to load variation history.</td></tr>';
         });
-    } else {
-        fetch(url)
-            .then(res => res.text())
-            .then(html => {
-                tbody.innerHTML = html;
-                populateTbSideBatchMultiselect();
-            })
-            .catch(() => {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger p-3" style="font-size: 0.82rem;">Failed to load variation history.</td></tr>';
-            });
-    }
 }
 
 function populateTbSideBatchMultiselect() {
@@ -2526,8 +2714,52 @@ function filterTbVariationHistoryTable() {
     });
 }
 
+function initPanelResizer() {
+    const resizer = document.getElementById('allurePanelResizer') || document.getElementById('panelResizer');
+    const panel = document.getElementById('testSidePagePanel');
+    if (!resizer || !panel) return;
+    if (resizer.dataset.resizerBound === 'true') return;
+    resizer.dataset.resizerBound = 'true';
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = panel.offsetWidth;
+        resizer.classList.add('is-resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const deltaX = startX - e.clientX;
+        const minWidth = 320;
+        const maxWidth = Math.max(minWidth, window.innerWidth - 100);
+        const newWidth = Math.min(Math.max(startWidth + deltaX, minWidth), maxWidth);
+        panel.style.width = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        resizer.classList.remove('is-resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        if (panel.offsetWidth) {
+            localStorage.setItem('aura_side_panel_width', panel.offsetWidth);
+        }
+    });
+}
+
 window.loadTestBaseVariationHistory = loadTestBaseVariationHistory;
 window.populateTbSideBatchMultiselect = populateTbSideBatchMultiselect;
 window.filterTbVariationHistoryTable = filterTbVariationHistoryTable;
+window.initPanelResizer = initPanelResizer;
+
 
 

@@ -30,6 +30,7 @@ import java.util.List;
 public final class TestBaseVariationHistoryDto
 {
     private final String runId;
+    private final String executionId;
     private final String batchName;
     private final String engine;
     private final String timestamp;
@@ -37,6 +38,28 @@ public final class TestBaseVariationHistoryDto
     private final String statusClass;
     private final String statusLabel;
     private final List<String> bugs;
+
+    public TestBaseVariationHistoryDto(
+        final String runId,
+        final String executionId,
+        final String batchName,
+        final String engine,
+        final String timestamp,
+        final String status,
+        final String statusClass,
+        final String statusLabel,
+        final List<String> bugs)
+    {
+        this.runId = runId != null ? runId : "";
+        this.executionId = executionId != null ? executionId : "";
+        this.batchName = batchName != null ? batchName : "Unknown";
+        this.engine = engine != null ? engine : "Java";
+        this.timestamp = timestamp != null ? timestamp : "Recently";
+        this.status = status != null ? status : "passed-clean";
+        this.statusClass = statusClass != null ? statusClass : "badge-pass";
+        this.statusLabel = statusLabel != null ? statusLabel : "PASSED";
+        this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
+    }
 
     public TestBaseVariationHistoryDto(
         final String runId,
@@ -48,19 +71,17 @@ public final class TestBaseVariationHistoryDto
         final String statusLabel,
         final List<String> bugs)
     {
-        this.runId = runId != null ? runId : "";
-        this.batchName = batchName != null ? batchName : "Unknown";
-        this.engine = engine != null ? engine : "Java";
-        this.timestamp = timestamp != null ? timestamp : "Recently";
-        this.status = status != null ? status : "passed-clean";
-        this.statusClass = statusClass != null ? statusClass : "badge-pass";
-        this.statusLabel = statusLabel != null ? statusLabel : "PASSED";
-        this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
+        this(runId, "", batchName, engine, timestamp, status, statusClass, statusLabel, bugs);
     }
 
     public String getRunId()
     {
         return runId;
+    }
+
+    public String getExecutionId()
+    {
+        return executionId;
     }
 
     public String getBatchName()
