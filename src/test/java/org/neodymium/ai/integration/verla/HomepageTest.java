@@ -65,6 +65,7 @@ public final class HomepageTest extends BaseAiTest
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 
     /**

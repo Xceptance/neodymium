@@ -68,6 +68,7 @@ public class VerlaGuestCheckout_Us_English_TailwindByClaude extends BaseAiTest
     {
         EmbeddedHtmlServer.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
 
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
         if (methodName.contains("WithJudge"))
