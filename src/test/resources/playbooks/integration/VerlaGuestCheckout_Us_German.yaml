@@ -24,7 +24,10 @@ steps: |
   Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.
   Klicke auf 'Kaufen' oder 'Purchase'.
   Warte bis der Text "Thank you for your purchase!" erscheint.
-  Eine Bestellnummer im Format 'V-[0-9]+-US' wird angezeigt, der Gesamtbetrag ist in USD angegeben, die Postleitzahl lautet '12345' und der Bestätigungstext ist sichtbar.
+  Eine Bestellnummer im Format 'V-[0-9]+-US' wird angezeigt.
+  Der Gesamtbetrag ist in Dollar ($) angegeben.
+  Die Postleitzahl lautet '12345'.
+  Der Text "Thank you for your purchase!" ist sichtbar.
   Es befindet sich ein grünes Häkchen in der Mitte des Bildschirms (visual: full).
 
 data:
