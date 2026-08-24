@@ -97,7 +97,10 @@ public final class VerlaProgrammaticDemoTest
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
     }
 

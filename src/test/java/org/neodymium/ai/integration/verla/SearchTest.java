@@ -62,7 +62,10 @@ public final class SearchTest extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }

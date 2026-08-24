@@ -66,7 +66,10 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
         Neodymium.getData().put("neodymium.ai.judge.enabled", "true");

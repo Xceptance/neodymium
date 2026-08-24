@@ -98,7 +98,10 @@ public abstract class BaseAiTest extends BaseLlmTest
     public void setupPageUrl(final TestInfo testInfo)
     {
         this.testInfo = testInfo;
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
 
         final boolean isInteractive = org.neodymium.ai.config.AiConfiguration.getInstance().isInteractive();
         org.junit.jupiter.api.Assertions.assertFalse(isInteractive,
