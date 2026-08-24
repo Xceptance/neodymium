@@ -63,7 +63,10 @@ public final class HomepageTest extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
@@ -74,7 +77,7 @@ public final class HomepageTest extends BaseAiTest
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
-    @AiPlaybook("/verla/HomepageTest.yaml")
+    @AiPlaybook
     public void testHomepageLivePerfect()
     {
     }
@@ -85,7 +88,7 @@ public final class HomepageTest extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
-    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLivePerfect")
+    @AiPlaybook(recordingMethod = "testHomepageLivePerfect")
     public void testHomepageReplayPerfect()
     {
     }
@@ -96,7 +99,7 @@ public final class HomepageTest extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
-    @AiPlaybook("/verla/HomepageTest.yaml")
+    @AiPlaybook
     public void testHomepageLiveNormal()
     {
     }
@@ -107,7 +110,7 @@ public final class HomepageTest extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
-    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLiveNormal")
+    @AiPlaybook(recordingMethod = "testHomepageLiveNormal")
     public void testHomepageReplayNormal()
     {
     }
@@ -118,7 +121,7 @@ public final class HomepageTest extends BaseAiTest
     @Order(5)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
-    @AiPlaybook("/verla/HomepageTest.yaml")
+    @AiPlaybook
     public void testHomepageLiveBad()
     {
     }
@@ -129,7 +132,7 @@ public final class HomepageTest extends BaseAiTest
     @Order(6)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
-    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLiveBad")
+    @AiPlaybook(recordingMethod = "testHomepageLiveBad")
     public void testHomepageReplayBad()
     {
     }
@@ -139,7 +142,7 @@ public final class HomepageTest extends BaseAiTest
      */
     @Order(7)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("/verla/HomepageTest.yaml")
+    @AiPlaybook
     public void testHomepageLiveAllDataSets()
     {
     }
@@ -149,7 +152,7 @@ public final class HomepageTest extends BaseAiTest
      */
     @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook(value = "/verla/HomepageTest.yaml", recordingMethod = "testHomepageLiveAllDataSets")
+    @AiPlaybook(recordingMethod = "testHomepageLiveAllDataSets")
     public void testHomepageReplayAllDataSets()
     {
     }
