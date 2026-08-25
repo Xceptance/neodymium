@@ -35,7 +35,7 @@ import org.neodymium.util.Neodymium;
 
 /**
  * Runs YAML-based VERLA integration tests for user registration and account creation flows
- * in recording mode first and strict replay mode second.
+ * with PESAP, LLM Quality Judge, Semantic Outcome Verification, and Visual Root Cause Analysis (RCA) explicitly enabled.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
@@ -45,20 +45,22 @@ import org.neodymium.util.Neodymium;
 @Tag("verla")
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
+@Tag("AuraJudge")
+@Tag("AuraVerification")
 @NeodymiumAiTest
 @AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public final class RegisterTest extends BaseAiTest
+public final class RegisterJudgeAndVerificationsTest extends BaseAiTest
 {
     /**
-     * Constructs a default RegisterTest.
+     * Constructs a default RegisterJudgeAndVerificationsTest.
      */
-    public RegisterTest()
+    public RegisterJudgeAndVerificationsTest()
     {
     }
 
     /**
-     * Setup method to inject dynamic server URLs.
+     * Setup method to inject dynamic server URLs and enable PESAP, Judge, Semantic Verification, and Visual RCA.
      */
     @BeforeEach
     public void setup()
@@ -69,8 +71,8 @@ public final class RegisterTest extends BaseAiTest
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
         Neodymium.getData().put("random", String.valueOf(Neodymium.getRandom().nextInt(1_000, 100_000_000)));
         Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-        Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
-        Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
+        Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "true");
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "true");
         AiConfiguration.resetInstance();
     }
