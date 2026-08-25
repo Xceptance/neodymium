@@ -30,7 +30,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 
 /**
@@ -52,6 +54,9 @@ public class RunStorageSyncServiceTest
 
     @Autowired
     private TestRunRepository runRepository;
+
+    @Autowired
+    private TestBaseBugRepository bugRepository;
 
     @AfterEach
     public void cleanup() throws IOException
@@ -289,6 +294,57 @@ public class RunStorageSyncServiceTest
         }
         finally
         {
+            if (Files.exists(runDir))
+            {
+                try (var stream = Files.walk(runDir))
+                {
+                    stream.sorted(Comparator.reverseOrder())
+                          .map(Path::toFile)
+                          .forEach(File::delete);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testStorageSyncPreservesDatabaseBugs() throws IOException
+    {
+        final String runId = "run-sync-db-bugs-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("General (default)").resolve("SyncBugTest");
+        Files.createDirectories(execDir);
+
+        final String execJson = """
+            {
+                "id": "exec-sync-bug-1",
+                "testClass": "SyncBugTest",
+                "title": "SyncBugTest [US Chrome]",
+                "status": "failed",
+                "location": "US",
+                "browser": "Chrome"
+            }
+            """;
+        Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+        final String varId = AuraReportDataService.generateVariationId("SyncBugTest", "SyncBugTest [US Chrome]", "US", "Chrome");
+        final TestBaseBugEntity bug = new TestBaseBugEntity(varId, "BUG-SYNC-999", "Unknown", "Unknown", System.currentTimeMillis(), runId);
+        bugRepository.save(bug);
+
+        try
+        {
+            final boolean success = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(success, "importOrUpdateRunReport should succeed for new run");
+
+            final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
+            Assertions.assertTrue(runOpt.isPresent(), "Run entity should be created in database");
+
+            final TestRunEntity runEntity = runOpt.get();
+            Assertions.assertEquals(1, runEntity.getFailedKnownCount(), "Failed known count should be 1 after storage sync incorporating DB bugs");
+            Assertions.assertEquals(0, runEntity.getFailedUnknownCount(), "Failed unknown count should be 0");
+        }
+        finally
+        {
+            bugRepository.delete(bug);
             if (Files.exists(runDir))
             {
                 try (var stream = Files.walk(runDir))
