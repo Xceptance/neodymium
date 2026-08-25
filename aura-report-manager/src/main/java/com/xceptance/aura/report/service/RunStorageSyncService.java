@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -305,6 +306,33 @@ public class RunStorageSyncService
 
             final JsonNode execArray = root.path("executions");
 
+            final String runEnv = env != null ? env : "ALL";
+            final String runBatch = batchName != null ? batchName : "ALL";
+
+            final Map<String, Long> runStartTimes = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
+                .collect(Collectors.toMap(
+                    TestRunEntity::getId,
+                    r -> r.getStartTimeMs() != null ? r.getStartTimeMs() : 0L,
+                    (a, b) -> a
+                ));
+
+            final List<TestBaseBugEntity> allRunBugs = bugRepository.findByBatchNameInAndEnvironmentIn(List.of(runBatch, "ALL"), List.of(runEnv, "ALL"));
+
+            final Map<String, List<String>> dbBugsByVarId = allRunBugs.stream()
+                .filter(b -> (b.getLinkedRunId() == null || AuraReportDataService.isRunAtOrAfter(runId, b.getLinkedRunId(), runStartTimes))
+                          && (b.getRemovedRunId() == null || !AuraReportDataService.isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes)))
+                .collect(Collectors.groupingBy(
+                    TestBaseBugEntity::getVariationId,
+                    Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
+                ));
+
+            final Map<String, java.util.Set<String>> removedBugsByVarId = allRunBugs.stream()
+                .filter(b -> b.getRemovedRunId() != null && AuraReportDataService.isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes))
+                .collect(Collectors.groupingBy(
+                    TestBaseBugEntity::getVariationId,
+                    Collectors.mapping(b -> AuraReportDataService.normalizeTicket(b.getBugTicket()), Collectors.toSet())
+                ));
+
             int calcPass = 0;
             int calcFixed = 0;
             int calcKnown = 0;
@@ -331,17 +359,27 @@ public class RunStorageSyncService
                     final String browser = AuraReportDataService.normalizeBrowser(exec.path("browser").asText("Chrome"));
                     final String rawStatus = exec.path("status").asText("passed-clean");
 
-                    final List<String> bugList = new ArrayList<>();
+                    final String varId = generateVariationId(testClass, dataSet, location, browser);
+                    final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
+                        .distinct()
+                        .collect(Collectors.toList());
+
+                    final java.util.Set<String> removedTickets = removedBugsByVarId.getOrDefault(varId, java.util.Set.of());
+                    final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
                     if (exec.has("bugs") && exec.path("bugs").isArray())
                     {
                         for (final JsonNode bugNode : exec.path("bugs"))
                         {
-                            if (!bugNode.asText().trim().isEmpty())
+                            final String rawB = bugNode.asText().trim();
+                            if (!rawB.isEmpty() && !removedTickets.contains(AuraReportDataService.normalizeTicket(rawB)))
                             {
-                                bugList.add(bugNode.asText().trim());
+                                combinedBugs.add(rawB);
                             }
                         }
                     }
+                    combinedBugs.addAll(dbBugTickets);
+
+                    final List<String> bugList = new ArrayList<>(combinedBugs);
                     final boolean hasBugs = !bugList.isEmpty();
                     final String bugsStr = hasBugs ? String.join(";", bugList) : "";
 
@@ -382,8 +420,6 @@ public class RunStorageSyncService
                         effectiveStatus = rawStatus;
                         calcPass++;
                     }
-
-                    final String varId = generateVariationId(testClass, dataSet, location, browser);
 
                     final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
                     final TestBaseVariationEntity varEntity;

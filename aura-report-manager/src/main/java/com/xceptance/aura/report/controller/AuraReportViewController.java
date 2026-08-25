@@ -306,8 +306,15 @@ public class AuraReportViewController
         final Model model,
         final HttpServletResponse response)
     {
+        final long totalStart = System.currentTimeMillis();
+
+        final long addStart = System.currentTimeMillis();
         final TestExecutionDto updatedExec = dataService.addBugToExecution(runId, rowId, bugTicket);
+        final long addDuration = System.currentTimeMillis() - addStart;
+
+        final long reportStart = System.currentTimeMillis();
         final RunReportDto report = dataService.getRunReport(runId);
+        final long reportDuration = System.currentTimeMillis() - reportStart;
 
         try
         {
@@ -334,6 +341,11 @@ public class AuraReportViewController
         model.addAttribute("runId", runId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("exec", updatedExec);
+
+        final long totalDuration = System.currentTimeMillis() - totalStart;
+        LOG.info("[PERF] Controller addBugToExecution total={} ms (addBug={} ms, getRunReport={} ms) runId={}, rowId={}, ticket={}",
+            totalDuration, addDuration, reportDuration, runId, rowId, bugTicket);
+
         return "fragments/side-panel-step-list :: sidePanelBugSection";
     }
 
@@ -347,10 +359,17 @@ public class AuraReportViewController
         final Model model,
         final HttpServletResponse response)
     {
+        final long totalStart = System.currentTimeMillis();
         final String effectiveRowId = rowIdParam != null ? rowIdParam : ampRowId;
         final String effectiveBugTicket = bugTicketParam != null ? bugTicketParam : ampBugTicket;
+
+        final long removeStart = System.currentTimeMillis();
         final TestExecutionDto updatedExec = dataService.removeBugFromExecution(runId, effectiveRowId, effectiveBugTicket);
+        final long removeDuration = System.currentTimeMillis() - removeStart;
+
+        final long reportStart = System.currentTimeMillis();
         final RunReportDto report = dataService.getRunReport(runId);
+        final long reportDuration = System.currentTimeMillis() - reportStart;
 
         try
         {
@@ -377,6 +396,11 @@ public class AuraReportViewController
         model.addAttribute("runId", runId);
         model.addAttribute("rowId", effectiveRowId);
         model.addAttribute("exec", updatedExec);
+
+        final long totalDuration = System.currentTimeMillis() - totalStart;
+        LOG.info("[PERF] Controller removeBugFromExecution total={} ms (removeBug={} ms, getRunReport={} ms) runId={}, rowId={}, ticket={}",
+            totalDuration, removeDuration, reportDuration, runId, effectiveRowId, effectiveBugTicket);
+
         return "fragments/side-panel-step-list :: sidePanelBugSection";
     }
 }
