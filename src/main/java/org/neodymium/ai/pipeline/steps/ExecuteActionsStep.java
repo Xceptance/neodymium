@@ -1139,7 +1139,12 @@ public final class ExecuteActionsStep implements PipelineStep
                         activeLevel = ContextLevel.MINIMAL;
                     }
 
-                    final ContextLevel escalatedLevel = isFirstHealingAttempt ? activeLevel : activeLevel.escalate();
+                    ContextLevel escalatedLevel = isFirstHealingAttempt ? activeLevel : activeLevel.escalate();
+                    if (escalatedLevel == null && activeLevel == ContextLevel.VISUAL_RICH)
+                    {
+                        // Stay at highest context level VISUAL_RICH for retry attempts
+                        escalatedLevel = ContextLevel.VISUAL_RICH;
+                    }
 
                     if (escalatedLevel == null)
                     {
@@ -1148,20 +1153,29 @@ public final class ExecuteActionsStep implements PipelineStep
                         throw new ConclusiveFailureException("Action execution failed after maximum context escalation (" + activeLevel + "): " + lastErr);
                     }
 
-                    if (activeLevel == escalatedLevel || escalatedLevel == ContextLevel.VISUAL_RICH)
+                    if (escalatedLevel == ContextLevel.VISUAL_RICH)
                     {
-                        final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
-                        final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
-                        if (attemptsUsed >= totalBudget && activeLevel == ContextLevel.VISUAL_RICH)
+                        final Integer visualRichAttempts = (Integer) c.getTransientData().getOrDefault("KEY_VISUAL_RICH_ATTEMPTS", 0);
+                        if (visualRichAttempts >= 3)
                         {
-                            LOGGER.error(
-                                "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at highest context level ({}) for step. Aborting retry loop.",
-                                attemptsUsed, totalBudget, activeLevel);
+                            LOGGER.error("🛑 Max VISUAL_RICH healing retry attempts (3) exceeded for step. Aborting retry loop.");
                             throw new ConclusiveFailureException(
-                                "Maximum step execution budget (" + totalBudget + " attempts) exceeded for step. Aborting pipeline.");
+                                "Maximum healing retry attempts (3) at highest context level (VISUAL_RICH) reached. Aborting pipeline.");
                         }
-                        c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
+                        c.getTransientData().put("KEY_VISUAL_RICH_ATTEMPTS", visualRichAttempts + 1);
                     }
+
+                    final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
+                    final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
+                    if (attemptsUsed >= totalBudget && activeLevel == ContextLevel.VISUAL_RICH)
+                    {
+                        LOGGER.error(
+                            "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at highest context level ({}) for step. Aborting retry loop.",
+                            attemptsUsed, totalBudget, activeLevel);
+                        throw new ConclusiveFailureException(
+                            "Maximum step execution budget (" + totalBudget + " attempts) exceeded for step. Aborting pipeline.");
+                    }
+                    c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
 
                     final TargetExecutor currentExecutor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     if (!WebDriverRunner.hasWebDriverStarted() && currentExecutor == null)
@@ -1197,43 +1211,60 @@ public final class ExecuteActionsStep implements PipelineStep
                     final Object errObj = c.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
                     final ToLevelEscalationException e = errObj instanceof ToLevelEscalationException tle ? tle : null;
                     final String targetLevelStr = e != null ? e.getTargetLevel() : "VISUAL_RICH";
-                    ContextLevel targetLevel = ContextLevel.MINIMAL;
+
+                    final Object curLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                    final ContextLevel currentLevel = curLevelObj instanceof ContextLevel cl ? cl : ContextLevel.MINIMAL;
+                    ContextLevel targetLevel = currentLevel;
                     try
                     {
-                        targetLevel = ContextLevel.valueOf(targetLevelStr.toUpperCase());
-                        final Object curLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                        final ContextLevel currentLevel = curLevelObj instanceof ContextLevel cl ? cl : ContextLevel.MINIMAL;
-
-                        final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
-                        final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
-
-                        if (attemptsUsed >= totalBudget && (currentLevel == ContextLevel.VISUAL_RICH || targetLevel == currentLevel))
+                        if (targetLevelStr != null && !targetLevelStr.isBlank())
                         {
-                            LOGGER.error(
-                                "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at context level ({}) for step. Aborting retry loop.",
-                                attemptsUsed, totalBudget, targetLevel);
-                            throw new ConclusiveFailureException(
-                                "Maximum step execution budget (" + totalBudget + " attempts) exceeded for step. Aborting pipeline.");
+                            targetLevel = ContextLevel.fromString(targetLevelStr.trim().toUpperCase(), currentLevel);
                         }
-                        c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
-
-                        c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, targetLevel);
-                        step.setContextLevel(targetLevel.name());
-                        LOGGER.warn("⚠️ Context escalated to: {}", targetLevel);
-
-                        final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
-                        if (statsObj instanceof StepStats stepStats)
-                        {
-                            stepStats.addContextLevel(targetLevel.name());
-                        }
-                    }
-                    catch (final ConclusiveFailureException cfe)
-                    {
-                        throw cfe;
                     }
                     catch (final Exception ex)
                     {
-                        // Fallback or ignore invalid level
+                        targetLevel = currentLevel;
+                    }
+                    if (targetLevel == null || (currentLevel != null && targetLevel.ordinal() < currentLevel.ordinal()))
+                    {
+                        targetLevel = currentLevel != null ? currentLevel : ContextLevel.VISUAL_RICH;
+                    }
+
+                    if (targetLevel == ContextLevel.VISUAL_RICH || currentLevel == ContextLevel.VISUAL_RICH)
+                    {
+                        targetLevel = ContextLevel.VISUAL_RICH;
+                        final Integer visualRichAttempts = (Integer) c.getTransientData().getOrDefault("KEY_VISUAL_RICH_ATTEMPTS", 0);
+                        if (visualRichAttempts >= 3)
+                        {
+                            LOGGER.error("🛑 Max VISUAL_RICH escalation attempts (3) exceeded for step. Aborting retry loop.");
+                            throw new ConclusiveFailureException(
+                                "Maximum escalation retry attempts (3) at highest context level (VISUAL_RICH) reached. Aborting pipeline.");
+                        }
+                        c.getTransientData().put("KEY_VISUAL_RICH_ATTEMPTS", visualRichAttempts + 1);
+                    }
+
+                    final Integer attemptsUsed = (Integer) c.getTransientData().getOrDefault("KEY_STEP_ATTEMPTS_USED", 0);
+                    final Integer totalBudget = (Integer) c.getTransientData().getOrDefault("KEY_STEP_TOTAL_BUDGET", 8);
+
+                    if (attemptsUsed >= totalBudget)
+                    {
+                        LOGGER.error(
+                            "🛑 Circuit Breaker Tripped: Exceeded step execution budget ({}/{}) at context level ({}) for step. Aborting retry loop.",
+                            attemptsUsed, totalBudget, targetLevel);
+                        throw new ConclusiveFailureException(
+                            "Maximum step execution budget (" + totalBudget + " attempts) exceeded for step. Aborting pipeline.");
+                    }
+                    c.getTransientData().put("KEY_STEP_ATTEMPTS_USED", attemptsUsed + 1);
+
+                    c.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, targetLevel);
+                    step.setContextLevel(targetLevel.name());
+                    LOGGER.warn("⚠️ Context escalated to: {}", targetLevel);
+
+                    final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                    if (statsObj instanceof StepStats stepStats)
+                    {
+                        stepStats.addContextLevel(targetLevel.name());
                     }
                     
                     final LlmCapability escalationCapability = (targetLevel != null && targetLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;

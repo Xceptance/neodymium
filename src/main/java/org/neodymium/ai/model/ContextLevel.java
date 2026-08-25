@@ -94,7 +94,7 @@ public enum ContextLevel
             case MINIMAL -> LEAN;
             case LEAN -> STANDARD;
             case STANDARD -> RICH;
-            case RICH -> VISUAL_LEAN;
+            case RICH -> VISUAL_RICH;
             case VISUAL -> VISUAL_LEAN;
             case VISUAL_LEAN -> VISUAL_RICH;
             case VISUAL_RICH -> null;
@@ -119,7 +119,7 @@ public enum ContextLevel
      */
     public boolean isFullPageScreenshot()
     {
-        return this == VISUAL || this == VISUAL_LEAN || this == VISUAL_RICH;
+        return this == VISUAL_LEAN || this == VISUAL_RICH;
     }
 
     /**
