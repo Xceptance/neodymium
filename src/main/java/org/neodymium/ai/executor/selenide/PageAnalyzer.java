@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.neodymium.common.ScreenshotWriter;
+import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.util.Neodymium;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
@@ -475,11 +476,12 @@ public class PageAnalyzer
                 function isInteractive(el) {
                     if (!el || !el.tagName) return false;
                     var tag = el.tagName.toLowerCase();
-                    if (['a', 'button', 'input', 'select', 'textarea', 'option', 'label'].indexOf(tag) !== -1) return true;
+                    if (['a', 'button', 'input', 'select', 'textarea', 'option', 'label', 'summary'].indexOf(tag) !== -1) return true;
                     if (el.hasAttribute('onclick') || typeof el.onclick === 'function') return true;
                     if (el.hasAttribute('tabindex') || el.hasAttribute('contenteditable')) return true;
-                    var role = el.getAttribute('role') || '';
-                    if (['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'combobox'].indexOf(role) !== -1) return true;
+                    var role = (el.getAttribute('role') || '').toLowerCase();
+                    if (['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'combobox', 'searchbox', 'textbox', 'spinbutton', 'slider', 'listbox', 'treeitem', 'menuitemcheckbox', 'menuitemradio'].indexOf(role) !== -1) return true;
+                    if (el.hasAttribute('data-action') || el.hasAttribute('data-click') || el.hasAttribute('data-toggle') || el.hasAttribute('hx-get') || el.hasAttribute('hx-post')) return true;
                     var id = el.id ? el.id.toLowerCase() : '';
                     var cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
                     if (id.includes('btn') || id.includes('button') || id.includes('click') || id.includes('nav') || id.includes('cart') || id.includes('trigger') ||
@@ -511,6 +513,12 @@ public class PageAnalyzer
                     if (isStandardLeaf || isCustomLeaf) {
                         var autoId = assignId(el);
                         var text = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
+                        if (!text && el.querySelector) {
+                            var img = el.querySelector('img, svg');
+                            if (img) {
+                                text = (img.getAttribute('alt') || img.getAttribute('title') || img.getAttribute('aria-label') || '').trim();
+                            }
+                        }
                         var options = null;
                         if (tag === 'select') {
                             options = Array.from(el.options).slice(0, 50).map(o => (o.id ? '#' + o.id + '=' : '') + o.text.trim()).filter(t => t.length > 0).join(', ');
@@ -533,6 +541,7 @@ public class PageAnalyzer
                             focused: (document.activeElement === el) ? 'true' : null,
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
+                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
                             value: getElementValue(el, tag),
                             options: options,
                             automationId: autoId,
@@ -540,8 +549,8 @@ public class PageAnalyzer
                         };
                     }
 
-                    var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol','select','optgroup'].indexOf(tag) !== -1;
-                    var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0));
+                    var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol','select','optgroup','p','table','tbody','thead','tfoot','tr','td','th','dl','dt','dd','figure','figcaption'].indexOf(tag) !== -1;
+                    var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0) || el.getAttribute('role') || el.getAttribute('aria-label') || el.getAttribute('data-testid') || el.getAttribute('data-test'));
                     var isDivContainer = (tag === 'div' || tag === 'li') && hasClassOrId;
 
                     var children = [];
@@ -575,6 +584,7 @@ public class PageAnalyzer
                             name: el.getAttribute('name'),
                             role: el.getAttribute('role'),
                             ariaLabel: el.getAttribute('aria-label'),
+                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
                             parentText: el.getAttribute('data-parent-text') || null,
                             automationId: autoIdContainer,
                             children: children
@@ -584,7 +594,7 @@ public class PageAnalyzer
                     // 3. Text leaf element (paragraphs, spans, table cells, or divs with text)
                     var textContent = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
                     var isInlineWrapper = children.length > 0 && children.every(function(c) {
-                        return c && (c.nodeType === 'leaf' || Array.isArray(c)) && ['span','b','strong','i','em','small','code','a'].indexOf(c.tagName || (c[0] && c[0].tagName)) !== -1;
+                        return c && (c.nodeType === 'leaf' || Array.isArray(c)) && !c.href && ['span','b','strong','i','em','small','code','u','s','mark','sub','sup'].indexOf(c.tagName || (c[0] && c[0].tagName)) !== -1;
                     });
                     if (!isMinimal && textContent.length > 0 && textContent.length <= MAX_TEXT && (children.length === 0 || isInlineWrapper)) {
                         // In LEAN mode (!includesText), exclude non-interactive static text nodes (copy text, list items, code blocks, spans)
@@ -600,7 +610,15 @@ public class PageAnalyzer
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
                             text: textContent,
                             id: el.id || null,
-                            automationId: autoId
+                            name: el.getAttribute('name'),
+                            type: el.getAttribute('type'),
+                            role: el.getAttribute('role'),
+                            checked: isChecked(el) ? 'true' : null,
+                            disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
+                            ariaLabel: el.getAttribute('aria-label'),
+                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
+                            automationId: autoId,
+                            parentText: el.getAttribute('data-parent-text') || null
                         };
                         if (includesRich) {
                             var titleAttr = el.getAttribute('title');
@@ -750,6 +768,12 @@ public class PageAnalyzer
         try
         {
             final boolean forceFullPage = isFullPage || (level != null && level.isFullPageScreenshot());
+            if (driver != null && (!Neodymium.hasDriver() || Neodymium.getDriver() != driver))
+            {
+                final WebDriverStateContainer container = new WebDriverStateContainer();
+                container.setWebDriver(driver);
+                Neodymium.setWebDriverStateContainer(container);
+            }
             return ScreenshotWriter.doScreenshot(
                     title.replaceAll("[^a-zA-Z0-9-]", "_").substring(0, Math.min(title.length(), 12)),
                     ScreenshotWriter.getFormatedReportsPath(), false, false, forceFullPage, true);
@@ -909,11 +933,11 @@ public class PageAnalyzer
         dom.append("Page URL: ").append(isEmptyPage ? "<empty page>" : url).append("\n");
         dom.append("Page Title: ").append(title != null ? title : "").append("\n\n");
 
-        if (isEmptyPage || level == ContextLevel.VISUAL) {
+        if (isEmptyPage || level == ContextLevel.VISUAL || level == ContextLevel.HINT) {
             final String result = dom.toString();
             final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             if (!isEmptyPage) {
-                LOG.debug("   📄 DOM Capture Completed in {} ms | Mode: VISUAL | Size: {} chars", elapsedMs, result.length());
+                LOG.debug("   📄 DOM Capture Completed in {} ms | Mode: {} | Size: {} chars", elapsedMs, level, result.length());
             }
             return result;
         }
@@ -1178,6 +1202,7 @@ public class PageAnalyzer
             appendAttribute(dom, "name", node.get("name"));
             appendAttribute(dom, "role", node.get("role"));
             appendAttribute(dom, "aria-label", node.get("ariaLabel"));
+            appendAttribute(dom, "data-testid", node.get("dataTestId"));
             appendAttribute(dom, "data-ai", node.get("automationId"));
             dom.append(">\n");
 
@@ -1232,6 +1257,7 @@ public class PageAnalyzer
         appendAttribute(dom, "href", el.get("href"));
         appendAttribute(dom, "placeholder", el.get("placeholder"));
         appendAttribute(dom, "aria-label", el.get("ariaLabel"));
+        appendAttribute(dom, "data-testid", el.get("dataTestId"));
         appendAttribute(dom, "pattern", el.get("pattern"));
         appendAttribute(dom, "title", el.get("title"));
         appendAttribute(dom, "min", el.get("min"));
