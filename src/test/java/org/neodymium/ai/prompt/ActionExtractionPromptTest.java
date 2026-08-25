@@ -410,6 +410,45 @@ public final class ActionExtractionPromptTest
     }
 
     @Test
+    public void testVisualLevelPreservesNavigateActionsOnNavigationStep() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "targetContextLevel": "VISUAL",
+              "reasoning": "Open the specified URL.",
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "https://localhost:8543/verla-perfect/index.html",
+                  "value": "",
+                  "isRegex": false,
+                  "reasoning": "Navigate to the given URL."
+                }
+              ]
+            }
+            """;
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep(
+            "Open https://localhost:8543/verla-perfect/index.html"
+        );
+        step.setLineNumber(2);
+        step.setSourceFile("RegisterTest.yaml");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+        assertEquals("NAVIGATE", actions.get(0).getType());
+        assertEquals("https://localhost:8543/verla-perfect/index.html", actions.get(0).getTarget());
+        assertEquals(1, step.getActions().size());
+        assertEquals("NAVIGATE", step.getActions().get(0).getType());
+    }
+
+    @Test
     public void testCompileSystemMessageContainsDeclarativeVsImperativeRule()
     {
         AiAgentPrompts.clearCache();
@@ -419,4 +458,37 @@ public final class ActionExtractionPromptTest
         assertTrue(systemMsg.contains("Declarative vs. Imperative Instructions"), "System prompt must contain declarative vs imperative rule.");
         assertTrue(systemMsg.contains("NOT an imperative command to execute"), "System prompt must clarify that descriptive affordances are not commands to execute.");
     }
+
+    /**
+     * Verifies that the compiled system message contains the strict data fidelity guideline
+     * and the dedicated TYPE action rule to prevent LLM value hallucination.
+     */
+    @Test
+    public void testCompileSystemMessageContainsDataFidelityAndTypeRule()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final String systemMsg = prompt.compileSystemMessage(null);
+        assertNotNull(systemMsg);
+        assertTrue(systemMsg.contains("Input & Assertion Data Fidelity"), "System prompt must contain data fidelity guideline.");
+        assertTrue(systemMsg.contains("NEVER invent, hallucinate, or substitute synthetic sample data"), "System prompt must forbid synthetic sample data.");
+        assertTrue(systemMsg.contains("- TYPE: set 'locator' to the input, textarea, or contenteditable element"), "System prompt must contain explicit TYPE action rule.");
+    }
+
+    /**
+     * Verifies that the lite model add-on includes the value fidelity directive for gemini-3.5-flash-lite.
+     */
+    @Test
+    public void testLiteModelAddonContainsValueFidelityDirective()
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, "gemini-3.5-flash-lite");
+
+        final String addon = SystemPromptAddonHelper.getAddon("general", context);
+        assertNotNull(addon, "Addon for gemini-3.5-flash-lite should not be null.");
+        assertTrue(addon.contains("Values"), "Lite model addon must contain values directive.");
+        assertTrue(addon.contains("Copy the exact literal text from the instruction into 'value'"), "Lite model addon must mandate copying literal text.");
+        assertTrue(addon.contains("Locators"), "Lite model addon must contain locators directive.");
+    }
 }
+

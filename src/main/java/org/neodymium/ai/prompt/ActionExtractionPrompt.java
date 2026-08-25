@@ -21,7 +21,6 @@ package org.neodymium.ai.prompt;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
@@ -167,23 +166,26 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 ? cl
                 : null;
 
-        if (activeLevel == org.neodymium.ai.model.ContextLevel.VISUAL && "SUCCESS".equalsIgnoreCase(status))
+        final Object currentStepObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
+        final org.neodymium.ai.model.PlaybookStep currentStep = currentStepObj instanceof org.neodymium.ai.model.PlaybookStep ps ? ps : null;
+
+        if (activeLevel == org.neodymium.ai.model.ContextLevel.VISUAL && "SUCCESS".equalsIgnoreCase(status) && currentStep != null && currentStep.isVisualStep())
         {
-            if (!actions.isEmpty())
+            final boolean hasNavigate = actions.stream().anyMatch(a -> a != null && "NAVIGATE".equalsIgnoreCase(a.getType()));
+            if (!hasNavigate && !actions.isEmpty())
             {
-                LOGGER.debug("🛡️ [Visual Guard] Visual check passed at ContextLevel.VISUAL. Discarded {} synthetic action(s).", actions.size());
+                LOGGER.debug("🛡️ [Visual Guard] Visual check passed at ContextLevel.VISUAL for visual step '{}'. Discarded {} synthetic action(s).", currentStep.getInstruction(), actions.size());
                 actions.clear();
             }
         }
 
         if (context != null)
         {
-            final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-            if (currentStepObj instanceof org.neodymium.ai.model.PlaybookStep step)
+            if (currentStep != null)
             {
                 if (statusReasoning != null && !statusReasoning.isBlank())
                 {
-                    step.setReasoning(statusReasoning.trim());
+                    currentStep.setReasoning(statusReasoning.trim());
                 }
                 else if (!actions.isEmpty())
                 {
@@ -201,11 +203,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                     }
                     if (!sb.isEmpty())
                     {
-                        step.setReasoning(sb.toString());
+                        currentStep.setReasoning(sb.toString());
                     }
                 }
-                step.getActions().clear();
-                step.getActions().addAll(actions);
+                currentStep.getActions().clear();
+                currentStep.getActions().addAll(actions);
             }
         }
 

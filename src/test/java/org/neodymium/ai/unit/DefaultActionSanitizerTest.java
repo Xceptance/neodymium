@@ -202,4 +202,99 @@ public class DefaultActionSanitizerTest
             System.clearProperty(sysPropKey);
         }
     }
+
+    @Test
+    public void testSanitizeTargetWithStepInstructionPlaceholders()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("verla.url", "https://localhost:8543", false);
+        sessionData.putDynamic("quality", "perfect", false);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action rawAction = new Action(
+            "NAVIGATE",
+            "https://localhost:8543/verla-perfect/index.html",
+            List.of("https://localhost:8543/verla-perfect/index.html"),
+            "Open https://localhost:8543/verla-perfect/index.html",
+            "Reasoning"
+        );
+        rawAction.setStepInstruction("Open ${verla.url}/verla-${quality}/index.html");
+
+        final Action sanitized = sanitizer.sanitize(rawAction, sessionData);
+
+        Assertions.assertEquals("${verla.url}/verla-${quality}/index.html", sanitized.getTarget());
+        Assertions.assertEquals("${verla.url}/verla-${quality}/index.html", sanitized.getValues().get(0));
+        Assertions.assertEquals("Open ${verla.url}/verla-${quality}/index.html", sanitized.getDescription());
+    }
+
+    @Test
+    public void testSanitizeTargetDoesNotCorruptWithUnreferencedSystemOrEnvVariables()
+    {
+        final String sysPropKey = "user.name";
+        final String origProp = System.getProperty(sysPropKey);
+
+        try
+        {
+            System.setProperty(sysPropKey, "verla");
+
+            final SessionData sessionData = new SessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+            final Action rawAction = new Action(
+                "NAVIGATE",
+                "https://localhost:8543/verla-perfect/index.html",
+                List.of("https://localhost:8543/verla-perfect/index.html"),
+                "Navigate to index",
+                "Reasoning"
+            );
+            rawAction.setStepInstruction("Open https://localhost:8543/verla-perfect/index.html");
+
+            final Action sanitized = sanitizer.sanitize(rawAction, sessionData);
+
+            Assertions.assertEquals("https://localhost:8543/verla-perfect/index.html", sanitized.getTarget(),
+                "Target URL should NOT be corrupted with unreferenced system property 'user.name'.");
+        }
+        finally
+        {
+            if (origProp != null)
+            {
+                System.setProperty(sysPropKey, origProp);
+            }
+        }
+    }
+
+    @Test
+    public void testSanitizeActionWithExplicitStepVariablesAndSensitivePassword()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("email", "test.user@example.com", false);
+        sessionData.putDynamic("password", "SecretPass123!", true);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action emailAction = new Action(
+            "TYPE",
+            "#email",
+            List.of("test.user@example.com"),
+            "Type test.user@example.com into email",
+            "Reasoning"
+        );
+        emailAction.setStepInstruction("Type \"${email}\" into email and \"${password}\" into password");
+
+        final Action passwordAction = new Action(
+            "TYPE",
+            "#password",
+            List.of("SecretPass123!"),
+            "Type password into password input",
+            "Reasoning"
+        );
+        passwordAction.setStepInstruction("Type \"${email}\" into email and \"${password}\" into password");
+
+        final Action sanitizedEmail = sanitizer.sanitize(emailAction, sessionData);
+        final Action sanitizedPassword = sanitizer.sanitize(passwordAction, sessionData);
+
+        Assertions.assertEquals("${email}", sanitizedEmail.getValues().get(0));
+        Assertions.assertEquals("${password}", sanitizedPassword.getValues().get(0));
+    }
 }

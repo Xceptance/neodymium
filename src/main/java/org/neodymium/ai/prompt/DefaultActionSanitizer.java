@@ -19,11 +19,13 @@
 package org.neodymium.ai.prompt;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.util.Neodymium;
 
 /**
  * Default implementation of {@link ActionSanitizer}.
@@ -64,14 +66,25 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         }
 
         final Map<String, String> sensitiveMap = data.getRawSensitiveData();
-        final Map<String, String> varMap = data.getAllVariables();
+        final Map<String, String> varMap = buildSanitizationVariables(rawAction, data);
         if (varMap.isEmpty())
         {
             return rawAction;
         }
 
         // Sort entries by value length descending to prevent substring collision (e.g. nested URLs)
-        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>(varMap.entrySet());
+        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>();
+        for (final Map.Entry<String, String> entry : varMap.entrySet())
+        {
+            if (entry.getValue() != null && !entry.getValue().isEmpty())
+            {
+                sortedEntries.add(entry);
+            }
+        }
+        if (sortedEntries.isEmpty())
+        {
+            return rawAction;
+        }
         sortedEntries.sort((e1, e2) -> Integer.compare(e2.getValue().length(), e1.getValue().length()));
 
         // 1. Sanitize values list
@@ -126,6 +139,11 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                 final String rawVal = entry.getValue();
                 if (rawVal != null && !rawVal.isEmpty())
                 {
+                    if (!isEligibleVariable(varKey, data))
+                    {
+                        continue;
+                    }
+
                     final boolean isSensitive = sensitiveMap.containsKey(varKey);
                     if (isSensitive || rawVal.length() >= 4)
                     {
@@ -151,6 +169,11 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                 final String rawVal = entry.getValue();
                 if (rawVal != null && !rawVal.isEmpty())
                 {
+                    if (!isEligibleVariable(varKey, data))
+                    {
+                        continue;
+                    }
+
                     final boolean isSensitive = sensitiveMap.containsKey(varKey);
                     if (isSensitive || rawVal.length() >= 4)
                     {
@@ -170,6 +193,11 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                 final String rawVal = entry.getValue();
                 if (rawVal != null && !rawVal.isEmpty())
                 {
+                    if (!isEligibleVariable(varKey, data))
+                    {
+                        continue;
+                    }
+
                     final boolean isSensitive = sensitiveMap.containsKey(varKey);
                     if (isSensitive || rawVal.length() >= 4)
                     {
@@ -251,6 +279,91 @@ public final class DefaultActionSanitizer implements ActionSanitizer
     }
 
     /**
+     * Builds the prioritized variable map for sanitizing an action.
+     * Prioritizes explicit placeholders declared in the step template, active dataset variables,
+     * sensitive keys, and Neodymium.getData() before falling back to all variables.
+     *
+     * @param rawAction the action to sanitize
+     * @param data the session data container
+     * @return map of variable names to raw values
+     */
+    private Map<String, String> buildSanitizationVariables(final Action rawAction, final SessionData data)
+    {
+        final Map<String, String> allVars = data.getAllVariables();
+        final Map<String, String> varMap = new LinkedHashMap<>();
+
+        // 1. Explicit placeholders in the action's step instruction template
+        if (rawAction != null && rawAction.getStepInstruction() != null)
+        {
+            final java.util.Set<String> keys = data.extractVariableNames(rawAction.getStepInstruction());
+            for (final String key : keys)
+            {
+                final String val = allVars.get(key);
+                if (val != null && !val.isEmpty())
+                {
+                    varMap.put(key, val);
+                }
+            }
+        }
+
+        // 2. Sensitive variables (always parameterize credentials)
+        if (data.getRawSensitiveData() != null)
+        {
+            for (final String key : data.getRawSensitiveData().keySet())
+            {
+                final String val = allVars.get(key);
+                if (val != null && !val.isEmpty())
+                {
+                    varMap.put(key, val);
+                }
+            }
+        }
+
+        // 3. Explicit dataset row variables
+        if (data.getAllRawDataMap() != null)
+        {
+            for (final String key : data.getAllRawDataMap().keySet())
+            {
+                final String val = allVars.get(key);
+                if (val != null && !val.isEmpty())
+                {
+                    varMap.put(key, val);
+                }
+            }
+        }
+
+        // 4. Neodymium test data
+        try
+        {
+            if (Neodymium.getData() != null)
+            {
+                for (final String key : Neodymium.getData().keySet())
+                {
+                    final String val = allVars.get(key);
+                    if (val != null && !val.isEmpty())
+                    {
+                        varMap.put(key, val);
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 5. Fallback to all variables filtered by eligibility
+        for (final Map.Entry<String, String> entry : allVars.entrySet())
+        {
+            if (entry.getValue() != null && !entry.getValue().isEmpty() && !varMap.containsKey(entry.getKey()) && isEligibleVariable(entry.getKey(), data))
+            {
+                varMap.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        return varMap;
+    }
+
+    /**
      * Sanitizes raw text content against SessionData variables.
      *
      * @param input the raw input string
@@ -265,13 +378,91 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         }
 
         final Map<String, String> sensitiveMap = data.getRawSensitiveData();
-        final Map<String, String> varMap = data.getAllVariables();
+        final Map<String, String> allVars = data.getAllVariables();
+        final Map<String, String> varMap = new LinkedHashMap<>();
+
+        // 1. Explicit placeholders inside the input string itself
+        final java.util.Set<String> keys = data.extractVariableNames(input);
+        for (final String key : keys)
+        {
+            final String val = allVars.get(key);
+            if (val != null && !val.isEmpty())
+            {
+                varMap.put(key, val);
+            }
+        }
+
+        // 2. Sensitive data
+        if (data.getRawSensitiveData() != null)
+        {
+            for (final String key : data.getRawSensitiveData().keySet())
+            {
+                final String val = allVars.get(key);
+                if (val != null && !val.isEmpty())
+                {
+                    varMap.put(key, val);
+                }
+            }
+        }
+
+        // 3. Dataset variables
+        if (data.getAllRawDataMap() != null)
+        {
+            for (final String key : data.getAllRawDataMap().keySet())
+            {
+                final String val = allVars.get(key);
+                if (val != null && !val.isEmpty())
+                {
+                    varMap.put(key, val);
+                }
+            }
+        }
+
+        // 4. Neodymium data
+        try
+        {
+            if (Neodymium.getData() != null)
+            {
+                for (final String key : Neodymium.getData().keySet())
+                {
+                    final String val = allVars.get(key);
+                    if (val != null && !val.isEmpty())
+                    {
+                        varMap.put(key, val);
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 5. Fallback
+        for (final Map.Entry<String, String> entry : allVars.entrySet())
+        {
+            if (entry.getValue() != null && !entry.getValue().isEmpty() && !varMap.containsKey(entry.getKey()) && isEligibleVariable(entry.getKey(), data))
+            {
+                varMap.put(entry.getKey(), entry.getValue());
+            }
+        }
+
         if (varMap.isEmpty())
         {
             return input;
         }
 
-        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>(varMap.entrySet());
+        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>();
+        for (final Map.Entry<String, String> entry : varMap.entrySet())
+        {
+            if (entry.getValue() != null && !entry.getValue().isEmpty())
+            {
+                sortedEntries.add(entry);
+            }
+        }
+        if (sortedEntries.isEmpty())
+        {
+            return input;
+        }
         sortedEntries.sort((e1, e2) -> Integer.compare(e2.getValue().length(), e1.getValue().length()));
 
         String clean = input;
@@ -316,7 +507,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             }
             try
             {
-                if (org.neodymium.util.Neodymium.getData() != null && org.neodymium.util.Neodymium.getData().containsKey(varKey))
+                if (Neodymium.getData() != null && Neodymium.getData().containsKey(varKey))
                 {
                     return true;
                 }
