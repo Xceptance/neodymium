@@ -20,8 +20,13 @@ package org.neodymium.ai.model;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Layered data holder providing clean static/dynamic variables separation,
@@ -333,6 +338,56 @@ public final class SessionData
             return resolveVariables(result, depth + 1);
         }
         return result;
+    }
+
+    /**
+     * Extracts all variable placeholder keys present in the given template string.
+     *
+     * @param template the template string possibly containing ${var} placeholders
+     * @return the set of variable placeholder names found in the template
+     */
+    public Set<String> extractVariableNames(final String template)
+    {
+        if (template == null || template.isEmpty())
+        {
+            return Collections.emptySet();
+        }
+        final Set<String> names = new LinkedHashSet<>();
+        final Matcher matcher = VARIABLE_PATTERN.matcher(template);
+        while (matcher.find())
+        {
+            names.add(matcher.group(1));
+        }
+        return names;
+    }
+
+    /**
+     * Resolves and extracts the key-value mappings for all placeholders present in the given template string.
+     *
+     * @param template the template string
+     * @return map of placeholder key to resolved string value for all placeholders in the template
+     */
+    public Map<String, String> getVariablesUsedIn(final String template)
+    {
+        if (template == null || template.isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+        final Set<String> keys = extractVariableNames(template);
+        if (keys.isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+        final Map<String, String> used = new LinkedHashMap<>();
+        for (final String key : keys)
+        {
+            final Object val = this.get(key);
+            if (val != null)
+            {
+                used.put(key, String.valueOf(val));
+            }
+        }
+        return used;
     }
 
     /**

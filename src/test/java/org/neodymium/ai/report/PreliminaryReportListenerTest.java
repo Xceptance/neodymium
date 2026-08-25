@@ -448,6 +448,10 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new StepStartedEvent(subStep1, 0));
         final Action act1 = new Action("CLEAR", "#couponCode", Collections.emptyList(), "Clear coupon", "Input reset");
         bus.dispatch(new ActionExecutedEvent(act1, true));
+        final String fakeBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        final SutAttachment attachment = new SutAttachment("image/png", null, fakeBase64);
+        final MockSutState state = new MockSutState("<html><body>Coupon</body></html>", List.of(attachment), "hash123");
+        bus.dispatch(new StateCapturedEvent(state));
         bus.dispatch(new StepFinishedEvent(subStep1, PlaybookStepStatus.SUCCESS));
 
         // Sub-step 2
@@ -457,6 +461,9 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new StepStartedEvent(subStep2, 0));
         final Action act2 = new Action("TYPE", "#couponCode", List.of("FREEGIFT"), "Type coupon code", "Apply promo");
         bus.dispatch(new ActionExecutedEvent(act2, true));
+        final LlmRequest subLlmReq = new LlmRequest("Action Execution", "Perform type...", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse subLlmResp = new LlmResponse("{\"action\":\"TYPE\"}", new TokenUsage(100, 20, 120, 50), "gemini-3.5-flash");
+        bus.dispatch(new LlmResponseReceivedEvent(subLlmReq, subLlmResp, 90, "Standard"));
         bus.dispatch(new StepFinishedEvent(subStep2, PlaybookStepStatus.SUCCESS));
 
         // Parent step finished (all sub-steps passed)
@@ -472,6 +479,11 @@ public class PreliminaryReportListenerTest
         assertTrue(html.contains("sub-steps-container"), "HTML report must contain sub-steps container");
         assertTrue(html.contains("#1.1"), "HTML report must show sub-step 1.1");
         assertTrue(html.contains("#1.2"), "HTML report must show sub-step 1.2");
+        assertTrue(html.contains("sub-step-footer"), "HTML report must render sub-step-footer for sub-steps with actions/screenshots/LLM calls");
+        assertTrue(html.contains("1 action(s)"), "HTML report must display action count tags for sub-steps");
+        assertTrue(html.contains("1 screenshot(s)"), "HTML report must display screenshot count tags for sub-steps");
+        assertTrue(html.contains("1 LLM call(s)"), "HTML report must display LLM call count tags for sub-steps");
+        assertTrue(html.contains("preview-thumb"), "HTML report must render screenshot preview thumbnails for sub-steps");
         assertTrue(html.contains("btn-toggle-inspector"), "HTML report must contain toggle inspector button");
 
         final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));

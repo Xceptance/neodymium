@@ -1032,11 +1032,8 @@ To handle model-specific quirks (such as `gemini-3-5-flash-lite` requiring expli
 2. **Example (`gemini-3-5-flash-lite`)**:
    File: `src/main/resources/ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`
    ```markdown
-   CRITICAL FOR LITE MODEL LOCATORS: DOM dump element tags represent real HTML tags 
-   (<p>, <div>, <span>, <h1>, <button>, <input>, <link>). Never invent synthetic 
-   tag names or pseudotags (such as 'text' or 'text:nth-of-type(N)') in locators. 
-   If a target element lacks a direct class or id attribute, select its parent 
-   element (e.g., 'div:has(...)') or set 'status' to 'ESCALATE' to request visual context.
+   - **Locators**: Only use real HTML tags from the DOM (`button`, `a`, `input`, `div`, `span`). Never invent non-existent tags (e.g. `text`, `text:nth-of-type(N)`). If an element lacks a unique class or ID, target its parent container (e.g. `header > div`) or escalate.
+   - **Values**: Copy the exact literal text from the instruction into 'value'. Do not substitute generic sample data (such as default passwords) or synthetic placeholders.
    ```
 
 ---
@@ -1075,6 +1072,23 @@ When automated tests target localized applications (e.g. French, German, Japanes
    - **PESAP (`pesap`)**: Instructs the pre-step analyzer that English splitting examples are illustrative only, applying identical splitting, context escalation, and non-splitting rules to equivalent phrasing in the target language while preserving the original natural language in generated sub-steps.
    - **Action Extraction (`general`)**: Directs the LLM to target localized button text, forms, labels, and links in the SUT DOM according to the active locale.
    - **Outcome Verification (`verification`)**: Verifies post-action outcomes against localized page content and currency/date formatting.
+
+---
+
+### 5.6 Language-Agnostic Input Data Fidelity & Anti-Hallucination Directives
+
+Lightweight or fast LLMs (such as `gemini-3.5-flash-lite`) can exhibit strong pretraining token priors on password or credential fields, occasionally drifting towards generic dummy defaults (e.g., `"Password123!"`) or placeholder variable tokens (e.g., `"${password}"`) instead of copying the literal string passed in the test instruction (e.g., `Type "SecurePass3!" into the confirm password field`).
+
+To guarantee 100% data fidelity while remaining strictly language-neutral and domain-agnostic, Neodymium enforces two layers of anti-hallucination guidance:
+
+1. **Universal Execution Guideline (Rule 4 in `action-extraction-prompt.md`)**:
+   > *"Input & Assertion Data Fidelity: In any natural language, whenever the active instruction commands entering data (typing text, numbers, codes, credentials, or selecting options) or asserting values, extract and populate the 'value' field with the exact literal characters, string, or parameter specified in the instruction. NEVER invent, hallucinate, or substitute synthetic sample data (e.g. generic passwords, dummy emails, placeholder names, or default text). NEVER emit synthetic variable placeholder expressions unless literally written as such in the active instruction."*
+
+2. **Dedicated `- TYPE:` Action Rule**:
+   > *"`- TYPE:` set 'locator' to the input, textarea, or contenteditable element, and set 'value' to the exact literal text, digits, or characters specified in the instruction. Regardless of the natural language used in the instruction, preserve the exact specified data verbatim; NEVER substitute, hallucinate, or default to generic sample values or synthetic variable placeholders."*
+
+3. **Model-Specific Add-on Directives (`addon-general.md`)**:
+   Model add-ons (such as `ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`) explicitly reinforce literal value extraction to prevent flash/lite models from falling back to training distribution priors.
 
 ---
 
