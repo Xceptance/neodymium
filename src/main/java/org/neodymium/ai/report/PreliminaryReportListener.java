@@ -472,59 +472,78 @@ public final class PreliminaryReportListener implements ExecutionListener
         final List<TestExecutionReport.ReportStepEntry> steps = this.report.getSteps();
         for (int i = 0; i < steps.size(); i++)
         {
-            final TestExecutionReport.ReportStepEntry step = steps.get(i);
-            if (!step.getSubSteps().isEmpty())
+            resolveStep(steps.get(i));
+        }
+    }
+
+    private void resolveStep(final TestExecutionReport.ReportStepEntry step)
+    {
+        if (step == null)
+        {
+            return;
+        }
+
+        if (!step.getSubSteps().isEmpty())
+        {
+            boolean anySubFailed = false;
+            boolean allSubSuccess = true;
+            long totalSubDuration = 0;
+
+            for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
             {
-                boolean allSubSuccess = true;
-                boolean anySubFailed = false;
-                long totalSubDuration = 0;
-
-                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                resolveStep(sub);
+                totalSubDuration += sub.getDurationMs();
+                if ("FAILED".equalsIgnoreCase(sub.getStatus()))
                 {
-                    totalSubDuration += sub.getDurationMs();
-                    if ("FAILED".equalsIgnoreCase(sub.getStatus()))
-                    {
-                        anySubFailed = true;
-                        allSubSuccess = false;
-                    }
-                    else if (!"SUCCESS".equalsIgnoreCase(sub.getStatus()) && !"PASSED".equalsIgnoreCase(sub.getStatus()) && !"HEALED".equalsIgnoreCase(sub.getStatus()))
-                    {
-                        allSubSuccess = false;
-                    }
+                    anySubFailed = true;
+                    allSubSuccess = false;
                 }
-
-                if (anySubFailed)
+                else if (!"SUCCESS".equalsIgnoreCase(sub.getStatus()) && !"PASSED".equalsIgnoreCase(sub.getStatus()) && !"HEALED".equalsIgnoreCase(sub.getStatus()))
                 {
-                    step.setStatus("FAILED");
-                }
-                else if (allSubSuccess || (!step.getSubSteps().isEmpty() && !anySubFailed))
-                {
-                    step.setStatus("SUCCESS");
-                }
-                if (step.getDurationMs() <= 0)
-                {
-                    step.setDurationMs(totalSubDuration);
+                    allSubSuccess = false;
                 }
             }
-            else if ("RUNNING".equalsIgnoreCase(step.getStatus()) || "PENDING".equalsIgnoreCase(step.getStatus()))
-            {
-                if (!this.report.isSuccess())
-                {
-                    step.setStatus("FAILED");
-                    if (step.getFailureReason() == null && this.report.getFailureReason() != null)
-                    {
-                        step.setFailureReason(this.report.getFailureReason());
-                    }
-                }
-                else
-                {
-                    step.setStatus("SUCCESS");
-                }
 
-                if (step.getDurationMs() <= 0 && step.getStartTimeMs() > 0)
+            if (anySubFailed || (!this.report.isSuccess() && !allSubSuccess))
+            {
+                step.setStatus("FAILED");
+                if (step.getFailureReason() == null && this.report.getFailureReason() != null)
                 {
-                    step.setDurationMs(Math.max(1, System.currentTimeMillis() - step.getStartTimeMs()));
+                    step.setFailureReason(this.report.getFailureReason());
                 }
+            }
+            else if (allSubSuccess)
+            {
+                step.setStatus("SUCCESS");
+            }
+            else
+            {
+                step.setStatus(!this.report.isSuccess() ? "FAILED" : "SUCCESS");
+            }
+
+            if (step.getDurationMs() <= 0)
+            {
+                step.setDurationMs(totalSubDuration);
+            }
+        }
+        else if ("RUNNING".equalsIgnoreCase(step.getStatus()) || "PENDING".equalsIgnoreCase(step.getStatus()) || step.getStatus() == null)
+        {
+            if (!this.report.isSuccess())
+            {
+                step.setStatus("FAILED");
+                if (step.getFailureReason() == null && this.report.getFailureReason() != null)
+                {
+                    step.setFailureReason(this.report.getFailureReason());
+                }
+            }
+            else
+            {
+                step.setStatus("SUCCESS");
+            }
+
+            if (step.getDurationMs() <= 0 && step.getStartTimeMs() > 0)
+            {
+                step.setDurationMs(Math.max(1, System.currentTimeMillis() - step.getStartTimeMs()));
             }
         }
     }

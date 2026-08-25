@@ -1073,4 +1073,63 @@ public class PreliminaryReportListenerTest
         assertTrue(md.contains("https://localhost:8543/index.html (Tpl: ${verla.url}/index.html)"));
         assertTrue(md.contains("john_doe (Tpl: ${user})"));
     }
+
+    @Test
+    @DisplayName("Verify unfinished sub-steps and parent compound step are marked FAILED on test failure")
+    public void testUnfinishedSubStepMarkedFailedWhenTestFails(@TempDir final Path tempDir) throws Exception
+    {
+        final Path reportDir = tempDir.resolve("ai-reports-substeps");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("org.neodymium.ai.integration.RegisterTest");
+        listener.getReport().setTestMethod("testRegisterLiveDe");
+        listener.getReport().setDatasetId("de");
+        listener.getReport().setExecutionMode("FORCE_RECORDING");
+        listener.getReport().setPlaybookFile("verla/RegisterTest.yaml");
+
+        // Parent Step 5 with 3 sub-steps
+        final PlaybookStep parentStep = new PlaybookStep("Type email, password and confirm password");
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+
+        final PlaybookStep subStep1 = new PlaybookStep("Type email");
+        subStep1.setParent(parentStep);
+        bus.dispatch(new StepStartedEvent(subStep1, 0));
+        bus.dispatch(new StepFinishedEvent(subStep1, PlaybookStepStatus.SUCCESS));
+
+        final PlaybookStep subStep2 = new PlaybookStep("Type password");
+        subStep2.setParent(parentStep);
+        bus.dispatch(new StepStartedEvent(subStep2, 1));
+        bus.dispatch(new StepFinishedEvent(subStep2, PlaybookStepStatus.SUCCESS));
+
+        // SubStep 3 started but never received StepFinishedEvent because pipeline aborted with exception
+        final PlaybookStep subStep3 = new PlaybookStep("Type confirm password");
+        subStep3.setParent(parentStep);
+        bus.dispatch(new StepStartedEvent(subStep3, 2));
+
+        // Session finishes with failure (e.g. DivergenceException)
+        bus.dispatch(new DiagnosticErrorEvent("DivergenceException: missing confirm password field"));
+        bus.dispatch(new SessionFinishedEvent(3500, false, List.of("DivergenceException: missing confirm password field")));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        assertTrue(Files.exists(jsonPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        assertFalse(root.get("success").asBoolean());
+
+        final JsonNode stepsNode = root.get("steps");
+        assertEquals(1, stepsNode.size());
+
+        final JsonNode parentNode = stepsNode.get(0);
+        assertEquals("FAILED", parentNode.get("status").asText());
+
+        final JsonNode subStepsNode = parentNode.get("subSteps");
+        assertEquals(3, subStepsNode.size());
+        assertEquals("SUCCESS", subStepsNode.get(0).get("status").asText());
+        assertEquals("SUCCESS", subStepsNode.get(1).get("status").asText());
+        assertEquals("FAILED", subStepsNode.get(2).get("status").asText());
+        assertTrue(subStepsNode.get(2).get("failureReason").asText().contains("DivergenceException"));
+    }
 }

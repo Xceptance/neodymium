@@ -100,7 +100,7 @@ public abstract class BaseAiTest extends BaseLlmTest
         this.testInfo = testInfo;
         if (server != null)
         {
-            server.resetInventory();
+            server.resetAll();
         }
 
         final boolean isInteractive = org.neodymium.ai.config.AiConfiguration.getInstance().isInteractive();

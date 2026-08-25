@@ -320,7 +320,7 @@ public final class EmbeddedHtmlServer
     private static volatile EmbeddedHtmlServer lastInstance;
 
     /**
-     * Resets product inventory levels to initial values, resets seeded random, and clears active carts/orders on this server instance.
+     * Resets product inventory levels to initial values and resets seeded random on this server instance.
      */
     public void resetInventory()
     {
@@ -333,13 +333,72 @@ public final class EmbeddedHtmlServer
                 this.productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
             }
         }
-        this.activeCarts.clear();
-        this.ordersDb.clear();
-        LOG.info("VÉRLA Product inventory, carts, and random seed reset to initial state on server port {}.", this.port);
+        LOG.info("VÉRLA Product inventory and random seed reset to initial state on server port {}.", this.port);
     }
 
     /**
-     * Static compatibility delegate to reset the most recently created server instance.
+     * Clears active shopping carts on this server instance.
+     */
+    public void resetCarts()
+    {
+        this.activeCarts.clear();
+        LOG.info("VÉRLA active carts reset on server port {}.", this.port);
+    }
+
+    /**
+     * Clears placed orders on this server instance.
+     */
+    public void resetOrders()
+    {
+        this.ordersDb.clear();
+        LOG.info("VÉRLA orders database reset on server port {}.", this.port);
+    }
+
+    /**
+     * Clears all active authenticated sessions on this server instance.
+     */
+    public void resetSessions()
+    {
+        this.activeSessions.clear();
+        LOG.info("VÉRLA active sessions reset on server port {}.", this.port);
+    }
+
+    /**
+     * Resets registered users back to the default test user on this server instance.
+     */
+    public void resetUsers()
+    {
+        this.usersDb.clear();
+        final User defaultUser = new User("johndoe@example.com", "topsecret");
+        defaultUser.addresses.add(new Address("addr-default", "123 Main St", "Boston", "MA", "02108", "US"));
+        defaultUser.cards.add(new Card("card-default", "1111222233334100", "Visa", "12/29", "123"));
+        this.usersDb.put(defaultUser.email, defaultUser);
+        LOG.info("VÉRLA users database reset to default test user on server port {}.", this.port);
+    }
+
+    /**
+     * Resets all server state (inventory, carts, orders, sessions, and users) on this server instance.
+     */
+    public void resetAll()
+    {
+        resetInventory();
+        resetCarts();
+        resetOrders();
+        resetSessions();
+        resetUsers();
+        LOG.info("VÉRLA full server state (inventory, carts, orders, sessions, users) reset on server port {}.", this.port);
+    }
+
+    /**
+     * Alias for {@link #resetAll()} to reset full server state.
+     */
+    public void resetState()
+    {
+        resetAll();
+    }
+
+    /**
+     * Static compatibility delegate to reset inventory on the most recently created server instance.
      */
     public static void resetInventoryStatic()
     {
@@ -348,6 +407,130 @@ public final class EmbeddedHtmlServer
         {
             instance.resetInventory();
         }
+    }
+
+    /**
+     * Static compatibility delegate to reset carts on the most recently created server instance.
+     */
+    public static void resetCartsStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetCarts();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset orders on the most recently created server instance.
+     */
+    public static void resetOrdersStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetOrders();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset sessions on the most recently created server instance.
+     */
+    public static void resetSessionsStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetSessions();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset users on the most recently created server instance.
+     */
+    public static void resetUsersStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetUsers();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset all server state on the most recently created server instance.
+     */
+    public static void resetAllStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetAll();
+        }
+    }
+
+    /**
+     * Checks if a user is registered in the server's user database.
+     *
+     * @param email the user email to check
+     * @return true if the user exists, false otherwise
+     */
+    public boolean hasUser(final String email)
+    {
+        return email != null && this.usersDb.containsKey(email);
+    }
+
+    /**
+     * Adds or overrides a user in the server's user database for test setup.
+     *
+     * @param user the user to add
+     */
+    public void addUser(final User user)
+    {
+        if (user != null && user.email != null)
+        {
+            this.usersDb.put(user.email, user);
+        }
+    }
+
+    /**
+     * Gets the count of registered users.
+     *
+     * @return registered users count
+     */
+    public int getUserCount()
+    {
+        return this.usersDb.size();
+    }
+
+    /**
+     * Gets the count of active carts.
+     *
+     * @return active carts count
+     */
+    public int getCartCount()
+    {
+        return this.activeCarts.size();
+    }
+
+    /**
+     * Gets the count of placed orders.
+     *
+     * @return placed orders count
+     */
+    public int getOrderCount()
+    {
+        return this.ordersDb.size();
+    }
+
+    /**
+     * Gets the count of active sessions.
+     *
+     * @return active sessions count
+     */
+    public int getSessionCount()
+    {
+        return this.activeSessions.size();
     }
 
     /**
