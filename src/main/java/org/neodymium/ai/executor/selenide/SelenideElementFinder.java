@@ -27,9 +27,7 @@ import com.codeborne.selenide.WebDriverRunner;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.ContextLevel;
@@ -61,8 +59,6 @@ import org.slf4j.LoggerFactory;
 public final class SelenideElementFinder
 {
     private static final Logger LOG = LoggerFactory.getLogger(SelenideElementFinder.class);
-    private static final Map<String, Long> LAST_STAMP_TIMESTAMP_PER_URL = new ConcurrentHashMap<>();
-    private static final long STAMP_THROTTLE_MS = 2000L;
     private static final long RETRY_INTERVAL_MS = 100L;
 
     /**
@@ -70,40 +66,6 @@ public final class SelenideElementFinder
      */
     private SelenideElementFinder()
     {
-    }
-
-    /**
-     * Checks if dynamic DOM attribute stamping should be attempted based on a 2-second per-URL throttle.
-     *
-     * @param driver the active WebDriver
-     * @return true if DOM stamping should be attempted, false if throttled
-     */
-    private static boolean shouldAttemptDomStamp(final WebDriver driver)
-    {
-        if (driver == null)
-        {
-            return false;
-        }
-        try
-        {
-            final String url = driver.getCurrentUrl();
-            if (url == null || url.isEmpty() || "data:,".equals(url) || "about:blank".equals(url))
-            {
-                return false;
-            }
-            final long now = System.currentTimeMillis();
-            final Long lastStamp = LAST_STAMP_TIMESTAMP_PER_URL.get(url);
-            if (lastStamp != null && (now - lastStamp) < STAMP_THROTTLE_MS)
-            {
-                return false;
-            }
-            LAST_STAMP_TIMESTAMP_PER_URL.put(url, now);
-            return true;
-        }
-        catch (final Exception e)
-        {
-            return false;
-        }
     }
 
     /**
@@ -411,7 +373,7 @@ public final class SelenideElementFinder
             }
 
             final WebDriver driver = WebDriverRunner.getWebDriver();
-            if (shouldAttemptDomStamp(driver))
+            if (driver != null)
             {
                 try
                 {

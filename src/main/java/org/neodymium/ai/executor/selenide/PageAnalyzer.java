@@ -1387,7 +1387,7 @@ public class PageAnalyzer
                 var results = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, [role], [onclick], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [data-testid], [data-test], [data-qa]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;
@@ -1575,7 +1575,7 @@ public class PageAnalyzer
                 var vectorData = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, [role], [onclick], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [data-testid], [data-test], [data-qa]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;

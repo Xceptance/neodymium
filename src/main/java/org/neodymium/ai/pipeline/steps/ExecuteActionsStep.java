@@ -276,6 +276,14 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                 }
 
+                final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                if (step != null && action.getStepInstruction() == null)
+                {
+                    action.setStepInstruction(step.getInstruction());
+                    action.setStepLine(step.getLineNumber());
+                    action.setStepFile(step.getSourceFile());
+                }
+
                 // Execute SUT action via targeted SUT driver
                 // Mask any raw sensitive inputs dynamically matching SessionData variable keys
                 Action sanitized = this.actionSanitizer.sanitize(action, context.getSessionData());
@@ -284,7 +292,6 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     mode = session.getExecutionMode();
                 }
-                final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
                 final boolean isNoReplay = step != null && step.isNoReplay();
                 final boolean isReplayingStep = mode != null && mode.isReplay() && !isNoReplay && (step == null || mode == ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null || (step.getStatus() != null && step.getStatus() != PlaybookStepStatus.PENDING))));
 
