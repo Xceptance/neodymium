@@ -136,6 +136,24 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     @Override
     public void write(final String identifier, final String content) throws IOException
     {
+        if (identifier != null && (identifier.startsWith("target/") || identifier.startsWith("./target/") || Path.of(identifier).isAbsolute()))
+        {
+            try
+            {
+                final Path directTargetPath = Path.of(identifier);
+                if (directTargetPath.getParent() != null)
+                {
+                    Files.createDirectories(directTargetPath.getParent());
+                }
+                Files.writeString(directTargetPath, content);
+                return;
+            }
+            catch (final Exception e)
+            {
+                throw new IOException("Failed to write resource to direct path: " + identifier, e);
+            }
+        }
+
         final URL rootUrl = classLoader.getResource("");
         if (rootUrl != null && "file".equals(rootUrl.getProtocol()))
         {

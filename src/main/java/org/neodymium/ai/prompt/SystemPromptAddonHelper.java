@@ -286,9 +286,16 @@ public final class SystemPromptAddonHelper
         {
             candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
             candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon-" + type + ".md");
+            if ("general".equalsIgnoreCase(type) || "default".equalsIgnoreCase(type))
+            {
+                candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon.md");
+                candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon.md");
+            }
         }
         else
         {
+            candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon-general.md");
+            candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon-general.md");
             candidatePaths.add("config/ai-prompts/models/" + cleanModel + "/addon.md");
             candidatePaths.add("ai-prompts/models/" + cleanModel + "/addon.md");
         }
