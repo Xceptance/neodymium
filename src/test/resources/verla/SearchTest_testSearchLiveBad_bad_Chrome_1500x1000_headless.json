@@ -52,7 +52,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "Open the requested URL.",
-  "durationMs" : 2856,
+  "durationMs" : 2519,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -140,7 +140,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "Verify that the site logo or title containing 'VÉRLA' is visible by checking the footer logo element which contains 'VÉRLA'.",
-  "durationMs" : 1217,
+  "durationMs" : 1197,
   "delayMs" : 1,
   "composite" : false
 }, {
@@ -253,7 +253,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Located the search input field (#search-input) in the DOM and typed 'Minimalist' into it.",
-  "durationMs" : 1426,
+  "durationMs" : 1275,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -366,7 +366,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Pressing Enter on the search input submits the search form.",
-  "durationMs" : 2132,
+  "durationMs" : 2289,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -458,7 +458,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "The search results page is loaded, displaying products matching the query 'Minimalist' with the heading and product grid visible.",
-  "durationMs" : 1166,
+  "durationMs" : 1204,
   "delayMs" : 1,
   "composite" : false
 }, {
@@ -550,7 +550,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Scroll to the bottom of the page to trigger infinite scroll.",
-  "durationMs" : 1093,
+  "durationMs" : 1144,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -647,7 +647,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "Product cards are successfully loaded and present in the grid (#plp-product-grid).",
-  "durationMs" : 6337,
+  "durationMs" : 3987,
   "delayMs" : 1,
   "composite" : false
 }, {
@@ -746,7 +746,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Found the 'Tops' category filter button in the navigation header with id 'tops-btn'.",
-  "durationMs" : 5347,
+  "durationMs" : 5040,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -839,7 +839,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "The page title and heading show 'Tops', and the product listing displays tops (shirts, t-shirts, sweaters). We can assert that the heading is visible and displays 'Tops'.",
-  "durationMs" : 1292,
+  "durationMs" : 1148,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -944,7 +944,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Select the 'Price: Low to High' option from the sort dropdown list using its value attribute 'price-asc'.",
-  "durationMs" : 4720,
+  "durationMs" : 4396,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -1041,7 +1041,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "The product grid is already sorted by price (price-asc is selected) and the product grid displaying sorted products is visible.",
-  "durationMs" : 1139,
+  "durationMs" : 1179,
   "delayMs" : 0,
   "composite" : false
 } ]

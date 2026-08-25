@@ -71,6 +71,7 @@ public final class EmbeddedHtmlServer
     private final HttpsServer httpsServer;
     private final int port;
     private final int httpsPort;
+    private volatile boolean running = false;
 
     // --- VÉRLA E-Commerce Domain Models ---
     
@@ -1054,20 +1055,35 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    public void start()
+    public synchronized void start()
     {
+        if (this.running)
+        {
+            return;
+        }
         LOG.info("Starting embedded HTML HTTP server on port {}", port);
         server.start();
         LOG.info("Starting embedded HTML HTTPS server on port {}", httpsPort);
         httpsServer.start();
+        this.running = true;
     }
 
-    public void stop()
+    public synchronized void stop()
     {
+        if (!this.running)
+        {
+            return;
+        }
         LOG.info("Stopping embedded HTML HTTP server on port {}", port);
         server.stop(0);
         LOG.info("Stopping embedded HTML HTTPS server on port {}", httpsPort);
         httpsServer.stop(0);
+        this.running = false;
+    }
+
+    public boolean isRunning()
+    {
+        return this.running;
     }
 
     public int getPort()

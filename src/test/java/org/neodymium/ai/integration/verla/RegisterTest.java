@@ -71,7 +71,7 @@ public final class RegisterTest extends BaseAiTest
         Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
         Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
         Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
-        Neodymium.getData().put("neodymium.ai.visualRca.enabled", "true");
+        Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
     }
 

@@ -52,7 +52,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "Open the requested URL in the browser.",
-  "durationMs" : 2556,
+  "durationMs" : 2229,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -149,7 +149,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "Verify that the site logo containing 'VÉRLA' is present and visible.",
-  "durationMs" : 1371,
+  "durationMs" : 1368,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -262,7 +262,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Located the search input field (#search-input) and prepared action to type 'Minimalist' into it.",
-  "durationMs" : 1516,
+  "durationMs" : 1329,
   "delayMs" : 1,
   "composite" : false
 }, {
@@ -375,7 +375,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "The instruction asks to press enter or click the search button to submit. Since the search input has value 'Minimalist' and suggestions are open, we can press Enter on the search input.",
-  "durationMs" : 2439,
+  "durationMs" : 2214,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -571,7 +571,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "The search results page is successfully loaded, displaying the heading 'Search: \"minimalist\"', product count '33 products', and matching minimalist product cards.",
-  "durationMs" : 3627,
+  "durationMs" : 3576,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -659,7 +659,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Scrolling to the bottom of the page to trigger infinite scroll as requested.",
-  "durationMs" : 1155,
+  "durationMs" : 1113,
   "delayMs" : 1,
   "composite" : false
 }, {
@@ -752,7 +752,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "RICH",
   "reasoning" : "Verify that product cards are loaded and present in the product grid.",
-  "durationMs" : 7202,
+  "durationMs" : 3884,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -840,7 +840,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "Clicking the 'Tops' category filter item in the sidebar categories list.",
-  "durationMs" : 1938,
+  "durationMs" : 1506,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -928,7 +928,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "The user wants to verify that the products displayed are refined to show only Tops. Looking at the sidebar under CATEGORIES, 'Tops' is available at li[data-ai='xcc75o1e']. Let's click it to refine to Tops.",
-  "durationMs" : 2156,
+  "durationMs" : 1689,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -1033,7 +1033,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
   "reasoning" : "Select 'Price: Low to High' from the sort dropdown list using the select element and its option value 'price-asc'.",
-  "durationMs" : 5136,
+  "durationMs" : 4648,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -1179,7 +1179,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
   "reasoning" : "The product grid and sort select are present, showing products sorted by price.",
-  "durationMs" : 2703,
+  "durationMs" : 2363,
   "delayMs" : 0,
   "composite" : false
 } ]

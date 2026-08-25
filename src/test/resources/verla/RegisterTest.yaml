@@ -1,6 +1,6 @@
 steps: |
   Open ${verla.url}/verla-${quality}/index.html
-  Select "${country}" from the country dropdown.
+  Open the country selector and click "${country}".
   Verify that the page now display most of the content in the language of "${country}" (visual).
   Check that the country flag is the flag of "${country}".
   Go to the login page.
