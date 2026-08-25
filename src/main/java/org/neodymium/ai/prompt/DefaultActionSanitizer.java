@@ -91,9 +91,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
                     final String rawVal = entry.getValue();
                     if (rawVal != null && !rawVal.isEmpty())
                     {
-                        // Skip internal system/framework properties to prevent corrupting placeholders (e.g. neodymium.junit.viewmode)
-                        if (varKey.startsWith("neodymium.junit.") || varKey.startsWith("neodymium.report.")
-                            || varKey.startsWith("java.") || varKey.startsWith("sun."))
+                        if (!isEligibleVariable(varKey, data))
                         {
                             continue;
                         }
@@ -191,7 +189,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         );
 
         sanitizedAction.setIsRegex(rawAction.isRegex());
-        sanitizedAction.setStepInstruction(rawAction.getStepInstruction());
+        sanitizedAction.setStepInstruction(sanitizeText(rawAction.getStepInstruction(), data));
         sanitizedAction.setStepLine(rawAction.getStepLine());
         sanitizedAction.setStepFile(rawAction.getStepFile());
         sanitizedAction.setStepScreenshotHash(rawAction.getStepScreenshotHash());
@@ -283,6 +281,11 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             final String rawVal = entry.getValue();
             if (rawVal != null && !rawVal.isEmpty())
             {
+                if (!isEligibleVariable(varKey, data))
+                {
+                    continue;
+                }
+
                 final boolean isSensitive = sensitiveMap.containsKey(varKey);
                 if (isSensitive || rawVal.length() >= 4)
                 {
@@ -291,6 +294,55 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             }
         }
         return clean;
+    }
+
+    /**
+     * Determines whether a variable key is eligible for action and text sanitization.
+     */
+    private boolean isEligibleVariable(final String varKey, final SessionData data)
+    {
+        if (varKey == null || varKey.isEmpty())
+        {
+            return false;
+        }
+
+        // Always allow variables that exist in dynamicData, staticData, sensitiveData, or Neodymium.getData()
+        if (data != null)
+        {
+            if (data.getAllRawDataMap().containsKey(varKey)
+                || data.getRawSensitiveData().containsKey(varKey))
+            {
+                return true;
+            }
+            try
+            {
+                if (org.neodymium.util.Neodymium.getData() != null && org.neodymium.util.Neodymium.getData().containsKey(varKey))
+                {
+                    return true;
+                }
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        // Skip internal system, Java, sun, and OS environment variable properties
+        if (varKey.startsWith("neodymium.junit.") || varKey.startsWith("neodymium.report.")
+            || varKey.startsWith("java.") || varKey.startsWith("sun.") || varKey.startsWith("user.")
+            || varKey.startsWith("os.") || varKey.startsWith("path.") || varKey.startsWith("file.")
+            || varKey.startsWith("line.") || varKey.startsWith("XDG_") || varKey.startsWith("GNOME_")
+            || varKey.startsWith("DESKTOP_") || varKey.startsWith("SESSION_") || varKey.startsWith("DBUS_")
+            || varKey.startsWith("VTE_") || varKey.startsWith("SSH_") || varKey.startsWith("GIO_")
+            || varKey.startsWith("GTK_") || varKey.startsWith("QT_")
+            || "SHELL".equals(varKey) || "USER".equals(varKey) || "LOGNAME".equals(varKey)
+            || "LANG".equals(varKey) || "PWD".equals(varKey) || "HOME".equals(varKey)
+            || "SHLVL".equals(varKey) || "TERM".equals(varKey) || "COLORTERM".equals(varKey)
+            || "DISPLAY".equals(varKey) || "OLDPWD".equals(varKey))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /**

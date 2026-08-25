@@ -38,6 +38,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
@@ -203,9 +204,11 @@ public final class PesapPreStep implements PipelineStep
                 if (pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
                 {
                     LOGGER.info("✂️ Upfront JIT step split detected: \"{}\" split into {}", resolvedInstruction, pesapResult.splitSteps());
+                    final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
                     for (final String part : pesapResult.splitSteps())
                     {
-                        final PlaybookStep subStep = new PlaybookStep(part);
+                        final String cleanPart = sanitizer.sanitizeText(part, context.getSessionData());
+                        final PlaybookStep subStep = new PlaybookStep(cleanPart);
                         subStep.setSourceFile(this.step.getSourceFile());
                         subStep.setLineNumber(this.step.getLineNumber());
                         subStep.setParent(this.step);

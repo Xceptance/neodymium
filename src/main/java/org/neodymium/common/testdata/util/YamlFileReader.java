@@ -193,6 +193,26 @@ public class YamlFileReader
             {
                 final Map<String, Object> variables = new LinkedHashMap<>(row);
 
+                if (rootMap != null)
+                {
+                    for (final Map.Entry<?, ?> entry : rootMap.entrySet())
+                    {
+                        final String k = String.valueOf(entry.getKey());
+                        if (!k.equals("data") && !k.equals("_data") && !k.equals("steps") && !k.equals("_steps")
+                            && !k.equals("before") && !k.equals("_beforeEach") && !k.equals("beforeAll") && !k.equals("_beforeAll")
+                            && !k.equals("after") && !k.equals("_afterEach") && !k.equals("afterAll") && !k.equals("_afterAll")
+                            && !k.equals("_onSuccess") && !k.equals("_onSuccessEach") && !k.equals("onSuccessAll") && !k.equals("_onSuccessAll")
+                            && !k.equals("_onFailure") && !k.equals("_onFailureEach") && !k.equals("onFailureAll") && !k.equals("_onFailureAll")
+                            && !k.equals("_meta") && !k.equals("_properties") && !k.equals("properties") && !k.equals("_include"))
+                        {
+                            if (!variables.containsKey(k) && entry.getValue() != null)
+                            {
+                                variables.put(k, entry.getValue());
+                            }
+                        }
+                    }
+                }
+
                 for (final Map.Entry<String, Object> entry : metaMap.entrySet())
                 {
                     if (!variables.containsKey(entry.getKey()))

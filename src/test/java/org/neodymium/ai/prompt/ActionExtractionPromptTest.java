@@ -68,7 +68,7 @@ public final class ActionExtractionPromptTest
         assertTrue(userMessage.contains("## Execution Context"));
         assertTrue(userMessage.contains("[INSTRUCTION]      Verify free gift item"));
         assertTrue(userMessage.contains("[CURRENT_LEVEL]    RICH"));
-        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL_LEAN"));
+        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL_RICH"));
     }
 
     /**
@@ -149,8 +149,8 @@ public final class ActionExtractionPromptTest
             prompt.parseResponse(rawJson, context);
         });
 
-        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL_LEAN
-        assertEquals("VISUAL_LEAN", ex.getTargetLevel());
+        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL_RICH
+        assertEquals("VISUAL_RICH", ex.getTargetLevel());
     }
 
     /**
@@ -396,7 +396,6 @@ public final class ActionExtractionPromptTest
               ]
             }
             """;
-
         final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
         final ExecutionContext context = new ExecutionContext(null);
         context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
@@ -408,5 +407,16 @@ public final class ActionExtractionPromptTest
         assertEquals("ASSERT", actions.get(0).getType());
         assertEquals("#checkout-form-container h1", actions.get(0).getTarget());
         assertEquals("Checkout", actions.get(0).getValue());
+    }
+
+    @Test
+    public void testCompileSystemMessageContainsDeclarativeVsImperativeRule()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final String systemMsg = prompt.compileSystemMessage(null);
+        assertNotNull(systemMsg);
+        assertTrue(systemMsg.contains("Declarative vs. Imperative Instructions"), "System prompt must contain declarative vs imperative rule.");
+        assertTrue(systemMsg.contains("NOT an imperative command to execute"), "System prompt must clarify that descriptive affordances are not commands to execute.");
     }
 }

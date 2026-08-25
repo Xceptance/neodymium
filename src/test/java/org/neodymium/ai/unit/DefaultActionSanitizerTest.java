@@ -134,4 +134,72 @@ public class DefaultActionSanitizerTest
         Assertions.assertEquals("#item1-input", sanitized.getTarget(), "Target selector #item1-input should NOT be corrupted into #item${qty}-input.");
         Assertions.assertEquals("${password}", sanitized.getValues().get(0), "Sensitive value should be parameterized into ${password}.");
     }
+
+    @Test
+    public void testSanitizeTextWithCompoundVariablesAndDynamicSeed()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("random", "95089506", false);
+        sessionData.putDynamic("email", "john.doe.us.${random}@example.com", false);
+        sessionData.putDynamic("password", "Password123!", true);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final String rawInstruction = "Type \"john.doe.us.95089506@example.com\" into the email address field";
+        final String sanitized = sanitizer.sanitizeText(rawInstruction, sessionData);
+
+        Assertions.assertEquals("Type \"${email}\" into the email address field", sanitized);
+
+        final String rawCompound = "Type \"john.doe.us.95089506@example.com\" into the email address field, \"Password123!\" into the password field and \"Password123!\" into the confirm password field.";
+        final String sanitizedCompound = sanitizer.sanitizeText(rawCompound, sessionData);
+
+        Assertions.assertEquals("Type \"${email}\" into the email address field, \"${password}\" into the password field and \"${password}\" into the confirm password field.", sanitizedCompound);
+    }
+
+    @Test
+    public void testSanitizeActionStepInstruction()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("random", "95089506", false);
+        sessionData.putDynamic("email", "john.doe.us.${random}@example.com", false);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action rawAction = new Action(
+            "TYPE",
+            "#email",
+            List.of("john.doe.us.95089506@example.com"),
+            "Type email into email input",
+            "Reasoning"
+        );
+        rawAction.setStepInstruction("Type \"john.doe.us.95089506@example.com\" into the email address field");
+
+        final Action sanitized = sanitizer.sanitize(rawAction, sessionData);
+
+        Assertions.assertEquals("${email}", sanitized.getValues().get(0));
+        Assertions.assertEquals("Type \"${email}\" into the email address field", sanitized.getStepInstruction());
+    }
+
+    @Test
+    public void testSanitizeTextIgnoresInternalFrameworkProperties()
+    {
+        final String sysPropKey = "neodymium.junit.viewmode";
+        final String sysPropVal = "headless";
+        System.setProperty(sysPropKey, sysPropVal);
+
+        try
+        {
+            final SessionData sessionData = new SessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+            final String text = "Running browser in headless mode";
+            final String sanitized = sanitizer.sanitizeText(text, sessionData);
+
+            Assertions.assertEquals("Running browser in headless mode", sanitized);
+        }
+        finally
+        {
+            System.clearProperty(sysPropKey);
+        }
+    }
 }
