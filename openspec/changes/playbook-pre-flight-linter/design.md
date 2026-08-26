@@ -1,20 +1,20 @@
 ## Context
 
-See [proposal.md](proposal.md) for motivation. Neodymium currently supports runtime per-step classification and JIT analysis (PESAP), as well as a local regex-based syntax checker (`StepLinter`). However, semantic and linguistic quality issues—such as compound instructions (e.g. `Open the country selector and click "${country}".`) where runtime execution (`ExecuteActionsStep`) risks dropping subsequent actions if JIT splitting does not trigger—require an upfront, cross-lingual batch analysis before execution starts.
+See [proposal.md](proposal.md) for motivation. Neodymium supports runtime per-step classification and JIT analysis (PESAP), as well as a local regex-based syntax checker (`StepLinter`). However, semantic and linguistic quality issues—such as compound instructions (e.g. `Open the country selector and click "${country}".`) where runtime execution (`ExecuteActionsStep`) risks dropping subsequent actions if JIT splitting does not trigger, passive affordance ambiguities, and subjective test oracles—require an upfront, cross-lingual batch analysis before execution starts.
 
 ## Goals / Non-Goals
 
 **Goals:**
 - Provide a single-batch upfront LLM inspection of all scenario steps before the test execution loop begins.
-- Detect 4 specific linguistic and semantic quality categories (`STEP_SPLITTING_CANDIDATE`, `MISSING_VISUAL_TAG`, `AMBIGUOUS_AFFORDANCE`, `VAGUE_TARGET`).
+- Detect 5 specific linguistic and semantic quality categories (`STEP_SPLITTING_CANDIDATE`, `MISSING_VISUAL_TAG` with viewport vs full-page scope, `AMBIGUOUS_AFFORDANCE`, `VAGUE_TARGET`, `VAGUE_VERIFICATION`).
 - Offer non-blocking advisory findings and suggested rewrites without failing tests.
 - Support dedicated LLM provider and model configuration to allow cheap and fast models for linting.
 - Integrate findings into execution context and test report generators.
 
 **Non-Goals:**
-- Replace runtime per-step perception or multimodal vision escalation.
+- Reimplement deterministic syntax parsing for `${...}` placeholders or tag regexes in the LLM (handled deterministically by offline regex parsers).
 - Automatically rewrite source YAML playbook files on disk during test execution.
-- Replace the offline regex-based `StepLinter` used for zero-token syntax validation.
+- Replace runtime per-step perception, multimodal vision escalation, or the offline `StepLinter`.
 
 ## Decisions
 
@@ -34,6 +34,14 @@ See [proposal.md](proposal.md) for motivation. Neodymium currently supports runt
 ### 4. Language-Agnostic LLM Prompt Design
 - **Decision:** The prompt instructions are in English, but explicitly instruct the LLM to analyze instructions written in any natural language (German, French, Japanese, etc.) and generate suggestions in the exact same language as the original instruction.
 - **Rationale:** Keeps Neodymium strictly universal and domain/language-neutral.
+
+### 5. Separation of Deterministic Syntax vs. Semantic Reasoning
+- **Decision:** Deterministic syntax checks (e.g. `${...}` placeholder bracket matching, `(visual)` tag formatting) remain strictly in offline regex components (`StepLinter`). The LLM linter is exclusively used for linguistic, semantic, and assertion clarity analysis.
+- **Rationale:** LLMs should not be used as pseudo-parsers for deterministic tokens; focusing the prompt on semantic comprehension yields higher accuracy and lower token consumption.
+
+### 6. Visual Scope Differentiation (`(visual)` vs. `(visual: full)`)
+- **Decision:** The linter evaluates whether visual descriptions describe viewport-local elements or whole-page/below-the-fold content (such as footers and page-spanning sections) and recommends the appropriate tag: `(visual)` vs `(visual: full)`.
+- **Rationale:** Ensures that full-page screenshot capture is triggered when verifying elements that span beyond the initial viewport.
 
 ## Risks / Trade-offs
 

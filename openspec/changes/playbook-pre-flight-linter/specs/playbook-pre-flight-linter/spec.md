@@ -1,6 +1,6 @@
 ## Purpose
 
-Provides an upfront, single-batch linguistic pre-flight linter that validates playbook instructions across four quality categories (compound steps, missing visual tags, ambiguous affordances, vague target anchors) before test execution begins.
+Provides an upfront, single-batch linguistic pre-flight linter that validates playbook instructions across semantic quality categories (compound steps, visual tags and scope, ambiguous affordances, vague target anchors, subjective test oracles) before test execution begins.
 
 ## ADDED Requirements
 
@@ -30,12 +30,16 @@ The linter SHALL identify compound instructions that combine two or more distinc
 - **WHEN** an instruction combines an action with a post-condition check, such as `Click submit and verify the confirmation modal appears`
 - **THEN** the linter SHALL generate a finding with category `STEP_SPLITTING_CANDIDATE` suggesting an action step followed by a dedicated verification step
 
-### Requirement: Missing Visual Tag Detection
-The linter SHALL identify instructions describing visual appearance, layout, colors, badges, icons, typography, or spatial locations that lack explicit visual tags, classifying them under `MISSING_VISUAL_TAG`.
+### Requirement: Missing Visual Tag and Scope Detection
+The linter SHALL identify instructions describing visual appearance, layout, colors, badges, icons, typography, or spatial locations that lack explicit visual tags, classifying them under `MISSING_VISUAL_TAG` and recommending either `(visual)` for viewport-scoped observations or `(visual: full)` for whole-page or cross-section observations.
 
-#### Scenario: Detecting visual description without visual tag
-- **WHEN** an instruction describes visual attributes such as `There is a green badge with a checkmark` or `Auf der rechten Seite ist ein rotes Warnsymbol` without a `(visual)` or `(layout)` tag
-- **THEN** the linter SHALL generate a finding with category `MISSING_VISUAL_TAG` suggesting the addition of `(visual)` or `(layout)`
+#### Scenario: Detecting visual description lacking visual tag
+- **WHEN** an instruction describes viewport visual attributes such as `There is a green badge with a checkmark` or `Auf der rechten Seite ist ein rotes Warnsymbol` without a visual tag
+- **THEN** the linter SHALL generate a finding with category `MISSING_VISUAL_TAG` suggesting the addition of `(visual)`
+
+#### Scenario: Detecting whole-page or footer visual description
+- **WHEN** an instruction describes layout spanning above and below the fold (e.g. `The page has a top advertising banner and a dark footer with copyright links at the bottom`) without a full-page visual tag
+- **THEN** the linter SHALL generate a finding with category `MISSING_VISUAL_TAG` suggesting `(visual: full)`
 
 ### Requirement: Ambiguous Affordance Detection
 The linter SHALL identify instructions describing element capability or affordance without an explicit action or verification verb, classifying them under `AMBIGUOUS_AFFORDANCE`.
@@ -50,6 +54,13 @@ The linter SHALL identify instructions containing under-specified element refere
 #### Scenario: Detecting under-specified element target
 - **WHEN** an instruction specifies a vague target such as `Click the button` or `Klicke darauf` where multiple matching candidates could exist
 - **THEN** the linter SHALL generate a finding with category `VAGUE_TARGET` recommending scoping the target with container, label, or section context
+
+### Requirement: Vague or Subjective Verification Detection
+The linter SHALL identify test assertions with vague, subjective, or non-verifiable criteria, classifying them under `VAGUE_VERIFICATION` and suggesting concrete verifiable state or element checks.
+
+#### Scenario: Detecting subjective verification criteria
+- **WHEN** an instruction uses subjective or non-verifiable criteria such as `Make sure everything looks good` or `Check that the page works correctly`
+- **THEN** the linter SHALL generate a finding with category `VAGUE_VERIFICATION` suggesting concrete verifiable criteria (e.g. verifying a specific banner, status message, or element state)
 
 ### Requirement: Dedicated Linter Routing Configuration
 The system SHALL support dedicated provider and model configuration for the pre-flight linter, allowing the use of fast and cost-effective LLM models while falling back to the default LLM provider if unspecified.

@@ -5,8 +5,8 @@
 
 ## 2. Linter Domain Model & Prompting
 
-- [ ] 2.1 Create `PlaybookLinterFinding`, `LinterCategory`, and `LinterSeverity` domain models in `org.neodymium.ai.playbook.linter`
-- [ ] 2.2 Create `playbook-linter-prompt.md` system prompt covering compound steps, missing visual tags, ambiguous affordances, and vague target anchors
+- [ ] 2.1 Create `PlaybookLinterFinding`, `LinterCategory` (`STEP_SPLITTING_CANDIDATE`, `MISSING_VISUAL_TAG`, `AMBIGUOUS_AFFORDANCE`, `VAGUE_TARGET`, `VAGUE_VERIFICATION`), and `LinterSeverity` in `org.neodymium.ai.playbook.linter`
+- [ ] 2.2 Create `playbook-linter-prompt.md` system prompt covering compound steps, missing visual tags with viewport/full-page scopes, ambiguous affordances, vague targets, and subjective test oracles
 - [ ] 2.3 Implement `PlaybookLinterPrompt` and JSON response parser in `org.neodymium.ai.prompt`
 - [ ] 2.4 Implement `PlaybookLinter` service with graceful error handling and provider routing in `org.neodymium.ai.playbook.linter`
 
@@ -22,7 +22,7 @@
 
 ## 5. Verification & Tests
 
-- [ ] 5.1 Add unit tests for `PlaybookLinterPrompt` (JSON parsing, compound step detection)
+- [ ] 5.1 Add unit tests for `PlaybookLinterPrompt` (JSON parsing, compound step detection, vague verifications, visual scope tagging)
 - [ ] 5.2 Add unit tests for `PlaybookLinter` (enabled/disabled toggles, error recovery)
 - [ ] 5.3 Add unit tests for `MarkdownReportGenerator` linter table rendering
 - [ ] 5.4 Execute integration test on a multi-step scenario with compound instructions and verify report output
