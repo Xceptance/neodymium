@@ -105,6 +105,8 @@ public final class VerifyOutcomeStep implements PipelineStep
         {
             try
             {
+                final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                    || step.isFullPageVisualStep();
                 SutState capturedState = null;
                 if (step.getActions() != null && !step.getActions().isEmpty())
                 {
@@ -123,8 +125,6 @@ public final class VerifyOutcomeStep implements PipelineStep
                     }
                     else
                     {
-                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                            || step.isFullPageVisualStep();
                         final ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
                             ? activeLevel 
                             : (isFullPageReq 
