@@ -26,7 +26,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 
 /**
  * AI prompt implementation for the pre-step PESAP preparation phase.
- * Analyzes the flow context upfront to predict minimal context level,
+ * Analyzes the active step instruction to predict minimal context level,
  * check if custom Java methods are required, and identify step splits.
  *
  * @author AI-generated: Gemini 2.5 Pro
@@ -37,8 +37,6 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final String currentInstruction;
-    private final String previousInstruction;
-    private final List<String> nextInstructions;
 
     /**
      * Represents the parsed result of the PESAP analysis.
@@ -52,17 +50,25 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
     }
 
     /**
-     * Constructs a PesapPrompt with flow context details.
+     * Constructs a PesapPrompt for the active step instruction.
      *
      * @param currentInstruction the current step instruction
-     * @param previousInstruction the previous step instruction (can be null)
-     * @param nextInstructions the next step instructions in the scenario flow (can be null/empty)
+     */
+    public PesapPrompt(final String currentInstruction)
+    {
+        this.currentInstruction = currentInstruction;
+    }
+
+    /**
+     * Constructs a PesapPrompt with legacy context parameters for backwards compatibility.
+     *
+     * @param currentInstruction the current step instruction
+     * @param previousInstruction the previous step instruction (unused)
+     * @param nextInstructions the next step instructions (unused)
      */
     public PesapPrompt(final String currentInstruction, final String previousInstruction, final List<String> nextInstructions)
     {
-        this.currentInstruction = currentInstruction;
-        this.previousInstruction = previousInstruction;
-        this.nextInstructions = nextInstructions != null ? nextInstructions : List.of();
+        this(currentInstruction);
     }
 
     @Override
@@ -80,30 +86,7 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
     @Override
     public String compileUserMessage(final ExecutionContext context)
     {
-        final StringBuilder sb = new StringBuilder();
-        if (this.previousInstruction != null && !this.previousInstruction.isBlank())
-        {
-            sb.append("[PREVIOUS] Step: ").append(truncateInstruction(this.previousInstruction)).append("\n");
-        }
-        if (this.currentInstruction != null && !this.currentInstruction.isBlank())
-        {
-            sb.append("[CURRENT]  Step: ").append(truncateInstruction(this.currentInstruction)).append("\n");
-        }
-
-        int count = 0;
-        for (final String next : this.nextInstructions)
-        {
-            if (next != null && !next.isBlank())
-            {
-                count++;
-                sb.append("[NEXT]     Step: ").append(truncateInstruction(next)).append("\n");
-                if (count >= 3)
-                {
-                    break; // Max 3 next steps as context
-                }
-            }
-        }
-        return "## Flow Context\n" + sb.toString();
+        return "## Active Instruction\n" + (this.currentInstruction != null ? truncateInstruction(this.currentInstruction) : "");
     }
 
     private static String truncateInstruction(final String instruction)
@@ -119,7 +102,6 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
         }
         return trimmed;
     }
-
 
     @Override
     public PesapResult parseResponse(final String rawContent, final ExecutionContext context) throws Exception

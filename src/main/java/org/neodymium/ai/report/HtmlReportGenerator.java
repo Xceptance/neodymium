@@ -281,6 +281,7 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"inspector-instruction\" id=\"inspInstruction\">Select a step</div>\n");
             sb.append("            <div class=\"inspector-raw-template\" id=\"inspRawTemplate\" style=\"display:none;\"></div>\n");
             sb.append("            <div class=\"inspector-sub-meta\" id=\"inspSourceFile\"></div>\n");
+            sb.append("            <div class=\"inspector-error-banner\" id=\"inspErrorBanner\" style=\"display:none;\"></div>\n");
             sb.append("          </div>\n");
 
             // Tab Navigation Bar
@@ -288,7 +289,7 @@ public final class HtmlReportGenerator
             sb.append("            <button class=\"tab-btn active\" id=\"tabBtn-llm\" onclick=\"switchInspectorTab('llm')\">🤖 LLM Details (<span id=\"tabLlmCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-actions\" onclick=\"switchInspectorTab('actions')\">🎯 Actions (<span id=\"tabActionsCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-visuals\" onclick=\"switchInspectorTab('visuals')\">📸 Visuals (<span id=\"tabVisualsCount\">0</span>)</button>\n");
-            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes</button>\n");
+            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes <span class=\"pill-error-count\" id=\"tabErrorBadge\" style=\"display:none;\">Error</span></button>\n");
             sb.append("          </div>\n");
 
             // Tab Content Panels
@@ -564,6 +565,11 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"step-source-meta\">📄 ").append(escapeHtml(step.getSourceFile()))
               .append(step.getLineNumber() > 0 ? ":" + step.getLineNumber() : "").append("</div>\n");
         }
+        if (step.getFailureReason() != null && !step.getFailureReason().isBlank())
+        {
+            sb.append("            <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
+              .append(escapeHtml(step.getFailureReason())).append("</div>\n");
+        }
         appendScreenshotPreviews(sb, step.getScreenshots(), "Step #" + (index + 1));
         sb.append("          </div>\n");
 
@@ -599,6 +605,12 @@ public final class HtmlReportGenerator
                 sb.append("                  <button class=\"btn-inspect-substep\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">🔍 Inspect</button>\n");
                 sb.append("                </div>\n");
                 sb.append("              </div>\n");
+
+                if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
+                {
+                    sb.append("              <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
+                      .append(escapeHtml(sub.getFailureReason())).append("</div>\n");
+                }
 
                 if (!sub.getScreenshots().isEmpty())
                 {
@@ -875,6 +887,19 @@ public final class HtmlReportGenerator
                     ctxBadge.style.display = 'none';
                 }
 
+                var errEl = document.getElementById('inspErrorBanner');
+                if (step.failureReason) {
+                    errEl.innerHTML = '❌ <strong>Error:</strong> <span>' + escapeHtml(step.failureReason) + '</span>';
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+
+                var errBadge = document.getElementById('tabErrorBadge');
+                if (errBadge) {
+                    errBadge.style.display = (step.failureReason && !step.bug) ? 'inline-block' : 'none';
+                }
+
                 // Update Tab Counts
                 var llmCalls = step.llmCalls || [];
                 var actions = step.actions || [];
@@ -887,8 +912,12 @@ public final class HtmlReportGenerator
                 // Tab Auto-Selection
                 if (preferredTab) {
                     window.switchInspectorTab(preferredTab);
+                } else if (step.failureReason && llmCalls.length === 0) {
+                    window.switchInspectorTab('reasoning');
                 } else if (step.visual || (visuals.length > 0 && llmCalls.length === 0)) {
                     window.switchInspectorTab('visuals');
+                } else {
+                    window.switchInspectorTab('llm');
                 }
 
                 // 1. Render LLM Panel (Safe Text Rendering via DOM textContent)
@@ -1766,6 +1795,37 @@ public final class HtmlReportGenerator
                 font-size: 0.8rem;
                 color: var(--text-muted);
                 font-family: var(--font-mono);
+            }
+            .step-card-error-banner {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                border-left: 4px solid var(--accent-danger);
+                border-radius: 6px;
+                color: #991b1b;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.82rem;
+                margin-top: 0.5rem;
+                word-break: break-word;
+            }
+            .inspector-error-banner {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                border-left: 4px solid var(--accent-danger);
+                border-radius: 6px;
+                color: #991b1b;
+                padding: 0.6rem 0.85rem;
+                font-size: 0.85rem;
+                margin-top: 0.4rem;
+                word-break: break-word;
+            }
+            .pill-error-count {
+                background: var(--accent-danger);
+                color: #ffffff;
+                padding: 0.1rem 0.4rem;
+                border-radius: 9999px;
+                font-size: 0.7rem;
+                font-weight: 700;
+                margin-left: 0.3rem;
             }
             .inspector-tabs {
                 display: flex;

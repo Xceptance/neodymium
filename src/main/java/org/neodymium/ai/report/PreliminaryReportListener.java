@@ -663,6 +663,30 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
         }
 
+        if (this.report.getFailureReason() == null && !this.report.isSuccess())
+        {
+            for (final TestExecutionReport.ReportStepEntry st : this.report.getSteps())
+            {
+                if (st.getFailureReason() != null && !st.getFailureReason().isBlank())
+                {
+                    this.report.setFailureReason(st.getFailureReason());
+                    break;
+                }
+                for (final TestExecutionReport.ReportStepEntry subSt : st.getSubSteps())
+                {
+                    if (subSt.getFailureReason() != null && !subSt.getFailureReason().isBlank())
+                    {
+                        this.report.setFailureReason(subSt.getFailureReason());
+                        break;
+                    }
+                }
+                if (this.report.getFailureReason() != null)
+                {
+                    break;
+                }
+            }
+        }
+
         if (this.report.getTestName() == null)
         {
             final String globalTestName = Neodymium.getTestName();

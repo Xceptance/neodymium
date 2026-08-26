@@ -1216,5 +1216,40 @@ public class PreliminaryReportListenerTest
         assertTrue(html.contains("data:image/png;base64,recordedBaselineData"));
         assertTrue(html.contains("data:image/png;base64,replayCurrentData"));
     }
+
+    @Test
+    @DisplayName("Verify that step failure reason is rendered on step card and inspector in HTML report")
+    public void testStepFailureReasonRenderedInHtmlReport() throws Exception
+    {
+        final Path reportDir = tempFolder.resolve("failure-reason-reports");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Open https://example.com/login");
+        step.setSourceFile("LoginTest.yaml");
+        step.setLineNumber(5);
+
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        step.setStatus(PlaybookStepStatus.FAILED);
+        step.setFailureReason("LLM provider communication failed: connection timeout");
+
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(1500, false, List.of()));
+
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+
+        assertTrue(Files.exists(htmlPath));
+        assertTrue(Files.exists(jsonPath));
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("step-card-error-banner"), "Step card must render error banner");
+        assertTrue(html.contains("LLM provider communication failed: connection timeout"), "Error message must be present in HTML");
+        assertTrue(html.contains("inspErrorBanner"), "Inspector error banner element must be present");
+        assertTrue(html.contains("tabErrorBadge"), "AI Notes error badge must be present in tab bar");
+    }
 }
 
