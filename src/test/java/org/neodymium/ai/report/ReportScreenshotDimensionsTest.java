@@ -89,7 +89,7 @@ public class ReportScreenshotDimensionsTest
     }
 
     @Test
-    @DisplayName("Verify Markdown report generator includes Dimensions column")
+    @DisplayName("Verify Markdown report generator includes Width, Height, and Dimensions columns")
     public void testMarkdownReportIncludesDimensionsColumn() throws Exception
     {
         final String base64Png = createBase64Image(1500, 881, "png");
@@ -108,15 +108,23 @@ public class ReportScreenshotDimensionsTest
         );
         report.addScreenshot(sc);
 
+        final TestExecutionReport.ReportStepEntry step = new TestExecutionReport.ReportStepEntry();
+        step.setStepIndex(0);
+        step.setInstruction("Check dashboard layout");
+        step.setStatus("SUCCESS");
+        step.addScreenshot(sc);
+        report.addStep(step);
+
         final MarkdownReportGenerator generator = new MarkdownReportGenerator();
         final String md = generator.generate(report);
 
-        Assertions.assertTrue(md.contains("| # | Step | Name | Format | Dimensions | Timestamp |"), "Markdown must contain Dimensions column header");
-        Assertions.assertTrue(md.contains("1500x881 px"), "Markdown must contain extracted image dimensions");
+        Assertions.assertTrue(md.contains("| # | Step | Name | Format | Width | Height | Dimensions | Timestamp |"), "Markdown must contain explicit Width and Height column headers");
+        Assertions.assertTrue(md.contains("| `1500 px` | `881 px` | `1500x881 px` |"), "Markdown table row must contain explicit width and height values");
+        Assertions.assertTrue(md.contains("Width: 1500px, Height: 881px"), "Markdown step detail must show explicit Width and Height");
     }
 
     @Test
-    @DisplayName("Verify HTML report generator includes dimensions badge in gallery and inspector")
+    @DisplayName("Verify HTML report generator includes width and height metadata in gallery and inspector")
     public void testHtmlReportIncludesDimensions() throws Exception
     {
         final String base64Png = createBase64Image(1500, 857, "png");
@@ -145,7 +153,37 @@ public class ReportScreenshotDimensionsTest
         final HtmlReportGenerator generator = new HtmlReportGenerator();
         final String html = generator.generate(report);
 
-        Assertions.assertTrue(html.contains("1500x857 px"), "HTML report must contain image dimensions in gallery or details");
+        Assertions.assertTrue(html.contains("1500x857 px"), "HTML report must contain image dimensions");
+        Assertions.assertTrue(html.contains("Width: <strong>1500px</strong>") || html.contains("1500px"), "HTML report must display explicit width");
+        Assertions.assertTrue(html.contains("Height: <strong>857px</strong>") || html.contains("857px"), "HTML report must display explicit height");
+    }
+
+    @Test
+    @DisplayName("Verify JSON report generator includes width, height, and dimensions fields")
+    public void testJsonReportIncludesWidthAndHeight() throws Exception
+    {
+        final String base64Png = createBase64Image(1500, 857, "png");
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("VisualDimensionsTest");
+        report.setStatus("SUCCESS");
+
+        final TestExecutionReport.ReportScreenshotEntry sc = new TestExecutionReport.ReportScreenshotEntry(
+            "Step #1 Capture",
+            0,
+            "image/png",
+            base64Png,
+            123456789L,
+            1500,
+            857
+        );
+        report.addScreenshot(sc);
+
+        final JsonReportGenerator generator = new JsonReportGenerator();
+        final String json = generator.generate(report);
+
+        Assertions.assertTrue(json.contains("\"width\" : 1500") || json.contains("\"width\":1500"), "JSON report must contain width field");
+        Assertions.assertTrue(json.contains("\"height\" : 857") || json.contains("\"height\":857"), "JSON report must contain height field");
+        Assertions.assertTrue(json.contains("\"dimensions\" : \"1500x857 px\"") || json.contains("\"dimensions\":\"1500x857 px\""), "JSON report must contain dimensions field");
     }
 
     @Test

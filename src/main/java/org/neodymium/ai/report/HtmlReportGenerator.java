@@ -354,6 +354,8 @@ public final class HtmlReportGenerator
                 }
                 final String scName = sc.getName() != null ? sc.getName() : "Screenshot #" + (s + 1);
                 final String dims = sc.getDimensions();
+                final Integer width = sc.getWidth();
+                final Integer height = sc.getHeight();
                 sb.append("      <div class=\"screenshot-card\">\n");
                 sb.append("        <div class=\"screenshot-header\"><span>").append(escapeHtml(scName)).append("</span>");
                 if (dims != null && !dims.isEmpty())
@@ -364,6 +366,13 @@ public final class HtmlReportGenerator
                 if (dataSrc != null)
                 {
                     sb.append("        <img src=\"").append(dataSrc).append("\" alt=\"Captured screenshot\" class=\"screenshot-img\" loading=\"lazy\" onclick=\"openLightbox(this.src, '").append(escapeAttr(scName + (dims != null ? " (" + dims + ")" : ""))).append("')\" title=\"Click to view full size\" />\n");
+                }
+                if (width != null && height != null)
+                {
+                    sb.append("        <div class=\"screenshot-meta-bar\">")
+                      .append("<span class=\"dim-pill\">Width: <strong>").append(width).append("px</strong></span>")
+                      .append("<span class=\"dim-pill\">Height: <strong>").append(height).append("px</strong></span>")
+                      .append("</div>\n");
                 }
                 sb.append("      </div>\n");
             }
@@ -471,7 +480,10 @@ public final class HtmlReportGenerator
                 ? sc.getBase64Data()
                 : "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + (sc.getBase64Data() != null ? sc.getBase64Data() : "");
             final String scName = sc.getName() != null ? sc.getName() : labelPrefix + " Screenshot";
-            sb.append("              <img src=\"").append(dataSrc).append("\" alt=\"Step screenshot preview\" class=\"preview-thumb\" onclick=\"event.stopPropagation(); openLightbox(this.src, '").append(escapeAttr(scName)).append("')\" title=\"").append(escapeHtml(scName)).append(" - Click to expand\" loading=\"lazy\" />\n");
+            final String dims = sc.getDimensions();
+            final String dimAnnotation = (dims != null ? " (" + dims + ")" : "");
+            final String scTitle = scName + (sc.getWidth() != null && sc.getHeight() != null ? " (Width: " + sc.getWidth() + "px, Height: " + sc.getHeight() + "px)" : dimAnnotation);
+            sb.append("              <img src=\"").append(dataSrc).append("\" alt=\"Step screenshot preview\" class=\"preview-thumb\" onclick=\"event.stopPropagation(); openLightbox(this.src, '").append(escapeAttr(scName + dimAnnotation)).append("')\" title=\"").append(escapeHtml(scTitle)).append(" - Click to expand\" loading=\"lazy\" />\n");
         }
         if (screenshots.size() > 3)
         {
@@ -503,7 +515,9 @@ public final class HtmlReportGenerator
             }
             if (!step.getScreenshots().isEmpty())
             {
-                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'visuals')\">📸 ").append(step.getScreenshots().size()).append(" screenshot(s)</span>\n");
+                final String firstDims = step.getScreenshots().get(0).getDimensions();
+                final String dimText = firstDims != null ? " (" + firstDims + ")" : "";
+                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'visuals')\">📸 ").append(step.getScreenshots().size()).append(" screenshot(s)").append(dimText).append("</span>\n");
             }
             if (llmCount > 0)
             {
@@ -1031,6 +1045,14 @@ public final class HtmlReportGenerator
                         var scLabel = (sc.name || ('Screenshot #' + (si + 1))) + (dims ? ' (' + dims + ')' : '');
                         img.onclick = function() { window.openLightbox(this.src, scLabel); };
                         card.appendChild(img);
+
+                        if (sc.width && sc.height) {
+                            var metaBar = document.createElement('div');
+                            metaBar.className = 'screenshot-meta-bar';
+                            metaBar.innerHTML = '<span class="dim-pill">Width: <strong>' + sc.width + 'px</strong></span>' +
+                                                '<span class="dim-pill">Height: <strong>' + sc.height + 'px</strong></span>';
+                            card.appendChild(metaBar);
+                        }
                         grid.appendChild(card);
                     });
                     visualsPanel.appendChild(grid);
@@ -2048,6 +2070,27 @@ public final class HtmlReportGenerator
                 padding: 0.15rem 0.4rem;
                 border-radius: 4px;
                 font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            }
+            .screenshot-meta-bar {
+                background: #f8fafc;
+                padding: 0.4rem 0.8rem;
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                border-top: 1px solid var(--border);
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+            }
+            .dim-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
+                font-size: 0.72rem;
+                color: #475569;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            }
+            .dim-pill strong {
+                color: #0f172a;
             }
             .screenshot-img {
                 width: 100%;
