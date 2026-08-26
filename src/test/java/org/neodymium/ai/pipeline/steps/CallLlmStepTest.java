@@ -19,7 +19,9 @@
 package org.neodymium.ai.pipeline.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -32,8 +34,12 @@ import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -245,5 +251,122 @@ public class CallLlmStepTest
             assertEquals(2, extracted.getCandidateLocators().size());
             assertEquals("High confidence selector with ID and clean classes", extracted.getSelfCritique());
         }
+    }
+
+    @Test
+    public void testCallLlmOmitsAttachmentsForTextOnlyContextLevel() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        provider.addResponse(new LlmResponse("Text Response", null, "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.MINIMAL);
+
+        // State has screenshot attachment
+        final SutAttachment attachment = new SutAttachment("image/png", "/tmp/screenshot.png", "fakeBase64Screenshot");
+        final SutState state = new MockSutState("<div>Some text</div>", List.of(attachment), "hash123");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+
+        final AiPrompt<String> dummyPrompt = new AiPrompt<>()
+        {
+            @Override
+            public ResponseSchema getResponseSchema()
+            {
+                return ResponseSchema.TEXT;
+            }
+
+            @Override
+            public String compileSystemMessage(final ExecutionContext ctx)
+            {
+                return "System";
+            }
+
+            @Override
+            public String compileUserMessage(final ExecutionContext ctx)
+            {
+                return "User";
+            }
+
+            @Override
+            public String parseResponse(final String rawContent, final ExecutionContext ctx)
+            {
+                return rawContent;
+            }
+        };
+
+        final CallLlmStep<String> callLlmStep = new CallLlmStep<>(dummyPrompt, LlmCapability.TEXT_ONLY);
+        callLlmStep.execute(context);
+
+        assertNotNull(provider.getLastRequest());
+        assertTrue(provider.getLastRequest().attachments().isEmpty(), "Text-only context levels must omit screenshot attachments.");
+    }
+
+    @Test
+    public void testCallLlmIncludesAttachmentsForVisualContextLevel() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        provider.addResponse(new LlmResponse("Visual Response", null, "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(provider);
+        registry.registerProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_LEAN);
+
+        // State has screenshot attachment
+        final SutAttachment attachment = new SutAttachment("image/png", "/tmp/screenshot.png", "fakeBase64Screenshot");
+        final SutState state = new MockSutState("<div>Some text</div>", List.of(attachment), "hash123");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+
+        final AiPrompt<String> dummyPrompt = new AiPrompt<>()
+        {
+            @Override
+            public ResponseSchema getResponseSchema()
+            {
+                return ResponseSchema.TEXT;
+            }
+
+            @Override
+            public String compileSystemMessage(final ExecutionContext ctx)
+            {
+                return "System";
+            }
+
+            @Override
+            public String compileUserMessage(final ExecutionContext ctx)
+            {
+                return "User";
+            }
+
+            @Override
+            public String parseResponse(final String rawContent, final ExecutionContext ctx)
+            {
+                return rawContent;
+            }
+        };
+
+        final CallLlmStep<String> callLlmStep = new CallLlmStep<>(dummyPrompt, LlmCapability.TEXT_ONLY);
+        callLlmStep.execute(context);
+
+        assertNotNull(provider.getLastRequest());
+        assertFalse(provider.getLastRequest().attachments().isEmpty(), "Visual context levels must include screenshot attachments.");
+        assertEquals(1, provider.getLastRequest().attachments().size());
     }
 }

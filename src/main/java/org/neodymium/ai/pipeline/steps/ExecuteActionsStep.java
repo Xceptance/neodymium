@@ -1072,16 +1072,7 @@ public final class ExecuteActionsStep implements PipelineStep
                         final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
                         final Object currentLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                         final ContextLevel currentLevel = currentLevelObj instanceof ContextLevel cl ? cl : baseLevel;
-                        final boolean verificationEnabled = AiConfiguration.getInstance().isSemanticVerificationEnabled();
-                        final ContextLevel captureLevel;
-                        if (verificationEnabled && (currentLevel == ContextLevel.MINIMAL || currentLevel == ContextLevel.LEAN))
-                        {
-                            captureLevel = ContextLevel.VISUAL_LEAN;
-                        }
-                        else
-                        {
-                            captureLevel = currentLevel;
-                        }
+                        final ContextLevel captureLevel = currentLevel != null ? currentLevel : ContextLevel.MINIMAL;
 
                         final SutState state = executor.captureState(captureLevel, isFullPageReq);
                         c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);

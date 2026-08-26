@@ -372,9 +372,9 @@ public class ExecuteActionsStepTest
         context.pushStep(pipelineStep);
 
         final StateMachineRunner runner = new StateMachineRunner(session);
-        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, runner::run);
+        final org.neodymium.ai.pipeline.DivergenceException ex = assertThrows(org.neodymium.ai.pipeline.DivergenceException.class, runner::run);
 
-        assertTrue(ex.getMessage().contains("VISUAL_RICH") || ex.getMessage().contains("budget"));
+        assertTrue(ex.getMessage().contains("Cannot resolve visually"));
         assertEquals(org.neodymium.ai.model.ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
 

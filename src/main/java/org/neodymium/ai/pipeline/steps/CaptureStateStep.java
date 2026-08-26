@@ -67,16 +67,7 @@ public final class CaptureStateStep implements PipelineStep
             try
             {
                 final ContextLevel level = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                final boolean verificationEnabled = AiConfiguration.getInstance().isSemanticVerificationEnabled();
-                final ContextLevel captureLevel;
-                if (verificationEnabled && (level == null || level == ContextLevel.MINIMAL || level == ContextLevel.LEAN))
-                {
-                    captureLevel = ContextLevel.VISUAL_LEAN;
-                }
-                else
-                {
-                    captureLevel = level != null ? level : ContextLevel.MINIMAL;
-                }
+                final ContextLevel captureLevel = level != null ? level : ContextLevel.MINIMAL;
 
                 LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) BEFORE executing actions", captureLevel);
                 final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
