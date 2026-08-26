@@ -95,6 +95,35 @@ public final class SelenideElementFinder
         {
             throw new IllegalArgumentException("Action cannot be null");
         }
+
+        final String target = action.getTarget();
+        final String val = action.getValue();
+        final String type = action.getType() != null ? action.getType().toUpperCase() : "";
+
+        // When a target locator and a text value are both provided for element targeting actions (e.g. CLICK, SELECT),
+        // query elements matching target filtered by the expected text value first
+        if (target != null && !target.isBlank() && val != null && !val.isBlank())
+        {
+            final boolean isTargetingAction = "CLICK".equals(type) || "SELECT".equals(type) || "HOVER".equals(type)
+                || "DOUBLE_CLICK".equals(type) || "CONTEXT_CLICK".equals(type) || "CHECK".equals(type);
+            if (isTargetingAction)
+            {
+                try
+                {
+                    final ElementsCollection matched = Selenide.$$(LocatorResolver.resolveLocator(target))
+                        .filterBy(Condition.text(val));
+                    final SelenideElement visible = findFirstVisible(matched, target);
+                    if (visible != null)
+                    {
+                        return visible;
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
         final List<String> fallbacks = new ArrayList<>();
         if (action.getCandidateLocators() != null)
         {

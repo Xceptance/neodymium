@@ -32,6 +32,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.util.ScreenshotHasher;
 import org.neodymium.ai.util.VisualStabilityDetector;
@@ -185,31 +186,65 @@ public final class VisualBaselineGateStep implements PipelineStep
                             this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
                             this.step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : (this.step.getScreenshotHashDim() != null ? this.step.getScreenshotHashDim() : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM));
 
-                            LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | SSIM Score: {} | Required Min Score: {}",
-                                resolvedInstruction, String.format("%.4f", ssimScore), minScore);
+                            String replayDims = null;
+                            if (currentState != null && currentState.getAttachments() != null)
+                            {
+                                for (final SutAttachment attachment : currentState.getAttachments())
+                                {
+                                    if (attachment != null && attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                                    {
+                                        final TestExecutionReport.ReportScreenshotEntry tempEntry = new TestExecutionReport.ReportScreenshotEntry(
+                                            "temp", 0, attachment.mediaType(), attachment.base64Data(), 0L);
+                                        replayDims = tempEntry.getDimensions();
+                                        break;
+                                    }
+                                }
+                            }
+
+                            LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | Dimensions: {} | SSIM Score: {} | Required Min Score: {}",
+                                resolvedInstruction, replayDims != null ? replayDims : "unknown", String.format("%.4f", ssimScore), minScore);
 
                             if (ssimScore >= minScore)
                             {
                                 isVisualMatch = true;
-                                LOGGER.info("   ✅ Visual SSIM match (score: {} >= {}) for instruction: \"{}\". Bypassing LLM call/actions.",
-                                    String.format("%.4f", ssimScore), minScore, resolvedInstruction);
+                                LOGGER.info("   ✅ Visual SSIM match (score: {} >= {}) for instruction: \"{}\" (Dimensions: {}). Bypassing LLM call/actions.",
+                                    String.format("%.4f", ssimScore), minScore, resolvedInstruction, replayDims != null ? replayDims : "unknown");
                             }
                             else
                             {
-                                LOGGER.debug("   ⚠️ Visual SSIM score below threshold ({} < {}) for instruction: \"{}\"",
-                                    String.format("%.4f", ssimScore), minScore, resolvedInstruction);
+                                LOGGER.debug("   ⚠️ Visual SSIM score below threshold ({} < {}) for instruction: \"{}\" (Dimensions: {})",
+                                    String.format("%.4f", ssimScore), minScore, resolvedInstruction, replayDims != null ? replayDims : "unknown");
                             }
                         }
 
                         final boolean hasActualActions = this.step.getActions() != null && !this.step.getActions().isEmpty()
                             && this.step.getActions().stream().anyMatch(a -> !"NONE".equalsIgnoreCase(a.getType()));
 
-                        if (isVisualMatch && !hasActualActions)
+                        final boolean isPureVerification = !hasActualActions
+                            || (this.step.isVisualStep() && this.step.getActions().stream().allMatch(a -> "ASSERT".equalsIgnoreCase(a.getType()) || "NONE".equalsIgnoreCase(a.getType())));
+
+                        if (isVisualMatch && isPureVerification)
                         {
                             return true;
                         }
                         else
                         {
+                            if (this.step.isVisualStep() && !isVisualMatch)
+                            {
+                                final String msg = String.format("Visual SSIM score below threshold (score: %s < %.2f) for visual instruction: \"%s\".",
+                                    currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A", minScore, resolvedInstruction);
+                                LOGGER.warn("   ❌ " + msg);
+
+                                if (mode.supportsHealing())
+                                {
+                                    throw new HealingRequiredException(msg);
+                                }
+                                else
+                                {
+                                    throw new DivergenceException(msg);
+                                }
+                            }
+
                             if (hasActualActions)
                             {
                                 if (coordinateTarget != null && !isVisualMatch)

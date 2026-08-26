@@ -353,11 +353,17 @@ public final class HtmlReportGenerator
                     dataSrc = "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + dataSrc;
                 }
                 final String scName = sc.getName() != null ? sc.getName() : "Screenshot #" + (s + 1);
+                final String dims = sc.getDimensions();
                 sb.append("      <div class=\"screenshot-card\">\n");
-                sb.append("        <div class=\"screenshot-header\">").append(escapeHtml(scName)).append("</div>\n");
+                sb.append("        <div class=\"screenshot-header\"><span>").append(escapeHtml(scName)).append("</span>");
+                if (dims != null && !dims.isEmpty())
+                {
+                    sb.append("<span class=\"screenshot-dim-badge\">").append(escapeHtml(dims)).append("</span>");
+                }
+                sb.append("</div>\n");
                 if (dataSrc != null)
                 {
-                    sb.append("        <img src=\"").append(dataSrc).append("\" alt=\"Captured screenshot\" class=\"screenshot-img\" loading=\"lazy\" onclick=\"openLightbox(this.src, '").append(escapeAttr(scName)).append("')\" title=\"Click to view full size\" />\n");
+                    sb.append("        <img src=\"").append(dataSrc).append("\" alt=\"Captured screenshot\" class=\"screenshot-img\" loading=\"lazy\" onclick=\"openLightbox(this.src, '").append(escapeAttr(scName + (dims != null ? " (" + dims + ")" : ""))).append("')\" title=\"Click to view full size\" />\n");
                 }
                 sb.append("      </div>\n");
             }
@@ -1002,7 +1008,16 @@ public final class HtmlReportGenerator
 
                         var header = document.createElement('div');
                         header.className = 'screenshot-header';
-                        header.textContent = sc.name || ('Screenshot #' + (si + 1));
+                        var nameSpan = document.createElement('span');
+                        nameSpan.textContent = sc.name || ('Screenshot #' + (si + 1));
+                        header.appendChild(nameSpan);
+                        var dims = sc.dimensions || (sc.width && sc.height ? (sc.width + 'x' + sc.height + ' px') : '');
+                        if (dims) {
+                            var dimBadge = document.createElement('span');
+                            dimBadge.className = 'screenshot-dim-badge';
+                            dimBadge.textContent = dims;
+                            header.appendChild(dimBadge);
+                        }
                         card.appendChild(header);
 
                         var src = sc.base64Data || '';
@@ -1013,7 +1028,8 @@ public final class HtmlReportGenerator
                         img.src = src;
                         img.className = 'screenshot-img';
                         img.title = 'Click to expand';
-                        img.onclick = function() { window.openLightbox(this.src, sc.name || ('Screenshot #' + (si + 1))); };
+                        var scLabel = (sc.name || ('Screenshot #' + (si + 1))) + (dims ? ' (' + dims + ')' : '');
+                        img.onclick = function() { window.openLightbox(this.src, scLabel); };
                         card.appendChild(img);
                         grid.appendChild(card);
                     });
@@ -2018,6 +2034,20 @@ public final class HtmlReportGenerator
                 font-weight: 600;
                 color: var(--text-muted);
                 border-bottom: 1px solid var(--border);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.5rem;
+            }
+            .screenshot-dim-badge {
+                display: inline-block;
+                background: #e2e8f0;
+                color: #475569;
+                font-size: 0.7rem;
+                font-weight: 600;
+                padding: 0.15rem 0.4rem;
+                border-radius: 4px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             }
             .screenshot-img {
                 width: 100%;

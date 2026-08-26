@@ -26,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
+import org.neodymium.ai.action.Action;
 
 /**
  * Live browser integration tests for {@link LocatorResolver}.
@@ -54,6 +56,11 @@ public class LocatorResolverBrowserTest
                 + "    <button id='pay-btn' data-ai='c42'>Total Paid: $27.58</button>"
                 + "    <a href='/checkout'>Checkout Now</a>"
                 + "  </div>"
+                + "  <ul id='country-list'>"
+                + "    <li class='country-item'>United States ($)</li>"
+                + "    <li class='country-item'>United Kingdom (£)</li>"
+                + "    <li class='country-item'>Germany (€)</li>"
+                + "  </ul>"
                 + "  <script>"
                 + "    class CustomCard extends HTMLElement {"
                 + "      constructor() {"
@@ -125,5 +132,14 @@ public class LocatorResolverBrowserTest
 
         final ElementsCollection xpathElements = LocatorResolver.findElements("//a[contains(text(), 'Checkout')]");
         Assertions.assertFalse(xpathElements.isEmpty());
+    }
+
+    @Test
+    public void testFindElementActionWithTargetAndValueDisambiguation()
+    {
+        final Action action = new Action("CLICK", "li.country-item", java.util.List.of("United Kingdom"), "Click United Kingdom", "reasoning", false);
+        final SelenideElement element = SelenideElementFinder.findElement(action);
+        Assertions.assertNotNull(element);
+        Assertions.assertTrue(element.getText().contains("United Kingdom"));
     }
 }

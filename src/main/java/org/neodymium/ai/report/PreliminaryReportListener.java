@@ -465,6 +465,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                         {
                             this.currentStep.addScreenshot(screenshot);
                         }
+                        LOGGER.debug("   📸 Recorded screenshot for step #{}: \"{}\" | Dimensions: {}",
+                            stepIdx + 1, label, screenshot.getDimensions() != null ? screenshot.getDimensions() : "unknown");
                     }
                 }
             }

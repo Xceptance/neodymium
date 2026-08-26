@@ -209,14 +209,16 @@ public final class MarkdownReportGenerator
         if (!screenshots.isEmpty())
         {
             sb.append("## 📸 Captured Visual Screenshots\n\n");
-            sb.append("| # | Step | Name | Format | Timestamp |\n");
-            sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
+            sb.append("| # | Step | Name | Format | Dimensions | Timestamp |\n");
+            sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
             for (int i = 0; i < screenshots.size(); i++)
             {
                 final TestExecutionReport.ReportScreenshotEntry sc = screenshots.get(i);
+                final String dims = sc.getDimensions() != null ? sc.getDimensions() : "-";
                 sb.append("| ").append(i + 1).append(" | Step #").append(sc.getStepIndex() + 1).append(" | `")
                     .append(escapeMarkdown(sc.getName() != null ? sc.getName() : "-")).append("` | `")
-                    .append(sc.getMediaType() != null ? sc.getMediaType() : "image/png").append("` | ")
+                    .append(sc.getMediaType() != null ? sc.getMediaType() : "image/png").append("` | `")
+                    .append(dims).append("` | ")
                     .append(sc.getTimestamp() > 0 ? NUMBER_FORMAT.format(sc.getTimestamp()) : "-").append(" |\n");
             }
             sb.append("\n");
@@ -278,7 +280,13 @@ public final class MarkdownReportGenerator
         }
         if (!step.getScreenshots().isEmpty())
         {
-            sb.append("- **Screenshots Captured:** ").append(step.getScreenshots().size()).append(" screenshot(s)\n");
+            sb.append("- **Screenshots Captured:** ").append(step.getScreenshots().size()).append(" screenshot(s)");
+            final String firstDims = step.getScreenshots().get(0).getDimensions();
+            if (firstDims != null)
+            {
+                sb.append(" (").append(firstDims).append(")");
+            }
+            sb.append("\n");
         }
         if (step.getRawInstruction() != null && !step.getRawInstruction().equals(step.getInstruction()))
         {
