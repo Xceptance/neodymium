@@ -120,6 +120,12 @@ public final class PlaybookStep
     private Integer screenshotHashDim;
 
     /**
+     * Flag indicating whether full-page screenshot capturing was used for this step's baseline.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean fullPage;
+
+    /**
      * Evaluated SSIM score against baseline during replay.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -639,11 +645,15 @@ public final class PlaybookStep
     /**
      * Checks if this step explicitly requests full-page visual context.
      *
-     * @return true if the instruction contains (visual: full), (visual:full), false otherwise
+     * @return true if the fullPage flag is true, or if the instruction contains (visual: full), (visual:full), false otherwise
      */
     @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isFullPageVisualStep()
     {
+        if (Boolean.TRUE.equals(this.fullPage))
+        {
+            return true;
+        }
         if (this.instruction == null)
         {
             return false;
@@ -769,6 +779,26 @@ public final class PlaybookStep
     public void setScreenshotHashDim(final Integer screenshotHashDim)
     {
         this.screenshotHashDim = screenshotHashDim;
+    }
+
+    /**
+     * Returns whether this step captures/requires a full-page screenshot.
+     *
+     * @return true if full-page screenshot was captured, false or null otherwise
+     */
+    public Boolean isFullPage()
+    {
+        return this.fullPage;
+    }
+
+    /**
+     * Sets whether this step captures/requires a full-page screenshot.
+     *
+     * @param fullPage true if full-page screenshot
+     */
+    public void setFullPage(final Boolean fullPage)
+    {
+        this.fullPage = fullPage;
     }
 
     /**

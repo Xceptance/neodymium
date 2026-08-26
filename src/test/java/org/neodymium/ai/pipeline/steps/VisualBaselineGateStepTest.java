@@ -239,6 +239,44 @@ public class VisualBaselineGateStepTest
         assertEquals(1.0, step.getSsimScore(), 0.001);
     }
 
+    @Test
+    public void testReplayWithMatchingVisualBaseline_withFullPageProperty_withoutInstructionTag() throws IOException
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.RED);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png)),
+            "content_hash");
+        executor.enqueueState(state);
+        executor.enqueueState(state);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String hash = ScreenshotHasher.computeSsimMatrix(base64Png);
+        final PlaybookStep step = new PlaybookStep("Verify logo");
+        step.setFullPage(true);
+        step.setScreenshotHash(hash);
+        final Action assertAction = new Action("ASSERT", "#logo", "visible");
+        step.getActions().add(assertAction);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertDoesNotThrow(() -> gateStep.execute(context));
+
+        assertNotNull(step.getSsimScore());
+        assertEquals(1.0, step.getSsimScore(), 0.001);
+    }
+
     private static String encodeToBase64(final BufferedImage image) throws IOException
     {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())

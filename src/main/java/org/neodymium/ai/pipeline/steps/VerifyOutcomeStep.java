@@ -180,6 +180,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                             if (ssimMatrix != null)
                             {
                                 step.setScreenshotHash(ssimMatrix);
+                                if (isFullPageReq || (activeLevel != null && activeLevel.isFullPageScreenshot()))
+                                {
+                                    step.setFullPage(true);
+                                }
                                 final String resolvedInstr = context.getSessionData() != null
                                     ? context.getSessionData().resolveVariables(step.getInstruction())
                                     : step.getInstruction();
@@ -490,6 +494,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                         : step.getInstruction();
                     LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
                     step.setScreenshotHash(dHash);
+                    if (isFullPageReq)
+                    {
+                        step.setFullPage(true);
+                    }
 
 
                     // 12. Create synthetic NONE action if no explicit DOM actions were generated to hold visual baseline

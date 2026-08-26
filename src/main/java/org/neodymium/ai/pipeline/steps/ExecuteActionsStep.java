@@ -1089,10 +1089,14 @@ public final class ExecuteActionsStep implements PipelineStep
                         {
                             session.getEventBus().dispatch(new StateCapturedEvent(state));
                         }
-                        if (state != null && state.getTextContent() != null)
+                        final PlaybookStep currentStep = (PlaybookStep) c.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                        if (currentStep != null)
                         {
-                            final PlaybookStep currentStep = (PlaybookStep) c.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                            if (currentStep != null)
+                            if (isFullPageReq || (captureLevel != null && captureLevel.isFullPageScreenshot()))
+                            {
+                                currentStep.setFullPage(true);
+                            }
+                            if (state != null && state.getTextContent() != null)
                             {
                                 currentStep.setBaselineState(new DefaultActionSanitizer().sanitizeText(state.getTextContent(), c.getSessionData()));
                             }
