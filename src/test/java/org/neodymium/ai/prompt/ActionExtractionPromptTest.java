@@ -472,7 +472,7 @@ public final class ActionExtractionPromptTest
         assertNotNull(systemMsg);
         assertTrue(systemMsg.contains("Input & Assertion Data Fidelity"), "System prompt must contain data fidelity guideline.");
         assertTrue(systemMsg.contains("NEVER invent, hallucinate, or substitute synthetic sample data"), "System prompt must forbid synthetic sample data.");
-        assertTrue(systemMsg.contains("- TYPE: set 'locator' to the input, textarea, or contenteditable element"), "System prompt must contain explicit TYPE action rule.");
+        assertTrue(systemMsg.contains("- **TYPE**: Target `input`, `textarea`, or `contenteditable`"), "System prompt must contain explicit TYPE action rule.");
     }
 
     /**

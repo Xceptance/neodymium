@@ -399,18 +399,19 @@ public final class StateMachineRunner
                 final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
                 if (currentStepObj instanceof PlaybookStep currentStep)
                 {
-                    if (currentStep.getStatus() == PlaybookStepStatus.RUNNING)
+                    currentStep.setStatus(PlaybookStepStatus.FAILED);
+                    currentStep.setFailed(true);
+                    if (currentStep.getFailureReason() == null)
                     {
-                        currentStep.setStatus(PlaybookStepStatus.FAILED);
-                        if (currentStep.getFailureReason() == null)
+                        Throwable root = failureCause;
+                        while (root.getCause() != null && root != root.getCause())
                         {
-                            Throwable root = failureCause;
-                            while (root.getCause() != null && root != root.getCause())
-                            {
-                                root = root.getCause();
-                            }
-                            currentStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                            root = root.getCause();
                         }
+                        currentStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                    }
+                    if (this.session != null && this.session.getEventBus() != null)
+                    {
                         this.session.getEventBus().dispatch(new StepFinishedEvent(currentStep, PlaybookStepStatus.FAILED));
                     }
                 }

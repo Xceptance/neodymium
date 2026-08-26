@@ -77,6 +77,26 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
+    @DisplayName("Verify that index generation handles unmappable characters safely")
+    public void testIndexGenerationHandlesUnmappableSurrogatesSafely() throws Exception
+    {
+        final Path testDir = tempFolder.resolve("surrogate-reports");
+        Files.createDirectories(testDir);
+
+        final TestExecutionReport reportWithSurrogate = new TestExecutionReport();
+        reportWithSurrogate.setTestName("SurrogateTest");
+        reportWithSurrogate.setStatus("FAILED");
+        reportWithSurrogate.setFailureReason("Malformed character \uD83D (lone surrogate) in output");
+        reportWithSurrogate.setStartTimeMs(System.currentTimeMillis());
+
+        final HtmlIndexReportGenerator generator = new HtmlIndexReportGenerator();
+        generator.updateIndex(testDir, reportWithSurrogate, "SurrogateTest_20260826-000000");
+
+        final Path indexPath = testDir.resolve("index.html");
+        assertTrue(Files.exists(indexPath), "index.html must be generated even with lone surrogate characters");
+    }
+
+    @Test
     @DisplayName("Verify parsing and normalization of DiskReportFormat enum")
     public void testDiskReportFormatParser()
     {
@@ -1144,4 +1164,57 @@ public class PreliminaryReportListenerTest
         assertEquals("FAILED", subStepsNode.get(2).get("status").asText());
         assertTrue(subStepsNode.get(2).get("failureReason").asText().contains("DivergenceException"));
     }
+
+    @Test
+    @DisplayName("Verify that visual baseline SSIM metrics and matrix thumbnail data URIs are recorded in report on divergence failure")
+    public void testVisualBaselineSsimFailureReporting() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-ssim-fail");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("VisualAuditTest");
+        listener.getReport().setTestMethod("testVisualMismatch");
+
+        final PlaybookStep visualStep = new PlaybookStep("Verify that the page is displayed in German (visual)");
+        visualStep.setScreenshotHash("dummyHashRecorded");
+        visualStep.setScreenshotHashDim(128);
+
+        bus.dispatch(new StepStartedEvent(visualStep, 0));
+
+        // Simulate VisualBaselineGateStep calculating SSIM and setting fields on divergence failure
+        visualStep.setSsimScore(0.4708);
+        visualStep.setSsimMinScore(0.99);
+        visualStep.setBaselineMatrixPng("data:image/png;base64,recordedBaselineData");
+        visualStep.setReplayMatrixPng("data:image/png;base64,replayCurrentData");
+        visualStep.setStatus(PlaybookStepStatus.FAILED);
+        visualStep.setFailureReason("Visual mismatch: SSIM score below threshold (0.4708 < 0.99)");
+
+        bus.dispatch(new StepFinishedEvent(visualStep, PlaybookStepStatus.FAILED));
+        bus.dispatch(new DiagnosticErrorEvent("Visual mismatch: SSIM score below threshold (0.4708 < 0.99)"));
+        bus.dispatch(new SessionFinishedEvent(2000, false, List.of("Visual mismatch: SSIM score below threshold")));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode stepNode = root.get("steps").get(0);
+
+        assertEquals("FAILED", stepNode.get("status").asText());
+        assertEquals(0.4708, stepNode.get("ssimScore").asDouble(), 0.0001);
+        assertEquals(0.99, stepNode.get("ssimMinScore").asDouble(), 0.0001);
+        assertEquals("data:image/png;base64,recordedBaselineData", stepNode.get("baselineMatrixPng").asText());
+        assertEquals("data:image/png;base64,replayCurrentData", stepNode.get("replayMatrixPng").asText());
+        assertEquals(128, stepNode.get("screenshotHashDim").asInt());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("data:image/png;base64,recordedBaselineData"));
+        assertTrue(html.contains("data:image/png;base64,replayCurrentData"));
+    }
 }
+

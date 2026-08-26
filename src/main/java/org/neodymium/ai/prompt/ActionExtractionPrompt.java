@@ -47,23 +47,12 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     /**
      * Selenide/Selenium engine locator constraint rule appended dynamically when operating in Selenide mode.
      */
-    public static final String SELENIDE_LOCATOR_RULE =
-        "\n\n## Selenide/Selenium Engine Locators\n"
-        + "- Locators MUST be standard W3C CSS selectors compatible with Selenium/WebDriver. "
-        + "FORBIDDEN: Playwright pseudo-selectors (such as ':has-text(...)', ':text(...)', ':text-is(...)', ':has(...)').";
+    public static final String SELENIDE_LOCATOR_RULE = "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
 
     /**
      * Candidate locators instruction appended dynamically when the Quality Judge is active.
      */
-    public static final String CANDIDATE_LOCATORS_RULE =
-        "\n\n## Candidate Locators & Ambiguity Evaluation\n"
-        + "- For each action, in addition to 'locator', provide a 'candidateLocators' array containing 1 to 3 alternate locator strategies (e.g. ID, clean CSS class, aria-label, data-ai) with confidence 'score' (0.0 to 1.0) and 'strategy'.\n"
-        + "- Example format inside each action:\n"
-        + "  \"candidateLocators\": [\n"
-        + "    {\"locator\": \"#submit-order\", \"strategy\": \"ID\", \"score\": 0.95},\n"
-        + "    {\"locator\": \".btn-checkout[type='submit']\", \"strategy\": \"CLASS_ATTRIBUTE\", \"score\": 0.85},\n"
-        + "    {\"locator\": \"[data-ai='xc123']\", \"strategy\": \"AUTOMATION_ID\", \"score\": 0.60}\n"
-        + "  ]";
+    public static final String CANDIDATE_LOCATORS_RULE = "\n\n" + AiAgentPrompts.getCandidateLocatorsRule().trim();
 
     /**
      * Constructs the extraction prompt.

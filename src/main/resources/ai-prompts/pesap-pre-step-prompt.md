@@ -19,7 +19,8 @@ Predict minimal context level and metadata for the current step.
    - Default: Omit 'sp' (keep unsplit). Unsplit instructions are always safer.
    - Split ONLY in these two cases:
      1. Multiple distinct target elements with explicit independent non-conditional actions or values (e.g. "Type user in #user, type pass in #pass, click Login" or "Card number is '4111...', expiry '12/29', CVV '111'").
-     2. Sequential multi-action interaction chains requiring intermediate UI state changes before the next action can occur (e.g. "Locate a product card, click translate('Add to Cart'), and choose an available size" -> ["Locate a product card and click translate('Add to Cart')", "Choose an available size"]).
+     2. Sequential multi-action interaction chains requiring intermediate UI state changes before the next action can occur (e.g. "Locate a product card, click 'Add to Cart', and choose an available size" -> ["Locate a product card and click 'Add to Cart'", "Choose an available size"]).
+   - Preserve the original wording, variables (e.g. ${var}), and tokens verbatim. NEVER invent, inject, or wrap text in synthetic functions like translate(...) or format changes unless already explicitly present in the original instruction text.
    - NEVER split instructions containing conditional logic, branch clauses, or state dependencies in ANY language (e.g. "If...", "When...", "Unless...", "In case...", "Si...", "Wenn...", etc.), simple single-action element targeting or locating ("Locate X and click it", "Localiser X et cliquer sur Y", "Finde X und klicke Y"), or referential dependencies ("...and hover over it"). All actions in a conditional sentence or target-and-action sentence must remain unsplit as a single step.
 
 ## Output Format
