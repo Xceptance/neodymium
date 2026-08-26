@@ -106,6 +106,54 @@ final class ScreenshotHasherTest
         assertNotNull(tile1);
         assertEquals(tile1, tile2);
         assertEquals(1.0, ScreenshotHasher.calculateSsim(tile1, tile2), 0.001);
+        assertEquals(64, ScreenshotHasher.getMatrixDimension(tile1));
+    }
+
+    @Test
+    void testMatrixDimension_andDataUri() throws IOException
+    {
+        final BufferedImage img = createSolidColorImage(Color.GREEN, 500, 500);
+        final String base64 = encodeToBase64Png(img);
+
+        final String matrix = ScreenshotHasher.computeSsimMatrix(base64);
+        assertNotNull(matrix);
+        assertEquals(128, ScreenshotHasher.getMatrixDimension(matrix));
+
+        final String dataUri = ScreenshotHasher.matrixToDataUri(matrix);
+        assertNotNull(dataUri);
+        assertTrue(dataUri.startsWith("data:image/png;base64,"));
+
+        assertEquals(0, ScreenshotHasher.getMatrixDimension(null));
+        assertEquals(0, ScreenshotHasher.getMatrixDimension(""));
+        assertEquals(0, ScreenshotHasher.getMatrixDimension("invalid_base64"));
+        assertNull(ScreenshotHasher.matrixToDataUri(null));
+        assertNull(ScreenshotHasher.matrixToDataUri(""));
+    }
+
+    @Test
+    void testCalculateSsim_mixedDimensions() throws IOException
+    {
+        final BufferedImage img = createCheckerboardImage(300, 300);
+        final String base64 = encodeToBase64Png(img);
+
+        final String fullMatrix = ScreenshotHasher.computeSsimMatrix(base64);
+        final String tileMatrix = ScreenshotHasher.computeTileSsimMatrix(base64, 50, 50, 32);
+
+        // Comparing two matrices with different dimensions must return 0.0
+        final double score = ScreenshotHasher.calculateSsim(fullMatrix, tileMatrix);
+        assertEquals(0.0, score, 0.001);
+    }
+
+    @Test
+    void testDownsampleProgressive_largeCanvas()
+    {
+        final BufferedImage large = createSolidColorImage(Color.RED, 1920, 1080);
+        final BufferedImage downscaled = ScreenshotHasher.downsampleProgressive(large, 128);
+
+        assertNotNull(downscaled);
+        assertEquals(128, downscaled.getWidth());
+        assertEquals(128, downscaled.getHeight());
+        assertEquals(BufferedImage.TYPE_BYTE_GRAY, downscaled.getType());
     }
 
     private BufferedImage createSolidColorImage(final Color color, final int width, final int height)

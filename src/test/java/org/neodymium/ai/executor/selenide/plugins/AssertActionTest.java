@@ -89,6 +89,30 @@ public class AssertActionTest extends BaseAiTest
         final AssertAction plugin = new AssertAction();
         // #welcome-message contains text: "Welcome to our web store!"
         plugin.execute(new Action("ASSERT", "#welcome-message", "Welcome", "check literal Welcome", "reasoning", false));
+
+        // #total-price contains text: "Total Amount: CAD $ 120.00"
+        plugin.execute(new Action("ASSERT", "#total-price", "CAD $", "check literal CAD $", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "[data-ai=\"xcuunj33\"]", "CAD $", "check data-ai literal CAD $", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#price-usd", "$ 45.00", "check literal $ 45.00", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#price-compact", "$100", "check literal $100", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#price-eur", "50 €", "check literal 50 €", "reasoning", false));
+    }
+
+    @Test
+    @DisplayName("AssertAction with isRegex=true handles CAD $ and dollar signs without failing on end anchor")
+    public void testAssertActionRegexWithDollarSignAndCurrency() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        // Even when LLM sets isRegex=true for "CAD $" or "$", it matches cleanly
+        plugin.execute(new Action("ASSERT", "[data-ai=\"xcuunj33\"]", "CAD $", "check regex CAD $", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#total-price", "CAD \\$ 120\\.00", "check fully escaped regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#total-price", "CAD $", "check unescaped CAD $ regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#price-usd", "$ 45.00", "check unescaped $ 45.00 regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#price-compact", "$100", "check unescaped $100 regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#price-eur", "50 €", "check 50 € regex", "reasoning", true));
     }
 
     @Test

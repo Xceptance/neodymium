@@ -250,6 +250,7 @@ public final class ExecuteActionsStep implements PipelineStep
             }
 
             final Action resolvedAction = resolveActionVariables(action, context.getSessionData());
+            final Action reportResolvedAction = resolveActionVariablesForReport(action, context.getSessionData());
 
             try
             {
@@ -536,7 +537,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                 }
 
-                session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
+                session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, reportResolvedAction, true));
                 context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                 if (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP")))
@@ -574,7 +575,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 // Dispatch failed event status and log error immediately
                 final String failureMsg = t.getMessage() != null ? t.getMessage() : t.toString();
                 LOGGER.error("   ❌ Action execution failed on SUT: {}", failureMsg);
-                session.getEventBus().dispatch(new ActionExecutedEvent(action, false));
+                session.getEventBus().dispatch(new ActionExecutedEvent(action, reportResolvedAction, false));
                 context.getTransientData().put(
                     ExecutionContext.KEY_LAST_EXECUTION_ERROR,
                     "Action " + action.getType() + " on locator '" + action.getTarget() + "' failed: " + failureMsg
@@ -698,7 +699,8 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 stepActions.add(sanitized);
             }
-            session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, true));
+            final Action reportResolvedInclude = resolveActionVariablesForReport(action, context.getSessionData());
+            session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, reportResolvedInclude, true));
         }
         catch (final IOException e)
         {
@@ -992,6 +994,14 @@ public final class ExecuteActionsStep implements PipelineStep
             final boolean isBypassed = visualBaselineGateStep.executeGate(contextState);
             if (isBypassed)
             {
+                step.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                contextState.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
+
+                step.setStatus(PlaybookStepStatus.SUCCESS);
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+                }
                 return;
             }
 
@@ -1447,6 +1457,88 @@ public final class ExecuteActionsStep implements PipelineStep
         }
 
         return resolvedAction;
+    }
+
+    private Action resolveActionVariablesForReport(final Action rawAction, final SessionData data)
+    {
+        if (rawAction == null || data == null)
+        {
+            return rawAction;
+        }
+
+        final Map<String, String> sensitiveMap = data.getRawSensitiveData();
+
+        // 1. Resolve values list, masking sensitive credentials
+        final List<String> resolvedValues = new ArrayList<>();
+        for (final String val : rawAction.getValues())
+        {
+            if (val == null)
+            {
+                resolvedValues.add(null);
+            }
+            else
+            {
+                String resolvedVal = data.resolveVariables(val);
+                if (sensitiveMap != null && !sensitiveMap.isEmpty())
+                {
+                    for (final String secret : sensitiveMap.values())
+                    {
+                        if (secret != null && !secret.isEmpty() && resolvedVal.contains(secret))
+                        {
+                            resolvedVal = resolvedVal.replace(secret, "••••••••");
+                        }
+                    }
+                }
+                resolvedValues.add(resolvedVal);
+            }
+        }
+
+        // 2. Resolve target selector/URL, masking sensitive credentials if any
+        String resolvedTarget = rawAction.getTarget() != null ? data.resolveVariables(rawAction.getTarget()) : null;
+        if (resolvedTarget != null && sensitiveMap != null && !sensitiveMap.isEmpty())
+        {
+            for (final String secret : sensitiveMap.values())
+            {
+                if (secret != null && !secret.isEmpty() && resolvedTarget.contains(secret))
+                {
+                    resolvedTarget = resolvedTarget.replace(secret, "••••••••");
+                }
+            }
+        }
+
+        // 3. Resolve description, masking sensitive credentials
+        String resolvedDesc = rawAction.getDescription() != null ? data.resolveVariables(rawAction.getDescription()) : null;
+        if (resolvedDesc != null && sensitiveMap != null && !sensitiveMap.isEmpty())
+        {
+            for (final String secret : sensitiveMap.values())
+            {
+                if (secret != null && !secret.isEmpty() && resolvedDesc.contains(secret))
+                {
+                    resolvedDesc = resolvedDesc.replace(secret, "••••••••");
+                }
+            }
+        }
+
+        final Action reportAction = new Action(
+            rawAction.getType(),
+            resolvedTarget,
+            resolvedValues,
+            resolvedDesc,
+            rawAction.getReasoning()
+        );
+        reportAction.setIsRegex(rawAction.isRegex());
+        reportAction.setStepInstruction(rawAction.getStepInstruction());
+        reportAction.setStepLine(rawAction.getStepLine());
+        reportAction.setStepFile(rawAction.getStepFile());
+        reportAction.setStepScreenshotHash(rawAction.getStepScreenshotHash());
+        reportAction.setAdjust(rawAction.getAdjust());
+        reportAction.setSelfCritique(rawAction.getSelfCritique());
+        reportAction.setDomFeatureVector(rawAction.getDomFeatureVector());
+        reportAction.setDurationMs(rawAction.getDurationMs());
+        reportAction.setDelayMs(rawAction.getDelayMs());
+        reportAction.setHasElse(rawAction.getHasElse());
+        reportAction.getParameters().putAll(rawAction.getParameters());
+        return reportAction;
     }
 
     /**

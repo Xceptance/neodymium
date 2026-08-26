@@ -319,6 +319,10 @@ public final class AuraReportingService
         command.add("io.qameta.allure:allure-maven:report");
         final File auraAllureResults = new File("target/aura-sandbox/allure-results").getAbsoluteFile();
         final File auraReportSite = new File("target/aura-sandbox/site/allure-maven-plugin").getAbsoluteFile();
+        if (auraReportSite.exists())
+        {
+            deleteDirRecursively(auraReportSite);
+        }
         command.add("-Dallure.results.directory=" + auraAllureResults.getAbsolutePath());
         command.add("-DresultsDirectory=" + auraAllureResults.getAbsolutePath());
         command.add("-Dallure.report.directory=" + auraReportSite.getAbsolutePath());

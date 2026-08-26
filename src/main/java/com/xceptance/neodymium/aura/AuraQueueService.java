@@ -242,29 +242,72 @@ public final class AuraQueueService
                 {
                     reportingService.deleteDirRecursively(allureResultsDir);
                 }
-
-                final Map<String, List<String>> datasetsByFile = new LinkedHashMap<>();
-                for (final DatasetSelection selection : req.datasets)
+                final File allureReportSiteDir = new File("target/aura-sandbox/site/allure-maven-plugin");
+                if (allureReportSiteDir.exists())
                 {
-                    datasetsByFile.computeIfAbsent(selection.file, k -> new ArrayList<>()).add(selection.id);
+                    reportingService.deleteDirRecursively(allureReportSiteDir);
+                }
+                final File defaultSiteDir = new File("target/site/allure-maven-plugin");
+                if (defaultSiteDir.exists())
+                {
+                    reportingService.deleteDirRecursively(defaultSiteDir);
                 }
 
-                // Group the requested datasets by file order to match the physical execution order
-                final List<DatasetSelection> groupedDatasets = new ArrayList<>();
-                for (final Map.Entry<String, List<String>> entry : datasetsByFile.entrySet())
+                final List<DatasetSelection> preservedDatasets = new ArrayList<>();
+                if (req.datasets != null)
                 {
-                    for (final String id : entry.getValue())
+                    for (final DatasetSelection selection : req.datasets)
                     {
-                        final DatasetSelection ds = new DatasetSelection();
-                        ds.file = entry.getKey();
-                        ds.id = id;
-                        groupedDatasets.add(ds);
+                        if (selection != null)
+                        {
+                            final DatasetSelection ds = new DatasetSelection();
+                            ds.file = selection.file;
+                            ds.id = selection.id;
+                            ds.browserProfiles = (selection.browserProfiles != null && !selection.browserProfiles.isEmpty())
+                                    ? new ArrayList<>(selection.browserProfiles)
+                                    : null;
+                            preservedDatasets.add(ds);
+                        }
                     }
                 }
-                req.datasets = groupedDatasets;
+                req.datasets = preservedDatasets;
 
-                LOGGER.info("[Aura Server] Starting execution of {} dataset(s) in {} file(s) in queue.",
-                        req.datasets.size(), datasetsByFile.size());
+                final List<ExecutionBatch> batches = new ArrayList<>();
+                final Set<String> uniqueFiles = new LinkedHashSet<>();
+                if (req.datasets != null)
+                {
+                    for (final DatasetSelection selection : req.datasets)
+                    {
+                        if (selection.file == null)
+                        {
+                            continue;
+                        }
+                        uniqueFiles.add(selection.file);
+                        final List<String> profiles = getEffectiveBrowserProfiles(selection, req.globalBrowserProfiles);
+
+                        ExecutionBatch match = null;
+                        for (final ExecutionBatch b : batches)
+                        {
+                            if (selection.file.equals(b.file) && profiles.equals(b.targetProfiles))
+                            {
+                                match = b;
+                                break;
+                            }
+                        }
+                        if (match == null)
+                        {
+                            match = new ExecutionBatch(selection.file, profiles);
+                            batches.add(match);
+                        }
+                        if (selection.id != null)
+                        {
+                            match.datasetIds.add(selection.id);
+                        }
+                    }
+                }
+
+                LOGGER.info("[Aura Server] Starting execution of {} dataset(s) across {} batch(es) in queue.",
+                        req.datasets.size(), batches.size());
                 globalTestsRun.set(0);
                 globalPassed.set(0);
                 globalFailed.set(0);
@@ -278,21 +321,23 @@ public final class AuraQueueService
                 runStartTimeMs.set(System.currentTimeMillis());
                 lastRunRequest.set(req);
 
-                final List<Map.Entry<String, List<String>>> entries = new ArrayList<>(datasetsByFile.entrySet());
-                for (int i = 0; i < entries.size(); i++)
+                for (int i = 0; i < batches.size(); i++)
                 {
-                    final Map.Entry<String, List<String>> entry = entries.get(i);
-                    final String file = entry.getKey();
-                    final List<String> ids = entry.getValue();
+                    final ExecutionBatch batch = batches.get(i);
+                    final String file = batch.file;
+                    final List<String> ids = batch.datasetIds;
+                    final List<String> targetProfiles = batch.targetProfiles;
 
                     activeFile.set(file);
 
                     if ("true".equalsIgnoreCase(System.getProperty("neodymium.aura.test", "false")))
                     {
-                        LOGGER.info("[Aura Server] Test mode active (neodymium.aura.test=true). Simulating queue execution for {}", file);
-                        broadcastLog("[INFO] Test mode active: simulating Maven subprocess for " + file);
-                        broadcastLog("[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0");
-                        globalTestsRun.incrementAndGet();
+                        LOGGER.info("[Aura Server] Test mode active (neodymium.aura.test=true). Simulating queue execution for {} with profiles {}", file, targetProfiles);
+                        broadcastLog("[INFO] Test mode active: simulating Maven subprocess for " + file + " [Profiles: " + targetProfiles + "]");
+                        final int simRuns = Math.max(1, ids.size()) * Math.max(1, targetProfiles.size());
+                        broadcastLog("[INFO] Tests run: " + simRuns + ", Failures: 0, Errors: 0, Skipped: 0");
+                        globalTestsRun.addAndGet(simRuns);
+                        globalPassed.addAndGet(simRuns);
                         completedFiles.add(file);
                         continue;
                     }
@@ -301,34 +346,6 @@ public final class AuraQueueService
                     final String safeName = file.replaceAll("[^a-zA-Z0-9]", "_");
                     final String className = "Aura_" + safeName + "_Test";
                     final File tempRunnerFile = new File(tempRunnerDir, className + ".java");
-
-                    // Collect all requested browser profiles for this file across its datasets
-                    final Set<String> targetProfiles = new LinkedHashSet<>();
-                    if (req.datasets != null)
-                    {
-                        for (final DatasetSelection selection : req.datasets)
-                        {
-                            if (file.equals(selection.file))
-                            {
-                                if (selection.browserProfiles != null && !selection.browserProfiles.isEmpty())
-                                {
-                                    targetProfiles.addAll(selection.browserProfiles);
-                                }
-                                else if (req.globalBrowserProfiles != null && !req.globalBrowserProfiles.isEmpty())
-                                {
-                                    targetProfiles.addAll(req.globalBrowserProfiles);
-                                }
-                            }
-                        }
-                    }
-                    if (targetProfiles.isEmpty() && req.globalBrowserProfiles != null && !req.globalBrowserProfiles.isEmpty())
-                    {
-                        targetProfiles.addAll(req.globalBrowserProfiles);
-                    }
-                    if (targetProfiles.isEmpty())
-                    {
-                        targetProfiles.add("Chrome_1024x768");
-                    }
 
                     final StringBuilder browserAnnotations = new StringBuilder();
                     for (final String profile : targetProfiles)
@@ -404,6 +421,12 @@ public final class AuraQueueService
                     }
                     else
                     {
+                        if (new File("/usr/bin/stdbuf").exists() || new File("/bin/stdbuf").exists())
+                        {
+                            command.add("stdbuf");
+                            command.add("-oL");
+                            command.add("-eL");
+                        }
                         command.add("mvn");
                     }
                     command.add("test");
@@ -433,9 +456,11 @@ public final class AuraQueueService
                     command.add("-Dsun.stdout.encoding=UTF-8");
                     command.add("-Dsun.stderr.encoding=UTF-8");
                     command.add("-Dnative.encoding=UTF-8");
-                    command.add("-DforkCount=0");
+                    command.add("-DforkCount=1");
                     command.add("-DreuseForks=true");
                     command.add("-Dsurefire.useFile=false");
+                    command.add("-Dsurefire.streamLogs=true");
+                    command.add("-Dsurefire.console.output.reporter.stdout=true");
 
                     LOGGER.info("[Aura Server] Executing command: {}", String.join(" ", command));
                     broadcastLog("[INFO] Command: " + String.join(" ", command));
@@ -472,6 +497,11 @@ public final class AuraQueueService
                     final AtomicInteger fileErrors = new AtomicInteger(0);
                     final AtomicInteger fileSkipped = new AtomicInteger(0);
 
+                    int prevReportedRuns = 0;
+                    int prevReportedPassed = 0;
+                    int prevReportedFailed = 0;
+                    int prevReportedSkipped = 0;
+
                     try (final BufferedReader reader = new BufferedReader(
                             new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)))
                     {
@@ -493,12 +523,41 @@ public final class AuraQueueService
                             final Matcher m = STATS_PATTERN.matcher(cleanLine);
                             if (m.find())
                             {
-                                fileTestsRun.set(Integer.parseInt(m.group(1)));
+                                final int currentRuns = Integer.parseInt(m.group(1));
+                                final int currentFailures = Integer.parseInt(m.group(2)) + Integer.parseInt(m.group(3));
+                                final int currentSkipped = m.group(4) != null ? Integer.parseInt(m.group(4)) : 0;
+                                final int currentPassed = Math.max(0, currentRuns - currentFailures - currentSkipped);
+
+                                fileTestsRun.set(currentRuns);
                                 fileFailures.set(Integer.parseInt(m.group(2)));
                                 fileErrors.set(Integer.parseInt(m.group(3)));
-                                if (m.group(4) != null)
+                                fileSkipped.set(currentSkipped);
+
+                                final int deltaRuns = currentRuns - prevReportedRuns;
+                                final int deltaPassed = currentPassed - prevReportedPassed;
+                                final int deltaFailed = currentFailures - prevReportedFailed;
+                                final int deltaSkipped = currentSkipped - prevReportedSkipped;
+
+                                if (deltaRuns > 0)
                                 {
-                                    fileSkipped.set(Integer.parseInt(m.group(4)));
+                                    globalTestsRun.addAndGet(deltaRuns);
+                                    if (deltaPassed > 0)
+                                    {
+                                        globalPassed.addAndGet(deltaPassed);
+                                    }
+                                    if (deltaFailed > 0)
+                                    {
+                                        globalFailed.addAndGet(deltaFailed);
+                                    }
+                                    if (deltaSkipped > 0)
+                                    {
+                                        globalSkipped.addAndGet(deltaSkipped);
+                                    }
+
+                                    prevReportedRuns = currentRuns;
+                                    prevReportedPassed = currentPassed;
+                                    prevReportedFailed = currentFailures;
+                                    prevReportedSkipped = currentSkipped;
                                 }
                             }
                         }
@@ -543,16 +602,7 @@ public final class AuraQueueService
                         break;
                     }
 
-                    if (fileTestsRun.get() > 0)
-                    {
-                        globalTestsRun.addAndGet(fileTestsRun.get());
-                        final int failures = fileFailures.get() + fileErrors.get();
-                        final int skipped = fileSkipped.get();
-                        globalFailed.addAndGet(failures);
-                        globalSkipped.addAndGet(skipped);
-                        globalPassed.addAndGet(fileTestsRun.get() - failures - skipped);
-                    }
-                    else
+                    if (fileTestsRun.get() == 0)
                     {
                         globalTestsRun.incrementAndGet();
                         if (exitCode != 0)
@@ -572,18 +622,18 @@ public final class AuraQueueService
 
                 if (!manuallyStopped.get())
                 {
-                    final List<String> uniqueFiles = new ArrayList<>(datasetsByFile.keySet());
+                    final List<String> uniqueFileList = new ArrayList<>(uniqueFiles);
                     if (req.allure)
                     {
                         LOGGER.info("[Aura Server] Auto-generating report as requested.");
-                        reportingService.generateReport(uniqueFiles, req, runStartTimeMs.get(), globalTestsRun.get(),
+                        reportingService.generateReport(uniqueFileList, req, runStartTimeMs.get(), globalTestsRun.get(),
                                 globalPassed.get(), globalFailed.get(), globalSkipped.get(), manuallyStopped.get(),
                                 currentRunLogs, currentRunEvents);
                     }
                     else
                     {
                         LOGGER.info("[Aura Server] Archiving execution run to history...");
-                        reportingService.copyReportToHistory(uniqueFiles, req, runStartTimeMs.get(), globalTestsRun.get(),
+                        reportingService.copyReportToHistory(uniqueFileList, req, runStartTimeMs.get(), globalTestsRun.get(),
                                 globalPassed.get(), globalFailed.get(), globalSkipped.get(), manuallyStopped.get(),
                                 currentRunLogs, currentRunEvents);
                     }
@@ -632,5 +682,31 @@ public final class AuraQueueService
         });
         thread.setName("NeodymiumAuraQueueExecutor");
         thread.start();
+    }
+
+    private static final class ExecutionBatch
+    {
+        final String file;
+        final List<String> targetProfiles;
+        final List<String> datasetIds = new ArrayList<>();
+
+        ExecutionBatch(final String file, final List<String> targetProfiles)
+        {
+            this.file = file;
+            this.targetProfiles = targetProfiles;
+        }
+    }
+
+    private static List<String> getEffectiveBrowserProfiles(final DatasetSelection selection, final List<String> globalProfiles)
+    {
+        if (selection != null && selection.browserProfiles != null && !selection.browserProfiles.isEmpty())
+        {
+            return new ArrayList<>(selection.browserProfiles);
+        }
+        if (globalProfiles != null && !globalProfiles.isEmpty())
+        {
+            return new ArrayList<>(globalProfiles);
+        }
+        return List.of("Chrome_1024x768");
     }
 }

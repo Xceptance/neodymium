@@ -30,6 +30,8 @@ import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Standard AI prompt to extract actionable steps from an execution instruction
@@ -40,6 +42,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
  */
 public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ActionExtractionPrompt.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
@@ -159,6 +162,20 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
+        final org.neodymium.ai.model.ContextLevel activeLevel =
+            (context != null && context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.model.ContextLevel cl)
+                ? cl
+                : null;
+
+        if (activeLevel == org.neodymium.ai.model.ContextLevel.VISUAL && "SUCCESS".equalsIgnoreCase(status))
+        {
+            if (!actions.isEmpty())
+            {
+                LOGGER.debug("🛡️ [Visual Guard] Visual check passed at ContextLevel.VISUAL. Discarded {} synthetic action(s).", actions.size());
+                actions.clear();
+            }
+        }
+
         if (context != null)
         {
             final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
@@ -192,21 +209,17 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
-        if ("CONTINUE".equalsIgnoreCase(status))
+        if (context != null && "CONTINUE".equalsIgnoreCase(status))
         {
             context.getTransientData().put("KEY_IS_CONTINUATION_STEP", true);
         }
-        else
+        else if (context != null)
         {
             context.getTransientData().put("KEY_IS_CONTINUATION_STEP", false);
         }
 
         boolean isEscalationRequested = "ESCALATE".equalsIgnoreCase(status);
         final String targetLevelCandidate = root.hasNonNull("targetContextLevel") ? root.path("targetContextLevel").asText() : (root.hasNonNull("tc") ? root.path("tc").asText() : null);
-        final org.neodymium.ai.model.ContextLevel activeLevel =
-            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.model.ContextLevel cl
-                ? cl
-                : null;
 
         if (!isEscalationRequested && targetLevelCandidate != null && actions.isEmpty())
         {

@@ -1024,4 +1024,53 @@ public class PreliminaryReportListenerTest
         assertTrue(html.contains("#4.3"));
         assertFalse(html.contains("#3.1"), "Step #3 must not have #3.1");
     }
+
+    @Test
+    public void testResolvedTargetAndValueInReport(@TempDir final Path tempDir) throws Exception
+    {
+        final Path reportDir = tempDir.resolve("ai-reports-resolved");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("org.neodymium.ai.integration.ResolvedActionTest");
+        listener.getReport().setTestMethod("testResolvedActions");
+        listener.getReport().setDatasetId("us");
+        listener.getReport().setExecutionMode("FORCE_RECORDING");
+        listener.getReport().setPlaybookFile("ResolvedActionTest.yaml");
+
+        final PlaybookStep step = new PlaybookStep("Open site and log in");
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        final Action parameterized = new Action("NAVIGATE", "${verla.url}/index.html", List.of("${user}"), "Open", "Nav reason");
+        final Action resolved = new Action("NAVIGATE", "https://localhost:8543/index.html", List.of("john_doe"), "Open", "Nav reason");
+
+        bus.dispatch(new ActionExecutedEvent(parameterized, resolved, true));
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(2000, true));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+        assertTrue(Files.exists(mdPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode actionNode = root.get("steps").get(0).get("actions").get(0);
+        assertEquals("${verla.url}/index.html", actionNode.get("target").asText());
+        assertEquals("https://localhost:8543/index.html", actionNode.get("resolvedTarget").asText());
+        assertEquals("${user}", actionNode.get("value").asText());
+        assertEquals("john_doe", actionNode.get("resolvedValue").asText());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("https://localhost:8543/index.html"));
+        assertTrue(html.contains("action-tpl-note"));
+
+        final String md = Files.readString(mdPath);
+        assertTrue(md.contains("https://localhost:8543/index.html (Tpl: ${verla.url}/index.html)"));
+        assertTrue(md.contains("john_doe (Tpl: ${user})"));
+    }
 }

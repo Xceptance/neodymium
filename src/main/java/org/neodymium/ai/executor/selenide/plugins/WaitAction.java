@@ -129,7 +129,9 @@ public final class WaitAction implements BrowserActionPlugin
                         if (action.isRegex())
                         {
                             final String cleanRegex = AssertAction.cleanRegexPattern(value);
-                            SelenideElementFinder.findElement(action).shouldHave(Condition.matchText(cleanRegex), Duration.ofSeconds(10));
+                            SelenideElementFinder.findElement(action).shouldHave(
+                                    Condition.or("Match regex pattern or literal text", Condition.matchText(cleanRegex), Condition.text(value)),
+                                    Duration.ofSeconds(10));
                         }
                         else
                         {

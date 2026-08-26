@@ -53,7 +53,7 @@ flowchart LR
 
 Because Neodymium AI observes both the semantic DOM tree and visual rendering at each step, you get powerful testing features **for free with zero extra authoring effort**:
 
-* 🖼️ **Visual Baseline & Layout Checks**: Automatically captures visual hashes and verifies page layouts using local $64 \times 64$ luminance Structural Similarity Index (SSIM) gating and temporal visual stability detection.
+* 🖼️ **Visual Baseline & Layout Checks**: Automatically captures visual hashes and verifies page layouts using local $128 \times 128$ luminance Structural Similarity Index (SSIM) gating with progressive multi-pass downscaling and temporal visual stability detection.
 * 🎯 **Post-Action Outcome Validation**: Automatically verifies that an action actually achieved its intended effect (e.g., verifying that clicking "Add to Cart" updated the cart badge or transitioned the view, rather than just blind clicking).
 * 🔍 **Prompt & Selector Quality Checking**: Automatically validates and scores generated CSS/XPath selectors against live DOM invariants, rejecting brittle or dynamic IDs before they reach test recordings.
 * 🩺 **Visual Root Cause Analysis (Visual RCA)**: When an unexpected failure occurs, the engine automatically analyzes failure screenshots, baseline deltas, and DOM state to deliver an instant, plain-language diagnostic report explaining *why* the test failed.
@@ -1067,13 +1067,15 @@ When automated tests target localized applications (e.g. French, German, Japanes
 
 ## 6. Visual Testing, Stability & Failure Diagnostics
 
-### 6.1 SSIM 64x64 Visual Matrix Verification
+### 6.1 SSIM Visual Matrix Verification & Progressive Downsampling
 
 Rather than using lossy 17×16 perceptual bit-hashes, visual steps capture structural luminance matrices:
-1. **Bilinear Downscaling**: Screenshots are downscaled to a $64 \times 64$ grid using `RenderingHints.VALUE_INTERPOLATION_BILINEAR`.
-2. **8-bit Luminance Matrix**: Calculates a 4,096-byte luminance matrix (0..255 brightness per grid cell), serialized as a Base64 string in `step.setScreenshotHash()`.
-3. **In-Memory SSIM Comparison**: During replay, Neodymium computes Mean SSIM ($0.0 \rightarrow 1.0$) across $8 \times 8$ local blocks in $< 0.05\text{ ms}$.
-4. **Visual Match Gate**: Checks `ssimScore >= neodymium.ai.ssim.minScore` (default: `0.99`). If the visual score passes, execution bypasses unnecessary LLM verification calls while staying immune to font anti-aliasing and subpixel noise.
+1. **Progressive Multi-Pass Downscaling**: Screenshots are downscaled to a $128 \times 128$ grid using iterative half-stepping with bilinear interpolation (`downsampleProgressive`). This eliminates single-pass subsampling aliasing on high-contrast text and micro-UI elements.
+2. **8-bit Luminance Matrix**: Calculates a 16,384-byte luminance matrix (0..255 brightness per grid cell), serialized as a Base64 string in `step.setScreenshotHash()`. Micro-cropped coordinate click tiles use $64 \times 64$ ($4,096\text{ bytes}$) with radius $32\text{px}$.
+3. **Playbook Metadata (`screenshotHashDim`)**: Companion `.json` recordings store `"screenshotHashDim": 128` (or `64` for tiles) to make matrix dimensions explicit for replay.
+4. **In-Memory SSIM Comparison**: During replay, Neodymium computes Mean SSIM ($0.0 \rightarrow 1.0$) across $8 \times 8$ local blocks (256 blocks total) in $< 2\text{ ms}$. Single-block dynamic text changes (e.g., randomized order numbers) are bounded to $< 0.39\%$ weight impact.
+5. **Visual Match Gate**: Checks `ssimScore >= neodymium.ai.ssim.minScore` (default: `0.99`). If the visual score passes, execution bypasses unnecessary LLM verification calls while catching genuine visual breaks, shifted layouts, and missing buttons.
+6. **Side-by-Side Reporting**: Replay test execution reports (HTML, Markdown, JSON) output the evaluated SSIM score badge alongside pixelated side-by-side previews of the **Recorded Baseline Mini-Image** vs. **Replay Capture Mini-Image**.
 
 ---
 

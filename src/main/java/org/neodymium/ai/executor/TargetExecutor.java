@@ -29,8 +29,17 @@ import org.neodymium.ai.action.Action;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
-public interface TargetExecutor
+public interface TargetExecutor extends AutoCloseable
 {
+    /**
+     * Closes any resources associated with this executor.
+     *
+     * @throws Exception if closing fails
+     */
+    @Override
+    default void close() throws Exception
+    {
+    }
     /**
      * Captures the current state of the SUT.
      *

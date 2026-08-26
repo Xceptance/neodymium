@@ -51,6 +51,7 @@ import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.InteractiveConsoleListener;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
@@ -570,6 +571,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
+        private boolean sessionFinishedHandled = false;
 
         public AiInvocationExtension(
             final String playbookPath,
@@ -589,6 +591,30 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         @Override
         public void beforeEach(final ExtensionContext context) throws Exception
         {
+            try
+            {
+                executeBeforeEach(context);
+            }
+            catch (final Throwable t)
+            {
+                handleEarlyFailure(context, t);
+                if (t instanceof Exception e)
+                {
+                    throw e;
+                }
+                else if (t instanceof Error err)
+                {
+                    throw err;
+                }
+                else
+                {
+                    throw new RuntimeException(t);
+                }
+            }
+        }
+
+        private void executeBeforeEach(final ExtensionContext context) throws Exception
+        {
             // Set test name dynamically in the Neodymium context
             if (context.getRequiredTestMethod() != null && context.getRequiredTestClass() != null)
             {
@@ -602,17 +628,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 Neodymium.setBrowserProfileName(this.browser.getBrowserTag());
             }
 
-            if (Neodymium.hasDriver())
-            {
-                final org.neodymium.common.browser.WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
-                if (legacyCont != null && legacyCont.getWebDriver() != null)
-                {
-                    final org.openqa.selenium.WebDriver driver = legacyCont.getDecoratedWebDriver() != null
-                        ? legacyCont.getDecoratedWebDriver()
-                        : legacyCont.getWebDriver();
-                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
-                }
-            }
+            syncWebDriverWithSelenide();
 
             // Automatically detect mock integration test package and apply thread-local overrides
             if (context.getRequiredTestClass() != null)
@@ -636,7 +652,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 });
             }
 
-            final SessionData sessionData = new SessionData(new HashMap<>(dataset));
+            final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
             
             final LlmRegistry registry = new LlmRegistry();
             final AiConfiguration config = AiConfiguration.getInstance();
@@ -1087,10 +1103,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
         }
 
+        private void syncWebDriverWithSelenide()
+        {
+            if (Neodymium.hasDriver())
+            {
+                final org.neodymium.common.browser.WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
+                if (legacyCont != null && legacyCont.getWebDriver() != null)
+                {
+                    final org.openqa.selenium.WebDriver driver = legacyCont.getDecoratedWebDriver() != null
+                        ? legacyCont.getDecoratedWebDriver()
+                        : legacyCont.getWebDriver();
+                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
+                }
+            }
+        }
+
         private void runPlaybookForMethod(final Method method) throws Exception
         {
             if (method != null && method.isAnnotationPresent(AiPlaybook.class) && this.session != null)
             {
+                syncWebDriverWithSelenide();
                 final ExecutionContext execCtx = this.session.getExecutionContext();
                 if (execCtx != null && Boolean.TRUE.equals(execCtx.getTransientData().get("playbook.programmatic")))
                 {
@@ -1133,6 +1165,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             if (this.session != null && !this.session.getExecutionContext().getTransientData().containsKey("playbook.programmatic"))
             {
+                syncWebDriverWithSelenide();
                 @SuppressWarnings("unchecked")
                 final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) this.session.getExecutionContext().getTransientData().remove("playbook.mainSteps");
                 if (playbookSteps != null && !playbookSteps.isEmpty())
@@ -1153,6 +1186,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             try
             {
+                if (context.getExecutionException().isPresent())
+                {
+                    handleEarlyFailure(context, context.getExecutionException().get());
+                }
+
                 if (this.session != null)
                 {
                     final ExecutionContext execCtx = this.session.getExecutionContext();
@@ -1171,6 +1209,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             finally
             {
+                if (!Neodymium.hasDriver() && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        com.codeborne.selenide.WebDriverRunner.closeWebDriver();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 if (context.getExecutionException().isPresent() && this.mode.isRecording() && this.recordingPath != null && this.resourceManager != null)
                 {
                     try
@@ -1195,6 +1243,72 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     InMemoryLlmCache.clear();
                 }
+            }
+        }
+
+        private void handleEarlyFailure(final ExtensionContext context, final Throwable t)
+        {
+            if (this.sessionFinishedHandled)
+            {
+                return;
+            }
+            if (this.session != null && Boolean.TRUE.equals(this.session.getExecutionContext().getTransientData().get("sessionFinishedHandled")))
+            {
+                this.sessionFinishedHandled = true;
+                return;
+            }
+            this.sessionFinishedHandled = true;
+
+            try
+            {
+                if (this.session == null)
+                {
+                    final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
+                    final LlmRegistry registry = new LlmRegistry();
+                    final ExecutionEventBus eventBus = new ExecutionEventBus();
+                    final SelenideTargetExecutor executor = new SelenideTargetExecutor();
+                    this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
+                }
+
+                final ExecutionContext execCtx = this.session.getExecutionContext();
+                execCtx.getTransientData().put("sessionFinishedHandled", true);
+
+                final Class<?> testClass = context.getTestClass().orElse(null);
+                final Method method = context.getTestMethod().orElse(null);
+
+                if (testClass != null)
+                {
+                    execCtx.getTransientData().put("testClass", testClass.getName());
+                }
+                if (method != null)
+                {
+                    execCtx.getTransientData().put("testMethod", method.getName());
+                }
+                if (this.playbookPath != null)
+                {
+                    execCtx.getTransientData().put("playbookFile", this.playbookPath);
+                }
+                if (this.datasetId != null)
+                {
+                    execCtx.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
+                }
+                execCtx.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.mode);
+                execCtx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+
+                final ExecutionContext prev = ExecutionContext.getActiveContext();
+                try
+                {
+                    ExecutionContext.setActiveContext(execCtx);
+                    this.session.getEventBus().dispatch(new SessionFinishedEvent(0, false, Collections.emptyList()));
+                }
+                finally
+                {
+                    ExecutionContext.setActiveContext(prev);
+                }
+            }
+            catch (final Exception ex)
+            {
+                org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn("Failed to dispatch early failure event", ex);
             }
         }
 

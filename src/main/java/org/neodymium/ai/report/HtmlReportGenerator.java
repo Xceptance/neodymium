@@ -500,9 +500,17 @@ public final class HtmlReportGenerator
         sb.append("          </div>\n");
 
         // Render Action and LLM Summary tags
-        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty())
+        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty() || step.getSsimScore() != null)
         {
             sb.append("          <div class=\"step-card-footer\">\n");
+            if (step.getSsimScore() != null)
+            {
+                final double score = step.getSsimScore();
+                final double min = step.getSsimMinScore() != null ? step.getSsimMinScore() : 0.99;
+                final boolean pass = score >= min;
+                sb.append("            <span class=\"footer-tag ").append(pass ? "ssim-pass" : "ssim-fail").append("\">🖼️ SSIM: ")
+                    .append(String.format("%.4f", score)).append(" (Min: ").append(String.format("%.2f", min)).append(")</span>\n");
+            }
             if (!step.getActions().isEmpty())
             {
                 sb.append("            <span class=\"footer-tag\">🎯 ").append(step.getActions().size()).append(" action(s)</span>\n");
@@ -593,6 +601,16 @@ public final class HtmlReportGenerator
             function formatCost(c) {
                 if (c == null) return "$0.0000";
                 return "$" + Number(c).toFixed(4);
+            }
+
+            function escapeHtml(str) {
+                if (str == null) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
             }
 
             window.setInspectorWidth = function(widthPx) {
@@ -698,7 +716,8 @@ public final class HtmlReportGenerator
             window.copyActionTarget = function(actionIndex, btn) {
                 var step = getActiveStepObject();
                 if (!step || !step.actions || !step.actions[actionIndex]) return;
-                var val = step.actions[actionIndex].target || '';
+                var act = step.actions[actionIndex];
+                var val = act.resolvedTarget || act.target || '';
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(val).then(function() {
                         var original = btn.textContent;
@@ -878,11 +897,25 @@ public final class HtmlReportGenerator
                         var resClass = a.success ? 'status-pass' : 'status-fail';
                         var resText = a.success ? 'SUCCESS' : 'FAILED';
 
+                        var displayTarget = a.resolvedTarget || a.target || '-';
+                        var hasTargetTpl = a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
+                        var targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
+                        if (hasTargetTpl) {
+                            targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                        }
+
+                        var displayValue = a.resolvedValue || a.value || '-';
+                        var hasValueTpl = a.value && a.resolvedValue && a.value !== a.resolvedValue;
+                        var valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
+                        if (hasValueTpl) {
+                            valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                        }
+
                         tr.innerHTML = '<td>' + (ai + 1) + '</td>' +
-                                       '<td><span class="badge-action">' + (a.type || '-') + '</span></td>' +
-                                       '<td><code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + (a.target || '-') + '</code></td>' +
-                                       '<td><code>' + (a.value || '-') + '</code></td>' +
-                                       '<td class="text-muted">' + (a.reasoning || a.description || '-') + '</td>' +
+                                       '<td><span class="badge-action">' + escapeHtml(a.type || '-') + '</span></td>' +
+                                       '<td>' + targetHtml + '</td>' +
+                                       '<td>' + valueHtml + '</td>' +
+                                       '<td class="text-muted">' + escapeHtml(a.reasoning || a.description || '-') + '</td>' +
                                        '<td><span class="' + resClass + '">' + resText + '</span></td>';
                         tbody.appendChild(tr);
                     });
@@ -894,12 +927,40 @@ public final class HtmlReportGenerator
                 // 3. Render Visuals Panel
                 var visualsPanel = document.getElementById('panel-visuals');
                 visualsPanel.innerHTML = '';
-                if (visuals.length === 0) {
+
+                // Render SSIM Baseline vs Replay comparison card if visual hashing occurred
+                if (step.ssimScore !== undefined && step.ssimScore !== null) {
+                    var ssimBox = document.createElement('div');
+                    ssimBox.className = 'ssim-comparison-box';
+                    var ssimPass = step.ssimScore >= (step.ssimMinScore || 0.99);
+                    var ssimDim = step.screenshotHashDim || 128;
+
+                    ssimBox.innerHTML = '<div class="ssim-score-header">' +
+                        '<span class="badge ' + (ssimPass ? 'pill-pass' : 'pill-fail') + '">' +
+                        '🖼️ SSIM Score: ' + Number(step.ssimScore).toFixed(4) + ' (Min: ' + Number(step.ssimMinScore || 0.99).toFixed(2) + ')' +
+                        '</span>' +
+                        '</div>' +
+                        '<div class="ssim-matrices-grid">' +
+                        (step.baselineMatrixPng ? 
+                            '<div class="ssim-matrix-card">' +
+                            '<div class="ssim-matrix-label">Recorded Baseline (' + ssimDim + 'x' + ssimDim + ')</div>' +
+                            '<img src="' + step.baselineMatrixPng + '" class="ssim-matrix-img" alt="Baseline Matrix" title="Baseline SSIM Luminance Matrix (' + ssimDim + 'x' + ssimDim + ')" />' +
+                            '</div>' : '') +
+                        (step.replayMatrixPng ? 
+                            '<div class="ssim-matrix-card">' +
+                            '<div class="ssim-matrix-label">Replay Capture (' + ssimDim + 'x' + ssimDim + ')</div>' +
+                            '<img src="' + step.replayMatrixPng + '" class="ssim-matrix-img" alt="Replay Matrix" title="Replay SSIM Luminance Matrix (' + ssimDim + 'x' + ssimDim + ')" />' +
+                            '</div>' : '') +
+                        '</div>';
+                    visualsPanel.appendChild(ssimBox);
+                }
+
+                if (visuals.length === 0 && (step.ssimScore === undefined || step.ssimScore === null)) {
                     var emptyDiv = document.createElement('div');
                     emptyDiv.className = 'empty-inspector-state';
                     emptyDiv.textContent = 'No state screenshots captured during this step.';
                     visualsPanel.appendChild(emptyDiv);
-                } else {
+                } else if (visuals.length > 0) {
                     var grid = document.createElement('div');
                     grid.className = 'screenshots-grid';
                     visuals.forEach(function(sc, si) {
@@ -1740,6 +1801,18 @@ public final class HtmlReportGenerator
                 background: var(--accent-primary-light);
                 color: var(--accent-primary);
             }
+            .action-tpl-note {
+                font-size: 0.72rem;
+                color: var(--text-sub, #64748b);
+                margin-top: 3px;
+                opacity: 0.85;
+            }
+            .action-tpl-note code {
+                font-size: 0.7rem;
+                background: #f1f5f9;
+                padding: 1px 4px;
+                border-radius: 3px;
+            }
             .reasoning-card {
                 background: var(--accent-primary-light);
                 border-left: 4px solid var(--accent-primary);
@@ -1902,6 +1975,58 @@ public final class HtmlReportGenerator
                 gap: 0.5rem;
                 margin-top: 0.6rem;
                 align-items: center;
+            }
+            .ssim-comparison-box {
+                background: #f8fafc;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1.2rem;
+            }
+            .ssim-score-header {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                margin-bottom: 0.8rem;
+            }
+            .ssim-matrices-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1.5rem;
+                align-items: flex-start;
+            }
+            .ssim-matrix-card {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 0.4rem;
+                background: #ffffff;
+                padding: 0.6rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+            }
+            .ssim-matrix-label {
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: var(--text-muted);
+            }
+            .ssim-matrix-img {
+                width: 128px;
+                height: 128px;
+                image-rendering: pixelated;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: #000000;
+            }
+            .ssim-pass {
+                background: #f0fdf4 !important;
+                color: #166534 !important;
+                border: 1px solid #bbf7d0 !important;
+            }
+            .ssim-fail {
+                background: #fef2f2 !important;
+                color: #991b1b !important;
+                border: 1px solid #fecaca !important;
             }
             .preview-thumb {
                 width: 90px;

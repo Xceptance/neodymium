@@ -18,6 +18,8 @@ steps: |
   Select '${countryName}' in checkout shipping country dropdown.
   Enter first name '${firstName}', last name '${lastName}', and email '${email}'.
   Enter street address '${street}', city '${city}', state '${state}', and postcode '${postcode}'.
+  If there is a 'prefecture' input field, enter '${prefecture}'.
+
   Enter card number '4111 1111 1111 1111', expiry '12/29', and CVV '111'.
   Click purchase submit button.
   Wait for confirmation text "${expectedSuccessText}" to appear.
@@ -36,6 +38,7 @@ data:
     street: "Volksbadstr. 18"
     city: "Heilbad Heiligenstadt"
     state: ""
+    prefecture: ""
     postcode: "37308"
     expectedSuccessText: "Vielen Dank für Ihren Einkauf!"
     expectedOrderPattern: "V-[0-9]+-DE"
@@ -50,6 +53,7 @@ data:
     street: "123 Main St"
     city: "Manchester"
     state: "MA"
+    prefecture: ""
     postcode: "12345"
     expectedSuccessText: "Thank you for your purchase!"
     expectedOrderPattern: "V-[0-9]+-US"
@@ -62,6 +66,7 @@ data:
     lastName: "Dupont"
     email: "jean-fr@example.com"
     street: "100 Rue Saint-Denis"
+    prefecture: ""
     city: "Montréal"
     state: "QC"
     postcode: "H2X 3K4"
@@ -76,9 +81,11 @@ data:
     lastName: "Tanaka"
     email: "taro-jp@example.com"
     street: "1-1 Chiyoda"
+    prefecture: "東京都"
     city: "Tokyo"
     state: ""
     postcode: "100-0001"
     expectedSuccessText: "ご購入ありがとうございます！"
     expectedOrderPattern: "V-[0-9]+-JP"
     currencySymbol: "¥"
+

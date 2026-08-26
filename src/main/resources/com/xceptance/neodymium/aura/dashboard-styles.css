@@ -961,13 +961,32 @@
         }
 
         .config-panel {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .browser-selection-container {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
             padding: 16px;
             display: flex;
             flex-direction: column;
             gap: 12px;
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
+        }
+
+        .run-config-container {
+            flex-shrink: 0;
+            border-top: 1px solid var(--border);
+            padding: 14px 16px;
+            background: var(--bg-surface-1);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         .config-row {

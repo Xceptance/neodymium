@@ -325,4 +325,88 @@ public final class ActionExtractionPromptTest
         assertEquals("submit", vector.getAttributes().get("type"));
         assertTrue(vector.toDetailString().contains("tag=<button>"));
     }
+
+    /**
+     * Goal: Verifies that when status is SUCCESS at ContextLevel.VISUAL, any synthetic DOM ASSERT actions
+     * generated without DOM context are discarded by the visual guard, preserving the visual reasoning.
+     */
+    @Test
+    public void testVisualGuardDiscardsSyntheticActionsAtVisualLevel() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "targetContextLevel": "VISUAL",
+              "reasoning": "The form is on the left and order summary is on the right.",
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "form",
+                  "value": "Contact Information",
+                  "isRegex": false,
+                  "reasoning": "Assert data input forms are present on the left"
+                },
+                {
+                  "action": "ASSERT",
+                  "locator": ".order-summary",
+                  "value": "Order Summary",
+                  "isRegex": false,
+                  "reasoning": "Assert order summary block is present on the right"
+                }
+              ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep(
+            "There are data input forms on the left and and order summary block on the right (visual)."
+        );
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertTrue(actions.isEmpty(), "Synthetic DOM ASSERT actions must be discarded at ContextLevel.VISUAL with status SUCCESS");
+        assertTrue(step.getActions().isEmpty(), "Step actions list must be empty after visual guard execution");
+        assertEquals("The form is on the left and order summary is on the right.", step.getReasoning());
+    }
+
+    /**
+     * Goal: Verifies that when status is SUCCESS at ContextLevel.STANDARD, valid DOM ASSERT actions
+     * are preserved normally.
+     */
+    @Test
+    public void testStandardLevelPreservesAssertActions() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "targetContextLevel": "STANDARD",
+              "reasoning": "The headline says Checkout",
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "#checkout-form-container h1",
+                  "value": "Checkout",
+                  "isRegex": false,
+                  "reasoning": "Verify headline"
+                }
+              ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+        assertEquals("ASSERT", actions.get(0).getType());
+        assertEquals("#checkout-form-container h1", actions.get(0).getTarget());
+        assertEquals("Checkout", actions.get(0).getValue());
+    }
 }

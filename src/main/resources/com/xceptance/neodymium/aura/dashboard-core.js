@@ -361,7 +361,7 @@ function init() {
                     }
                 });
                 if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
-            } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls') {
+            } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls' || evt.detail.target.id === 'configPanel') {
                 if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
             } else if (evt.detail.target.id === 'colTests') {
                 if (typeof applyHistoryState === 'function') applyHistoryState(2);

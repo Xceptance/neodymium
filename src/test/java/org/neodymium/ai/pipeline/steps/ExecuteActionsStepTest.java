@@ -23,8 +23,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmRegistry;
@@ -34,15 +42,18 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
+import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
  * Dedicated unit tests for {@link ExecuteActionsStep}.
@@ -266,5 +277,66 @@ public class ExecuteActionsStepTest
         }
 
         assertTrue(stateCapturedReceived.get(), "StateCapturedEvent with screenshot attachment must be dispatched during visual step execution");
+    }
+
+    @Test
+    public void testReplayVisualBypassSetsSuccessAndDispatchesStepFinishedEvent() throws PipelineException, IOException
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+        final String recordedMatrix = ScreenshotHasher.computeSsimMatrix(base64Png);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", base64Png);
+        final MockSutState visualState = new MockSutState("<html><body>Confirmed</body></html>", List.of(screenshot), "hash-vis-replay");
+        executor.enqueueState(visualState);
+
+        final SessionData sessionData = new org.neodymium.ai.model.SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AtomicReference<StepFinishedEvent> finishedEventRef = new AtomicReference<>();
+        eventBus.registerListener(event -> {
+            if (event instanceof StepFinishedEvent sfe)
+            {
+                finishedEventRef.set(sfe);
+            }
+        });
+
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep visualStep = new PlaybookStep("Green checkmark is displayed (visual: full)");
+        visualStep.setScreenshotHash(recordedMatrix);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, visualStep.getStatus());
+        assertNotNull(visualStep.getSsimScore());
+        assertTrue(visualStep.getSsimScore() >= 0.99);
+        assertNotNull(finishedEventRef.get(), "StepFinishedEvent must be dispatched when visual gate bypasses step");
+        assertEquals(PlaybookStepStatus.SUCCESS, finishedEventRef.get().getStatus());
+        assertEquals(visualStep, finishedEventRef.get().getStep());
+    }
+
+    private static String encodeToBase64(final BufferedImage image) throws IOException
+    {
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(image, "png", baos);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
     }
 }

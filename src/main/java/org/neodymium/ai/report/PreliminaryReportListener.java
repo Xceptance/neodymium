@@ -310,6 +310,26 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setFailureReason(pbStep.getFailureReason());
                     }
+                    if (pbStep.getSsimScore() != null)
+                    {
+                        targetStep.setSsimScore(pbStep.getSsimScore());
+                    }
+                    if (pbStep.getSsimMinScore() != null)
+                    {
+                        targetStep.setSsimMinScore(pbStep.getSsimMinScore());
+                    }
+                    if (pbStep.getBaselineMatrixPng() != null)
+                    {
+                        targetStep.setBaselineMatrixPng(pbStep.getBaselineMatrixPng());
+                    }
+                    if (pbStep.getReplayMatrixPng() != null)
+                    {
+                        targetStep.setReplayMatrixPng(pbStep.getReplayMatrixPng());
+                    }
+                    if (pbStep.getScreenshotHashDim() != null)
+                    {
+                        targetStep.setScreenshotHashDim(pbStep.getScreenshotHashDim());
+                    }
                 }
             }
         }
@@ -318,6 +338,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (this.currentStep != null && actionExecuted.getAction() != null)
             {
                 final org.neodymium.ai.action.Action action = actionExecuted.getAction();
+                final org.neodymium.ai.action.Action resolvedAction = actionExecuted.getResolvedAction();
                 final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
                     action.getType(),
                     action.getTarget(),
@@ -326,6 +347,11 @@ public final class PreliminaryReportListener implements ExecutionListener
                     action.getReasoning(),
                     actionExecuted.isSuccess()
                 );
+                if (resolvedAction != null)
+                {
+                    actionEntry.setResolvedTarget(resolvedAction.getTarget());
+                    actionEntry.setResolvedValue(resolvedAction.getValue());
+                }
                 this.currentStep.addAction(actionEntry);
             }
         }
@@ -568,6 +594,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                         t.printStackTrace(new PrintWriter(sw));
                         this.report.setFailureStackTrace(sw.toString());
                     }
+                }
+                else if (lastErr != null)
+                {
+                    this.report.setFailureReason(lastErr.toString());
                 }
             }
         }

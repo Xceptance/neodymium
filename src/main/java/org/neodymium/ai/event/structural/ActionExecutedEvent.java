@@ -35,20 +35,38 @@ public final class ActionExecutedEvent extends ExecutionEvent
     private final Action action;
 
     /**
+     * The runtime action with resolved variables (if available).
+     */
+    private final Action resolvedAction;
+
+    /**
      * The execution outcome status (true for success, false for failure).
      */
     private final boolean success;
 
     /**
-     * Constructs an ActionExecutedEvent.
+     * Constructs an ActionExecutedEvent without explicit resolved action.
      *
      * @param action the executed action
      * @param success the execution outcome status
      */
     public ActionExecutedEvent(final Action action, final boolean success)
     {
+        this(action, null, success);
+    }
+
+    /**
+     * Constructs an ActionExecutedEvent with both canonical action and resolved action.
+     *
+     * @param action the canonical executed action
+     * @param resolvedAction the runtime resolved action
+     * @param success the execution outcome status
+     */
+    public ActionExecutedEvent(final Action action, final Action resolvedAction, final boolean success)
+    {
         super();
         this.action = action;
+        this.resolvedAction = resolvedAction;
         this.success = success;
     }
 
@@ -60,6 +78,16 @@ public final class ActionExecutedEvent extends ExecutionEvent
     public Action getAction()
     {
         return this.action;
+    }
+
+    /**
+     * Gets the runtime resolved action.
+     *
+     * @return the runtime resolved action, or the canonical action if no separate resolved action was supplied
+     */
+    public Action getResolvedAction()
+    {
+        return this.resolvedAction != null ? this.resolvedAction : this.action;
     }
 
     /**

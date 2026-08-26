@@ -230,8 +230,16 @@ public final class VisualStabilityDetector
                 return currentState;
             }
 
-            LOGGER.debug("   ⏳ [Visual Settling] SUT still transitioning (attempt {}/{}, stability: {} < {}). Waiting {}ms...",
-                attempt, effectiveMaxAttempts, String.format("%.4f", interFrameStability), stabilityThreshold, effectiveInterval);
+            if (expectedBaselineMatrix != null && !expectedBaselineMatrix.isBlank())
+            {
+                LOGGER.debug("   ⏳ [Visual Settling] Target visual baseline not yet reached (attempt {}/{}, stability: {}). Waiting {}ms...",
+                    attempt, effectiveMaxAttempts, String.format("%.4f", interFrameStability), effectiveInterval);
+            }
+            else
+            {
+                LOGGER.debug("   ⏳ [Visual Settling] SUT still transitioning (attempt {}/{}, stability: {} < {}). Waiting {}ms...",
+                    attempt, effectiveMaxAttempts, String.format("%.4f", interFrameStability), stabilityThreshold, effectiveInterval);
+            }
 
             previousState = currentState;
             previousMatrix = currentMatrix;

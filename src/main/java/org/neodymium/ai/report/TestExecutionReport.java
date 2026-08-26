@@ -309,6 +309,11 @@ public final class TestExecutionReport
         private boolean continueOnError;
         private boolean noHealing;
         private boolean visual;
+        private Double ssimScore;
+        private Double ssimMinScore;
+        private String baselineMatrixPng;
+        private String replayMatrixPng;
+        private Integer screenshotHashDim;
 
         public ReportStepEntry()
         {
@@ -639,6 +644,56 @@ public final class TestExecutionReport
         {
             this.visual = visual;
         }
+
+        public Double getSsimScore()
+        {
+            return this.ssimScore;
+        }
+
+        public void setSsimScore(final Double ssimScore)
+        {
+            this.ssimScore = ssimScore;
+        }
+
+        public Double getSsimMinScore()
+        {
+            return this.ssimMinScore;
+        }
+
+        public void setSsimMinScore(final Double ssimMinScore)
+        {
+            this.ssimMinScore = ssimMinScore;
+        }
+
+        public String getBaselineMatrixPng()
+        {
+            return this.baselineMatrixPng;
+        }
+
+        public void setBaselineMatrixPng(final String baselineMatrixPng)
+        {
+            this.baselineMatrixPng = baselineMatrixPng;
+        }
+
+        public String getReplayMatrixPng()
+        {
+            return this.replayMatrixPng;
+        }
+
+        public void setReplayMatrixPng(final String replayMatrixPng)
+        {
+            this.replayMatrixPng = replayMatrixPng;
+        }
+
+        public Integer getScreenshotHashDim()
+        {
+            return this.screenshotHashDim;
+        }
+
+        public void setScreenshotHashDim(final Integer screenshotHashDim)
+        {
+            this.screenshotHashDim = screenshotHashDim;
+        }
     }
 
     /**
@@ -648,7 +703,9 @@ public final class TestExecutionReport
     {
         private String type;
         private String target;
+        private String resolvedTarget;
         private String value;
+        private String resolvedValue;
         private String description;
         private String reasoning;
         private boolean success;
@@ -694,6 +751,16 @@ public final class TestExecutionReport
             this.target = target;
         }
 
+        public String getResolvedTarget()
+        {
+            return this.resolvedTarget;
+        }
+
+        public void setResolvedTarget(final String resolvedTarget)
+        {
+            this.resolvedTarget = resolvedTarget;
+        }
+
         public String getValue()
         {
             return this.value;
@@ -702,6 +769,16 @@ public final class TestExecutionReport
         public void setValue(final String value)
         {
             this.value = value;
+        }
+
+        public String getResolvedValue()
+        {
+            return this.resolvedValue;
+        }
+
+        public void setResolvedValue(final String resolvedValue)
+        {
+            this.resolvedValue = resolvedValue;
         }
 
         public String getDescription()

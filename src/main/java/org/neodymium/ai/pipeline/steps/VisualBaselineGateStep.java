@@ -179,6 +179,10 @@ public final class VisualBaselineGateStep implements PipelineStep
                         {
                             final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
                             currentSsimScore = ssimScore;
+                            this.step.setSsimScore(ssimScore);
+                            this.step.setSsimMinScore(minScore);
+                            this.step.setBaselineMatrixPng(ScreenshotHasher.matrixToDataUri(recordedHash));
+                            this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
 
                             LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | SSIM Score: {} | Required Min Score: {}",
                                 resolvedInstruction, String.format("%.4f", ssimScore), minScore);
