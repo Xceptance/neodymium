@@ -527,10 +527,11 @@ public final class ExecuteActionsStep implements PipelineStep
                 {
                     try
                     {
-                        final ContextLevel cl = (step != null && step.isVisualStep())
-                            ? ContextLevel.VISUAL
-                            : ContextLevel.VISUAL_LEAN;
-                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                            || (step != null && step.isFullPageVisualStep());
+                        final ContextLevel cl = isFullPageReq
+                            ? ContextLevel.VISUAL_LEAN
+                            : ContextLevel.VISUAL;
                         final SutState postActionState = executor.captureState(cl, isFullPageReq);
                         if (postActionState != null)
                         {
@@ -1360,6 +1361,10 @@ public final class ExecuteActionsStep implements PipelineStep
                         warnings.add(msg);
                     }
                 }
+
+                c.getTransientData().remove("KEY_POST_ACTION_STATE");
+                c.getTransientData().remove(ExecutionContext.KEY_LAST_STATE);
+                c.getTransientData().remove("KEY_IS_FULL_PAGE_SCREENSHOT");
             });
 
             contextState.pushStep(tryCatch);

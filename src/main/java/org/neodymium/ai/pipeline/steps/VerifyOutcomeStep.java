@@ -105,7 +105,15 @@ public final class VerifyOutcomeStep implements PipelineStep
         {
             try
             {
-                SutState capturedState = (SutState) context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                SutState capturedState = null;
+                if (step.getActions() != null && !step.getActions().isEmpty())
+                {
+                    capturedState = (SutState) context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                }
+                else
+                {
+                    context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                }
                 if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
                 {
                     final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
@@ -115,21 +123,22 @@ public final class VerifyOutcomeStep implements PipelineStep
                     }
                     else
                     {
+                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                            || step.isFullPageVisualStep();
                         final ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
                             ? activeLevel 
-                            : ((step != null && step.isVisualStep()) 
-                                ? ContextLevel.VISUAL 
-                                : ContextLevel.VISUAL_LEAN);
-                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                            : (isFullPageReq 
+                                ? ContextLevel.VISUAL_LEAN 
+                                : ContextLevel.VISUAL);
                         capturedState = executor.captureState(level, isFullPageReq);
+                        if (session != null && session.getEventBus() != null && capturedState != null)
+                        {
+                            session.getEventBus().dispatch(new StateCapturedEvent(capturedState));
+                        }
                     }
                 }
                 if (capturedState != null && capturedState.getAttachments() != null)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new StateCapturedEvent(capturedState));
-                    }
 
                     CoordinateTarget coordinateTarget = null;
                     if (step.getActions() != null)
@@ -276,7 +285,8 @@ public final class VerifyOutcomeStep implements PipelineStep
         try
         {
             // 4. Capture the post-execution SUT state (with temporal visual stability settling for visual assertions)
-            final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+            final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                || (step != null && step.isFullPageVisualStep());
             final SutState finalState;
             if (step != null && (step.isVisualStep() || isFullPageReq))
             {

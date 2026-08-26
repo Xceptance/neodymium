@@ -137,7 +137,7 @@ public final class VisualBaselineGateStep implements PipelineStep
                     final double minScore = coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore();
 
                     final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                        || (this.step != null && this.step.getInstruction() != null && (this.step.getInstruction().toLowerCase().contains("visual: full") || this.step.getInstruction().toLowerCase().contains("visual:full")));
+                        || (this.step != null && this.step.isFullPageVisualStep());
                     final SutState currentState = VisualStabilityDetector.captureSettledState(
                         executor,
                         isFullPageReq,

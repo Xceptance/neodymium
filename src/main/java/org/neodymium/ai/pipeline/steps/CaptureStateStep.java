@@ -24,6 +24,7 @@ import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
@@ -78,7 +79,10 @@ public final class CaptureStateStep implements PipelineStep
                 }
 
                 LOGGER.debug("📸 [Capture] Capturing SUT state (level: {}) BEFORE executing actions", captureLevel);
-                final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                final PlaybookStep playbookStep = stepObj instanceof PlaybookStep ps ? ps : null;
+                final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                    || (playbookStep != null && playbookStep.isFullPageVisualStep());
                 final SutState state = executor.captureState(captureLevel, isFullPageReq);
                 context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
                 session.getEventBus().dispatch(new StateCapturedEvent(state));
