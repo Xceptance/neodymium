@@ -884,6 +884,12 @@ When an action step cannot be fulfilled at the initial context level, the framew
 4. **Escalation 3 (`STANDARD` $\rightarrow$ `RICH`)**: Expands to all `data-*` attributes, ARIA descriptions, tables, and deep parent ancestry.
 5. **Escalation 4 (`RICH` $\rightarrow$ `VISUAL_RICH`)**: Cross-track escalation attaches full-page screenshot while **strictly preserving all rich DOM text and attributes** (never regressing to 0 DOM nodes).
 
+#### Neutral Escalation Framing & Ceiling Guidance
+
+* **Suppression of False Failure Attribution**: Context escalations (`ToLevelEscalationException`) represent neutral context expansions rather than SUT execution failures. The pipeline suppresses `⚠️ PREVIOUS ATTEMPT FAILURE` warning banners during normal tier escalations so the model is not misled into believing an attempted action failed.
+* **Ceiling-Level Context Guidance**: When reaching `VISUAL_RICH` (the maximum context level), the prompt provides explicit ceiling guidance informing the model that full DOM and visual state are available and instructing it to return `status: "FAILED"` if an element or assertion condition is absent, rather than inventing speculative mutating actions.
+* **Deterministic Ceiling Termination**: If the model requests escalation at `VISUAL_RICH`, the state machine immediately terminates the step with `DivergenceException(reasoning)`, allowing expected bug steps (`(bug)`) to reproduce deterministically and assertions to fail cleanly without unneeded re-prompt loops.
+
 ---
 
 ### 4.3 Dynamic Step Escalation Budget Model
@@ -1441,9 +1447,20 @@ Providers support role-based scoping (e.g., configuring `neodymium.ai.pesap.prov
 
 * `neodymium.ai.provider` - Global active LLM provider. Supports `gemini`, `openai`, `vertex`, `mistral`, and `mock`. (Default: `gemini`)
 * `neodymium.ai.model` - Global active model. (Default: `gemini-3.5-flash-lite`)
-* `neodymium.ai.apiKey` - Global API Key. It is highly recommended to inject this via the `NEODYMIUM_AI_APIKEY` environment variable or store it strictly in `config/credentials.properties` which should be `.gitignore`d.
+* `neodymium.ai.apiKey` - Global API Key (`${GEMINI_API_KEY}`). All API keys must be injected dynamically via environment variables (such as `GEMINI_API_KEY`, `OPENAI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Never commit API keys to git or configuration files.
 * `neodymium.ai.timeoutSeconds` - Global network timeout for LLM HTTP calls. (Default: `180`)
 * `neodymium.ai.temperature` - Global LLM temperature. (Default: `0.0`)
+
+#### CLI Test Execution & API Key Injection Examples
+
+```bash
+# Option 1: Export environment variable (recommended for interactive shell & CI)
+export GEMINI_API_KEY="your-gemini-api-key"
+mvn test -Dtest=AddToCartJudgeAndVerificationsTest
+
+# Option 2: Pass as runtime JVM argument
+mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-gemini-api-key"
+```
 
 ### 8.3 Sub-System Toggles
 * `neodymium.ai.pesap.enabled` - (Boolean) Toggles Pre-Execution Structural Analysis & Prediction. (Default: `true`)

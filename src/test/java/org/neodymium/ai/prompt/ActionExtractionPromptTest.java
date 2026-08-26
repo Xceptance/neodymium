@@ -490,5 +490,72 @@ public final class ActionExtractionPromptTest
         assertTrue(addon.contains("Copy the exact literal text from the instruction into 'value'"), "Lite model addon must mandate copying literal text.");
         assertTrue(addon.contains("Locators"), "Lite model addon must contain locators directive.");
     }
+
+    /**
+     * Verifies that compileUserMessage adds ceiling level notice and omits next escalation when at VISUAL_RICH.
+     */
+    @Test
+    public void testCompileUserMessageCeilingLevelNotice()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify bonus gift");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+
+        final String userMessage = prompt.compileUserMessage(context);
+
+        assertNotNull(userMessage);
+        assertTrue(userMessage.contains("[CURRENT_LEVEL]    VISUAL_RICH"));
+        assertFalse(userMessage.contains("[NEXT_ESCALATION]"));
+        assertTrue(userMessage.contains("MAXIMUM CONTEXT LEVEL REACHED"));
+        assertTrue(userMessage.contains("Do NOT emit speculative actions"));
+    }
+
+    /**
+     * Verifies that compileUserMessage does not output previous attempt failure when error is ToLevelEscalationException.
+     */
+    @Test
+    public void testCompileUserMessageSuppressesToLevelEscalationException()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify bonus gift");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+        context.getTransientData().put(
+            ExecutionContext.KEY_LAST_EXECUTION_ERROR,
+            new ToLevelEscalationException("Escalating context", "VISUAL_RICH")
+        );
+
+        final String userMessage = prompt.compileUserMessage(context);
+
+        assertNotNull(userMessage);
+        assertFalse(userMessage.contains("⚠️ PREVIOUS ATTEMPT FAILURE"));
+    }
+
+    /**
+     * Verifies that parseResponse throws DivergenceException when escalation is requested at the ceiling (VISUAL_RICH).
+     */
+    @Test
+    public void testParseResponseEscalateAtCeilingThrowsDivergenceException()
+    {
+        final String rawJson = """
+            {
+              "status": "ESCALATE",
+              "targetContextLevel": "VISUAL_RICH",
+              "reasoning": "The cart table does not show 'Free Bonus Gift'."
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> {
+            prompt.parseResponse(rawJson, context);
+        });
+
+        assertTrue(ex.getMessage().contains("The cart table does not show 'Free Bonus Gift'."));
+    }
 }
+
 
