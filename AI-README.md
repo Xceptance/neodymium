@@ -242,6 +242,37 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
     Click logout button
   ```
 
+  #### E. Test Data Blocks (`data:`)
+  Playbooks support defining test datasets directly in YAML to drive parameterized test execution or provide scenario variables:
+
+  - **Multi-Dataset Sequence (`data:` as a list)**:
+    Executes the playbook once per dataset entry in a data-driven test matrix:
+    ```yaml
+    data:
+      - testId: guestCheckout
+        user:
+          email: "guest@example.com"
+          country: "US"
+        query: "Smart Watch"
+      - testId: memberCheckout
+        user:
+          email: "member@example.com"
+          country: "DE"
+        query: "Leather Strap"
+    ```
+
+  - **Single-Dataset Map (`data:` as key-value pairs)**:
+    Provides a concise, direct dictionary structure when driving a single test iteration without list hyphens:
+    ```yaml
+    data:
+      user: "tester@example.com"
+      searchTerm: "Minimalist Watch"
+      category: "Accessories"
+    ```
+
+  - **Dataset-Level Step Overrides & Scoped Blocks**:
+    Individual datasets can define their own localized `steps:`, `before:`, or `after:` blocks to override root playbook behavior for specific iterations.
+
 * **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
 * **Recording Directory Configuration**: Companion `.json` recording output locations can be configured at the test class/method level or globally:
@@ -489,10 +520,35 @@ Before compiling prompts or sending request payloads to the LLM, the framework e
 ---
 
 ### 2.5 Dynamic Variable Parameterization & Outbound Secret Masking
-Ensures recorded playbooks remain reusable and enterprise credentials remain confidential:
-* **Resolution**: Resolves variables (e.g. `${username}`) at runtime before executing actions.
-* **Outbound Secret Masking (`ContextSanitizer`)**: Before prompts, instructions, or captured SUT DOM state payloads are transmitted over the network to external LLM providers (Gemini, Mistral, Vertex), `DefaultContextSanitizer` scans the payload against sensitive session dataset entries (`DataEntry.sensitive() == true`) and replaces raw secret credentials with format-preserving `[MASKED_VAR_key]` placeholders (e.g. `[MASKED_VAR_password]`). Returned LLM responses are automatically reverse-mapped back to variable reference syntax (`${password}`) prior to action parsing, ensuring raw secrets never leave the client.
-* **Recording Parameterization**: Automatically matches executed values and dynamic response strings (such as order numbers or generated URLs) back to variable definitions, writing parameterized entries like `"${order.number}"` into the companion JSON instead of hardcoded session values.
+
+Neodymium AI features an automated variable interpolation engine and outbound data sanitizer to ensure test playbooks remain fully parameterized, modular, and privacy-compliant:
+
+#### A. Intra-Dataset Variable Interpolation & Nested Dot-Notation
+Variables in YAML test datasets and playbook step definitions are dynamically evaluated using standard `${...}` placeholder syntax:
+
+* **Intra-Dataset Referencing**: Dataset fields can reference other properties within the same dataset row:
+  ```yaml
+  data:
+    foo: "bar"
+    foobar: "${foo}"
+  ```
+* **Nested Object & Dot-Path Navigation**: Traverses nested maps and object structures seamlessly using dot notation:
+  ```yaml
+  data:
+    phrase:
+      Part1: "Neo"
+      Part2: "dymium"
+    searchPhrase: "${phrase.Part1}${phrase.Part2}"
+  ```
+* **Recursive Collection Resolution**: Placeholders within nested maps, strings, and lists are recursively resolved throughout the dataset hierarchy.
+* **Metadata & System Property Injection (`_meta.*`)**: Special system metadata keys (such as `${_meta.sourceFile}` or `${_meta.classpathResourcePath}`) are automatically accessible within step instructions and variable expressions to trace origin files or construct relative dynamic paths.
+* **Interleaved Multi-Pass Resolution**: Variables and step instructions are evaluated in an interleaved multi-pass resolution loop with recursion limits, ensuring forward and cross-referenced variables resolve cleanly while preventing cyclic reference deadlocks.
+
+#### B. Outbound Secret Masking (`ContextSanitizer`)
+Before prompts, instructions, or captured SUT DOM state payloads are transmitted over the network to external LLM providers (Gemini, Mistral, Vertex), `DefaultContextSanitizer` scans the payload against sensitive session dataset entries (`DataEntry.sensitive() == true`) and replaces raw secret credentials with format-preserving `[MASKED_VAR_key]` placeholders (e.g. `[MASKED_VAR_password]`). Returned LLM responses are automatically reverse-mapped back to variable reference syntax (`${password}`) prior to action parsing, ensuring raw secrets never leave the client.
+
+#### C. Dynamic Recording Parameterization
+During recording (`FORCE_RECORDING`), the engine automatically matches executed values and dynamic response strings (such as order numbers, session IDs, or generated URLs) back to dataset variable definitions, writing parameterized entries like `"${order.number}"` into the companion JSON recording instead of hardcoded session values.
 
 ---
 
