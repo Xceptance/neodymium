@@ -22,7 +22,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Opening the specified URL in the browser.",
-  "durationMs" : 459,
+  "durationMs" : 1865,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -49,7 +49,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Found the 'History & Reports' navigation item represented by the material symbol 'schedule' in the structural DOM tree.",
-  "durationMs" : 83,
+  "durationMs" : 108,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -76,7 +76,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Verify the History view headline 'Run History' is displayed in the panel header.",
-  "durationMs" : 77,
+  "durationMs" : 101,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -103,7 +103,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Found the workspace navigation item in the sidebar with id 'navWorkspace'.",
-  "durationMs" : 91,
+  "durationMs" : 94,
   "delayMs" : 0,
   "composite" : false
 }, {

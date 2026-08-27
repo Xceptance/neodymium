@@ -138,7 +138,7 @@ public class AuraReportBugUnlinkTest
     @org.junit.jupiter.api.AfterEach
     public void tearDown() throws java.io.IOException
     {
-        for (final String runId : List.of(TEST_RUN_ID, "run-raw-no-id-99"))
+        for (final String runId : List.of(TEST_RUN_ID, "run-raw-no-id-99", "run-initial-1", "run-upfollowing-2"))
         {
             final java.nio.file.Path runDir = storageService.getRunDir(runId);
             if (java.nio.file.Files.exists(runDir))
@@ -156,6 +156,65 @@ public class AuraReportBugUnlinkTest
                 java.nio.file.Files.deleteIfExists(flatFile);
             }
         }
+    }
+
+    @Test
+    public void testUnlinkBugFromInitialReportAfterUnlinkingFromUpfollowingReport() throws java.io.IOException
+    {
+        final String run1 = "run-initial-1";
+        final String run2 = "run-upfollowing-2";
+
+        final TestRunEntity runEntity1 = new TestRunEntity(
+            run1, "Unlink Order Batch", "COMPLETED", "Run 1", "US-West", "en_US", "Chrome", "2026-08-17 12:00:00", 100000L
+        );
+        runRepository.save(runEntity1);
+
+        final TestRunEntity runEntity2 = new TestRunEntity(
+            run2, "Unlink Order Batch", "COMPLETED", "Run 2", "US-West", "en_US", "Chrome", "2026-08-17 13:00:00", 200000L
+        );
+        runRepository.save(runEntity2);
+
+        final TestExecutionDto exec1 = new TestExecutionDto(
+            "row-order-1", run1, "com.xceptance.neodymium.test.CheckoutTest", "testCheckoutProcess",
+            "CheckoutTest testCheckoutProcess", "1.0s", "2026-08-17 12:00:00", "failed", "JUnit5",
+            "US-West", "Chrome", "AssertionError", List.of(), null, "Checkout", List.of(), null, null, null, null
+        );
+        final RunReportDto report1 = new RunReportDto(run1, "Unlink Order Batch", "2026-08-17 12:00:00", "1.0s", 1, 0, 0, 0, 1, 0, List.of(exec1));
+        dataService.saveRunReportToDisk(run1, report1);
+
+        final TestExecutionDto exec2 = new TestExecutionDto(
+            "row-order-2", run2, "com.xceptance.neodymium.test.CheckoutTest", "testCheckoutProcess",
+            "CheckoutTest testCheckoutProcess", "1.0s", "2026-08-17 13:00:00", "failed", "JUnit5",
+            "US-West", "Chrome", "AssertionError", List.of(), null, "Checkout", List.of(), null, null, null, null
+        );
+        final RunReportDto report2 = new RunReportDto(run2, "Unlink Order Batch", "2026-08-17 13:00:00", "1.0s", 1, 0, 0, 0, 1, 0, List.of(exec2));
+        dataService.saveRunReportToDisk(run2, report2);
+
+        // 1. Link BUG-1234 in Run 1
+        dataService.addBugToExecution(run1, "row-order-1", "BUG-1234");
+        dataService.updateCachedReportBugsAndStats(run1);
+        dataService.updateCachedReportBugsAndStats(run2);
+
+        Assertions.assertTrue(dataService.getRunReport(run1).getExecutions().get(0).getBugs().contains("BUG-1234"));
+        Assertions.assertTrue(dataService.getRunReport(run2).getExecutions().get(0).getBugs().contains("BUG-1234"));
+
+        // 2. Unlink BUG-1234 in Run 2 (the upfollowing report)
+        dataService.removeBugFromExecution(run2, "row-order-2", "BUG-1234");
+        dataService.updateCachedReportBugsAndStats(run1);
+        dataService.updateCachedReportBugsAndStats(run2);
+
+        Assertions.assertTrue(dataService.getRunReport(run1).getExecutions().get(0).getBugs().contains("BUG-1234"));
+        Assertions.assertFalse(dataService.getRunReport(run2).getExecutions().get(0).getBugs().contains("BUG-1234"));
+
+        // 3. Unlink BUG-1234 in Run 1 (the initial report where it was first linked)
+        dataService.removeBugFromExecution(run1, "row-order-1", "BUG-1234");
+        dataService.updateCachedReportBugsAndStats(run1);
+        dataService.updateCachedReportBugsAndStats(run2);
+
+        Assertions.assertFalse(dataService.getRunReport(run1).getExecutions().get(0).getBugs().contains("BUG-1234"));
+        Assertions.assertEquals("failed-unknown", dataService.getRunReport(run1).getExecutions().get(0).getStatus());
+        Assertions.assertFalse(dataService.getRunReport(run2).getExecutions().get(0).getBugs().contains("BUG-1234"));
+        Assertions.assertEquals("failed-unknown", dataService.getRunReport(run2).getExecutions().get(0).getStatus());
     }
 
     @Test

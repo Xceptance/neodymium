@@ -27,6 +27,7 @@ import jakarta.persistence.Table;
 /**
  * JPA entity representing a single Test Execution Run instance.
  *
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Entity
@@ -99,6 +100,21 @@ public class TestRunEntity
 
     @Column(name = "attachments_synced_to_s3")
     private Boolean attachmentsSyncedToS3 = false;
+
+    @Column(name = "duration_ms")
+    private Long durationMs = 0L;
+
+    @Column(name = "formatted_duration", length = 100)
+    private String formattedDuration = "0 ms";
+
+    @Column(name = "total_llm_calls")
+    private Integer totalLlmCalls = 0;
+
+    @Column(name = "total_llm_tokens")
+    private Long totalLlmTokens = 0L;
+
+    @Column(name = "total_llm_cost")
+    private Double totalLlmCost = 0.0;
 
     public TestRunEntity()
     {
@@ -189,7 +205,15 @@ public class TestRunEntity
 
     public String getTimestampLabel()
     {
-        return timestampLabel;
+        if (startTimeMs != null && startTimeMs > 0L)
+        {
+            final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(
+                java.time.Instant.ofEpochMilli(startTimeMs),
+                java.time.ZoneId.systemDefault()
+            );
+            return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
+        return timestampLabel != null ? timestampLabel : "Recently";
     }
 
     public void setTimestampLabel(final String timestampLabel)
@@ -325,6 +349,56 @@ public class TestRunEntity
     public void setAttachmentsSyncedToS3(final Boolean attachmentsSyncedToS3)
     {
         this.attachmentsSyncedToS3 = attachmentsSyncedToS3;
+    }
+
+    public Long getDurationMs()
+    {
+        return durationMs;
+    }
+
+    public void setDurationMs(final Long durationMs)
+    {
+        this.durationMs = durationMs;
+    }
+
+    public String getFormattedDuration()
+    {
+        return formattedDuration;
+    }
+
+    public void setFormattedDuration(final String formattedDuration)
+    {
+        this.formattedDuration = formattedDuration;
+    }
+
+    public Integer getTotalLlmCalls()
+    {
+        return totalLlmCalls != null ? totalLlmCalls : 0;
+    }
+
+    public void setTotalLlmCalls(final Integer totalLlmCalls)
+    {
+        this.totalLlmCalls = totalLlmCalls;
+    }
+
+    public Long getTotalLlmTokens()
+    {
+        return totalLlmTokens != null ? totalLlmTokens : 0L;
+    }
+
+    public void setTotalLlmTokens(final Long totalLlmTokens)
+    {
+        this.totalLlmTokens = totalLlmTokens;
+    }
+
+    public Double getTotalLlmCost()
+    {
+        return totalLlmCost != null ? totalLlmCost : 0.0;
+    }
+
+    public void setTotalLlmCost(final Double totalLlmCost)
+    {
+        this.totalLlmCost = totalLlmCost;
     }
 
     public void recalculatePassRate()

@@ -24,6 +24,76 @@ const activeClassFilters = {};
 const activeAreaFilters = {};
 let activeWholeExecutionFilter = null;
 
+function formatDurationInMinutes(durMs) {
+    if (durMs === null || durMs === undefined) return '0 min 0 s';
+    const num = Number(durMs);
+    if (isNaN(num) || num <= 0) return '0 min 0 s';
+    const totalSec = Math.round(num / 1000);
+    const minutes = Math.floor(totalSec / 60);
+    const seconds = totalSec % 60;
+    return `${minutes} min ${seconds} s`;
+}
+
+function formatTimestamp(raw) {
+    if (!raw) return '';
+    let d = null;
+    if (typeof raw === 'number') {
+        d = new Date(raw);
+    } else if (typeof raw === 'string') {
+        const num = Number(raw);
+        if (!isNaN(num) && num > 0) {
+            d = new Date(num);
+        } else {
+            d = new Date(raw.includes(' ') && !raw.includes('T') ? raw.replace(' ', 'T') : raw);
+        }
+    }
+    if (!d || isNaN(d.getTime())) {
+        return String(raw);
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    const YYYY = d.getFullYear();
+    const MM = pad(d.getMonth() + 1);
+    const DD = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mm = pad(d.getMinutes());
+    const ss = pad(d.getSeconds());
+    return `${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}`;
+}
+
+function formatAllDurationsOnPage() {
+    document.querySelectorAll('.js-format-duration').forEach(el => {
+        const durMs = el.getAttribute('data-duration-ms');
+        if (durMs !== null && durMs !== undefined && durMs !== '') {
+            el.innerText = formatDurationInMinutes(durMs);
+        }
+    });
+}
+
+function formatAllTimestampsOnPage() {
+    document.querySelectorAll('.js-format-timestamp').forEach(el => {
+        const tsMs = el.getAttribute('data-timestamp-ms') || el.getAttribute('data-timestamp');
+        if (tsMs !== null && tsMs !== undefined && tsMs !== '' && tsMs !== '0') {
+            const formatted = formatTimestamp(tsMs);
+            if (formatted) {
+                el.innerText = formatted;
+            }
+        }
+    });
+}
+
+function formatAllOnPage() {
+    formatAllDurationsOnPage();
+    formatAllTimestampsOnPage();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', formatAllOnPage);
+} else {
+    formatAllOnPage();
+}
+
+document.addEventListener('htmx:afterSwap', formatAllOnPage);
+
 // Navigation & View Switches
 function toggleSidebarCollapse() {
     const sidebar = document.getElementById('mainSidebar');
@@ -217,8 +287,10 @@ function renderDynamicTrendChart(targetBatchName) {
     // In tables, rows are typically displayed newest to oldest. For trend charts, sort oldest to newest (left-to-right).
     const runsData = [];
     rowElements.slice().reverse().forEach(row => {
-        const rowBatch = row.querySelector('.tag-batch')?.innerText.trim() || '';
-        if (targetBatchName && rowBatch && !rowBatch.includes(targetBatchName) && !targetBatchName.includes(rowBatch)) {
+        const tagBatchEl = row.querySelector('.tag-batch span:last-child') || row.querySelector('.tag-batch');
+        const rowBatch = tagBatchEl ? tagBatchEl.innerText.trim() : (row.getAttribute('data-batch') || '');
+        const isHistoryTable = row.closest('#batchRunsHistoryTableBody') !== null;
+        if (!isHistoryTable && targetBatchName && rowBatch && !rowBatch.includes(targetBatchName) && !targetBatchName.includes(rowBatch)) {
             return;
         }
         const runId = row.getAttribute('data-run-id') || row.querySelector('strong.text-mono')?.innerText.replace('#', '').trim() || '#RUN_ID';
@@ -360,6 +432,100 @@ function renderDynamicTrendChart(targetBatchName) {
         `).join('');
         if (window.htmx) htmx.process(dotsGroup);
     }
+}
+
+function renderDynamicAreaTrendCharts() {
+    const areaSvgs = document.querySelectorAll('.area-trend-svg');
+    if (areaSvgs.length === 0) return;
+
+    areaSvgs.forEach(svg => {
+        const rawJson = svg.getAttribute('data-run-points');
+        if (!rawJson) return;
+
+        let points = [];
+        try {
+            points = JSON.parse(rawJson);
+        } catch (e) {
+            console.error("Failed to parse area run points", e);
+            return;
+        }
+
+        if (!points || points.length === 0) return;
+
+        const maxTests = Math.max(1, ...points.map(p => p.totalCount || (p.passCount + p.fixedCount + p.knownCount + p.unknownCount + p.ignoredCount)));
+        const scale = 60 / maxTests;
+        const count = points.length;
+
+        const coords = points.map((p, idx) => {
+            const x = count === 1 ? 150 : 20 + (idx / (count - 1)) * 260;
+            const y0 = 80;
+            const y1 = y0 - ((p.ignoredCount || 0) * scale);
+            const y2 = y1 - ((p.unknownCount || 0) * scale);
+            const y3 = y2 - ((p.knownCount || 0) * scale);
+            const y4 = y3 - ((p.fixedCount || 0) * scale);
+            const y5 = y4 - ((p.passCount || 0) * scale);
+            return { x, y0, y1, y2, y3, y4, y5 };
+        });
+
+        function buildBezierTopPath(yProp) {
+            let d = `M ${coords[0].x} ${coords[0][yProp]}`;
+            for (let i = 0; i < coords.length - 1; i++) {
+                const x1 = coords[i].x;
+                const y1 = coords[i][yProp];
+                const x2 = coords[i + 1].x;
+                const y2 = coords[i + 1][yProp];
+                const dx = (x2 - x1) / 2;
+                d += ` C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+            }
+            return d;
+        }
+
+        function buildBezierReversePath(yProp) {
+            let d = `L ${coords[coords.length - 1].x} ${coords[coords.length - 1][yProp]}`;
+            for (let i = coords.length - 1; i > 0; i--) {
+                const x1 = coords[i].x;
+                const y1 = coords[i][yProp];
+                const x2 = coords[i - 1].x;
+                const y2 = coords[i - 1][yProp];
+                const dx = (x1 - x2) / 2;
+                d += ` C ${x1 - dx} ${y1}, ${x2 + dx} ${y2}, ${x2} ${y2}`;
+            }
+            return d;
+        }
+
+        let pathL1, pathL2, pathL3, pathL4, pathL5, topStroke;
+
+        if (coords.length === 1) {
+            const c = coords[0];
+            const halfW = 20;
+            const leftX = Math.max(20, c.x - halfW);
+            const rightX = Math.min(280, c.x + halfW);
+
+            pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 80 L ${leftX} 80 Z`;
+            pathL2 = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
+            pathL3 = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
+            pathL4 = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
+            pathL5 = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+            topStroke = `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`;
+        } else {
+            const lastX = coords[coords.length - 1].x;
+            const firstX = coords[0].x;
+
+            pathL1 = `${buildBezierTopPath('y1')} L ${lastX} 80 L ${firstX} 80 Z`;
+            pathL2 = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y1')} Z`;
+            pathL3 = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y2')} Z`;
+            pathL4 = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y3')} Z`;
+            pathL5 = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y4')} Z`;
+            topStroke = buildBezierTopPath('y5');
+        }
+
+        svg.querySelector('.area-layer-ignored')?.setAttribute('d', pathL1);
+        svg.querySelector('.area-layer-unknown')?.setAttribute('d', pathL2);
+        svg.querySelector('.area-layer-known')?.setAttribute('d', pathL3);
+        svg.querySelector('.area-layer-fixed')?.setAttribute('d', pathL4);
+        svg.querySelector('.area-layer-pass')?.setAttribute('d', pathL5);
+        svg.querySelector('.area-layer-top-stroke')?.setAttribute('d', topStroke);
+    });
 }
 
 function switchRunReportSubTab(subTabId, btn) {
@@ -610,7 +776,20 @@ function saveBugTicketLink() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'HX-Request': 'true' },
                     body: params.toString()
-                }).then(res => res.text()).then(html => {
+                }).then(res => {
+                    const triggerHeader = res.headers.get('HX-Trigger');
+                    if (triggerHeader) {
+                        try {
+                            const triggerData = JSON.parse(triggerHeader);
+                            if (triggerData.bugUpdated) {
+                                document.body.dispatchEvent(new CustomEvent('bugUpdated', { detail: triggerData.bugUpdated }));
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse HX-Trigger:', e);
+                        }
+                    }
+                    return res.text();
+                }).then(html => {
                     const section = document.getElementById('sidePageStatusBadge');
                     if (section && html) section.outerHTML = html;
                     if (window.htmx) htmx.process(document.getElementById('sidePageStatusBadge') || document.body);
@@ -659,7 +838,20 @@ function removeSpecificBugTicketLink(bugToRemove) {
     fetch(`/fragments/test-side-panel/bugs?runId=${encodeURIComponent(activeRunId)}&rowId=${encodeURIComponent(currentActiveRowId)}&bugTicket=${encodeURIComponent(bugToRemove)}`, {
         method: 'DELETE',
         headers: { 'HX-Request': 'true' }
-    }).then(res => res.text()).then(html => {
+    }).then(res => {
+        const triggerHeader = res.headers.get('HX-Trigger');
+        if (triggerHeader) {
+            try {
+                const triggerData = JSON.parse(triggerHeader);
+                if (triggerData.bugUpdated) {
+                    document.body.dispatchEvent(new CustomEvent('bugUpdated', { detail: triggerData.bugUpdated }));
+                }
+            } catch (e) {
+                console.error('Failed to parse HX-Trigger:', e);
+            }
+        }
+        return res.text();
+    }).then(html => {
         const section = document.getElementById('sidePageStatusBadge');
         if (section && html) section.outerHTML = html;
         if (window.htmx) htmx.process(document.getElementById('sidePageStatusBadge') || document.body);
@@ -685,32 +877,36 @@ function updateRowStatusAndMetrics(rowId) {
     const currentStatus = (row.getAttribute('data-status') || '').toUpperCase();
 
     let newStatus = currentStatus;
-    if (rawStatus === 'succeeded-fixed' || rawStatus === 'fixed' || rawStatus === 'healed') {
-        newStatus = 'SUCCEEDED_FIXED';
-        currentExecutionIsFailed = false;
-    } else if (rawStatus === 'failed-known' || rawStatus === 'known') {
-        newStatus = 'FAILED_KNOWN';
-        currentExecutionIsFailed = true;
-    } else if (rawStatus === 'passed-clean' || rawStatus === 'passed' || rawStatus === 'succeeded') {
+    let newRawStatus = rawStatus;
+
+    if (rawStatus === 'succeeded-fixed' || rawStatus === 'fixed' || rawStatus === 'healed' ||
+        rawStatus === 'passed-clean' || rawStatus === 'passed' || rawStatus === 'succeeded') {
         newStatus = activeBugs.length > 0 ? 'SUCCEEDED_FIXED' : 'PASSED';
+        newRawStatus = activeBugs.length > 0 ? 'succeeded-fixed' : 'passed-clean';
         currentExecutionIsFailed = false;
-    } else if (rawStatus === 'failed' || rawStatus === 'failed-unknown' || rawStatus === 'error') {
+    } else if (rawStatus === 'failed-known' || rawStatus === 'known' ||
+               rawStatus === 'failed' || rawStatus === 'failed-unknown' || rawStatus === 'error') {
         newStatus = activeBugs.length > 0 ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
+        newRawStatus = activeBugs.length > 0 ? 'failed-known' : 'failed-unknown';
         currentExecutionIsFailed = true;
     } else if (rawStatus === 'ignored' || rawStatus === 'skipped') {
         newStatus = 'SKIPPED';
+        newRawStatus = 'ignored';
         currentExecutionIsFailed = false;
     } else {
         if (currentStatus === 'FAILED_UNKNOWN' || currentStatus === 'FAILED_KNOWN') {
             newStatus = activeBugs.length > 0 ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
+            newRawStatus = activeBugs.length > 0 ? 'failed-known' : 'failed-unknown';
             currentExecutionIsFailed = true;
         } else if (currentStatus === 'PASSED' || currentStatus === 'SUCCEEDED_FIXED' || currentStatus === 'HEALED') {
             newStatus = activeBugs.length > 0 ? 'SUCCEEDED_FIXED' : 'PASSED';
+            newRawStatus = activeBugs.length > 0 ? 'succeeded-fixed' : 'passed-clean';
             currentExecutionIsFailed = false;
         }
     }
 
     row.setAttribute('data-status', newStatus);
+    row.setAttribute('data-status-raw', newRawStatus);
     row.setAttribute('data-bugs', activeBugs.length > 0 ? activeBugs.join(',') : 'NONE');
 
     // Update Status Cell (.col-status-badge)
@@ -777,13 +973,13 @@ function getRowStatusCategory(r) {
     const hasBugs = bugs !== '' && bugs.toUpperCase() !== 'NONE';
 
     if (st === 'SUCCEEDED_FIXED' || st === 'HEALED' || stRaw === 'succeeded-fixed' || stRaw === 'fixed' || stRaw === 'healed') {
-        return 'SUCCEEDED_FIXED';
+        return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
     }
     if (st === 'PASSED' || stRaw === 'passed-clean' || stRaw === 'passed' || stRaw === 'succeeded') {
         return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
     }
     if (st === 'FAILED_KNOWN' || stRaw === 'failed-known' || stRaw === 'known') {
-        return 'FAILED_KNOWN';
+        return hasBugs ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
     }
     if (st === 'FAILED_UNKNOWN' || stRaw === 'failed-unknown' || stRaw === 'failed' || stRaw === 'error') {
         return hasBugs ? 'FAILED_KNOWN' : 'FAILED_UNKNOWN';
@@ -1107,8 +1303,29 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
     const nameEl = document.getElementById('sidePageTestName');
     const dsEl = document.getElementById('sidePageTestDataSet');
+    const startTimeEl = document.getElementById('sidePageTestStartTimeVal');
     if (nameEl) nameEl.innerText = testName;
     if (dsEl) dsEl.innerText = currentDataSetStr;
+
+    if (startTimeEl) {
+        const rawTs = activeRow ? (activeRow.getAttribute('data-timestamp-ms') || activeRow.getAttribute('data-timestamp') || activeRow.getAttribute('data-start-time') || '') : '';
+        let startStr = formatTimestamp(rawTs);
+        if (!startStr && activeRow) {
+            const dateFmt = activeRow.getAttribute('data-date-formatted') || '';
+            const timeFmt = activeRow.getAttribute('data-time-formatted') || '';
+            if (dateFmt || timeFmt) {
+                startStr = `${dateFmt} ${timeFmt}`.trim();
+            }
+        }
+        if (startTimeEl.parentElement) {
+            if (startStr) {
+                startTimeEl.innerText = `Started: ${startStr}`;
+                startTimeEl.parentElement.style.display = 'flex';
+            } else {
+                startTimeEl.parentElement.style.display = 'none';
+            }
+        }
+    }
 
     const singleRunControls = document.getElementById('sidePageSingleRunControls');
     const testBaseControls = document.getElementById('sidePageTestBaseVariationControls');
@@ -1289,6 +1506,53 @@ function renderStepsForExecution(activeRow) {
 
     const blocksAttr = activeRow.getAttribute('data-blocks');
     const stepsAttr = activeRow.getAttribute('data-steps');
+
+    if ((!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
+        const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
+        const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
+
+        if (rowId) {
+            stepListEl.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size: 1.5rem; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Loading steps and screenshots...</div>';
+
+            fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`)
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(execDto => {
+                    if (execDto) {
+                        if (execDto.blocksJson) activeRow.setAttribute('data-blocks', execDto.blocksJson);
+                        if (execDto.stepsJson) activeRow.setAttribute('data-steps', execDto.stepsJson);
+                        if (execDto.localDataBindingsJson) activeRow.setAttribute('data-local-bindings', execDto.localDataBindingsJson);
+                        if (execDto.playbookFile) activeRow.setAttribute('data-playbook-file', execDto.playbookFile);
+                        if (execDto.failure) activeRow.setAttribute('data-failure', execDto.failure);
+                        if (execDto.durationMs) activeRow.setAttribute('data-duration-ms', execDto.durationMs);
+                        if (execDto.durationFormatted) activeRow.setAttribute('data-duration-formatted', execDto.durationFormatted);
+                        if (execDto.startTime) activeRow.setAttribute('data-start-time', execDto.startTime);
+                        if (execDto.dateFormatted) activeRow.setAttribute('data-date-formatted', execDto.dateFormatted);
+                        if (execDto.timeFormatted) activeRow.setAttribute('data-time-formatted', execDto.timeFormatted);
+
+                        const startTimeEl = document.getElementById('sidePageTestStartTimeVal');
+                        if (startTimeEl) {
+                            const rawTs = execDto.timestampMs || execDto.startTime || `${execDto.dateFormatted || ''} ${execDto.timeFormatted || ''}`.trim();
+                            const startStr = formatTimestamp(rawTs) || execDto.startTime || '';
+                            if (startStr) {
+                                startTimeEl.innerText = `Started: ${startStr}`;
+                                if (startTimeEl.parentElement) startTimeEl.parentElement.style.display = 'flex';
+                            }
+                        }
+
+                        renderStepsForExecution(activeRow);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching execution details:', err);
+                    stepListEl.innerHTML = '<div style="padding: 1rem; color: #ef4444; font-size: 0.85rem;">Failed to load step details for this test execution.</div>';
+                });
+            return;
+        }
+    }
+
     const localBindingsAttr = activeRow.getAttribute('data-local-bindings');
     const playbookFile = activeRow.getAttribute('data-playbook-file') || '';
     const failureText = activeRow.getAttribute('data-failure') || '';
@@ -1368,10 +1632,15 @@ function renderStepsForExecution(activeRow) {
     const sideTokenInOutEl = document.getElementById('sideMetricTokenInOut');
 
     if (sideDurEl) {
-        let durFormatted = '0ms';
+        let durFormatted = '0 min 0 s';
         if (durMs) {
-            const num = Number(durMs);
-            durFormatted = !isNaN(num) ? (num >= 1000 ? (num / 1000).toFixed(2) + 's' : num + 'ms') : durMs;
+            durFormatted = formatDurationInMinutes(durMs);
+        } else {
+            const durFormattedAttr = activeRow.getAttribute('data-duration-formatted');
+            if (durFormattedAttr) {
+                const num = Number(durFormattedAttr);
+                durFormatted = !isNaN(num) ? formatDurationInMinutes(num) : durFormattedAttr;
+            }
         }
         sideDurEl.innerHTML = `${durFormatted}`;
     }
@@ -1502,10 +1771,9 @@ function renderStepsForExecution(activeRow) {
             }
 
             let rawDuration = s.duration !== undefined && s.duration !== null ? s.duration : (s.durationMs !== undefined ? s.durationMs : null);
-            let formattedDuration = '0ms';
+            let formattedDuration = '0 min 0 s';
             if (rawDuration !== null && rawDuration !== undefined) {
-                const num = Number(rawDuration);
-                formattedDuration = !isNaN(num) ? (num >= 1000 ? (num / 1000).toFixed(2) + 's' : num + 'ms') : String(rawDuration);
+                formattedDuration = formatDurationInMinutes(rawDuration);
             }
 
             // Format Reasoning
@@ -1630,7 +1898,7 @@ function renderStepsForExecution(activeRow) {
                 subSteps.forEach((sub, subIdx) => {
                     const subNum = `#${stepNum}.${subIdx + 1}`;
                     const subTitle = sub.instruction || sub.action || `Sub-step ${subIdx + 1}`;
-                    const subDur = sub.durationMs ? `${sub.durationMs}ms` : '';
+                    const subDur = (sub.durationMs !== undefined && sub.durationMs !== null) ? formatDurationInMinutes(sub.durationMs) : (sub.duration ? formatDurationInMinutes(sub.duration) : '');
                     subStepsHtml += `
                         <div class="sub-step-card">
                             <span class="sub-step-number">${subNum}</span>
@@ -1689,7 +1957,7 @@ function renderStepsForExecution(activeRow) {
                         const roundedUp = Math.ceil(rawCost * 10000) / 10000;
                         formattedCost = '$' + roundedUp.toFixed(4);
                     }
-                    const dur = call.durationMs ? `${call.durationMs}ms` : '';
+                    const dur = (call.durationMs !== undefined && call.durationMs !== null) ? formatDurationInMinutes(call.durationMs) : (call.duration ? formatDurationInMinutes(call.duration) : '');
                     
                     const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
                     const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
@@ -2071,9 +2339,13 @@ function resetTestBaseFilters() {
 }
 
 // Unobtrusive Event Listeners & HTMX Re-Binding
-document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        bindGlobalListeners();
+    });
+} else {
     bindGlobalListeners();
-});
+}
 
 let lastHandledTargetExecutionId = null;
 
@@ -2125,6 +2397,7 @@ function bindGlobalListeners() {
             activeBatchName = titleEl.innerText.trim();
         }
         renderDynamicTrendChart(activeBatchName);
+        renderDynamicAreaTrendCharts();
         
         const headerTitle = document.getElementById('pageTitle');
         if (headerTitle) headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">trending_up</span> Batch History Overview`;

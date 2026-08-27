@@ -236,7 +236,7 @@
                                 </div>
                             </td>
                             <td><span class="badge-status badge-pass" th:text="${r.passRate + '% Pass'}">0% Pass</span></td>
-                            <td class="text-muted" th:text="${r.timestampLabel}">Recently</td>
+                            <td class="text-muted js-format-timestamp" th:data-timestamp-ms="${r.startTimeMs}" th:text="${r.timestampLabel}">Recently</td>
                             <td>
                                 <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" onclick="event.stopPropagation();">
                                     <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect

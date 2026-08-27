@@ -88,11 +88,11 @@ public class LocalRunJsonStorageService
         {
             try
             {
-                return Optional.of(buildFullRunJsonFromNestedDir(runId, nestedRunJson));
+                return Optional.of(Files.readString(nestedRunJson, StandardCharsets.UTF_8));
             }
             catch (final Exception e)
             {
-                LOG.error("Failed to assemble nested run JSON for run {}: {}", runId, e.getMessage());
+                LOG.error("Failed to read nested run JSON from disk for run {}: {}", runId, e.getMessage());
             }
         }
 
@@ -112,7 +112,7 @@ public class LocalRunJsonStorageService
         final Path runDir = Paths.get(baseDir, runId);
         if (Files.exists(runDir) && Files.isDirectory(runDir))
         {
-            return buildRunJsonContent(runDir.toFile(), runId);
+            return buildRunJsonContent(runDir.toFile(), runId, true);
         }
 
         return Optional.empty();
@@ -120,10 +120,15 @@ public class LocalRunJsonStorageService
 
     public void generateRunJsonFromTestExecutions(final File runDir, final String runId)
     {
-        buildRunJsonContent(runDir, runId);
+        buildRunJsonContent(runDir, runId, true);
     }
 
     public Optional<String> buildRunJsonContent(final File runDir, final String runId)
+    {
+        return buildRunJsonContent(runDir, runId, true);
+    }
+
+    public Optional<String> buildRunJsonContent(final File runDir, final String runId, final boolean writeToDisk)
     {
         try
         {
@@ -598,11 +603,99 @@ public class LocalRunJsonStorageService
                 areasArray.add(areaObj);
             }
 
-            rootNode.set("summary", summaryNode);
-            rootNode.set("executions", mergedExecutions);
-            rootNode.set("areas", areasArray);
+            final ObjectNode executionMetricsNode = objectMapper.createObjectNode();
+            for (final JsonNode execNode : mergedExecutions)
+            {
+                if (execNode instanceof ObjectNode objNode)
+                {
+                    final String tClass = objNode.path("testClass").asText("DefaultClass");
+                    final String tMethod = extractTestMethod(objNode);
+                    final String tTitle = objNode.path("title").asText("Default");
+                    final String tBrowser = objNode.path("browser").asText("Chrome");
+                    final String key = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
 
-            return Optional.of(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode));
+                    final String loc = objNode.path("location").asText(objNode.path("locale").asText("Unknown"));
+                    final ObjectNode metricObj = objectMapper.createObjectNode();
+                    metricObj.put("id", objNode.path("id").asText(""));
+                    metricObj.put("testClass", tClass);
+                    metricObj.put("testMethod", tMethod);
+                    metricObj.put("title", tTitle);
+                    metricObj.put("location", loc);
+                    metricObj.put("browser", tBrowser);
+                    metricObj.put("status", objNode.path("status").asText("passed-clean"));
+                    if (objNode.has("startTime"))
+                    {
+                        metricObj.put("startTime", objNode.path("startTime").asText(""));
+                        final Long parsedStartMs = RunStorageSyncService.parseStartTimeMs(objNode);
+                        if (parsedStartMs != null)
+                        {
+                            metricObj.put("timestampMs", parsedStartMs);
+                        }
+                    }
+                    metricObj.put("executionMode", objNode.path("executionMode").asText("FORCE_RECORDING"));
+                    final long durMs = objNode.hasNonNull("duration") ? objNode.path("duration").asLong(0L) : objNode.path("durationMs").asLong(0L);
+                    metricObj.put("durationMs", durMs);
+                    metricObj.put("durationFormatted", objNode.hasNonNull("durationFormatted") ? objNode.path("durationFormatted").asText() : RunStorageSyncService.formatDurationMs(durMs));
+
+                    metricObj.put("totalStepsCount", extractStepsTotal(objNode));
+                    metricObj.put("failedStepsCount", extractStepsFailed(objNode));
+                    metricObj.put("healedStepsCount", extractStepsHealed(objNode));
+                    metricObj.put("llmCallsCount", extractLlmCalls(objNode));
+                    metricObj.put("llmTotalTokens", extractLlmTokens(objNode));
+                    metricObj.put("llmCost", extractLlmCost(objNode));
+                    metricObj.set("bugs", objNode.path("bugs"));
+
+                    String uniqueKey = key;
+                    if (executionMetricsNode.has(uniqueKey))
+                    {
+                        final String execId = objNode.path("id").asText("");
+                        if (!execId.isEmpty() && !execId.equalsIgnoreCase(tTitle) && !execId.equalsIgnoreCase("default"))
+                        {
+                            uniqueKey = key + "#" + execId;
+                        }
+                        else
+                        {
+                            int count = 2;
+                            while (executionMetricsNode.has(key + "#" + count))
+                            {
+                                count++;
+                            }
+                            uniqueKey = key + "#" + count;
+                        }
+                    }
+
+                    final String origId = objNode.path("id").asText("");
+                    if (origId.isEmpty() || origId.equalsIgnoreCase(tTitle) || origId.equalsIgnoreCase("default") || origId.equalsIgnoreCase("bad") || origId.equalsIgnoreCase("perfect"))
+                    {
+                        metricObj.put("id", uniqueKey);
+                    }
+
+                    executionMetricsNode.set(uniqueKey, metricObj);
+                }
+            }
+
+            final ObjectNode compactRootNode = objectMapper.createObjectNode();
+            if (earliestTimeStr != null && !earliestTimeStr.isBlank())
+            {
+                compactRootNode.put("timestamp", earliestTimeStr);
+            }
+            compactRootNode.set("executionMetrics", executionMetricsNode);
+
+            final String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(compactRootNode);
+            if (writeToDisk)
+            {
+                try
+                {
+                    java.nio.file.Files.writeString(runJsonFile.toPath(), jsonString, StandardCharsets.UTF_8);
+                    LOG.info("Saved run.json for runId {} at {}", runId, runJsonFile.getAbsolutePath());
+                }
+                catch (final Exception e)
+                {
+                    LOG.error("Failed to write run.json file to disk for runId {}: {}", runId, e.getMessage());
+                }
+            }
+
+            return Optional.of(jsonString);
         }
         catch (final Exception e)
         {
@@ -662,6 +755,169 @@ public class LocalRunJsonStorageService
         return false;
     }
 
+    public static String extractTestMethod(final JsonNode execNode)
+    {
+        if (execNode == null)
+        {
+            return "";
+        }
+        if (execNode.has("testMethod") && !execNode.path("testMethod").asText().trim().isEmpty())
+        {
+            return execNode.path("testMethod").asText().trim();
+        }
+        final String testClass = execNode.path("testClass").asText("").trim();
+        if (execNode.has("junitTags") && execNode.path("junitTags").isArray() && execNode.path("junitTags").size() >= 2)
+        {
+            final String tag1 = execNode.path("junitTags").get(1).asText("").trim();
+            if (!tag1.isEmpty() && !tag1.startsWith("Dataset:") && !tag1.startsWith("Location:") && !tag1.startsWith("Browser:") && !tag1.equalsIgnoreCase(testClass))
+            {
+                return tag1;
+            }
+        }
+        if (execNode.has("testFile") && execNode.path("testFile").asText().contains("#"))
+        {
+            final String tf = execNode.path("testFile").asText();
+            final String method = tf.substring(tf.indexOf('#') + 1).trim();
+            if (!method.isEmpty() && !"executeTest".equalsIgnoreCase(method))
+            {
+                return method;
+            }
+        }
+        return "";
+    }
+
+    public static String buildExecutionKey(final String testClass, final String testMethod, final String dataSet, final String browser)
+    {
+        final String c = testClass != null ? testClass.trim() : "";
+        final String m = testMethod != null ? testMethod.trim() : "";
+        final String d = dataSet != null ? dataSet.trim() : "";
+        final String b = browser != null ? browser.trim() : "";
+        if (!m.isEmpty())
+        {
+            return c + "#" + m + "#" + d + "#" + b;
+        }
+        return c + "#" + d + "#" + b;
+    }
+
+    public static String buildExecutionKey(final String testClass, final String dataSet, final String browser)
+    {
+        return buildExecutionKey(testClass, null, dataSet, browser);
+    }
+
+    private int extractStepsTotal(final JsonNode node)
+    {
+        if (node.has("totalStepsCount") && node.path("totalStepsCount").isInt())
+        {
+            return node.path("totalStepsCount").asInt();
+        }
+        final JsonNode blocks = node.path("blocks");
+        if (blocks.isObject())
+        {
+            int count = 0;
+            final JsonNode b = blocks.path("before");
+            if (b.isArray()) count += b.size();
+            final JsonNode s = blocks.path("steps");
+            if (s.isArray()) count += s.size();
+            final JsonNode a = blocks.path("after");
+            if (a.isArray()) count += a.size();
+            if (count > 0) return count;
+        }
+        return 0;
+    }
+
+    private int extractStepsFailed(final JsonNode node)
+    {
+        if (node.has("failedStepsCount") && node.path("failedStepsCount").isInt())
+        {
+            return node.path("failedStepsCount").asInt();
+        }
+        final JsonNode blocks = node.path("blocks");
+        if (blocks.isObject())
+        {
+            int failed = 0;
+            for (final String key : List.of("before", "steps", "after"))
+            {
+                final JsonNode arr = blocks.path(key);
+                if (arr.isArray())
+                {
+                    for (final JsonNode step : arr)
+                    {
+                        final String status = step.path("status").asText("");
+                        final boolean passed = step.path("passed").asBoolean(true);
+                        if ("failed".equalsIgnoreCase(status) || !passed)
+                        {
+                            failed++;
+                        }
+                    }
+                }
+            }
+            return failed;
+        }
+        return 0;
+    }
+
+    private int extractStepsHealed(final JsonNode node)
+    {
+        if (node.has("healedStepsCount") && node.path("healedStepsCount").isInt())
+        {
+            return node.path("healedStepsCount").asInt();
+        }
+        final String status = node.path("status").asText("");
+        return "succeeded-fixed".equalsIgnoreCase(status) || "fixed".equalsIgnoreCase(status) || "healed".equalsIgnoreCase(status) ? 1 : 0;
+    }
+
+    private int extractLlmCalls(final JsonNode node)
+    {
+        if (node.has("llmCallsCount") && node.path("llmCallsCount").isInt())
+        {
+            return node.path("llmCallsCount").asInt();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("totalLlmCalls") && metrics.path("totalLlmCalls").isInt())
+        {
+            return metrics.path("totalLlmCalls").asInt();
+        }
+        final JsonNode blocks = node.path("blocks");
+        if (blocks.has("llmCalls") && blocks.path("llmCalls").isArray())
+        {
+            return blocks.path("llmCalls").size();
+        }
+        final JsonNode llmCalls = node.path("llmCalls");
+        if (llmCalls.isArray())
+        {
+            return llmCalls.size();
+        }
+        return 0;
+    }
+
+    private long extractLlmTokens(final JsonNode node)
+    {
+        if (node.has("llmTotalTokens") && node.path("llmTotalTokens").isNumber())
+        {
+            return node.path("llmTotalTokens").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("totalTokens") && metrics.path("totalTokens").isNumber())
+        {
+            return metrics.path("totalTokens").asLong();
+        }
+        return 0L;
+    }
+
+    private double extractLlmCost(final JsonNode node)
+    {
+        if (node.has("llmCost") && node.path("llmCost").isNumber())
+        {
+            return node.path("llmCost").asDouble();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("estimatedCostUsd") && metrics.path("estimatedCostUsd").isNumber())
+        {
+            return metrics.path("estimatedCostUsd").asDouble();
+        }
+        return 0.0;
+    }
+
     private void populateBlockSteps(final JsonNode sourceSteps, final ArrayNode targetArray, final String prefix, final String file, final String defaultEngine, final ObjectMapper mapper)
     {
         if (sourceSteps != null && sourceSteps.isArray())
@@ -707,7 +963,7 @@ public class LocalRunJsonStorageService
         }
     }
 
-    private void scanForTestExecJsonFiles(final File dir, final List<File> results)
+    public void scanForTestExecJsonFiles(final File dir, final List<File> results)
     {
         final File[] files = dir.listFiles();
         if (files == null) return;
@@ -903,11 +1159,6 @@ public class LocalRunJsonStorageService
                     }
                 }
             }
-        }
-
-        if (!root.has("executions") || root.get("executions") == null || root.get("executions").isNull() || root.get("executions").isEmpty())
-        {
-            root.set("executions", mergedExecutions);
         }
 
         return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);

@@ -36,9 +36,10 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class TestExecutionDto
 {
-    private final String id;
+    private String id;
     private final String runId;
     private final String testClass;
+    private final String testMethod;
     private final String title;
     private final String testName;
     private final String playbookFile;
@@ -54,8 +55,8 @@ public final class TestExecutionDto
     private final List<String> junitTags;
     private final Map<String, String> dataBindings;
     private final Map<String, String> localDataBindings;
-    private final JsonNode blocks;
-    private final JsonNode steps;
+    private JsonNode blocks;
+    private JsonNode steps;
     private final String executionMode;
     private final String startTime;
     private final String dateFormatted;
@@ -72,7 +73,7 @@ public final class TestExecutionDto
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
+        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
     }
 
     @JsonCreator
@@ -80,6 +81,7 @@ public final class TestExecutionDto
         @JsonProperty("id") final String id,
         @JsonProperty("runId") final String runId,
         @JsonProperty("testClass") final String testClass,
+        @JsonProperty("testMethod") final String testMethod,
         @JsonProperty("title") final String title,
         @JsonProperty("testName") final String testName,
         @JsonProperty("playbookFile") final String playbookFile,
@@ -178,9 +180,31 @@ public final class TestExecutionDto
         }
 
         this.runId = runId != null ? runId : "";
-        this.testName = (testName != null && !testName.isEmpty()) ? testName : (this.testClass + " " + this.title).trim();
         this.playbookFile = playbookFile != null ? playbookFile : "";
         this.testFile = testFile != null ? testFile : "";
+        this.junitTags = junitTags != null ? new ArrayList<>(junitTags) : new ArrayList<>();
+
+        final String effectiveTestMethod;
+        if (testMethod != null && !testMethod.trim().isEmpty())
+        {
+            effectiveTestMethod = testMethod.trim();
+        }
+        else if (this.junitTags.size() >= 2 && !this.junitTags.get(1).trim().isEmpty() && !this.junitTags.get(1).trim().startsWith("Dataset:"))
+        {
+            effectiveTestMethod = this.junitTags.get(1).trim();
+        }
+        else if (this.testFile.contains("#"))
+        {
+            final String tm = this.testFile.substring(this.testFile.indexOf('#') + 1).trim();
+            effectiveTestMethod = !tm.isEmpty() ? tm : "";
+        }
+        else
+        {
+            effectiveTestMethod = "";
+        }
+        this.testMethod = effectiveTestMethod;
+
+        this.testName = (testName != null && !testName.isEmpty()) ? testName : (this.testClass + " " + (this.testMethod.isEmpty() ? this.title : (this.testMethod + " [" + this.title + "]"))).trim();
         this.status = status != null ? status : "passed-clean";
         this.engine = engine != null ? engine : "Java";
 
@@ -204,7 +228,6 @@ public final class TestExecutionDto
         this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
         this.comment = comment;
         this.areaName = (areaName != null && !areaName.trim().isEmpty() && !"General".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Browsing (default)";
-        this.junitTags = junitTags != null ? new ArrayList<>(junitTags) : new ArrayList<>();
         this.dataBindings = dataBindings != null ? new HashMap<>(dataBindings) : new HashMap<>();
         this.localDataBindings = localDataBindings != null ? new HashMap<>(localDataBindings) : new HashMap<>();
         this.blocks = blocks;
@@ -235,6 +258,49 @@ public final class TestExecutionDto
         final String status,
         final String engine,
         final String location,
+        final String locale,
+        final String browser,
+        final String failure,
+        final List<String> bugs,
+        final String comment,
+        final String areaName,
+        final List<String> junitTags,
+        final Map<String, String> dataBindings,
+        final Map<String, String> localDataBindings,
+        final JsonNode blocks,
+        final JsonNode steps,
+        final String testId,
+        final String datasetId,
+        final String executionMode,
+        final String mode,
+        final String startTime,
+        final String dateFormatted,
+        final String timeFormatted,
+        final Long timestampMs,
+        final Integer totalStepsCount,
+        final Integer failedStepsCount,
+        final Long durationMs,
+        final String durationFormatted,
+        final Integer llmCallsCount,
+        final Long llmTotalTokens,
+        final Double llmCost,
+        final String failureSnippet)
+    {
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet);
+    }
+
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String testMethod,
+        final String title,
+        final String testName,
+        final String playbookFile,
+        final String testFile,
+        final String status,
+        final String engine,
+        final String location,
         final String browser,
         final String failure,
         final List<String> bugs,
@@ -246,7 +312,32 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
+    }
+
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String title,
+        final String testName,
+        final String playbookFile,
+        final String testFile,
+        final String status,
+        final String engine,
+        final String location,
+        final String browser,
+        final String failure,
+        final List<String> bugs,
+        final String comment,
+        final String areaName,
+        final List<String> junitTags,
+        final Map<String, String> dataBindings,
+        final Map<String, String> localDataBindings,
+        final JsonNode blocks,
+        final JsonNode steps)
+    {
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
     }
 
     public TestExecutionDto(
@@ -260,12 +351,17 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null);
     }
 
     public String getId()
     {
         return id;
+    }
+
+    public void setId(final String id)
+    {
+        this.id = id != null ? id.trim() : "";
     }
 
     public String getRunId()
@@ -276,6 +372,11 @@ public final class TestExecutionDto
     public String getTestClass()
     {
         return testClass;
+    }
+
+    public String getTestMethod()
+    {
+        return testMethod != null ? testMethod : "";
     }
 
     public String getTitle()
@@ -417,6 +518,16 @@ public final class TestExecutionDto
         return "{}";
     }
 
+    public void setBlocks(final JsonNode blocks)
+    {
+        this.blocks = blocks;
+    }
+
+    public void setSteps(final JsonNode steps)
+    {
+        this.steps = steps;
+    }
+
     public String getLocalDataBindingsJson()
     {
         if (localDataBindings != null)
@@ -459,7 +570,19 @@ public final class TestExecutionDto
 
     public long getTimestampMs()
     {
-        return timestampMs;
+        if (timestampMs > 0L)
+        {
+            return timestampMs;
+        }
+        if (startTime != null && !startTime.isBlank())
+        {
+            final Long parsed = com.xceptance.aura.report.service.RunStorageSyncService.parseTimestampToMs(startTime);
+            if (parsed != null && parsed > 0L)
+            {
+                return parsed;
+            }
+        }
+        return 0L;
     }
 
     public int getTotalStepsCount()
@@ -509,7 +632,7 @@ public final class TestExecutionDto
     public String getLlmCostFormatted()
     {
         final double roundedUp = Math.ceil(llmCost * 10000.0) / 10000.0;
-        return String.format("$%.4f", roundedUp);
+        return String.format(java.util.Locale.ROOT, "%.4f", roundedUp);
     }
 
     public String getFailureSnippet()
@@ -549,6 +672,14 @@ public final class TestExecutionDto
 
     public String getFormattedTime()
     {
+        if (timestampMs > 0L)
+        {
+            final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(
+                java.time.Instant.ofEpochMilli(timestampMs),
+                java.time.ZoneId.systemDefault()
+            );
+            return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
         if (dateFormatted != null && !dateFormatted.isBlank() && timeFormatted != null && !timeFormatted.isBlank())
         {
             return dateFormatted + " " + timeFormatted;

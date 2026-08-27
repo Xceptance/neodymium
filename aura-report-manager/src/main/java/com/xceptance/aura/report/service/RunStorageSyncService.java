@@ -39,9 +39,11 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -249,6 +251,12 @@ public class RunStorageSyncService
     {
         try
         {
+            final File runDirFile = localRunJsonStorageService.getRunDir(runId).toFile();
+            if (runDirFile.exists() && runDirFile.isDirectory())
+            {
+                localRunJsonStorageService.buildRunJsonContent(runDirFile, runId, true);
+            }
+
             final Optional<String> fullJsonOpt = localRunJsonStorageService.readRunJson(runId);
             if (fullJsonOpt.isEmpty())
             {
@@ -265,7 +273,6 @@ public class RunStorageSyncService
             final String env = root.path("environment").asText(batchInfo.environment);
             final String batchDesc = batchInfo.description;
             final String trigger = root.path("trigger").asText(root.path("triggerSource").asText("Unknown"));
-            final String timestamp = root.path("timestamp").asText(root.path("startTime").asText("Recently"));
 
             final JsonNode summaryNode = root.path("summary");
             final int totalTests = summaryNode.path("total").asInt(0);
@@ -275,6 +282,26 @@ public class RunStorageSyncService
             final int unknown = summaryNode.path("unknown").asInt(0);
             final int ignored = summaryNode.path("ignored").asInt(0);
             final double passRate = summaryNode.path("passRate").asDouble(totalTests > 0 ? (double) (pass + fixed) / totalTests * 100.0 : 0.0);
+
+            int sumLlmCalls = summaryNode.path("totalLlmCalls").asInt(0);
+            long sumLlmTokens = summaryNode.path("totalLlmTokens").asLong(0L);
+            double sumLlmCost = summaryNode.path("totalLlmCost").asDouble(0.0);
+
+            if (sumLlmCalls == 0 && sumLlmTokens == 0L && sumLlmCost == 0.0)
+            {
+                final JsonNode execMetricsNode = root.path("executionMetrics");
+                if (execMetricsNode.isObject())
+                {
+                    for (final JsonNode mNode : execMetricsNode)
+                    {
+                        sumLlmCalls += mNode.path("llmCallsCount").asInt(0);
+                        sumLlmTokens += mNode.path("llmTotalTokens").asLong(0L);
+                        sumLlmCost += mNode.path("llmCost").asDouble(0.0);
+                    }
+                }
+            }
+
+            final JsonNode execMetricsNode = root.path("executionMetrics");
 
             final List<String> localesList = new ArrayList<>();
             final JsonNode localesArr = root.path("locales");
@@ -287,6 +314,19 @@ public class RunStorageSyncService
                         localesList.add(l.asText().trim());
                     }
                 }
+            }
+            if (localesList.isEmpty() && execMetricsNode.isObject())
+            {
+                final Set<String> locSet = new LinkedHashSet<>();
+                for (final JsonNode mNode : execMetricsNode)
+                {
+                    final String loc = mNode.path("location").asText(mNode.path("locale").asText("")).trim();
+                    if (!loc.isEmpty() && !"Unknown".equalsIgnoreCase(loc))
+                    {
+                        locSet.add(loc);
+                    }
+                }
+                localesList.addAll(locSet);
             }
             final String localesCsv = !localesList.isEmpty() ? String.join(",", localesList) : "Unknown";
 
@@ -302,9 +342,75 @@ public class RunStorageSyncService
                     }
                 }
             }
+            if (browsersList.isEmpty() && execMetricsNode.isObject())
+            {
+                final Set<String> bSet = new LinkedHashSet<>();
+                for (final JsonNode mNode : execMetricsNode)
+                {
+                    final String br = mNode.path("browser").asText("").trim();
+                    if (!br.isEmpty() && !"Unknown".equalsIgnoreCase(br))
+                    {
+                        bSet.add(br);
+                    }
+                }
+                browsersList.addAll(bSet);
+            }
             final String browsersCsv = !browsersList.isEmpty() ? String.join(",", browsersList) : "Chrome";
 
-            final JsonNode execArray = root.path("executions");
+            String timestampVal = root.path("timestamp").asText(root.path("startTime").asText("")).trim();
+            if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
+            {
+                String earliestTime = null;
+                Long minMs = null;
+                if (!timestampVal.isEmpty() && !"Recently".equalsIgnoreCase(timestampVal))
+                {
+                    earliestTime = timestampVal;
+                    minMs = parseTimestampToMs(timestampVal);
+                }
+                for (final JsonNode mNode : execMetricsNode)
+                {
+                    final Long ms = parseStartTimeMs(mNode);
+                    String st = mNode.path("startTime").asText("").trim();
+                    if (st.isEmpty() && mNode.has("timestamp"))
+                    {
+                        st = mNode.path("timestamp").asText("").trim();
+                    }
+                    if (ms != null && ms > 0L)
+                    {
+                        if (minMs == null || ms < minMs)
+                        {
+                            minMs = ms;
+                            if (!st.isEmpty())
+                            {
+                                earliestTime = st;
+                            }
+                        }
+                    }
+                    else if (!st.isEmpty() && (earliestTime == null || st.compareTo(earliestTime) < 0))
+                    {
+                        earliestTime = st;
+                    }
+                }
+                if (earliestTime != null)
+                {
+                    timestampVal = earliestTime;
+                }
+            }
+            if (timestampVal.isEmpty())
+            {
+                timestampVal = "Recently";
+            }
+            final String timestamp = timestampVal;
+
+            final List<JsonNode> execList = new ArrayList<>();
+            if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
+            {
+                execMetricsNode.elements().forEachRemaining(execList::add);
+            }
+            else if (root.path("executions").isArray())
+            {
+                root.path("executions").elements().forEachRemaining(execList::add);
+            }
 
             final String runEnv = env != null ? env : "ALL";
             final String runBatch = batchName != null ? batchName : "ALL";
@@ -339,12 +445,34 @@ public class RunStorageSyncService
             int calcUnknown = 0;
             int calcIgnored = 0;
 
-            if (execArray.isArray())
+            Long minStartTimeMs = null;
+            Long maxStartTimeMs = null;
+            long durationOfLatestExecMs = 0L;
+            long sumDurationMs = 0L;
+
+            if (!execList.isEmpty())
             {
-                for (final JsonNode exec : execArray)
+                for (final JsonNode exec : execList)
                 {
+                    final long execDurationMs = exec.hasNonNull("duration") ? exec.path("duration").asLong(0L) : exec.path("durationMs").asLong(0L);
+                    sumDurationMs += execDurationMs;
+
+                    final Long execStartMs = parseStartTimeMs(exec);
+                    if (execStartMs != null && execStartMs > 0L)
+                    {
+                        if (minStartTimeMs == null || execStartMs < minStartTimeMs)
+                        {
+                            minStartTimeMs = execStartMs;
+                        }
+                        if (maxStartTimeMs == null || execStartMs >= maxStartTimeMs)
+                        {
+                            maxStartTimeMs = execStartMs;
+                            durationOfLatestExecMs = execDurationMs;
+                        }
+                    }
                     final String execId = exec.path("id").asText("");
                     final String testClass = exec.path("testClass").asText("UnknownClass");
+                    final String testMethod = LocalRunJsonStorageService.extractTestMethod(exec);
                     String rawTitle = exec.path("title").asText("").trim();
                     if (rawTitle.isEmpty())
                     {
@@ -359,7 +487,7 @@ public class RunStorageSyncService
                     final String browser = AuraReportDataService.normalizeBrowser(exec.path("browser").asText("Chrome"));
                     final String rawStatus = exec.path("status").asText("passed-clean");
 
-                    final String varId = generateVariationId(testClass, dataSet, location, browser);
+                    final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
                     final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
                         .distinct()
                         .collect(Collectors.toList());
@@ -509,14 +637,32 @@ public class RunStorageSyncService
                 );
             }
 
-            final boolean hasExecCounts = execArray.isArray() && execArray.size() > 0;
-            final int finalTotal = hasExecCounts ? execArray.size() : totalTests;
+            final boolean hasExecCounts = !execList.isEmpty();
+            final int finalTotal = hasExecCounts ? execList.size() : totalTests;
             final int finalPass = hasExecCounts ? calcPass : pass;
             final int finalFixed = hasExecCounts ? calcFixed : fixed;
             final int finalKnown = hasExecCounts ? calcKnown : known;
             final int finalUnknown = hasExecCounts ? calcUnknown : unknown;
             final int finalIgnored = hasExecCounts ? calcIgnored : ignored;
             final double finalPassRate = finalTotal > 0 ? (double)(finalPass + finalFixed) / finalTotal * 100.0 : passRate;
+
+            final long calculatedRunDurationMs;
+            if (minStartTimeMs != null && maxStartTimeMs != null && maxStartTimeMs >= minStartTimeMs)
+            {
+                calculatedRunDurationMs = (maxStartTimeMs - minStartTimeMs) + durationOfLatestExecMs;
+            }
+            else
+            {
+                calculatedRunDurationMs = sumDurationMs;
+            }
+
+            if (minStartTimeMs != null)
+            {
+                runEntity.setStartTimeMs(minStartTimeMs);
+                runEntity.setEndTimeMs(maxStartTimeMs != null ? maxStartTimeMs + durationOfLatestExecMs : minStartTimeMs + calculatedRunDurationMs);
+            }
+            runEntity.setDurationMs(calculatedRunDurationMs);
+            runEntity.setFormattedDuration(formatDurationMs(calculatedRunDurationMs));
 
             runEntity.setLocalesCsv(localesCsv);
             runEntity.setBrowsersCsv(browsersCsv);
@@ -527,6 +673,9 @@ public class RunStorageSyncService
             runEntity.setFailedUnknownCount(finalUnknown);
             runEntity.setIgnoredCount(finalIgnored);
             runEntity.setPassRate(finalPassRate);
+            runEntity.setTotalLlmCalls(sumLlmCalls);
+            runEntity.setTotalLlmTokens(sumLlmTokens);
+            runEntity.setTotalLlmCost(Math.ceil(sumLlmCost * 1000000.0) / 1000000.0);
             runEntity.setAttachmentsSyncedToS3(true);
 
             runRepository.save(runEntity);
@@ -568,27 +717,108 @@ public class RunStorageSyncService
         }
     }
 
+    private String generateVariationId(final String testClass, final String testMethod, final String dataSet, final String location, final String browser)
+    {
+        return AuraReportDataService.generateVariationId(testClass, testMethod, dataSet, location, browser);
+    }
+
     private String generateVariationId(final String testClass, final String dataSet, final String location, final String browser)
     {
-        final String normBrowser = AuraReportDataService.normalizeBrowser(browser);
-        final String raw = (testClass != null ? testClass : "") + "|" +
-                           (dataSet != null ? dataSet : "") + "|" +
-                           (location != null ? location : "") + "|" +
-                           (normBrowser != null ? normBrowser : "");
+        return AuraReportDataService.generateVariationId(testClass, null, dataSet, location, browser);
+    }
+
+    public static Long parseStartTimeMs(final JsonNode node)
+    {
+        if (node == null || !node.isObject())
+        {
+            return null;
+        }
+
+        for (final String key : List.of("startTimeMs", "startTime", "timestamp", "startDate", "time", "createdAt"))
+        {
+            if (node.hasNonNull(key))
+            {
+                final JsonNode valNode = node.get(key);
+                if (valNode.isNumber())
+                {
+                    long val = valNode.asLong();
+                    if (val > 0L)
+                    {
+                        if (val < 100000000000L)
+                        {
+                            val *= 1000L;
+                        }
+                        return val;
+                    }
+                }
+                final String raw = valNode.asText("").trim();
+                if (!raw.isEmpty())
+                {
+                    final Long parsed = parseTimestampToMs(raw);
+                    if (parsed != null && parsed > 0L)
+                    {
+                        return parsed;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public static Long parseTimestampToMs(final String rawVal)
+    {
+        if (rawVal == null || rawVal.trim().isEmpty())
+        {
+            return null;
+        }
+        final String trimmed = rawVal.trim();
         try
         {
-            final MessageDigest md = MessageDigest.getInstance("SHA-256");
-            final byte[] hash = md.digest(raw.getBytes(StandardCharsets.UTF_8));
-            final StringBuilder hex = new StringBuilder();
-            for (int i = 0; i < 8; i++)
+            double num = Double.parseDouble(trimmed);
+            if (num > 0.0)
             {
-                hex.append(String.format("%02x", hash[i]));
+                if (num < 1e11)
+                {
+                    num *= 1000.0;
+                }
+                return (long) num;
             }
-            return "var_" + hex;
         }
-        catch (final NoSuchAlgorithmException e)
+        catch (final NumberFormatException ignored)
         {
-            return "var_" + Math.abs(raw.hashCode());
         }
+
+        try
+        {
+            return java.time.Instant.parse(trimmed).toEpochMilli();
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        for (final String pattern : List.of("yyyy-MM-dd'T'HH:mm:ss.SSSX", "yyyy-MM-dd'T'HH:mm:ssX", "yyyy-MM-dd HH:mm:ss.SSS", "yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyyMMdd_HHmmss"))
+        {
+            try
+            {
+                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(trimmed, java.time.format.DateTimeFormatter.ofPattern(pattern));
+                return ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
+    public static String formatDurationMs(final long totalMs)
+    {
+        if (totalMs <= 0L)
+        {
+            return "0 min 0 s";
+        }
+        final long totalSeconds = Math.round(totalMs / 1000.0);
+        final long minutes = totalSeconds / 60L;
+        final long seconds = totalSeconds % 60L;
+        return minutes + " min " + seconds + " s";
     }
 }

@@ -47,7 +47,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 3897,
+  "durationMs" : 2578,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -99,7 +99,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1460,
+  "durationMs" : 1625,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -151,7 +151,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1508,
+  "durationMs" : 1967,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -203,7 +203,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1376,
+  "durationMs" : 1630,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -255,7 +255,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1487,
+  "durationMs" : 1703,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -307,7 +307,7 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1314,
+  "durationMs" : 1515,
   "delayMs" : 0,
   "composite" : false
 } ]

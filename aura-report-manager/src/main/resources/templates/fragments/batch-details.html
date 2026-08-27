@@ -51,7 +51,7 @@
                 <tbody id="batchSpecificRunsTableBody">
                     <tr th:each="run : ${runs}">
                         <td class="font-mono fw-bold text-primary" th:text="'#' + ${run.id}">#RUN_ID</td>
-                        <td class="font-size-sm text-muted" th:text="${run.timestampLabel}">UNKNOWN</td>
+                        <td class="font-size-sm text-muted js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">UNKNOWN</td>
                         <td class="font-mono fw-bold" th:text="${run.totalTests}">7</td>
                         <td style="min-width: 220px; vertical-align: middle;">
                             <div class="status-stacked-bar">

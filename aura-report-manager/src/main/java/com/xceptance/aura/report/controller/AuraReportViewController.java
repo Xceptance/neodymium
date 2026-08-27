@@ -18,6 +18,9 @@
  */
 package com.xceptance.aura.report.controller;
 
+import com.xceptance.aura.report.dto.AreaRunPointDto;
+import com.xceptance.aura.report.dto.AreaSummaryDto;
+import com.xceptance.aura.report.dto.BatchAreaTrendDto;
 import com.xceptance.aura.report.dto.BatchOverviewDataDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
@@ -31,7 +34,9 @@ import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,6 +46,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,10 +54,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
  * Spring MVC View Controller serving Aura Report Manager page views and HTMX partial routes backed 100% by database and JSON storage.
  *
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Controller
@@ -147,12 +155,81 @@ public class AuraReportViewController
                 .findFirst()
                 .orElse("Unknown"));
 
+        final List<TestRunEntity> chronoRuns = new ArrayList<>(runs);
+        java.util.Collections.reverse(chronoRuns);
+
+        final Map<String, List<AreaRunPointDto>> areaPointsMap = new LinkedHashMap<>();
+        for (final TestRunEntity r : chronoRuns)
+        {
+            final RunReportDto rReport = dataService.getRunReport(r.getId());
+            if (rReport != null && rReport.getAreaSummaries() != null)
+            {
+                for (final AreaSummaryDto area : rReport.getAreaSummaries())
+                {
+                    final String areaName = area.getAreaName() != null ? area.getAreaName() : "Browsing (default)";
+                    areaPointsMap.computeIfAbsent(areaName, k -> new ArrayList<>())
+                        .add(new AreaRunPointDto(
+                            r.getId(),
+                            r.getTimestampLabel(),
+                            area.getPassCount(),
+                            area.getFixedCount(),
+                            area.getKnownCount(),
+                            area.getUnknownCount(),
+                            area.getIgnoredCount(),
+                            area.getTotalCount()
+                        ));
+                }
+            }
+        }
+
+        final List<BatchAreaTrendDto> areaTrends = new ArrayList<>();
+        for (final Map.Entry<String, List<AreaRunPointDto>> entry : areaPointsMap.entrySet())
+        {
+            final String areaName = entry.getKey();
+            final List<AreaRunPointDto> points = entry.getValue();
+            final AreaRunPointDto latestPoint = !points.isEmpty() ? points.get(points.size() - 1) : null;
+            final int latestCount = latestPoint != null ? latestPoint.getTotalCount() : 0;
+
+            final String badgeClass;
+            if (latestPoint != null && latestPoint.getUnknownCount() > 0)
+            {
+                badgeClass = "badge-unknown-fail";
+            }
+            else if (latestPoint != null && latestPoint.getKnownCount() > 0)
+            {
+                badgeClass = "badge-known-fail";
+            }
+            else if (latestPoint != null && latestPoint.getFixedCount() > 0)
+            {
+                badgeClass = "badge-fixed";
+            }
+            else if (latestPoint != null && latestPoint.getPassCount() > 0)
+            {
+                badgeClass = "badge-pass";
+            }
+            else
+            {
+                badgeClass = "badge-ignored";
+            }
+
+            final String areaGroup = "areaTrendGroup" + areaName.replaceAll("[^a-zA-Z0-9]", "");
+            areaTrends.add(new BatchAreaTrendDto(
+                areaName,
+                areaGroup,
+                latestCount,
+                badgeClass,
+                latestCount + " Executions in Last Run",
+                points
+            ));
+        }
+
         model.addAttribute("batchName", batchName);
         model.addAttribute("batch", batchOpt.orElse(null));
         model.addAttribute("batchEnvironment", batchEnvironment);
         model.addAttribute("runs", runs);
         model.addAttribute("batchLocales", batchLocales);
         model.addAttribute("batchBrowsers", batchBrowsers);
+        model.addAttribute("areaTrends", areaTrends);
         model.addAttribute("pageTitle", "Batch History Overview - " + batchName);
         model.addAttribute("activeTab", "BatchHistory");
         model.addAttribute("viewFragment", "fragments/batch-history :: batchHistory");
@@ -276,6 +353,20 @@ public class AuraReportViewController
         model.addAttribute("exec", currentExec);
 
         return "fragments/test-side-panel :: testSidePanel";
+    }
+
+    @GetMapping("/fragments/test-side-panel/steps")
+    @ResponseBody
+    public ResponseEntity<TestExecutionDto> getExecutionSteps(
+        @RequestParam(name = "runId", required = false) final String runId,
+        @RequestParam(name = "rowId", required = false) final String rowId)
+    {
+        final TestExecutionDto exec = dataService.getExecutionDetails(runId, rowId);
+        if (exec == null)
+        {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(exec);
     }
 
     @GetMapping("/fragments/test-side-panel/bugs")

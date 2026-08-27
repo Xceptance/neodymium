@@ -82,20 +82,12 @@
                 <text x="42" y="194" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">0 Tests</text>
 
                 <!-- STACKED LAYERS -->
-                <path id="trendLayerIgnored" d="M 50 170 C 140 170, 140 170, 230 170 C 325 170, 325 170, 420 170 C 515 170, 515 170, 610 170 C 705 170, 705 170, 800 170 L 800 190 L 50 190 Z" fill="#cbd5e1" />
-                <path d="M 50 170 C 140 170, 140 170, 230 170 C 325 170, 325 170, 420 170 C 515 170, 515 170, 610 170 C 705 170, 705 170, 800 170" fill="none" stroke="#94a3b8" stroke-width="2" />
-
-                <path id="trendLayerUnknown" d="M 50 150 C 140 150, 140 150, 230 150 C 325 150, 325 150, 420 150 C 515 150, 515 170, 610 170 C 705 170, 705 150, 800 150 L 800 170 C 705 170, 705 170, 610 170 C 515 170, 515 170, 420 170 C 325 170, 325 170, 230 170 C 140 170, 140 170, 50 170 Z" fill="#fca5a5" />
-                <path d="M 50 150 C 140 150, 140 150, 230 150 C 325 150, 325 150, 420 150 C 515 150, 515 170, 610 170 C 705 170, 705 150, 800 150" fill="none" stroke="#f87171" stroke-width="2.5" />
-
-                <path id="trendLayerKnown" d="M 50 110 C 140 110, 140 130, 230 130 C 325 130, 325 130, 420 130 C 515 130, 515 150, 610 150 C 705 150, 705 130, 800 130 L 800 150 C 705 150, 705 170, 610 170 C 515 170, 515 150, 420 150 C 325 150, 325 150, 230 150 C 140 150, 140 150, 50 150 Z" fill="#fdba74" />
-                <path d="M 50 110 C 140 110, 140 130, 230 130 C 325 130, 325 130, 420 130 C 515 130, 515 150, 610 150 C 705 150, 705 130, 800 130" fill="none" stroke="#fb923c" stroke-width="2.5" />
-
-                <path id="trendLayerFixed" d="M 50 90 C 140 90, 140 110, 230 110 C 325 110, 325 90, 420 90 C 515 90, 515 110, 610 110 C 705 110, 705 90, 800 90 L 800 130 C 705 130, 705 150, 610 150 C 515 150, 515 130, 420 130 C 325 130, 325 130, 230 130 C 140 130, 140 110, 50 110 Z" fill="#93c5fd" />
-                <path d="M 50 90 C 140 90, 140 110, 230 110 C 325 110, 325 90, 420 90 C 515 90, 515 110, 610 110 C 705 110, 705 90, 800 90" fill="none" stroke="#60a5fa" stroke-width="2.5" />
-
-                <path id="trendLayerPass" d="M 50 70 C 140 70, 140 50, 230 50 C 325 50, 325 50, 420 50 C 515 50, 515 30, 610 30 C 705 30, 705 30, 800 30 L 800 90 C 705 90, 705 110, 610 110 C 515 110, 515 90, 420 90 C 325 90, 325 110, 230 110 C 140 110, 140 90, 50 90 Z" fill="#6ee7b7" />
-                <path id="trendTopStroke" d="M 50 70 C 140 70, 140 50, 230 50 C 325 50, 325 50, 420 50 C 515 50, 515 30, 610 30 C 705 30, 705 30, 800 30" fill="none" stroke="#34d399" stroke-width="3" />
+                <path id="trendLayerIgnored" d="" fill="#cbd5e1" />
+                <path id="trendLayerUnknown" d="" fill="#fca5a5" />
+                <path id="trendLayerKnown" d="" fill="#fdba74" />
+                <path id="trendLayerFixed" d="" fill="#93c5fd" />
+                <path id="trendLayerPass" d="" fill="#6ee7b7" />
+                <path id="trendTopStroke" d="" fill="none" stroke="#34d399" stroke-width="3" />
 
                 <line id="trendHoverGuide" x1="-100" y1="10" x2="-100" y2="190" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3 3" style="display: none;" />
 
@@ -128,47 +120,30 @@
         <div class="panel-header">
             <div>
                 <div class="panel-title"><span class="material-symbols-outlined text-accent">layers</span> History Trends for Included Areas</div>
-                <div class="panel-subtitle">Click any area below to open list of tests belonging to it in this batch</div>
+                <div class="panel-subtitle">History trend breakdown per area across batch runs</div>
             </div>
         </div>
 
         <div class="area-trend-grid">
-            <div class="area-trend-card">
+            <div th:each="area : ${areaTrends}" class="area-trend-card">
                 <div class="area-trend-header">
-                    <div class="area-trend-title"><span class="material-symbols-outlined text-accent">shopping_cart</span> Area: @Checkout</div>
-                    <span class="badge-status badge-known-fail" id="areaTrendCountCheckout">5 Executions in Last Run</span>
+                    <div class="area-trend-title"><span class="material-symbols-outlined text-accent">folder</span> Area: @<span th:text="${area.areaName}">Area</span></div>
+                    <span th:class="'badge-status ' + ${area.latestStatusBadgeClass}" th:text="${area.latestStatusLabel}">0 Executions in Last Run</span>
                 </div>
                 <div class="area-stacked-svg-container">
-                    <svg width="100%" height="100%" viewBox="0 0 300 90" preserveAspectRatio="none">
+                    <svg class="area-trend-svg" width="100%" height="100%" viewBox="0 0 300 90" preserveAspectRatio="none" th:data-run-points="${area.runPointsJson}">
                         <line x1="20" y1="80" x2="280" y2="80" stroke="#cbd5e1" stroke-width="1"/>
-                        <path d="M 20 80 C 52.5 80, 52.5 80, 85 80 C 117.5 80, 117.5 80, 150 80 C 182.5 80, 182.5 80, 215 80 C 247.5 80, 247.5 70, 280 70 L 280 80 L 20 80 Z" fill="#cbd5e1" />
-                        <path d="M 20 70 C 52.5 70, 52.5 80, 85 80 C 117.5 80, 117.5 70, 150 70 C 182.5 70, 182.5 80, 215 80 C 247.5 80, 247.5 60, 280 60 L 280 70 C 247.5 70, 247.5 80, 215 80 C 182.5 80, 182.5 80, 150 80 C 117.5 80, 117.5 80, 85 80 C 52.5 80, 52.5 80, 20 80 Z" fill="#fca5a5" />
-                        <path d="M 20 60 C 52.5 60, 52.5 70, 85 70 C 117.5 70, 117.5 60, 150 60 C 182.5 60, 182.5 70, 215 70 C 247.5 70, 247.5 50, 280 50 L 280 60 C 247.5 60, 247.5 80, 215 80 C 182.5 80, 182.5 70, 150 70 C 117.5 70, 117.5 80, 85 80 C 52.5 80, 52.5 70, 20 70 Z" fill="#fdba74" />
-                        <path d="M 20 50 C 52.5 50, 52.5 60, 85 60 C 117.5 60, 117.5 50, 150 50 C 182.5 50, 182.5 50, 215 50 C 247.5 50, 247.5 40, 280 40 L 280 50 C 247.5 50, 247.5 70, 215 70 C 182.5 70, 182.5 60, 150 60 C 117.5 60, 117.5 70, 85 70 C 52.5 70, 52.5 60, 20 60 Z" fill="#93c5fd" />
-                        <path d="M 20 40 C 52.5 40, 52.5 40, 85 40 C 117.5 40, 117.5 40, 150 40 C 182.5 40, 182.5 30, 215 30 C 247.5 30, 247.5 30, 280 30 L 280 40 C 247.5 40, 247.5 50, 215 50 C 182.5 50, 182.5 50, 150 50 C 117.5 50, 117.5 60, 85 60 C 52.5 60, 52.5 50, 20 50 Z" fill="#6ee7b7" />
-                        <path d="M 20 40 C 52.5 40, 52.5 40, 85 40 C 117.5 40, 117.5 40, 150 40 C 182.5 40, 182.5 30, 215 30 C 247.5 30, 247.5 30, 280 30" fill="none" stroke="#34d399" stroke-width="2" />
-                        <circle cx="280" cy="30" r="3.5" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+                        <path class="area-layer-ignored" d="" fill="#cbd5e1" />
+                        <path class="area-layer-unknown" d="" fill="#fca5a5" />
+                        <path class="area-layer-known" d="" fill="#fdba74" />
+                        <path class="area-layer-fixed" d="" fill="#93c5fd" />
+                        <path class="area-layer-pass" d="" fill="#6ee7b7" />
+                        <path class="area-layer-top-stroke" d="" fill="none" stroke="#34d399" stroke-width="2" />
                     </svg>
                 </div>
             </div>
-
-            <div class="area-trend-card">
-                <div class="area-trend-header">
-                    <div class="area-trend-title"><span class="material-symbols-outlined text-accent">shield</span> Area: @Authentication</div>
-                    <span class="badge-status badge-pass" id="areaTrendCountAuth">3 Executions in Last Run</span>
-                </div>
-                <div class="area-stacked-svg-container">
-                    <svg width="100%" height="100%" viewBox="0 0 300 90" preserveAspectRatio="none">
-                        <line x1="20" y1="80" x2="280" y2="80" stroke="#cbd5e1" stroke-width="1"/>
-                        <path d="M 20 80 C 52.5 80, 52.5 65, 85 65 C 117.5 65, 117.5 80, 150 80 C 182.5 80, 182.5 65, 215 65 C 247.5 65, 247.5 80, 280 80 L 280 80 L 20 80 Z" fill="#cbd5e1" />
-                        <path d="M 20 65 C 52.5 65, 52.5 50, 85 50 C 117.5 50, 117.5 80, 150 80 C 182.5 80, 182.5 65, 215 65 C 247.5 65, 247.5 80, 280 80 L 280 80 C 247.5 80, 247.5 65, 215 65 C 182.5 65, 182.5 80, 150 80 C 117.5 80, 117.5 65, 85 65 C 52.5 65, 52.5 80, 20 80 Z" fill="#fca5a5" />
-                        <path d="M 20 50 C 52.5 50, 52.5 50, 85 50 C 117.5 50, 117.5 65, 150 65 C 182.5 65, 182.5 65, 215 65 C 247.5 65, 247.5 80, 280 80 L 280 80 C 247.5 80, 247.5 65, 215 65 C 182.5 65, 182.5 80, 150 80 C 117.5 80, 117.5 50, 85 50 C 52.5 50, 52.5 65, 20 65 Z" fill="#fdba74" />
-                        <path d="M 20 50 C 52.5 50, 52.5 50, 85 50 C 117.5 50, 117.5 50, 150 50 C 182.5 50, 182.5 65, 215 65 C 247.5 65, 247.5 65, 280 65 L 280 80 C 247.5 80, 247.5 65, 215 65 C 182.5 65, 182.5 65, 150 65 C 117.5 65, 117.5 50, 85 50 C 52.5 50, 52.5 50, 20 50 Z" fill="#93c5fd" />
-                        <path d="M 20 50 C 52.5 50, 52.5 35, 85 35 C 117.5 35, 117.5 35, 150 35 C 182.5 35, 182.5 35, 215 35 C 247.5 35, 247.5 35, 280 35 L 280 65 C 247.5 65, 247.5 65, 215 65 C 182.5 65, 182.5 50, 150 50 C 117.5 50, 117.5 50, 85 50 C 52.5 50, 52.5 50, 20 50 Z" fill="#6ee7b7" />
-                        <path d="M 20 50 C 52.5 50, 52.5 35, 85 35 C 117.5 35, 117.5 35, 150 35 C 182.5 35, 182.5 35, 215 35 C 247.5 35, 247.5 35, 280 35" fill="none" stroke="#34d399" stroke-width="2" />
-                        <circle cx="280" cy="35" r="3.5" fill="#059669" stroke="#ffffff" stroke-width="1.5"/>
-                    </svg>
-                </div>
+            <div th:if="${areaTrends == null || areaTrends.isEmpty()}" class="text-muted" style="padding: 1rem; font-size: 0.85rem;">
+                No area trend data available for this batch.
             </div>
         </div>
     </div>
@@ -195,7 +170,7 @@
                     </tr>
                 </thead>
                 <tbody id="batchRunsHistoryTableBody">
-                    <tr th:each="run, iterStat : ${runs}" class="clickable-row" 
+                    <tr th:each="run, iterStat : ${runs}" class="clickable-row run-history-row" 
                         th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML"
                         th:data-run-id="${run.id}"
                         th:data-pass="${run.passedCount}"
@@ -203,13 +178,15 @@
                         th:data-known="${run.failedKnownCount}"
                         th:data-unknown="${run.failedUnknownCount}"
                         th:data-ignored="${run.ignoredCount}"
-                        th:data-rate="${run.passRate}">
+                        th:data-rate="${run.passRate + '% Pass'}"
+                        th:data-total="${run.totalTests != null ? run.totalTests : 0}"
+                        th:data-time="${run.timestampLabel}">
                         <td>
                             <strong class="text-mono text-accent" style="font-size: 0.95rem;" th:text="'#' + ${run.id}">#RUN_ID</strong> 
                             <span class="tag-chip" style="background: #ecfdf5; color: var(--status-pass); border-color: var(--status-pass-border);" th:if="${iterStat.first}">LATEST</span>
                         </td>
                         <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">Unknown</span></span></td>
-                        <td th:text="${run.timestampLabel}">Recently</td>
+                        <td class="js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">Recently</td>
                         <td><span class="material-symbols-outlined">smart_toy</span> <span th:text="${run.triggerSource}">Unknown</span></td>
                         <td><strong class="text-mono" th:text="${run.totalTests != null ? run.totalTests + ' Tests' : '0 Tests'}">8 Tests</strong></td>
                         <td style="min-width: 220px; vertical-align: middle;">
