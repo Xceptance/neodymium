@@ -556,6 +556,99 @@ public final class ActionExtractionPromptTest
 
         assertTrue(ex.getMessage().contains("The cart table does not show 'Free Bonus Gift'."));
     }
+
+    /**
+     * Verifies that parseResponse throws DivergenceException when assertionSatisfied is false despite status SUCCESS.
+     */
+    @Test
+    public void testParseResponseStructuralInconsistencyThrowsDivergenceException()
+    {
+        final String rawJson = """
+            {
+              "reasoning": "Upon inspecting the visual state, there is no green checkmark at the center of the screen.",
+              "assertionSatisfied": false,
+              "status": "SUCCESS",
+              "targetContextLevel": "VISUAL",
+              "actions": []
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> {
+            prompt.parseResponse(rawJson, context);
+        });
+
+        assertTrue(ex.getMessage().contains("Upon inspecting the visual state, there is no green checkmark"));
+    }
+
+    /**
+     * Verifies that parseResponse discards mutating interactive actions (e.g. CLICK) on visual verification steps.
+     */
+    @Test
+    public void testParseResponseVisualStepDiscardsMutatingActions() throws Exception
+    {
+        final String rawJson = """
+            {
+              "reasoning": "There are data input forms on the left and order summary on the right.",
+              "assertionSatisfied": true,
+              "status": "SUCCESS",
+              "targetContextLevel": "VISUAL",
+              "actions": [ {
+                "action": "CLICK",
+                "locator": "#purchase-btn",
+                "reasoning": "Speculative click"
+              } ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep(
+            "There are data input forms on the left and an order summary on the right (visual)."
+        );
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+        assertNotNull(actions);
+        assertTrue(actions.isEmpty(), "Mutating actions should be discarded on visual steps");
+    }
+
+    /**
+     * Verifies that parseResponse allows executable actions (e.g. NAVIGATE) when status is SUCCESS even if assertionSatisfied is false.
+     */
+    @Test
+    public void testParseResponseActionStepAllowsAssertionSatisfiedFalseWithExecutableActions() throws Exception
+    {
+        final String rawJson = """
+            {
+              "reasoning": "The current page is empty. Navigating to the URL.",
+              "assertionSatisfied": false,
+              "status": "SUCCESS",
+              "targetContextLevel": "LEAN",
+              "actions": [ {
+                "action": "NAVIGATE",
+                "locator": "",
+                "value": "https://localhost:8543/verla-perfect/index.html",
+                "reasoning": "Navigate to the specified URL"
+              } ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.LEAN);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+        assertEquals("NAVIGATE", actions.get(0).getType());
+        assertEquals("https://localhost:8543/verla-perfect/index.html", actions.get(0).getValue());
+    }
 }
 
 

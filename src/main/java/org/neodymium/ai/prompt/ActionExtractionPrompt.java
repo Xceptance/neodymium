@@ -152,6 +152,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         final String status = root.hasNonNull("status") ? root.path("status").asText() : (root.hasNonNull("st") ? root.path("st").asText() : "");
         final String statusReasoning = root.hasNonNull("reasoning") ? root.path("reasoning").asText() : (root.hasNonNull("r") ? root.path("r").asText() : "");
 
+        final boolean hasAssertionSatisfied = root.hasNonNull("assertionSatisfied") || root.hasNonNull("as");
+        final Boolean assertionSatisfied = hasAssertionSatisfied
+            ? (root.hasNonNull("assertionSatisfied") ? root.path("assertionSatisfied").asBoolean() : root.path("as").asBoolean())
+            : null;
+
         final List<Action> actions = new ArrayList<>();
         final JsonNode actionsNode = root.path("actions");
         if (actionsNode.isArray())
@@ -170,14 +175,47 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         final Object currentStepObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
         final PlaybookStep currentStep = currentStepObj instanceof PlaybookStep ps ? ps : null;
 
-        if (activeLevel == ContextLevel.VISUAL && "SUCCESS".equalsIgnoreCase(status) && currentStep != null && currentStep.isVisualStep())
+        // Invariant 1: Visual Step Guard
+        if (currentStep != null && currentStep.isVisualStep())
         {
-            final boolean hasNavigate = actions.stream().anyMatch(a -> a != null && "NAVIGATE".equalsIgnoreCase(a.getType()));
-            if (!hasNavigate && !actions.isEmpty())
+            // Visual steps must not execute mutating interactive actions (CLICK, TYPE, CLEAR, SELECT)
+            final boolean hasMutatingAction = actions.stream().anyMatch(a -> a != null
+                && ("CLICK".equalsIgnoreCase(a.getType())
+                    || "TYPE".equalsIgnoreCase(a.getType())
+                    || "CLEAR".equalsIgnoreCase(a.getType())
+                    || "SELECT".equalsIgnoreCase(a.getType())));
+
+            if (hasMutatingAction)
             {
-                LOGGER.debug("🛡️ [Visual Guard] Visual check passed at ContextLevel.VISUAL for visual step '{}'. Discarded {} synthetic action(s).", currentStep.getInstruction(), actions.size());
+                LOGGER.warn("🛡️ [Visual Guard] Visual step '{}' emitted interactive mutating actions. Discarded {} mutating action(s).", currentStep.getInstruction(), actions.size());
                 actions.clear();
             }
+
+            if ("SUCCESS".equalsIgnoreCase(status) && (assertionSatisfied == null || assertionSatisfied))
+            {
+                final boolean hasNavigate = actions.stream().anyMatch(a -> a != null && "NAVIGATE".equalsIgnoreCase(a.getType()));
+                if (!hasNavigate && !actions.isEmpty())
+                {
+                    LOGGER.debug("🛡️ [Visual Guard] Visual check passed at {} for visual step '{}'. Discarded {} synthetic action(s).", activeLevel, currentStep.getInstruction(), actions.size());
+                    actions.clear();
+                }
+            }
+            else if ("FAILED".equalsIgnoreCase(status) || (assertionSatisfied != null && !assertionSatisfied))
+            {
+                throw new DivergenceException(statusReasoning.isEmpty() ? "Visual check assertion failed." : statusReasoning);
+            }
+        }
+
+        final boolean hasExecutableActions = actions.stream().anyMatch(a -> a != null
+            && !a.getType().isBlank()
+            && !"NONE".equalsIgnoreCase(a.getType())
+            && !"VERIFY".equalsIgnoreCase(a.getType()));
+
+        // Invariant 2: Structural Contradiction Guard (when no executable actions exist, assertionSatisfied: false contradicts SUCCESS status)
+        if (assertionSatisfied != null && !assertionSatisfied && "SUCCESS".equalsIgnoreCase(status) && !hasExecutableActions)
+        {
+            LOGGER.warn("🚨 [Structural Inconsistency] LLM emitted status: SUCCESS but assertionSatisfied: false with no executable actions. Overriding status to FAILED.");
+            throw new DivergenceException(statusReasoning.isEmpty() ? "Visual or assertion condition evaluated as false." : statusReasoning);
         }
 
         if (context != null)
@@ -265,7 +303,12 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         }
         else if ("FAILED".equalsIgnoreCase(status) || "ERROR".equalsIgnoreCase(status))
         {
-            if (!actions.isEmpty())
+            final boolean hasRealExecutableAction = actions.stream().anyMatch(a -> a != null
+                && !a.getType().isBlank()
+                && !"NONE".equalsIgnoreCase(a.getType())
+                && !"VERIFY".equalsIgnoreCase(a.getType()));
+
+            if (hasRealExecutableAction)
             {
                 return actions;
             }
