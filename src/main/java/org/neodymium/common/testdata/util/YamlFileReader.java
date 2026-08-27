@@ -35,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -156,6 +157,14 @@ public class YamlFileReader
                     {
                         rawDataList = (List<?>) loaded;
                     }
+                    else if (loaded instanceof Map)
+                    {
+                        rawDataList = List.of(loaded);
+                    }
+                }
+                else if (dataObj instanceof Map<?, ?> mapData)
+                {
+                    rawDataList = List.of(mapData);
                 }
                 else
                 {
@@ -265,6 +274,12 @@ public class YamlFileReader
                 {
                     changed = false;
                     depth++;
+
+                    // 0. Resolve variables in dataset variables map
+                    if (resolveVariablesInMap(variables, variables, metaMap))
+                    {
+                        changed = true;
+                    }
 
                     // 1. Resolve variables in all blocks
                     if (resolveVariablesInSteps(beforeAllSteps, variables, metaMap))
@@ -1002,26 +1017,151 @@ public class YamlFileReader
         return result.toString();
     }
 
-    private static String lookupCaseInsensitive(final String key, final Map<String, ?> map)
+    private static boolean resolveVariablesInMap(final Map<String, Object> targetMap, final Map<String, ?> variables, final Map<String, ?> meta)
     {
-        if (map == null)
+        if (targetMap == null || targetMap.isEmpty())
+        {
+            return false;
+        }
+
+        boolean changed = false;
+        for (final Map.Entry<String, Object> entry : targetMap.entrySet())
+        {
+            final Object val = entry.getValue();
+            if (val instanceof String strVal)
+            {
+                if (strVal.contains("${"))
+                {
+                    final String resolved = resolveVariables(strVal, variables, meta);
+                    if (!Objects.equals(strVal, resolved))
+                    {
+                        entry.setValue(resolved);
+                        changed = true;
+                    }
+                }
+            }
+            else if (val instanceof Map<?, ?> nestedMap)
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> modifiableNestedMap = (nestedMap instanceof LinkedHashMap || nestedMap instanceof HashMap)
+                    ? (Map<String, Object>) nestedMap
+                    : new LinkedHashMap<>((Map<String, Object>) nestedMap);
+                if (resolveVariablesInMap(modifiableNestedMap, variables, meta))
+                {
+                    entry.setValue(modifiableNestedMap);
+                    changed = true;
+                }
+            }
+            else if (val instanceof List<?> nestedList)
+            {
+                @SuppressWarnings("unchecked")
+                final List<Object> modifiableList = (nestedList instanceof ArrayList)
+                    ? (List<Object>) (List<?>) nestedList
+                    : new ArrayList<>(nestedList);
+                boolean listChanged = false;
+                for (int i = 0; i < modifiableList.size(); i++)
+                {
+                    final Object item = modifiableList.get(i);
+                    if (item instanceof String strItem)
+                    {
+                        if (strItem.contains("${"))
+                        {
+                            final String resolved = resolveVariables(strItem, variables, meta);
+                            if (!Objects.equals(strItem, resolved))
+                            {
+                                modifiableList.set(i, resolved);
+                                listChanged = true;
+                            }
+                        }
+                    }
+                    else if (item instanceof Map<?, ?> itemMap)
+                    {
+                        @SuppressWarnings("unchecked")
+                        final Map<String, Object> modifiableItemMap = (itemMap instanceof LinkedHashMap || itemMap instanceof HashMap)
+                            ? (Map<String, Object>) itemMap
+                            : new LinkedHashMap<>((Map<String, Object>) itemMap);
+                        if (resolveVariablesInMap(modifiableItemMap, variables, meta))
+                        {
+                            modifiableList.set(i, modifiableItemMap);
+                            listChanged = true;
+                        }
+                    }
+                }
+                if (listChanged)
+                {
+                    entry.setValue(modifiableList);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private static Object lookupValueCaseInsensitive(final String key, final Map<?, ?> map)
+    {
+        if (map == null || key == null)
         {
             return null;
         }
+
+        // Direct match first (including exact keys that may contain dots)
         if (map.containsKey(key))
         {
-            final Object val = map.get(key);
-            return val == null ? null : String.valueOf(val);
+            return map.get(key);
         }
-        for (final Map.Entry<String, ?> entry : map.entrySet())
+        for (final Map.Entry<?, ?> entry : map.entrySet())
         {
-            if (entry.getKey().equalsIgnoreCase(key))
+            if (String.valueOf(entry.getKey()).equalsIgnoreCase(key))
             {
-                final Object val = entry.getValue();
-                return val == null ? null : String.valueOf(val);
+                return entry.getValue();
             }
         }
+
+        // Dot notation navigation if not directly matched
+        final int dotIndex = key.indexOf('.');
+        if (dotIndex != -1)
+        {
+            final String currentPart = key.substring(0, dotIndex);
+            final String remainingPart = key.substring(dotIndex + 1);
+
+            Object currentObj = null;
+            if (map.containsKey(currentPart))
+            {
+                currentObj = map.get(currentPart);
+            }
+            else
+            {
+                for (final Map.Entry<?, ?> entry : map.entrySet())
+                {
+                    if (String.valueOf(entry.getKey()).equalsIgnoreCase(currentPart))
+                    {
+                        currentObj = entry.getValue();
+                        break;
+                    }
+                }
+            }
+
+            if (currentObj instanceof Map<?, ?> currentMap)
+            {
+                return lookupValueCaseInsensitive(remainingPart, currentMap);
+            }
+        }
+
         return null;
+    }
+
+    private static String lookupCaseInsensitive(final String key, final Map<?, ?> map)
+    {
+        final Object val = lookupValueCaseInsensitive(key, map);
+        if (val == null)
+        {
+            return null;
+        }
+        if (val instanceof Map || val instanceof List)
+        {
+            return GSON.toJson(val);
+        }
+        return String.valueOf(val);
     }
 
     private static Object loadYaml(final String content)
