@@ -188,6 +188,20 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     @Override
     public void delete(final String identifier) throws IOException
     {
+        if (identifier != null && (identifier.startsWith("target/") || identifier.startsWith("./target/") || Path.of(identifier).isAbsolute()))
+        {
+            try
+            {
+                final Path directTargetPath = Path.of(identifier);
+                Files.deleteIfExists(directTargetPath);
+                return;
+            }
+            catch (final Exception e)
+            {
+                throw new IOException("Failed to delete resource from direct path: " + identifier, e);
+            }
+        }
+
         final URL rootUrl = classLoader.getResource("");
         if (rootUrl != null && "file".equals(rootUrl.getProtocol()))
         {

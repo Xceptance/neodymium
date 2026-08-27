@@ -1072,6 +1072,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName, recDir);
             if (this.recordingPath != null)
             {
+                if (this.mode.isRecording())
+                {
+                    try
+                    {
+                        manager.delete(this.recordingPath);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.mode);
                 eventBus.registerListener(recorder);
             }
@@ -1101,8 +1111,19 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            runMainTestPlaybook();
-            invocation.proceed();
+            try
+            {
+                runMainTestPlaybook();
+                invocation.proceed();
+            }
+            catch (final Throwable t)
+            {
+                if (this.session != null && this.session.getExecutionContext() != null)
+                {
+                    this.session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+                }
+                throw t;
+            }
         }
 
         @Override
@@ -1112,8 +1133,19 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            runMainTestPlaybook();
-            invocation.proceed();
+            try
+            {
+                runMainTestPlaybook();
+                invocation.proceed();
+            }
+            catch (final Throwable t)
+            {
+                if (this.session != null && this.session.getExecutionContext() != null)
+                {
+                    this.session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+                }
+                throw t;
+            }
         }
 
         @Override
@@ -1249,7 +1281,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     {
                     }
                 }
-                if (context.getExecutionException().isPresent() && this.mode.isRecording() && this.recordingPath != null && this.resourceManager != null)
+                final boolean hasFailed = context.getExecutionException().isPresent()
+                    || (this.session != null && this.session.getExecutionContext() != null && this.session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR));
+                if (hasFailed && this.mode.isRecording() && this.recordingPath != null && this.resourceManager != null)
                 {
                     try
                     {

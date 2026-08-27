@@ -239,6 +239,8 @@ public final class StateMachineRunner
                         playbookStep.setFailed(true);
                         playbookStep.setFailureReason(e.getMessage());
 
+                        context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+
                         final String bugComment = playbookStep.getBugDetails();
                         final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
                         final String resolvedBugInstruction = context.getSessionData() != null
@@ -272,6 +274,8 @@ public final class StateMachineRunner
                             // Discard the remaining pending steps of this step block
                             context.discardStepsUpToTryCatch(tryCatch);
                         }
+
+                        context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         // Add failure to warnings/reporting list
                         @SuppressWarnings("unchecked")
@@ -378,6 +382,7 @@ public final class StateMachineRunner
                 }
             }
             success = true;
+            context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
         }
         catch (final PipelineException e)
         {
