@@ -131,6 +131,140 @@ def extract_browsers_from_execution(exec_data):
                 result.append(s)
     return result
 
+def extract_execution_metrics(exec_data, test_class_name):
+    title = exec_data.get("title") or exec_data.get("dataSet") or ""
+    browser = exec_data.get("browser") or "Chrome"
+    if isinstance(browser, list):
+        browser = browser[0] if browser else "Chrome"
+
+    metrics_obj = exec_data.get("metrics") if isinstance(exec_data.get("metrics"), dict) else {}
+
+    total_steps = exec_data.get("totalStepsCount") or metrics_obj.get("totalSteps")
+    failed_steps = exec_data.get("failedStepsCount") or metrics_obj.get("failedSteps")
+    healed_steps = exec_data.get("healedStepsCount") or metrics_obj.get("healedSteps")
+
+    blocks = exec_data.get("blocks")
+    all_steps = []
+    if isinstance(blocks, dict) and blocks:
+        for key in ("before", "steps", "after"):
+            arr = blocks.get(key)
+            if isinstance(arr, list):
+                all_steps.extend(arr)
+    elif isinstance(exec_data.get("steps"), list):
+        all_steps = exec_data.get("steps")
+    elif isinstance(exec_data.get("llmCalls"), list):
+        all_steps = exec_data.get("llmCalls")
+
+    if total_steps is None or not isinstance(total_steps, int):
+        total_steps = len(all_steps)
+
+    if failed_steps is None or not isinstance(failed_steps, int):
+        failed_steps = sum(1 for s in all_steps if isinstance(s, dict) and str(s.get("status", "")).lower() in ("failed", "error"))
+
+    if healed_steps is None or not isinstance(healed_steps, int):
+        healed_steps = sum(1 for s in all_steps if isinstance(s, dict) and (s.get("healed") or str(s.get("status", "")).lower() in ("healed", "succeeded-fixed", "fixed")))
+
+    llm_calls = exec_data.get("llmCallsCount") or metrics_obj.get("totalLlmCalls")
+    llm_tokens = exec_data.get("llmTotalTokens") or metrics_obj.get("totalTokens")
+    llm_cost = exec_data.get("llmCost") or metrics_obj.get("estimatedCostUsd")
+
+    c_calls, c_tokens, c_cost, c_duration = 0, 0, 0.0, 0
+    for s in all_steps:
+        if isinstance(s, dict):
+            calls = s.get("llmCallsCount") or s.get("llmCalls")
+            if isinstance(calls, list):
+                c_calls += len(calls)
+            elif isinstance(calls, (int, float, str)):
+                try:
+                    c_calls += int(calls)
+                except (ValueError, TypeError):
+                    c_calls += 1
+            elif s.get("modelName") or s.get("totalTokens") or s.get("estimatedCostUsd") or s.get("inputTokens") or "stepIndex" in s:
+                c_calls += 1
+
+            toks = s.get("totalTokens") or s.get("tokens") or s.get("llmTotalTokens")
+            if toks is not None:
+                c_tokens += int(toks)
+            else:
+                c_tokens += int(s.get("inputTokens") or 0) + int(s.get("outputTokens") or 0)
+
+            cost = s.get("estimatedCostUsd") or s.get("llmCost") or s.get("cost") or s.get("costUsd")
+            if cost is not None:
+                c_cost += float(cost)
+
+            dur = s.get("durationMs") or s.get("duration")
+            if dur:
+                c_duration += int(dur)
+
+    if llm_calls is None or llm_calls == 0:
+        llm_calls = c_calls
+    if llm_tokens is None or llm_tokens == 0:
+        llm_tokens = c_tokens
+    if llm_cost is None or llm_cost == 0.0:
+        llm_cost = round(c_cost, 6)
+
+    duration_val = exec_data.get("duration") if exec_data.get("duration") is not None else exec_data.get("durationMs")
+    duration_ms = int(duration_val) if duration_val is not None else c_duration
+    if duration_ms > 0:
+        duration_fmt = exec_data.get("durationFormatted") or f"{duration_ms:,} ms"
+    else:
+        duration_fmt = "0 ms"
+
+    time_ms, time_str = extract_execution_start_time(exec_data)
+    date_formatted = ""
+    time_formatted = ""
+    timestamp_ms = 0
+    if time_ms is not None:
+        timestamp_ms = int(time_ms)
+        try:
+            dt = datetime.datetime.fromtimestamp(time_ms / 1000.0, tz=datetime.timezone.utc)
+            date_formatted = dt.strftime("%Y-%m-%d")
+            time_formatted = dt.strftime("%H:%M:%S")
+        except Exception:
+            pass
+
+    junit_tags = exec_data.get("junitTags") or []
+    test_method = exec_data.get("testMethod") or ""
+    if not test_method and isinstance(junit_tags, list) and len(junit_tags) >= 2:
+        tag1 = str(junit_tags[1]).strip()
+        if tag1 and not tag1.startswith("Dataset:") and not tag1.startswith("Location:") and not tag1.startswith("Browser:") and tag1.lower() != test_class_name.lower():
+            test_method = tag1
+    if not test_method and exec_data.get("testFile") and "#" in str(exec_data.get("testFile")):
+        test_file_str = str(exec_data.get("testFile"))
+        method = test_file_str.split("#", 1)[1].strip()
+        if method.lower() != "executetest":
+            test_method = method
+
+    if test_method:
+        key = f"{test_class_name}#{test_method}#{title}#{browser}"
+    else:
+        key = f"{test_class_name}#{title}#{browser}"
+
+    return key, {
+        "id": exec_id,
+        "testClass": test_class_name,
+        "testMethod": test_method,
+        "title": title,
+        "location": exec_data.get("location") or exec_data.get("locale") or "Unknown",
+        "browser": browser,
+        "status": exec_data.get("status") or "passed-clean",
+        "executionMode": exec_data.get("executionMode") or exec_data.get("mode") or "FORCE_RECORDING",
+        "startTime": time_str or "",
+        "dateFormatted": date_formatted,
+        "timeFormatted": time_formatted,
+        "timestampMs": timestamp_ms,
+        "durationMs": duration_ms,
+        "durationFormatted": duration_fmt,
+        "totalStepsCount": total_steps,
+        "failedStepsCount": failed_steps,
+        "healedStepsCount": healed_steps,
+        "llmCallsCount": llm_calls,
+        "llmTotalTokens": llm_tokens,
+        "llmCost": llm_cost,
+        "bugs": exec_data.get("bugs") if exec_data.get("bugs") is not None else None
+    }
+
+
 def analyze_and_generate_run_json(run_dir_path):
     run_dir = Path(run_dir_path).resolve()
     if not run_dir.is_dir():
@@ -180,6 +314,7 @@ def analyze_and_generate_run_json(run_dir_path):
 
     # Group executions by area and testClass
     areas_map = {}
+    execution_metrics = {}
     summary_counts = {
         "total": 0,
         "pass": 0,
@@ -284,6 +419,10 @@ def analyze_and_generate_run_json(run_dir_path):
         exec_data["areaName"] = area_name
         exec_data["testClass"] = test_class_name
 
+        # Extract execution metrics for instant "All Tests" view
+        metric_key, metric_data = extract_execution_metrics(exec_data, test_class_name)
+        execution_metrics[metric_key] = metric_data
+
         # Ensure file is moved to target area and test class folder on disk if needed
         target_dir = run_dir / area_name / test_class_name
         target_file = target_dir / full_path.name
@@ -351,20 +490,13 @@ def analyze_and_generate_run_json(run_dir_path):
             "testClasses": test_classes_list
         })
 
-    # Assemble complete run.json structure
+    summary_counts["totalLlmCalls"] = sum(m.get("llmCallsCount", 0) for m in execution_metrics.values())
+    summary_counts["totalLlmTokens"] = sum(m.get("llmTotalTokens", 0) for m in execution_metrics.values())
+    summary_counts["totalLlmCost"] = round(sum(m.get("llmCost", 0.0) for m in execution_metrics.values()), 6)
+
+    # Assemble clean run.json structure containing only executionMetrics
     run_json_data = {
-        "runId": meta["runId"],
-        "batchName": meta["batchName"],
-        "timestamp": meta["timestamp"],
-        "startTime": meta.get("startTime", meta["timestamp"]),
-        "duration": meta["duration"],
-        "trigger": meta["trigger"],
-        "environment": meta["environment"],
-        "locales": sorted(list(locales_set)) if locales_set else (meta.get("locales") if meta.get("locales") else ["Unknown"]),
-        "browsers": sorted(list(browsers_set)) if browsers_set else (meta.get("browsers") if meta.get("browsers") else ["Chrome"]),
-        "threadsCount": meta["threadsCount"],
-        "summary": summary_counts,
-        "areas": areas_list
+        "executionMetrics": execution_metrics
     }
 
     # Write out run.json

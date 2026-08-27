@@ -66,7 +66,7 @@
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Total Duration</div>
-                        <div class="kpi-value" th:text="${report?.totalDurationFormatted ?: '0s'}">0s</div>
+                        <div class="kpi-value js-format-duration" th:data-duration-ms="${report?.totalDurationMs}" th:text="${report?.totalDurationFormatted ?: '0 min 0 s'}">0 min 0 s</div>
                         <div class="kpi-sub">Wall Clock Execution</div>
                     </div>
                     <div class="kpi-card">
@@ -242,24 +242,30 @@
                                                     th:data-status="${(exec.status == 'succeeded-fixed' or exec.status == 'fixed' or exec.status == 'healed' or ((exec.status == 'passed-clean' or exec.status == 'passed' or exec.status == 'succeeded') and exec.bugs != null and !exec.bugs.isEmpty())) ? 'SUCCEEDED_FIXED' : ((exec.status == 'passed-clean' or exec.status == 'passed' or exec.status == 'succeeded') ? 'PASSED' : ((exec.bugs != null and !exec.bugs.isEmpty()) ? 'FAILED_KNOWN' : ((exec.status == 'ignored' or exec.status == 'skipped') ? 'SKIPPED' : 'FAILED_UNKNOWN')))}"
                                                     th:data-status-raw="${exec.status}" 
                                                     th:data-mode="${exec.executionMode ?: 'FORCE_RECORDING'}"
-                                                    th:data-search="${(exec.testClass ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.executionMode ?: '')}"
+                                                    th:data-test-method="${exec.testMethod ?: ''}"
+                                                    th:data-search="${(exec.testClass ?: '') + ' ' + (exec.testMethod ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.executionMode ?: '')}"
                                                     th:data-location="${exec.location}" 
                                                     th:data-browser="${exec.browser}" 
                                                     th:data-bugs="${exec.bugs != null && !exec.bugs.isEmpty() ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
                                                     th:data-failure="${exec.failure}"
-                                                    th:data-duration-ms="${exec.durationMs}"
                                                     th:data-steps-total="${exec.totalStepsCount}"
                                                     th:data-healed-count="${exec.healedStepsCount}"
                                                     th:data-failed-count="${exec.failedStepsCount}"
+                                                    th:data-duration-ms="${exec.durationMs}"
+                                                    th:data-duration-formatted="${exec.durationFormatted}"
+                                                    th:data-start-time="${exec.startTime != null && !exec.startTime.isEmpty() ? exec.startTime : ((exec.dateFormatted != null ? exec.dateFormatted : '') + ' ' + (exec.timeFormatted != null ? exec.timeFormatted : ''))}"
+                                                    th:data-date-formatted="${exec.dateFormatted}"
+                                                    th:data-time-formatted="${exec.timeFormatted}"
+                                                    th:data-timestamp-ms="${exec.timestampMs}"
+                                                    th:data-llm-calls="${exec.llmCallsCount}"
+                                                    th:data-total-tokens="${exec.llmTotalTokens}"
+                                                    th:data-est-cost="${exec.llmCostFormatted}"
                                                     th:data-has-visual-changes="${exec.hasVisualChanges ?: false}"
                                                     th:data-video="${exec.videoPath ?: ''}"
-                                                    th:data-log-path="${exec.logPath ?: ''}"
-                                                    th:data-blocks="${exec.blocksJson}"
-                                                    th:data-steps="${exec.stepsJson}">
+                                                    th:data-log-path="${exec.logPath ?: ''}">
                                                     
                                                     <td th:attr="data-sort=${exec.timestampMs}">
-                                                        <div class="timestamp-date" th:text="${exec.dateFormatted != null && !exec.dateFormatted.isEmpty() ? exec.dateFormatted : (exec.startTimeDate ?: '2026-08-20')}">2026-08-20</div>
-                                                        <div class="timestamp-time" th:text="${exec.timeFormatted != null && !exec.timeFormatted.isEmpty() ? exec.timeFormatted : (exec.startTimeClock ?: '12:31:21')}">12:31:21</div>
+                                                        <span class="text-mono js-format-timestamp" style="font-weight: 600;" th:data-timestamp-ms="${exec.timestampMs}" th:text="${exec.formattedTime != null && !exec.formattedTime.isBlank() ? exec.formattedTime : ((exec.dateFormatted != null && !exec.dateFormatted.isEmpty() ? exec.dateFormatted : '2026-08-20') + ' ' + (exec.timeFormatted != null && !exec.timeFormatted.isEmpty() ? exec.timeFormatted : '12:31:21'))}">2026-08-20 12:31:21</span>
                                                     </td>
 
                                                     <td class="col-status-badge">
@@ -272,11 +278,11 @@
 
                                                     <td>
                                                         <div class="test-name-line">
-                                                            <a href="javascript:void(0)" class="test-title-link" th:text="${exec.title != null && !exec.title.isEmpty() ? exec.title : exec.testClass}">CheckoutProcessTest</a>
+                                                            <a href="javascript:void(0)" class="test-title-link" th:text="${exec.testMethod != null && !exec.testMethod.isEmpty() ? (exec.testMethod + ' [' + (exec.title != null && !exec.title.isEmpty() ? exec.title : 'default') + ']') : (exec.title != null && !exec.title.isEmpty() ? exec.title : exec.testClass)}">CheckoutProcessTest</a>
                                                             <span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${exec.location}">US</span></span>
                                                             <span class="badge-status badge-mode-java" style="font-size: 0.7rem;"><span class="material-symbols-outlined">language</span> <span th:text="${exec.browser}">Chrome</span></span>
                                                         </div>
-                                                        <div class="test-meta-line" th:text="${exec.testClass}">com.xceptance.aura.CheckoutProcessTest</div>
+                                                        <div class="test-meta-line" th:text="${exec.testClass + (exec.testMethod != null && !exec.testMethod.isEmpty() ? (' :: ' + exec.testMethod) : '')}">com.xceptance.aura.CheckoutProcessTest</div>
                                                         <div class="failure-reason-snip" th:if="${exec.failureSnippet != null && !exec.failureSnippet.isEmpty()}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: #ef4444;">warning</span> <span th:text="${exec.failureSnippet}">Element not found</span></div>
                                                     </td>
 
@@ -290,7 +296,7 @@
                                                     </td>
 
                                                     <td th:attr="data-sort=${exec.durationMs}">
-                                                        <span class="text-mono" style="font-weight: 600;" th:text="${exec.durationFormatted ?: '0 ms'}">1,240 ms</span>
+                                                        <span class="text-mono js-format-duration" style="font-weight: 600;" th:data-duration-ms="${exec.durationMs}" th:text="${exec.durationFormatted ?: '0 min 0 s'}">0 min 0 s</span>
                                                     </td>
 
                                                     <td>
@@ -341,6 +347,8 @@
                                          th:data-test-name="${exec.testClass}"
                                          th:data-dataset="${exec.title}"
                                          th:data-status="${exec.status}"
+                                         th:data-duration-ms="${exec.durationMs}"
+                                         th:data-duration-formatted="${exec.durationFormatted}"
                                          th:text="${exec.testClass}">TestClass</div>
                                 </div>
                             </div>

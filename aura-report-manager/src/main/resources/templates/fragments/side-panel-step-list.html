@@ -9,6 +9,10 @@
         <div>
             <div class="side-page-title" id="sidePageTestName"></div>
             <div class="text-mono" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;" id="sidePageTestDataSet"></div>
+            <div class="text-mono" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem;" id="sidePageTestStartTime">
+                <span class="material-symbols-outlined" style="font-size: 0.88rem; color: var(--text-accent, #2563eb);">schedule</span>
+                <span id="sidePageTestStartTimeVal"></span>
+            </div>
         </div>
         <button class="side-page-close js-close-side-panel" onclick="closeSidePanelInspector()"><span class="material-symbols-outlined">close</span></button>
     </div>
@@ -88,7 +92,7 @@
             <div class="metrics-grid" id="sidePageMetricsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 0.25rem;">
                 <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
                     <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Duration</div>
-                    <div class="metric-value" id="sideMetricDuration" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);">0<span class="unit" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">ms</span></div>
+                    <div class="metric-value" id="sideMetricDuration" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);" th:text="${exec != null ? (exec.durationFormatted ?: '0 min 0 s') : '0 min 0 s'}">0<span class="unit" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">min</span></div>
                     <div class="metric-sub" id="sideMetricStatus" style="font-size: 0.72rem; color: var(--text-muted);">Status: <strong class="status-pass">PASSED</strong></div>
                 </div>
                 <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">

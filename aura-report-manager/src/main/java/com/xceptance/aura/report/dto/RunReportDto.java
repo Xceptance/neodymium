@@ -41,6 +41,43 @@ public final class RunReportDto
     private final int ignoredCount;
     private final List<TestExecutionDto> executions;
     private final List<AreaSummaryDto> areaSummaries;
+    private final int totalLlmCalls;
+    private final long totalLlmTokens;
+    private final double totalLlmCost;
+
+    public RunReportDto(
+        final String runId,
+        final String batchName,
+        final String timestamp,
+        final String duration,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final List<TestExecutionDto> executions,
+        final List<AreaSummaryDto> areaSummaries,
+        final int totalLlmCalls,
+        final long totalLlmTokens,
+        final double totalLlmCost)
+    {
+        this.runId = runId;
+        this.batchName = batchName;
+        this.timestamp = timestamp;
+        this.duration = duration;
+        this.totalCount = totalCount;
+        this.passCount = passCount;
+        this.fixedCount = fixedCount;
+        this.knownCount = knownCount;
+        this.unknownCount = unknownCount;
+        this.ignoredCount = ignoredCount;
+        this.executions = executions != null ? executions : new ArrayList<>();
+        this.areaSummaries = areaSummaries != null ? areaSummaries : new ArrayList<>();
+        this.totalLlmCalls = totalLlmCalls;
+        this.totalLlmTokens = totalLlmTokens;
+        this.totalLlmCost = totalLlmCost;
+    }
 
     public RunReportDto(
         final String runId,
@@ -56,18 +93,7 @@ public final class RunReportDto
         final List<TestExecutionDto> executions,
         final List<AreaSummaryDto> areaSummaries)
     {
-        this.runId = runId;
-        this.batchName = batchName;
-        this.timestamp = timestamp;
-        this.duration = duration;
-        this.totalCount = totalCount;
-        this.passCount = passCount;
-        this.fixedCount = fixedCount;
-        this.knownCount = knownCount;
-        this.unknownCount = unknownCount;
-        this.ignoredCount = ignoredCount;
-        this.executions = executions != null ? executions : new ArrayList<>();
-        this.areaSummaries = areaSummaries != null ? areaSummaries : new ArrayList<>();
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions, areaSummaries, 0, 0L, 0.0);
     }
 
     public RunReportDto(
@@ -219,23 +245,27 @@ public final class RunReportDto
 
     public String getTotalDurationFormatted()
     {
+        if (duration != null && !duration.isBlank() && !"0s".equalsIgnoreCase(duration.trim()) && !"0 ms".equalsIgnoreCase(duration.trim()))
+        {
+            return duration;
+        }
         final long totalMs = getTotalDurationMs();
         if (totalMs <= 0)
         {
-            return duration != null ? duration : "0s";
+            return "0 min 0 s";
         }
-        final long seconds = totalMs / 1000;
-        final long minutes = seconds / 60;
-        final double remSec = (totalMs % 60000) / 1000.0;
-        if (minutes > 0)
-        {
-            return String.format("%dm %.1fs", minutes, remSec);
-        }
-        return String.format("%.1fs", remSec);
+        final long totalSeconds = Math.round(totalMs / 1000.0);
+        final long minutes = totalSeconds / 60L;
+        final long seconds = totalSeconds % 60L;
+        return minutes + " min " + seconds + " s";
     }
 
     public double getTotalLlmCost()
     {
+        if (totalLlmCost > 0.0)
+        {
+            return totalLlmCost;
+        }
         if (executions == null || executions.isEmpty())
         {
             return 0.0;
@@ -251,6 +281,10 @@ public final class RunReportDto
 
     public int getTotalLlmCalls()
     {
+        if (totalLlmCalls > 0)
+        {
+            return totalLlmCalls;
+        }
         if (executions == null || executions.isEmpty())
         {
             return 0;
@@ -260,6 +294,10 @@ public final class RunReportDto
 
     public long getTotalLlmTokens()
     {
+        if (totalLlmTokens > 0L)
+        {
+            return totalLlmTokens;
+        }
         if (executions == null || executions.isEmpty())
         {
             return 0L;
