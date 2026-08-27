@@ -1,62 +1,6 @@
-# Neodymium AI - Reference Manual & Architecture Documentation
+# Neodymium AI - Comprehensive Technical Reference Manual & Architecture Guide
 
-Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent test automation framework built to bridge the gap between test design and test execution. It empowers test engineers, manual testers, and domain experts alike by making human-readable test descriptions directly executable against real web applications.
-
----
-
-## Introduction
-
-### Purpose: Making Test Definitions Executable
-
-In traditional test automation, a wide divide exists between test definitions (written by QA engineers, product managers, or domain experts in test management tools or plain English/German specs) and actual test automation scripts (written by software developers in code with complex Page Object hierarchies, custom locators, and WebDriver glue code). Every UI change requires a developer to update selectors, adjust methods, and maintain brittle test code.
-
-Neodymium AI eliminates this friction by **making the test definition itself the executable test case**:
-* **Natural Language Playbooks**: Write test steps in plain natural language (e.g. `Open store homepage`, `Search for "Minimalist Watch"`, `Click add to cart button`) via simple YAML files, inline Java text blocks, or JUnit annotations.
-* **Empowering Non-Automation Engineers**: Testers and domain specialists without deep programming experience can create, run, and maintain reliable browser automation suites without getting bogged down in DOM inspection, CSS selectors, or WebDriver plumbing.
-* **Unified Specification & Automation**: The test specification is no longer a separate document that drifts out of sync with the code—it *is* the test.
-
----
-
-### Vision: AI-Authored, Offline-Replayed, Self-Healing
-
-The core architectural philosophy of Neodymium AI is **"Record Once with AI, Replay Offline at Native Speed, Self-Heal on Drift"**:
-
-```mermaid
-flowchart LR
-    A["Natural Language Playbook<br/>(YAML / Annotations / Java)"] -->|Initial AI Run| B["LLM Action Extraction<br/>(UPM, 5-Tier Cascading)"]
-    B -->|Generates| C["Companion JSON Recording<br/>(Deterministic SUT Actions & Hashes)"]
-    C -->|Subsequent CI Runs| D["Fast Offline Replay<br/>(Milliseconds, 0 LLM Calls, 100% Deterministic)"]
-    D -->|On UI Drift / Failure| E["Autonomous Self-Healing<br/>(Multimodal Vision & JIT Fixes)"]
-    E -->|Updates| C
-```
-
-1. **Intelligent Recording**: On the initial run (`FORCE_RECORDING`), a Multimodal Large Language Model (LLM) inspects the page, understands the human intent, interacts with the browser, and compiles the step into a structured JSON companion recording.
-2. **Millisecond Offline Replay**: In continuous integration (CI) and daily test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`), the test executes directly via the browser engine in milliseconds—**with zero LLM API calls, zero token costs, and 100% determinism**.
-3. **Autonomous Self-Healing**: When a web application evolves (new styling, modified layout, framework migration, or dynamic IDs), the engine detects the divergence and automatically invokes the LLM to heal broken locators and update the recording on the fly.
-4. **Target Drivers & Upcoming Playwright Support**: Built natively on top of Selenide and Selenium WebDriver, with an extensible driver architecture (`TargetExecutor`) designed to bring native **Playwright support** in an upcoming release.
-
----
-
-### Key Challenges & How Neodymium AI Solves Them
-
-| Challenge in AI Web Testing | The Core Problem | Neodymium AI Solution |
-| :--- | :--- | :--- |
-| **Cost & Latency in CI/CD** | Calling cloud LLMs on every step of large test suites is slow, expensive, and rate-limited. | **Companion JSON Replay**: AI runs once to create the recording; subsequent CI runs execute offline at native browser speed with 0 API calls. |
-| **DOM Volatility & Flaky Locators** | Dynamic CSS classes (e.g. Tailwind), volatile IDs, and framework refactorings constantly break selectors. | **Unified Perception Model (UPM) & 5-Tier Cascading Locators**: Resolves elements across QA test-IDs, ARIA accessibility semantics, clean text/CSS, DOM feature proximity scoring, and visual anchor coordinates. |
-| **LLM Non-Determinism & Hallucinations** | Generative models can hallucinate invalid selectors, wrong element IDs, or non-existent syntax. | **Context Escalation Ladder & Offline Syntax ASTs**: Monotonically escalates context (`MINIMAL` $\to$ `VISUAL_RICH`), pre-validates selectors via jsoup/XPath ASTs before browser execution, and rejects volatile IDs early. |
-| **Enterprise Data Privacy** | Sensitive credentials (passwords, API tokens, PII) in test data risk leaking to external LLM providers. | **Outbound Secret Masking (`ContextSanitizer`)**: Replaces sensitive data with format-preserving placeholders (`[MASKED_VAR_password]`) before network transmission and restores variables locally. |
-| **Multilingual Applications** | Testing internationalized applications often leads to brittle language-specific heuristics in test code. | **Language-Agnostic `CONTINUE` Protocol**: Uses native LLM semantic understanding across all natural languages with zero hardcoded human language string checks in Java. |
-
----
-
-### Out-of-the-Box "Free Extra" Capabilities
-
-Because Neodymium AI observes both the semantic DOM tree and visual rendering at each step, you get powerful testing features **for free with zero extra authoring effort**:
-
-* 🖼️ **Visual Baseline & Layout Checks**: Automatically captures visual hashes and verifies page layouts using local $128 \times 128$ luminance Structural Similarity Index (SSIM) gating with progressive multi-pass downscaling and temporal visual stability detection.
-* 🎯 **Post-Action Outcome Validation**: Automatically verifies that an action actually achieved its intended effect (e.g., verifying that clicking "Add to Cart" updated the cart badge or transitioned the view, rather than just blind clicking).
-* 🔍 **Prompt & Selector Quality Checking**: Automatically validates and scores generated CSS/XPath selectors against live DOM invariants, rejecting brittle or dynamic IDs before they reach test recordings.
-* 🩺 **Visual Root Cause Analysis (Visual RCA)**: When an unexpected failure occurs, the engine automatically analyzes failure screenshots, baseline deltas, and DOM state to deliver an instant, plain-language diagnostic report explaining *why* the test failed.
+Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutral test automation engine built on top of Java, Selenide, and Selenium WebDriver. It bridges the divide between human test specifications and executable browser automation by turning natural language playbooks into robust, millisecond-fast offline test runs.
 
 ---
 
@@ -93,8 +37,9 @@ Because Neodymium AI observes both the semantic DOM tree and visual rendering at
    - [5.3 Custom System Prompt Add-ons (`promptAddon`)](#53-custom-system-prompt-add-ons-promptaddon)
    - [5.4 Disk-Based Model-Specific System Prompt Add-ons](#54-disk-based-model-specific-system-prompt-add-ons)
    - [5.5 Multilingual Testing & Language Universality (`neodymium.ai.multilingual`)](#55-multilingual-testing--language-universality-neodymiumaimultilingual)
+   - [5.6 Language-Agnostic Input Data Fidelity & Anti-Hallucination Directives](#56-language-agnostic-input-data-fidelity--anti-hallucination-directives)
 6. [Visual Testing, Stability & Failure Diagnostics](#6-visual-testing-stability--failure-diagnostics)
-   - [6.1 SSIM 64x64 Visual Matrix Verification](#61-ssim-64x64-visual-matrix-verification)
+   - [6.1 SSIM Visual Matrix Verification & Progressive Downsampling](#61-ssim-visual-matrix-verification--progressive-downsampling)
    - [6.2 Temporal Inter-Frame Visual Stability Detection](#62-temporal-inter-frame-visual-stability-detection)
    - [6.3 Post-Action AI Outcome Verification](#63-post-action-ai-outcome-verification)
    - [6.4 Universal Candidate Playbook Capture & Invalidation Lifecycle](#64-universal-candidate-playbook-capture--invalidation-lifecycle)
@@ -105,6 +50,11 @@ Because Neodymium AI observes both the semantic DOM tree and visual rendering at
    - [7.3 Real-Time Token Budget Guard & Limits](#73-real-time-token-budget-guard--limits)
    - [7.4 Per-Call-Type Telemetry Breakdown](#74-per-call-type-telemetry-breakdown)
    - [7.5 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)](#75-execution-data-access-telemetry-metrics--mode-conditional-asserters-verifymetrics)
+8. [Configuration Reference](#8-configuration-reference)
+   - [8.1 Core Execution Settings](#81-core-execution-settings)
+   - [8.2 Provider and Model Configuration](#82-provider-and-model-configuration)
+   - [8.3 Sub-System Toggles](#83-sub-system-toggles)
+   - [8.4 Network and Budget Limits](#84-network-and-budget-limits)
 
 ---
 
@@ -281,6 +231,8 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
   - **Default**: When omitted, companion recordings are saved in the same parent directory as the source `.yaml` playbook (e.g. `src/test/resources/playbooks/...`).
   - **Strict Replay Error Handling**: If a test runs in replay mode (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) and no recorded companion `.json` file is found, execution fails immediately by throwing `FileNotFoundException`. No silent fallback to YAML playbooks occurs.
 
+---
+
 ### 2.2 Execution Patterns & Developer APIs (The 8 Patterns)
 
 Neodymium AI provides 8 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
@@ -345,7 +297,7 @@ public void test4_JudgeMatrix(final AiSession session)
 
 #### B. Programmatic & Debugging APIs
 
-##### Pattern 4: Fully Programmatic Java Builder (`Playbook.builder()`)
+##### Pattern 5: Fully Programmatic Java Builder (`Playbook.builder()`)
 Construct steps programmatically using `PlaybookStep` and `Playbook.builder()`:
 ```java
 final Playbook playbook = Playbook.builder()
@@ -360,7 +312,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 5: Multiline Text Block String with Embedded YAML Data
+##### Pattern 6: Multiline Text Block String with Embedded YAML Data
 Execute raw multiline text blocks containing embedded YAML `steps:` and `data:` sections via `session.execute(...)`:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
@@ -378,7 +330,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 6: Multiline Text Block String with `SessionData` Container
+##### Pattern 7: Multiline Text Block String with `SessionData` Container
 Execute text block prompt strings seeded with a programmatic `SessionData` container:
 ```java
 final SessionData sessionData = new SessionData();
@@ -394,7 +346,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 7: Step-by-Step Java Statement Debugging
+##### Pattern 8: Step-by-Step Java Statement Debugging
 Execute single-statement prompts allowing standard IDE breakpoints on individual Java lines:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
@@ -403,20 +355,6 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
     session.execute("Locate the search input field and type '${searchTerm}' into it");
     session.execute("Press enter to submit search");
 }
-```
-
-##### Pattern 8: Hybrid Execution (Mixing Direct Selenide Commands & AI Steps)
-Mix direct Java Selenide browser calls (`open`, `shouldBe`, `pressEnter`) seamlessly with AI prompt steps:
-```java
-open(Neodymium.getData().get("verla.url") + "/verla-perfect/index.html");
-$("#search-input").shouldBe(visible);
-
-try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
-{
-    session.execute("Locate the search input field and type '${searchTerm}' into it");
-}
-
-$("#search-input").pressEnter();
 ```
 
 ---
@@ -450,9 +388,6 @@ $$\text{RecordingPath} = \text{\{DirectoryPath\}} / \text{\{ClassName\}} \_\, \t
 * **Method Name**: Guarantees uniqueness for each test method (e.g. `testCheckoutLive`).
 * **Dataset ID**: Appended when parameterized dataset execution is active (e.g. `_perfect`).
 * **Browser Profile**: Appended when `@Browser("...")` annotation is present (e.g. `_Chrome_1500x1000`).
-
-**Example Recording Path:**
-`playbooks/integration/VerlaGuestCheckoutIntegrationTest_testCheckoutLive_perfect_Chrome_1500x1000.json`
 
 ---
 
@@ -495,7 +430,7 @@ Instructs the pipeline to continue executing subsequent steps even if the curren
 
 ##### `(no-healing)`
 Disables all self-healing mechanisms for a specific step.
-* **Behavior**: If the step fails during live or replay execution, the framework does not attempt LLM escalations or semantic self-healing. The failure is immediately propagated (failing the test, triggering bug negation, or triggering soft-failure warnings, depending on other active tags).
+* **Behavior**: If the step fails during live or replay execution, the framework does not attempt LLM escalations or semantic self-healing. The failure is immediately propagated.
 * **Syntax Examples**: `(no-healing)`, `(NO-HEALING)`, `( no-healing )`
 
 ##### `(timeout: <duration>)`
@@ -510,7 +445,6 @@ Triggers visual execution mode with a page screenshot payload.
 * **`(layout)`**: Triggers maximum multimodal execution starting directly at `ContextLevel.VISUAL_RICH` (full DOM tree context) while forcing full-page screenshot capture on the initial attempt.
 * **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. If visual evaluation fails or requires element interaction, escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**. It will **never** revert to a small viewport screenshot during escalations.
 * **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are protected from being overwritten or downgraded by PESAP pre-step predictions.
-* **Syntax Examples**: `(visual)`, `(visual: full)`, `(layout)`
 
 #### Runtime Instruction Preparation
 Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips most explicit control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(visual)`, `(visual: full)`), preventing internal test configurations from polluting the natural language prompts sent to the LLM.
@@ -579,9 +513,6 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 | `neodymium.ai.replay.useRecordedDelays` | `false` | When `true`, replay pauses proportionally to recorded delays between actions/steps. |
 | `neodymium.ai.replay.delayScale` | `1.0` | Multiplier for recorded delays (e.g. `0.5` for 2x replay speed, `1.0` for real-time pacing). |
 | `neodymium.ai.visual.postActionSettleMs` | `1000` | Minimum settling pause in milliseconds before capturing visual screenshots for SSIM baseline checks. |
-
-#### Adaptive Visual Settle in Replay
-When executing visual verification steps (`(visual: full)` / SSIM comparison), replay honors `neodymium.ai.visual.postActionSettleMs` (and any recorded step delay) prior to capturing the screenshot. If transient repaint or dynamic animation occurs, a settle retry is automatically performed to guarantee stable visual comparisons.
 
 ---
 
@@ -679,8 +610,6 @@ For `<canvas>`, `<svg>`, or coordinate targets, `TypeAction` acquires browser fo
 
 ### 3.4 Fast Offline Syntax Classification & 7-Step Dispatch Pipeline
 
-To prevent structured locator strategies from accidentally searching literal DOM text or code blocks when elements are absent, the framework integrates `SelectorSyntaxChecker` and a streamlined 7-step resolution pipeline:
-
 #### Fast Offline Syntax Classifier (`SelectorSyntaxChecker`)
 * **XPath Validation**: Uses JDK native `javax.xml.xpath.XPathFactory` to validate expression syntax for XPath expressions (`//...`, `xpath=...`).
 * **CSS Validation**: Uses jsoup `QueryParser.parse` with UI state pseudo-class normalization (`:hover`, `:focus`, `:focus-visible`, `:active`) and combinator validation to reliably identify valid W3C CSS selectors.
@@ -705,12 +634,8 @@ When `ExecutionContext.KEY_TARGET_EXECUTOR` is operating in Selenide/WebDriver m
 
 ### 3.5 Centralized Locator Translation (`LocatorResolver`)
 
-To support vendor-neutral prompt outputs and handle custom browser pseudo-selectors without failing W3C CSS parsing engines, Neodymium AI provides a centralized **`LocatorResolver`**:
-
 #### Concept & Scope
 * **Selenium/Selenide Exclusive**: `LocatorResolver` is strictly used by the Selenide/Selenium execution layer (`ActionExecutor` and `SelenideElementFinder`) to translate target strings into W3C-compliant `org.openqa.selenium.By` locators.
-* **Framework Translation**: Translates general string selectors via `LocatorResolver` into Selenide-compatible locators.
-
 * **XPath & CSS Prefix Normalization**: Normalizes `xpath=` and `css=` prefixes (common LLM artifacts) into valid Selenium `By.xpath` and `By.cssSelector` objects.
 * **Text Normalization**: Safely handles single and double quotes inside `Selectors.withText(...)` by generating nested `concat()` structures.
 
@@ -727,55 +652,35 @@ To support vendor-neutral prompt outputs and handle custom browser pseudo-select
 
 ### 3.6 Target Safeguarding & Early Volatile ID Rejection
 
-Neodymium AI enforces a multi-tier **Target Safeguarding & Escalation Pipeline** to prevent invalid, volatile, or hallucinated selectors (such as fake `#xc...` ID selectors or framework dynamic hashes) from executing or polluting recorded playbook files.
-
-#### Escalation & Safeguard Architecture
-
-```mermaid
-flowchart TD
-    A["1. LLM Returns Action"] --> B{"ActionExtractionPrompt Safeguard"}
-    B -->|"Illegal #xc... Selector / Volatile ID"| C["Throw ToLevelEscalationException"]
-    B -->|"Valid Selector"| D["Execute Action against SUT"]
-    
-    C --> E["Escalate Context Level (MINIMAL -> LEAN -> STANDARD -> RICH -> VISUAL_RICH)"]
-    E --> F["Capture Higher Context State"]
-    F --> G["Re-prompt LLM with Higher Context"]
-    
-    D -->|"Action Execution Fails (Element Not Found)"| H["HealingRequiredException Handler"]
-    H --> E
-```
+Neodymium AI enforces a multi-tier **Target Safeguarding & Escalation Pipeline** to prevent invalid, volatile, or hallucinated selectors from executing or polluting recorded playbook files.
 
 #### Safeguard Rules & Pipeline Invariants
 
 1. **Early Volatile ID Rejection (`ActionExtractionPrompt`)**:
-   - When the LLM parses an action, target locators are evaluated against `VolatileIdDetector` rules (including configured `neodymium.ai.dom.volatileIdPatterns` and framework invariant `^xc[a-z0-9_]+$`).
+   - Target locators are evaluated against `VolatileIdDetector` rules (including configured `neodymium.ai.dom.volatileIdPatterns` and framework invariant `^xc[a-z0-9_]+$`).
    - If an action returns an illegal `#xc...` ID selector or a volatile ID, `ActionExtractionPrompt` throws `ToLevelEscalationException` directly during response parsing.
    - **Result**: Context immediately escalates along the monotonic ladder (`MINIMAL` $\to$ `LEAN` $\to$ `STANDARD` $\to$ `RICH` $\to$ `VISUAL_RICH`), capturing higher context and re-prompting the LLM with richer state before an execution attempt is made.
 
 2. **No Magic Selection Fallbacks (`SelenideElementFinder`)**:
    - `SelenideElementFinder` restricts `data-ai` attribute matching strictly to explicit `[data-ai=...]` or `data-ai=` selectors.
-   - If the LLM returns an invalid ID selector like `#xck520w4`, `SelenideElementFinder` queries `id="xck520w4"` directly on the HTML DOM, failing cleanly instead of silently rewriting the selector under the hood.
+   - If the LLM returns an invalid ID selector like `#xck520w4`, `SelenideElementFinder` queries `id="xck520w4"` directly on the HTML DOM, failing cleanly instead of silently rewriting the selector.
 
 3. **Action Retry Context Escalation (`ExecuteActionsStep`)**:
    - When an action execution fails on SUT (e.g. `Element not found`), `ExecuteActionsStep` catches the failure and automatically escalates `KEY_CURRENT_CONTEXT_LEVEL` to the next level (`MINIMAL` $\to$ `LEAN` $\to$ `STANDARD` $\to$ `RICH` $\to$ `VISUAL_RICH`), capturing state before re-querying the LLM.
-   - **Result**: Monotonically escalates context with state re-capture at each level, ensuring the LLM receives full multimodal context to fix broken locators.
 
 4. **Extensible TargetExecutor Capability Abstraction**:
    - Decoupled from specific driver implementations via `TargetExecutor.supportsLocatorImprovement()`.
-   - Ensures DOM-specific locator improvement only runs for web browser executors (`SelenideTargetExecutor`), preserving clean architectural boundaries for non-DOM executors (`RestTargetExecutor`).
+   - Ensures DOM-specific locator improvement only runs for web browser executors (`SelenideTargetExecutor`).
 
 ---
 
 ### 3.7 Ranked Candidate Locators, Automatic Locator Improver & LLM Quality Judge
 
-Neodymium AI automatically inspects target DOM elements during LLM step execution, generates candidate standard CSS locators (`#id`, `[data-testid='...']`, `[name='...']`, `[aria-label='...']`, `[placeholder='...']`), and validates them against live browser DOM invariants before upgrading saved playbook action locators.
-
 #### A. Ranked Candidate Locators
-
 For every extracted action, the primary LLM generates 2–3 candidate locators ranked by stability in `action.getCandidateLocators()`:
-* **Candidate 1 (Primary)**: Unique standard `#id`, `name`, `data-test`, `data-testid`, or `aria-label`. `data-ai` attributes are **strictly forbidden** in Candidate 1.
-* **Candidate 2 (Semantic Fallback)**: Clean semantic CSS class or standard attribute combination (e.g. `.btn-secondary[type='submit']`). `data-ai` attributes and dynamic CSS module hashes are **strictly forbidden**.
-* **Candidate 3 (Stability Fallback)**: `[data-ai='...']` selector attribute provided in the DOM dump (strategy `DATA_AI`).
+* **Candidate 1 (Primary)**: Unique standard `#id`, `name`, `data-test`, `data-testid`, or `aria-label`.
+* **Candidate 2 (Semantic Fallback)**: Clean semantic CSS class or standard attribute combination (e.g. `.btn-secondary[type='submit']`).
+* **Candidate 3 (Stability Fallback)**: `[data-ai='...']` selector attribute provided in the DOM dump.
 
 #### B. Quality Scoring Scale (0 to 10)
 
@@ -794,45 +699,16 @@ For every extracted action, the primary LLM generates 2–3 candidate locators r
 3. **Identity Check**: The element returned by the candidate locator must be the **exact same `WebElement` instance** (`matchedElement.equals(targetElement)`).
 4. **Volatile ID Protection**: Ignores dynamic/framework auto-generated IDs using `VolatileIdDetector`.
 
-#### D. Configuration
-```properties
-# Enables or disables automatic live DOM locator upgrading and quality scoring for recorded playbooks.
-# Default is true. Set to false for testing or disabling locator upgrades.
-neodymium.ai.locatorImprover.enabled=true
-```
-
-#### E. External Quality Judge (`QualityJudgeStep` - Optional / Second Opinion)
-
+#### D. External Quality Judge (`QualityJudgeStep` - Optional / Second Opinion)
 When an independent "second opinion" model is desired:
 * **Execution**: Executes `QualityJudgePrompt` passing the proposed primary action, candidate locators, and full DOM tree context.
 * **Output**: Returns structured `QualityJudgeResult` JSON containing `judgment` (`APPROVED`, `REFINED`, `REJECTED`), `chosenLocator`, `chosenValue`, `isRegex`, `confidence`, and `reasoning`.
-* **Configuration**:
-  ```properties
-  # Enables or disables the external LLM Quality Judge ("second opinion") step.
-  neodymium.ai.judge.enabled=false
 
-  # Execution mode for Quality Judge. Valid options: ON_AMBIGUITY (default), ALWAYS, ON_FAIL.
-  neodymium.ai.judge.mode=ON_AMBIGUITY
-
-  # Optional separate LLM provider and model for Quality Judge (e.g. Ollama / Llama 3)
-  neodymium.ai.judge.provider=ollama
-  neodymium.ai.judge.model=llama3
-  ```
-
-#### F. Dynamic Candidate Prompt Injection & Detailed Judge Logging
-
-1. **Dynamic Schema Injection**:
-   To conserve tokens during standard execution, `ActionExtractionPrompt` appends the candidate locators generation rule (`CANDIDATE_LOCATORS_RULE`) **dynamically only when `neodymium.ai.judge.enabled=true`**. When the Quality Judge is disabled, the LLM prompt requests only the primary locator, keeping prompt and response tokens minimal.
-
-2. **Ambiguity Triggering (`ON_AMBIGUITY`)**:
-   Under `ON_AMBIGUITY` mode, the Quality Judge triggers when top candidate confidence scores are within $0.15$ of each other ($\text{Score}_1 - \text{Score}_2 < 0.15$), resolving locator ambiguity before executing on the browser.
-
-3. **Transparent Debug Logging**:
-   When `DEBUG` logging is enabled, `QualityJudgeStep` outputs:
-   - Input candidate locators with their strategies and confidence scores.
-   - The query instruction and target being evaluated.
-   - The formatted, pretty-printed raw JSON response received from the Quality Judge model.
-   - Trace-level logging for full compiled system and user prompts.
+```properties
+# Enables or disables the external LLM Quality Judge ("second opinion") step.
+neodymium.ai.judge.enabled=false
+neodymium.ai.judge.mode=ON_AMBIGUITY
+```
 
 ---
 
@@ -844,9 +720,7 @@ To handle complex, compound, or ambiguous instructions, the pipeline executes a 
 * **Contextual Inputs**: The analysis receives the current step, the previously executed step's instruction (for flow context), and up to two subsequent steps' instructions.
 * **JIT Upfront Step Splitting**: If a compound step (e.g. `"Search for shirt, select size L, and click Checkout"`) is identified, the LLM splits the instruction into distinct leaf sub-steps. These are instantiated dynamically as child `PlaybookStep` instances and pushed onto the execution stack.
 * **Conservative Non-Splitting Invariants**: Single-target instructions with multiple descriptive clauses (e.g. `"Select standard shipping option (5-7 business days) for $5.00"`) or referential verification instructions (e.g. `"Verify order total matches previous summary"`) are strictly preserved as single steps.
-* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal initial interaction mode (Context Level) required for the step across the 8-tier context escalation ladder.
-* **Prompt Optimization**: `pesap-pre-step-prompt.md` features a 56% token footprint reduction (~500 tokens $\rightarrow$ ~220 tokens), significantly lowering prompt overhead across test execution.
-* **Bypassing on Replay**: PESAP runs during live recording mode; replay runs skip this analysis and execute the already-split steps directly from the JSON companion.
+* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal initial interaction mode across the 8-tier context escalation ladder.
 
 ---
 
@@ -870,91 +744,22 @@ $$\textbf{Track B (Visual Track): } \mathbf{VISUAL} \longrightarrow \mathbf{VISU
 | **`VISUAL_LEAN`** | Visual | **Full-Page Screenshot + `LEAN` DOM.** Visual element interaction. | Triggered upon visual escalation; uses full-page screenshot. |
 | **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. Strictly preserves all DOM text and attributes. | Triggered by `(layout)` checks or cross-track escalation from `RICH`; uses full-page screenshot. |
 
-> **Screenshot Capture Scope Strategy**:
-> - **Viewport Screenshot**: Initial `VISUAL` steps (tagged `(visual)`) capture a standard viewport screenshot matching the active browser window size.
-> - **Immediate Full-Page Trigger**: Steps tagged with `(visual: full)` or `(visual:full)` capture a full-page screenshot immediately on the initial attempt while using ultra-lean `ContextLevel.VISUAL` (0 DOM element nodes).
-> - **Persistent Full-Page Escalation**: Once a step escalates visually (to `VISUAL_LEAN` or `VISUAL_RICH`) or starts with `(visual: full)`, screenshot capture **continuously preserves full-page mode** (capturing full document height beyond the fold, overlaid with a visual viewport border). It will never revert to a small viewport screenshot during retry escalations.
-
-#### DOM Serialization Differences: `MINIMAL` vs `LEAN` vs `STANDARD` vs `RICH`
-
-To understand how `MINIMAL`, `LEAN`, `STANDARD`, and `RICH` differ at runtime:
-
-```html
-<!-- MINIMAL DOM Capture (Form Inputs & Action Buttons Only; Zero Surrounding Page Layout) -->
-<form id="quick-order-form" data-ai="xc81920a">
-  <input name="size" type="hidden" value="M" data-ai="xc93012b" />
-  <button class="btn-quick-add" type="submit" data-ai="xce624f1">ADD TO BAG</button>
-</form>
-```
-
-```html
-<!-- LEAN DOM Capture (Interactive Elements + Headings + Concise Labels; Excludes Long Paragraph Copy) -->
-<div class="product-card" data-ai="xce869u2">
-  <div class="product-info" data-ai="xc9g93c4">
-    <span class="product-category" selector="span.product-category" data-ai="xc2nupq6">TOPS</span>
-    <h3 class="product-title" selector="h3.product-title" data-ai="xceg4w4t">Minimalist Oversized Hoodie</h3>
-    <p class="product-price" selector="p.product-price" data-ai="xc1j5c6g">$120.00 USD</p>
-    <div class="product-actions" data-ai="xc5f2v4m">
-      <button class="btn-quick-add" type="button" selector="button.btn-quick-add:nth-of-type(1)" data-ai="xce624f1">ADD TO BAG</button>
-    </div>
-  </div>
-</div>
-```
-
-```html
-<!-- STANDARD DOM Capture (LEAN + Full Static Paragraph Copy & Body Text) -->
-<div class="product-card" data-ai="xce869u2">
-  <div class="product-info" data-ai="xc9g93c4">
-    <span class="product-category" selector="span.product-category" data-ai="xc2nupq6">TOPS</span>
-    <h3 class="product-title" selector="h3.product-title" data-ai="xceg4w4t">Minimalist Oversized Hoodie</h3>
-    <p class="product-desc" selector="p.product-desc" data-ai="xch294lm">Minimalist silhouettes engineered with sustainable organic textiles and precision craftsmanship in Berlin.</p>
-    <p class="product-price" selector="p.product-price" data-ai="xc1j5c6g">$120.00 USD</p>
-    <div class="product-actions" data-ai="xc5f2v4m">
-      <button class="btn-quick-add" type="button" selector="button.btn-quick-add:nth-of-type(1)" data-ai="xce624f1">ADD TO BAG</button>
-    </div>
-  </div>
-</div>
-```
-
-```html
-<!-- RICH DOM Capture (STANDARD + data-*, title, aria-describedby + 5-Level Parent Context) -->
-<div class="product-card" data-product-id="prod-101" data-category="tops" data-ai="xce869u2">
-  <div class="product-info" data-ai="xc9g93c4">
-    <span class="product-category" selector="span.product-category" data-ai="xc2nupq6">TOPS</span>
-    <h3 class="product-title" selector="h3.product-title" title="Minimalist Oversized Hoodie - Organic Cotton" data-ai="xceg4w4t">Minimalist Oversized Hoodie</h3>
-    <p class="product-desc" selector="p.product-desc" data-ai="xch294lm">Minimalist silhouettes engineered with sustainable organic textiles and precision craftsmanship in Berlin.</p>
-    <p class="product-price" selector="p.product-price" aria-describedby="price-disclaimer-101" data-ai="xc1j5c6g">$120.00 USD</p>
-    <div class="product-actions" data-ai="xc5f2v4m">
-      <button class="btn-quick-add" type="button" data-analytics="add-cart-top-101" selector="button.btn-quick-add:nth-of-type(1)" data-parent-text="TOPS > Minimalist Oversized Hoodie > $120.00 USD > Size M" data-ai="xce624f1">ADD TO BAG</button>
-    </div>
-  </div>
-</div>
-```
-
-#### Automatic Monotonic Escalation Flow Example
-
-When an action step cannot be fulfilled at the initial context level, the framework automatically escalates to the next level:
+#### Dynamic Escalation Flow
 1. **Initial Step**: Starts at **`MINIMAL`** (or `LEAN` / `VISUAL` based on PESAP prediction or explicit tags).
 2. **Escalation 1 (`MINIMAL` $\rightarrow$ `LEAN`)**: Expands to all interactive elements, navigation links, and section headings.
 3. **Escalation 2 (`LEAN` $\rightarrow$ `STANDARD`)**: Expands to static text, paragraphs, and order summary totals.
 4. **Escalation 3 (`STANDARD` $\rightarrow$ `RICH`)**: Expands to all `data-*` attributes, ARIA descriptions, tables, and deep parent ancestry.
 5. **Escalation 4 (`RICH` $\rightarrow$ `VISUAL_RICH`)**: Cross-track escalation attaches full-page screenshot while **strictly preserving all rich DOM text and attributes** (never regressing to 0 DOM nodes).
 
-#### Neutral Escalation Framing & Ceiling Guidance
-
-* **Suppression of False Failure Attribution**: Context escalations (`ToLevelEscalationException`) represent neutral context expansions rather than SUT execution failures. The pipeline suppresses `⚠️ PREVIOUS ATTEMPT FAILURE` warning banners during normal tier escalations so the model is not misled into believing an attempted action failed.
-* **Ceiling-Level Context Guidance**: When reaching `VISUAL_RICH` (the maximum context level), the prompt provides explicit ceiling guidance informing the model that full DOM and visual state are available and instructing it to return `status: "FAILED"` if an element or assertion condition is absent, rather than inventing speculative mutating actions.
-* **Deterministic Ceiling Termination**: If the model requests escalation at `VISUAL_RICH`, the state machine immediately terminates the step with `DivergenceException(reasoning)`, allowing expected bug steps (`(bug)`) to reproduce deterministically and assertions to fail cleanly without unneeded re-prompt loops.
-
 ---
 
 ### 4.3 Dynamic Step Escalation Budget Model
 
-To prevent infinite escalation loops while ensuring that steps starting at higher context levels (such as `LEAN` or `VISUAL_LEAN`) are never blocked from reaching `VISUAL_RICH`, the framework enforces a **Dynamic Step Escalation Budget**:
+To prevent infinite escalation loops while ensuring that steps starting at higher context levels are never blocked from reaching `VISUAL_RICH`, the framework enforces a **Dynamic Step Escalation Budget**:
 
 $$\text{Total Step Budget} = (\text{VISUAL\_RICH.ordinal()} - \text{initialLevel.ordinal()} + 1) + \text{neodymium.ai.maxRetriesAtMaxLevel}$$
 
-* **Unused Level Budget Preservation**: When PESAP or explicit configuration starts a step at a higher level (e.g. `LEAN` or `VISUAL_LEAN`), unused lower levels (e.g. `MINIMAL`) are preserved. This provides full attempt capacity for higher-level interactions and visual checks.
+* **Unused Level Budget Preservation**: Starting at higher levels preserves unused lower level attempt capacity.
 * **Guaranteed Initial `VISUAL_RICH` Attempt**: Upward escalation into `VISUAL_RICH` for the first time is always permitted to run its initial attempt.
 * **Circuit Breaker Enforcement**: The circuit breaker trips only when `attemptsUsed >= totalStepBudget` AND `currentLevel == VISUAL_RICH`.
 
@@ -964,63 +769,41 @@ $$\text{Total Step Budget} = (\text{VISUAL\_RICH.ordinal()} - \text{initialLevel
 
 ### 5.1 AI Prompt Taxonomy
 
-The framework utilizes a dedicated taxonomy of prompts, each mapped to specific pipeline phases and LLM capabilities:
-
 | Prompt Class | Pipeline Step / Context | LLM Capability | Inputs | Purpose & Output |
 | :--- | :--- | :--- | :--- | :--- |
-| **`PesapPrompt`** | `BeforeStep` / pre-step analysis | `PESAP` | Current instruction, previous instruction, next instructions. | Analyzes instruction flow to predict interaction `ContextLevel`, split compound instructions into sub-steps, and check if custom Java reflection methods are required. Outputs structured JSON. |
-| **`ActionExtractionPrompt`** | `CallLlmStep` / live action generation | `EXECUTION` | Current SUT DOM state, natural language instruction, step history. | Identifies the correct sequence of web automation actions (`CLICK`, `TYPE`, etc.) to implement the instruction. Outputs structured JSON actions. |
-| **`QualityJudgePrompt`** | `QualityJudgeStep` / optional second-opinion evaluator | `EXECUTION` | Instruction, proposed primary action, candidate locators list, full DOM context. | Evaluates proposed locator and alternative candidates against full DOM tree for stability and uniqueness. Outputs structured judgment (`APPROVED`, `REFINED`, `REJECTED`), `chosenLocator`, and `chosenValue`. |
-| **`VerificationPrompt`** | `VerifyOutcomeStep` / post-action validation | `VERIFICATION` | Natural language instruction, executed actions, pre/post screenshots. | Acts as an objective AI judge, scoring the outcome on rubrics (`intentMatch`, `visualDelta`, `absenceOfErrors`). Outputs a structured `VerificationResult` JSON. |
-| **`SemanticDivergencePrompt`** | `SemanticDivergenceAnalysisStep` / replay healing | `TEXT_ONLY` | Baseline page source, current page source. | Compares expected vs actual SUT page states during a replay cache divergence to generate a plain-English diff summary (e.g. `ID changed from checkout to pay-now`). |
-| **`VisualRcaPrompt`** | `StateMachineRunner.runVisualRca` / final error debug | `VISION` | Failed instruction, error details, current page screenshot. | Diagnoses visual root causes on conclusive execution failures (e.g., overlapping elements, cookie popups). Publishes a `DiagnosticErrorEvent`. |
+| **`PesapPrompt`** | `BeforeStep` / pre-step analysis | `PESAP` | Current instruction, previous instruction, next instructions. | Analyzes instruction flow to predict interaction `ContextLevel` and split compound instructions. |
+| **`ActionExtractionPrompt`** | `CallLlmStep` / live action generation | `EXECUTION` | Current SUT DOM state, natural language instruction, step history. | Identifies the correct sequence of web automation actions (`CLICK`, `TYPE`, etc.). |
+| **`QualityJudgePrompt`** | `QualityJudgeStep` / second-opinion evaluator | `EXECUTION` | Instruction, proposed primary action, candidate locators list, full DOM context. | Evaluates proposed locator and alternative candidates against full DOM tree. |
+| **`VerificationPrompt`** | `VerifyOutcomeStep` / post-action validation | `VERIFICATION` | Natural language instruction, executed actions, pre/post screenshots. | Scores outcome on rubrics (`intentMatch`, `visualDelta`, `absenceOfErrors`). |
+| **`SemanticDivergencePrompt`** | `SemanticDivergenceAnalysisStep` / replay healing | `TEXT_ONLY` | Baseline page source, current page source. | Compares expected vs actual SUT page states during replay divergence. |
+| **`VisualRcaPrompt`** | `StateMachineRunner.runVisualRca` / final error debug | `VISION` | Failed instruction, error details, current page screenshot. | Diagnoses visual root causes on conclusive execution failures. |
 
 ---
 
 ### 5.2 Multi-Dimensional Prompt Resolution Architecture
 
 > [!WARNING]
-> **Planned / Not Yet Implemented**
-> The multi-dimensional prompt resolution, fallback hierarchies, and snippet injection features described in this section are planned architecture designs and are **not yet implemented** in the current release. Currently, `AiAgentPrompts` uses a flat classpath lookup mechanism.
-
-To optimize prompt engineering across different LLM providers (e.g. Gemini, GPT-4o, Claude 3.5) and target execution engines, Neodymium AI plans to implement **Multi-Dimensional Prompt Resolution** in `AiAgentPrompts`.
-
-#### Resolution Hierarchy
-
-When a prompt template (e.g., `system-prompt-rules.md`) is requested for a given `ExecutionEngine` and `Model`, the framework evaluates candidate paths in the following order (first match wins):
+> **Planned Architecture**
+> The multi-dimensional prompt resolution, fallback hierarchies, and snippet injection features described here represent planned framework expansions. Currently, `AiAgentPrompts` uses a flat classpath lookup mechanism.
 
 ```
                        Prompt Request: "system-prompt-rules.md"
                                        │
                                        ▼
-   1. Engine + Model Specific : ai-prompts/engines/{engine}/models/{model}/system-prompt-rules.md
+    1. Engine + Model Specific : ai-prompts/engines/{engine}/models/{model}/system-prompt-rules.md
                                        │
                                        ▼
-   2. Engine Specific         : ai-prompts/engines/{engine}/system-prompt-rules.md
+    2. Engine Specific         : ai-prompts/engines/{engine}/system-prompt-rules.md
                                        │
                                        ▼
-   3. Model Specific          : ai-prompts/models/{model}/system-prompt-rules.md
+    3. Model Specific          : ai-prompts/models/{model}/system-prompt-rules.md
                                        │
                                        ▼
-   4. Default Fallback        : ai-prompts/default/system-prompt-rules.md
+    4. Default Fallback        : ai-prompts/default/system-prompt-rules.md
                                        │
                                        ▼
-   5. Direct Root Fallback    : ai-prompts/system-prompt-rules.md
+    5. Direct Root Fallback    : ai-prompts/system-prompt-rules.md
 ```
-
-#### Plug-and-Play Snippet Substitution vs Full Copies
-
-The framework supports two prompt tuning workflows:
-
-1. **Plug-and-Play Snippet Injection (DRY Default)**:
-   Base prompt templates remain shared across engines and include dynamic placeholders such as `{{ENGINE_LOCATOR_RULES}}`.
-   * **Selenide Target** (`ai-prompts/engines/selenide/locator-rules.md`):
-     > *"Target browser engine is W3C Selenium / Selenide. Generated CSS selectors MUST be valid W3C CSS level 3/4 selectors."*
-   * **Playwright Target** (`ai-prompts/engines/playwright/locator-rules.md`):
-     > *"Target browser engine is native Playwright. You MAY generate native Playwright pseudo-selectors such as `:has-text(...)`, `text=...`, or `:visible`."*
-
-2. **Full Prompt Copy Overrides**:
-   If a specific model or engine requires a fundamentally different prompt structure, a full prompt copy can be placed in `ai-prompts/engines/{engine}/system-prompt-rules.md`, overriding the default prompt entirely.
 
 ---
 
@@ -1028,129 +811,46 @@ The framework supports two prompt tuning workflows:
 
 To tune the LLM's behavioral instructions for specific environments, applications, or testing scenarios, custom prompt add-ons can be declared dynamically in YAML playbooks, datasets, or model override files:
 
-1. **Canonical Keyword (`promptAddon`)**:
-   Playbooks and datasets standardize on the single canonical keyword `promptAddon` (supporting both scalar strings and nested capability maps):
-   - **Scalar string (General)**:
-     ```yaml
-     promptAddon: "Always look for button text first and wait for spinners."
-     ```
-   - **Nested Map (Capability-Targeted)**:
-     ```yaml
-     promptAddon:
-       general: "Always look for button text first"
-       pesap: "Predict shorter execution timeouts"
-       verification: "Be extremely strict about price format changes"
-       rca: "Check if modal dialogs obscured the click target"
-     ```
-   - **Flat Dot Notation (Datasets & Playbooks)**:
-     ```yaml
-     promptAddon: "General rule for this dataset row"
-     promptAddon.pesap: "Specialized pre-step check for this dataset row"
-     promptAddon.verification: "Specialized outcome check for this dataset row"
-     ```
+```yaml
+# Scalar string (General)
+promptAddon: "Always look for button text first and wait for spinners."
 
-2. **Per-Capability Customization Keys**:
-   Add-on keys can target a specific type of LLM prompt or apply generally to all prompts:
-   - `promptAddon` (or `promptAddon.general` / `promptAddon.default`): Applies to all prompts.
-   - `promptAddon.pesap`: Appends specifically to the `PesapPrompt`.
-   - `promptAddon.general`: Appends specifically to the `ActionExtractionPrompt`.
-   - `promptAddon.verification`: Appends specifically to the `VerificationPrompt`.
-   - `promptAddon.rca`: Appends specifically to the `VisualRcaPrompt`.
-   - `promptAddon.divergence`: Appends specifically to the `SemanticDivergencePrompt`.
-
-3. **Multi-Layer Accumulation (Stacking)**:
-   Prompt add-ons **accumulate across all active layers** in order of specificity:
-   - Layer 0: **Multilingual Guidance Layer**: Dynamic language universality and localized DOM guidance (injected when `neodymium.ai.multilingual=true`).
-   - Layer 1: **Model / Disk Layer**: Global model-specific rules (`addon.md`, `addon-<type>.md`).
-   - Layer 2: **YAML Playbook Layer**: Playbook general add-on + capability-targeted add-on.
-   - Layer 3: **Test Dataset Layer**: Dataset general add-on + capability-targeted add-on (closest to data).
-
-4. **Dynamic Variable Interpolation (`${variableName}`)**:
-   Prompt add-on strings support dynamic `${variable}` placeholders that are automatically resolved against runtime session data, dataset parameters, and configuration properties:
-   ```yaml
-   promptAddon: "The application is running in ${locale}. Ensure currency displays as ${currency}."
-   ```
-
-5. **Safety Limits & Adherence Enforcement**:
-   * **Length Limit**: Any custom prompt add-on combined value must not exceed **2000 characters**. If it does, validation throws `IllegalArgumentException` early.
-   * **Adherence Enforcement Suffix**: When appending custom add-on prompts, the compiler automatically appends a strict reminder suffix:
-     `"CRITICAL REMINDER: The above rules are custom extensions for this test step. You MUST still strictly follow all JSON schema formatting rules, action capabilities, and output guidelines specified in the main system prompt above."`
+# Nested Map (Capability-Targeted)
+promptAddon:
+  general: "Always look for button text first"
+  pesap: "Predict shorter execution timeouts"
+  verification: "Be extremely strict about price format changes"
+  rca: "Check if modal dialogs obscured the click target"
+```
 
 ---
 
 ### 5.4 Disk-Based Model-Specific System Prompt Add-ons
 
-To handle model-specific quirks (such as `gemini-3-5-flash-lite` requiring explicit warnings against synthetic HTML element tag names in DOM dumps) without hardcoding any model names in Java code, Neodymium AI resolves model prompt add-ons dynamically from disk and classpath:
+Model-specific system prompt add-ons are placed in `ai-prompts/models/<cleanModel>/` on the classpath or filesystem `config/ai-prompts/models/<cleanModel>/`:
+* `ai-prompts/models/<cleanModel>/addon-general.md`
+* `ai-prompts/models/<cleanModel>/addon.md`
 
-1. **Resolution Directory Layout**:
-   Model-specific system prompt add-ons are placed in `ai-prompts/models/<cleanModel>/` on the classpath (or filesystem `config/ai-prompts/models/<cleanModel>/`):
-   - `config/ai-prompts/models/<cleanModel>/addon-<type>.md` (filesystem override for capability type, e.g. `addon-general.md`)
-   - `config/ai-prompts/models/<cleanModel>/addon.md` (filesystem override default)
-   - `ai-prompts/models/<cleanModel>/addon-<type>.md` (classpath resource for capability type)
-   - `ai-prompts/models/<cleanModel>/addon.md` (classpath resource default)
-
-   Where `<cleanModel>` is the active model name sanitized to lowercase alphanumeric kebab-case (e.g., `gemini-3.5-flash-lite` $\rightarrow$ `gemini-3-5-flash-lite`).
-
-2. **Example (`gemini-3-5-flash-lite`)**:
-   File: `src/main/resources/ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`
-   ```markdown
-   - **Locators**: Only use real HTML tags from the DOM (`button`, `a`, `input`, `div`, `span`). Never invent non-existent tags (e.g. `text`, `text:nth-of-type(N)`). If an element lacks a unique class or ID, target its parent container (e.g. `header > div`) or escalate.
-   - **Values**: Copy the exact literal text from the instruction into 'value'. Do not substitute generic sample data (such as default passwords) or synthetic placeholders.
-   ```
+Where `<cleanModel>` is the active model name sanitized to lowercase alphanumeric kebab-case (e.g., `gemini-3.5-flash-lite` $\rightarrow$ `gemini-3-5-flash-lite`).
 
 ---
 
 ### 5.5 Multilingual Testing & Language Universality (`neodymium.ai.multilingual`)
 
-When automated tests target localized applications (e.g. French, German, Japanese, Polish, Swedish, Spanish) or playbooks written in non-English natural languages, Neodymium AI provides a dedicated **Multilingual Testing Mode**.
-
-1. **Token Cost Optimization**:
-   Standard English test suites keep system prompts ultra-compact (saving ~50–80 tokens per step across CI runs). When multilingual mode is enabled, the prompt compiler dynamically injects **Language Universality** guidance into the relevant prompt pipelines without requiring separate translated system prompt files.
-
-2. **Configuration (`neodymium.ai.multilingual`)**:
-   - **Default**: `false`
-   - **Configuration Methods**:
-     - **Global Property** (in `neodymium.properties` or `ai.properties`):
-       ```properties
-       neodymium.ai.multilingual=true
-       ```
-     - **JVM Argument**:
-       ```bash
-       mvn test -Dneodymium.ai.multilingual=true
-       ```
-     - **Per-Test Setup**:
-       ```java
-       Neodymium.getData().put("neodymium.ai.multilingual", "true");
-       ```
-     - **Per-Dataset Row** (JSON/CSV):
-       ```json
-       {
-         "locale": "ca_fr",
-         "neodymium.ai.multilingual": "true"
-       }
-       ```
-
-3. **Dynamic Prompt Injections by Capability**:
-   - **PESAP (`pesap`)**: Instructs the pre-step analyzer that English splitting examples are illustrative only, applying identical splitting, context escalation, and non-splitting rules to equivalent phrasing in the target language while preserving the original natural language in generated sub-steps.
-   - **Action Extraction (`general`)**: Directs the LLM to target localized button text, forms, labels, and links in the SUT DOM according to the active locale.
-   - **Outcome Verification (`verification`)**: Verifies post-action outcomes against localized page content and currency/date formatting.
+When automated tests target localized applications (e.g. French, German, Japanese, Polish, Swedish, Spanish) or playbooks written in non-English natural languages:
+* **Token Cost Optimization**: Keeps English runs compact while dynamically injecting Language Universality guidance when `neodymium.ai.multilingual=true`.
+* **Configuration**:
+  ```properties
+  neodymium.ai.multilingual=true
+  ```
 
 ---
 
 ### 5.6 Language-Agnostic Input Data Fidelity & Anti-Hallucination Directives
 
-Lightweight or fast LLMs (such as `gemini-3.5-flash-lite`) can exhibit strong pretraining token priors on password or credential fields, occasionally drifting towards generic dummy defaults (e.g., `"Password123!"`) or placeholder variable tokens (e.g., `"${password}"`) instead of copying the literal string passed in the test instruction (e.g., `Type "SecurePass3!" into the confirm password field`).
-
 To guarantee 100% data fidelity while remaining strictly language-neutral and domain-agnostic, Neodymium enforces two layers of anti-hallucination guidance:
-
-1. **Universal Execution Guideline (Rule 4 in `action-extraction-prompt.md`)**:
-   > *"Input & Assertion Data Fidelity: In any natural language, whenever the active instruction commands entering data (typing text, numbers, codes, credentials, or selecting options) or asserting values, extract and populate the 'value' field with the exact literal characters, string, or parameter specified in the instruction. NEVER invent, hallucinate, or substitute synthetic sample data (e.g. generic passwords, dummy emails, placeholder names, or default text). NEVER emit synthetic variable placeholder expressions unless literally written as such in the active instruction."*
-
-2. **Dedicated `- TYPE:` Action Rule**:
-   > *"`- TYPE:` set 'locator' to the input, textarea, or contenteditable element, and set 'value' to the exact literal text, digits, or characters specified in the instruction. Regardless of the natural language used in the instruction, preserve the exact specified data verbatim; NEVER substitute, hallucinate, or default to generic sample values or synthetic variable placeholders."*
-
-3. **Model-Specific Add-on Directives (`addon-general.md`)**:
-   Model add-ons (such as `ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`) explicitly reinforce literal value extraction to prevent flash/lite models from falling back to training distribution priors.
+* **Universal Execution Guideline (Rule 4 in `action-extraction-prompt.md`)**: Instructs the model to populate values with exact literal characters specified in the instruction without inventing synthetic placeholders.
+* **Dedicated `- TYPE:` Action Rule**: Reinforces verbatim data entry across all languages.
 
 ---
 
@@ -1158,35 +858,24 @@ To guarantee 100% data fidelity while remaining strictly language-neutral and do
 
 ### 6.1 SSIM Visual Matrix Verification & Progressive Downsampling
 
-Rather than using lossy 17×16 perceptual bit-hashes, visual steps capture structural luminance matrices:
-1. **Progressive Multi-Pass Downscaling**: Screenshots are downscaled to a $128 \times 128$ grid using iterative half-stepping with bilinear interpolation (`downsampleProgressive`). This eliminates single-pass subsampling aliasing on high-contrast text and micro-UI elements.
-2. **8-bit Luminance Matrix**: Calculates a 16,384-byte luminance matrix (0..255 brightness per grid cell), serialized as a Base64 string in `step.setScreenshotHash()`. Micro-cropped coordinate click tiles use $64 \times 64$ ($4,096\text{ bytes}$) with radius $32\text{px}$.
-3. **Playbook Metadata (`screenshotHashDim`)**: Companion `.json` recordings store `"screenshotHashDim": 128` (or `64` for tiles) to make matrix dimensions explicit for replay.
-4. **In-Memory SSIM Comparison**: During replay, Neodymium computes Mean SSIM ($0.0 \rightarrow 1.0$) across $8 \times 8$ local blocks (256 blocks total) in $< 2\text{ ms}$. Single-block dynamic text changes (e.g., randomized order numbers) are bounded to $< 0.39\%$ weight impact.
-5. **Visual Match Gate**: Checks `ssimScore >= neodymium.ai.ssim.minScore` (default: `0.99`). If the visual score passes, execution bypasses unnecessary LLM verification calls while catching genuine visual breaks, shifted layouts, and missing buttons.
-6. **Side-by-Side Reporting**: Replay test execution reports (HTML, Markdown, JSON) output the evaluated SSIM score badge alongside pixelated side-by-side previews of the **Recorded Baseline Mini-Image** vs. **Replay Capture Mini-Image**.
+1. **Progressive Multi-Pass Downscaling**: Screenshots are downscaled to a $128 \times 128$ grid using iterative half-stepping with bilinear interpolation (`downsampleProgressive`).
+2. **8-bit Luminance Matrix**: Calculates a 16,384-byte luminance matrix (0..255 brightness per grid cell), serialized as a Base64 string in `step.setScreenshotHash()`.
+3. **In-Memory SSIM Comparison**: Computes Mean SSIM ($0.0 \rightarrow 1.0$) across $8 \times 8$ local blocks (256 blocks total) in $< 2\text{ ms}$.
+4. **Visual Match Gate**: Checks `ssimScore >= neodymium.ai.ssim.minScore` (default: `0.99`).
 
 ---
 
 ### 6.2 Temporal Inter-Frame Visual Stability Detection
 
-Rather than relying on arbitrary blind sleeps or premature frame comparisons against the baseline, Neodymium dynamically evaluates whether the live SUT has finished animating and reflowing by comparing consecutive frames against each other ($\text{SSIM}(\text{Frame}_t, \text{Frame}_{t-1})$):
+Evaluates whether the live SUT has finished animating and reflowing by comparing consecutive frames against each other ($\text{SSIM}(\text{Frame}_t, \text{Frame}_{t-1})$):
 * **1-Second Frame Spacing**: Consecutive frame captures are spaced by at least $1000\text{ms}$ (`neodymium.ai.visual.stabilityIntervalMs`).
-* **Stability Quiescence Threshold**: When $\text{SSIM}(\text{Frame}_t, \text{Frame}_{t-1}) \ge 0.999$ (`neodymium.ai.visual.stabilityThreshold`), the DOM is considered visually quiescent and settled.
-* **5-Attempt Safety Cutoff**: Polling is capped at a maximum of 5 attempts (`neodymium.ai.visual.stabilityMaxAttempts`) to prevent infinite blocking on perpetual animations (such as looping spinners or video hero banners).
-* **Baseline & Replay Symmetry**: Used in both live recording (to record baselines from quiescent layouts) and replay playback (to settle before baseline evaluation).
+* **Stability Quiescence Threshold**: When $\text{SSIM}(\text{Frame}_t, \text{Frame}_{t-1}) \ge 0.999$ (`neodymium.ai.visual.stabilityThreshold`), the DOM is settled.
+* **5-Attempt Safety Cutoff**: Polling is capped at a maximum of 5 attempts.
 
 ```properties
-# Minimum SSIM score (0.0 to 1.0) required for visual match gate approval against recorded baseline
 neodymium.ai.ssim.minScore=0.99
-
-# Polling interval in milliseconds between consecutive frame captures during visual stability detection (minimum: 1000ms)
 neodymium.ai.visual.stabilityIntervalMs=1000
-
-# Maximum number of attempts allowed for temporal inter-frame visual stability settling before proceeding
 neodymium.ai.visual.stabilityMaxAttempts=5
-
-# Minimum inter-frame SSIM threshold required to consider the SUT visually quiescent/settled
 neodymium.ai.visual.stabilityThreshold=0.999
 ```
 
@@ -1194,39 +883,27 @@ neodymium.ai.visual.stabilityThreshold=0.999
 
 ### 6.3 Post-Action AI Outcome Verification
 
-After executing the SUT actions for a step, the framework performs a **Post-Action Outcome Verification**:
-* **Always Visual**: Regardless of the initial execution context level, outcome verification always captures the SUT state at the `VISUAL` level to record baseline images and compute screenshot dHash/SSIM baselines.
-* **Semantic Verification Prompt**: Evaluates the natural language instruction against the final page DOM and screenshot using the `VerificationPrompt` template via the `LlmCapability.VERIFICATION` capability.
-* **Advisory & Diagnostic by Design (Soft Failures)**: Verification failures perform post-step semantic auditing and diagnostic scoring. They are collected and reported as warnings at the end of the test case, allowing developers to inspect semantic discrepancies without crashing the automation flow. Verification failures do **not** fail the test case directly; explicit test assertions are enforced via concrete SUT `ASSERT` actions.
+After executing SUT actions for a step, the framework performs a **Post-Action Outcome Verification**:
+* **Always Visual**: Captures SUT state at `VISUAL` level to record baseline images and compute SSIM baselines.
+* **Advisory & Diagnostic by Design (Soft Failures)**: Verification failures perform post-step semantic auditing and diagnostic scoring. They are reported as warnings at the end of the test case, allowing developers to inspect discrepancies without crashing the test run.
 
 ---
 
 ### 6.4 Universal Candidate Playbook Capture & Invalidation Lifecycle
 
-1. **All Execution Modes**: `PlaybookRecorder` collects candidate execution steps in memory across all modes (`LLM_RECORDING`, `FORCE_RECORDING`, `REPLAY_WITH_HEALING`, `REPLAY_STRICT`).
-2. **Failure Protection**: If a test fails, the candidate playbook is discarded. The disk file remains 100% untouched.
-3. **Success Write-Back**: If a test succeeds and steps were healed or updated, the candidate playbook replaces the disk file atomically. If 0 changes occurred on replay, disk writes are skipped.
-4. **YAML Hash Invalidation**: Companion `.json` files store `sourceYamlHash` (SHA-256 of original `.yaml` playbook). On replay, if the source `.yaml` file has been modified, a staleness warning is logged.
+1. **All Execution Modes**: `PlaybookRecorder` collects candidate execution steps in memory across all modes.
+2. **Failure Protection**: If a test fails, the candidate playbook is discarded. Disk files remain untouched.
+3. **Success Write-Back**: If a test succeeds and steps were healed or updated, the candidate playbook replaces the disk file atomically.
+4. **YAML Hash Invalidation**: Companion `.json` files store `sourceYamlHash`. On replay, if the source `.yaml` file has been modified, a staleness warning is logged.
 
 ---
 
 ### 6.5 Visual Root Cause Analysis (RCA) & Failure Diagnostics
 
-When a test step fails during execution (in `LIVE`, `REPLAY_WITH_HEALING`, or `REPLAY_STRICT` mode), Neodymium AI automatically captures the final SUT page state and invokes the Vision LLM (`LlmCapability.VISION`) to generate a plain-English **Visual Root Cause Analysis (RCA)**.
-
-#### Concept & Logging
-* **Post-Mortem Failure Diagnostic**: Visual RCA is strictly a diagnostic feature and does not perform self-healing or alter test execution flow. It attaches root cause explanations to Allure reports, telemetry sinks, and log files.
-* **Detailed Logging**: System/User prompts and raw responses are output at `TRACE` log level (`Compiling prompt: VisualRcaPrompt`), while the final root cause diagnosis is emitted at `INFO` level:
-  ```text
-  INFO - 🚨 [Visual RCA Diagnosis]: The 'Submit Order' button is missing because the checkout page failed to populate payment methods due to an upstream API timeout.
-  ```
-
-#### Configuration
-Visual RCA can be optionally disabled (e.g., for token conservation or offline CI test runs):
+When a test step fails during execution, Neodymium AI automatically captures the final SUT page state and invokes the Vision LLM (`LlmCapability.VISION`) to generate a plain-English **Visual Root Cause Analysis (RCA)**:
+* **Post-Mortem Failure Diagnostic**: Attaches root cause explanations to Allure reports, telemetry sinks, and log files.
 
 ```properties
-# Enables or disables automatic Visual Root Cause Analysis (RCA) on step execution failures.
-# Default is true. Set to false to bypass Visual RCA calls on step failure.
 neodymium.ai.visualRca.enabled=true
 ```
 
@@ -1236,75 +913,21 @@ neodymium.ai.visualRca.enabled=true
 
 ### 7.1 In-Memory LLM Request Caching (`@AiLlmCache`)
 
-Neodymium AI provides an in-memory key-value prompt response caching mechanism (`@AiLlmCache`) specifically designed to speed up test suites, eliminate LLM API costs during replay verification, and ensure fast, deterministic integration test execution.
+Provides an in-memory key-value prompt response caching mechanism (`@AiLlmCache`) to eliminate LLM API costs during replay verification and speed up integration tests:
 
 ```java
 @Browser("Chrome_1500x1000")
-@Tag("integration")
 @AiLlmCache
 @NeodymiumAiTest
 public final class VerlaProgrammaticDemoTest
 {
     @Test
     @AiLlmCache
-    public void test1_FullyProgrammaticObjects() throws Exception
+    public void test1_CachedExecution() throws Exception
     {
-        // First execution populates in-memory cache on MISS
-    }
-
-    @Test
-    @AiLlmCache
-    public void test2a_ProgrammaticTextBlockWithEmbeddedYamlData() throws Exception
-    {
-        // Subsequent execution with identical prompt hits cache instantly
+        // First execution populates in-memory cache on MISS; subsequent calls HIT cache instantly
     }
 }
-```
-
-#### Scoping & Lifecycle Rules
-
-1. **Class Execution Scope (`@AiLlmCache` on test class)**:
-   The cache persists for the entire test class run. Any test method annotated with `@AiLlmCache` inside the class shares and reuses identical prompt responses recorded during that test class run. The cache is automatically cleared when the class completes.
-2. **Method-Only Scope (`@AiLlmCache` on `@Test` method without class annotation)**:
-   The in-memory cache lives strictly for that single method execution. It is initialized before `beforeEach` and cleared immediately upon method completion in `afterEach`.
-3. **No Cache (`@Test` method without `@AiLlmCache`)**:
-   Caching is completely bypassed and live LLM execution is performed, even if the surrounding test class is annotated with `@AiLlmCache`.
-4. **Programmatic & Annotation Support**:
-   Both annotation-driven tests (`@AiPlaybook`, `@AiInlinePlaybook`) and programmatic `AiSession.selenide(...)` calls automatically inherit caching when `@AiLlmCache` is present on the executing thread stack via `LlmCacheHelper`.
-
-#### Human-Readable Logging & Telemetry
-
-Cache keys are constructed directly from human-readable prompt instruction strings (not opaque hashes), making execution logs transparent and readable:
-
-```text
-21:00:47 [LLM Cache MISS] Prompt: "Open http://localhost:8542/verla-perfect/index.html in the browser" -> Executing live LLM provider
-21:00:47 [LLM Cache HIT]  Prompt: "Open http://localhost:8542/verla-perfect/index.html in the browser" -> Returning cached response (gemini-3.5-flash-lite)
-⚡ CallLlmStep replayed response from internal LLM cache for instruction: Open http://localhost:8542/verla-perfect/index.html in the browser
-```
-
-Test statistics summaries report exact internal cache hits and cached token metrics:
-
-```text
-======== 📊 AI Step Execution Statistics ========
-  Step 1: Open ${verla.url}/verla-perfect/index.html in the browser
-      Mode:           LLM
-      Duration:       267 ms
-      Escalations:    0
-      Context Levels: MINIMAL
-      Actions:        1 (NAVIGATE)
-      Standard Calls: 1 (Tokens: 0 in (1,459 cached) → 0 out)
-=================================================
-╔════════════════════════════════════════════════════════════════════════════════════
-║ 🏁 TEST CASE COMPLETED: SUCCESS
-║ ⏱️ Duration:            269 ms
-║ 🎟️ Replays:             0
-║ ⚡ Internal Cache Hits: 1 hits
-║ 🤖 LLM Calls & Tokens:  1 calls | 1,459 tokens (In: 0, Out: 0, Cached: 1,459)
-║   ├─ PESAP:             0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
-║   ├─ Action:            1 calls | 1,459 tokens (In: 0, Out: 0, Cached: 1,459)
-║   ├─ Judge:             0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
-║   └─ Verification:      0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
-╚════════════════════════════════════════════════════════════════════════════════════
 ```
 
 ---
@@ -1312,28 +935,18 @@ Test statistics summaries report exact internal cache hits and cached token metr
 ### 7.2 Event-Driven Architecture, EventBus & HUD Overlays
 
 * **`EventBus`**: Centrally coordinates all framework execution events (e.g., `ActionExecutedEvent`, `SessionFinishedEvent`).
-* **Heads-Up Display (HUD)**: Decoupled HUD listeners observe event streams to render interactive overlays and debug windows without polluting the core execution pipeline.
-* **Metrics Summary**: Automatically tracks duration, token count, LLM provider invocation logs, and semantic outcome errors on a per-step basis.
+* **Heads-Up Display (HUD)**: Decoupled HUD listeners observe event streams to render interactive overlays and debug windows.
 
 ---
 
 ### 7.3 Real-Time Token Budget Guard & Limits
 
-Neodymium AI supports real-time input (prompt) and output (completion) token budget limits per test run to prevent runaway LLM costs or infinite self-healing retry loops.
-
-#### A. Configuration Properties
-Token budgets can be configured globally in `neodymium.properties`:
+Supports real-time input (prompt) and output (completion) token budget limits per test run:
 
 ```properties
-# Maximum input (prompt) token budget per test run (-1 = unlimited, default: -1)
 neodymium.ai.tokenBudget.input=50000
-
-# Maximum output (completion) token budget per test run (-1 = unlimited, default: -1)
 neodymium.ai.tokenBudget.output=10000
 ```
-
-#### B. Annotation-Driven Token Budgets (`@AiContext`)
-Token budgets can also be declared directly on test methods or test classes using the `@AiContext` annotation:
 
 ```java
 @Test
@@ -1341,21 +954,14 @@ Token budgets can also be declared directly on test methods or test classes usin
 @AiContext(tokenBudgetInput = 10000, tokenBudgetOutput = 2000)
 public void testWithStrictTokenLimits()
 {
-    // Execution aborts immediately with TokenBudgetExceededException if token usage exceeds limits
 }
 ```
-
-#### C. Real-Time Enforcement & Abort Behavior
-- **`TokenBudgetGuard`**: An `ExecutionListener` registered automatically on every `AiSession`.
-- **Event Monitoring**: Listens to `LlmResponseReceivedEvent` dispatches after each LLM provider call and tracks cumulative input and output tokens consumed during the test run.
-- **Immediate Abort**: When cumulative input tokens exceed `neodymium.ai.tokenBudget.input` (or output tokens exceed `neodymium.ai.tokenBudget.output`), `TokenBudgetGuard` throws a `TokenBudgetExceededException`.
-- **Bypasses Healing Loops**: `TokenBudgetExceededException` is treated as an unrecoverable failure by `StateMachineRunner`, immediately aborting the test without triggering retry loops or soft healing attempts.
 
 ---
 
 ### 7.4 Per-Call-Type Telemetry Breakdown
 
-Test completion stats and log summaries report an exact breakdown of LLM calls and token usage across all four pipeline call types:
+Test completion stats report an exact breakdown across all pipeline call types:
 
 ```text
 🤖 LLM Calls & Tokens: 45 calls | 100,784 tokens (In: 95,584, Out: 5,200, Cached: 0)
@@ -1369,43 +975,9 @@ Test completion stats and log summaries report an exact breakdown of LLM calls a
 
 ### 7.5 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)
 
-Neodymium AI provides programmatic access to session dataset variables, execution mode contexts, and telemetry metrics (such as LLM call counts, replayed steps, self-healing status, and token usage) directly from `AiSession` and `PlaybookRecording`.
-
-#### A. Session Data & Variable Management
-
-Session data variables are stored in the thread-isolated `SessionData` container attached to `AiSession`:
+To validate execution invariants across different `@AiMode` parameterized test runs, `PlaybookRecording` provides a fluent `MetricsAsserter`:
 
 ```java
-// Set dynamic variables during test case execution
-session.setData("userEmail", "test@example.com");
-
-// Retrieve variables (resolves dynamic layer, static dataset, System props, and Neodymium data)
-Object user = session.getData("userEmail");
-SessionData sessionData = session.getSessionData(); // or session.data()
-```
-
-#### B. Execution Mode Querying
-
-You can inspect the governing `ExecutionMode` (`LLM_ONLY`, `LLM_RECORDING`, `FORCE_RECORDING`, `REPLAY_WITH_HEALING`, `REPLAY_STRICT`) directly from `AiSession`, `PlaybookRecording`, or `ExecutionMetrics`:
-
-```java
-// Query execution mode directly
-ExecutionMode mode = session.getExecutionMode();       // or recording.getExecutionMode()
-
-// Mode query helper booleans available on Session, Recording, & Metrics:
-boolean live      = session.isLive();           // FORCE_RECORDING, LLM_ONLY, LLM_RECORDING
-boolean replay    = session.isReplay();         // REPLAY_STRICT, REPLAY_WITH_HEALING, LLM_RECORDING
-boolean strict    = session.isStrictReplay();   // REPLAY_STRICT
-boolean recording = session.isRecording();      // FORCE_RECORDING, LLM_RECORDING
-boolean healing   = session.supportsHealing();  // REPLAY_WITH_HEALING
-```
-
-#### C. Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)
-
-To validate execution invariants across different `@AiMode` parameterized test runs, `PlaybookRecording` provides a fluent `MetricsAsserter` with overloaded breakdown and range assertions:
-
-```java
-// Execute playbook and perform mode-conditional lambda validations:
 session.execute(playbook)
     .verifyMetrics()
     .hasStepCount(12)
@@ -1421,69 +993,11 @@ session.execute(playbook)
     });
 ```
 
-##### Overloaded Range & Breakdown Assertions
-
-`MetricsAsserter` supports exact counts (`hasLlmCalls(12)`) and inclusive ranges (`hasLlmCalls(12, 24)`):
-
-```java
-asserter
-    .hasStepCount(12)                // exact step count
-    .hasStepCount(10, 15)            // range [10, 15]
-    .hasLlmCalls(12, 24)             // total LLM calls between 12 and 24
-    .hasActionCalls(12)            // exact standard action extraction calls
-    .hasPesapCalls(0, 12)            // PESAP pre-step analysis calls
-    .hasVerificationCalls(0)         // post-action verification calls
-    .hasJudgeCalls(0)                // quality judge calls
-    .hasInputTokens(1000, 5000)      // input tokens between 1000 and 5000
-    .hasOutputTokens(200, 800)       // output tokens between 200 and 800
-    .hasTotalTokens(1200, 5800)      // total tokens between 1200 and 5800
-    .hasNoEscalations()              // asserts 0 context level escalations occurred
-    .hasContextLevelCount(ContextLevel.MINIMAL, 12); // asserts ContextLevel.MINIMAL was used 12 times
-```
-
-##### Escalation & Context Level Usage Assertions
-
-`MetricsAsserter` tracks step context level escalations and context level distribution (`ContextLevel.MINIMAL`, `LEAN`, `STANDARD`, `RICH`, `VISUAL`, `VISUAL_LEAN`, `VISUAL_RICH`, `HINT`):
-
-```java
-asserter
-    .hasNoEscalations()                              // asserts 0 escalations
-    .hasEscalationCount(0)                           // exact escalation count
-    .hasEscalationCount(0, 2)                        // range [0, 2]
-    .hasContextLevelCount(ContextLevel.MINIMAL, 12)  // MINIMAL used 12 times
-    .hasContextLevelCount(ContextLevel.LEAN, 0, 5)   // LEAN used between 0 and 5 times
-    .hasContextLevelCount("MINIMAL", 12);            // String level overload
-```
-
-##### Quality Judge Conditional Assertions (`onJudge`, `onNoJudge`)
-
-When parameterized across Quality Judge variations using `@AiJudge({false, true})`, assertions can branch conditionally:
-
-```java
-asserter
-    .onJudge(m -> m.hasJudgeCalls(6))
-    .onNoJudge(m -> m.hasJudgeCalls(0));
-```
-
-##### Automated Mode Invariants (`matchesModeExpectations()`)
-
-For parameterized test methods running under multiple `@AiMode` configurations, `matchesModeExpectations()` automatically validates the correct telemetry invariants:
-
-```java
-session.execute(playbook)
-    .verifyMetrics()
-    .matchesModeExpectations();
-```
-
-* **In `REPLAY_STRICT`**: Asserts `llmCalls == 0`, `healedSteps == 0`, `replayedSteps == stepCount`, and `softFailedSteps == 0`.
-* **In `FORCE_RECORDING` / `LLM_ONLY`**: Asserts `llmCalls > 0`, `replayedSteps == 0`, and `softFailedSteps == 0`.
-* **In `REPLAY_WITH_HEALING`**: Asserts that if any step was healed, `healedStepCount > 0` and `llmCalls > 0` (for healed steps only), otherwise `llmCalls == 0`.
-
 ---
 
 ## 8. Configuration Reference
 
-Neodymium AI uses a hierarchical property loading mechanism (`AiConfiguration`). Configuration is resolved in the following order:
+Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 1. System environment variables (e.g. `NEODYMIUM_AI_APIKEY`)
 2. `neodymium.temporaryConfigFile` system property
 3. `config/dev-neodymium.properties` (for local development)
@@ -1492,42 +1006,28 @@ Neodymium AI uses a hierarchical property loading mechanism (`AiConfiguration`).
 6. `config/neodymium.properties`
 
 ### 8.1 Core Execution Settings
-* `neodymium.ai.executionMode` - Defines the global fallback execution mode if an explicit mode is not passed to the session. Supports `REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`. (Default: `REPLAY_WITH_HEALING`)
+* `neodymium.ai.executionMode` - Defines global fallback execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`). (Default: `REPLAY_WITH_HEALING`)
 * `neodymium.ai.playbook.recordingDirectory` - Primary directory for saving and loading Playbook JSON execution recordings.
-* `neodymium.ai.playbook.recordingDir` - Fallback legacy directory for recordings if `recordingDirectory` is not set.
 * `neodymium.ai.replay.useRecordedDelays` - (Boolean) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
-* `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays when `useRecordedDelays` is true. (Default: `1.0`)
+* `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. (Default: `1.0`)
 
 ### 8.2 Provider and Model Configuration
-Providers support role-based scoping (e.g., configuring `neodymium.ai.pesap.provider=openai` alongside a global `neodymium.ai.provider=gemini`). Missing role-specific properties automatically fall back to the global properties.
-
-* `neodymium.ai.provider` - Global active LLM provider. Supports `gemini`, `openai`, `vertex`, `mistral`, and `mock`. (Default: `gemini`)
+* `neodymium.ai.provider` - Global active LLM provider (`gemini`, `openai`, `vertex`, `mistral`, `mock`). (Default: `gemini`)
 * `neodymium.ai.model` - Global active model. (Default: `gemini-3.5-flash-lite`)
-* `neodymium.ai.apiKey` - Global API Key (`${GEMINI_API_KEY}`). All API keys must be injected dynamically via environment variables (such as `GEMINI_API_KEY`, `OPENAI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Never commit API keys to git or configuration files.
+* `neodymium.ai.apiKey` - Global API Key (`${GEMINI_API_KEY}`). Injected dynamically via environment variables or JVM arguments (`-Dneodymium.ai.apiKey=...`).
 * `neodymium.ai.timeoutSeconds` - Global network timeout for LLM HTTP calls. (Default: `180`)
 * `neodymium.ai.temperature` - Global LLM temperature. (Default: `0.0`)
 
-#### CLI Test Execution & API Key Injection Examples
-
-```bash
-# Option 1: Export environment variable (recommended for interactive shell & CI)
-export GEMINI_API_KEY="your-gemini-api-key"
-mvn test -Dtest=AddToCartJudgeAndVerificationsTest
-
-# Option 2: Pass as runtime JVM argument
-mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-gemini-api-key"
-```
-
 ### 8.3 Sub-System Toggles
-* `neodymium.ai.pesap.enabled` - (Boolean) Toggles Pre-Execution Structural Analysis & Prediction. (Default: `true`)
-* `neodymium.ai.semanticVerification.enabled` - (Boolean) Toggles the SSIM and Visual Anchor validation gates. (Default: `true`)
-* `neodymium.ai.visualRca.enabled` - (Boolean) Toggles the final diagnostic `VisualRcaPrompt` execution on conclusive failure. (Default: `true`)
-* `neodymium.ai.locatorImprover.enabled` - (Boolean) Toggles automatic self-healing of fragile test author locators during live execution. (Default: `true`)
-* `neodymium.ai.judge.enabled` - (Boolean) Toggles LLM response validation via the `QualityJudgePrompt`. (Default: `false`)
-* `neodymium.ai.judge.mode` - The strictness mode of the Quality Judge. (Default: `ON_AMBIGUITY`)
+* `neodymium.ai.pesap.enabled` - (Boolean) Pre-Execution Structural Analysis & Prediction. (Default: `true`)
+* `neodymium.ai.semanticVerification.enabled` - (Boolean) SSIM and Visual Anchor validation gates. (Default: `true`)
+* `neodymium.ai.visualRca.enabled` - (Boolean) Visual Root Cause Analysis on failure. (Default: `true`)
+* `neodymium.ai.locatorImprover.enabled` - (Boolean) Automatic locator upgrading for recorded playbooks. (Default: `true`)
+* `neodymium.ai.judge.enabled` - (Boolean) LLM Quality Judge second-opinion evaluation. (Default: `false`)
+* `neodymium.ai.judge.mode` - Mode of Quality Judge (`ON_AMBIGUITY`, `ALWAYS`, `ON_FAIL`). (Default: `ON_AMBIGUITY`)
 
 ### 8.4 Network and Budget Limits
-* `neodymium.ai.maxRetriesAtMaxLevel` - Number of LLM self-healing iterations allowed *after* a step has reached its maximum context level (e.g., `VISUAL_RICH`). (Default: `1`)
+* `neodymium.ai.maxRetriesAtMaxLevel` - Number of LLM self-healing iterations allowed after reaching maximum context level. (Default: `1`)
 * `neodymium.ai.llm.maxRetries` - Maximum network retries for 429/500 LLM API failures.
 * `neodymium.ai.tokenBudget.input` - Hard limit on input context tokens per execution. (Default: `-1` disabled)
 * `neodymium.ai.tokenBudget.output` - Hard limit on output response tokens per execution. (Default: `-1` disabled)
