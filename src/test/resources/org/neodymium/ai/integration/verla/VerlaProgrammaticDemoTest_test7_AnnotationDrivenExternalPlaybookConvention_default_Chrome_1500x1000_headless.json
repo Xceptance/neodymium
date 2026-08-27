@@ -10,9 +10,9 @@
   "actions" : [ {
     "type" : "NAVIGATE",
     "target" : "${verla.url}/verla-perfect/index.html",
-    "value" : null,
+    "value" : "${verla.url}/verla-perfect/index.html",
     "description" : "Extracted NAVIGATE action",
-    "reasoning" : "Navigate to the specified URL",
+    "reasoning" : "Navigate to the given URL.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -21,7 +21,7 @@
     "stepLine" : 6,
     "stepFile" : "VerlaProgrammaticDemoTest_test7_AnnotationDrivenExternalPlaybookConvention.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 4299,
+    "durationMs" : 4188,
     "delayMs" : null,
     "parameters" : { },
     "bestCandidateLocator" : "${verla.url}/verla-perfect/index.html",
@@ -36,7 +36,7 @@
       "reasoning" : ""
     } ],
     "domFeatureVector" : null,
-    "values" : [ ]
+    "values" : [ "${verla.url}/verla-perfect/index.html" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -51,8 +51,8 @@
   "domFeatureVector" : null,
   "schemaVersion" : "3.0",
   "contextLevel" : "MINIMAL",
-  "reasoning" : "Open the requested URL in the browser",
-  "durationMs" : 7322,
+  "reasoning" : "Open the requested URL in the browser.",
+  "durationMs" : 6425,
   "delayMs" : null,
   "composite" : false
 }, {
@@ -78,8 +78,8 @@
     "stepLine" : 7,
     "stepFile" : "VerlaProgrammaticDemoTest_test7_AnnotationDrivenExternalPlaybookConvention.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 425,
-    "delayMs" : 3162,
+    "durationMs" : 384,
+    "delayMs" : 2476,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
     "allCandidateLocators" : [ "#search-input" ],
@@ -111,7 +111,7 @@
       "accessibleName" : "Search products...",
       "parentTag" : "form",
       "siblingIndex" : 1,
-      "x" : 902,
+      "x" : 895,
       "y" : 62,
       "width" : 180,
       "height" : 34
@@ -147,16 +147,16 @@
     "accessibleName" : "Search products...",
     "parentTag" : "form",
     "siblingIndex" : 1,
-    "x" : 902,
+    "x" : 895,
     "y" : 62,
     "width" : 180,
     "height" : 34
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "MINIMAL",
-  "reasoning" : "Located the search input field (#search-input) and prepared to type 'Minimalist' into it.",
-  "durationMs" : 3550,
-  "delayMs" : 1,
+  "reasoning" : "Located the search input field with id #search-input and typed 'Minimalist' into it.",
+  "durationMs" : 2892,
+  "delayMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Press enter to submit search",
@@ -170,9 +170,9 @@
   "actions" : [ {
     "type" : "KEY_PRESS",
     "target" : "#search-input",
-    "value" : "ENTER",
+    "value" : "Enter",
     "description" : "Extracted KEY_PRESS action",
-    "reasoning" : "Press enter key to submit search query",
+    "reasoning" : "Press enter to submit the search form",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -181,8 +181,8 @@
     "stepLine" : 8,
     "stepFile" : "VerlaProgrammaticDemoTest_test7_AnnotationDrivenExternalPlaybookConvention.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 1241,
-    "delayMs" : 3035,
+    "durationMs" : 1078,
+    "delayMs" : 2292,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
     "allCandidateLocators" : [ "#search-input" ],
@@ -214,12 +214,12 @@
       "accessibleName" : "Search products...",
       "parentTag" : "form",
       "siblingIndex" : 1,
-      "x" : 842,
+      "x" : 835,
       "y" : 62,
       "width" : 240,
       "height" : 34
     },
-    "values" : [ "ENTER" ]
+    "values" : [ "Enter" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -250,7 +250,7 @@
     "accessibleName" : "Search products...",
     "parentTag" : "form",
     "siblingIndex" : 1,
-    "x" : 842,
+    "x" : 835,
     "y" : 62,
     "width" : 240,
     "height" : 34
@@ -258,7 +258,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Press enter on the search input to submit the search query.",
-  "durationMs" : 4068,
+  "durationMs" : 3023,
   "delayMs" : 0,
   "composite" : false
 } ]

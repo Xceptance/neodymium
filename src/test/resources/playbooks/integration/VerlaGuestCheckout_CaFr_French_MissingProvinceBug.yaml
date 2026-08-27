@@ -18,10 +18,10 @@ steps: |
   Il y a des formulaires de saisie de données sur la gauche et un bloc récapitulatif de commande sur la droite (visual).
   Sélectionner 'Canada (FR)' comme pays.
   Saisir 'Jean' comme prénom, 'Dupont' comme nom et l'adresse e-mail 'foo@varmail.net'.
-  Saisir '100 Rue Saint-Denis' comme rue, 'Montréal' comme ville, 'QC' comme province et 'H2X 3K4' comme code postal.
+  Saisir '100 Rue Saint-Denis' comme rue, 'Montréal' comme ville et 'H2X 3K4' comme code postal.
   Numéro de carte '4111 1111 1111 1111', date d'expiration '12/29' et CVV '111'.
   Cliquer sur 'Acheter'.
-  Attendre que le texte "Merci pour votre achat !" apparaisse.
+  Attendre que le texte "Merci pour votre achat !" apparaisse. (bug: missing province halts checkout)
   Un numéro de commande au format 'V-[0-9]+-CA_FR' est affiché, le montant total est en CAD $, le code postal est 'H2X 3K4' et le texte "Merci pour votre achat !" est affiché.
   Il y a une coche verte au centre de l'écran (visual: full).
 

@@ -10,9 +10,9 @@
   "actions" : [ {
     "type" : "NAVIGATE",
     "target" : "${verla.url}/verla-perfect/index.html",
-    "value" : null,
+    "value" : "${verla.url}/verla-perfect/index.html",
     "description" : "Extracted NAVIGATE action",
-    "reasoning" : "Navigate to the home page URL",
+    "reasoning" : "Open the specified URL in the browser",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -21,7 +21,7 @@
     "stepLine" : 2,
     "stepFile" : "inline-660700510.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 4260,
+    "durationMs" : 3935,
     "delayMs" : null,
     "parameters" : { },
     "bestCandidateLocator" : "${verla.url}/verla-perfect/index.html",
@@ -36,7 +36,7 @@
       "reasoning" : ""
     } ],
     "domFeatureVector" : null,
-    "values" : [ ]
+    "values" : [ "${verla.url}/verla-perfect/index.html" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -51,8 +51,8 @@
   "domFeatureVector" : null,
   "schemaVersion" : "3.0",
   "contextLevel" : "MINIMAL",
-  "reasoning" : "Open the requested URL in the browser",
-  "durationMs" : 7333,
+  "reasoning" : "Navigate to the requested URL in the browser.",
+  "durationMs" : 5958,
   "delayMs" : null,
   "composite" : false
 }, {
@@ -69,7 +69,7 @@
     "target" : "#search-input",
     "value" : "${searchTerm}",
     "description" : "Extracted TYPE action",
-    "reasoning" : "Type '${searchTerm}' into the search input field",
+    "reasoning" : "Type '${searchTerm}' into the search input field.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -78,8 +78,8 @@
     "stepLine" : 3,
     "stepFile" : "inline-660700510.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 423,
-    "delayMs" : 3218,
+    "durationMs" : 197,
+    "delayMs" : 2066,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
     "allCandidateLocators" : [ "#search-input" ],
@@ -111,7 +111,7 @@
       "accessibleName" : "Search products...",
       "parentTag" : "form",
       "siblingIndex" : 1,
-      "x" : 902,
+      "x" : 895,
       "y" : 62,
       "width" : 180,
       "height" : 34
@@ -147,7 +147,7 @@
     "accessibleName" : "Search products...",
     "parentTag" : "form",
     "siblingIndex" : 1,
-    "x" : 902,
+    "x" : 895,
     "y" : 62,
     "width" : 180,
     "height" : 34
@@ -155,7 +155,7 @@
   "schemaVersion" : "3.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Located the search input field (#search-input) and prepared to type 'Minimalist' into it.",
-  "durationMs" : 3624,
+  "durationMs" : 2277,
   "delayMs" : 0,
   "composite" : false
 }, {
@@ -170,9 +170,9 @@
   "actions" : [ {
     "type" : "KEY_PRESS",
     "target" : "#search-input",
-    "value" : "ENTER",
+    "value" : "Enter",
     "description" : "Extracted KEY_PRESS action",
-    "reasoning" : "Press enter on the search input element to submit the search.",
+    "reasoning" : "Submit the search by pressing Enter",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -181,8 +181,8 @@
     "stepLine" : 4,
     "stepFile" : "inline-660700510.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 1225,
-    "delayMs" : 3098,
+    "durationMs" : 1106,
+    "delayMs" : 1969,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
     "allCandidateLocators" : [ "#search-input" ],
@@ -214,12 +214,12 @@
       "accessibleName" : "Search products...",
       "parentTag" : "form",
       "siblingIndex" : 1,
-      "x" : 842,
+      "x" : 835,
       "y" : 62,
       "width" : 240,
       "height" : 34
     },
-    "values" : [ "ENTER" ]
+    "values" : [ "Enter" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -250,15 +250,15 @@
     "accessibleName" : "Search products...",
     "parentTag" : "form",
     "siblingIndex" : 1,
-    "x" : 842,
+    "x" : 835,
     "y" : 62,
     "width" : 240,
     "height" : 34
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "MINIMAL",
-  "reasoning" : "Press enter on the search input to submit the search query.",
-  "durationMs" : 4133,
+  "reasoning" : "Pressing Enter on the search input to submit the search.",
+  "durationMs" : 3154,
   "delayMs" : 0,
   "composite" : false
 } ]

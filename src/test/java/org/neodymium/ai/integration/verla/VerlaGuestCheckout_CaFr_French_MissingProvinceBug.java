@@ -34,10 +34,8 @@ import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
 /**
- * French Language Guest Checkout Integration Test targeting the Canadian French storefront (-CA_FR).
- * Drives the French-Canadian Verla SUT checkout flow using natural French step instructions.
- *
- * Schema: Feature_TargetStore_ScriptLanguage
+ * French Language Guest Checkout Integration Test with intentionally missing province
+ * to verify expected bug handling and failure reporting when form validation halts checkout.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
@@ -46,14 +44,14 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
-@AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_CaFr_French.yaml", recordingDirectory = "target/playbooks/integration")
+@AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_CaFr_French_MissingProvinceBug.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class VerlaGuestCheckout_CaFr_French extends BaseAiTest
+public class VerlaGuestCheckout_CaFr_French_MissingProvinceBug extends BaseAiTest
 {
     /**
-     * Constructs a default VerlaGuestCheckout_CaFr_French instance.
+     * Constructs a default VerlaGuestCheckout_CaFr_French_MissingProvinceBug instance.
      */
-    public VerlaGuestCheckout_CaFr_French()
+    public VerlaGuestCheckout_CaFr_French_MissingProvinceBug()
     {
     }
 
