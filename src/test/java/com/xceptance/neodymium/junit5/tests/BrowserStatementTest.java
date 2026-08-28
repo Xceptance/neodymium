@@ -411,7 +411,7 @@ public class BrowserStatementTest extends AbstractNeodymiumTest
         String[] expected = new String[]
         {
           "test1 :: Browser Chrome_1024x768",
-          "test1 :: Browser Chrome_1500x1000"
+          "test1 :: Browser Chrome_1500x1000_headless"
         };
         checkDescription(DisableRandomBrowserAnnotation.class, expected);
     }

@@ -107,4 +107,15 @@ public interface TargetExecutor extends AutoCloseable
     {
         return "SELENIUM_SELENIDE";
     }
+
+    /**
+     * Registers username/password credentials for dynamic HTTP Basic Authentication
+     * injection on the active target driver.
+     *
+     * @param username the authentication username
+     * @param password the authentication password
+     */
+    default void registerBasicAuth(final String username, final String password)
+    {
+    }
 }

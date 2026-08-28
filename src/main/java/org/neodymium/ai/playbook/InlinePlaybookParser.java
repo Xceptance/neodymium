@@ -37,6 +37,14 @@ import org.neodymium.ai.resources.PlaybookResourceManager;
 public final class InlinePlaybookParser implements PlaybookParser
 {
     /**
+     * Pattern matching standard top-level YAML section keys at the start of lines.
+     */
+    private static final java.util.regex.Pattern YAML_BLOCK_PATTERN = java.util.regex.Pattern.compile(
+        "(?m)^(steps|_steps|data|_data|before|beforeEach|_beforeEach|_beforeAll|after|afterEach|_afterEach|_afterAll|inline|_include|include|playbook|actions|promptAddon|addon|teardown|_meta|meta):",
+        java.util.regex.Pattern.CASE_INSENSITIVE
+    );
+
+    /**
      * The raw multi-line playbook string content.
      */
     private final String content;
@@ -70,7 +78,7 @@ public final class InlinePlaybookParser implements PlaybookParser
         }
 
         final String trimmed = this.content.trim();
-        if (trimmed.startsWith("steps:") || trimmed.startsWith("inline:") || trimmed.startsWith("---") || trimmed.startsWith("_include:") || trimmed.startsWith("include:") || trimmed.contains("\nsteps:") || trimmed.contains("\ndata:") || trimmed.contains("\n_include:") || trimmed.contains("\ninclude:"))
+        if (trimmed.startsWith("---") || YAML_BLOCK_PATTERN.matcher(trimmed).find())
         {
             final InMemoryResourceManager stringManager = (manager != null)
                 ? new InMemoryResourceManager(manager)

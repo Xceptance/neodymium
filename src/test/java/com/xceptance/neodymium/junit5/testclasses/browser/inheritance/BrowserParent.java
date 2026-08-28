@@ -8,7 +8,7 @@ import com.xceptance.neodymium.junit5.tests.NeodymiumWebDriverTest;
 import org.neodymium.util.Neodymium;
 
 @Browser("Chrome_1024x768")
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 public abstract class BrowserParent
 {
     @NeodymiumTest

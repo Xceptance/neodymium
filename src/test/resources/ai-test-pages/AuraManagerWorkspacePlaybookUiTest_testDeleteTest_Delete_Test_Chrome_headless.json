@@ -22,8 +22,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 342,
+  "durationMs" : 422,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Select the file \"automated-workspace-test.yaml\" from the file selection list",
@@ -49,8 +50,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 152,
+  "durationMs" : 94,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click the \"Delete\" button in the editor panel",
@@ -76,8 +78,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 123,
+  "durationMs" : 77,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Wait for the \"Delete Test Case\" modal to appear",
@@ -103,8 +106,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 111,
+  "durationMs" : 84,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click the \"Confirm Delete\" button",
@@ -130,8 +134,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 117,
+  "durationMs" : 85,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "java verifyAutomatedWorkspaceTestNotPresent()",
@@ -157,7 +162,8 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 122,
+  "durationMs" : 85,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 } ]

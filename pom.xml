@@ -100,6 +100,7 @@
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
 						<allure.results.directory>${allure.results.directory}</allure.results.directory>
+						<selenide.headless>true</selenide.headless>
 					</systemPropertyVariables>
 					<forkCount>${surefire.forkCount}</forkCount>
 					<reuseForks>false</reuseForks>

@@ -33,6 +33,7 @@ import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
+import org.neodymium.ai.util.SelectorSyntaxChecker;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -336,7 +337,7 @@ public final class SelenideElementFinder
             }
         }
 
-        if (!forceCss && !forceXpath && !clean.contains("<") && !clean.contains(">"))
+        if (!forceCss && !forceXpath && !SelectorSyntaxChecker.isCssSelector(clean) && !SelectorSyntaxChecker.isXpathExpression(clean) && !clean.contains("<") && !clean.contains(">"))
         {
             try
             {

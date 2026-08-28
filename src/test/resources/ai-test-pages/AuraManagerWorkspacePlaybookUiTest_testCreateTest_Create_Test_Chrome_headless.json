@@ -47,8 +47,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 2691,
+  "durationMs" : 2697,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click the \"Create New Test\" button",
@@ -99,8 +100,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 2017,
+  "durationMs" : 1879,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Wait for the Create Test Modal to appear",
@@ -151,8 +153,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1600,
+  "durationMs" : 1506,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Enter \"Automated Workspace Test\" into the test name input field",
@@ -203,8 +206,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1577,
+  "durationMs" : 1671,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click the \"Create Test\" submit button",
@@ -255,8 +259,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 5863,
+  "durationMs" : 1626,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click the \"Close\" button in the editor panel",
@@ -307,8 +312,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 2163,
+  "durationMs" : 1409,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "java verifyAutomatedWorkspaceTestPresent()",
@@ -359,7 +365,8 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 2216,
+  "durationMs" : 1603,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 } ]

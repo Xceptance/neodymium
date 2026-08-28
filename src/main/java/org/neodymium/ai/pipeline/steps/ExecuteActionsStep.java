@@ -332,6 +332,10 @@ public final class ExecuteActionsStep implements PipelineStep
                         customTimeoutMs = "s".equalsIgnoreCase(unit) ? parsedVal * 1000L : parsedVal;
                     }
                 }
+                if (customTimeoutMs == null && step != null && step.getTimeoutMs() != null)
+                {
+                    customTimeoutMs = step.getTimeoutMs();
+                }
 
                 final long origTimeout = Configuration.timeout;
                 if (customTimeoutMs != null)
@@ -509,8 +513,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     context.getTransientData().remove("currentAction");
                 }
                 
-                final long settleMs = AiConfiguration.getInstance()
-                    .getLong("neodymium.ai.visual.postActionSettleMs", 1000L);
+                final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
                 if (settleMs > 0)
                 {
                     try
@@ -978,7 +981,7 @@ public final class ExecuteActionsStep implements PipelineStep
             final ContextLevel effectiveLevel = (ContextLevel) contextState.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
             stats.addContextLevel(effectiveLevel != null ? effectiveLevel.name() : initialLevel.name());
 
-            final int maxRetriesAtMaxLevel = AiConfiguration.getInstance().getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
+            final int maxRetriesAtMaxLevel = AiConfiguration.getInstance().getMaxRetriesAtMaxLevel();
             final int ladderDistance = ContextLevel.VISUAL_RICH.ordinal() - (effectiveLevel != null ? effectiveLevel.ordinal() : initialLevel.ordinal()) + 1;
             final int totalStepBudget = Math.max(1, ladderDistance) + Math.max(0, maxRetriesAtMaxLevel);
 

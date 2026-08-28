@@ -372,9 +372,29 @@ public final class YamlPlaybookParser implements PlaybookParser
                             final boolean sensitive = isSensitiveKey(key);
                             datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
                         }
+                        injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
                         outDataSets.add(datasetMap);
                     }
                 }
+            }
+            else if (rawData instanceof Map)
+            {
+                final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) rawData).entrySet())
+                {
+                    final String key = String.valueOf(mapEntry.getKey());
+                    final Object val = mapEntry.getValue();
+                    final boolean sensitive = isSensitiveKey(key);
+                    datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
+                }
+                injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                outDataSets.add(datasetMap);
+            }
+            else if (loadedMap.containsKey("_meta"))
+            {
+                final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                outDataSets.add(datasetMap);
             }
 
             // 3. Parse before, steps, and after blocks
@@ -671,5 +691,38 @@ public final class YamlPlaybookParser implements PlaybookParser
         }
 
         return yamlPlaybook;
+    }
+
+    /**
+     * Injects system and custom metadata variables into a parsed dataset map.
+     *
+     * @param datasetMap the dataset entry map to populate
+     * @param rawMeta raw metadata object from the YAML root
+     * @param fileName source file name
+     * @param identifier resource identifier path
+     */
+    private void injectMetaEntries(
+        final Map<String, SessionData.DataEntry> datasetMap,
+        final Object rawMeta,
+        final String fileName,
+        final String identifier
+    )
+    {
+        if (fileName != null && !fileName.isEmpty())
+        {
+            datasetMap.put("_meta.sourceFile", new SessionData.DataEntry(fileName, false));
+        }
+        if (identifier != null && !identifier.isEmpty())
+        {
+            datasetMap.put("_meta.classpathResourcePath", new SessionData.DataEntry(identifier, false));
+        }
+        if (rawMeta instanceof Map<?, ?> metaMap)
+        {
+            for (final Map.Entry<?, ?> entry : metaMap.entrySet())
+            {
+                final String k = String.valueOf(entry.getKey());
+                datasetMap.put("_meta." + k, new SessionData.DataEntry(entry.getValue(), false));
+            }
+        }
     }
 }

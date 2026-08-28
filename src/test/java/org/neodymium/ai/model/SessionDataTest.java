@@ -167,4 +167,66 @@ public final class SessionDataTest
             "Exception message should mention the missing variable name"
         );
     }
+
+    /**
+     * Verifies that dot-notation path navigation resolves nested Map values in static and dynamic layers.
+     */
+    @Test
+    public void testNestedMapDotNotationResolution()
+    {
+        final Map<String, Object> innerMap = new HashMap<>();
+        innerMap.put("Part1", "hello");
+        innerMap.put("Part2", "world");
+
+        final Map<String, Object> addressMap = new HashMap<>();
+        addressMap.put("city", "Jena");
+        addressMap.put("zip", "07745");
+
+        final Map<String, Object> userMap = new HashMap<>();
+        userMap.put("name", "John");
+        userMap.put("address", addressMap);
+
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("phrase", new SessionData.DataEntry(innerMap, false));
+        staticMap.put("user", new SessionData.DataEntry(userMap, false));
+
+        final SessionData session = new SessionData(staticMap);
+
+        assertEquals("hello", session.get("phrase.Part1"));
+        assertEquals("world", session.get("phrase.Part2"));
+        assertEquals("John", session.get("user.name"));
+        assertEquals("Jena", session.get("user.address.city"));
+        assertEquals("07745", session.get("user.address.zip"));
+
+        // Resolution in string template placeholders
+        final String resolved = session.resolveVariables("Greeting: ${phrase.Part1} ${phrase.Part2} from ${user.address.city}!");
+        assertEquals("Greeting: hello world from Jena!", resolved);
+
+        // Overriding nested value dynamically
+        final Map<String, Object> dynamicUser = new HashMap<>();
+        dynamicUser.put("name", "Alice");
+        session.putDynamic("user", dynamicUser, false);
+
+        assertEquals("Alice", session.get("user.name"));
+    }
+
+    /**
+     * Verifies that getAllVariables flattens nested maps into dot-separated keys.
+     */
+    @Test
+    public void testNestedMapGetAllVariables()
+    {
+        final Map<String, Object> innerMap = new HashMap<>();
+        innerMap.put("host", "example.com");
+        innerMap.put("port", "8080");
+
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("server", new SessionData.DataEntry(innerMap, false));
+
+        final SessionData session = new SessionData(staticMap);
+        final Map<String, String> allVars = session.getAllVariables();
+
+        assertEquals("example.com", allVars.get("server.host"));
+        assertEquals("8080", allVars.get("server.port"));
+    }
 }
