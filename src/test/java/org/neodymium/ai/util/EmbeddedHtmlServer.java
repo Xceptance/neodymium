@@ -3019,7 +3019,71 @@ public final class EmbeddedHtmlServer
         {
             return getCartDropdownHtmlTailwind(cart, trans, country, showTemp);
         }
+        if ("pwa-chaos".equals(quality))
+        {
+            return getCartDropdownHtmlPwaChaos(cart, trans, country, showTemp);
+        }
 
+        final StringBuilder sb = new StringBuilder();
+        if (showTemp)
+        {
+            sb.append("<div class=\"cart-dropdown show-temp\" id=\"cart-dropdown-panel\">");
+        }
+        else
+        {
+            sb.append("<div class=\"cart-dropdown\" id=\"cart-dropdown-panel\">");
+        }
+        if (cart.items.isEmpty())
+        {
+            sb.append("  <div class=\"cart-dropdown-empty\">")
+              .append("    <p style=\"color: var(--color-text-secondary); margin-bottom: 12px;\">").append(trans.getOrDefault("cartIsEmpty", "Your bag is empty.")).append("</p>")
+              .append("    <a href=\"c/tops.html\" class=\"cart-dropdown-checkout-btn\" style=\"display:inline-block; padding: 8px 16px;\">Shop Now</a>")
+              .append("  </div>");
+        }
+        else
+        {
+            sb.append("  <div class=\"cart-dropdown-items\">");
+            double subtotal = 0;
+            for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+            {
+                final Product p = lookupProductById(entry.getKey());
+                if (p == null)
+                {
+                    continue;
+                }
+                final String[] parts = entry.getKey().split(":");
+                final String size = parts.length > 1 ? " (" + parts[1] + ")" : "";
+                final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                final double rowTotal = price * entry.getValue();
+                subtotal += rowTotal;
+
+                sb.append("    <div class=\"cart-dropdown-item\">")
+                  .append("      <div class=\"cart-dropdown-item-img\">")
+                  .append("        <svg viewBox=\"0 0 100 100\">").append(p.svgPath).append("</svg>")
+                  .append("      </div>")
+                  .append("      <div class=\"cart-dropdown-item-details\">")
+                  .append("        <div class=\"cart-dropdown-item-title\">").append(escapeHtml(p.names.getOrDefault(country.locale, p.names.get("en")))).append(size).append("</div>")
+                  .append("        <div class=\"cart-dropdown-item-price\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
+                  .append("      </div>")
+                  .append("    </div>");
+            }
+            sb.append("  </div>")
+              .append("  <div class=\"cart-dropdown-footer\">")
+              .append("    <div class=\"cart-dropdown-subtotal\">")
+              .append("      <span>").append(trans != null ? trans.getOrDefault("subtotal", "Subtotal") : "Subtotal").append("</span>")
+              .append("      <span>").append(formatPrice(subtotal, country)).append("</span>")
+              .append("    </div>")
+              .append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"cart-dropdown-checkout-btn\">")
+              .append(trans != null ? trans.getOrDefault("proceedToCheckout", trans.getOrDefault("viewCartCheckout", trans.getOrDefault("checkout", "View Bag & Checkout"))) : "View Bag & Checkout")
+              .append("</a>")
+              .append("  </div>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private String getCartDropdownHtmlPwaChaos(final Cart cart, final Map<String, String> trans, final Country country, final boolean showTemp)
+    {
         final StringBuilder sb = new StringBuilder();
         if (showTemp)
         {
@@ -3070,10 +3134,7 @@ public final class EmbeddedHtmlServer
               .append("      <span>").append(trans != null ? trans.getOrDefault("subtotal", "Subtotal") : "Subtotal").append("</span>")
               .append("      <span>").append(formatPrice(subtotal, country)).append("</span>")
               .append("    </div>");
-            if (!"pwa-chaos".equals(quality))
-            {
-                sb.append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"wick-button\" style=\"display:flex; width:100%; justify-content:center; background:#E80070; color:#fff; font-weight:700; font-size:13px; text-transform:uppercase; padding:12px; border-radius:4px; text-align:center; text-decoration:none;\" onclick=\"closeMiniCartDrawer(); if(window.pwaRouter){event.preventDefault(); window.pwaRouter.navigate('cart.html');}\">").append(trans != null ? trans.getOrDefault("viewCartCheckout", "View Bag & Checkout") : "View Bag & Checkout").append("</a>");
-            }
+            sb.append("    <a href=\"cart.html\" id=\"mini-cart-checkout-btn\" class=\"wick-button\" style=\"display:flex; width:100%; justify-content:center; background:#E80070; color:#fff; font-weight:700; font-size:13px; text-transform:uppercase; padding:12px; border-radius:4px; text-align:center; text-decoration:none;\" onclick=\"closeMiniCartDrawer(); if(window.pwaRouter){event.preventDefault(); window.pwaRouter.navigate('cart.html');}\">").append(trans != null ? trans.getOrDefault("viewCartCheckout", "View Bag & Checkout") : "View Bag & Checkout").append("</a>");
             sb.append("  </div>");
         }
         sb.append("</div>");
@@ -3438,13 +3499,13 @@ public final class EmbeddedHtmlServer
         if ("modern-bad-nowcag".equals(quality))
         {
             sb.append("    <div onclick=\"location.href='checkout.html'\" id=\"checkout-btn\" class=\"btn-primary cursor-pointer\" style=\"display: block; text-align: center; margin-top: 24px; padding: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px;\">")
-              .append("      <span><span>").append(trans.getOrDefault("checkout", "Checkout")).append("</span></span>")
+              .append("      <span><span>").append(trans.getOrDefault("proceedToCheckout", trans.getOrDefault("checkout", "Checkout"))).append("</span></span>")
               .append("    </div>");
         }
         else
         {
             sb.append("    <a href=\"checkout.html\" id=\"checkout-btn\" class=\"btn-primary\" style=\"display: block; text-align: center; margin-top: 24px; padding: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px;\">")
-              .append("      ").append(trans.getOrDefault("checkout", "Checkout"))
+              .append("      ").append(trans.getOrDefault("proceedToCheckout", trans.getOrDefault("checkout", "Checkout")))
               .append("    </a>");
         }
 
@@ -3650,7 +3711,7 @@ public final class EmbeddedHtmlServer
           .append("      </div>")
           .append("    </div>")
           .append("    <a href=\"checkout.html\" id=\"checkout-btn\" class=\"mt-6 block rounded-lg bg-terracotta-500 p-3 text-center text-xs font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700\">")
-          .append(trans.getOrDefault("checkout", "Checkout"))
+          .append(trans.getOrDefault("proceedToCheckout", trans.getOrDefault("checkout", "Checkout")))
           .append("    </a>")
           .append("  </div>")
           .append("</div>")
