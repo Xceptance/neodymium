@@ -709,6 +709,96 @@ public final class ActionExtractionPromptTest
         assertEquals("ASSERT", actions.get(0).getType());
         assertEquals("#order-confirmation", actions.get(0).getTarget());
     }
+
+    /**
+     * Verifies that parseResponse does not set hasElse to true when else is an empty array,
+     * but sets hasElse to true when else contains actions or when hasElse is explicitly true.
+     */
+    @Test
+    public void testParseResponseBranchActionHasElseBehavior() throws Exception
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+
+        // Case 1: 1-way if branch with empty "else": [] should NOT set hasElse to true
+        final String jsonEmptyElse = """
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "condition": [
+                    { "action": "ASSERT", "locator": "#state", "value": "present" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "#state", "value": "CA" }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+            """;
+
+        final List<Action> actionsEmpty = prompt.parseResponse(jsonEmptyElse, context);
+        assertNotNull(actionsEmpty);
+        assertEquals(1, actionsEmpty.size());
+        final Action actionEmpty = actionsEmpty.get(0);
+        assertEquals("BRANCH", actionEmpty.getType());
+        assertFalse(actionEmpty.hasElse(), "Empty 'else' array must not mark hasElse as true");
+
+        // Case 2: Populated "else" array should set hasElse to true
+        final String jsonPopulatedElse = """
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "condition": [
+                    { "action": "ASSERT", "locator": "#state", "value": "present" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "#state", "value": "CA" }
+                  ],
+                  "else": [
+                    { "action": "CLICK", "locator": "#skip-btn" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        final List<Action> actionsPopulated = prompt.parseResponse(jsonPopulatedElse, context);
+        assertNotNull(actionsPopulated);
+        assertEquals(1, actionsPopulated.size());
+        final Action actionPopulated = actionsPopulated.get(0);
+        assertTrue(actionPopulated.hasElse(), "Populated 'else' array must mark hasElse as true");
+
+        // Case 3: Explicit "hasElse": true with empty else array
+        final String jsonExplicitHasElse = """
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "hasElse": true,
+                  "condition": [
+                    { "action": "ASSERT", "locator": "#state", "value": "present" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "#state", "value": "CA" }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+            """;
+
+        final List<Action> actionsExplicit = prompt.parseResponse(jsonExplicitHasElse, context);
+        assertNotNull(actionsExplicit);
+        assertEquals(1, actionsExplicit.size());
+        final Action actionExplicit = actionsExplicit.get(0);
+        assertTrue(actionExplicit.hasElse(), "Explicit hasElse=true must be preserved");
+    }
 }
 
 

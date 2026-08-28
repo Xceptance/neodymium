@@ -12,7 +12,7 @@ Analyze current DOM and visual state to fulfill the active instruction.
 
 ## Action Rules
 - **Valid Actions**: `BRANCH`, `CLICK`, `TYPE`, `NAVIGATE`, `CLEAR`, `HOVER`, `SCROLL`, `WAIT`, `SELECT`, `KEY_PRESS`, `ASSERT`, `BACK`, `FORWARD`, `REFRESH`.
-- **CLICK**: Target the interactive element itself (`a`, `button`, `input`), NEVER container tags (`p`, `div`, `span`, `li`, `td`). If the interactive child is visually hidden, target its visible parent container (e.g. `.search-toggle`).
+- **CLICK**: Target the interactive element itself (`a`, `button`, `input`, or interactive item/option such as `li`, `[role="option"]`, `[role="button"]`, `.country-item`). Avoid non-interactive outer layout wrappers (`div`, `p`, `table`, `td`) unless the element itself is the clickable control or the interactive child is visually hidden (e.g. `.search-toggle`).
 - **TYPE**: Target `input`, `textarea`, or `contenteditable`. Set 'value' to the exact verbatim data from the instruction.
 - **SELECT**: Target `select` or option trigger. Set 'value' to option text or value.
 - **ASSERT**: ALWAYS emit an explicit `ASSERT` action targeting the element or nearest scoped container (`#checkout-form-container`, `.order-summary`); do NOT pre-fail in reasoning based on static DOM text. NEVER target `body`, `html`, or unscoped bare tags (`div`, `span`, `p`, `li`).

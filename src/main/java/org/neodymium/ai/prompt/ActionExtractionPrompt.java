@@ -488,7 +488,10 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 elseActions.add(parseActionNode(subNode));
             }
             action.setElseActions(elseActions);
-            action.setHasElse(true);
+            if (!elseActions.isEmpty())
+            {
+                action.setHasElse(true);
+            }
         }
 
         if (node.hasNonNull("hasElse"))

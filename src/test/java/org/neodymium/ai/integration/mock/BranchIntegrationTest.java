@@ -225,6 +225,82 @@ public class BranchIntegrationTest extends BaseAiTest
     }
 
     /**
+     * Tests that a 1-way if statement with empty 'else: []' in LLM response succeeds as a no-op in strict replay mode when condition is false.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "oneway_empty_else_noop_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchOneWayWithEmptyElseArrayFalseNoOpStrictMock(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check with empty else array",
+                  "condition": [
+                    {
+                      "action": "ASSERT",
+                      "locator": "#btn-accept",
+                      "value": "hidden",
+                      "reasoning": "Check if button is hidden (which it isn't)"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-accept",
+                      "value": "",
+                      "reasoning": "Click accept button"
+                    }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            data:
+              - testId: branchData
+            steps: |
+              Open ${branch.test.url} in the browser
+              If #cookie-banner is visible, click #btn-accept
+            """);
+    }
+
+    /**
      * Tests that a 2-way if-else branch with unpopulated 'else' actions fails with UnpopulatedBranchAssertionError in strict replay mode.
      *
      * @param session the thread-isolated AiSession
