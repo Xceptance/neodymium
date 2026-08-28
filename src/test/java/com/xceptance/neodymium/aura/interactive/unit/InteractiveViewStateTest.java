@@ -69,7 +69,7 @@ public final class InteractiveViewStateTest extends BaseInteractiveViewTest
     @Test
     public final void testConsoleStatesAndFailureRecovery() throws Exception
     {
-        Configuration.headless = false;
+        Configuration.headless = true;
 
         // Load resources
         final String yamlContent;

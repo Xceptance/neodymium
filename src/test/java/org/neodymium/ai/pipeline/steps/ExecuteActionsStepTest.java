@@ -378,6 +378,18 @@ public class ExecuteActionsStepTest
         assertEquals(org.neodymium.ai.model.ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
 
+    @Test
+    public void testPrepareInstructionStrippingControlTags()
+    {
+        final String raw = "Check cart header (layout) (hint: #cart-badge) (no-replay) (bug: BUG-123) (timeout: 5000ms) (visual:full)";
+        final String prepared = ExecuteActionsStep.prepareInstruction(raw);
+        assertEquals("Check cart header", prepared);
+
+        final String raw2 = "Click submit (hint) (optional)";
+        final String prepared2 = ExecuteActionsStep.prepareInstruction(raw2);
+        assertEquals("Click submit", prepared2);
+    }
+
     private static String encodeToBase64(final BufferedImage image) throws IOException
     {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())

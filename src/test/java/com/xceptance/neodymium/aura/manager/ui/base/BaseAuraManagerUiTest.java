@@ -36,6 +36,7 @@ public abstract class BaseAuraManagerUiTest
         final boolean isInteractive = AiConfiguration.getInstance().isInteractive();
         Assertions.assertFalse(isInteractive,
             "Interactive mode is currently active ('neodymium.ai.interactive'=true or configured in properties). Automated batch UI tests must run with interactive mode disabled (isInteractive=false) to prevent halting and waiting for manual UI console input.");
+        com.codeborne.selenide.Configuration.headless = true;
         AuraManagerTestHelper.setStartPort(this.startPort);
         AuraManagerTestHelper.startManager();
     }

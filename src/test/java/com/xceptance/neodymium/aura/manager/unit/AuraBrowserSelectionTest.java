@@ -84,7 +84,7 @@ public final class AuraBrowserSelectionTest
     public void testBrowserTypesForProfilesAccurateIcons()
     {
         // When setting only Chrome profiles globally
-        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "Chrome_1500x1000"));
+        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "Chrome_1500x1000_headless"));
         final List<String> chromeOnlyIcons = queueController.getBrowserTypesForProfiles(null);
         Assertions.assertEquals(1, chromeOnlyIcons.size());
         Assertions.assertEquals("chrome", chromeOnlyIcons.get(0));
@@ -105,7 +105,7 @@ public final class AuraBrowserSelectionTest
     @Test
     public void testGroupedBrowserProfilesSelectedCount()
     {
-        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "Chrome_1500x1000"));
+        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "Chrome_1500x1000_headless"));
         final List<BrowserGroupDto> groups = queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles());
         Assertions.assertNotNull(groups);
 

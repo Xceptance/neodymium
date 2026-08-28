@@ -205,6 +205,11 @@ public final class PlaybookStep
     private Long delayMs;
 
     /**
+     * Custom execution timeout for this step in milliseconds, or null if default timeout applies.
+     */
+    private Long timeoutMs;
+
+    /**
      * Returns the recorded context level for this step.
      *
      * @return the context level name, or null if not recorded
@@ -337,6 +342,23 @@ public final class PlaybookStep
             {
                 this.noHealing = true;
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
+            }
+
+            final java.util.regex.Pattern timeoutPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
+            final java.util.regex.Matcher timeoutMatcher = timeoutPattern.matcher(cleaned);
+            if (timeoutMatcher.find())
+            {
+                final long val = Long.parseLong(timeoutMatcher.group(1));
+                final String unit = timeoutMatcher.group(2);
+                if (unit != null && unit.equalsIgnoreCase("s"))
+                {
+                    this.timeoutMs = val * 1000L;
+                }
+                else
+                {
+                    this.timeoutMs = val;
+                }
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\s*\\)\\s*", " ");
             }
 
             this.instruction = cleaned.trim();
@@ -1077,5 +1099,35 @@ public final class PlaybookStep
     public void setDelayMs(final long delayMs)
     {
         this.delayMs = delayMs;
+    }
+
+    /**
+     * Retrieves the custom timeout for this step in milliseconds, if configured.
+     *
+     * @return timeout in milliseconds, or null
+     */
+    public Long getTimeoutMs()
+    {
+        return this.timeoutMs;
+    }
+
+    /**
+     * Sets the custom timeout for this step in milliseconds.
+     *
+     * @param timeoutMs timeout in milliseconds
+     */
+    public void setTimeoutMs(final Long timeoutMs)
+    {
+        this.timeoutMs = timeoutMs;
+    }
+
+    /**
+     * Sets the custom timeout for this step in milliseconds.
+     *
+     * @param timeoutMs timeout in milliseconds
+     */
+    public void setTimeoutMs(final long timeoutMs)
+    {
+        this.timeoutMs = timeoutMs;
     }
 }

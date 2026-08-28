@@ -13,7 +13,7 @@ import org.neodymium.junit4.NeodymiumRunner;
 import org.neodymium.util.Neodymium;
 
 @Browser("Chrome_1024x768")
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 @Browser("FF_1024x768")
 @Browser("FF_1500x1000")
 @RandomBrowsers(2)
@@ -33,7 +33,7 @@ public class FixedRandomnessOfRandomBrowser
     public void test2()
     {
         Assert.assertEquals(2, browsers.size());
-        Assert.assertEquals("Chrome_1500x1000", browsers.get(0));
+        Assert.assertEquals("Chrome_1500x1000_headless", browsers.get(0));
         Assert.assertEquals("FF_1500x1000", browsers.get(1));
     }
 }

@@ -22,8 +22,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Opening the specified URL in the browser.",
-  "durationMs" : 1865,
+  "durationMs" : 600,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click on the \"History & Reports\" navigation item",
@@ -49,8 +50,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Found the 'History & Reports' navigation item represented by the material symbol 'schedule' in the structural DOM tree.",
-  "durationMs" : 108,
+  "durationMs" : 93,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify the History view Headline is displayed",
@@ -76,8 +78,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Verify the History view headline 'Run History' is displayed in the panel header.",
-  "durationMs" : 101,
+  "durationMs" : 93,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click on the \"Workspace\" navigation item",
@@ -103,8 +106,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "Found the workspace navigation item in the sidebar with id 'navWorkspace'.",
-  "durationMs" : 94,
+  "durationMs" : 91,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify the Workspace view is displayed",
@@ -130,7 +134,8 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : "The Workspace view is successfully displayed with test cases, execution profiles, and control buttons visible.",
-  "durationMs" : 87,
+  "durationMs" : 88,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 } ]

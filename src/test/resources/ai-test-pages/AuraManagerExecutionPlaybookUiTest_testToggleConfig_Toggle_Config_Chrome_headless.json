@@ -47,8 +47,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 3536,
+  "durationMs" : 2943,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Toggle the \"Headless Mode\" switch",
@@ -99,8 +100,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 5068,
+  "durationMs" : 2137,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify that \"#optHeadless:not(:checked)\" exists",
@@ -151,8 +153,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 4608,
+  "durationMs" : 1557,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Toggle the \"Record Video\" switch",
@@ -203,8 +206,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 4812,
+  "durationMs" : 2019,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify that \"#optVideo:checked\" exists",
@@ -255,7 +259,8 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 4715,
+  "durationMs" : 1493,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 } ]

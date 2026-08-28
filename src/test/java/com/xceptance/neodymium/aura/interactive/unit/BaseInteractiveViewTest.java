@@ -44,7 +44,6 @@ public abstract class BaseInteractiveViewTest
     protected InteractiveConsoleEngine engine;
     protected InteractiveConsoleServer server;
     private long originalTimeout;
-    private boolean originalHeadless;
 
     @BeforeEach
     public final void setupServer() throws IOException
@@ -64,7 +63,6 @@ public abstract class BaseInteractiveViewTest
         // auto-run sequences, rewind flows, and drag-and-drop assertions.
         this.originalTimeout = Configuration.timeout;
         Configuration.timeout = 30000;
-        this.originalHeadless = Configuration.headless;
         Configuration.headless = true;
     }
 
@@ -72,7 +70,6 @@ public abstract class BaseInteractiveViewTest
     public final void tearDownServer()
     {
         Configuration.timeout = this.originalTimeout;
-        Configuration.headless = this.originalHeadless;
 
         if (this.server != null)
         {

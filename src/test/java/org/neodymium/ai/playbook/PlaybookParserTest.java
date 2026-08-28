@@ -238,4 +238,76 @@ public final class PlaybookParserTest
         assertEquals(1, playbook.getDataSets().size());
         assertEquals("Minimalist", playbook.getDataSets().get(0).get("searchTerm").value());
     }
+
+    /**
+     * Verifies that single Map datasets and metadata sections are parsed correctly by YamlPlaybookParser.
+     */
+    @Test
+    public void testParseSingleMapDataAndMetadata() throws IOException
+    {
+        final PlaybookResourceManager manager = new InMemoryResourceManager();
+        final String yaml = """
+            _meta:
+              author: "AI QA Team"
+              version: "1.2.0"
+            data:
+              user: "testuser"
+              password: "secretpassword"
+            steps:
+              - "Login with user"
+            """;
+
+        manager.write("auth_playbook.yaml", yaml);
+
+        final PlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("auth_playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(1, playbook.getDataSets().size());
+
+        final Map<String, SessionData.DataEntry> dataset = playbook.getDataSets().get(0);
+        assertEquals("testuser", dataset.get("user").value());
+        assertEquals("secretpassword", dataset.get("password").value());
+        assertEquals("auth_playbook.yaml", dataset.get("_meta.sourceFile").value());
+        assertEquals("auth_playbook.yaml", dataset.get("_meta.classpathResourcePath").value());
+        assertEquals("AI QA Team", dataset.get("_meta.author").value());
+        assertEquals("1.2.0", dataset.get("_meta.version").value());
+    }
+
+    /**
+     * Verifies that InlinePlaybookParser detects YAML when starting with data: or before: blocks.
+     */
+    @Test
+    public void testInlinePlaybookParserStartingWithDataOrBefore() throws IOException
+    {
+        final String dataFirstYaml = """
+            data:
+              searchTerm: "Desk Lamp"
+            steps:
+              - "Search for ${searchTerm}"
+            """;
+
+        final PlaybookParser parser = new InlinePlaybookParser(dataFirstYaml);
+        final Playbook playbook = parser.parse("inline.yaml", null);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(1, playbook.getDataSets().size());
+        assertEquals("Desk Lamp", playbook.getDataSets().get(0).get("searchTerm").value());
+
+        final String beforeYaml = """
+            before:
+              - "Open login page"
+            steps:
+              - "Submit form"
+            """;
+        final PlaybookParser beforeParser = new InlinePlaybookParser(beforeYaml);
+        final Playbook beforePlaybook = beforeParser.parse("inline.yaml", null);
+
+        assertNotNull(beforePlaybook);
+        assertEquals(2, beforePlaybook.getSteps().size());
+        assertEquals("Open login page", beforePlaybook.getSteps().get(0).getInstruction());
+        assertEquals("Submit form", beforePlaybook.getSteps().get(1).getInstruction());
+    }
 }

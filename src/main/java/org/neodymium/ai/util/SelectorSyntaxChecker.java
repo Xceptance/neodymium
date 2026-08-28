@@ -115,9 +115,9 @@ public final class SelectorSyntaxChecker
             return true;
         }
 
-        // Plain text heuristics (sentences, punctuation, prices)
+        // Plain text heuristics (sentences, punctuation, prices with currency symbols)
         if (clean.contains(": ") || clean.contains(". ") || clean.endsWith(".")
-            || clean.contains("$") || clean.contains("€") || clean.contains("£") || clean.contains("¥") || clean.contains("zł")
+            || clean.matches(".*\\p{Sc}.*")
             || clean.contains("!") || clean.contains("?"))
         {
             return false;

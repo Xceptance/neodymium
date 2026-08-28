@@ -58,8 +58,8 @@ public final class LlmRetryHelper
     public static LlmResponse executeWithRetry(final LlmCallable callable) throws IOException
     {
         final AiConfiguration config = AiConfiguration.getInstance();
-        final int maxRetries = Math.max(1, config.getInt("neodymium.ai.llm.maxRetries", 3));
-        final long initialDelayMs = Math.max(10L, config.getLong("neodymium.ai.llm.initialRetryDelayMs", 100L));
+        final int maxRetries = config.getLlmMaxRetries();
+        final long initialDelayMs = config.getLlmInitialRetryDelayMs();
 
         int attempt = 0;
         long currentDelayMs = initialDelayMs;

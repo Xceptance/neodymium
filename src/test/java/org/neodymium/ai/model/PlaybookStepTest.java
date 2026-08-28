@@ -199,4 +199,25 @@ public class PlaybookStepTest
         Assertions.assertEquals("V-[0-9]+-US", deserializedAction.getValue());
         Assertions.assertTrue(deserializedAction.isRegex());
     }
+
+    @Test
+    public void testTimeoutParsingAndSerialization() throws Exception
+    {
+        final PlaybookStep stepMs = new PlaybookStep();
+        stepMs.setInstruction("Wait for loader to vanish (timeout: 5000ms)");
+        Assertions.assertEquals("Wait for loader to vanish", stepMs.getInstruction());
+        Assertions.assertEquals(5000L, stepMs.getTimeoutMs());
+
+        final PlaybookStep stepSec = new PlaybookStep();
+        stepSec.setInstruction("Wait for response (timeout: 10s)");
+        Assertions.assertEquals("Wait for response", stepSec.getInstruction());
+        Assertions.assertEquals(10000L, stepSec.getTimeoutMs());
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final String json = mapper.writeValueAsString(stepSec);
+        Assertions.assertTrue(json.contains("\"timeoutMs\":10000") || json.contains("\"timeoutMs\" : 10000"));
+
+        final PlaybookStep deserialized = mapper.readValue(json, PlaybookStep.class);
+        Assertions.assertEquals(10000L, deserialized.getTimeoutMs());
+    }
 }

@@ -103,7 +103,7 @@ public final class PesapPreStep implements PipelineStep
             || (executionMode != null && executionMode.isReplay() && !this.step.isNoReplay() && this.step.getActions() != null && (!this.step.getActions().isEmpty() || this.step.getScreenshotHash() != null));
         final AiConfiguration config = AiConfiguration.getInstance();
 
-        if (!isReplay && config.getBoolean("neodymium.ai.pesap.enabled", true) && !alreadySplitSteps.contains(this.step))
+        if (!isReplay && config.isPesapEnabled() && !alreadySplitSteps.contains(this.step))
         {
             alreadySplitSteps.add(this.step);
             try

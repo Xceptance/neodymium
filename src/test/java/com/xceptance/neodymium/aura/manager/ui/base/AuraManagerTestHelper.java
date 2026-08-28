@@ -125,6 +125,7 @@ public final class AuraManagerTestHelper
 
     public static void startManager() throws IOException
     {
+        com.codeborne.selenide.Configuration.headless = true;
         if (auraServer != null)
         {
             return;

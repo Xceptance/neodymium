@@ -47,8 +47,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 2578,
+  "durationMs" : 2742,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify the page title is \"Neodymium Aura Manager\"",
@@ -99,8 +100,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1625,
+  "durationMs" : 1645,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click the Dark Mode button",
@@ -151,8 +153,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1967,
+  "durationMs" : 1705,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify the root element has the \"force-dark\" class",
@@ -203,8 +206,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1630,
+  "durationMs" : 1479,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click the Light Mode button",
@@ -255,8 +259,9 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1703,
+  "durationMs" : 1532,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify the root element has the \"force-light\" class",
@@ -307,7 +312,8 @@
   "schemaVersion" : "2.0",
   "contextLevel" : "MINIMAL",
   "reasoning" : null,
-  "durationMs" : 1515,
+  "durationMs" : 1439,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 } ]

@@ -626,6 +626,26 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if PESAP (Pre-Execution Step Analysis & Partitioning) is enabled.
+     *
+     * @return true if PESAP is enabled (default: true), false otherwise
+     */
+    public boolean isPesapEnabled()
+    {
+        return getBoolean("neodymium.ai.pesap.enabled", true);
+    }
+
+    /**
+     * Resolves the maximum number of retry attempts permitted at the highest escalation level.
+     *
+     * @return maximum retry count (default: 1)
+     */
+    public int getMaxRetriesAtMaxLevel()
+    {
+        return getInt("neodymium.ai.maxRetriesAtMaxLevel", 1);
+    }
+
+    /**
      * Checks whether interactive console mode is enabled.
      *
      * @return true if neodymium.ai.interactive is set to true
@@ -779,5 +799,38 @@ public final class AiConfiguration
             return primary;
         }
         return getProperty("neodymium.ai.report.disk.formats", "ALL");
+    }
+
+    /**
+     * Gets the post-action visual settle sleep duration in milliseconds.
+     * Default is 1000ms.
+     *
+     * @return post-action visual settle delay in milliseconds
+     */
+    public long getVisualPostActionSettleMs()
+    {
+        return getLong("neodymium.ai.visual.postActionSettleMs", 1000L);
+    }
+
+    /**
+     * Gets the maximum number of retry attempts for transient LLM errors.
+     * Default is 3.
+     *
+     * @return maximum LLM retry attempts
+     */
+    public int getLlmMaxRetries()
+    {
+        return Math.max(1, getInt("neodymium.ai.llm.maxRetries", 3));
+    }
+
+    /**
+     * Gets the initial retry backoff delay in milliseconds for transient LLM errors.
+     * Default is 100ms.
+     *
+     * @return initial LLM retry delay in milliseconds
+     */
+    public long getLlmInitialRetryDelayMs()
+    {
+        return Math.max(10L, getLong("neodymium.ai.llm.initialRetryDelayMs", 100L));
     }
 }

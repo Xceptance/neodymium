@@ -9,7 +9,7 @@ import org.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_1024x768")
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 @RandomBrowsers(2)
 public class DisableRandomBrowserAnnotation
 {

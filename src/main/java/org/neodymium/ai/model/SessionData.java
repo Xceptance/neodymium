@@ -116,11 +116,23 @@ public final class SessionData
         {
             return this.dynamicData.get(key);
         }
+        final DataEntry dynamicNested = resolveNestedPath(this.dynamicData, key);
+        if (dynamicNested != null)
+        {
+            return dynamicNested;
+        }
+
         // 2. Fallback to static data
         if (this.staticData.containsKey(key))
         {
             return this.staticData.get(key);
         }
+        final DataEntry staticNested = resolveNestedPath(this.staticData, key);
+        if (staticNested != null)
+        {
+            return staticNested;
+        }
+
         // 3. Fallback to System properties
         final String sysProp = System.getProperty(key);
         if (sysProp != null)
@@ -460,18 +472,18 @@ public final class SessionData
         // 4. Static dataset layer
         for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
         {
-            if (entry.getValue().value() != null)
+            if (entry.getValue() != null && entry.getValue().value() != null)
             {
-                varMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+                flattenObject(entry.getKey(), entry.getValue().value(), varMap);
             }
         }
         
         // 5. Dynamic data layer
         for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
         {
-            if (entry.getValue().value() != null)
+            if (entry.getValue() != null && entry.getValue().value() != null)
             {
-                varMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+                flattenObject(entry.getKey(), entry.getValue().value(), varMap);
             }
         }
 
@@ -530,9 +542,108 @@ public final class SessionData
         {
             if (entry.getValue() != null && entry.getValue().value() != null)
             {
-                map.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+                flattenObject(entry.getKey(), entry.getValue().value(), map);
             }
         }
         return map;
+    }
+
+    /**
+     * Resolves a dot-delimited property path against a dataset layer.
+     *
+     * @param layer the data layer map
+     * @param key the dot-delimited property key
+     * @return the resolved DataEntry, or null if unresolvable
+     */
+    private DataEntry resolveNestedPath(final Map<String, DataEntry> layer, final String key)
+    {
+        if (layer == null || key == null || !key.contains("."))
+        {
+            return null;
+        }
+
+        final int firstDot = key.indexOf('.');
+        final String rootKey = key.substring(0, firstDot);
+        final String remainingPath = key.substring(firstDot + 1);
+
+        final DataEntry rootEntry = layer.get(rootKey);
+        if (rootEntry == null || rootEntry.value() == null)
+        {
+            return null;
+        }
+
+        final Object leafValue = navigatePath(rootEntry.value(), remainingPath);
+        if (leafValue != null)
+        {
+            return new DataEntry(leafValue, rootEntry.sensitive());
+        }
+        return null;
+    }
+
+    /**
+     * Traverses a nested object or Map structure following a dot-delimited path.
+     *
+     * @param current the current object in the navigation hierarchy
+     * @param path the remaining dot-delimited path
+     * @return the leaf object value, or null if path segment is not found
+     */
+    private Object navigatePath(final Object current, final String path)
+    {
+        if (current == null || path == null || path.isEmpty())
+        {
+            return current;
+        }
+
+        final int dotIdx = path.indexOf('.');
+        final String currentSegment = dotIdx == -1 ? path : path.substring(0, dotIdx);
+        final String nextPath = dotIdx == -1 ? null : path.substring(dotIdx + 1);
+
+        if (current instanceof Map<?, ?> map)
+        {
+            Object nextVal = map.get(currentSegment);
+            if (nextVal == null)
+            {
+                for (final Map.Entry<?, ?> entry : map.entrySet())
+                {
+                    if (String.valueOf(entry.getKey()).equalsIgnoreCase(currentSegment))
+                    {
+                        nextVal = entry.getValue();
+                        break;
+                    }
+                }
+            }
+            if (nextVal != null)
+            {
+                return nextPath == null ? nextVal : navigatePath(nextVal, nextPath);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Recursively flattens nested maps into dot-separated string key-value pairs.
+     *
+     * @param prefix current property path prefix
+     * @param value object value to flatten
+     * @param outMap target map receiving flattened key-value entries
+     */
+    private void flattenObject(final String prefix, final Object value, final Map<String, String> outMap)
+    {
+        if (value == null)
+        {
+            return;
+        }
+        if (value instanceof Map<?, ?> map)
+        {
+            for (final Map.Entry<?, ?> entry : map.entrySet())
+            {
+                final String childKey = prefix.isEmpty() ? String.valueOf(entry.getKey()) : prefix + "." + entry.getKey();
+                flattenObject(childKey, entry.getValue(), outMap);
+            }
+        }
+        else
+        {
+            outMap.put(prefix, String.valueOf(value));
+        }
     }
 }
