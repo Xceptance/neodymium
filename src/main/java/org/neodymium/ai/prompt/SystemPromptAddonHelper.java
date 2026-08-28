@@ -156,16 +156,21 @@ public final class SystemPromptAddonHelper
 
         final String cleanModel = activeModel.trim().toLowerCase().replaceAll("[^a-z0-9_\\-]", "-");
 
-        // General model add-on
-        final String modelGeneral = loadModelAddon(cleanModel, null);
-        if (modelGeneral != null && !modelGeneral.isBlank())
-        {
-            addSegment(modelGeneral, sessionData, segments);
-        }
+        final boolean isGeneral = type == null || "general".equalsIgnoreCase(type)
+            || "action".equalsIgnoreCase(type) || "default".equalsIgnoreCase(type);
 
-        // Specific model add-on (if type is specified and not general/default)
-        if (type != null && !type.equalsIgnoreCase("general") && !type.equalsIgnoreCase("default"))
+        if (isGeneral)
         {
+            // General model add-on (for action extraction / execution prompts)
+            final String modelGeneral = loadModelAddon(cleanModel, null);
+            if (modelGeneral != null && !modelGeneral.isBlank())
+            {
+                addSegment(modelGeneral, sessionData, segments);
+            }
+        }
+        else
+        {
+            // Specific capability model add-on (e.g. addon-pesap.md, addon-verification.md)
             final String modelSpecific = loadModelAddon(cleanModel, type);
             if (modelSpecific != null && !modelSpecific.isBlank())
             {
