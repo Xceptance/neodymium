@@ -22,12 +22,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 
 /**
  * AI prompt implementation for the pre-step PESAP preparation phase.
  * Analyzes the active step instruction to predict minimal context level,
- * check if custom Java methods are required, and identify step splits.
+ * check if custom Java methods are required, classify semantic intent, and identify step splits.
  *
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
@@ -44,9 +45,21 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
      * @param contextLevel predicted SUT context level
      * @param requiresJavaMethods whether custom Java reflection methods are required
      * @param splitSteps the split step instructions, or empty if no split
+     * @param intent the predicted semantic intent, or null if unclassified
      */
-    public record PesapResult(String contextLevel, boolean requiresJavaMethods, List<String> splitSteps)
+    public record PesapResult(String contextLevel, boolean requiresJavaMethods, List<String> splitSteps, SemanticIntent intent)
     {
+        /**
+         * Backwards-compatible constructor without explicit semantic intent.
+         *
+         * @param contextLevel predicted SUT context level
+         * @param requiresJavaMethods whether custom Java reflection methods are required
+         * @param splitSteps the split step instructions, or empty if no split
+         */
+        public PesapResult(final String contextLevel, final boolean requiresJavaMethods, final List<String> splitSteps)
+        {
+            this(contextLevel, requiresJavaMethods, splitSteps, null);
+        }
     }
 
     /**
@@ -109,7 +122,7 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
         final String jsonContent = LlmResponseSanitizer.extractJson(rawContent);
         if (jsonContent.isEmpty())
         {
-            return new PesapResult("LEAN", false, List.of());
+            return new PesapResult("LEAN", false, List.of(), null);
         }
 
         final JsonNode root = MAPPER.readTree(jsonContent);
@@ -127,6 +140,9 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
             }
         }
 
-        return new PesapResult(contextLevel, requiresJavaMethods, splitSteps);
+        final String rawIntent = root.hasNonNull("i") ? root.path("i").asText(null) : null;
+        final SemanticIntent intent = SemanticIntent.fromCode(rawIntent);
+
+        return new PesapResult(contextLevel, requiresJavaMethods, splitSteps, intent);
     }
 }

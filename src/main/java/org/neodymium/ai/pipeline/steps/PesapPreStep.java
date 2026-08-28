@@ -216,7 +216,23 @@ public final class PesapPreStep implements PipelineStep
                     return true;
                 }
 
-                if (pesapResult.contextLevel() != null)
+                if (pesapResult.intent() != null)
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, pesapResult.intent());
+                    this.step.setSemanticIntent(pesapResult.intent());
+                    if (stats != null)
+                    {
+                        stats.setSemanticIntent(pesapResult.intent().name());
+                    }
+                    LOGGER.debug("   🎯 [Pre-Step PESAP] Classified intent: {}", pesapResult.intent());
+                }
+
+                if (pesapResult.intent() == org.neodymium.ai.model.SemanticIntent.ASSERT_METADATA)
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.MINIMAL);
+                    this.step.setContextLevel(ContextLevel.MINIMAL.name());
+                }
+                else if (pesapResult.contextLevel() != null)
                 {
                     try
                     {

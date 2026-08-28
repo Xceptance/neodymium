@@ -14,7 +14,19 @@ Predict minimal context level and metadata for the given test instruction.
 
 2. Java Method ('jm'): Set true ONLY if explicit custom Java method name (e.g. assertCalculation) is specified; false for text instructions.
 
-3. Step Splitting ('sp'):
+3. Semantic Intent ('i'): Classify the primary operational objective:
+   - `ASSERT`: Page & element verifications (text content, pattern matching, badges, messages, presence, visibility, enabled/disabled state, checked/unchecked, focused state, counts, wait-for-text).
+   - `ASSERT_METADATA`: Page URL, page title, or browser metadata assertions.
+   - `CLICK`: Clicking buttons, links, checkboxes, icons, tabs, or interactive triggers.
+   - `TYPE`: Form data entry into input fields, textareas, contenteditable elements.
+   - `SELECT`: Selecting options from dropdowns, radio button groups, or list pickers.
+   - `HOVER_SCROLL`: Mouse hover, scrolling to element or viewport position, revealing hover menus.
+   - `NAVIGATE`: Browser navigation (open URL, refresh, back, forward).
+   - `WAIT`: Explicit temporal pauses, sleeps, or waiting for spinners/animations.
+   - `STORE`: Extracting or reading on-screen values into session variables.
+   - `BRANCH`: Conditional logic (If / Else execution branches).
+
+4. Step Splitting ('sp'):
    - Default: Omit 'sp' (keep unsplit). Unsplit instructions are always safer.
    - Split ONLY when the instruction contains one of these two cases in ANY natural language:
      1. Multiple distinct target elements with explicit independent non-conditional actions or values (e.g. "Type user in #user, type pass in #pass, click Login", "Card number is '4111...', expiry '12/29', CVV '111'", or localized equivalents).
@@ -25,4 +37,4 @@ Predict minimal context level and metadata for the given test instruction.
 
 ## Output Format
 Return ONLY minified JSON:
-{"c":"HINT|MINIMAL|LEAN|STANDARD|RICH|VISUAL|VISUAL_LEAN|VISUAL_RICH","jm":false,"sp":["step 1","step 2"]}
+{"c":"HINT|MINIMAL|LEAN|STANDARD|RICH|VISUAL|VISUAL_LEAN|VISUAL_RICH","jm":false,"i":"ASSERT|ASSERT_METADATA|CLICK|TYPE|SELECT|HOVER_SCROLL|NAVIGATE|WAIT|STORE|BRANCH","sp":["step 1","step 2"]}

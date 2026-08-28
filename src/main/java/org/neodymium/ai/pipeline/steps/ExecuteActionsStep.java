@@ -56,6 +56,7 @@ import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.DivergenceException;
@@ -247,6 +248,19 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 executeIncludeAction(action, session, context, recordedActions);
                 return;
+            }
+
+            // Execution Guard: Block mutating actions when step has assertion intent
+            final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT);
+            final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : null;
+            if (intent != null && intent.isAssertion())
+            {
+                final String type = action.getType();
+                if ("CLICK".equalsIgnoreCase(type) || "TYPE".equalsIgnoreCase(type) || "CLEAR".equalsIgnoreCase(type) || "SELECT".equalsIgnoreCase(type))
+                {
+                    LOGGER.warn("🛡️ [Execute Guard] Blocked mutating action '{}' during step with assertion intent '{}'.", type, intent);
+                    return;
+                }
             }
 
             final Action resolvedAction = resolveActionVariables(action, context.getSessionData());
@@ -1387,6 +1401,10 @@ public final class ExecuteActionsStep implements PipelineStep
                 : raw;
             stats = new StepStats(resolved, startTime);
             stats.setReplayed(replayed);
+            if (step.getSemanticIntent() != null)
+            {
+                stats.setSemanticIntent(step.getSemanticIntent().name());
+            }
             stepStatsMap.put(step, stats);
 
             final PlaybookStep parentStep = step.getParent();
@@ -1399,6 +1417,10 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 allStats.add(stats);
             }
+        }
+        else if (stats.getSemanticIntent() == null && step.getSemanticIntent() != null)
+        {
+            stats.setSemanticIntent(step.getSemanticIntent().name());
         }
         return stats;
     }

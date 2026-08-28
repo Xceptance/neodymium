@@ -31,6 +31,7 @@ import org.neodymium.ai.executor.selenide.VolatileIdDetector;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.ToLevelEscalationException;
@@ -107,9 +108,16 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 : ContextLevel.MINIMAL;
         final ContextLevel nextLevel = activeLevel.escalate();
 
+        final Object intentObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT) : null;
+        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : null;
+
         final StringBuilder sb = new StringBuilder();
         sb.append("## Execution Context\n");
         sb.append("[INSTRUCTION]      ").append(instruction).append("\n");
+        if (intent != null)
+        {
+            sb.append("[SEMANTIC_INTENT]  ").append(intent.name()).append("\n");
+        }
         sb.append("[CURRENT_LEVEL]    ").append(activeLevel.name()).append("\n");
         if (nextLevel != null && nextLevel != activeLevel)
         {
@@ -203,6 +211,28 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             else if ("FAILED".equalsIgnoreCase(status) || (assertionSatisfied != null && !assertionSatisfied))
             {
                 throw new DivergenceException(statusReasoning.isEmpty() ? "Visual check assertion failed." : statusReasoning);
+            }
+        }
+
+        // Invariant 2: Semantic Intent Assertion Guard
+        final Object intentObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT) : null;
+        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : (currentStep != null ? currentStep.getSemanticIntent() : null);
+        if (intent != null && intent.isAssertion())
+        {
+            final boolean hasMutatingAction = actions.stream().anyMatch(a -> a != null
+                && ("CLICK".equalsIgnoreCase(a.getType())
+                    || "TYPE".equalsIgnoreCase(a.getType())
+                    || "CLEAR".equalsIgnoreCase(a.getType())
+                    || "SELECT".equalsIgnoreCase(a.getType())));
+
+            if (hasMutatingAction)
+            {
+                LOGGER.warn("🛡️ [Assertion Guard] Step with assertion intent '{}' emitted mutating action(s). Discarded mutating action(s).", intent);
+                actions.removeIf(a -> a != null
+                    && ("CLICK".equalsIgnoreCase(a.getType())
+                        || "TYPE".equalsIgnoreCase(a.getType())
+                        || "CLEAR".equalsIgnoreCase(a.getType())
+                        || "SELECT".equalsIgnoreCase(a.getType())));
             }
         }
 

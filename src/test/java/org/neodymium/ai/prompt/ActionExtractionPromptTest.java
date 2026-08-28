@@ -31,6 +31,7 @@ import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.ToLevelEscalationException;
@@ -648,6 +649,65 @@ public final class ActionExtractionPromptTest
         assertEquals(1, actions.size());
         assertEquals("NAVIGATE", actions.get(0).getType());
         assertEquals("https://localhost:8543/verla-perfect/index.html", actions.get(0).getValue());
+    }
+
+    /**
+     * Verifies that compileUserMessage includes the classified semantic intent header.
+     */
+    @Test
+    public void testCompileUserMessageIncludesSemanticIntent()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify checkout total is 99.00");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.LEAN);
+        context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+
+        final String userMessage = prompt.compileUserMessage(context);
+
+        assertNotNull(userMessage);
+        assertTrue(userMessage.contains("[INSTRUCTION]      Verify checkout total is 99.00"));
+        assertTrue(userMessage.contains("[SEMANTIC_INTENT]  ASSERT"));
+        assertTrue(userMessage.contains("[CURRENT_LEVEL]    LEAN"));
+    }
+
+    /**
+     * Verifies that parseResponse discards mutating actions when step has assertion intent.
+     */
+    @Test
+    public void testParseResponseDiscardsMutatingActionsOnAssertionIntent() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "targetContextLevel": "LEAN",
+              "reasoning": "Wait for confirmation message to appear",
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#purchase-btn",
+                  "reasoning": "Speculative click attempt"
+                },
+                {
+                  "action": "ASSERT",
+                  "locator": "#order-confirmation",
+                  "value": "Thank you",
+                  "reasoning": "Verify order confirmation text"
+                }
+              ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertEquals(1, actions.size(), "Mutating action (CLICK) should be discarded on ASSERT intent");
+        assertEquals("ASSERT", actions.get(0).getType());
+        assertEquals("#order-confirmation", actions.get(0).getTarget());
     }
 }
 

@@ -319,6 +319,7 @@ public final class TestExecutionReport
         private String baselineMatrixPng;
         private String replayMatrixPng;
         private Integer screenshotHashDim;
+        private String semanticIntent;
 
         public ReportStepEntry()
         {
@@ -698,6 +699,16 @@ public final class TestExecutionReport
         public void setScreenshotHashDim(final Integer screenshotHashDim)
         {
             this.screenshotHashDim = screenshotHashDim;
+        }
+
+        public String getSemanticIntent()
+        {
+            return this.semanticIntent;
+        }
+
+        public void setSemanticIntent(final String semanticIntent)
+        {
+            this.semanticIntent = semanticIntent;
         }
     }
 
