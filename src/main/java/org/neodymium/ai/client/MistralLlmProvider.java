@@ -51,6 +51,7 @@ public final class MistralLlmProvider implements LlmProvider
     private final AiConfiguration config;
     private final String apiKey;
     private final String modelName;
+    private final String baseUrl;
     private final ChatModel defaultModel;
     private final java.util.concurrent.ConcurrentHashMap<String, ChatModel> modelCache = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -72,18 +73,30 @@ public final class MistralLlmProvider implements LlmProvider
 
         this.modelName = this.config.getProperty("neodymium.ai.mistral.model", this.config.getModel("mistral"));
 
-        this.defaultModel = buildChatModel(0.0, 180);
+        this.baseUrl = this.config.getProperty("neodymium.ai.mistral.baseUrl", "https://api.mistral.ai/v1");
+
+        this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
 
     /**
-     * Builds a MistralAiChatModel with specified temperature and timeout.
+     * Builds a MistralAiChatModel with specified temperature, timeout, and response schema.
      */
-    private ChatModel buildChatModel(final double temperature, final int timeoutSeconds)
+    private ChatModel buildChatModel(
+        final double temperature,
+        final int timeoutSeconds,
+        final ResponseSchema responseSchema,
+        final ReasoningEffort reasoningEffort
+    )
     {
-        final MistralAiChatModel.MistralAiChatModelBuilder builder = MistralAiChatModel.builder()
+        final int maxTokens = ResponseSchema.resolveMaxOutputTokens(responseSchema);
+
+        final dev.langchain4j.model.mistralai.MistralAiChatModel.MistralAiChatModelBuilder builder = dev.langchain4j.model.mistralai.MistralAiChatModel.builder()
+            .baseUrl(this.baseUrl)
             .apiKey(this.apiKey)
             .modelName(this.modelName != null ? this.modelName : "mistral-large-latest")
-            .temperature(temperature);
+            .temperature(temperature)
+            .maxTokens(maxTokens);
+
         if (timeoutSeconds > 0)
         {
             builder.timeout(java.time.Duration.ofSeconds(timeoutSeconds));
@@ -92,19 +105,27 @@ public final class MistralLlmProvider implements LlmProvider
     }
 
     /**
-     * Resolves appropriate ChatModel for the given temperature and timeout settings.
+     * Resolves appropriate ChatModel for the given temperature, timeout, and response schema settings.
      */
-    private ChatModel getChatModel(final double temperature, final int timeoutSeconds)
+    private ChatModel getChatModel(
+        final double temperature,
+        final int timeoutSeconds,
+        final ResponseSchema responseSchema,
+        final ReasoningEffort reasoningEffort
+    )
     {
         final double temp = temperature >= 0.0 ? temperature : 0.0;
         final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
-        if (temp == 0.0 && timeout == 180)
+        final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
+        final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
+
+        if (temp == 0.0 && timeout == 180 && schema == ResponseSchema.TEXT && effort == ReasoningEffort.MEDIUM)
         {
             return this.defaultModel;
         }
 
-        final String cacheKey = String.format("%s:%.2f:%d", this.modelName, temp, timeout);
-        return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout));
+        final String cacheKey = String.format("%s:%.2f:%d:%s:%s", this.modelName, temp, timeout, schema.name(), effort.name());
+        return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout, schema, effort));
     }
 
     @Override
@@ -129,7 +150,12 @@ public final class MistralLlmProvider implements LlmProvider
         return LlmRetryHelper.executeWithRetry(() -> {
             try
             {
-                final ChatModel activeModel = getChatModel(request.temperature(), request.timeoutSeconds());
+                final ChatModel activeModel = getChatModel(
+                    request.temperature(),
+                    request.timeoutSeconds(),
+                    request.responseSchema(),
+                    request.reasoningEffort()
+                );
                 final ChatResponse response = activeModel.chat(messages);
 
                 final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();

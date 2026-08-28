@@ -92,37 +92,53 @@ public final class VertexAiLlamaProvider implements LlmProvider
                 location, projectId, location);
         }
 
-        this.defaultModel = buildChatModel(0.0, 180);
+        this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
 
     /**
-     * Builds an OpenAiChatModel instance configured for Vertex AI with specified temperature and timeout.
+     * Builds an OpenAiChatModel instance configured for Vertex AI with specified temperature, timeout, and response schema.
      */
-    private ChatModel buildChatModel(final double temperature, final int timeoutSeconds)
+    private ChatModel buildChatModel(
+        final double temperature,
+        final int timeoutSeconds,
+        final ResponseSchema responseSchema,
+        final ReasoningEffort reasoningEffort
+    )
     {
+        final int maxTokens = ResponseSchema.resolveMaxOutputTokens(responseSchema);
+
         return OpenAiChatModel.builder()
             .baseUrl(this.baseUrl)
             .apiKey(this.apiKey)
             .modelName(this.modelName)
             .temperature(temperature)
+            .maxTokens(maxTokens)
             .timeout(java.time.Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180))
             .build();
     }
 
     /**
-     * Resolves appropriate ChatModel for the given temperature and timeout settings.
+     * Resolves appropriate ChatModel for the given temperature, timeout, and response schema settings.
      */
-    private ChatModel getChatModel(final double temperature, final int timeoutSeconds)
+    private ChatModel getChatModel(
+        final double temperature,
+        final int timeoutSeconds,
+        final ResponseSchema responseSchema,
+        final ReasoningEffort reasoningEffort
+    )
     {
         final double temp = temperature >= 0.0 ? temperature : 0.0;
         final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
-        if (temp == 0.0 && timeout == 180)
+        final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
+        final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
+
+        if (temp == 0.0 && timeout == 180 && schema == ResponseSchema.TEXT && effort == ReasoningEffort.MEDIUM)
         {
             return this.defaultModel;
         }
 
-        final String cacheKey = String.format("%s:%.2f:%d", this.modelName, temp, timeout);
-        return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout));
+        final String cacheKey = String.format("%s:%.2f:%d:%s:%s", this.modelName, temp, timeout, schema.name(), effort.name());
+        return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout, schema, effort));
     }
 
     @Override
@@ -131,7 +147,12 @@ public final class VertexAiLlamaProvider implements LlmProvider
         final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = org.neodymium.ai.prompt.LlmSanitizerHelper.sanitizeRequest(rawRequest);
         final LlmRequest request = org.neodymium.ai.prompt.LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
 
-        final ChatModel activeModel = getChatModel(request.temperature(), request.timeoutSeconds());
+        final ChatModel activeModel = getChatModel(
+            request.temperature(),
+            request.timeoutSeconds(),
+            request.responseSchema(),
+            request.reasoningEffort()
+        );
 
         final List<ChatMessage> messages = new ArrayList<>();
         if (request.systemMessage() != null && !request.systemMessage().isBlank())

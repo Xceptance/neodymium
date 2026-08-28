@@ -24,6 +24,7 @@ import java.util.List;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -55,9 +56,9 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
     }
 
     @Override
-    public org.neodymium.ai.client.ResponseSchema getResponseSchema()
+    public ResponseSchema getResponseSchema()
     {
-        return org.neodymium.ai.client.ResponseSchema.TEXT;
+        return ResponseSchema.JUDGE;
     }
 
     @Override

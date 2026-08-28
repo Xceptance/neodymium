@@ -30,8 +30,9 @@ import java.util.List;
  * @param responseSchema the expected/enforced output response schema format
  * @param temperature the model generation temperature setting
  * @param timeoutSeconds the request timeout in seconds
+ * @param reasoningEffort the reasoning/thinking effort tier for this request
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
 public record LlmRequest(
@@ -40,11 +41,34 @@ public record LlmRequest(
     List<SutAttachment> attachments,
     ResponseSchema responseSchema,
     double temperature,
-    int timeoutSeconds
+    int timeoutSeconds,
+    ReasoningEffort reasoningEffort
 )
 {
     /**
-     * Canonical constructor that performs a defensive copy of the attachments list to guarantee immutability.
+     * Canonical constructor that performs defensive copying and sets default reasoning effort.
+     */
+    public LlmRequest(
+        final String systemMessage,
+        final String userMessage,
+        final List<SutAttachment> attachments,
+        final ResponseSchema responseSchema,
+        final double temperature,
+        final int timeoutSeconds,
+        final ReasoningEffort reasoningEffort
+    )
+    {
+        this.systemMessage = systemMessage;
+        this.userMessage = userMessage;
+        this.attachments = attachments == null ? Collections.emptyList() : List.copyOf(attachments);
+        this.responseSchema = responseSchema;
+        this.temperature = temperature;
+        this.timeoutSeconds = timeoutSeconds;
+        this.reasoningEffort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(responseSchema);
+    }
+
+    /**
+     * Convenience constructor resolving default reasoning effort from responseSchema.
      */
     public LlmRequest(
         final String systemMessage,
@@ -55,11 +79,6 @@ public record LlmRequest(
         final int timeoutSeconds
     )
     {
-        this.systemMessage = systemMessage;
-        this.userMessage = userMessage;
-        this.attachments = attachments == null ? Collections.emptyList() : List.copyOf(attachments);
-        this.responseSchema = responseSchema;
-        this.temperature = temperature;
-        this.timeoutSeconds = timeoutSeconds;
+        this(systemMessage, userMessage, attachments, responseSchema, temperature, timeoutSeconds, ResponseSchema.resolveReasoningEffort(responseSchema));
     }
 }
