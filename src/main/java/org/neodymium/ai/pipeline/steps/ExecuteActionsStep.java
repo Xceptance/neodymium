@@ -407,6 +407,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                     if (!isReplayingStep
                         && executor != null
+                        && isElementAction(resolvedAction.getType())
                         && WebDriverRunner.hasWebDriverStarted()
                         && resolvedAction.getTarget() != null
                         && !resolvedAction.getTarget().isBlank())
@@ -1620,5 +1621,18 @@ public final class ExecuteActionsStep implements PipelineStep
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)\\s*", " ");
         return prepared.replaceAll("\\s+", " ").trim();
+    }
+
+    private static boolean isElementAction(final String actionType)
+    {
+        if (actionType == null)
+        {
+            return false;
+        }
+        return switch (actionType.toUpperCase())
+        {
+            case "NAVIGATE", "OPEN", "GOTO", "BACK", "FORWARD", "REFRESH", "PAUSE", "WAIT", "SLEEP", "SCRIPT", "EXECUTE_SCRIPT", "NONE", "VERIFY", "INCLUDE", "SPLIT", "BRANCH" -> false;
+            default -> true;
+        };
     }
 }

@@ -69,6 +69,12 @@ public final class SelectorSyntaxChecker
 
         final String clean = candidate.trim();
 
+        // URLs with scheme (e.g. http://, https://, file://) are plain text values/targets, not locators
+        if (clean.contains("://"))
+        {
+            return SelectorType.TEXT;
+        }
+
         // 1. Explicit Prefixes & Structural Indicators
         if (clean.toLowerCase().startsWith("xpath=") || clean.startsWith("//") || clean.startsWith("./") || clean.startsWith("(/"))
         {
@@ -109,6 +115,11 @@ public final class SelectorSyntaxChecker
         }
 
         final String clean = candidate.trim();
+
+        if (clean.contains("://"))
+        {
+            return false;
+        }
 
         if (clean.startsWith("css=") || clean.startsWith("[data-ai="))
         {
@@ -187,6 +198,11 @@ public final class SelectorSyntaxChecker
         }
 
         final String clean = candidate.trim();
+
+        if (clean.contains("://"))
+        {
+            return false;
+        }
 
         final boolean hasXpathTokens = clean.startsWith("/") || clean.startsWith("./") || clean.startsWith("(/")
                 || clean.contains("//") || clean.contains("@") || clean.contains("text()") || clean.contains("contains(");
