@@ -89,4 +89,22 @@ public class GeminiLlmProviderTest
         }
     }
 
+    @Test
+    public void testIncludeThoughtsConfiguration()
+    {
+        System.setProperty("neodymium.ai.gemini.apiKey", "mock-gemini-key");
+        try
+        {
+            System.setProperty("neodymium.ai.gemini.includeThoughts", "true");
+            AiConfiguration.resetInstance();
+            assertTrue(AiConfiguration.getInstance().isIncludeThoughts(), "isIncludeThoughts should be true when configured.");
+            final GeminiLlmProvider providerWithThoughts = new GeminiLlmProvider();
+            assertNotNull(providerWithThoughts, "Provider should initialize with includeThoughts=true.");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.gemini.includeThoughts");
+            AiConfiguration.resetInstance();
+        }
+    }
 }

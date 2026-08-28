@@ -6,6 +6,7 @@ steps: |
   Open ${verla.url}/verla-perfect/index.html
   Open country region selection modal and select country '${countryName}'.
   Verify country flag '${countryFlag}' is displayed.
+  Verify that most of the text visible is displayed in language of '${countryCode}' (visual).
 
   Locate the first product card and click 'Add to Cart'
   Click size button 'L'

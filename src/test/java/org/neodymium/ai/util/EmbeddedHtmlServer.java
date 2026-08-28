@@ -1465,22 +1465,21 @@ public final class EmbeddedHtmlServer
                         if (q.isEmpty() || c.name.toLowerCase().contains(q) || c.code.toLowerCase().contains(q))
                         {
                             final String selectedClass = c.code.equals(activeCountry.code) ? "selected" : "";
-                            final String flag = getCountryFlag(c.code);
                             // Perfect vs Normal/Bad styling
                             if (isTailwindByClaude(qualitySuffix))
                             {
                                 sb.append("<li data-selected=\"").append(c.code.equals(activeCountry.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
-                                  .append(c.name).append(" ").append(flag).append("</li>");
+                                  .append(c.name).append(" (").append(c.symbol).append(")</li>");
                             }
-                            else if ("bad".equals(qualitySuffix))
+                            else if ("bad".equals(qualitySuffix) || "modern-bad-nowcag".equals(qualitySuffix))
                             {
                                 sb.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
-                                  .append(c.name).append(" ").append(flag).append("</div>");
+                                  .append(c.name).append(" (").append(c.symbol).append(")</div>");
                             }
                             else
                             {
                                 sb.append("<li class=\"country-item ").append(selectedClass).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
-                                  .append(c.name).append(" ").append(flag).append("</li>");
+                                  .append(c.name).append(" (").append(c.symbol).append(")</li>");
                             }
                         }
                     }

@@ -542,6 +542,19 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if thought traces should be included in LLM output for extensive debugging.
+     * Controlled via {@code neodymium.ai.gemini.includeThoughts} or {@code neodymium.ai.includeThoughts}.
+     * Defaults to {@code false}.
+     *
+     * @return true if thoughts should be included in the response, false otherwise
+     */
+    public boolean isIncludeThoughts()
+    {
+        return getBoolean("neodymium.ai.gemini.includeThoughts",
+            getBoolean("neodymium.ai.includeThoughts", false));
+    }
+
+    /**
      * Returns the speed scaling multiplier applied to recorded delays during replay.
      * For example, 1.0 is real-time, 0.5 is 2x speed, 2.0 is half speed.
      *

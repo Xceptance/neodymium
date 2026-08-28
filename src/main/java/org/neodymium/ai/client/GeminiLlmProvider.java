@@ -49,6 +49,7 @@ public final class GeminiLlmProvider implements LlmProvider
     private final AiConfiguration config;
     private final String apiKey;
     private final String modelName;
+    private final boolean includeThoughts;
     private final ChatModel defaultModel;
     private final java.util.concurrent.ConcurrentHashMap<String, ChatModel> modelCache = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -69,6 +70,7 @@ public final class GeminiLlmProvider implements LlmProvider
         }
 
         this.modelName = this.config.getProperty("neodymium.ai.gemini.model", this.config.getModel("gemini"));
+        this.includeThoughts = this.config.isIncludeThoughts();
 
         this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
@@ -76,15 +78,15 @@ public final class GeminiLlmProvider implements LlmProvider
     /**
      * Builds a GeminiThinkingConfig instance mapped from the specified ReasoningEffort tier.
      */
-    private static GeminiThinkingConfig buildThinkingConfig(final ReasoningEffort effort)
+    private static GeminiThinkingConfig buildThinkingConfig(final ReasoningEffort effort, final boolean includeThoughts)
     {
         final ReasoningEffort effectiveEffort = effort != null ? effort : ReasoningEffort.MEDIUM;
         return switch (effectiveEffort)
         {
             case OFF -> GeminiThinkingConfig.builder().thinkingBudget(0).includeThoughts(false).build();
-            case LOW -> GeminiThinkingConfig.builder().thinkingLevel("LOW").includeThoughts(true).build();
-            case MEDIUM -> GeminiThinkingConfig.builder().thinkingLevel("MEDIUM").includeThoughts(true).build();
-            case HIGH -> GeminiThinkingConfig.builder().thinkingLevel("HIGH").includeThoughts(true).build();
+            case LOW -> GeminiThinkingConfig.builder().thinkingLevel("LOW").includeThoughts(includeThoughts).build();
+            case MEDIUM -> GeminiThinkingConfig.builder().thinkingLevel("MEDIUM").includeThoughts(includeThoughts).build();
+            case HIGH -> GeminiThinkingConfig.builder().thinkingLevel("HIGH").includeThoughts(includeThoughts).build();
         };
     }
 
@@ -106,7 +108,7 @@ public final class GeminiLlmProvider implements LlmProvider
             .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash-lite")
             .temperature(temperature)
             .maxOutputTokens(maxTokens)
-            .thinkingConfig(buildThinkingConfig(effort))
+            .thinkingConfig(buildThinkingConfig(effort, this.includeThoughts))
             .timeout(java.time.Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180))
             .build();
     }

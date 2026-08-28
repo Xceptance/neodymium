@@ -19,12 +19,16 @@
 package org.neodymium.ai.prompt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Utility helper to clean and extract raw JSON structures from LLM response text outputs.
- * Handles markdown code block stripping (```json ... ```) and extracts bounded JSON
- * objects ({ ... }) or arrays ([ ... ]), filtering out any conversational preambles,
- * markdown headers, or malformed leading labels (e.g. {\label} : country_selector_click).
+ * Generic utility helper to clean and extract the authoritative JSON structure (object or array)
+ * from LLM response text outputs.
+ * <p>
+ * Supports responses containing multiple intermediate reasoning scratchpads or markdown code blocks
+ * by scanning code blocks and JSON structures in reverse order (from last to first), guaranteeing
+ * that the model's final conclusion is extracted rather than intermediate brainstormed drafts.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
@@ -39,7 +43,7 @@ public final class LlmResponseSanitizer
     }
 
     /**
-     * Extracts and sanitizes the raw JSON content (object or array) from an LLM response text.
+     * Extracts and sanitizes the final, authoritative JSON content (object or array) from an LLM response text.
      *
      * @param rawContent the raw string returned by the LLM
      * @return the sanitized JSON string, or empty string if input is null/empty
@@ -51,89 +55,95 @@ public final class LlmResponseSanitizer
             return "";
         }
 
-        String content = rawContent.trim();
+        final String trimmed = rawContent.trim();
 
-        // 1. Strip markdown code block wrappers
-        if (content.contains("```json"))
+        // 1. Check if the entire rawContent is directly a valid JSON structure
+        if (isValidJson(trimmed))
         {
-            content = content.substring(content.indexOf("```json") + 7);
-            if (content.contains("```"))
-            {
-                content = content.substring(0, content.indexOf("```"));
-            }
-        }
-        else if (content.contains("```"))
-        {
-            content = content.substring(content.indexOf("```") + 3);
-            if (content.contains("```"))
-            {
-                content = content.substring(0, content.indexOf("```"));
-            }
+            return trimmed;
         }
 
-        content = content.trim();
-
-        // Quick check if full string is already valid JSON
-        try
+        // 2. Search for the last valid JSON object or array in the text (scanned from end of text)
+        final String extracted = findLastValidJson(trimmed);
+        if (extracted != null)
         {
-            MAPPER.readTree(content);
-            return content;
+            return extracted;
+        }
+
+        return trimmed;
+    }
+
+    private static boolean isValidJson(final String text)
+    {
+        if (text == null || text.isEmpty())
+        {
+            return false;
+        }
+        final char firstChar = text.charAt(0);
+        final char lastChar = text.charAt(text.length() - 1);
+        if ((firstChar != '{' || lastChar != '}') && (firstChar != '[' || lastChar != ']'))
+        {
+            return false;
+        }
+        try (com.fasterxml.jackson.core.JsonParser parser = MAPPER.createParser(text))
+        {
+            MAPPER.readTree(parser);
+            return parser.nextToken() == null;
         }
         catch (final Exception ignored)
         {
-            // Fall through to sub-string extraction
+            return false;
+        }
+    }
+
+    /**
+     * Finds the last valid JSON Object or Array in text by inspecting balanced close/open pairs from the end.
+     */
+    private static String findLastValidJson(final String text)
+    {
+        if (text == null || text.isEmpty())
+        {
+            return null;
         }
 
-        // 2. Extract valid JSON Object { ... }
-        final int lastBrace = content.lastIndexOf('}');
-        if (lastBrace > 0)
+        // Collect all candidate closing brace and bracket positions in reverse order
+        final List<Integer> closePositions = new ArrayList<>();
+        for (int i = text.length() - 1; i >= 0; i--)
         {
-            int searchPos = 0;
-            while (searchPos < lastBrace)
+            final char c = text.charAt(i);
+            if (c == '}' || c == ']')
             {
-                final int candidateBrace = content.indexOf('{', searchPos);
-                if (candidateBrace < 0)
+                closePositions.add(i);
+            }
+        }
+
+        for (final int closePos : closePositions)
+        {
+            final char closeChar = text.charAt(closePos);
+            final char openChar = (closeChar == '}') ? '{' : '[';
+
+            // Collect all matching open characters before closePos
+            final List<Integer> openPositions = new ArrayList<>();
+            for (int i = 0; i < closePos; i++)
+            {
+                if (text.charAt(i) == openChar)
                 {
-                    break;
+                    openPositions.add(i);
                 }
-                final String candidateJson = content.substring(candidateBrace, lastBrace + 1).trim();
-                try
+            }
+
+            // Test candidate openings from closest to furthest
+            for (int j = openPositions.size() - 1; j >= 0; j--)
+            {
+                final int openPos = openPositions.get(j);
+                final String candidate = text.substring(openPos, closePos + 1).trim();
+                if (isValidJson(candidate))
                 {
-                    MAPPER.readTree(candidateJson);
-                    return candidateJson;
-                }
-                catch (final Exception ignored)
-                {
-                    searchPos = candidateBrace + 1;
+                    return candidate;
                 }
             }
         }
 
-        // 3. Extract valid JSON Array [ ... ]
-        final int lastBracket = content.lastIndexOf(']');
-        if (lastBracket > 0)
-        {
-            int searchPos = 0;
-            while (searchPos < lastBracket)
-            {
-                final int candidateBracket = content.indexOf('[', searchPos);
-                if (candidateBracket < 0)
-                {
-                    break;
-                }
-                final String candidateJson = content.substring(candidateBracket, lastBracket + 1).trim();
-                try
-                {
-                    MAPPER.readTree(candidateJson);
-                    return candidateJson;
-                }
-                catch (final Exception ignored)
-                {
-                    searchPos = candidateBracket + 1;
-                }
-            }
-        }
-
-        return content;
+        return null;
     }
 }
