@@ -90,6 +90,10 @@ public final class PesapPreStep implements PipelineStep
             return false;
         }
 
+        // Always reset transient intent at step start to prevent intent leakage across steps
+        context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+        this.step.setSemanticIntent(null);
+
         final String resolvedInstruction = context.getSessionData().resolveVariables(this.step.getInstruction());
         final StepStats stats = (StepStats) context.getTransientData().get("KEY_CURRENT_STEP_STATS");
 
@@ -226,6 +230,11 @@ public final class PesapPreStep implements PipelineStep
                     }
                     LOGGER.debug("   🎯 [Pre-Step PESAP] Classified intent: {}", pesapResult.intent());
                 }
+                else
+                {
+                    context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+                    this.step.setSemanticIntent(null);
+                }
 
                 if (pesapResult.intent() == org.neodymium.ai.model.SemanticIntent.ASSERT_METADATA)
                 {
@@ -252,6 +261,8 @@ public final class PesapPreStep implements PipelineStep
             }
             catch (final Exception e)
             {
+                context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+                this.step.setSemanticIntent(null);
                 LOGGER.warn("⚠️ Pre-Step PESAP failed for step '{}' — falling back to defaults: {}", resolvedInstruction, e.getMessage());
             }
         }

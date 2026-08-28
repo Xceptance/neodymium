@@ -1620,6 +1620,8 @@ public final class ExecuteActionsStep implements PipelineStep
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*layout\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*hint(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
         return prepared.replaceAll("\\s+", " ").trim();
     }
 

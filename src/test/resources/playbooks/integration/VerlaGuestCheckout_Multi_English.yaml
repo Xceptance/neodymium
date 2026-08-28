@@ -17,7 +17,7 @@ steps: |
   Verify checkout page headline.
   Select '${countryName}' in checkout shipping country dropdown.
   Enter first name '${firstName}', last name '${lastName}', and email '${email}'.
-  Enter street address '${street}', city '${city}', state '${state}', and postcode '${postcode}'.
+  Enter street address '${street}', city '${city}', state/province '${state}', and postcode '${postcode}'.
   If there is a 'prefecture' input field, enter '${prefecture}'.
 
   Enter card number '4111 1111 1111 1111', expiry '12/29', and CVV '111'.
