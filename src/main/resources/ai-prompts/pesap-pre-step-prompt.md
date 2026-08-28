@@ -4,8 +4,8 @@ Predict minimal context level, semantic intent, and step splits for the given te
 1. Context Level ('c'):
    - Explicit selector hint tag `(hint: ...)` -> HINT
    - Element state, property/attribute value, metadata, or presence assertion -> MINIMAL
-   - Scoped container section (modal, dialog, form, header, card) or standard form input action verb (typing text, filling fields, selecting options, submitting forms, logging in) -> LEAN
-   - Page content text validation, headings, article body copy, or search results -> STANDARD
+   - Scoped container section (modal, dialog, form, header, card), standard form input action verb (typing text, filling fields, selecting options, submitting forms, logging in), or element/UI assertion (buttons, badges, headings, messages, counts, cart, verification) -> LEAN
+   - Long-form article body copy, static paragraphs, or full-page text search results -> STANDARD
    - Complex data grid, table validation, or multi-field calculation -> RICH
    - Visual assertion `(visual)` -> VISUAL 
    - Visual interaction -> VISUAL_LEAN
