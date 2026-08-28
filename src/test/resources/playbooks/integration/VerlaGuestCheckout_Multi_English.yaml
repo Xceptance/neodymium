@@ -4,9 +4,8 @@
 
 steps: |
   Open ${verla.url}/verla-perfect/index.html
-  Open country region selection modal.
-  Select country '${countryName}'.
-  Verify country flag for '${countryName}' is displayed.
+  Open country region selection modal and select country '${countryName}'.
+  Verify country flag '${countryFlag}' is displayed.
 
   Locate the first product card and click 'Add to Cart'
   Click size button 'L'
@@ -33,6 +32,7 @@ data:
   - testId: "germany"
     countryName: "Germany"
     countryCode: "DE"
+    countryFlag: "🇩🇪"
     firstName: "Mario"
     lastName: "Meier"
     email: "mario-de@example.com"
@@ -48,6 +48,7 @@ data:
   - testId: "united-states"
     countryName: "United States"
     countryCode: "US"
+    countryFlag: "🇺🇸"
     firstName: "John"
     lastName: "Doe"
     email: "john-us@example.com"
@@ -63,6 +64,7 @@ data:
   - testId: "united-kingdom"
     countryName: "United Kingdom"
     countryCode: "UK"
+    countryFlag: "🇬🇧"
     firstName: "Oliver"
     lastName: "Smith"
     email: "oliver-uk@example.com"
@@ -78,6 +80,7 @@ data:
   - testId: "canada-en"
     countryName: "Canada (EN)"
     countryCode: "CA_EN"
+    countryFlag: "🇨🇦"
     firstName: "William"
     lastName: "Tremblay"
     email: "william-ca@example.com"
@@ -93,6 +96,7 @@ data:
   - testId: "canada-fr"
     countryName: "Canada (FR)"
     countryCode: "CA_FR"
+    countryFlag: "🇨🇦"
     firstName: "Jean"
     lastName: "Dupont"
     email: "jean-fr@example.com"
@@ -108,6 +112,7 @@ data:
   - testId: "poland"
     countryName: "Poland"
     countryCode: "PL"
+    countryFlag: "🇵🇱"
     firstName: "Jan"
     lastName: "Kowalski"
     email: "jan-pl@example.com"
@@ -123,6 +128,7 @@ data:
   - testId: "sweden"
     countryName: "Sweden"
     countryCode: "SE"
+    countryFlag: "🇸🇪"
     firstName: "Lars"
     lastName: "Larsson"
     email: "lars-se@example.com"
@@ -138,6 +144,7 @@ data:
   - testId: "finland"
     countryName: "Finland"
     countryCode: "FI"
+    countryFlag: "🇫🇮"
     firstName: "Matti"
     lastName: "Virtanen"
     email: "matti-fi@example.com"
@@ -153,6 +160,7 @@ data:
   - testId: "japan"
     countryName: "Japan"
     countryCode: "JP"
+    countryFlag: "🇯🇵"
     firstName: "Taro"
     lastName: "Tanaka"
     email: "taro-jp@example.com"
