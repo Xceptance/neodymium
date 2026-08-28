@@ -131,4 +131,33 @@ public class PesapPreStepTest
         assertEquals("Type \"${email}\" into email", parentStep.getSubSteps().get(0).getInstruction());
         assertEquals("Type \"${password}\" into password", parentStep.getSubSteps().get(1).getInstruction());
     }
+
+    @Test
+    public void testPesapClearsPreviousIntentAndHandlesUnclassifiedIntent() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        // Emits unclassified/invalid intent code (e.g. LLM typo)
+        provider.addResponse(new LlmResponse("{\"c\": \"LEAN\", \"i\": \"NAVGIATE\"}", null, "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.PESAP, provider);
+        registry.setDefaultProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+
+        // Simulate stale intent from a prior step
+        context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, org.neodymium.ai.model.SemanticIntent.ASSERT);
+
+        final PlaybookStep step = new PlaybookStep("Navigate to cart page.");
+        final PesapPreStep pesapStep = new PesapPreStep(step, session);
+        final boolean isSplit = pesapStep.executePreStep(context);
+
+        org.junit.jupiter.api.Assertions.assertFalse(isSplit);
+        org.junit.jupiter.api.Assertions.assertNull(context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT));
+        org.junit.jupiter.api.Assertions.assertNull(step.getSemanticIntent());
+    }
 }

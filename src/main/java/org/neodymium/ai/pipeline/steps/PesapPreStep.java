@@ -90,6 +90,10 @@ public final class PesapPreStep implements PipelineStep
             return false;
         }
 
+        // Always reset transient intent at step start to prevent intent leakage across steps
+        context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+        this.step.setSemanticIntent(null);
+
         final String resolvedInstruction = context.getSessionData().resolveVariables(this.step.getInstruction());
         final StepStats stats = (StepStats) context.getTransientData().get("KEY_CURRENT_STEP_STATS");
 
@@ -216,7 +220,28 @@ public final class PesapPreStep implements PipelineStep
                     return true;
                 }
 
-                if (pesapResult.contextLevel() != null)
+                if (pesapResult.intent() != null)
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, pesapResult.intent());
+                    this.step.setSemanticIntent(pesapResult.intent());
+                    if (stats != null)
+                    {
+                        stats.setSemanticIntent(pesapResult.intent().name());
+                    }
+                    LOGGER.debug("   🎯 [Pre-Step PESAP] Classified intent: {}", pesapResult.intent());
+                }
+                else
+                {
+                    context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+                    this.step.setSemanticIntent(null);
+                }
+
+                if (pesapResult.intent() == org.neodymium.ai.model.SemanticIntent.ASSERT_METADATA)
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.MINIMAL);
+                    this.step.setContextLevel(ContextLevel.MINIMAL.name());
+                }
+                else if (pesapResult.contextLevel() != null)
                 {
                     try
                     {
@@ -236,6 +261,8 @@ public final class PesapPreStep implements PipelineStep
             }
             catch (final Exception e)
             {
+                context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+                this.step.setSemanticIntent(null);
                 LOGGER.warn("⚠️ Pre-Step PESAP failed for step '{}' — falling back to defaults: {}", resolvedInstruction, e.getMessage());
             }
         }

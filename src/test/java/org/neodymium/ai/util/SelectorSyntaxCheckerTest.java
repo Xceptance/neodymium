@@ -73,6 +73,10 @@ public class SelectorSyntaxCheckerTest
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Canada (FR)"));
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("Art.-Nr. 123"));
         assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("z.B. Test"));
+
+        // Full URLs must be classified as TEXT, never XPath or CSS
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("https://localhost:8543/verla-perfect/index.html"));
+        assertEquals(SelectorType.TEXT, SelectorSyntaxChecker.determineType("http://example.com/shop"));
     }
 
     @Test
@@ -83,6 +87,7 @@ public class SelectorSyntaxCheckerTest
         assertTrue(SelectorSyntaxChecker.isCssSelector("header > div.logo"));
         assertFalse(SelectorSyntaxChecker.isCssSelector("Plain text string"));
         assertFalse(SelectorSyntaxChecker.isCssSelector("//div[@id='foo']"));
+        assertFalse(SelectorSyntaxChecker.isCssSelector("https://localhost:8543/verla-perfect/index.html"));
 
         // Standard attribute presence selectors
         assertTrue(SelectorSyntaxChecker.isCssSelector("input.form-control[required]"));
@@ -120,5 +125,7 @@ public class SelectorSyntaxCheckerTest
         assertTrue(SelectorSyntaxChecker.isXpathExpression("//button[contains(text(),'OK')]"));
         assertFalse(SelectorSyntaxChecker.isXpathExpression("#search-field"));
         assertFalse(SelectorSyntaxChecker.isXpathExpression("Just some instruction text"));
+        assertFalse(SelectorSyntaxChecker.isXpathExpression("https://localhost:8543/verla-perfect/index.html"));
+        assertFalse(SelectorSyntaxChecker.isXpathExpression("http://example.com/api"));
     }
 }

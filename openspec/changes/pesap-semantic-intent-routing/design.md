@@ -47,6 +47,13 @@ See [proposal.md](proposal.md) for motivation. PESAP currently analyzes instruct
 - **Decision:** If PESAP returns an invalid or unrecognized intent, intent defaults to `null` and standard execution continues safely. For compound instructions, PESAP step-splitting runs first so each atomic sub-step receives its own distinct intent.
 - **Rationale:** Ensures resilience, backward compatibility, and proper intent assignment per atomic action.
 
+### 6. 360° LLM Taming & Safety Lifecycle Documentation
+- **Decision:** Document the unified safety lifecycle in `doc/DOCUMENTATION.md` under a dedicated Chapter 4 section, covering:
+  - **Pre-Execution:** Intent routing, volatile framework ID stripping, outbound secret credential masking.
+  - **In-Flight:** Java-side mutating action rejection on assertions, action scope focusing (`[SEMANTIC_INTENT]`), timeout guards.
+  - **Post-Execution:** Semantic outcome verification (`VerifyOutcomeStep`), second-opinion Quality Judge auditing (`QualityJudgeStep`), and SSIM temporal visual stability settling.
+- **Rationale:** Consolidates all defense-in-depth mechanisms into a clear, cohesive architecture guide for developers and auditors.
+
 ## Risks / Trade-offs
 
 - **[Risk: PESAP Misclassifies Intent on Ambiguous Instructions]** → Mitigation: If Action Extractor receives an assertion intent but determines that no assertion is viable, it escalates to the next context level with clear reasoning rather than failing silently.
