@@ -799,6 +799,127 @@ public final class ActionExtractionPromptTest
         final Action actionExplicit = actionsExplicit.get(0);
         assertTrue(actionExplicit.hasElse(), "Explicit hasElse=true must be preserved");
     }
+
+    @Test
+    public void testParseDistinctAssertActions() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "reasoning": "Parsed various assertion actions",
+              "actions": [
+                {
+                  "action": "ASSERT_EXISTS",
+                  "locator": "#prefecture",
+                  "reasoning": "Verify prefecture field is present"
+                },
+                {
+                  "action": "ASSERT_ABSENT",
+                  "locator": "#cookie-modal",
+                  "reasoning": "Verify cookie modal is closed"
+                },
+                {
+                  "action": "ASSERT_TEXT",
+                  "locator": "#headline",
+                  "value": "Checkout",
+                  "reasoning": "Verify headline text"
+                },
+                {
+                  "action": "ASSERT_VALUE",
+                  "locator": "#first-name",
+                  "value": "Alice",
+                  "reasoning": "Verify input value"
+                },
+                {
+                  "action": "ASSERT_CHECKED",
+                  "locator": "#newsletter",
+                  "reasoning": "Verify checkbox is checked"
+                },
+                {
+                  "action": "ASSERT_DISABLED",
+                  "locator": "#submit-btn",
+                  "reasoning": "Verify button is disabled"
+                },
+                {
+                  "action": "ASSERT_URL",
+                  "locator": "url",
+                  "value": "https://example.com/checkout",
+                  "reasoning": "Verify page URL"
+                }
+              ]
+            }
+            """;
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+        assertNotNull(actions);
+        assertEquals(7, actions.size());
+
+        assertEquals("ASSERT_EXISTS", actions.get(0).getType());
+        assertEquals("#prefecture", actions.get(0).getTarget());
+
+        assertEquals("ASSERT_ABSENT", actions.get(1).getType());
+        assertEquals("#cookie-modal", actions.get(1).getTarget());
+
+        assertEquals("ASSERT_TEXT", actions.get(2).getType());
+        assertEquals("#headline", actions.get(2).getTarget());
+        assertEquals("Checkout", actions.get(2).getValue());
+
+        assertEquals("ASSERT_VALUE", actions.get(3).getType());
+        assertEquals("#first-name", actions.get(3).getTarget());
+        assertEquals("Alice", actions.get(3).getValue());
+
+        assertEquals("ASSERT_CHECKED", actions.get(4).getType());
+        assertEquals("#newsletter", actions.get(4).getTarget());
+
+        assertEquals("ASSERT_DISABLED", actions.get(5).getType());
+        assertEquals("#submit-btn", actions.get(5).getTarget());
+
+        assertEquals("ASSERT_URL", actions.get(6).getType());
+        assertEquals("url", actions.get(6).getTarget());
+        assertEquals("https://example.com/checkout", actions.get(6).getValue());
+    }
+
+    @Test
+    public void testParseBranchWithAssertExistsCondition() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "reasoning": "Conditional branch based on prefecture existence",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "condition": [
+                    { "action": "ASSERT_EXISTS", "locator": "input[name='prefecture'], #prefecture" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "input[name='prefecture'], #prefecture", "value": "${prefecture}" }
+                  ]
+                }
+              ]
+            }
+            """;
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+
+        final Action branch = actions.get(0);
+        assertEquals("BRANCH", branch.getType());
+        assertNotNull(branch.getCondition());
+        assertEquals(1, branch.getCondition().size());
+        assertEquals("ASSERT_EXISTS", branch.getCondition().get(0).getType());
+        assertEquals("input[name='prefecture'], #prefecture", branch.getCondition().get(0).getTarget());
+
+        assertNotNull(branch.getThen());
+        assertEquals(1, branch.getThen().size());
+        assertEquals("TYPE", branch.getThen().get(0).getType());
+        assertEquals("${prefecture}", branch.getThen().get(0).getValue());
+    }
 }
 
 

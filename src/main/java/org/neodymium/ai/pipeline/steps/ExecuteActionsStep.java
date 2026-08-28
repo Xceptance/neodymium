@@ -627,7 +627,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     cause = cause.getCause();
                 }
 
-                if ("ASSERT".equalsIgnoreCase(action.getType()))
+                if (action.getType() != null && action.getType().toUpperCase().startsWith("ASSERT"))
                 {
                     if (isAssertionFailure)
                     {
@@ -1633,7 +1633,7 @@ public final class ExecuteActionsStep implements PipelineStep
         }
         return switch (actionType.toUpperCase())
         {
-            case "NAVIGATE", "OPEN", "GOTO", "BACK", "FORWARD", "REFRESH", "PAUSE", "WAIT", "SLEEP", "SCRIPT", "EXECUTE_SCRIPT", "NONE", "VERIFY", "INCLUDE", "SPLIT", "BRANCH" -> false;
+            case "NAVIGATE", "OPEN", "GOTO", "BACK", "FORWARD", "REFRESH", "PAUSE", "WAIT", "SLEEP", "SCRIPT", "EXECUTE_SCRIPT", "NONE", "VERIFY", "INCLUDE", "SPLIT", "BRANCH", "ASSERT_URL", "ASSERT_TITLE" -> false;
             default -> true;
         };
     }

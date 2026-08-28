@@ -233,4 +233,119 @@ public class AssertActionTest extends BaseAiTest
             plugin.execute(new Action("ASSERT", "#opt-admin", "selected", "check selected on unselected option", "reasoning", false));
         });
     }
+
+    @Test
+    @DisplayName("AssertAction handles distinct ASSERT_EXISTS and ASSERT_ABSENT cleanly")
+    public void testDistinctAssertExistsAndAbsent() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        plugin.execute(new Action("ASSERT_EXISTS", "#visible-btn", "", "check exists", "reasoning", false));
+        plugin.execute(new Action("ASSERT_VISIBLE", "#visible-btn", "", "check visible", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ABSENT", "#hidden-btn", "", "check absent", "reasoning", false));
+        plugin.execute(new Action("ASSERT_HIDDEN", "#hidden-btn", "", "check hidden", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ABSENT", "#non-existent-element-xyz", "", "check non-existent is absent", "reasoning", false));
+
+        // Negative: asserting absent element exists
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_EXISTS", "#hidden-btn", "", "check hidden exists", "reasoning", false));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_VISIBLE", "#non-existent-element-xyz", "", "check non-existent visible", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles distinct ASSERT_TEXT and ASSERT_VALUE cleanly without keyword collision")
+    public void testDistinctAssertTextAndValue() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        plugin.execute(new Action("ASSERT_TEXT", "#welcome-message", "Welcome", "check text Welcome", "reasoning", false));
+        plugin.execute(new Action("ASSERT_TEXT", "#total-price", "CAD $", "check text CAD $", "reasoning", false));
+        plugin.execute(new Action("ASSERT_TEXT", "#price-usd", "$ 45.00", "check text $ 45.00", "reasoning", false));
+
+        // Test with value input
+        plugin.execute(new Action("ASSERT_VALUE", "#username", "JohnDoe", "check username initial value", "reasoning", false));
+        $("#username").setValue("AntigravityUser");
+        plugin.execute(new Action("ASSERT_VALUE", "#username", "AntigravityUser", "check username value", "reasoning", false));
+
+        // Negative: asserting wrong text or value
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_TEXT", "#welcome-message", "NonExistentText123", "wrong text", "reasoning", false));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_VALUE", "#username", "WrongValue", "wrong value", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles distinct element state actions (ASSERT_CHECKED, ASSERT_DISABLED, etc.)")
+    public void testDistinctAssertElementStates() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Checkbox states
+        plugin.execute(new Action("ASSERT_CHECKED", "#newsletter-opt", "", "check checked", "reasoning", false));
+        plugin.execute(new Action("ASSERT_UNCHECKED", "#terms-opt", "", "check unchecked", "reasoning", false));
+
+        // Disabled / Enabled
+        plugin.execute(new Action("ASSERT_DISABLED", "#disabled-input", "", "check disabled", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ENABLED", "#enabled-input", "", "check enabled", "reasoning", false));
+
+        // Focus
+        $("#username").click();
+        plugin.execute(new Action("ASSERT_FOCUSED", "#username", "", "check focused", "reasoning", false));
+
+        // Selected
+        plugin.execute(new Action("ASSERT_SELECTED", "#opt-user", "", "check option selected", "reasoning", false));
+        plugin.execute(new Action("ASSERT_SELECTED", "#role-select", "", "check select has selected option", "reasoning", false));
+
+        // Readonly / Editable
+        plugin.execute(new Action("ASSERT_READONLY", "#readonly-input", "", "check readonly", "reasoning", false));
+        plugin.execute(new Action("ASSERT_EDITABLE", "#enabled-input", "", "check editable", "reasoning", false));
+
+        // Negative checks
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_ENABLED", "#disabled-input", "", "check enabled on disabled", "reasoning", false));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_DISABLED", "#enabled-input", "", "check disabled on enabled", "reasoning", false));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_CHECKED", "#terms-opt", "", "check checked on unchecked", "reasoning", false));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_UNCHECKED", "#newsletter-opt", "", "check unchecked on checked", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles distinct ASSERT_URL and ASSERT_TITLE cleanly")
+    public void testDistinctAssertUrlAndTitle() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        plugin.execute(new Action("ASSERT_URL", "url", "testAssertHappyPath.html", "check url contains", "reasoning", false));
+        plugin.execute(new Action("ASSERT_TITLE", "title", "Assert Action Test", "check title contains", "reasoning", false));
+        plugin.execute(new Action("ASSERT_URL", "url", ".*AssertActionTest.*", "check url regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT_TITLE", "title", "^Assert Action.*", "check title regex", "reasoning", true));
+    }
 }

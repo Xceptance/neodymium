@@ -755,4 +755,156 @@ public class BranchIntegrationTest extends BaseAiTest
 
         $("#result").shouldHave(text("Main Action Triggered!"));
     }
+
+    /**
+     * Tests that a 1-way branch using distinct ASSERT_EXISTS condition executes the 'then' branch when element is present.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "branch_assert_exists_met_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchWithAssertExistsConditionMet(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "%s",
+                  "value": "",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check with ASSERT_EXISTS",
+                  "condition": [
+                    {
+                      "action": "ASSERT_EXISTS",
+                      "locator": "#cookie-banner",
+                      "reasoning": "Check if cookie banner exists"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-accept",
+                      "value": "",
+                      "reasoning": "Click accept button"
+                    }
+                  ]
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            data:
+              - testId: branchData
+            steps: |
+              Open ${branch.test.url} in the browser
+              If #cookie-banner exists, click #btn-accept
+            """);
+
+        $("#result").shouldHave(text("Cookies Accepted!"));
+    }
+
+    /**
+     * Tests that a 1-way branch using distinct ASSERT_EXISTS condition safely skips execution when element is absent.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", name = "branch_assert_exists_absent_noop_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testBranchWithAssertExistsConditionFalseNoOp(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        try
+        {
+            while (true)
+            {
+                mock.chat(null);
+            }
+        }
+        catch (final java.io.IOException e)
+        {
+            // Empty queue
+        }
+
+        final String pageUrl = String.format("http://localhost:%d/BranchActionTest/testBranchHappyPath.html", server.getPort());
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "%s",
+                  "value": "",
+                  "reasoning": "Navigate to branch test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "locator": "",
+                  "value": "",
+                  "reasoning": "Conditional check for absent element with ASSERT_EXISTS",
+                  "condition": [
+                    {
+                      "action": "ASSERT_EXISTS",
+                      "locator": "#non-existent-prefecture-field",
+                      "reasoning": "Check if missing prefecture field exists"
+                    }
+                  ],
+                  "then": [
+                    {
+                      "action": "TYPE",
+                      "locator": "#non-existent-prefecture-field",
+                      "value": "Tokyo",
+                      "reasoning": "Type prefecture"
+                    }
+                  ]
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            data:
+              - testId: branchData
+            steps: |
+              Open ${branch.test.url} in the browser
+              If #non-existent-prefecture-field exists, enter Tokyo
+            """);
+
+        // The branch was false and 1-way, so nothing was executed and the test passed cleanly without error
+    }
 }
