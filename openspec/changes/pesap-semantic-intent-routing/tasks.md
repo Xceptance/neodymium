@@ -16,10 +16,11 @@
 - [ ] 3.1 Optimize context level and state capture for `ASSERT_METADATA` to clamp to `MINIMAL` context
 - [ ] 3.2 Add native evaluation fallback for page title and URL assertions to skip heavy DOM serialization and vision calls
 
-## 4. Diagnostics & Reporting
+## 4. Diagnostics, Reporting & Documentation
 
 - [ ] 4.1 Update `TestExecutionReport.ReportStepEntry` and `StepStats` to capture and record `semanticIntent`
 - [ ] 4.2 Update `MarkdownReportGenerator` and `HtmlReportGenerator` to display semantic intent badges in step execution details
+- [ ] 4.3 Update `doc/DOCUMENTATION.md` with Section 4.4 on the **360° LLM Taming & Safety Lifecycle** (Pre-Execution Intent Routing & Volatile ID Stripping, In-Flight Mutating Action Guards, Post-Execution Semantic Outcome Verification & Quality Judge Auditing)
 
 ## 5. Verification & Tests
 

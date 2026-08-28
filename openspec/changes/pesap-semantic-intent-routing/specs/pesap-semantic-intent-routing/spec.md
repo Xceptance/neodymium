@@ -71,3 +71,13 @@ The system SHALL support fast-path assertion evaluation for URL and Title verifi
 #### Scenario: Fast-path execution for metadata assertions
 - **WHEN** PESAP classifies a step as `ASSERT_METADATA`
 - **THEN** the system SHALL use `MINIMAL` context or evaluate browser state directly via native WebDriver calls, bypassing full DOM capture
+
+### Requirement: 360° LLM Taming & Safety Lifecycle Documentation
+The system documentation in `doc/DOCUMENTATION.md` SHALL include a dedicated section detailing all defense-in-depth safety guardrails, execution invariants, and verification mechanisms used to tame LLM non-determinism.
+
+#### Scenario: Documenting comprehensive LLM safety mechanisms
+- **WHEN** the technical reference manual `doc/DOCUMENTATION.md` is compiled or updated
+- **THEN** it SHALL include Section 4.4 detailing:
+  1. Pre-execution guardrails (JIT semantic intent routing, volatile ID stripping, outbound credential masking)
+  2. In-flight execution boundaries (Java-level mutating action rejection on assertions, action scope focusing, timeout guards)
+  3. Post-execution verification (semantic outcome verification, second-opinion Quality Judge auditing, temporal visual stability settling, and visual RCA diagnostics)
