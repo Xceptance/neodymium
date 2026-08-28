@@ -51,8 +51,8 @@ public class TestdataSubstitutionTest
                                 Open https://www.wikipedia.org
                                 Select the '${language}' language
                                 Type '${searchPhrase}' in the Search input field
-                                Click the Search button
-                                Verify the main page heading contains '${searchPhrase}'
+                                Click the search button
+                                Verify the main heading contains '${searchPhrase}' (bug)
 
                             data:
                               - testId: test
