@@ -15,13 +15,13 @@ import org.junit.runner.RunWith;
 import org.openqa.selenium.WebDriver;
 
 import com.browserup.bup.BrowserUpProxy;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.WebDriverCache;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.WebDriverCache;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.WebDriverUtils;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.WebDriverUtils;
 
 /*
  * Validate that the reuse of a web driver could be prevented programmatically.

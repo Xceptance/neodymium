@@ -8,7 +8,7 @@ import org.junit.runner.Result;
 import com.xceptance.neodymium.junit4.testclasses.wip.WIPAnnotationChildTest;
 import com.xceptance.neodymium.junit4.testclasses.wip.WIPAnnotationTest;
 import com.xceptance.neodymium.junit4.testclasses.wip.WIPMultiplicationTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class WIPTest extends NeodymiumTest
 {

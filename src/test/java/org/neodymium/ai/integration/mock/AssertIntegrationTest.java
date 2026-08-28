@@ -1,0 +1,191 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.integration.mock;
+
+import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Selenide.$;
+
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.session.AiSession;
+
+/**
+ * Mock programmatic integration test for the ASSERT action plugin.
+ *
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
+ */
+@Browser("Chrome_headless")
+@Tag("AuraIntegration")
+@NeodymiumAiTest
+@AiPlaybook(value = "programmatic", name = "custom_assert_playbook")
+public class AssertIntegrationTest extends BaseAiTest
+{
+
+    /**
+     * Set up test page URL before each test.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @BeforeEach
+    public void setupProperties(final AiSession session) throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        session.data().putDynamic("assert.test.url", pageUrl, false);
+    }
+
+    /**
+     * Tests Assert action.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", recordingFileName = "custom_assert_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testAssertMock(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        final String pageUrl = (String) session.data().get("assert.test.url");
+
+        mock.clearResponses();
+        // Step 1: Open SUT
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "target": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to assert test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // Step 2: Assert
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "target": "#welcome-message",
+                  "value": "Welcome to our web store!",
+                  "reasoning": "Verify welcome text"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            data:
+              - testId: assertData
+            steps:
+              - Open ${assert.test.url} in the browser
+              - "Assert that #welcome-message has text 'Welcome to our web store!'"
+            """);
+
+        $("#welcome-message").shouldHave(text("Welcome to our web store!"));
+
+        // Verify parameterization
+        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
+        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_assert_playbook_" + browserProfile + ".json");
+        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk: " + recordingFile.getPath());
+        try
+        {
+            final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);
+            org.junit.jupiter.api.Assertions.assertTrue(content.contains("\"target\" : \"${assert.test.url}\""), 
+                "Recorded target should be parameterized");
+            org.junit.jupiter.api.Assertions.assertFalse(content.contains("http://localhost:"), 
+                "Recorded playbook should not contain any hardcoded localhost URLs");
+        }
+        catch (final IOException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Tests that a failing ASSERT step throws AssertionError.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", recordingFileName = "custom_assert_failure_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertFailureMock(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        final String pageUrl = (String) session.data().get("assert.test.url");
+        final org.neodymium.ai.config.ExecutionMode mode = session.getExecutionMode();
+
+        if (mode == org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING)
+        {
+            mock.clearResponses();
+            // Mock navigate (succeeds)
+            mock.addResponse(new LlmResponse("""
+                {
+                  "actions": [
+                    {
+                      "action": "NAVIGATE",
+                      "target": "",
+                      "value": "%s",
+                      "reasoning": "Navigate to assert test page"
+                    }
+                  ]
+                }
+                """.formatted(pageUrl), null, "mock"));
+
+            // Mock failing ASSERT step
+            mock.addResponse(new LlmResponse("""
+                {
+                  "actions": [
+                    {
+                      "action": "ASSERT",
+                      "target": "#welcome-message",
+                      "value": "Goodbye!",
+                      "reasoning": "Verify failing welcome text"
+                    }
+                  ]
+                }
+                """, null, "mock"));
+        }
+
+        // The assertion should fail, throwing AssertionError
+        org.junit.jupiter.api.Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            session.execute( """
+                steps:
+                  - Open ${assert.test.url} in the browser
+                  - "Assert that #welcome-message has text 'Goodbye!'"
+                """);
+        });
+    }
+}

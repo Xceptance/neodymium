@@ -1,0 +1,2 @@
+steps: |
+  include: accept_cookies.yaml

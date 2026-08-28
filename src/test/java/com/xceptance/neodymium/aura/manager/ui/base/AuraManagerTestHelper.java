@@ -21,11 +21,11 @@ package com.xceptance.neodymium.aura.manager.ui.base;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
-import com.xceptance.neodymium.ai.action.plugins.AiMethod;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import org.junit.jupiter.api.Assertions;
+import org.neodymium.ai.executor.selenide.plugins.AiMethod;
 import java.io.File;
 import java.io.IOException;
 
@@ -65,48 +65,50 @@ public final class AuraManagerTestHelper
         {
             reportDir.mkdirs();
 
-            final String metadataJson = "{\n"
-                + "  \"status\": \"Passed\",\n"
-                + "  \"timestamp\": \"2026-08-03T12:00:00Z\",\n"
-                + "  \"total\": 1,\n"
-                + "  \"passed\": 1,\n"
-                + "  \"failed\": 0,\n"
-                + "  \"durationMs\": 15000,\n"
-                + "  \"headless\": true,\n"
-                + "  \"allureEnabled\": true,\n"
-                + "  \"videoEnabled\": false\n"
-                + "}";
+            final String metadataJson = """
+                {
+                  "status": "Passed",
+                  "timestamp": "2026-08-03T12:00:00Z",
+                  "total": 1,
+                  "passed": 1,
+                  "failed": 0,
+                  "durationMs": 15000,
+                  "headless": true,
+                  "allureEnabled": true,
+                  "videoEnabled": false
+                }""";
             Files.writeString(new File(reportDir, "metadata.json").toPath(), metadataJson, StandardCharsets.UTF_8);
 
-            final String executionJson = "{\n"
-                + "  \"testId\": \"T101\",\n"
-                + "  \"testName\": \"Layout Blueprint Verification Test\",\n"
-                + "  \"status\": \"Passed\",\n"
-                + "  \"browser\": \"Chrome\",\n"
-                + "  \"stats\": {\n"
-                + "    \"durationMs\": 15000\n"
-                + "  },\n"
-                + "  \"yamlSource\": \"tests/layout_test.yaml\",\n"
-                + "  \"playbookMode\": \"false\",\n"
-                + "  \"steps\": [\n"
-                + "    {\n"
-                + "      \"index\": 0,\n"
-                + "      \"step\": \"Open homepage and verify header\",\n"
-                + "      \"status\": \"passed\",\n"
-                + "      \"action\": \"open\",\n"
-                + "      \"target\": \"http://localhost\",\n"
-                + "      \"durationMs\": 1200\n"
-                + "    },\n"
-                + "    {\n"
-                + "      \"index\": 1,\n"
-                + "      \"step\": \"Click navigation menu item\",\n"
-                + "      \"status\": \"passed\",\n"
-                + "      \"action\": \"click\",\n"
-                + "      \"target\": \"#navReports\",\n"
-                + "      \"durationMs\": 850\n"
-                + "    }\n"
-                + "  ]\n"
-                + "}";
+            final String executionJson = """
+                {
+                  "testId": "T101",
+                  "testName": "Layout Blueprint Verification Test",
+                  "status": "Passed",
+                  "browser": "Chrome",
+                  "stats": {
+                    "durationMs": 15000
+                  },
+                  "yamlSource": "tests/layout_test.yaml",
+                  "playbookMode": "false",
+                  "steps": [
+                    {
+                      "index": 0,
+                      "step": "Open homepage and verify header",
+                      "status": "passed",
+                      "action": "open",
+                      "target": "http://localhost",
+                      "durationMs": 1200
+                    },
+                    {
+                      "index": 1,
+                      "step": "Click navigation menu item",
+                      "status": "passed",
+                      "action": "click",
+                      "target": "#navReports",
+                      "durationMs": 850
+                    }
+                  ]
+                }""";
             Files.writeString(new File(reportDir, "console-execution-layout.json").toPath(), executionJson, StandardCharsets.UTF_8);
         }
     }
@@ -121,9 +123,9 @@ public final class AuraManagerTestHelper
         return auraServer;
     }
 
-    @AiMethod("Starts the Aura Manager HTTP and HTTPS servers on dynamically configured ports")
     public static void startManager() throws IOException
     {
+        com.codeborne.selenide.Configuration.headless = true;
         if (auraServer != null)
         {
             return;
@@ -137,19 +139,21 @@ public final class AuraManagerTestHelper
             {
                 if (targetFile.exists())
                 {
-                    java.nio.file.Files.delete(targetFile.toPath());
+                    Files.delete(targetFile.toPath());
                 }
             }
             else if (testName.contains("testDeleteTest") || testName.contains("Delete_Test"))
             {
                 if (!targetFile.exists())
                 {
-                    final String boilerplate = "# Neodymium YAML Test Data File\n" +
-                                               "steps: |\n" +
-                                               "  Open browser\n" +
-                                               "data:\n" +
-                                               "  - testId: \"Automated Workspace Test\"\n";
-                    java.nio.file.Files.writeString(targetFile.toPath(), boilerplate, java.nio.charset.StandardCharsets.UTF_8);
+                    final String boilerplate = """
+                        # Neodymium YAML Test Data File
+                        steps: |
+                          Open browser
+                        data:
+                          - testId: "Automated Workspace Test"
+                        """;
+                    Files.writeString(targetFile.toPath(), boilerplate, StandardCharsets.UTF_8);
                 }
             }
         }
@@ -169,13 +173,11 @@ public final class AuraManagerTestHelper
         }
     }
 
-    @AiMethod("No-op placeholder method to prevent stopping the manager server prematurely")
     public static void stopManager()
     {
         // No-op for AI Playbook. Server must stay alive across phases.
     }
 
-    @AiMethod("Forcefully shuts down the running Aura Manager server")
     public static void forceStopManager()
     {
         if (auraServer != null)
@@ -223,28 +225,29 @@ public final class AuraManagerTestHelper
         Selenide.$("#yamlFileList").shouldNot(Condition.text("automated-workspace-test.yaml"));
     }
 
-    @AiMethod("Deletes the automated-workspace-test.yaml file from the workspace directory")
+    @AiMethod("Deletes the test file automated-workspace-test.yaml from disk")
     public static void deleteWorkspaceTestFile() throws IOException
     {
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
         if (targetFile.exists())
         {
-            java.nio.file.Files.delete(targetFile.toPath());
+            Files.delete(targetFile.toPath());
         }
     }
 
-    @AiMethod("Creates the automated-workspace-test.yaml file in the workspace directory with template data")
     public static void createWorkspaceTestFile() throws IOException
     {
         final File targetFile = new File("src/test/resources/automated-workspace-test.yaml").getAbsoluteFile();
         if (!targetFile.exists())
         {
-            final String boilerplate = "# Neodymium YAML Test Data File\n" +
-                                       "steps: |\n" +
-                                       "  Open browser\n" +
-                                       "data:\n" +
-                                       "  - testId: \"Automated Workspace Test\"\n";
-            java.nio.file.Files.writeString(targetFile.toPath(), boilerplate, java.nio.charset.StandardCharsets.UTF_8);
+            final String boilerplate = """
+                # Neodymium YAML Test Data File
+                steps: |
+                  Open browser
+                data:
+                  - testId: "Automated Workspace Test"
+                """;
+            Files.writeString(targetFile.toPath(), boilerplate, StandardCharsets.UTF_8);
         }
     }
 }

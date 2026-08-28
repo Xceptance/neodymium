@@ -1,5 +1,10 @@
 # Comprehensive Architectural & Reliability Improvement Proposal for Neodymium AI Agent
 
+> [!CAUTION]
+> **DEPRECATED / ARCHIVED DOCUMENTATION (v1 Architecture)**
+> This document describes historical v1 architecture proposals and gap analyses.
+> It has been superseded by the **v2 Architecture**: see [`doc/redesign-v2/architecture.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/architecture.md) and [`doc/redesign-v2/annotations.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/annotations.md).
+
 This document is a deep architectural audit covering **architecture, reliability, concurrency, testability, and future-proofness** across the entire `com.xceptance.neodymium.ai` subsystem.
 
 ---

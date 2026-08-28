@@ -1,0 +1,236 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.executor.selenide.plugins;
+
+import static com.codeborne.selenide.Selenide.$;
+
+import com.codeborne.selenide.Selenide;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
+
+/**
+ * Unit test for {@link AssertAction} verifying support for all DOM element states.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+@Browser("Chrome_headless")
+public class AssertActionTest extends BaseAiTest
+{
+    @Test
+    @DisplayName("AssertAction handles all DOM element state assertions cleanly")
+    public void testAssertActionDomStates() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. Visible & Hidden
+        plugin.execute(new Action("ASSERT", "#visible-btn", "visible", "check visible", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#hidden-btn", "hidden", "check hidden", "reasoning", false));
+
+        // 2. Checked & Unchecked
+        plugin.execute(new Action("ASSERT", "#newsletter-opt", "checked", "check checked", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#terms-opt", "unchecked", "check unchecked", "reasoning", false));
+
+        // 3. Disabled & Enabled
+        plugin.execute(new Action("ASSERT", "#disabled-input", "disabled", "check disabled", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#enabled-input", "enabled", "check enabled", "reasoning", false));
+
+        // 4. Selected
+        plugin.execute(new Action("ASSERT", "#opt-user", "selected", "check selected", "reasoning", false));
+
+        // 5. Readonly & Editable
+        plugin.execute(new Action("ASSERT", "#readonly-input", "readonly", "check readonly", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#enabled-input", "editable", "check editable", "reasoning", false));
+
+        // 6. Focused
+        $("#username").click();
+        plugin.execute(new Action("ASSERT", "#username", "focused", "check focused", "reasoning", false));
+
+        // 7. Boolean "true" / "false" shortcuts & attribute expressions
+        plugin.execute(new Action("ASSERT", "#newsletter-opt", "true", "check true on checkbox", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#terms-opt", "false", "check false on checkbox", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#newsletter-opt", "checked=true", "check checked=true", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#terms-opt", "checked=false", "check checked=false", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#disabled-input", "disabled=true", "check disabled=true", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#enabled-input", "disabled=false", "check disabled=false", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#opt-user", "selected=true", "check selected=true", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#readonly-input", "readonly=true", "check readonly=true", "reasoning", false));
+    }
+
+    @Test
+    @DisplayName("AssertAction with isRegex=false matches literal text containing dollar signs cleanly")
+    public void testAssertActionLiteralWithDollarSignPasses() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        // #welcome-message contains text: "Welcome to our web store!"
+        plugin.execute(new Action("ASSERT", "#welcome-message", "Welcome", "check literal Welcome", "reasoning", false));
+
+        // #total-price contains text: "Total Amount: CAD $ 120.00"
+        plugin.execute(new Action("ASSERT", "#total-price", "CAD $", "check literal CAD $", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "[data-ai=\"xcuunj33\"]", "CAD $", "check data-ai literal CAD $", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#price-usd", "$ 45.00", "check literal $ 45.00", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#price-compact", "$100", "check literal $100", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#price-eur", "50 €", "check literal 50 €", "reasoning", false));
+    }
+
+    @Test
+    @DisplayName("AssertAction with isRegex=true handles CAD $ and dollar signs without failing on end anchor")
+    public void testAssertActionRegexWithDollarSignAndCurrency() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        // Even when LLM sets isRegex=true for "CAD $" or "$", it matches cleanly
+        plugin.execute(new Action("ASSERT", "[data-ai=\"xcuunj33\"]", "CAD $", "check regex CAD $", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#total-price", "CAD \\$ 120\\.00", "check fully escaped regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#total-price", "CAD $", "check unescaped CAD $ regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#price-usd", "$ 45.00", "check unescaped $ 45.00 regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#price-compact", "$100", "check unescaped $100 regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "#price-eur", "50 €", "check 50 € regex", "reasoning", true));
+    }
+
+    @Test
+    @DisplayName("AssertAction handles URL and Title assertions with isRegex=true cleanly")
+    public void testAssertActionUrlAndTitleRegexMatching() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. URL regex match
+        plugin.execute(new Action("ASSERT", "url", ".*AssertActionTest/testAssertHappyPath\\.html", "check url regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "currentUrl", ".*/testAssertHappyPath\\.html.*", "check currentUrl regex", "reasoning", true));
+
+        // 2. Title regex match
+        plugin.execute(new Action("ASSERT", "title", ".*Assert.*Action.*Test.*", "check title regex", "reasoning", true));
+        plugin.execute(new Action("ASSERT", "pageTitle", "^Assert.*Test$", "check pageTitle regex", "reasoning", true));
+    }
+
+    @Test
+    @DisplayName("AssertAction handles URL and Title assertions with isRegex=false literal contains cleanly")
+    public void testAssertActionUrlAndTitleLiteralContains() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. URL literal substring contains
+        plugin.execute(new Action("ASSERT", "url", "testAssertHappyPath.html", "check url contains", "reasoning", false));
+
+        // 2. Title literal substring contains
+        plugin.execute(new Action("ASSERT", "title", "Assert Action", "check title contains", "reasoning", false));
+    }
+
+    @Test
+    @DisplayName("AssertAction gracefully handles malformed regex patterns by falling back to literal matching")
+    public void testAssertActionMalformedRegexFallback() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        // Regex with surrounding slashes cleaned cleanly
+        plugin.execute(new Action("ASSERT", "#welcome-message", "/Welcome.*store!/", "regex with slashes", "reasoning", true));
+        // Regex on title with surrounding slashes
+        plugin.execute(new Action("ASSERT", "title", "/Assert Action Test/", "regex title with slashes", "reasoning", true));
+        // Regex on URL with surrounding slashes
+        plugin.execute(new Action("ASSERT", "url", "/testAssertHappyPath\\.html/", "regex url with slashes", "reasoning", true));
+        // Unclosed regex bracket on an element where text does not match throws AssertionError cleanly (not unhandled PatternSyntaxException)
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#welcome-message", "[unclosed-bracket", "malformed regex non-matching", "reasoning", true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction throws RuntimeException when URL or Title assertion has null value")
+    public void testAssertActionNullValueOnUrlAndTitleThrows() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        Assertions.assertThrows(RuntimeException.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "url", null, "check null url", "reasoning", false));
+        });
+        Assertions.assertThrows(RuntimeException.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "title", null, "check null title", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles asserting selected state on direct SELECT elements")
+    public void testAssertActionDirectSelectElement() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        plugin.execute(new Action("ASSERT", "#role-select", "selected", "check select element has selected option", "reasoning", false));
+    }
+
+    @Test
+    @DisplayName("AssertAction throws AssertionError on failed state assertions")
+    public void testAssertActionNegativeStates() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. Asserting disabled element is enabled
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#disabled-input", "enabled", "check enabled on disabled element", "reasoning", false));
+        });
+
+        // 2. Asserting unchecked box is checked
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#terms-opt", "checked", "check checked on unchecked box", "reasoning", false));
+        });
+
+        // 3. Asserting readonly input is editable
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#readonly-input", "editable", "check editable on readonly element", "reasoning", false));
+        });
+
+        // 4. Asserting unselected option is selected
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#opt-admin", "selected", "check selected on unselected option", "reasoning", false));
+        });
+    }
+}

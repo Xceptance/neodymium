@@ -1,13 +1,13 @@
 package com.xceptance.neodymium.common.retry;
 
-import org.opentest4j.TestAbortedException;
-
-public class TestFailedAndShouldBeRetired extends TestAbortedException
+/**
+ * @deprecated Use {@link org.neodymium.common.retry.TestFailedAndShouldBeRetired} instead.
+ */
+@Deprecated
+public class TestFailedAndShouldBeRetired extends org.neodymium.common.retry.TestFailedAndShouldBeRetired
 {
     public TestFailedAndShouldBeRetired(int nextRetryIndex, Throwable originalError)
     {
-        super("Test failed, starting retry: " + nextRetryIndex, originalError);
+        super(nextRetryIndex, originalError);
     }
-
-    private static final long serialVersionUID = 1L;
 }

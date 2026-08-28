@@ -851,12 +851,158 @@
             color: white !important;
             border-color: #8E998B !important;
         }
+
+        /* Mini-cart Dropdown & Sizes Selector */
+        #cart-btn-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        .cart-dropdown {
+            visibility: hidden;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            width: 320px;
+            z-index: 1000;
+            padding: 20px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity var(--transition-speed), transform var(--transition-speed), visibility var(--transition-speed);
+        }
+        #cart-btn-wrapper:hover .cart-dropdown,
+        .cart-dropdown.show-temp {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .cart-dropdown-empty {
+            text-align: center;
+            padding: 20px 0;
+            color: var(--color-text-secondary);
+            font-size: 14px;
+        }
+        .cart-dropdown-items {
+            max-height: 240px;
+            overflow-y: auto;
+            margin-bottom: 16px;
+        }
+        .cart-dropdown-item {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--color-border);
+        }
+        .cart-dropdown-item:last-child {
+            border-bottom: none;
+        }
+        .cart-dropdown-item-img {
+            width: 48px;
+            height: 48px;
+            background: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .cart-dropdown-item-img svg {
+            width: 70%;
+            height: 70%;
+            color: var(--color-accent);
+        }
+        .cart-dropdown-item-details {
+            flex-grow: 1;
+        }
+        .cart-dropdown-item-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-text-primary);
+            margin-bottom: 2px;
+        }
+        .cart-dropdown-item-price {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+        }
+        .cart-dropdown-footer {
+            border-top: 1px solid var(--color-border);
+            padding-top: 16px;
+        }
+        .cart-dropdown-subtotal {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: var(--color-text-primary);
+        }
+        .cart-dropdown-checkout-btn {
+            display: block;
+            text-align: center;
+            background: var(--color-accent);
+            color: var(--color-bg-primary);
+            padding: 10px;
+            border-radius: var(--border-radius);
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background var(--transition-speed);
+        }
+        .cart-dropdown-checkout-btn:hover {
+            background: var(--color-accent-dark, #a35932);
+        }
+        .product-media {
+            position: relative;
+        }
+        .quick-add-dropdown {
+            display: none;
+            position: absolute;
+            bottom: 12%;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-radius: var(--border-radius);
+            padding: 8px 12px;
+            z-index: 1000;
+            gap: 6px;
+            opacity: 0;
+            transition: opacity var(--transition-speed), transform var(--transition-speed);
+        }
+        .quick-add-dropdown.active {
+            display: flex;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .size-btn {
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--color-border);
+            background: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .size-btn:hover {
+            border-color: var(--color-accent);
+            background-color: var(--color-accent);
+            color: white;
+        }
     </style>
 </head>
 <body>
     <!-- Announcement Bar -->
     <div class="announcement-bar">
-        Free worldwide shipping on orders over $150 USD
+        ${lang_promoBanner}
     </div>
 
     <!-- Header Navigation -->
@@ -907,10 +1053,10 @@
             <div class="footer-grid">
                 <div>
                     <div class="footer-logo">VÉRLA</div>
-                    <p style="margin-bottom: 20px; line-height: 1.7;">A design studio specializing in premium essential apparel. Grounded in minimal aesthetics, organic materials, and perfect cuts.</p>
+                    <p style="margin-bottom: 20px; line-height: 1.7;">${lang_footerDesc}</p>
                 </div>
                 <div>
-                    <div class="footer-heading">Shop</div>
+                    <div class="footer-heading">${lang_shop}</div>
                     <ul class="footer-links">
                         <li><a href="c/tops.html" class="footer-link">${lang_tops}</a></li>
                         <li><a href="c/bottoms.html" class="footer-link">${lang_bottoms}</a></li>
@@ -920,28 +1066,28 @@
                     </ul>
                 </div>
                 <div>
-                    <div class="footer-heading">Support</div>
+                    <div class="footer-heading">${lang_support}</div>
                     <ul class="footer-links">
                         <li><a href="faq.html" class="footer-link">FAQ</a></li>
-                        <li><a href="shipping.html" class="footer-link">Shipping & Returns</a></li>
-                        <li><a href="track-orders.html" class="footer-link">Track Orders</a></li>
-                        <li><a href="about.html" class="footer-link">About Us</a></li>
+                        <li><a href="shipping.html" class="footer-link">${lang_shippingReturns}</a></li>
+                        <li><a href="track-orders.html" class="footer-link">${lang_trackOrders}</a></li>
+                        <li><a href="about.html" class="footer-link">${lang_aboutUs}</a></li>
                     </ul>
                 </div>
                 <div>
-                    <div class="footer-heading">Contact</div>
+                    <div class="footer-heading">${lang_contact}</div>
                     <ul class="footer-links">
-                        <li><a href="stores.html" class="footer-link">Our Stores</a></li>
-                        <li><a href="careers.html" class="footer-link">Careers</a></li>
-                        <li><a href="about.html#contact" class="footer-link">Get in Touch</a></li>
+                        <li><a href="stores.html" class="footer-link">${lang_ourStores}</a></li>
+                        <li><a href="careers.html" class="footer-link">${lang_careers}</a></li>
+                        <li><a href="about.html#contact" class="footer-link">${lang_getInTouch}</a></li>
                     </ul>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2026 VÉRLA Apparel. All rights reserved.</p>
+                <p>&copy; 2026 VÉRLA Apparel. ${lang_allRightsReserved}</p>
                 <div style="display: flex; gap: 24px;">
-                    <a href="about.html" class="footer-link">Privacy Policy</a>
-                    <a href="about.html" class="footer-link">Terms of Service</a>
+                    <a href="about.html" class="footer-link">${lang_privacyPolicy}</a>
+                    <a href="about.html" class="footer-link">${lang_termsOfService}</a>
                 </div>
             </div>
         </div>
@@ -951,9 +1097,9 @@
     <div class="modal-overlay" id="country-modal-overlay">
         <div class="modal">
             <button class="modal-close-btn" id="country-modal-close">&times;</button>
-            <h3 class="modal-title">Select Region</h3>
+            <h3 class="modal-title">${lang_selectRegion}</h3>
             <!-- HTMX-powered type-as-you-search -->
-            <input type="text" class="country-search-input" id="country-search" placeholder="Search country..."
+            <input type="text" class="country-search-input" id="country-search" placeholder="${lang_searchCountry}"
                    hx-get="api/countries" hx-target="#country-list-container" hx-trigger="keyup">
             <ul class="country-list" id="country-list-container">
                 ${country_items_list}
@@ -998,7 +1144,137 @@
                 });
             }
 
+            let cartCloseTimeout = null;
+
+            // Temporarily open the cart dropdown when a product is added
+            document.body.addEventListener('htmx:afterSwap', (evt) => {
+                if (evt.detail.target.id === 'cart-btn-wrapper') {
+                    const dropdown = document.querySelector('#cart-btn-wrapper .cart-dropdown');
+                    if (dropdown) {
+                        dropdown.classList.add('show-temp');
+                        if (cartCloseTimeout) {
+                            clearTimeout(cartCloseTimeout);
+                        }
+                        cartCloseTimeout = setTimeout(() => {
+                            dropdown.classList.remove('show-temp');
+                        }, 6000);
+                    }
+                }
+            });
+
+            // Quick Add sizes dropdown function
+            window.showQuickAddSizes = (btn) => {
+                const category = btn.getAttribute('data-category') || 'tops';
+                let dropdown = btn.nextElementSibling;
+                if (!dropdown || !dropdown.classList.contains('quick-add-dropdown')) {
+                    dropdown = document.createElement('div');
+                    dropdown.className = 'quick-add-dropdown';
+                    
+                    let sizes = ['XS', 'S', 'M', 'L', 'XL'];
+                    if (category === 'bottoms') {
+                        sizes = ['28', '30', '32', '34', '36', '38'];
+                    } else if (category === 'footwear' || category === 'shoes') {
+                        sizes = ['39', '40', '41', '42', '43', '44'];
+                    }
+                    
+                    const stockData = JSON.parse(btn.getAttribute('data-stock') || '{}');
+                    dropdown.innerHTML = sizes.map(size => {
+                        const stock = stockData[size] !== undefined ? stockData[size] : 0;
+                        if (stock <= 0) {
+                            return '<button class="size-btn" type="button" data-size="' + size + '" disabled>' + size + ' (0)</button>';
+                        } else {
+                            return '<button class="size-btn" type="button" data-size="' + size + '">' + size + '</button>';
+                        }
+                    }).join('');
+                    btn.after(dropdown);
+                }
+                
+                document.querySelectorAll('.quick-add-dropdown.active').forEach(d => {
+                    if (d !== dropdown) d.classList.remove('active');
+                });
+                
+                dropdown.classList.toggle('active');
+            };
+
             document.addEventListener('click', (e) => {
+                const btn = e.target.closest('.product-quick-add');
+                if (btn) {
+                    if (btn.disabled || btn.classList.contains('adding')) return;
+                    e.stopPropagation();
+                    
+                    const category = btn.getAttribute('data-category');
+                    if (category === 'accessories') {
+                        const productId = btn.getAttribute('data-product-id');
+                        const originalText = btn.textContent;
+                        btn.classList.add('adding');
+                        btn.textContent = 'Adding...';
+                        
+                        if (typeof htmx !== 'undefined') {
+                            htmx.ajax('POST', 'api/cart/add?productId=' + productId + '&quantity=1', {
+                                target: '#cart-btn-wrapper',
+                                swap: 'outerHTML'
+                            });
+                        }
+                        
+                        setTimeout(() => {
+                            btn.classList.remove('adding');
+                            btn.classList.add('added');
+                            btn.textContent = '${lang_added}';
+                            
+                            setTimeout(() => {
+                                btn.classList.remove('added');
+                                btn.textContent = originalText;
+                            }, 1500);
+                        }, 800);
+                        return;
+                    }
+                    
+                    window.showQuickAddSizes(btn);
+                    return;
+                }
+
+                const sizeBtn = e.target.closest('.size-btn');
+                if (sizeBtn) {
+                    e.stopPropagation();
+                    const dropdown = sizeBtn.parentElement;
+                    const quickBtn = dropdown.previousElementSibling;
+                    const productId = quickBtn.getAttribute('data-product-id');
+                    const size = sizeBtn.getAttribute('data-size');
+                    
+                    if (!quickBtn || quickBtn.disabled || quickBtn.classList.contains('adding')) return;
+                    
+                    const originalText = quickBtn.textContent;
+                    quickBtn.textContent = '${lang_adding}';
+                    quickBtn.classList.add('adding');
+                    dropdown.classList.remove('active');
+
+                    if (typeof htmx !== 'undefined') {
+                        htmx.ajax('POST', 'api/cart/add?productId=' + productId + ':' + size + '&quantity=1', {
+                            target: '#cart-btn-wrapper',
+                            swap: 'outerHTML'
+                        });
+                    }
+                    
+                    setTimeout(() => {
+                        quickBtn.classList.remove('adding');
+                        quickBtn.classList.add('added');
+                        quickBtn.textContent = '${lang_added}';
+                        
+                        setTimeout(() => {
+                            quickBtn.classList.remove('added');
+                            quickBtn.textContent = originalText;
+                        }, 1500);
+                    }, 600);
+                    return;
+                }
+
+                // Close active quick-add dropdowns when clicking outside
+                if (!e.target.closest('.quick-add-dropdown')) {
+                    document.querySelectorAll('.quick-add-dropdown.active').forEach(d => {
+                        d.classList.remove('active');
+                    });
+                }
+
                 const searchDropdown = document.getElementById('search-suggestions');
                 const searchInput = document.getElementById('search-input');
                 if (searchDropdown && searchInput && !searchDropdown.contains(e.target) && e.target !== searchInput) {

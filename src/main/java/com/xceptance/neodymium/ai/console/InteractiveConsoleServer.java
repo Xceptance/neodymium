@@ -19,6 +19,7 @@
 package com.xceptance.neodymium.ai.console;
 
 import java.awt.Desktop;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -29,12 +30,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 import org.yaml.snakeyaml.Yaml;
 
 import com.google.gson.Gson;
@@ -44,14 +47,14 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Lightweight standalone HTTP server for the Interactive Console.
  * <p>
- * This wrapper is used when tests are executed with {@code neodymium.interactive=true} but without the Neodymium Aura
- * Manager. It starts a minimal {@link HttpServer} and wires in the provided {@link InteractiveConsoleEngine}'s HTTP
- * handlers.
+ * This wrapper is used when tests are executed with {@code neodymium.ai.interactive=true} but without the Neodymium
+ * Aura Manager. It starts a minimal {@link HttpServer} and wires in the provided {@link InteractiveConsoleEngine}'s
+ * HTTP handlers.
  * </p>
  * <p>
  * When the Aura Manager is active (detected via the {@code aura.manager} JVM property), this class should <em>not</em>
@@ -83,6 +86,8 @@ public final class InteractiveConsoleServer
 
     private final int port;
 
+    private com.codeborne.selenide.SelenideDriver consoleDriver;
+
     /**
      * Creates and starts the standalone server, binding it to the first free port at or above
      * {@link #DEFAULT_START_PORT} on all network interfaces ({@code 0.0.0.0}).
@@ -107,6 +112,11 @@ public final class InteractiveConsoleServer
      */
     public String getLocalUrl()
     {
+        return "http://localhost:" + this.port;
+    }
+
+    public String getLanUrl()
+    {
         return "http://" + (engine != null ? engine.getLanIp() : "localhost") + ":" + this.port;
     }
 
@@ -128,24 +138,22 @@ public final class InteractiveConsoleServer
             }
             config.browser(browser);
             config.headless(false); // force non-headless
-
             if (browser.toLowerCase().contains("chrome"))
             {
                 final org.openqa.selenium.chrome.ChromeOptions options = new org.openqa.selenium.chrome.ChromeOptions();
                 options.addArguments("--app=" + url);
                 config.browserCapabilities(options);
             }
-
-            final com.codeborne.selenide.SelenideDriver driver = new com.codeborne.selenide.SelenideDriver(config);
-            driver.open(url);
+            this.consoleDriver = new com.codeborne.selenide.SelenideDriver(config);
+            this.consoleDriver.open(url);
             return;
         }
         catch (final Exception e)
         {
             LOG.warn("Could not open browser via Selenide: {}. Falling back to Desktop.", e.getMessage());
         }
-
         // Fallback if selnide failed.
+
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE))
         {
             try
@@ -155,25 +163,24 @@ public final class InteractiveConsoleServer
             }
             catch (final Exception e)
             {
-                // fall through to OS-specific fallback
+                LOG.warn("Could not open browser via Desktop.browse: {}. Trying OS fallback.", e.getMessage());
             }
         }
 
-        // Fallback for the fallback
         try
         {
             final String os = System.getProperty("os.name", "").toLowerCase();
             if (os.contains("win"))
             {
-                Runtime.getRuntime().exec("rundll32 url.dll,FileProtocolHandler " + url);
+                Runtime.getRuntime().exec(new String[] { "cmd.exe", "/c", "start", url });
             }
             else if (os.contains("mac"))
             {
-                Runtime.getRuntime().exec("open " + url);
+                Runtime.getRuntime().exec(new String[] { "open", url });
             }
             else
             {
-                Runtime.getRuntime().exec("xdg-open " + url);
+                Runtime.getRuntime().exec(new String[] { "xdg-open", url });
             }
         }
         catch (final Exception e)
@@ -183,10 +190,26 @@ public final class InteractiveConsoleServer
     }
 
     /**
-     * Stops the HTTP server gracefully.
+     * Stops the HTTP server gracefully and closes the interactive console browser if running.
      */
     public void stop()
     {
+        if (this.consoleDriver != null)
+        {
+            try
+            {
+                this.consoleDriver.close();
+                if (this.consoleDriver.hasWebDriverStarted())
+                {
+                    this.consoleDriver.getWebDriver().quit();
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("[InteractiveConsoleServer] Could not close console browser driver: {}", e.getMessage());
+            }
+            this.consoleDriver = null;
+        }
         this.server.stop(0);
         LOG.info("[InteractiveConsoleServer] Stopped.");
     }
@@ -327,6 +350,16 @@ public final class InteractiveConsoleServer
                 resourcePath = "com/xceptance/neodymium/ai/console/interactive_console.js";
                 contentType = "application/javascript; charset=UTF-8";
             }
+            else if ("/material-symbols.css".equals(path))
+            {
+                resourcePath = "com/xceptance/neodymium/ai/console/material-symbols.css";
+                contentType = "text/css; charset=UTF-8";
+            }
+            else if ("/material-symbols-outlined.woff2".equals(path))
+            {
+                resourcePath = "com/xceptance/neodymium/ai/console/material-symbols-outlined.woff2";
+                contentType = "font/woff2";
+            }
             else
             {
                 final byte[] msg = "Not Found".getBytes(StandardCharsets.UTF_8);
@@ -406,7 +439,7 @@ public final class InteractiveConsoleServer
                         exchange.sendResponseHeaders(403, -1);
                         return;
                     }
-                    final String screenshotsDir = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+                    final String screenshotsDir = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
                     final Path file = Paths.get(screenshotsDir, fileName);
                     if (Files.exists(file))
                     {
@@ -637,13 +670,53 @@ public final class InteractiveConsoleServer
     {
         try
         {
-            final Gson gson = new Gson();
             final JsonObject template = JsonParser.parseString(jsonContent).getAsJsonObject();
             runSimulationInternal(engine, template, template);
         }
         catch (final Exception e)
         {
             LOG.error("[Simulation] Error in json simulation: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Simulation combining YAML structure and JSON mock execution results.
+     */
+    public static void runSimulation(final InteractiveConsoleEngine engine, final File yamlFile,
+                              final String jsonContent)
+    {
+        try
+        {
+            final String yamlContent = Files.readString(yamlFile.toPath());
+            final Yaml yaml = new Yaml();
+            final Object yamlData = yaml.load(yamlContent);
+            final String yamlJson = new Gson().toJson(yamlData);
+
+            final JsonObject yamlObj = JsonParser.parseString(yamlJson).getAsJsonObject();
+            final JsonObject jsonDatabase = (jsonContent != null && !jsonContent.trim().isEmpty())
+                                                                                                    ? JsonParser.parseString(jsonContent)
+                                                                                                                .getAsJsonObject()
+                                                                                                    : new JsonObject();
+
+            // Build the dynamic active state from YAML
+            final JsonObject activeState = new JsonObject();
+            activeState.addProperty("playbookFile", yamlFile.getAbsolutePath());
+            if (jsonDatabase.has("runId"))
+            {
+                activeState.addProperty("runId", jsonDatabase.get("runId").getAsString());
+            }
+            else
+            {
+                activeState.addProperty("runId", engine.getRunId());
+            }
+
+            parseYamlToSteps(yamlObj, activeState);
+
+            runSimulationInternal(engine, activeState, jsonDatabase);
+        }
+        catch (final Exception e)
+        {
+            LOG.error("[Simulation] Error starting yaml+json simulation: {}", e.getMessage(), e);
         }
     }
 
@@ -660,7 +733,10 @@ public final class InteractiveConsoleServer
             final String yamlJson = new Gson().toJson(yamlData);
 
             final JsonObject yamlObj = JsonParser.parseString(yamlJson).getAsJsonObject();
-            final JsonObject jsonDatabase = JsonParser.parseString(jsonContent).getAsJsonObject();
+            final JsonObject jsonDatabase = (jsonContent != null && !jsonContent.trim().isEmpty())
+                                                                                                    ? JsonParser.parseString(jsonContent)
+                                                                                                                .getAsJsonObject()
+                                                                                                    : new JsonObject();
 
             // Build the dynamic active state from YAML
             final JsonObject activeState = new JsonObject();
@@ -668,8 +744,26 @@ public final class InteractiveConsoleServer
             {
                 activeState.addProperty("runId", jsonDatabase.get("runId").getAsString());
             }
+            else
+            {
+                activeState.addProperty("runId", engine.getRunId());
+            }
 
             parseYamlToSteps(yamlObj, activeState);
+
+            if (jsonDatabase.has("dataBindings") && jsonDatabase.get("dataBindings").isJsonObject())
+            {
+                final JsonObject activeBindings = activeState.has("dataBindings") ? activeState.getAsJsonObject("dataBindings") : new JsonObject();
+                final JsonObject jsonBindings = jsonDatabase.getAsJsonObject("dataBindings");
+                for (final Map.Entry<String, JsonElement> entry : jsonBindings.entrySet())
+                {
+                    if (!activeBindings.has(entry.getKey()))
+                    {
+                        activeBindings.add(entry.getKey(), entry.getValue());
+                    }
+                }
+                activeState.add("dataBindings", activeBindings);
+            }
 
             runSimulationInternal(engine, activeState, jsonDatabase);
         }
@@ -711,6 +805,7 @@ public final class InteractiveConsoleServer
                     bindings.add(entry.getKey(), entry.getValue());
                 }
                 activeState.add("dataBindings", bindings);
+                activeState.add("localDataBindings", bindings.deepCopy());
             }
         }
 
@@ -723,13 +818,20 @@ public final class InteractiveConsoleServer
 
         // Populate source info for the "Test Info" panel
         activeState.addProperty("testFile", "com.xceptance.neodymium.tests.CheckoutFlowTest");
-        activeState.addProperty("yamlSource", "src/test/resources/checkout/checkout-flow.yaml");
-        activeState.addProperty("playbookFile", "src/test/resources/checkout/checkout-flow.json");
+        if (!activeState.has("playbookFile"))
+        {
+            activeState.addProperty("playbookFile", "src/test/resources/checkout/checkout-flow.yaml");
+        }
+        activeState.addProperty("playbookRecordingFile", "src/test/resources/checkout/checkout-flow.json");
 
         // Parse lifecycle blocks passing dataEntry down to resolve placeholders
-        parseYamlBlock(yamlObj.get("before"), beforeArray, "before", 0, dataEntry, new ArrayList<>());
-        parseYamlBlock(yamlObj.get("steps"), stepsArray, "steps", 0, dataEntry, new ArrayList<>());
-        parseYamlBlock(yamlObj.get("after"), afterArray, "after", 0, dataEntry, new ArrayList<>());
+        final JsonElement beforeObj = yamlObj.has("before") ? yamlObj.get("before") : (dataEntry != null ? dataEntry.get("before") : null);
+        final JsonElement stepsObj = yamlObj.has("steps") ? yamlObj.get("steps") : (dataEntry != null ? dataEntry.get("steps") : null);
+        final JsonElement afterObj = yamlObj.has("after") ? yamlObj.get("after") : (dataEntry != null ? dataEntry.get("after") : null);
+
+        parseYamlBlock(beforeObj, beforeArray, "before", 0, dataEntry, new ArrayList<>());
+        parseYamlBlock(stepsObj, stepsArray, "steps", 0, dataEntry, new ArrayList<>());
+        parseYamlBlock(afterObj, afterArray, "after", 0, dataEntry, new ArrayList<>());
     }
 
     private static String resolvePlaceholders(final String instruction, final JsonObject dataEntry)
@@ -1166,6 +1268,7 @@ public final class InteractiveConsoleServer
                 }
                 else if ("SKIP".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     step.addProperty("status", "skipped");
                     if (templateStep != null && templateStep.has("reasoning"))
                     {
@@ -1201,8 +1304,24 @@ public final class InteractiveConsoleServer
                 }
                 else if ("EDIT".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     final int targetIdx = response.get("index").getAsInt();
                     final String instruction = response.get("instruction").getAsString();
+
+                    if (response.has("bindings") && response.get("bindings").isJsonObject())
+                    {
+                        final JsonObject newBindings = response.getAsJsonObject("bindings");
+                        JsonObject bindingsObj = activeState.getAsJsonObject("dataBindings");
+                        if (bindingsObj == null)
+                        {
+                            bindingsObj = new JsonObject();
+                            activeState.add("dataBindings", bindingsObj);
+                        }
+                        for (final Map.Entry<String, JsonElement> e : newBindings.entrySet())
+                        {
+                            bindingsObj.add(e.getKey(), e.getValue());
+                        }
+                    }
 
                     final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
                     if (blocksObj != null)
@@ -1239,6 +1358,7 @@ public final class InteractiveConsoleServer
                 }
                 else if ("ADD".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     final String blockName = response.has("block") ? response.get("block").getAsString() : "steps";
                     final String instruction = response.get("instruction").getAsString();
 
@@ -1293,6 +1413,7 @@ public final class InteractiveConsoleServer
                 }
                 else if ("REORDER".equals(action))
                 {
+                    activeState.addProperty("interactivePromptChanged", true);
                     final String fromBlock = response.has("fromBlock") ? response.get("fromBlock").getAsString()
                                                                        : response.get("block").getAsString();
                     final int fromIndex = response.get("fromIndex").getAsInt();
@@ -1377,13 +1498,25 @@ public final class InteractiveConsoleServer
                 }
                 else if ("SAVE_EXIT".equals(action))
                 {
-                    LOG.info("[Simulation] Received stop signal. Exiting simulation.");
+                    LOG.info("[Simulation] Received stop signal. Saving YAML and exiting simulation.");
+                    saveSimulationYaml(activeState, response);
                     break;
                 }
             }
 
-            // Final state push
+            // Final state push & final pause for overlay
+            if (!activeState.has("status") || !"failed".equals(activeState.get("status").getAsString()))
+            {
+                activeState.addProperty("status", "finished");
+            }
+            final String finalPauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
+            activeState.addProperty("pauseId", finalPauseId);
             engine.pushState(gson.toJson(activeState));
+            final JsonObject finalResponse = engine.waitForAction(finalPauseId);
+            if (finalResponse != null)
+            {
+                saveSimulationYaml(activeState, finalResponse);
+            }
         }
         catch (final Exception e)
         {
@@ -1462,5 +1595,175 @@ public final class InteractiveConsoleServer
             }
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void saveSimulationYaml(final JsonObject activeState, final JsonObject response)
+    {
+        try
+        {
+            String filePath = null;
+            if (activeState.has("playbookFile") && !activeState.get("playbookFile").getAsString().isEmpty())
+            {
+                filePath = activeState.get("playbookFile").getAsString();
+            }
+            else if (activeState.has("yamlSource") && !activeState.get("yamlSource").getAsString().isEmpty())
+            {
+                filePath = activeState.get("yamlSource").getAsString();
+            }
+            else
+            {
+                try
+                {
+                    final String neodymiumFile = com.xceptance.neodymium.util.Neodymium.getTestdataSourceFile();
+                    if (neodymiumFile != null && !neodymiumFile.isEmpty() && new File(neodymiumFile).exists())
+                    {
+                        filePath = neodymiumFile;
+                    }
+                }
+                catch (final Throwable ignored)
+                {
+                }
+            }
+
+            if (filePath == null)
+            {
+                return;
+            }
+
+            final File targetFile = new File(filePath);
+            if (!targetFile.exists())
+            {
+                return;
+            }
+
+            final org.yaml.snakeyaml.DumperOptions options = new org.yaml.snakeyaml.DumperOptions();
+            options.setDefaultFlowStyle(org.yaml.snakeyaml.DumperOptions.FlowStyle.BLOCK);
+            options.setPrettyFlow(true);
+            final org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(options);
+
+            Map<String, Object> map = yaml.load(Files.readString(targetFile.toPath()));
+            if (map == null)
+            {
+                map = new LinkedHashMap<>();
+            }
+
+            String saveScope = "global";
+            if (response != null && response.has("saveScope"))
+            {
+                saveScope = response.get("saveScope").getAsString();
+            }
+            else if (activeState.has("yamlScope"))
+            {
+                saveScope = activeState.get("yamlScope").getAsString();
+            }
+
+            final boolean isLocal = "local".equalsIgnoreCase(saveScope);
+
+            final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
+            final Map<String, String> blockTexts = new LinkedHashMap<>();
+
+            if (blocksObj != null)
+            {
+                for (final String bKey : new String[] { "before", "steps", "after" })
+                {
+                    if (blocksObj.has(bKey))
+                    {
+                        final JsonArray arr = blocksObj.getAsJsonArray(bKey);
+                        final List<String> lines = new ArrayList<>();
+                        for (final JsonElement el : arr)
+                        {
+                            if (el.isJsonObject())
+                            {
+                                final JsonObject s = el.getAsJsonObject();
+                                String instr = s.has("instruction") ? s.get("instruction").getAsString() : "";
+                                if (s.has("status") && "skipped".equals(s.get("status").getAsString()))
+                                {
+                                    if (!instr.startsWith("// [SKIPPED]"))
+                                    {
+                                        instr = "// [SKIPPED] " + instr;
+                                    }
+                                }
+                                lines.add(instr);
+                            }
+                        }
+                        if (!lines.isEmpty())
+                        {
+                            blockTexts.put(bKey, String.join("\n", lines));
+                        }
+                    }
+                }
+            }
+
+            final List<Map<String, Object>> dataList = (List<Map<String, Object>>) map.get("data");
+            final Map<String, Object> firstDataset = (dataList != null && !dataList.isEmpty()) ? dataList.get(0) : null;
+
+            // Update bindings into first dataset
+            if (firstDataset != null && activeState.has("dataBindings"))
+            {
+                final JsonObject bindings = activeState.getAsJsonObject("dataBindings");
+                for (final Map.Entry<String, JsonElement> e : bindings.entrySet())
+                {
+                    firstDataset.put(e.getKey(), e.getValue().getAsString());
+                }
+            }
+
+            if (isLocal)
+            {
+                // Remove blocks from global level
+                map.remove("before");
+                map.remove("steps");
+                map.remove("after");
+
+                if (firstDataset != null)
+                {
+                    for (final String bKey : new String[] { "before", "steps", "after" })
+                    {
+                        if (blockTexts.containsKey(bKey))
+                        {
+                            firstDataset.put(bKey, blockTexts.get(bKey));
+                        }
+                        else
+                        {
+                            firstDataset.remove(bKey);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Global level
+                for (final String bKey : new String[] { "before", "steps", "after" })
+                {
+                    if (blockTexts.containsKey(bKey))
+                    {
+                        map.put(bKey, blockTexts.get(bKey));
+                    }
+                    else
+                    {
+                        map.remove(bKey);
+                    }
+                }
+
+                // Remove block keys from dataset level
+                if (dataList != null)
+                {
+                    for (final Map<String, Object> dataset : dataList)
+                    {
+                        dataset.remove("before");
+                        dataset.remove("steps");
+                        dataset.remove("after");
+                    }
+                }
+            }
+
+            final String dumped = yaml.dump(map);
+            Files.writeString(targetFile.toPath(), dumped);
+            LOG.info("[Simulation] Saved modified YAML to {}:\n{}", targetFile.getAbsolutePath(), dumped);
+        }
+        catch (final Exception e)
+        {
+            LOG.error("[Simulation] Error saving simulation YAML: {}", e.getMessage(), e);
+        }
     }
 }

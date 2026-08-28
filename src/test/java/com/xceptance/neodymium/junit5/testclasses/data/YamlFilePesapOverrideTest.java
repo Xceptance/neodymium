@@ -34,7 +34,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.common.testdata.util.YamlFileReader;
+import org.neodymium.common.testdata.util.YamlFileReader;
 
 /**
  * Tests for propagating and overriding neodymium.ai.pesap properties in YAML playbook files.

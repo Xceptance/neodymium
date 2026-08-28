@@ -1,32 +1,371 @@
 <!--
-  Xceptance Aura YAML Editor Contents Fragment
+  Xceptance Aura Visual Playbook Editor Fragment
   @author AI-generated: Antigravity
   Xceptance GmbH 2026
 -->
 <th:block th:fragment="editorPanelContent">
     <div class="panel-header">
         <div class="neo-u-11">
-            <i class="fa-solid fa-file-lines neo-u-12"></i>
+            <span class="material-symbols-outlined neo-u-12">description</span>
             <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
+            <span id="editorUnsavedBadge" style="display: none;" class="unsaved-badge">
+                <span class="material-symbols-outlined" style="font-size: 12px;">warning</span> Unsaved
+            </span>
         </div>
         <div class="editor-actions">
+            <button class="btn-editor" id="undoBtn" onclick="editorUndo()" title="Undo (Ctrl+Z)" disabled>
+                <span class="material-symbols-outlined">undo</span> Undo
+            </button>
+            <button class="btn-editor" id="redoBtn" onclick="editorRedo()" title="Redo (Ctrl+Y)" disabled>
+                <span class="material-symbols-outlined">redo</span> Redo
+            </button>
+            <button class="btn-editor btn-review" id="reviewStepsBtn" onclick="runReviewSteps()" title="Run PESAP AI Step Review">
+                <span class="material-symbols-outlined">auto_awesome</span> Review Steps
+            </button>
             <button class="btn-editor save"
                     id="saveYamlBtn"
                     hx-post="/api/save"
                     hx-include="#editorContent"
                     th:hx-vals="${'{\&quot;file\&quot;:\&quot;' + (activeEditingFile != null ? activeEditingFile : '') + '\&quot;}'}"
                     hx-swap="none"
-                    onclick="if(typeof saveYamlFile === 'function') saveYamlFile();">
-                <i class="fa-solid fa-floppy-disk"></i> Save
+                    onclick="if(typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml(); if(typeof saveYamlFile === 'function') saveYamlFile();">
+                <span class="material-symbols-outlined">save</span> Save
             </button>
-            <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
+            <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><span class="material-symbols-outlined">delete</span> Delete</button>
             <button class="btn-editor" 
                     hx-post="/api/editor/close" 
                     hx-swap="none" 
                     onclick="closeEditor()">
-                <i class="fa-solid fa-xmark"></i> Close
+                <span class="material-symbols-outlined">close</span> Close
             </button>
         </div>
     </div>
-    <textarea class="editor-textarea" id="editorContent" name="content" spellcheck="false" th:text="${editorContent != null ? editorContent : ''}"></textarea>
+
+    <!-- Hidden input holding compiled YAML payload for HTMX form submission -->
+    <input type="hidden" id="editorContent" name="content" th:value="${editorContent != null ? editorContent : ''}" />
+
+    <!-- Main Visual Editor Layout Container -->
+    <div style="display: flex; flex: 1; min-height: 0; overflow: hidden; width: 100%;">
+        
+        <!-- Central Visual Editor Area -->
+        <main class="editor-main-area" id="visualEditorMain">
+
+            <!-- Subtle Add 'before:' Button Container -->
+            <div id="addBeforeBtnContainer" th:style="${beforeSteps != null and !#lists.isEmpty(beforeSteps) ? 'display: none;' : 'display: block;'}">
+                <button class="btn-add-section-block" onclick="addBeforeBlock()">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    <span>Add 'before:' Block</span>
+                </button>
+            </div>
+
+            <!-- before: Section Code Panel -->
+            <div class="editor-code-panel" id="beforeCodePanel" th:style="${beforeSteps != null and !#lists.isEmpty(beforeSteps) ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">play_circle</span>
+                        Setup Steps (before:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Runs before main steps
+                        </div>
+                        <button class="btn-remove-section-block" onclick="removeBeforeBlock()">
+                            <span class="material-symbols-outlined">delete</span>
+                            Remove Block
+                        </button>
+                    </div>
+                </div>
+                <div class="steps-container" id="beforeStepsList">
+                    <th:block th:if="${beforeSteps != null and !#lists.isEmpty(beforeSteps)}">
+                        <div class="step-row" th:each="step, iterStat : ${beforeSteps}" th:data-line="${iterStat.index + 1}">
+                            <span class="step-number" th:text="${iterStat.index + 1}">1</span>
+                            <div class="step-content" contenteditable="true" spellcheck="false"
+                                 th:data-raw="${step}"
+                                 th:text="${step}"
+                                 onkeydown="handleKeyDown(event, parseInt(this.closest('.step-row').getAttribute('data-line')))"
+                                 onfocus="handleStepFocus(parseInt(this.closest('.step-row').getAttribute('data-line')))"
+                                 onblur="handleStepBlur(parseInt(this.closest('.step-row').getAttribute('data-line')))"></div>
+                            <div class="step-actions">
+                                <button class="icon-btn danger" onclick="deleteStep(parseInt(this.closest('.step-row').getAttribute('data-line')))"><span class="material-symbols-outlined">delete</span></button>
+                            </div>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- steps: Main Section Code Panel -->
+            <div class="editor-code-panel" id="stepsCodePanel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">task_alt</span>
+                        Playbook Steps (steps:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Core execution steps
+                        </div>
+                    </div>
+                </div>
+                <div class="steps-container" id="stepsList">
+                    <th:block th:if="${mainSteps != null and !#lists.isEmpty(mainSteps)}">
+                        <div class="step-row" th:each="step, iterStat : ${mainSteps}" th:data-line="${iterStat.index + 1}">
+                            <span class="step-number" th:text="${iterStat.index + 1}">1</span>
+                            <div class="step-content" contenteditable="true" spellcheck="false"
+                                 th:data-raw="${step}"
+                                 th:text="${step}"
+                                 onkeydown="handleKeyDown(event, parseInt(this.closest('.step-row').getAttribute('data-line')))"
+                                 onfocus="handleStepFocus(parseInt(this.closest('.step-row').getAttribute('data-line')))"
+                                 onblur="handleStepBlur(parseInt(this.closest('.step-row').getAttribute('data-line')))"></div>
+                            <div class="step-actions">
+                                <button class="icon-btn danger" onclick="deleteStep(parseInt(this.closest('.step-row').getAttribute('data-line')))"><span class="material-symbols-outlined">delete</span></button>
+                            </div>
+                        </div>
+                    </th:block>
+                    <th:block th:if="${mainSteps == null or #lists.isEmpty(mainSteps)}">
+                        <div class="step-row" data-line="1">
+                            <span class="step-number">1</span>
+                            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Open ${neodymium.url}" onkeydown="handleKeyDown(event, 1)" onfocus="handleStepFocus(1)" onblur="handleStepBlur(1)">Open ${neodymium.url}</div>
+                            <div class="step-actions">
+                                <button class="icon-btn danger" onclick="deleteStep(1)"><span class="material-symbols-outlined">delete</span></button>
+                            </div>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- after: Section Code Panel -->
+            <div class="editor-code-panel" id="afterCodePanel" th:style="${afterSteps != null and !#lists.isEmpty(afterSteps) ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">stop_circle</span>
+                        After Steps (after:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Teardown / Cleanup
+                        </div>
+                        <button class="btn-remove-section-block" onclick="removeAfterBlock()">
+                            <span class="material-symbols-outlined">delete</span>
+                            Remove Block
+                        </button>
+                    </div>
+                </div>
+                <div class="steps-container" id="afterStepsList">
+                    <th:block th:if="${afterSteps != null and !#lists.isEmpty(afterSteps)}">
+                        <div class="step-row" th:each="step, iterStat : ${afterSteps}" th:data-line="${iterStat.index + 1}">
+                            <span class="step-number" th:text="${iterStat.index + 1}">1</span>
+                            <div class="step-content" contenteditable="true" spellcheck="false"
+                                 th:data-raw="${step}"
+                                 th:text="${step}"
+                                 onkeydown="handleKeyDown(event, parseInt(this.closest('.step-row').getAttribute('data-line')))"
+                                 onfocus="handleStepFocus(parseInt(this.closest('.step-row').getAttribute('data-line')))"
+                                 onblur="handleStepBlur(parseInt(this.closest('.step-row').getAttribute('data-line')))"></div>
+                            <div class="step-actions">
+                                <button class="icon-btn danger" onclick="deleteStep(parseInt(this.closest('.step-row').getAttribute('data-line')))"><span class="material-symbols-outlined">delete</span></button>
+                            </div>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- Subtle Add 'after:' Button Container -->
+            <div id="addAfterBtnContainer" th:style="${afterSteps != null and !#lists.isEmpty(afterSteps) ? 'display: none;' : 'display: block;'}">
+                <button class="btn-add-section-block" onclick="addAfterBlock()">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    <span>Add 'after:' Block</span>
+                </button>
+            </div>
+
+            <!-- Transposed Test Data Matrix -->
+            <div class="editor-code-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">grid_on</span>
+                        Test Data Matrix (data:)
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        Transposed Data Table
+                    </div>
+                </div>
+                <div style="padding: 16px; overflow-x: auto;">
+                    <table class="transposed-matrix" id="transposedGrid">
+                        <thead>
+                            <tr id="matrixHeaderRow">
+                                <th class="var-key-col">Variable Key \ Iteration</th>
+                                <th th:each="row, iterStat : ${dataMatrix}" th:id="'iterHeader_' + ${iterStat.index + 1}">
+                                    <span th:text="${row.get('testId') != null ? row.get('testId') : 'Iteration ' + (iterStat.index + 1)}">Iteration 1</span>
+                                </th>
+                                <th th:if="${dataMatrix == null or #lists.isEmpty(dataMatrix)}">Iteration 1</th>
+                                <th>
+                                    <button class="add-col-th-btn" onclick="addMatrixColumnInline()">
+                                        <span class="material-symbols-outlined" style="font-size: 14px;">add</span>
+                                        Add Iteration
+                                    </button>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <th:block th:if="${varKeys != null and !#lists.isEmpty(varKeys)}">
+                                <tr th:each="key : ${varKeys}">
+                                    <td>
+                                        <div class="var-key-cell">
+                                            <input type="text" class="var-key-input" th:value="${key}" oninput="compilePlaybookToYaml()" />
+                                            <button class="btn-insert-var-chip" th:data-key="${key}" onclick="insertVariableFromInput(this.getAttribute('data-key'))">+ Insert</button>
+                                        </div>
+                                    </td>
+                                    <td th:each="dataRow : ${dataMatrix}">
+                                        <input type="text" class="cell-val" th:value="${dataRow.get(key)}" placeholder="empty" oninput="compilePlaybookToYaml()" />
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            </th:block>
+                            <th:block th:if="${varKeys == null or #lists.isEmpty(varKeys)}">
+                                <tr>
+                                    <td>
+                                        <div class="var-key-cell">
+                                            <input type="text" class="var-key-input" value="testId" />
+                                            <button class="btn-insert-var-chip" onclick="insertVariableFromInput('testId')">+ Insert</button>
+                                        </div>
+                                    </td>
+                                    <td><input type="text" class="cell-val" value="Default" oninput="compilePlaybookToYaml()" /></td>
+                                    <td></td>
+                                </tr>
+                            </th:block>
+                        </tbody>
+                    </table>
+                    <button class="add-row-bottom-btn" onclick="addMatrixRowInlineEmpty()">
+                        <span class="material-symbols-outlined" style="font-size: 14px;">add</span>
+                        <span>Add Variable Row</span>
+                    </button>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Right Sidebar Quick Insert Palette -->
+        <aside class="sidebar-palette-right">
+            
+            <!-- Category 1: Actions & Templates -->
+            <div>
+                <div class="palette-section-title">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">play_arrow</span>
+                    Actions & Templates
+                </div>
+                <div class="action-chip-list">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Open ${neodymium.url}')">
+                        <span class="label"><span class="material-symbols-outlined icon">public</span> Open Base URL</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Type &quot;&quot;', 6)">
+                        <span class="label"><span class="material-symbols-outlined icon">edit_note</span> Type Text</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Wait for  to be visible',9)">
+                        <span class="label"><span class="material-symbols-outlined icon">timer</span> Wait for Visible</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert  is visible',7)">
+                        <span class="label"><span class="material-symbols-outlined icon">visibility</span> Assert Visible</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert page contains &quot;&quot;', 22)">
+                        <span class="label"><span class="material-symbols-outlined icon">find_in_page</span> Assert Text</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Select option &quot;&quot;', 15)">
+                        <span class="label"><span class="material-symbols-outlined icon">checklist</span> Select Option</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Click ',6)">
+                        <span class="label"><span class="material-symbols-outlined icon">touch_app</span> Click Element</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 2: Control Tags & Flags -->
+            <div>
+                <div class="palette-section-title">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">label</span>
+                    Control Tags & Flags
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(optional)')">(optional)</button>
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(continue-on-error)')">(continue-on-error)</button>
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(no-replay)')">(no-replay)</button>
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(bug: )', 6)">(bug: ID)</button>
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(hint: #)', 8)">(hint: #)</button>
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(timeout: 10s)')">(timeout: 10s)</button>
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(visual)')">(visual)</button>
+                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(layout)')">(layout)</button>
+                </div>
+            </div>
+
+            <!-- Category 3: Java Extensions & Variables -->
+            <div>
+                <div class="palette-section-title">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">code</span>
+                    Java Extensions & Variables
+                </div>
+                <div class="action-chip-list">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Execute Java method &quot;&quot;', 22)">
+                        <span class="label"><span class="material-symbols-outlined icon">terminal</span> Call Java Method</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('${}', 2)">
+                        <span class="label"><span class="material-symbols-outlined icon">data_object</span> Insert Variable ${}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 4: Available Included Files -->
+            <div>
+                <div class="palette-section-title">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">extension</span>
+                    Available Included Files
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <th:block th:if="${yamlFiles != null}">
+                        <div class="include-card" th:each="f : ${yamlFiles}" th:data-file="${f.file}" onclick="insertIncludePill(this.getAttribute('data-file'))" th:title="${f.file}">
+                            <div class="include-title">
+                                <span class="material-symbols-outlined" style="font-size: 14px;">extension</span>
+                                <span th:text="${f.fileNameWithoutExtension}">playbook</span>
+                            </div>
+                            <div class="include-path" th:text="${f.file}">com/xceptance/neodymium/test/playbook.yaml</div>
+                            <div class="include-desc" th:text="${'Datasets: ' + (f.datasets != null ? f.datasets.size() : 0)}">Reusable module</div>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+</th:block>
+
+<!-- HTMX Fragment for Inline Inclusion Tree Expansion -->
+<th:block th:fragment="includeTreeCardFragment">
+    <div class="include-tree-card" th:id="'includeTreeCard_' + ${cardId}" th:data-include-file="${includeFile}">
+        <div class="include-tree-header">
+            <div class="include-tree-title">
+                <span class="material-symbols-outlined" style="font-size: 16px;">extension</span>
+                <span>Included File: <b th:text="${includeFile}">included.yaml</b></span>
+                <span th:id="'unsavedBadge_' + ${cardId}" style="display: none;" class="unsaved-badge">
+                    <span class="material-symbols-outlined" style="font-size: 12px;">warning</span> Unsaved Changes
+                </span>
+            </div>
+            <div class="include-tree-actions">
+                <button class="btn-editor" style="font-size: 11px; padding: 3px 8px;" th:id="'btnEditInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="enableIncludeEdit(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">edit</span> Edit File
+                </button>
+                <button class="btn-editor save" th:id="'btnSaveInclude_' + ${cardId}" style="display: none; font-size: 11px; padding: 3px 8px;" th:data-card-id="${cardId}" onclick="saveIncludeInline(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">save</span> Save
+                </button>
+                <button class="btn-editor" th:id="'btnDiscardInclude_' + ${cardId}" style="display: none; font-size: 11px; padding: 3px 8px;" th:data-card-id="${cardId}" onclick="discardIncludeInline(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span> Discard
+                </button>
+            </div>
+        </div>
+        <div th:if="${fileExists == false}" class="include-warning-banner" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">warning</span>
+            <span>Included file does not exist on disk. Edit steps below and save to create it.</span>
+        </div>
+        <div th:id="'includeInnerSteps_' + ${cardId}" style="display: flex; flex-direction: column; gap: 4px;">
+            <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this)" onblur="handleNestedBlur(this)" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
+                <span class="sub-line-num">-</span>
+                <span th:text="${step}">Step text</span>
+            </div>
+        </div>
+    </div>
 </th:block>

@@ -6,19 +6,19 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Neodymium Aura Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<link href="/material-symbols.css" rel="stylesheet"/>
 <link href="dashboard-styles.css" rel="stylesheet"/>
 </head>
 <body>
 <div class="toast-container" id="toastContainer"></div>
 <div class="sidebar">
-<div class="logo"><i class="fa-solid fa-atom"></i></div>
+<div class="logo"><span class="material-symbols-outlined">auto_awesome</span></div>
 <div class="nav-item active" id="navWorkspace" onclick="showView('dashboardView')" title="Workspace">
-<i class="fa-solid fa-laptop-code"></i>
-<div class="nav-badge neo-u-1" id="sidebarRunBadge"><i class="fa-solid fa-circle-notch spinner"></i></div>
+<span class="material-symbols-outlined">terminal</span>
+<div class="nav-badge neo-u-1" id="sidebarRunBadge"><span class="material-symbols-outlined spinner">progress_activity</span></div>
 </div>
 <div class="nav-item" id="navReports" onclick="showView('reportViewContainer')" title="History &amp; Reports">
-<i class="fa-solid fa-chart-bar"></i>
+<span class="material-symbols-outlined">bar_chart</span>
 </div>
 </div>
 <div class="main-container">
@@ -26,9 +26,9 @@
 <div class="neo-u-2">Neodymium Aura Dashboard</div>
 <div class="neo-u-3">
 <div class="neo-u-4">
-<button class="btn-edit neo-u-5" id="themeLight" onclick="changeTheme('light')" title="Light Mode"><i class="fa-solid fa-sun"></i></button>
-<button class="btn-edit neo-u-5" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode"><i class="fa-solid fa-moon"></i></button>
-<button class="btn-edit neo-u-5" id="themeSystem" onclick="changeTheme('system')" title="System Theme"><i class="fa-solid fa-desktop"></i></button>
+<button class="btn-edit neo-u-5" id="themeLight" onclick="changeTheme('light')" title="Light Mode"><span class="material-symbols-outlined">light_mode</span></button>
+<button class="btn-edit neo-u-5" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode"><span class="material-symbols-outlined">dark_mode</span></button>
+<button class="btn-edit neo-u-5" id="themeSystem" onclick="changeTheme('system')" title="System Theme"><span class="material-symbols-outlined">desktop_windows</span></button>
 </div>
 </div>
 </div>
@@ -43,12 +43,12 @@
 <div class="panel">
 <div class="panel-header">
 <span>Test Selection</span>
-<button class="btn-edit neo-u-8" onclick="loadFiles()" title="Refresh Files"><i class="fa-solid fa-rotate-right"></i></button>
+<button class="btn-edit neo-u-8" onclick="loadFiles()" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
 </div>
 <div class="content-scroll" id="yamlFileList">
 <!-- Populated by JS -->
 </div>
-<div class="neo-u-9"><button class="btn-edit neo-u-10" id="openModalBtn" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();"><i class="fa-solid fa-plus"></i> Create New Test</button></div>
+<div class="neo-u-9"><button class="btn-edit neo-u-10" id="openModalBtn" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();"><span class="material-symbols-outlined">add</span> Create New Test</button></div>
 </div>
 <div class="panel">
 <div class="panel-header">Run Queue</div>
@@ -65,13 +65,13 @@
 <div class="panel editor-container" id="editorPanel">
 <div class="panel-header">
 <div class="neo-u-11">
-<i class="fa-solid fa-file-lines neo-u-12"></i>
+<span class="material-symbols-outlined neo-u-12">description</span>
 <span id="editorFileName">test.yaml</span>
 </div>
 <div class="editor-actions">
-<button class="btn-editor save" onclick="saveYamlFile()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
-<button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><i class="fa-solid fa-trash"></i> Delete</button>
-<button class="btn-editor" onclick="closeEditor()"><i class="fa-solid fa-xmark"></i>
+<button class="btn-editor save" onclick="saveYamlFile()"><span class="material-symbols-outlined">save</span> Save</button>
+<button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><span class="material-symbols-outlined">delete</span> Delete</button>
+<button class="btn-editor" onclick="closeEditor()"><span class="material-symbols-outlined">close</span>
                                         Close</button>
 </div>
 </div>
@@ -91,12 +91,16 @@
 <div class="panel neo-u-19" id="consolePanel">
 <div class="terminal-panel">
 <div class="neo-u-20">
-<span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><i class="fa-solid fa-circle-notch spinner neo-u-21"></i></span></span>
+<span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
 <div class="neo-u-22">
 <input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
 <label for="aiOnlyCb">AI Only</label>
 <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
 <label for="errorsOnlyCb">Errors Only</label>
+<button id="copyTerminalBtn" class="btn-edit" onclick="copyTerminalOutput()" title="Copy terminal output" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+<span class="material-symbols-outlined" id="copyTerminalIcon">content_copy</span>
+<span id="copyTerminalText">Copy</span>
+</button>
 </div>
 </div>
 <div id="terminalConsole">Console idle.</div>
@@ -109,19 +113,19 @@
 <div class="right-area" id="rightArea">
 <div class="panel chat-container">
 <div class="panel-header neo-u-23">
-<div><i class="fa-solid fa-sparkles neo-u-15"></i> Aura Assistant</div>
+<div><span class="material-symbols-outlined neo-u-15">auto_awesome</span> Aura Assistant</div>
 <div class="neo-u-24">
 <select class="neo-u-25" id="chatSessionSelect" onchange="switchChatSession()"></select>
-<button class="btn-edit neo-u-8" onclick="createNewChatSession()" title="New Chat"><i class="fa-solid fa-plus"></i></button>
-<button class="btn-edit neo-u-8" onclick="renameCurrentChatSession()" title="Rename Chat"><i class="fa-solid fa-pen"></i></button>
-<button class="btn-edit neo-u-26" onclick="deleteCurrentChatSession()" title="Delete Chat"><i class="fa-solid fa-trash"></i></button>
+<button class="btn-edit neo-u-8" onclick="createNewChatSession()" title="New Chat"><span class="material-symbols-outlined">add</span></button>
+<button class="btn-edit neo-u-8" onclick="renameCurrentChatSession()" title="Rename Chat"><span class="material-symbols-outlined">edit</span></button>
+<button class="btn-edit neo-u-26" onclick="deleteCurrentChatSession()" title="Delete Chat"><span class="material-symbols-outlined">delete</span></button>
 </div>
 </div>
 <div class="api-key-banner neo-u-27" id="apiKeyBanner">
-<i class="fa-solid fa-triangle-exclamation"></i> <span id="apiKeyBannerText"></span>
+<span class="material-symbols-outlined">warning</span> <span id="apiKeyBannerText"></span>
 </div>
 <div class="api-key-banner neo-u-28" id="warningBanner">
-<i class="fa-solid fa-triangle-exclamation"></i> <span id="warningBannerText"></span>
+<span class="material-symbols-outlined">warning</span> <span id="warningBannerText"></span>
 </div>
 <div class="chat-messages" id="chatMessages"></div>
 <input class="chat-input" id="chatInput" placeholder="Ask Aura..." type="text"/>
@@ -147,14 +151,6 @@
 </div>
 <div class="config-row-wrapper neo-u-30">
 <div class="config-row neo-u-31">
-<span class="neo-u-2">Keep Browser Open</span>
-<label class="switch" for="optKeepOpen"><input id="optKeepOpen" type="checkbox"/><span class="slider"></span></label>
-</div>
-<span class="neo-u-32">Leaves the browser window
-                                    open after execution finishes.</span>
-</div>
-<div class="config-row-wrapper neo-u-30">
-<div class="config-row neo-u-31">
 <span class="neo-u-2">Interactive Mode</span>
 <label class="switch" for="optInteractive"><input id="optInteractive" type="checkbox"/><span class="slider"></span></label>
 </div>
@@ -169,10 +165,23 @@
 <span class="neo-u-32">Compiles and opens the
                                     visual test report after execution completes.</span>
 </div>
-<button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><i class="fa-solid fa-play"></i> Run Queue</button>
-<button class="btn-primary neo-u-33" id="runCurrentTestBtn" onclick="runCurrentFile()"><i class="fa-solid fa-play"></i> Run
+<div class="config-row-wrapper neo-u-30">
+<div class="config-row neo-u-31">
+<span class="neo-u-2">Execution Mode</span>
+<select id="optExecutionMode" class="neo-select">
+<option value="REPLAY_WITH_HEALING" selected="selected">Replay with Healing</option>
+<option value="REPLAY_STRICT">Replay Strict</option>
+<option value="LLM_RECORDING">LLM Recording</option>
+<option value="FORCE_RECORDING">Force Recording</option>
+<option value="LLM_ONLY">LLM Only</option>
+</select>
+</div>
+<span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
+</div>
+<button class="btn-primary" id="runQueueBtn" onclick="runQueue()"><span class="material-symbols-outlined">play_arrow</span> Run Queue</button>
+<button class="btn-primary neo-u-33" id="runCurrentTestBtn" onclick="runCurrentFile()"><span class="material-symbols-outlined">play_arrow</span> Run
                                 Open Test</button>
-<button class="btn-danger neo-u-1" id="stopQueueBtn" onclick="stopQueue()"><i class="fa-solid fa-stop"></i> Stop Execution</button>
+<button class="btn-danger neo-u-1" id="stopQueueBtn" onclick="stopQueue()"><span class="material-symbols-outlined">stop</span> Stop Execution</button>
 </div>
 </div>
 </div>
@@ -191,7 +200,7 @@
 <div class="panel neo-u-35">
 <div class="panel-header">
 <span>Run History</span>
-<button class="btn btn-secondary neo-u-36" onclick="loadHistory()"><i aria-hidden="true" class="fa-solid fa-arrows-rotate"></i></button>
+<button class="btn btn-secondary neo-u-36" onclick="loadHistory()"><span aria-hidden="true" class="material-symbols-outlined">sync</span></button>
 </div>
 <div class="neo-u-37">
 <table class="history-table neo-u-38">
@@ -231,7 +240,7 @@
 <div class="neo-u-40">
 <iframe class="neo-u-41" id="historyConsoleIframe"></iframe>
 <div class="neo-u-42" id="historyPlaceholder">
-<i class="fa-solid fa-clock-rotate-left neo-u-43"></i>
+<span class="material-symbols-outlined neo-u-43">schedule</span>
 <p>Select a run from the history to view its interactive report.</p>
 </div>
 </div>
@@ -241,9 +250,9 @@
 <!-- REPORT IFRAME VIEW (Hidden until report opened) -->
 <div class="iframe-view-pane" id="reportView">
 <div class="neo-report-header">
-<div class="neo-u-44"><i class="fa-solid fa-chart-column neo-u-45"></i>
+<div class="neo-u-44"><span class="material-symbols-outlined neo-u-45">bar_chart</span>
                     Test Report: <span id="reportDisplayName"></span></div>
-<button class="btn-edit" onclick="closeReportView()"><i class="fa-solid fa-arrow-left"></i>
+<button class="btn-edit" onclick="closeReportView()"><span class="material-symbols-outlined">arrow_back</span>
                     Back</button>
 </div>
 <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
@@ -251,9 +260,9 @@
 <!-- INTERACTIVE CONSOLE VIEW -->
 <div class="iframe-view-pane" id="interactiveConsoleView">
 <div class="neo-report-header">
-<div class="neo-u-44"><i class="fa-solid fa-terminal neo-u-46"></i>
+<div class="neo-u-44"><span class="material-symbols-outlined neo-u-46">terminal</span>
                     Interactive Console</div>
-<button class="btn-edit" onclick="closeInteractiveConsoleView()"><i class="fa-solid fa-arrow-left"></i>
+<button class="btn-edit" onclick="closeInteractiveConsoleView()"><span class="material-symbols-outlined">arrow_back</span>
                     Back</button>
 </div>
 <iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
@@ -292,7 +301,7 @@
 <div class="modal-card neo-u-50">
 <div class="modal-header neo-u-31">
 <span>Execution Log</span>
-<button class="btn-editor neo-u-51" id="downloadLogBtn"><i class="fa-solid fa-download"></i>
+<button class="btn-editor neo-u-51" id="downloadLogBtn"><span class="material-symbols-outlined">download</span>
                     Download</button>
 </div>
 <div class="modal-body neo-u-52">

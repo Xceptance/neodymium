@@ -1,12 +1,9 @@
+steps: |
+  Open ${auraManagerUrl} in the browser
+  Toggle the "Headless Mode" switch
+  Verify that "#optHeadless:not(:checked)" exists
+  Toggle the "Record Video" switch
+  Verify that "#optVideo:checked" exists
+
 data:
   - testId: "Toggle_Config"
-    before:
-      - java startManager()
-    steps: |
-      Open ${auraManagerUrl} in the browser
-      Toggle the "Headless Mode" switch
-      java verifyCheckboxChecked(#optHeadless)
-      Toggle the "Record Video" switch
-      java verifyCheckboxChecked(#optVideo)
-    after:
-      - java stopManager()

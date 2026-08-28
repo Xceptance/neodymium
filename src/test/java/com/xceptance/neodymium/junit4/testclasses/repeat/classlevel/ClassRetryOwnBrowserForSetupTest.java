@@ -7,11 +7,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.StartNewBrowserForSetUp;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.util.Neodymium;
 
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")

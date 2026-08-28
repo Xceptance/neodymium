@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit5.testclasses.wip;
 
-import com.xceptance.neodymium.common.WorkInProgress;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.WorkInProgress;
+import org.neodymium.junit5.NeodymiumTest;
 
 public class WIPAnnotationTest
 {

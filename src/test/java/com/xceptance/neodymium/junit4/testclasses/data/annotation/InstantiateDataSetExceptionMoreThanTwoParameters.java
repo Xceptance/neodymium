@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit4.testclasses.data.annotation;
 
-import com.xceptance.neodymium.common.testdata.DataFile;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.testdata.DataFile;
+import org.neodymium.common.testdata.DataSet;
+import org.neodymium.junit4.NeodymiumRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 @RunWith(NeodymiumRunner.class)

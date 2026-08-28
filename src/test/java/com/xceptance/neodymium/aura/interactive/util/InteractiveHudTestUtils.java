@@ -34,12 +34,7 @@ import org.openqa.selenium.WrapsDriver;
 import org.openqa.selenium.interactions.Interactive;
 
 import com.codeborne.selenide.WebDriverRunner;
-import com.xceptance.neodymium.ai.action.ActionExecutor;
-import com.xceptance.neodymium.ai.core.AiAgent;
-import com.xceptance.neodymium.ai.core.AiBrowser;
-import com.xceptance.neodymium.ai.core.LlmClient;
-import com.xceptance.neodymium.ai.core.PageAnalyzer;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Utility helper class for Neodymium AI Interactive HUD integration tests.
@@ -228,29 +223,5 @@ public final class InteractiveHudTestUtils
         field.setAccessible(true);
         final Map<Thread, Object> contexts = (Map<Thread, Object>) field.get(null);
         contexts.put(Thread.currentThread(), context);
-    }
-
-    /**
-     * Creates a custom AiBrowser instance injected with the given custom mock LLM client.
-     *
-     * @param testInstance the test class instance running the test
-     * @param mockLlmClient the custom mock LLM client
-     * @return the configured AiBrowser instance
-     * @throws Exception if injection fails
-     */
-    public static AiBrowser createTestAiBrowser(final Object testInstance, final LlmClient mockLlmClient) throws Exception
-    {
-        final AiBrowser browser = new AiBrowser(testInstance);
-        final AiAgent customAgent = new AiAgent(
-            mockLlmClient,
-            new PageAnalyzer(),
-            new ActionExecutor(testInstance),
-            Neodymium.aiConfiguration()
-        );
-        final Field agentField = AiBrowser.class.getDeclaredField("agent");
-        agentField.setAccessible(true);
-        agentField.set(browser, customAgent);
-
-        return browser;
     }
 }

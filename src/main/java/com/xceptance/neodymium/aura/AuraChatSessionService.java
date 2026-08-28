@@ -23,8 +23,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -79,6 +81,7 @@ public final class AuraChatSessionService
 
         if (files != null && files.length > 0)
         {
+            final Set<String> diskIds = new HashSet<>();
             for (final File file : files)
             {
                 try
@@ -87,6 +90,7 @@ public final class AuraChatSessionService
                     final ChatSessionDto session = this.gson.fromJson(content, ChatSessionDto.class);
                     if (session != null && session.id != null)
                     {
+                        diskIds.add(session.id);
                         final ChatSessionDto cached = this.sessionCache.get(session.id);
                         if (cached != null)
                         {
@@ -104,6 +108,11 @@ public final class AuraChatSessionService
                     LOGGER.error("[Aura Chat] Failed to load chat session file: {}", file.getName(), e);
                 }
             }
+            this.sessionCache.keySet().removeIf(id -> !diskIds.contains(id));
+        }
+        else
+        {
+            this.sessionCache.clear();
         }
 
         // If no sessions exist, provision and return the default session

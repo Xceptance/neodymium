@@ -10,7 +10,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/material-symbols.css">
 
     <link rel="stylesheet" href="/interactive_console.css">
 
@@ -20,14 +20,14 @@
 
     <!-- Initial Loading Overlay -->
     <div id="initialLoadingOverlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(11, 12, 16, 0.45); backdrop-filter: blur(8px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s, visibility 0.3s;">
-        <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 3rem; color: var(--accent-primary); margin-bottom: 1rem;"></i>
+        <span class="material-symbols-outlined spinner" style="font-size: 3rem; color: var(--accent-primary); margin-bottom: 1rem;">progress_activity</span>
         <h2 style="font-size: 1.25rem; font-weight: 500; color: var(--text-main); font-family: var(--font-main);">Loading</h2>
         <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem; font-family: var(--font-main);">Waiting for data</p>
     </div>
 
     <!-- Stale tab warning -->
     <div id="staleBanner">
-        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span class="material-symbols-outlined">warning</span>
         <span id="staleBannerMsg">This tab is connected to an old test run.</span>
         <button class="btn btn-primary" onclick="refreshToCurrentRun()"
             style="padding: 5px 12px; font-size: 12px;">Refresh to current run</button>
@@ -41,14 +41,13 @@
     <header>
         <div class="header-meta">
             <div id="connectionDot" title="Connecting..."></div>
-            <span class="header-browser-icon" id="browserIcon" title="Browser"><i
-                    class="fa-brands fa-chrome"></i></span>
+            <span class="header-browser-icon" id="browserIcon" title="Browser"><span class="material-symbols-outlined">language</span></span>
             <!-- Test name/ID is now a button that toggles the details panel -->
             <button class="header-meta-btn" id="btnToggleDetails" onclick="toggleTopDetails()"
                 title="Test Details (Alt+D)" aria-label="Toggle Test Metadata Details" type="button">
                 <h1 id="testNameDisplay">—</h1>
                 <span class="hdr-id big-screen-only" id="testIdDisplay"></span>
-                <span class="hdr-details-hint"><i class="fa-solid fa-chevron-down" id="detailsChevron"></i>
+                <span class="hdr-details-hint"><span class="material-symbols-outlined" id="detailsChevron">expand_more</span>
                     <span class="big-screen-only">details</span></span>
             </button>
         </div>
@@ -62,7 +61,7 @@
         <div class="header-controls">
             <div class="help-hover-container">
                 <button class="btn btn-icon" id="btnHelp" onclick="toggleHelpOverlay()" title="Help (Alt+I)"
-                    aria-label="Keyboard Shortcuts and Help"><i class="fa-solid fa-circle-question"></i></button>
+                    aria-label="Keyboard Shortcuts and Help"><span class="material-symbols-outlined">help</span></button>
                 <div id="helpOverlay">
                     <div class="modal-header">
                         <h3>Keyboard Shortcuts & Info</h3>
@@ -124,12 +123,12 @@
                 </div>
             </div>
             <button class="btn btn-mobile-qr" onclick="openMobileQr()" title="Open on mobile"
-                aria-label="Show QR code to open on mobile device"><i class="fa-solid fa-mobile-screen-button"
-                    aria-hidden="true"></i></button>
+                aria-label="Show QR code to open on mobile device"><span class="material-symbols-outlined"
+                    aria-hidden="true">smartphone</span></button>
             <button class="btn" id="btnSettings" onclick="openOverlay('settingsOverlay')" title="Settings (Alt+G)"
-                aria-label="Open Settings (Alt+G)"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
-            <button class="btn" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Light/Dark Theme"><i
-                    class="fa-solid fa-circle-half-stroke"></i></button>
+                aria-label="Open Settings (Alt+G)"><span class="material-symbols-outlined" aria-hidden="true">settings</span></button>
+            <button class="btn" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle Light/Dark Theme"><span
+                    class="material-symbols-outlined">contrast</span></button>
         </div>
     </header>
     <div id="topDetailsPanel" class="hidden-details"
@@ -202,8 +201,8 @@
                     <div class="block-header">Before Execution</div>
                     <div id="beforeSteps"></div>
                     <button class="add-step-card-btn" onclick="openAddStepOverlay('before')" title="Add Step (Alt+N)"
-                        aria-label="Add step to before block" style="margin-top: 4px; margin-bottom: 12px;"><i
-                            class="fa-solid fa-plus"></i> Add Step</button>
+                        aria-label="Add step to before block" style="margin-top: 4px; margin-bottom: 12px;"><span
+                            class="material-symbols-outlined">add</span> Add Step</button>
                 </div>
 
                 <div class="block-group" id="stepsGroup" style="display:none;" role="group"
@@ -211,8 +210,8 @@
                     <div class="block-header">Core Test Steps</div>
                     <div id="stepsSteps"></div>
                     <button class="add-step-card-btn" onclick="openAddStepOverlay('steps')" title="Add Step (Alt+N)"
-                        aria-label="Add step to steps block" style="margin-top: 4px; margin-bottom: 12px;"><i
-                            class="fa-solid fa-plus"></i> Add Step</button>
+                        aria-label="Add step to steps block" style="margin-top: 4px; margin-bottom: 12px;"><span
+                            class="material-symbols-outlined">add</span> Add Step</button>
                 </div>
 
                 <div class="block-group" id="afterGroup" style="display:none;" role="group"
@@ -220,8 +219,8 @@
                     <div class="block-header">After Execution</div>
                     <div id="afterSteps"></div>
                     <button class="add-step-card-btn" onclick="openAddStepOverlay('after')" title="Add Step (Alt+N)"
-                        aria-label="Add step to after block" style="margin-top: 4px; margin-bottom: 12px;"><i
-                            class="fa-solid fa-plus"></i> Add Step</button>
+                        aria-label="Add step to after block" style="margin-top: 4px; margin-bottom: 12px;"><span
+                            class="material-symbols-outlined">add</span> Add Step</button>
                 </div>
             </div>
 
@@ -231,17 +230,20 @@
                 <div class="toolbar-footer">
                     <div class="btn-group">
                         <button class="btn" id="btnBack" onclick="sendAction('REWIND')"
-                            title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><i
-                                class="fa-solid fa-backward-step" aria-hidden="true"></i> <span>Back</span></button>
-                        <button class="btn btn-success" id="btnRun" onclick="sendAction('RUN')"
+                            title="Step Back (Alt+Z / Alt+Y)" aria-label="Rewind step back (Alt+Z or Alt+Y)" disabled><span
+                                class="material-symbols-outlined" aria-hidden="true">skip_previous</span> <span>Back</span></button>
+                        <button class="btn btn-success" id="btnRun" onclick="handlePrimaryAction()"
                             title="Run Step (Alt+R / Ctrl+Enter)" aria-label="Run step (Alt+R or Ctrl+Enter)"
-                            disabled><i class="fa-solid fa-play" aria-hidden="true"></i> <span>Run</span></button>
+                            disabled><span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> <span>Run</span></button>
+                        <button class="btn btn-warning" id="btnFinish" onclick="sendAction('FINISH')"
+                            title="Accept current state and finish test" aria-label="Accept current state and finish test"
+                            style="display: none;" disabled><span class="material-symbols-outlined" aria-hidden="true">flag</span> <span>Finish</span></button>
                         <button class="btn" id="btnSkip" onclick="sendAction('SKIP')" title="Skip Step (Alt+K)"
-                            aria-label="Skip step (Alt+K)" disabled><i class="fa-solid fa-forward-step"
-                                aria-hidden="true"></i> <span>Skip</span></button>
+                            aria-label="Skip step (Alt+K)" disabled><span class="material-symbols-outlined"
+                                aria-hidden="true">skip_next</span> <span>Skip</span></button>
                         <button class="btn" id="btnAuto" onclick="toggleAuto()" title="Auto-run (Alt+S)"
-                            aria-label="Toggle Auto-run (Alt+S)" disabled><i class="fa-solid fa-forward-fast"
-                                aria-hidden="true"></i> <span>Auto</span></button>
+                            aria-label="Toggle Auto-run (Alt+S)" disabled><span class="material-symbols-outlined"
+                                aria-hidden="true">fast_forward</span> <span>Auto</span></button>
                     </div>
 
                     <div class="btn-group">
@@ -253,8 +255,8 @@
                                 aria-label="Cancel stopping">No</button>
                         </div>
                         <button class="btn btn-danger" id="btnCancel" onclick="showCancelWarning()"
-                            title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><i
-                                class="fa-solid fa-stop" aria-hidden="true"></i> <span>Cancel
+                            title="Cancel test run (Escape)" aria-label="Cancel test run (Escape)"><span
+                                class="material-symbols-outlined" aria-hidden="true">stop</span> <span>Cancel
                                 Test</span></button>
 
                         <!-- Kebab menu: debug actions hidden beside the Cancel button -->
@@ -266,7 +268,7 @@
                                 aria-haspopup="true"
                                 aria-expanded="false"
                                 disabled>
-                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+                                <span class="material-symbols-outlined" aria-hidden="true">more_vert</span>
                             </button>
                             <div class="kebab-dropdown" id="kebabDropdown" role="menu">
                                 <button class="kebab-item" id="btnDump"
@@ -274,7 +276,7 @@
                                     title="Capture AI context, DOM, and step history to target/ai-console-dump/"
                                     aria-label="Create Data Dump"
                                     role="menuitem">
-                                    <i class="fa-solid fa-bug" aria-hidden="true"></i>
+                                    <span class="material-symbols-outlined" aria-hidden="true">bug_report</span>
                                     Create Data Dump
                                 </button>
                             </div>
@@ -294,7 +296,7 @@
                     style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                     <h3
                         style="font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-circle-info" style="color:var(--accent-primary)"></i> Step Execution
+                        <span class="material-symbols-outlined" style="color:var(--accent-primary)">info</span> Step Execution
                         Details
                     </h3>
                     <div id="bigScreenDetailsContent">
@@ -311,8 +313,8 @@
         aria-labelledby="mobileQrTitle" aria-modal="true">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width:340px;text-align:center;">
             <div class="modal-header">
-                <h3 id="mobileQrTitle"><i class="fa-solid fa-mobile-screen-button"
-                        style="color:var(--accent-primary);"></i> Open on Mobile</h3>
+                <h3 id="mobileQrTitle"><span class="material-symbols-outlined"
+                        style="color:var(--accent-primary);">smartphone</span> Open on Mobile</h3>
                 <button class="close-btn" onclick="closeOverlay('mobileQrOverlay')" aria-label="Close">&times;</button>
             </div>
             <p style="font-size:13px;color:var(--text-secondary);margin:12px 0 4px;">Scan with your phone to open this
@@ -426,10 +428,10 @@
             <div class="modal-header" style="flex-shrink: 0;">
                 <h3>Screenshot</h3>
                 <div style="display: flex; gap: 8px; align-items: center; margin-right: 16px;">
-                    <button class="btn btn-icon" onclick="zoomScreenshot(1.2)" title="Zoom In"><i
-                            class="fa-solid fa-magnifying-glass-plus"></i></button>
-                    <button class="btn btn-icon" onclick="zoomScreenshot(0.8)" title="Zoom Out"><i
-                            class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <button class="btn btn-icon" onclick="zoomScreenshot(1.2)" title="Zoom In"><span
+                            class="material-symbols-outlined">zoom_in</span></button>
+                    <button class="btn btn-icon" onclick="zoomScreenshot(0.8)" title="Zoom Out"><span
+                            class="material-symbols-outlined">zoom_out</span></button>
                     <button class="btn" onclick="resetScreenshotZoom()"
                         style="font-size: 11px; padding: 4px 8px;">Reset</button>
                 </div>
@@ -452,11 +454,11 @@
     <!-- Final Save Overlay -->
     <div id="finalSaveOverlay" class="final-save-overlay" role="dialog" aria-modal="true" aria-labelledby="finalSaveTitle">
         <div class="final-save-box">
-            <h2 id="finalSaveTitle"><i class="fa-solid fa-circle-check"></i> Test Finished</h2>
+            <h2 id="finalSaveTitle"><span class="material-symbols-outlined">check_circle</span> Test Finished</h2>
             <p id="finalSaveText">You have made changes to the test steps during execution. Would you like to save these changes?</p>
             <div id="saveScopeContainer" style="display: none; margin: 15px 0 25px 0; text-align: left;">
                 <label for="saveScopeSelect" style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: bold; color: #ccc;">
-                    <i class="fa-solid fa-floppy-disk"></i> Save Destination
+                    <span class="material-symbols-outlined">save</span> Save Destination
                 </label>
                 <select id="saveScopeSelect" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #444; background-color: #222; color: #fff; font-size: 14px; outline: none; cursor: pointer;">
                     <option value="global">Global (full test / root level)</option>
@@ -477,7 +479,7 @@
     <div id="dumpReadyOverlay" class="dump-ready-overlay" role="dialog" aria-modal="true" aria-labelledby="dumpReadyTitle">
         <div class="dump-ready-box">
             <div class="dump-ready-header">
-                <i class="fa-solid fa-bug dump-ready-icon" aria-hidden="true"></i>
+                <span class="material-symbols-outlined dump-ready-icon" aria-hidden="true">bug_report</span>
                 <h2 id="dumpReadyTitle">Data Dump Created</h2>
             </div>
             <p class="dump-ready-subtitle">The following files were written to disk:</p>
@@ -486,8 +488,37 @@
             </div>
             <div class="dump-ready-footer">
                 <button class="btn btn-primary" onclick="closeDumpPopup()" autofocus>
-                    <i class="fa-solid fa-check" aria-hidden="true"></i> Got it
+                    <span class="material-symbols-outlined" aria-hidden="true">check</span> Got it
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Fix Suggestion Overlay -->
+    <div id="suggestionOverlay" class="modal-overlay" onclick="closeOverlay('suggestionOverlay')" role="dialog" aria-labelledby="suggestionTitle" aria-modal="true">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 580px; width: 90%;">
+            <div class="modal-header">
+                <h3 id="suggestionTitle"><span class="material-symbols-outlined" style="color:#8b5cf6;">auto_awesome</span> AI Instruction Fix Suggestion</h3>
+                <button class="close-btn" onclick="closeOverlay('suggestionOverlay')" aria-label="Close Suggestion">&times;</button>
+            </div>
+            <div id="suggestionLoading" style="display: none; padding: 24px; text-align: center;">
+                <span class="material-symbols-outlined spinner" style="font-size: 2rem; color: #8b5cf6; margin-bottom: 12px;">progress_activity</span>
+                <p style="color: var(--text-secondary); font-size: 14px;">Analyzing SUT page state & generating fix suggestion...</p>
+            </div>
+            <div id="suggestionBody" style="display: none; flex-direction: column; gap: 14px; margin: 16px 0; text-align: left;">
+                <div>
+                    <label style="display: block; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px;">Original Instruction</label>
+                    <div id="suggestionOriginalText" style="padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); word-break: break-all;"></div>
+                </div>
+                <div>
+                    <label for="suggestionTextarea" style="display: block; font-weight: 600; font-size: 12px; text-transform: uppercase; color: #8b5cf6; margin-bottom: 4px;">Suggested Fix (Editable)</label>
+                    <textarea id="suggestionTextarea" rows="3" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid #8b5cf6; color: var(--text-main); padding: 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; outline: none; resize: vertical;"></textarea>
+                </div>
+            </div>
+            <div class="inline-edit-actions" id="suggestionActions" style="display: none; gap: 10px; justify-content: flex-end; margin-top: 12px;">
+                <button class="btn" onclick="closeOverlay('suggestionOverlay')">Dismiss</button>
+                <button class="btn btn-primary" onclick="applySuggestionOnly()">Apply Only</button>
+                <button class="btn btn-success" onclick="applySuggestionAndRun()"><span class="material-symbols-outlined">play_arrow</span> Approve & Run</button>
             </div>
         </div>
     </div>

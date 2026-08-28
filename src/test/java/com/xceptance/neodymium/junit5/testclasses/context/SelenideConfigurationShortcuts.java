@@ -4,9 +4,9 @@ import org.junit.jupiter.api.Assertions;
 
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.util.Neodymium;
 
 @Browser("Chrome_headless")
 public class SelenideConfigurationShortcuts

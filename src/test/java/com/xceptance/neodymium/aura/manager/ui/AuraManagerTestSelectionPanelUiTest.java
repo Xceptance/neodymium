@@ -32,8 +32,8 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide UI test to verify the Neodymium Aura Manager's Test Selection Panel
@@ -86,15 +86,15 @@ public final class AuraManagerTestSelectionPanelUiTest
         final var firstFileItem = $$("#yamlFileList .file-container").first().$(".list-item");
         firstFileItem.shouldBe(Condition.visible);
 
-        // Check original state (should be collapsed, so chevron-right is present)
-        final var chevron = firstFileItem.$("i.fa-solid");
-        chevron.shouldHave(Condition.cssClass("fa-chevron-right"));
+        // Check original state (should be collapsed, so keyboard_arrow_right is present)
+        final var chevron = firstFileItem.$(".material-symbols-outlined");
+        chevron.shouldHave(Condition.exactText("keyboard_arrow_right"));
 
         // Click to expand
         firstFileItem.click();
 
-        // Verify the chevron has toggled to chevron-down and datasets list is visible
-        chevron.shouldHave(Condition.cssClass("fa-chevron-down"));
+        // Verify the chevron has toggled to keyboard_arrow_down and datasets list is visible
+        chevron.shouldHave(Condition.exactText("keyboard_arrow_down"));
         final var datasetList = $$("#yamlFileList .file-container").first().$(".dataset-list");
         datasetList.shouldBe(Condition.visible);
         datasetList.$$(".dataset-item").shouldHave(CollectionCondition.sizeGreaterThan(0));
@@ -103,7 +103,7 @@ public final class AuraManagerTestSelectionPanelUiTest
         firstFileItem.click();
 
         // Verify the chevron toggles back and datasets list is hidden/not visible
-        chevron.shouldHave(Condition.cssClass("fa-chevron-right"));
+        chevron.shouldHave(Condition.exactText("keyboard_arrow_right"));
         datasetList.shouldNotBe(Condition.visible);
     }
 
@@ -124,8 +124,14 @@ public final class AuraManagerTestSelectionPanelUiTest
     {
         Selenide.open("http://localhost:" + this.port + "/");
 
-        // Verify initial files list has items
-        final int initialCount = $$("#yamlFileList .file-container").size();
+        // Count YAML test files dynamically in resources
+        final java.util.List<String> dynamicFiles = new java.util.ArrayList<>();
+        final java.io.File resourcesDir = new java.io.File("src/test/resources").getAbsoluteFile();
+        new com.xceptance.neodymium.aura.AuraFileService().scanDirStatic(resourcesDir, resourcesDir, dynamicFiles);
+        final int dynamicCount = dynamicFiles.size();
+
+        // Verify initial files list matches dynamically counted files
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(dynamicCount));
 
         // Enter search term into search input
         $("#testSearchInput").shouldBe(Condition.visible).setValue("test");
@@ -134,10 +140,11 @@ public final class AuraManagerTestSelectionPanelUiTest
         $$("#yamlFileList .file-container").shouldHave(CollectionCondition.sizeGreaterThan(0));
 
         // Clear search input
-        $("#testSearchInput").clear();
+        $("#testSearchInput").setValue("").sendKeys(" ");
+        $("#testSearchInput").sendKeys(org.openqa.selenium.Keys.BACK_SPACE);
 
-        // List should restore back to initial count
-        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(initialCount));
+        // List should restore back to dynamic count
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.size(dynamicCount));
     }
 
     @NeodymiumTest
@@ -171,5 +178,53 @@ public final class AuraManagerTestSelectionPanelUiTest
         reloadedContainer.$(".file-select-cb").shouldBe(Condition.selected);
         reloadedContainer.$(".list-item").click();
         reloadedContainer.$(".dataset-list").$(".dataset-select-cb").shouldBe(Condition.selected);
+    }
+
+    @NeodymiumTest
+    public final void testPartialDatasetSelectionIndeterminateState()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Find a file container with multiple datasets
+        final var multiContainer = $$("#yamlFileList .file-container")
+                .asDynamicIterable().stream()
+                .filter(c -> c.$$(".dataset-select-cb").size() > 1)
+                .findFirst().orElseThrow();
+        final String targetFileName = multiContainer.$(".list-item").getAttribute("data-file");
+
+        multiContainer.$(".list-item").click();
+        final var datasetList = multiContainer.$(".dataset-list");
+        datasetList.shouldBe(Condition.visible);
+
+        final var datasetCheckboxes = datasetList.$$(".dataset-select-cb");
+        datasetCheckboxes.shouldHave(CollectionCondition.sizeGreaterThan(1));
+
+        final var fileCheckbox = multiContainer.$(".file-select-cb");
+
+        // Clear any selection first
+        if (fileCheckbox.isSelected())
+        {
+            fileCheckbox.click();
+        }
+
+        // Select only the first dataset
+        datasetCheckboxes.first().click();
+
+        // Verify file checkbox is not fully checked, but is indeterminate
+        fileCheckbox.shouldNotBe(Condition.selected);
+        final Boolean isIndeterminate = Selenide.executeJavaScript("return arguments[0].indeterminate;", fileCheckbox);
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.TRUE, isIndeterminate);
+
+        // Reload page to verify server-side state persistence of partial selection
+        Selenide.refresh();
+
+        final var reloadedContainer = $$("#yamlFileList .file-container")
+                .findBy(Condition.attribute("data-file", targetFileName));
+        final var reloadedFileCb = reloadedContainer.$(".file-select-cb");
+        reloadedFileCb.shouldNotBe(Condition.selected);
+        reloadedFileCb.shouldHave(Condition.attribute("data-indeterminate", "true"));
+
+        final Boolean isReloadedIndeterminate = Selenide.executeJavaScript("return arguments[0].indeterminate;", reloadedFileCb);
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.TRUE, isReloadedIndeterminate);
     }
 }

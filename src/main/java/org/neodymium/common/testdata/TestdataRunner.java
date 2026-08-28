@@ -1,0 +1,95 @@
+package org.neodymium.common.testdata;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.lang3.StringUtils;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumAnnotationUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class TestdataRunner
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(TestdataRunner.class);
+
+    private TestdataContainer testData;
+
+    public TestdataRunner(TestdataContainer testData)
+    {
+        this.testData = testData;
+    }
+
+    public void setUpTest(final Object testClassInstance) throws IllegalArgumentException, IllegalAccessException
+    {
+        if (testData != null)
+        {
+            final Map<String, String> dataSet = testData.getDataSet();
+            final String sourceFile = dataSet.get("neodymium.sourceFile");
+            if (sourceFile != null)
+            {
+                Neodymium.setTestdataSourceFile(sourceFile);
+            }
+            Neodymium.getData().putAll(dataSet);
+            Neodymium.getData().remove("neodymium.sourceFile");
+            initializeDataObjects(testClassInstance);
+        }
+        else
+        {
+            LOGGER.debug("using no dataset");
+        }
+    }
+
+    private void initializeDataObjects(Object testClassInstance) throws IllegalArgumentException, IllegalAccessException
+    {
+        for (Field field : getFieldsFromSuperclasses(testClassInstance))
+        {
+            DataItem dataAnnotation = NeodymiumAnnotationUtils.getAnnotations(field, DataItem.class).stream().findFirst().orElse(null);
+            if (dataAnnotation != null)
+            {
+                boolean isFieldAccessable = field.canAccess(testClassInstance);
+                field.setAccessible(true);
+                try
+                {
+                    if (!StringUtils.isBlank(dataAnnotation.value()))
+                    {
+                        field.set(testClassInstance, Neodymium.getData().get(dataAnnotation.value(), field.getType()));
+                    }
+                    else if (Neodymium.getData().exists(field.getName()))
+                    {
+                        field.set(testClassInstance, Neodymium.getData().get("$." + field.getName(), field.getType()));
+                    }
+                    else if (Neodymium.getData().getDataAsJsonObject().isJsonPrimitive() == (field.getType().isPrimitive() || field.getType()
+                                                                                                                                   .equals(String.class)))
+                    {
+                        field.set(testClassInstance, Neodymium.getData().get(field.getType()));
+                    }
+                }
+                catch (Exception e)
+                {
+                    throw new RuntimeException("Something went wrong while test data value injection for field:'" + field.getName() + "' in class:'"
+                                                   + testClassInstance.getClass().getName() + "'", e);
+                }
+                finally
+                {
+                    field.setAccessible(isFieldAccessable);
+                }
+            }
+        }
+    }
+
+    private List<Field> getFieldsFromSuperclasses(Object testClassInstance)
+    {
+        Class<?> currentSuperclass = testClassInstance.getClass().getSuperclass();
+        ArrayList<Field> fields = new ArrayList<Field>(Arrays.asList(testClassInstance.getClass().getDeclaredFields()));
+        while (!currentSuperclass.equals(Object.class))
+        {
+            fields.addAll(List.of(currentSuperclass.getDeclaredFields()));
+            currentSuperclass = currentSuperclass.getSuperclass();
+        }
+        return fields;
+    }
+}

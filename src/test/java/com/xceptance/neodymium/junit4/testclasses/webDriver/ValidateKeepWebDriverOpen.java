@@ -17,15 +17,15 @@ import org.openqa.selenium.WebDriver;
 import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.StartNewBrowserForCleanUp;
-import com.xceptance.neodymium.common.browser.StartNewBrowserForSetUp;
-import com.xceptance.neodymium.common.browser.WebDriverCache;
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.StartNewBrowserForCleanUp;
+import org.neodymium.common.browser.StartNewBrowserForSetUp;
+import org.neodymium.common.browser.WebDriverCache;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /*
  * Validate that the web driver is kept open after the test is finished.

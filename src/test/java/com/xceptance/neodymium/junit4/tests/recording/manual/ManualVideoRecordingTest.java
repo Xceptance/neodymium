@@ -9,8 +9,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 
-import com.xceptance.neodymium.common.recording.FilmTestExecution;
-import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
+import org.neodymium.common.recording.FilmTestExecution;
+import org.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingTest;
 
 public class ManualVideoRecordingTest extends AbstractRecordingTest

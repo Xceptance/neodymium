@@ -20,7 +20,7 @@ package com.xceptance.neodymium.aura;
 
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -42,6 +42,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 
 /**
  * Service handling test execution reporting, run history, metadata storage, and report compilation.
@@ -54,9 +55,15 @@ public final class AuraReportingService
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraReportingService.class);
 
     private final AtomicReference<Process> activeProcess = new AtomicReference<>(null);
+    private AuraInteractiveService interactiveService;
 
     public AuraReportingService()
     {
+    }
+
+    public void setInteractiveService(final AuraInteractiveService interactiveService)
+    {
+        this.interactiveService = interactiveService;
     }
 
     public File getReportHistoryDir()
@@ -312,6 +319,10 @@ public final class AuraReportingService
         command.add("io.qameta.allure:allure-maven:report");
         final File auraAllureResults = new File("target/aura-sandbox/allure-results").getAbsoluteFile();
         final File auraReportSite = new File("target/aura-sandbox/site/allure-maven-plugin").getAbsoluteFile();
+        if (auraReportSite.exists())
+        {
+            deleteDirRecursively(auraReportSite);
+        }
         command.add("-Dallure.results.directory=" + auraAllureResults.getAbsolutePath());
         command.add("-DresultsDirectory=" + auraAllureResults.getAbsolutePath());
         command.add("-Dallure.report.directory=" + auraReportSite.getAbsolutePath());
@@ -346,21 +357,22 @@ public final class AuraReportingService
             if (exitCode == 0)
             {
                 LOGGER.info("[Aura Server] Report successfully compiled.");
-                copyReportToHistory(files, req, runStartTimeMs, testsRun, passed, failed, skipped, manuallyStoppedVal, runLogs, runEvents);
             }
             else
             {
                 LOGGER.error("[Aura Server] Report compilation failed with exit code: {}", exitCode);
             }
+            copyReportToHistory(files, req, runStartTimeMs, testsRun, passed, failed, skipped, manuallyStoppedVal, runLogs, runEvents);
         }
         catch (final Exception e)
         {
             LOGGER.error("[Aura Server] Failed to compile report", e);
             activeProcess.set(null);
+            copyReportToHistory(files, req, runStartTimeMs, testsRun, passed, failed, skipped, manuallyStoppedVal, runLogs, runEvents);
         }
     }
 
-    private void copyReportToHistory(final List<String> files, final RunRequest req, final long runStartTimeMs,
+    public void copyReportToHistory(final List<String> files, final RunRequest req, final long runStartTimeMs,
             final int testsRun, final int passed, final int failed, final int skipped, final boolean manuallyStoppedVal,
             final List<String> runLogs, final List<Map<String, Object>> runEvents)
     {
@@ -369,19 +381,17 @@ public final class AuraReportingService
         {
             srcDir = new File("target/site/allure-maven-plugin");
         }
-        if (!srcDir.exists() || !srcDir.isDirectory())
-        {
-            LOGGER.error("[Aura Server] Report source directory not found: {}", srcDir.getAbsolutePath());
-            return;
-        }
 
         final String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         final List<String> names = new ArrayList<>();
-        for (final String file : files)
+        if (files != null)
         {
-            final String name = new File(file).getName();
-            final int dotIdx = name.lastIndexOf('.');
-            names.add(dotIdx > 0 ? name.substring(0, dotIdx) : name);
+            for (final String file : files)
+            {
+                final String name = new File(file).getName();
+                final int dotIdx = name.lastIndexOf('.');
+                names.add(dotIdx > 0 ? name.substring(0, dotIdx) : name);
+            }
         }
         final String joined = String.join("_", names);
         final String folderName = timestamp + "_" + (joined.isEmpty() ? "run" : joined);
@@ -389,7 +399,15 @@ public final class AuraReportingService
 
         try
         {
-            copyDirectory(srcDir, new File(destDir, "allure-report"));
+            if (!destDir.exists())
+            {
+                destDir.mkdirs();
+            }
+
+            if (srcDir.exists() && srcDir.isDirectory())
+            {
+                copyDirectory(srcDir, new File(destDir, "allure-report"));
+            }
 
             // Write metadata.json
             final File metadataFile = new File(destDir, "metadata.json");
@@ -400,12 +418,23 @@ public final class AuraReportingService
             final boolean allureEnabled = req != null && req.allure;
             final boolean videoEnabled = req != null && req.video;
 
-            final String runConfigJson = AuraHttpUtils.gson.toJson(req);
+            final Map<String, Object> metadataMap = new LinkedHashMap<>();
+            metadataMap.put("status", status);
+            metadataMap.put("timestamp", timestamp);
+            metadataMap.put("total", testsRun);
+            metadataMap.put("passed", passed);
+            metadataMap.put("failed", failed);
+            metadataMap.put("skipped", skipped);
+            metadataMap.put("durationMs", durationMs);
+            metadataMap.put("headless", headless);
+            metadataMap.put("allureEnabled", allureEnabled);
+            metadataMap.put("videoEnabled", videoEnabled);
+            if (req != null)
+            {
+                metadataMap.put("runConfig", req);
+            }
 
-            final String metadataContent = String.format(
-                    "{%n  \"status\": \"%s\",%n  \"timestamp\": \"%s\",%n  \"total\": %d,%n  \"passed\": %d,%n  \"failed\": %d,%n  \"skipped\": %d,%n  \"durationMs\": %d,%n  \"headless\": %b,%n  \"allureEnabled\": %b,%n  \"videoEnabled\": %b,%n  \"runConfig\": %s%n}",
-                    status, timestamp, testsRun, passed, failed, skipped,
-                    durationMs, headless, allureEnabled, videoEnabled, runConfigJson);
+            final String metadataContent = AuraHttpUtils.gson.toJson(metadataMap);
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
             // Write full execution log
@@ -437,33 +466,67 @@ public final class AuraReportingService
                 LOGGER.info("[Aura Server] Archived {} console-execution JSONs to {}", consoleFiles.length,
                         destDir.getName());
             }
-            else if (files != null && !files.isEmpty())
+            else
             {
-                int testCounter = 1;
-                for (final String file : files)
+                boolean savedFromMemory = false;
+                if (interactiveService != null && interactiveService.getCurrentConsoleEngine() != null)
                 {
-                    final String baseName = new File(file).getName();
-                    final String yamlLabel = baseName.endsWith(".yaml") ? baseName.substring(0, baseName.length() - 5) : baseName;
-                    final List<String> datasets = new ArrayList<>();
-                    if (req != null && req.datasets != null)
+                    final String currentStateJson = interactiveService.getCurrentConsoleEngine().getCurrentStateJson();
+                    if (currentStateJson != null && currentStateJson.contains("\"blocks\""))
                     {
-                        for (final DatasetSelection ds : req.datasets)
+                        try
                         {
-                            if (file.equals(ds.file) && ds.id != null && !ds.id.isEmpty())
-                            {
-                                datasets.add(ds.id);
-                            }
+                            final File destConsoleFile = new File(destDir, "console-execution-1.json");
+                            Files.writeString(destConsoleFile.toPath(), currentStateJson, StandardCharsets.UTF_8);
+                            savedFromMemory = true;
+                            LOGGER.info("[Aura Server] Archived console-execution-1.json from active console engine state to {}", destDir.getName());
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.warn("[Aura Server] Failed to save active console engine state to history: {}", e.getMessage());
                         }
                     }
-                    
-                    if (!datasets.isEmpty())
+                }
+
+                if (!savedFromMemory && files != null && !files.isEmpty())
+                {
+                    int testCounter = 1;
+                    for (final String file : files)
                     {
-                        for (final String ds : datasets)
+                        final String baseName = new File(file).getName();
+                        final String yamlLabel = baseName.endsWith(".yaml") ? baseName.substring(0, baseName.length() - 5) : baseName;
+                        final List<String> datasets = new ArrayList<>();
+                        if (req != null && req.datasets != null)
+                        {
+                            for (final DatasetSelection ds : req.datasets)
+                            {
+                                if (file.equals(ds.file) && ds.id != null && !ds.id.isEmpty())
+                                {
+                                    datasets.add(ds.id);
+                                }
+                            }
+                        }
+                        
+                        if (!datasets.isEmpty())
+                        {
+                            for (final String ds : datasets)
+                            {
+                                final Map<String, Object> testData = new HashMap<>();
+                                testData.put("testName", yamlLabel + " (" + ds + ")");
+                                testData.put("testId", ds);
+                                testData.put("playbookFile", file);
+                                testData.put("status", status);
+                                testData.put("steps", Collections.emptyList());
+                                
+                                final String json = AuraHttpUtils.gson.toJson(testData);
+                                Files.writeString(new File(destDir, "console-execution-" + (testCounter++) + ".json").toPath(), json, StandardCharsets.UTF_8);
+                            }
+                        }
+                        else
                         {
                             final Map<String, Object> testData = new HashMap<>();
-                            testData.put("testName", yamlLabel + " (" + ds + ")");
-                            testData.put("testId", ds);
-                            testData.put("yamlSource", file);
+                            testData.put("testName", yamlLabel);
+                            testData.put("playbookFile", file);
                             testData.put("status", status);
                             testData.put("steps", Collections.emptyList());
                             
@@ -471,21 +534,10 @@ public final class AuraReportingService
                             Files.writeString(new File(destDir, "console-execution-" + (testCounter++) + ".json").toPath(), json, StandardCharsets.UTF_8);
                         }
                     }
-                    else
-                    {
-                        final Map<String, Object> testData = new HashMap<>();
-                        testData.put("testName", yamlLabel);
-                        testData.put("yamlSource", file);
-                        testData.put("status", status);
-                        testData.put("steps", Collections.emptyList());
-                        
-                        final String json = AuraHttpUtils.gson.toJson(testData);
-                        Files.writeString(new File(destDir, "console-execution-" + (testCounter++) + ".json").toPath(), json, StandardCharsets.UTF_8);
-                    }
                 }
             }
 
-            final String screenshotsDirPath = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+            final String screenshotsDirPath = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
             File screenshotsDir = new File(screenshotsDirPath);
             if (!screenshotsDir.exists() || !screenshotsDir.isDirectory())
             {

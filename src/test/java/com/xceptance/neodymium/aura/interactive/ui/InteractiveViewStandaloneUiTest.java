@@ -37,6 +37,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.testing.BaseAiTest;
 import org.openqa.selenium.JavascriptExecutor;
 
 import com.codeborne.selenide.CollectionCondition;
@@ -45,11 +46,10 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.xceptance.neodymium.ai.BaseAiTest;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide integration tests for the <em>standalone</em> Interactive View — that is, the
@@ -390,7 +390,7 @@ public class InteractiveViewStandaloneUiTest extends BaseAiTest
         $("#finalSaveText").shouldHave(Condition.text("Test execution finished successfully!"));
 
         $("#finalSaveButtons").$$("button").shouldHave(CollectionCondition.size(1));
-        $("#finalSaveButtons").$$("button").get(0).shouldHave(Condition.text("Close Console"));
+        $("#finalSaveButtons").$$("button").get(0).shouldHave(Condition.text("Close"));
 
         $("#finalSaveButtons").$$("button").get(0).click();
         sleep(400);

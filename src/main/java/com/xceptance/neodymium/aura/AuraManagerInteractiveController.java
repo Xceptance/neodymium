@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.neodymium.ai.config.AiConfiguration;
 
 /**
  * Controller handling live event routing, step submissions, screenshots serving,
@@ -133,7 +134,7 @@ public final class AuraManagerInteractiveController
         }
         if (targetFile == null || !targetFile.exists())
         {
-            final String screenshotsDirPath = System.getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+            final String screenshotsDirPath = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
             final File activeDir = new File(screenshotsDirPath).getCanonicalFile();
             targetFile = new File(activeDir, file).getCanonicalFile();
             if (!targetFile.getPath().startsWith(activeDir.getPath()))
@@ -163,17 +164,19 @@ public final class AuraManagerInteractiveController
             interactiveService.setCurrentConsoleEngine(engine);
         }
         final String body = AuraHttpUtils.readBody(exchange);
+        JsonObject json = null;
         try
         {
-            final JsonObject json = AuraHttpUtils.gson.fromJson(body, JsonObject.class);
+            json = AuraHttpUtils.gson.fromJson(body, JsonObject.class);
             if (json != null && json.has("runId"))
             {
                 final String incomingRunId = json.get("runId").getAsString();
                 final String lastId = interactiveService.getLastProcessedRunIdReference().getAndSet(incomingRunId);
                 if (incomingRunId != null && !incomingRunId.equals(lastId))
                 {
-                    LOGGER.info("[Aura Server] New runId detected: {}. Resetting manuallyStopped flag.", incomingRunId);
+                    LOGGER.info("[Aura Server] New runId detected: {}. Resetting manuallyStopped flag and execution indexes.", incomingRunId);
                     queueService.setManuallyStopped(false);
+                    interactiveService.resetExecutionIndexes();
                 }
                 engine.setRunId(incomingRunId);
             }
@@ -183,10 +186,58 @@ public final class AuraManagerInteractiveController
             // ignore parsing error
         }
         engine.pushState(body);
+
+        try
+        {
+            final File resultsDir = new File("target/aura-sandbox/allure-results");
+            if (!resultsDir.exists())
+            {
+                resultsDir.mkdirs();
+            }
+            final String executionKey = extractExecutionKey(json);
+            final int index = interactiveService.getExecutionIndex(executionKey);
+            final File executionJson = new File(resultsDir, "console-execution-" + index + ".json");
+            Files.writeString(executionJson.toPath(), body, StandardCharsets.UTF_8);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("[Aura Server] Failed to save console execution snapshot: {}", e.getMessage());
+        }
+
         final String responseJson = queueService.isManuallyStopped()
                 ? "{\"status\":\"stopped\"}"
                 : "{\"status\":\"ok\"}";
         AuraHttpUtils.sendResponse(exchange, 200, "application/json", responseJson.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String extractExecutionKey(final JsonObject json)
+    {
+        if (json == null)
+        {
+            return "default";
+        }
+        if (json.has("testName") && !json.get("testName").isJsonNull())
+        {
+            final String testName = json.get("testName").getAsString();
+            if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
+            {
+                return testName;
+            }
+        }
+        String key = "";
+        if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
+        {
+            key += json.get("playbookFile").getAsString();
+        }
+        else if (json.has("testFile") && !json.get("testFile").isJsonNull())
+        {
+            key += json.get("testFile").getAsString();
+        }
+        if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
+        {
+            key += "::" + json.get("datasetId").getAsString();
+        }
+        return key.isEmpty() ? "default" : key;
     }
 
     public void handleBroadcast(final HttpExchange exchange) throws IOException

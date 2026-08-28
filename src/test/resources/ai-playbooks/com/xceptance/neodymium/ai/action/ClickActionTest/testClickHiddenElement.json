@@ -2,8 +2,23 @@
   "id": "com.xceptance.neodymium.ai.action.ClickActionTest :: testClickHiddenElement",
   "steps": [
     {
-      "actions": [],
-      "expectedFailure": false
+      "promptLine": "Click the Secret Admin Button.",
+      "reasoning": "",
+      "actions": [
+        {
+          "type": "CLICK",
+          "target": "#secret-admin-btn",
+          "description": "Click the Secret Admin Button",
+          "elementDetails": "Secret Admin Button",
+          "elementContext": {},
+          "replay": "",
+          "adjust": false
+        }
+      ],
+      "expectedFailure": false,
+      "expectedErrorType": "com.codeborne.selenide.ex.ElementShould",
+      "expectedErrorMessage": "Element should be visible {By.xpath: //*[not(ancestor-or-self::*[@id\u003d\u0027neo-ai-hud\u0027]) and (contains(normalize-space(text()), \u0027Secret Admin Button\u0027) or contains(@value, \u0027Secret Admin Button\u0027) or contains(@aria-label, \u0027Secret Admin Button\u0027))][0]}\nElement: \u0027\u003cbutton id\u003d\"btn-hidden\" type\u003d\"submit\" displayed:false\u003e\u003c/button\u003e\u0027\nActual value: hidden\n(Timeout: 4s)",
+      "healedContextLevel": "VISUAL"
     }
   ]
 }

@@ -1,9 +1,9 @@
 package com.xceptance.neodymium.junit4.testclasses.data.override.methodonly;
 
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.common.testdata.RandomDataSets;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.DataSet;
+import org.neodymium.common.testdata.RandomDataSets;
+import org.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.util.Neodymium;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;

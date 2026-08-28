@@ -281,12 +281,45 @@ public final class AuraFileService
     public File resolveCanonicalFile(final String file) throws IOException
     {
         final File resourcesDir = new File("src/test/resources").getCanonicalFile();
-        final File yamlFile = new File(resourcesDir, file).getCanonicalFile();
+        File yamlFile = new File(resourcesDir, file).getCanonicalFile();
+        if (!yamlFile.exists())
+        {
+            final File found = findFileRecursively(resourcesDir, file);
+            if (found != null)
+            {
+                yamlFile = found.getCanonicalFile();
+            }
+        }
         if (!yamlFile.getPath().startsWith(resourcesDir.getPath()))
         {
             throw new SecurityException("Access denied: Directory traversal detected");
         }
         return yamlFile;
+    }
+
+    private File findFileRecursively(final File dir, final String targetName)
+    {
+        final String cleanTarget = targetName.contains("/") ? targetName.substring(targetName.lastIndexOf('/') + 1) : targetName;
+        final File[] files = dir.listFiles();
+        if (files != null)
+        {
+            for (final File f : files)
+            {
+                if (f.isDirectory())
+                {
+                    final File found = findFileRecursively(f, cleanTarget);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+                else if (f.getName().equalsIgnoreCase(cleanTarget) || f.getName().equalsIgnoreCase(cleanTarget + ".yaml") || f.getName().equalsIgnoreCase(cleanTarget + ".yml"))
+                {
+                    return f;
+                }
+            }
+        }
+        return null;
     }
 
     public String readYamlFileContent(final String file) throws IOException
@@ -302,6 +335,10 @@ public final class AuraFileService
     public void saveYamlFileContent(final String file, final String content) throws IOException
     {
         final File yamlFile = resolveCanonicalFile(file);
+        if (yamlFile.getParentFile() != null && !yamlFile.getParentFile().exists())
+        {
+            yamlFile.getParentFile().mkdirs();
+        }
         Files.writeString(yamlFile.toPath(), content, StandardCharsets.UTF_8);
     }
 
@@ -324,5 +361,153 @@ public final class AuraFileService
             return true;
         }
         return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> parsePlaybookSections(final String content)
+    {
+        final Map<String, Object> result = new HashMap<>();
+        final List<String> beforeSteps = new ArrayList<>();
+        final List<String> mainSteps = new ArrayList<>();
+        final List<String> afterSteps = new ArrayList<>();
+        final List<Map<String, String>> dataMatrix = new ArrayList<>();
+        final List<String> varKeys = new ArrayList<>();
+
+        if (content != null && !content.trim().isEmpty())
+        {
+            try
+            {
+                final Yaml yaml = new Yaml();
+                final Object loaded = yaml.load(content);
+                if (loaded instanceof Map)
+                {
+                    final Map<String, Object> root = (Map<String, Object>) loaded;
+
+                    if (root.containsKey("before"))
+                    {
+                        final String beforeStr = String.valueOf(root.get("before"));
+                        for (final String line : beforeStr.split("\n"))
+                        {
+                            if (!line.trim().isEmpty())
+                            {
+                                beforeSteps.add(line.trim());
+                            }
+                        }
+                    }
+
+                    if (root.containsKey("steps"))
+                    {
+                        final Object stepsObj = root.get("steps");
+                        if (stepsObj instanceof List)
+                        {
+                            for (final Object stepItem : (List<?>) stepsObj)
+                            {
+                                if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
+                                {
+                                    mainSteps.add(String.valueOf(stepItem).trim());
+                                }
+                            }
+                        }
+                        else
+                        {
+                            final String stepsStr = String.valueOf(stepsObj);
+                            for (final String line : stepsStr.split("\n"))
+                            {
+                                if (!line.trim().isEmpty())
+                                {
+                                    mainSteps.add(line.trim());
+                                }
+                            }
+                        }
+                    }
+
+                    if (root.containsKey("after"))
+                    {
+                        final String afterStr = String.valueOf(root.get("after"));
+                        for (final String line : afterStr.split("\n"))
+                        {
+                            if (!line.trim().isEmpty())
+                            {
+                                afterSteps.add(line.trim());
+                            }
+                        }
+                    }
+
+                    if (root.containsKey("data") && root.get("data") instanceof List)
+                    {
+                        final List<?> dataList = (List<?>) root.get("data");
+                        for (final Object item : dataList)
+                        {
+                            if (item instanceof Map)
+                            {
+                                final Map<?, ?> itemMap = (Map<?, ?>) item;
+                                final Map<String, String> row = new HashMap<>();
+                                for (final Map.Entry<?, ?> entry : itemMap.entrySet())
+                                {
+                                    final String k = String.valueOf(entry.getKey());
+                                    final String v = entry.getValue() != null ? String.valueOf(entry.getValue()) : "";
+                                    row.put(k, v);
+                                    if (!varKeys.contains(k))
+                                    {
+                                        varKeys.add(k);
+                                    }
+                                }
+                                dataMatrix.add(row);
+                            }
+                        }
+                    }
+                }
+                else if (loaded instanceof List)
+                {
+                    for (final Object stepItem : (List<?>) loaded)
+                    {
+                        if (stepItem != null)
+                        {
+                            String s = String.valueOf(stepItem).trim();
+                            if (s.startsWith("-"))
+                            {
+                                s = s.substring(1).trim();
+                            }
+                            if (!s.isEmpty())
+                            {
+                                mainSteps.add(s);
+                            }
+                        }
+                    }
+                }
+
+                // Fallback for raw text lines
+                if (mainSteps.isEmpty() && beforeSteps.isEmpty() && afterSteps.isEmpty())
+                {
+                    for (final String line : content.split("\n"))
+                    {
+                        String trimmed = line.trim();
+                        if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+                        {
+                            if (trimmed.startsWith("-"))
+                            {
+                                trimmed = trimmed.substring(1).trim();
+                            }
+                            if (!trimmed.isEmpty())
+                            {
+                                mainSteps.add(trimmed);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to parse YAML content sections", e);
+            }
+        }
+
+
+        result.put("beforeSteps", beforeSteps);
+        result.put("mainSteps", mainSteps);
+        result.put("afterSteps", afterSteps);
+        result.put("dataMatrix", dataMatrix);
+        result.put("varKeys", varKeys);
+        return result;
     }
 }

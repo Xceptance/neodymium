@@ -1,12 +1,13 @@
 package com.xceptance.neodymium.aura.manager.ui;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
 
+import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
-import com.xceptance.neodymium.common.testdata.DataFile;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.DataSet;
 
 /**
  * Playbook-based UI test for Aura Manager workspace files management.
@@ -16,7 +17,7 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Tag("ui")
 @Tag("aura-manager")
-@DataFile("ai-test-pages/aura-manager-workspace-test.yaml")
+@NeodymiumAiTest
 public class AuraManagerWorkspacePlaybookUiTest extends BaseAuraManagerUiTest
 {
     public AuraManagerWorkspacePlaybookUiTest()
@@ -24,17 +25,21 @@ public class AuraManagerWorkspacePlaybookUiTest extends BaseAuraManagerUiTest
         super(18130);
     }
 
-    @NeodymiumTest
+    @BeforeEach
+    public void setupWorkspaceTest() throws Exception
+    {
+        AuraManagerTestHelper.createWorkspaceTestFile();
+    }
+
+    @AiPlaybook("ai-test-pages/aura-manager-workspace-create-test.yaml")
     @DataSet(id = "Create_Test")
     public void testCreateTest() throws Throwable
     {
-        Neodymium.ai().execute();
     }
 
-    @NeodymiumTest
+    @AiPlaybook("ai-test-pages/aura-manager-workspace-delete-test.yaml")
     @DataSet(id = "Delete_Test")
     public void testDeleteTest() throws Throwable
     {
-        Neodymium.ai().execute();
     }
 }

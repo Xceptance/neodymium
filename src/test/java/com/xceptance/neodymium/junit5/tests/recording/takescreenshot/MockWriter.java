@@ -7,8 +7,8 @@ import java.util.List;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
-import com.xceptance.neodymium.common.recording.writers.Writer;
+import org.neodymium.common.recording.config.RecordingConfigurations;
+import org.neodymium.common.recording.writers.Writer;
 
 public class MockWriter implements Writer
 {

@@ -3,9 +3,9 @@ package com.xceptance.neodymium.junit5.testclasses.allure;
 import org.junit.jupiter.api.Assertions;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumRunner;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumRunner;
+import org.neodymium.junit5.NeodymiumTest;
 
 @Browser("Chrome_headless")
 public class AllureSelenideListenerIsActiveForJava

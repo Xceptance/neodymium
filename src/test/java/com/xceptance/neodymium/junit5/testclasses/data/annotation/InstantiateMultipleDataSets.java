@@ -4,10 +4,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.testdata.DataFile;
-import com.xceptance.neodymium.common.testdata.DataItem;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.testdata.DataFile;
+import org.neodymium.common.testdata.DataItem;
+import org.neodymium.common.testdata.DataSet;
+import org.neodymium.junit5.NeodymiumTest;
 
 @DataFile("com/xceptance/neodymium/junit5/testclasses/data/annotation/InstantiateDataSets.json")
 public class InstantiateMultipleDataSets

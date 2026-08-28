@@ -1,0 +1,59 @@
+<!-- Hero Section -->
+<section class="relative mb-15 flex flex-col-reverse items-center justify-between gap-10 overflow-hidden rounded-lg bg-linear-[135deg,var(--color-sand-50)_0%,#FFFFFF_100%] px-6 py-10 text-center md:flex-row md:px-12 md:py-15 md:text-left">
+    <div class="z-[2] max-w-[550px] flex-1">
+        <span class="mb-4 block text-xs font-semibold uppercase tracking-[0.2em] text-terracotta-500">${lang_summerEssentials}</span>
+        <h1 class="mb-6 font-serif text-4xl font-semibold leading-[1.15] text-ink md:text-5xl">${lang_heroTitle}</h1>
+        <p class="mb-9 text-base leading-[1.7] text-muted">${lang_heroDescription}</p>
+        <a href="c/tops.html" class="inline-block rounded-lg bg-terracotta-500 px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700">${lang_shopCollection}</a>
+    </div>
+    <div class="relative z-[2] flex flex-1 items-center justify-center">
+        <!-- Curated Premium silhouette display SVG -->
+        <svg viewBox="0 0 100 100" class="w-full max-w-80 text-terracotta-500 transition-transform duration-300 hover:scale-105">
+            <defs>
+                <linearGradient id="terracotta-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#F4ECE7"/>
+                    <stop offset="100%" stop-color="#E8DCD5"/>
+                </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="45" fill="url(#terracotta-glow)"/>
+            <path d="M25 25 C30 18, 70 18, 75 25 L82 45 L72 48 L68 35 L68 85 L32 85 L32 35 L28 48 L18 45 Z" fill="currentColor" opacity="0.85"/>
+        </svg>
+    </div>
+    <!-- Elegant background glow -->
+    <div class="pointer-events-none absolute -right-12 -top-12 z-[1] h-75 w-75 rounded-full bg-terracotta-100/50 blur-3xl"></div>
+</section>
+
+<!-- Featured Categories -->
+<section class="mb-15">
+    <h2 class="mb-10 text-center font-serif text-3xl font-semibold">${lang_featuredCategories}</h2>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-6">
+        <a href="c/tops.html" class="rounded-lg border border-sand-200 bg-sand-50 p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+            <div class="mb-3 text-[32px]">👕</div>
+            <div class="text-base font-semibold text-ink">${lang_tops}</div>
+        </a>
+        <a href="c/bottoms.html" class="rounded-lg border border-sand-200 bg-sand-50 p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+            <div class="mb-3 text-[32px]">👖</div>
+            <div class="text-base font-semibold text-ink">${lang_bottoms}</div>
+        </a>
+        <a href="c/outerwear.html" class="rounded-lg border border-sand-200 bg-sand-50 p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+            <div class="mb-3 text-[32px]">🧥</div>
+            <div class="text-base font-semibold text-ink">${lang_outerwear}</div>
+        </a>
+        <a href="c/footwear.html" class="rounded-lg border border-sand-200 bg-sand-50 p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+            <div class="mb-3 text-[32px]">👟</div>
+            <div class="text-base font-semibold text-ink">${lang_footwear}</div>
+        </a>
+        <a href="c/accessories.html" class="rounded-lg border border-sand-200 bg-sand-50 p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+            <div class="mb-3 text-[32px]">👜</div>
+            <div class="text-base font-semibold text-ink">${lang_accessories}</div>
+        </a>
+    </div>
+</section>
+
+<!-- Featured Products Grid -->
+<section class="mb-10">
+    <h2 class="mb-10 text-center font-serif text-3xl font-semibold">${lang_featuredEssentials}</h2>
+    <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-7.5">
+        ${featured_products}
+    </div>
+</section>

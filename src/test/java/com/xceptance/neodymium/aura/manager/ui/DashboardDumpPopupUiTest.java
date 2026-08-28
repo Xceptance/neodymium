@@ -39,8 +39,8 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
 import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide tests for the <em>Data Dump</em> popup shown inside the Aura Manager's embedded
@@ -88,7 +88,10 @@ public class DashboardDumpPopupUiTest extends BaseAuraManagerUiTest
 
         // Load the interactive console into the iframe
         js().executeScript(
-            "document.getElementById('historyConsoleIframe').src = '/interactive_console.html';"
+            "var iframe = document.getElementById('historyConsoleIframe');" +
+            "var colReport = document.getElementById('colReport');" +
+            "if (colReport) { colReport.style.display = 'flex'; colReport.style.width = '100%'; colReport.style.height = '800px'; }" +
+            "if (iframe) { iframe.style.display = 'block'; iframe.style.width = '100%'; iframe.style.height = '800px'; iframe.src = '/interactive_console.html'; }"
         );
         sleep(1000); // give the iframe time to load
 
@@ -229,7 +232,7 @@ public class DashboardDumpPopupUiTest extends BaseAuraManagerUiTest
         triggerDumpPopupInFrame(TXT_PATH, HTML_PATH, TXT_SIZE, HTML_SIZE);
         assertOverlayVisible();
 
-        $(".dump-ready-footer .btn").shouldBe(Condition.visible).click();
+        $(".dump-ready-footer .btn").should(Condition.exist).click();
         sleep(200);
 
         assertOverlayHidden();

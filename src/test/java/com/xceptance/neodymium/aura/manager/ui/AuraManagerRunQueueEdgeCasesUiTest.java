@@ -31,13 +31,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.BeforeEach;
 
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide UI edge cases test to verify run queue error handling, rerun resilience, and execution failure recovery.
@@ -85,7 +86,7 @@ public final class AuraManagerRunQueueEdgeCasesUiTest
             + "  \"datasets\": [{\"file\": \"non_existent_file_123.yaml\", \"datasetId\": \"1\"}],"
             + "  \"headless\": true,"
             + "  \"video\": false,"
-            + "  \"keepOpen\": false"
+            + "  \"executionMode\": \"REPLAY_WITH_HEALING\""
             + "}"
             + "}";
         Files.writeString(new File(this.reportDir, "metadata.json").toPath(), metadataJson, StandardCharsets.UTF_8);
@@ -156,7 +157,10 @@ public final class AuraManagerRunQueueEdgeCasesUiTest
 
         // Return to Workspace tab and verify workspace controls remain functional
         $("#navWorkspace").shouldBe(Condition.visible).click();
-        $("#runQueueBtn").shouldBe(Condition.visible);
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.sizeGreaterThan(0), Duration.ofSeconds(10));
+        final var checkbox = $$("#yamlFileList .file-container .custom-checkbox").first().shouldBe(Condition.visible);
+        checkbox.click();
+        $("#runQueueBtn").shouldBe(Condition.visible, Duration.ofSeconds(30));
     }
 
     @NeodymiumTest
@@ -167,21 +171,21 @@ public final class AuraManagerRunQueueEdgeCasesUiTest
         // Open Workspace view and select an existing test file
         $("#navWorkspace").shouldBe(Condition.visible).click();
 
-        final var targetItem = $$("#yamlFileList .list-item").first();
-        targetItem.shouldBe(Condition.visible);
-
-        final var checkbox = targetItem.$("input[type='checkbox']");
-        checkbox.shouldBe(Condition.visible);
-        if (!checkbox.isSelected())
-        {
-            checkbox.click();
-        }
+        $$("#yamlFileList .file-container").shouldHave(CollectionCondition.sizeGreaterThan(0), Duration.ofSeconds(10));
+        final var checkbox = $$("#yamlFileList .file-container .custom-checkbox").first().shouldBe(Condition.visible);
+        checkbox.click();
 
         // Click Run Queue
         final var runQueueBtn = $("#runQueueBtn");
         runQueueBtn.shouldBe(Condition.visible).shouldNotBe(Condition.disabled).click();
 
-        // Wait for run queue button to be restored
-        $("#runQueueBtn").shouldBe(Condition.visible, Duration.ofSeconds(120));
+        // Verify Stop Execution button appears when execution starts, then click it to stop
+        final var stopQueueBtn = $("#stopQueueBtn");
+        stopQueueBtn.shouldBe(Condition.visible, Duration.ofSeconds(10)).click();
+        stopQueueBtn.shouldBe(Condition.hidden, Duration.ofSeconds(15));
+
+        // Return to Workspace tab and wait for run queue button to be restored after stopping
+        $("#navWorkspace").shouldBe(Condition.visible).click();
+        $("#runQueueBtn").shouldBe(Condition.visible, Duration.ofSeconds(15));
     }
 }

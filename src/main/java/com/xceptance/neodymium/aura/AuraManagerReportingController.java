@@ -428,9 +428,9 @@ public final class AuraManagerReportingController
                                     {
                                         testMap.put("testId", String.valueOf(map.get("testId")));
                                     }
-                                    if (map.containsKey("yamlSource") && map.get("yamlSource") != null)
+                                    if ((map.containsKey("playbookFile") && map.get("playbookFile") != null) || (map.containsKey("yamlSource") && map.get("yamlSource") != null))
                                     {
-                                        final String src = String.valueOf(map.get("yamlSource"));
+                                        final String src = String.valueOf(map.get("playbookFile") != null ? map.get("playbookFile") : map.get("yamlSource"));
                                         final String base = new File(src).getName();
                                         testMap.put("yamlLabel", base);
                                     }
@@ -611,7 +611,7 @@ public final class AuraManagerReportingController
                                 singlePayload.put("interactive", rc.get("interactive"));
                                 singlePayload.put("allure", rc.get("allure"));
                                 singlePayload.put("video", rc.get("video"));
-                                singlePayload.put("keepOpen", rc.get("keepOpen"));
+                                singlePayload.put("executionMode", rc.get("executionMode"));
 
                                 final String payloadStr = AuraHttpUtils.gson.toJson(singlePayload).replace("'", "\\'");
                                 testMap.put("rerunPayload", payloadStr);

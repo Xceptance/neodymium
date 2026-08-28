@@ -24,10 +24,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.ScreenshotWriter;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.ScreenshotWriter;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
@@ -78,8 +78,18 @@ public class AdvancedScreenshotTest
         // compare them
         List<Attachment> attachments = getAllureResultAttachments();
 
-        Assertions.assertFalse(compareImage(new File("allure-results/" + attachments.get(0).getSource()),
-                                            new File("allure-results/" + attachments.get(1).getSource())),
+        File file1 = new File("allure-results/" + attachments.get(0).getSource());
+        if (!file1.exists())
+        {
+            file1 = new File("target/allure-results/" + attachments.get(0).getSource());
+        }
+        File file2 = new File("allure-results/" + attachments.get(1).getSource());
+        if (!file2.exists())
+        {
+            file2 = new File("target/allure-results/" + attachments.get(1).getSource());
+        }
+
+        Assertions.assertFalse(compareImage(file1, file2),
                                "blurred and not blurred images should not be the same");
     }
 

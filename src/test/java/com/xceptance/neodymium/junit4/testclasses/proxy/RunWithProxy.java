@@ -9,8 +9,8 @@ import org.junit.runner.RunWith;
 import org.openqa.selenium.WebDriverException;
 
 import com.codeborne.selenide.Selenide;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit4.NeodymiumRunner;
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_headless")
 public class RunWithProxy

@@ -1,0 +1,23 @@
+<div class="mx-auto my-5 w-full max-w-[450px] rounded-lg border border-sand-200 bg-sand-50 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.04)] sm:my-10 sm:p-8">
+    <h2 class="mb-6 text-center font-serif text-[26px] font-semibold">${lang_trackOrders}</h2>
+
+    <!-- HTMX order lookup form -->
+    <form hx-post="api/order/lookup" hx-target="#order-lookup-result" hx-swap="innerHTML">
+        <div class="mb-5">
+            <label for="orderNumber" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_orderNumber}</label>
+            <input type="text" id="orderNumber" name="orderNumber" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" placeholder="V-102931-DE" required>
+        </div>
+
+        <div class="mb-6">
+            <label for="zipCode" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_zipCode}</label>
+            <input type="text" id="zipCode" name="zipCode" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" placeholder="12345" required>
+        </div>
+
+        <button type="submit" class="mb-5 w-full rounded-lg bg-terracotta-500 px-5 py-3 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700">
+            ${lang_lookup}
+        </button>
+    </form>
+
+    <!-- Result container -->
+    <div id="order-lookup-result" class="mt-5"></div>
+</div>

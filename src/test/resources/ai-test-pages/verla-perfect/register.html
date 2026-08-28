@@ -18,7 +18,7 @@
         </div>
 
         <div class="form-group" style="margin-bottom: 24px;">
-            <label for="confirmPassword" class="form-label">Confirm Password</label>
+            <label for="confirmPassword" class="form-label">${lang_confirmPassword}</label>
             <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" required minlength="6">
             <div class="error-message">${err_confirmPassword}</div>
         </div>
@@ -28,7 +28,7 @@
         </button>
 
         <p style="text-align: center; font-size: 13px; color: var(--color-text-secondary);">
-            Already have an account? <a href="login.html" style="color: var(--color-accent); font-weight: 600;">${lang_login}</a>
+            ${lang_haveAccount} <a href="login.html" style="color: var(--color-accent); font-weight: 600;">${lang_login}</a>
         </p>
     </form>
 </div>

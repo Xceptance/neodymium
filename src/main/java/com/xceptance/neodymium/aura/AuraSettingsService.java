@@ -132,7 +132,7 @@ public final class AuraSettingsService
 
         public PropertySectionDto(final String name, final List<PropertyEntryDto> entries)
         {
-            this(name, "", "fa-solid fa-file-code", entries, List.of());
+            this(name, "", "description", entries, List.of());
         }
 
         public PropertySectionDto(final String name, final String profileTag, final String browserIcon,
@@ -212,38 +212,23 @@ public final class AuraSettingsService
     {
         if ("global".equalsIgnoreCase(profileTag))
         {
-            return "fa-solid fa-sliders";
+            return "tune";
         }
         if (browserType == null || browserType.trim().isEmpty())
         {
-            return "fa-solid fa-desktop";
+            return "desktop_windows";
         }
         final String lower = browserType.trim().toLowerCase();
-        if (lower.contains("chrome"))
+        if (lower.contains("chrome") || lower.contains("firefox") || lower.contains("ff")
+                || lower.contains("safari") || lower.contains("edge") || lower.contains("ie"))
         {
-            return "fa-brands fa-chrome";
-        }
-        if (lower.contains("firefox") || lower.contains("ff"))
-        {
-            return "fa-brands fa-firefox-browser";
-        }
-        if (lower.contains("safari"))
-        {
-            return "fa-brands fa-safari";
-        }
-        if (lower.contains("edge"))
-        {
-            return "fa-brands fa-edge";
-        }
-        if (lower.contains("ie") || lower.contains("internetexplorer"))
-        {
-            return "fa-brands fa-internet-explorer";
+            return "language";
         }
         if (lower.contains("iphone") || lower.contains("ipad") || lower.contains("android") || lower.contains("mobile"))
         {
-            return "fa-solid fa-mobile-screen-button";
+            return "smartphone";
         }
-        return "fa-solid fa-desktop";
+        return "desktop_windows";
     }
 
 

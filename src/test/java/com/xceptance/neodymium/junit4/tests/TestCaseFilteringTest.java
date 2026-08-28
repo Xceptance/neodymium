@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit4.tests;
 
 import com.xceptance.neodymium.junit4.testclasses.filtering.TestCaseFiltering;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.After;
 import org.junit.BeforeClass;

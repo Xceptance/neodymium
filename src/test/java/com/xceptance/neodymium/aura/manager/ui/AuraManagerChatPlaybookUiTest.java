@@ -1,12 +1,11 @@
 package com.xceptance.neodymium.aura.manager.ui;
 
 import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
 
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
-import com.xceptance.neodymium.common.testdata.DataFile;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.DataSet;
 
 /**
  * Playbook-based UI test for Aura Manager chat.
@@ -16,7 +15,7 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Tag("ui")
 @Tag("aura-manager")
-@DataFile("ai-test-pages/aura-manager-chat-test.yaml")
+@NeodymiumAiTest
 public class AuraManagerChatPlaybookUiTest extends BaseAuraManagerUiTest
 {
     public AuraManagerChatPlaybookUiTest()
@@ -24,10 +23,9 @@ public class AuraManagerChatPlaybookUiTest extends BaseAuraManagerUiTest
         super(18100);
     }
 
-    @NeodymiumTest
+    @AiPlaybook("ai-test-pages/aura-manager-chat-test.yaml")
     @DataSet(id = "Chat_Message")
     public void testChatMessage() throws Throwable
     {
-        Neodymium.ai().execute();
     }
 }

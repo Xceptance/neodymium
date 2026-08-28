@@ -1,6 +1,6 @@
 package com.xceptance.neodymium.junit4.tests.recording.config;
 
-import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
+import org.neodymium.common.recording.config.GifRecordingConfigurations;
 import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingDeletionTest;
 import org.junit.BeforeClass;
 

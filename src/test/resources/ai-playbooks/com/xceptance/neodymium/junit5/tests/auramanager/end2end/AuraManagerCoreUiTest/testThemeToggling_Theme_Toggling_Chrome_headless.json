@@ -13,8 +13,7 @@
           ],
           "description": "Call startManager with param ",
           "elementContext": {},
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "adjust": false
         }
       ],
@@ -33,8 +32,7 @@
           "description": "Open the specified URL in the browser",
           "elementDetails": "http://127.0.0.1:18120",
           "elementContext": {},
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "adjust": false
         }
       ],
@@ -54,8 +52,7 @@
           "description": "Verify the page title is \u0027Neodymium Aura Manager\u0027",
           "elementDetails": "Page Title",
           "elementContext": {},
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "adjust": false
         }
       ],
@@ -72,13 +69,12 @@
           "description": "Click the Dark Mode button",
           "elementDetails": "Dark Mode button",
           "elementContext": {
-            "classes": "btn-edit neo-u-5",
+            "classes": "btn-edit",
             "id": "themeDark",
             "tagName": "button",
             "type": "submit"
           },
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "frameId": "DEC775DAAF57A427D89F92251D13FBC1:main",
           "adjust": false
         }
@@ -88,23 +84,22 @@
     },
     {
       "promptLine": "Verify the root element has the \"force-dark\" class",
-      "reasoning": "The instruction is to verify the \u0027force-dark\u0027 class on the root element. I\u0027ve chosen the `body` element as the most common root for theme classes and used a CSS selector `body.force-dark` to assert its visibility, which implicitly checks for the class. This is a different approach from a visual hash mismatch, focusing on the DOM state.",
+      "reasoning": "The instruction is to verify that the root element has the \u0027force-dark\u0027 class. I will use an ASSERT action targeting the \u0027html\u0027 element and checking for the \u0027force-dark\u0027 class as its value.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "body.force-dark",
+          "target": "html",
           "value": [
-            "visible"
+            "force-dark"
           ],
-          "description": "Verify the body element has the \u0027force-dark\u0027 class, indicating dark mode is active.",
-          "elementDetails": "body element with class \u0027force-dark\u0027",
+          "description": "Verify the root element has the \u0027force-dark\u0027 class",
+          "elementDetails": "root html element",
           "elementContext": {},
-          "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "screenshotHash": "60020008820882083a088208820842094208820882082a08820882042a088008",
+      "screenshotHash": "000280008000b000b020b020b000b000b005b000b000b000b010b00080208000",
       "expectedFailure": false,
       "healedContextLevel": "VISUAL"
     },
@@ -118,13 +113,12 @@
           "description": "Click the Light Mode button",
           "elementDetails": "Light Mode button",
           "elementContext": {
-            "classes": "btn-edit neo-u-5",
+            "classes": "btn-edit",
             "id": "themeLight",
             "tagName": "button",
             "type": "submit"
           },
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "frameId": "DEC775DAAF57A427D89F92251D13FBC1:main",
           "adjust": false
         }
@@ -145,8 +139,7 @@
           "description": "Verify the root element has the \u0027force-light\u0027 class",
           "elementDetails": "root html element",
           "elementContext": {},
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "adjust": false
         }
       ],
@@ -165,8 +158,7 @@
           ],
           "description": "Call stopManager with param ",
           "elementContext": {},
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "adjust": false
         }
       ],

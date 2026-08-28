@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit5.testclasses.datautils;
 
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.DataUtils;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.DataUtils;
 import org.junit.jupiter.api.Assertions;
 
 public class DataUtilsHelperTests

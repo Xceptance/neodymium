@@ -4,8 +4,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.retry.Retry;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.retry.Retry;
+import org.neodymium.junit5.NeodymiumTest;
 
 @Retry
 public class ClassRetryOnEveryErrorTest

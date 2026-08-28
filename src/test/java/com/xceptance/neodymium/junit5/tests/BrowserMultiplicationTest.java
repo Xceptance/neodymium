@@ -9,12 +9,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import com.xceptance.neodymium.junit5.testclasses.multiplication.browser.OneBrowserOneMethod;
 import com.xceptance.neodymium.junit5.testclasses.multiplication.browser.OneBrowserTwoMethods;
 import com.xceptance.neodymium.junit5.testclasses.multiplication.browser.TwoBrowserOneMethod;
 import com.xceptance.neodymium.junit5.testclasses.multiplication.browser.TwoBrowserTwoMethods;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class BrowserMultiplicationTest extends AbstractNeodymiumTest
 {

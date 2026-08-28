@@ -8,8 +8,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.junit4.NeodymiumRunner;
 
 @RunWith(NeodymiumRunner.class)
 public class GeneratorAutoTypeConversionCanNotHandleArbitraryTypes

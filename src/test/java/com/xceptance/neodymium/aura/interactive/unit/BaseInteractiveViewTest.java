@@ -28,7 +28,7 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 /**
  * Base test class for Interactive View unit/integration tests.
@@ -44,7 +44,6 @@ public abstract class BaseInteractiveViewTest
     protected InteractiveConsoleEngine engine;
     protected InteractiveConsoleServer server;
     private long originalTimeout;
-    private boolean originalHeadless;
 
     @BeforeEach
     public final void setupServer() throws IOException
@@ -54,6 +53,7 @@ public abstract class BaseInteractiveViewTest
         // Bind mock properties
         System.setProperty("neodymium.ai.interactive", "true");
         System.setProperty("neodymium.ai.interactive.allowHeadlessHUD", "true");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
 
         // Initialize engine and server on a random free port
         this.engine = new InteractiveConsoleEngine("test-run-id");
@@ -63,7 +63,6 @@ public abstract class BaseInteractiveViewTest
         // auto-run sequences, rewind flows, and drag-and-drop assertions.
         this.originalTimeout = Configuration.timeout;
         Configuration.timeout = 30000;
-        this.originalHeadless = Configuration.headless;
         Configuration.headless = true;
     }
 
@@ -71,7 +70,6 @@ public abstract class BaseInteractiveViewTest
     public final void tearDownServer()
     {
         Configuration.timeout = this.originalTimeout;
-        Configuration.headless = this.originalHeadless;
 
         if (this.server != null)
         {
@@ -88,6 +86,7 @@ public abstract class BaseInteractiveViewTest
 
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.ai.interactive.allowHeadlessHUD");
+        org.neodymium.ai.config.AiConfiguration.resetInstance();
         Neodymium.clearThreadContext();
     }
 

@@ -1,5 +1,10 @@
 # Neodymium AI Architecture: Gap Analysis & Potential Issues
 
+> [!CAUTION]
+> **DEPRECATED / ARCHIVED DOCUMENTATION (v1 Architecture)**
+> This document describes historical v1 architecture proposals and gap analyses.
+> It has been superseded by the **v2 Architecture**: see [`doc/redesign-v2/architecture.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/architecture.md) and [`doc/redesign-v2/annotations.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/annotations.md).
+
 Following up on the initial architectural rewrite plan, I have conducted a deep dive into the current implementation (`AiAgent`, `ActionExecutor`, `PlaybookManager`, `ActionRegistry`, `LlmClient`, etc.) to identify concrete technical gaps and hidden potential issues. 
 
 This analysis serves as a foundation for planning the rewrite without making immediate code changes.

@@ -13,8 +13,8 @@ import com.xceptance.neodymium.junit5.testclasses.datautils.TestDataHelperTests;
 import com.xceptance.neodymium.junit5.testclasses.datautils.TestDataTests;
 import com.xceptance.neodymium.junit5.testclasses.datautils.TestDataTestsXml;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumRandom;
 
 public class TestDataTest extends AbstractNeodymiumTest
 {

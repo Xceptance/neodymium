@@ -1,0 +1,28 @@
+## 1. Semantic Intent Model & PESAP Prompt Extension
+
+- [ ] 1.1 Create `SemanticIntent` enum in `org.neodymium.ai.model` (`ASSERT`, `ASSERT_METADATA`, `CLICK`, `TYPE`, `SELECT`, `HOVER_SCROLL`, `NAVIGATE`, `WAIT`, `STORE`, `BRANCH`) with helper methods (`isAssertion()`, `fromCode()`)
+- [ ] 1.2 Update `src/main/resources/ai-prompts/pesap-pre-step-prompt.md` to define semantic intent classification rules for `i` and minified JSON schema format
+- [ ] 1.3 Update `PesapPrompt.java` to parse `intent` (`i`) into `PesapResult` and add unit tests in `PesapPromptTest`
+- [ ] 1.4 Update `PesapPreStep.java` to store `KEY_PESAP_INTENT` in `ExecutionContext` transient data, set `semanticIntent` on `PlaybookStep`, and log intent classification
+
+## 2. Action Extractor Prompt Injection & Java Invariant Guardrails
+
+- [ ] 2.1 Update `ActionExtractionPrompt.java` to inject `[SEMANTIC_INTENT]  <INTENT>` into the user message header when available
+- [ ] 2.2 In `ActionExtractionPrompt.java`, enforce Java-level invariant rejecting mutating actions (`CLICK`, `TYPE`, `CLEAR`, `SELECT`) when intent is `ASSERT` or `ASSERT_METADATA`, logging a warning and treating the step strictly as an assertion
+- [ ] 2.3 In `ExecuteActionsStep.java`, add execution guard ensuring assertion intent steps do not execute mutating DOM actions
+
+## 3. Metadata Fast-Path & Minimal Context Optimizations
+
+- [ ] 3.1 Optimize context level and state capture for `ASSERT_METADATA` to clamp to `MINIMAL` context
+- [ ] 3.2 Add native evaluation fallback for page title and URL assertions to skip heavy DOM serialization and vision calls
+
+## 4. Diagnostics & Reporting
+
+- [ ] 4.1 Update `TestExecutionReport.ReportStepEntry` and `StepStats` to capture and record `semanticIntent`
+- [ ] 4.2 Update `MarkdownReportGenerator` and `HtmlReportGenerator` to display semantic intent badges in step execution details
+
+## 5. Verification & Tests
+
+- [ ] 5.1 Add comprehensive unit tests in `PesapPromptTest` validating intent classification across multilingual instructions (English, French, German, Japanese)
+- [ ] 5.2 Add unit tests in `ActionExtractionPromptTest` verifying that mutating actions emitted on assertion intents are strictly rejected
+- [ ] 5.3 Run integration test suite (`VerlaGuestCheckout_CaFr_French_MissingProvinceBug` and `AddToCartJudgeAndVerificationsTest`) to verify end-to-end execution

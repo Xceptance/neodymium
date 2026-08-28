@@ -1,5 +1,10 @@
 # Neodymium AI Architecture Rewrite Plan
 
+> [!CAUTION]
+> **DEPRECATED / ARCHIVED DOCUMENTATION (v1 Architecture)**
+> This document describes historical v1 architecture proposals and gap analyses.
+> It has been superseded by the **v2 Architecture**: see [`doc/redesign-v2/architecture.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/architecture.md) and [`doc/redesign-v2/annotations.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/redesign-v2/annotations.md).
+
 Based on the `refactor-ai-agent-state-machine` OpenSpec and your instruction to **not maintain backward compatibility**, this plan outlines the complete rewrite of the AI subsystem.
 
 ## User Review Required

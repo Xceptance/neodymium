@@ -18,15 +18,18 @@
  */
 package com.xceptance.neodymium.aura;
 
-import com.xceptance.neodymium.ai.action.ActionRegistry;
-import com.xceptance.neodymium.ai.core.AiStats;
-import com.xceptance.neodymium.ai.core.LlmClient;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmProviderFactory;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.config.AiConfiguration;
+import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.ChatMessageDto;
 import com.xceptance.neodymium.aura.dto.ChatRequest;
 import com.xceptance.neodymium.aura.dto.ChatResponse;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -52,10 +55,22 @@ public final class AuraChatService
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraChatService.class);
 
     private final AuraFileService fileService;
+    private AuraManagerQueueController queueController;
 
     public AuraChatService(final AuraFileService fileService)
     {
         this.fileService = fileService;
+    }
+
+    public AuraChatService(final AuraFileService fileService, final AuraManagerQueueController queueController)
+    {
+        this.fileService = fileService;
+        this.queueController = queueController;
+    }
+
+    public void setQueueController(final AuraManagerQueueController queueController)
+    {
+        this.queueController = queueController;
     }
 
     public ChatResponse runChatWorkflow(final ChatRequest req)
@@ -63,40 +78,33 @@ public final class AuraChatService
         final StringBuilder thinkingLog = new StringBuilder();
         thinkingLog.append("[AI Intent Classification] Running Stage 1...\n");
 
-        final LlmClient client = new LlmClient(Neodymium.aiConfiguration(), new AiStats());
+        final LlmProvider client = LlmProviderFactory.createProvider("chat", new AiConfiguration());
 
         // Stage 1: Intent Classifier
         final String stage1SystemPrompt = "You are an AI router for a test automation manager called Neodymium Aura.\n"
                 + "Your job is to classify the user's intent into one of the following categories:\n"
+                + "- \"browser\": The user wants to configure, select, switch, or change browser profiles (e.g., \"Run on Chrome and Firefox\", \"Select mobile profiles\", \"Use Safari\", \"Configure desktop browsers\", \"Select all browsers\", \"Clear browsers\").\n"
                 + "- \"select\": The user wants to select, run, filter, check, or execute one or more test cases.\n"
                 + "- \"edit\": The user wants to edit, update, create, delete, add steps, or modify a test case.\n"
-                + "- \"both\": The user request implies both selection and editing.\n"
+                + "- \"both\": The user request implies both test selection and editing.\n"
                 + "- \"neither\": The user is asking a general question, greeting, or querying system statistics/status.\n\n"
                 + "Respond ONLY with a valid JSON object matching this schema:\n"
                 + "{\n"
-                + "  \"intent\": \"select\" | \"edit\" | \"both\" | \"neither\",\n"
+                + "  \"intent\": \"browser\" | \"select\" | \"edit\" | \"both\" | \"neither\",\n"
                 + "  \"reason\": \"Brief reason for classification\"\n"
                 + "}";
 
-        final List<ChatMessage> stage1Messages = new ArrayList<>();
-        stage1Messages.add(SystemMessage.from(stage1SystemPrompt));
-        if (req.history != null)
+        final LlmResponse stage1ResponseObj;
+        try
         {
-            for (final ChatMessageDto msg : req.history)
-            {
-                if ("user".equalsIgnoreCase(msg.role))
-                {
-                    stage1Messages.add(UserMessage.from(msg.content));
-                }
-                else if ("assistant".equalsIgnoreCase(msg.role) || "ai".equalsIgnoreCase(msg.role))
-                {
-                    stage1Messages.add(AiMessage.from(msg.content));
-                }
-            }
+            stage1ResponseObj = client.chat(new LlmRequest(stage1SystemPrompt, req.prompt, null, null, 0.2, 30));
         }
-        stage1Messages.add(UserMessage.from(req.prompt));
-
-        final String stage1Response = client.chat(stage1Messages);
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to execute Stage 1 LLM request", e);
+            return new ChatResponse("LLM provider execution error: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+        }
+        final String stage1Response = stage1ResponseObj != null ? stage1ResponseObj.content() : "";
         thinkingLog.append("Stage 1 Response: ").append(stage1Response).append("\n");
 
         String intent = "neither";
@@ -116,30 +124,86 @@ public final class AuraChatService
 
         thinkingLog.append("Classified intent: ").append(intent).append("\n");
 
+        if ("browser".equalsIgnoreCase(intent))
+        {
+            thinkingLog.append("[AI Browser Configuration] Running Stage 2 (Browser Selection)...\n");
+            final List<BrowserProfileDto> availableProfiles = queueController != null
+                    ? queueController.getAvailableBrowserProfiles()
+                    : new ArrayList<>();
+
+            final StringBuilder profilesJson = new StringBuilder("[");
+            for (int i = 0; i < availableProfiles.size(); i++)
+            {
+                final BrowserProfileDto p = availableProfiles.get(i);
+                if (i > 0)
+                {
+                    profilesJson.append(", ");
+                }
+                profilesJson.append("{\"id\":\"").append(p.id)
+                        .append("\",\"name\":\"").append(p.name)
+                        .append("\",\"browser\":\"").append(p.browser)
+                        .append("\",\"resolution\":\"").append(p.res)
+                        .append("\"}");
+            }
+            profilesJson.append("]");
+
+            final String browserSystemPrompt = "You are the Neodymium Aura Browser Configuration Assistant.\n"
+                    + "Your goal is to select matching browser profile IDs based on the user's configuration request.\n"
+                    + "Here are the available browser profiles configured in the project:\n"
+                    + profilesJson.toString() + "\n\n"
+                    + "Guidelines:\n"
+                    + "- If the user asks for Chrome, select all relevant Chrome profiles (or specific ones if requested).\n"
+                    + "- If the user asks for Firefox, select all relevant Firefox profiles.\n"
+                    + "- If the user asks for Chrome + FF, select Chrome and Firefox profiles.\n"
+                    + "- If the user asks for Mobile, select mobile profiles (devices/emulations).\n"
+                    + "- If the user asks for Desktop, select desktop profiles (chrome, firefox, safari, edge).\n"
+                    + "- If the user asks for All, select all available profiles.\n"
+                    + "- If the user asks for Clear, select none (empty array).\n\n"
+                    + "You MUST respond ONLY with a valid JSON object matching this schema:\n"
+                    + "{\n"
+                    + "  \"selectedBrowserProfiles\": [\"Profile_ID_1\", \"Profile_ID_2\", ...],\n"
+                    + "  \"message\": \"Clear, friendly explanation of the applied browser profile selection.\"\n"
+                    + "}";
+
+            try
+            {
+                final LlmResponse resp = client.chat(new LlmRequest(browserSystemPrompt, req.prompt, null, null, 0.2, 30));
+                final String respText = resp != null ? resp.content() : "";
+                thinkingLog.append("Browser configuration LLM response: ").append(respText).append("\n");
+
+                final Map<?, ?> parsed = AuraHttpUtils.gson.fromJson(cleanJsonResponse(respText), Map.class);
+                final String message = parsed != null && parsed.containsKey("message")
+                        ? String.valueOf(parsed.get("message"))
+                        : "Updated browser configuration.";
+                final List<String> selected = new ArrayList<>();
+                if (parsed != null && parsed.get("selectedBrowserProfiles") instanceof List<?> list)
+                {
+                    for (final Object item : list)
+                    {
+                        if (item != null)
+                        {
+                            selected.add(String.valueOf(item));
+                        }
+                    }
+                }
+
+                return new ChatResponse(message, thinkingLog.toString(), "select_browser", null, null, null, null, selected);
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to execute browser configuration LLM request", e);
+                thinkingLog.append("Error during browser configuration: ").append(e.getMessage()).append("\n");
+                return new ChatResponse("Error configuring browser profiles: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+            }
+        }
+
         if ("edit".equalsIgnoreCase(intent) || "both".equalsIgnoreCase(intent))
         {
             // Run editor / creation workflow
             thinkingLog.append("[AI Test Generation] Running Stage 2 (Edit/Create)...\n");
 
-            // Assemble dynamic instructions from action plugins
             final StringBuilder actionInstructions = new StringBuilder();
-            try
-            {
-                for (final Object plugin : ActionRegistry.getAllPlugins())
-                {
-                    final Method getInstructionsMethod = plugin.getClass().getMethod("getPromptInstructions");
-                    final Object instructions = getInstructionsMethod.invoke(plugin);
-                    if (instructions != null)
-                    {
-                        actionInstructions.append(instructions).append("\n");
-                    }
-                }
-            }
-            catch (final Exception e)
-            {
-                LOGGER.error("Failed to load action plugins instructions", e);
-                thinkingLog.append("Error loading action plugins: ").append(e.getMessage()).append("\n");
-            }
+            actionInstructions.append("Supported actions: Open URL, Type text into input fields, Click elements, Verify text content, Select dropdown options, Submit forms.");
 
             String activeFileContent = "";
             if (req.activeFile != null && !req.activeFile.trim().isEmpty())
@@ -161,7 +225,7 @@ public final class AuraChatService
                     + "CRITICAL REQUIREMENT ON YAML FORMATTING:\n"
                     + "The YAML file content must strictly follow this format:\n"
                     + "- Do NOT include metadata fields like 'name', 'description', or any other root-level properties.\n"
-                    + "- The 'steps' property MUST be a multiline YAML string (using the '|' indicator), where each line is a natural English step sentence. Example:\n"
+                    + "- The 'steps' property MUST be a multiline YAML string (using the '|' indicator), where each line is a natural language step sentence. Example:\n"
                     + "  steps: |\n"
                     + "    Open https://posters.xceptance.io:8443/posters/\n"
                     + "    Type \"${searchTerm}\" into the search field.\n"
@@ -171,8 +235,8 @@ public final class AuraChatService
                     + "  data:\n"
                     + "    - searchTerm: Test\n"
                     + "    - searchTerm: Chair\n"
-                    + "- Do NOT output steps as structured arrays/lists of action/target/value objects (e.g. '- action: NAVIGATE'). Only write them as plain, natural English statements.\n"
-                    + "- Do NOT guess or hallucinate HTML element IDs, CSS selectors, class names, or XPaths (such as \"search-form-input\" or \"div.no-results\") unless they are explicitly given. Stick to high-level, simple natural English descriptions of elements (e.g., \"search field\", \"no products found message\").\n\n"
+                    + "- Do NOT output steps as structured arrays/lists of action/target/value objects (e.g. '- action: NAVIGATE'). Only write them as plain, natural language statements.\n"
+                    + "- Do NOT guess or hallucinate HTML element IDs, CSS selectors, class names, or XPaths (such as \"search-form-input\" or \"div.no-results\") unless they are explicitly given. Stick to high-level, simple natural language descriptions of elements (e.g., \"search field\", \"no products found message\").\n\n"
                     + "If the user wants to EDIT an existing file, the current content of the active file is:\n"
                     + activeFileContent + "\n\n"
                     + "You MUST respond in JSON format with the following schema:\n"
@@ -184,25 +248,18 @@ public final class AuraChatService
                     + "  \"message\": \"Your user-facing response message summarizing what you changed or created.\"\n"
                     + "}";
 
-            final List<ChatMessage> editMessages = new ArrayList<>();
-            editMessages.add(SystemMessage.from(editorSystemPrompt));
-            if (req.history != null)
+            final String editorResponseObj;
+            try
             {
-                for (final ChatMessageDto msg : req.history)
-                {
-                    if ("user".equalsIgnoreCase(msg.role))
-                    {
-                        editMessages.add(UserMessage.from(msg.content));
-                    }
-                    else if ("assistant".equalsIgnoreCase(msg.role) || "ai".equalsIgnoreCase(msg.role))
-                    {
-                        editMessages.add(AiMessage.from(msg.content));
-                    }
-                }
+                final LlmResponse resp = client.chat(new LlmRequest(editorSystemPrompt, req.prompt, null, null, 0.2, 60));
+                editorResponseObj = resp != null ? resp.content() : "";
             }
-            editMessages.add(UserMessage.from(req.prompt));
-
-            final String editorResponse = client.chat(editMessages);
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to execute Stage 2 LLM request", e);
+                return new ChatResponse("Failed to generate test case: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+            }
+            final String editorResponse = editorResponseObj;
             thinkingLog.append("Editor Response: ").append(editorResponse).append("\n");
 
             try
@@ -309,7 +366,17 @@ public final class AuraChatService
                 iterations++;
                 thinkingLog.append("Escalation Loop Iteration ").append(iterations).append("...\n");
 
-                final String responseText = client.chat(conversation);
+                final String responseText;
+                try
+                {
+                    final LlmResponse resp = client.chat(new LlmRequest("You are the Neodymium Aura Test Selector Assistant.", req.prompt, null, null, 0.2, 30));
+                    responseText = resp != null ? resp.content() : "";
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.error("Failed to execute LLM request in escalation loop", e);
+                    return new ChatResponse("LLM selection error: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+                }
                 thinkingLog.append("Response: ").append(responseText).append("\n");
 
                 try
@@ -422,7 +489,17 @@ public final class AuraChatService
             }
             fallbackMessages.add(UserMessage.from(req.prompt));
 
-            final String fallbackResponse = client.chat(fallbackMessages);
+            final String fallbackResponse;
+            try
+            {
+                final LlmResponse fallbackResp = client.chat(new LlmRequest(fallbackSystemPrompt, req.prompt, null, null, 0.2, 30));
+                fallbackResponse = fallbackResp != null ? fallbackResp.content() : "";
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to execute fallback LLM request", e);
+                return new ChatResponse("Fallback LLM error: " + e.getMessage(), thinkingLog.toString(), "error", null, null, null, null);
+            }
             String message = fallbackResponse;
             try
             {

@@ -23,7 +23,9 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -33,6 +35,7 @@ import org.thymeleaf.context.Context;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.xceptance.neodymium.aura.dto.SaveRequest;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 
 /**
  * Controller handling Yaml editor rendering, file reading, saving, creating, and deleting operations.
@@ -240,9 +243,17 @@ public final class AuraManagerEditorController
             if (isHtmxRequest(exchange))
             {
                 final Context context = new Context();
-                context.setVariable("files", fileService.getYamlFilesList());
+                final List<YamlFileDto> filesList = fileService.getYamlFilesList();
+                context.setVariable("files", filesList);
                 context.setVariable("expandedFiles", fileService.getExpandedFiles());
                 context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+                if (queueController != null)
+                {
+                    context.setVariable("queue", queueController.getSelectedQueue());
+                    context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
+                    context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filesList));
+                    context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(filesList));
+                }
 
                 final String deleteModalHtml = manager.getTemplateEngine().process("fragments/modals", Set.of("deleteTestModal"), context);
                 final String yamlTreeHtml = manager.getTemplateEngine().process("fragments/test-selection", Set.of("yamlFileList"), context);
@@ -323,10 +334,18 @@ public final class AuraManagerEditorController
             {
                 fileService.setActiveEditingFile(filename);
                 final Context context = new Context();
-                context.setVariable("files", fileService.getYamlFilesList());
+                final List<YamlFileDto> filesList = fileService.getYamlFilesList();
+                context.setVariable("files", filesList);
                 context.setVariable("expandedFiles", fileService.getExpandedFiles());
                 context.setVariable("activeEditingFile", filename);
                 context.setVariable("editorContent", boilerplate);
+                if (queueController != null)
+                {
+                    context.setVariable("queue", queueController.getSelectedQueue());
+                    context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
+                    context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filesList));
+                    context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(filesList));
+                }
 
                 final String createModalHtml = manager.getTemplateEngine().process("fragments/modals", Set.of("createTestModal"), context);
                 final String yamlTreeHtml = manager.getTemplateEngine().process("fragments/test-selection", Set.of("yamlFileList"), context);
@@ -392,7 +411,64 @@ public final class AuraManagerEditorController
         fileService.setActiveEditingFile(file);
         context.setVariable("activeEditingFile", file);
         context.setVariable("editorContent", content);
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        context.setVariable("beforeSteps", sections.get("beforeSteps"));
+        context.setVariable("mainSteps", sections.get("mainSteps"));
+        context.setVariable("afterSteps", sections.get("afterSteps"));
+        context.setVariable("dataMatrix", sections.get("dataMatrix"));
+        context.setVariable("varKeys", sections.get("varKeys"));
+        context.setVariable("yamlFiles", fileService.getYamlFilesList());
+
         return "dashboard :: editorPanel";
+    }
+
+    public void handleGetIncludeTree(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String file = params.get("file");
+        final String cardId = params.get("cardId");
+
+        if (file == null || file.trim().isEmpty() || cardId == null)
+        {
+            AuraHttpUtils.sendError(exchange, 400, "Missing file or cardId parameter");
+            return;
+        }
+
+        try
+        {
+            final String content = fileService.readYamlFileContent(file);
+            final boolean fileExists = (content != null);
+            final List<String> steps = new ArrayList<>();
+            if (content != null)
+            {
+                final Map<String, Object> parsed = fileService.parsePlaybookSections(content);
+                @SuppressWarnings("unchecked")
+                final List<String> mainSteps = (List<String>) parsed.get("mainSteps");
+                if (mainSteps != null)
+                {
+                    steps.addAll(mainSteps);
+                }
+            }
+            else
+            {
+                steps.add("action: Enter step details here");
+            }
+
+            final Context context = new Context();
+            context.setVariable("cardId", cardId);
+            context.setVariable("includeFile", file);
+            context.setVariable("includeSteps", steps);
+            context.setVariable("fileExists", fileExists);
+
+            final String html = manager.getTemplateEngine().process("fragments/editor", Set.of("includeTreeCardFragment"), context);
+            AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to render include tree fragment for: {}", file, e);
+            AuraHttpUtils.sendError(exchange, 500, e.getMessage());
+        }
     }
 
     public void handleCloseEditor(final HttpExchange exchange) throws IOException
@@ -400,4 +476,81 @@ public final class AuraManagerEditorController
         fileService.setActiveEditingFile(null);
         AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(Map.of("success", true)));
     }
+
+    public void handleReviewSteps(final HttpExchange exchange) throws IOException
+    {
+        try
+        {
+            final String body = AuraHttpUtils.readBody(exchange);
+            final Map<?, ?> req = AuraHttpUtils.gson.fromJson(body, Map.class);
+            final List<?> steps = req != null && req.get("steps") instanceof List<?> ? (List<?>) req.get("steps") : List.of();
+
+            final List<Map<String, Object>> suggestions = new ArrayList<>();
+
+            for (final Object stepObj : steps)
+            {
+                if (stepObj instanceof Map<?, ?> stepMap)
+                {
+                    final Object lineObj = stepMap.get("line");
+                    final String text = stepMap.get("text") != null ? stepMap.get("text").toString() : "";
+                    int lineNum = 1;
+                    if (lineObj instanceof Number)
+                    {
+                        lineNum = ((Number) lineObj).intValue();
+                    }
+                    else if (lineObj != null)
+                    {
+                        try
+                        {
+                            lineNum = Integer.parseInt(lineObj.toString());
+                        }
+                        catch (final NumberFormatException e)
+                        {
+                            lineNum = 1;
+                        }
+                    }
+
+                    final String lower = text.toLowerCase();
+                    if (lower.contains("close") || lower.contains("banner") || lower.contains("modal") || lower.contains("cookie") || lower.contains("popup"))
+                    {
+                        if (!lower.contains("(optional)") && !lower.contains("(continue-on-error)"))
+                        {
+                            final Map<String, Object> sugg = new HashMap<>();
+                            sugg.put("targetLine", lineNum);
+                            sugg.put("type", "warning");
+                            sugg.put("icon", "warning");
+                            sugg.put("message", "Optional popup/modal step detected. Consider adding (optional) tag so execution won't fail if popup is absent.");
+                            sugg.put("hintText", "(optional)");
+                            suggestions.add(sugg);
+                        }
+                    }
+                    else if (lower.contains("click") || lower.contains("type") || lower.contains("select"))
+                    {
+                        if (!lower.contains("#") && !lower.contains(".") && !lower.contains("button") && !lower.contains("input") && !lower.contains("(hint:"))
+                        {
+                            final Map<String, Object> sugg = new HashMap<>();
+                            sugg.put("targetLine", lineNum);
+                            sugg.put("type", "info");
+                            sugg.put("icon", "auto_awesome");
+                            sugg.put("message", "Action step lacks an explicit DOM selector hint or ID. Adding a hint tag helps Aura locate elements faster.");
+                            sugg.put("hintText", "(hint: #element-id)");
+                            suggestions.add(sugg);
+                        }
+                    }
+                }
+            }
+
+            final Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("suggestions", suggestions);
+            AuraHttpUtils.sendJsonResponse(exchange, 200, AuraHttpUtils.gson.toJson(response));
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("[Aura Server] Exception in handleReviewSteps: {}", e.getMessage(), e);
+            AuraHttpUtils.sendError(exchange, 500, e.getMessage());
+        }
+    }
 }
+
+

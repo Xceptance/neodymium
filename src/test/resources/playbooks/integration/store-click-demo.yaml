@@ -1,0 +1,6 @@
+data:
+  - testId: clickDemoData
+    lang_button: Submit Order
+steps: |
+  Open ${demo.url} in the browser
+  Click the '${lang_button}' button

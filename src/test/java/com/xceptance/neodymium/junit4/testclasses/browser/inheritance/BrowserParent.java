@@ -4,13 +4,13 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit5.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 @Browser("Chrome_1024x768")
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 @RunWith(NeodymiumRunner.class)
 public abstract class BrowserParent
 {

@@ -1,0 +1,95 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.event.diagnostic;
+
+import org.neodymium.ai.event.ExecutionEvent;
+
+/**
+ * Event conveying execution failure error details and causes during test runs.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class DiagnosticErrorEvent extends ExecutionEvent
+{
+    /**
+     * The error message details.
+     */
+    private final String message;
+
+    /**
+     * The underlying exception error cause, or null if not applicable.
+     */
+    private final Throwable cause;
+
+    /**
+     * Constructs a DiagnosticErrorEvent.
+     *
+     * @param message the error details message
+     */
+    public DiagnosticErrorEvent(final String message)
+    {
+        this(message, null);
+    }
+
+    /**
+     * Constructs a DiagnosticErrorEvent with a specific throwable cause.
+     *
+     * @param message the error details message
+     * @param cause the underlying exception cause
+     */
+    public DiagnosticErrorEvent(final String message, final Throwable cause)
+    {
+        super();
+        this.message = message;
+        this.cause = cause;
+    }
+
+    /**
+     * Gets the error details message.
+     *
+     * @return the error message string
+     */
+    public String getMessage()
+    {
+        return this.message;
+    }
+
+    /**
+     * Gets the underlying exception cause.
+     *
+     * @return the throwable cause instance, or null if none
+     */
+    public Throwable getCause()
+    {
+        return this.cause;
+    }
+
+    @Override
+    public String getEventType()
+    {
+        return "diagnostic.error";
+    }
+
+    @Override
+    public org.neodymium.ai.event.EventCategory getCategory()
+    {
+        return org.neodymium.ai.event.EventCategory.DIAGNOSTIC;
+    }
+}

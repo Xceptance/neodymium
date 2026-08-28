@@ -1,9 +1,0 @@
-# Account deletion steps with conditional branching include
-steps:
-  - Check if user is logged in.
-  - If not logged in:
-    - _include: login.yaml
-  - Click on user settings link.
-  - Click 'Delete Account' button.
-  - Confirm deletion of account.
-  - Verify logout status page.

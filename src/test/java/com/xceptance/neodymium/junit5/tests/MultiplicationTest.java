@@ -11,7 +11,7 @@ import com.xceptance.neodymium.junit5.testclasses.multiplication.dataset.OneData
 import com.xceptance.neodymium.junit5.testclasses.multiplication.dataset.TwoDataSetsOneMethod;
 import com.xceptance.neodymium.junit5.testclasses.multiplication.dataset.TwoDataSetsTwoMethods;
 import com.xceptance.neodymium.junit5.testclasses.multiplication.pkgdata.PackageDataDoNotAffectMethodMultiplication;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class MultiplicationTest extends AbstractNeodymiumTest
 {

@@ -32,8 +32,8 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * Selenide UI test to verify the Neodymium Aura Manager's Run Queue and
@@ -212,16 +212,16 @@ public final class AuraManagerRunQueueUiTest
     {
         Selenide.open("http://localhost:" + this.port + "/");
 
-        // 1. Check/toggle multiple configuration checkboxes
+        // 1. Check/toggle multiple configuration checkboxes and select box
         final var headlessCb = $("#optHeadless");
         final var videoCb = $("#optVideo");
-        final var keepOpenCb = $("#optKeepOpen");
+        final var executionModeSelect = $("#optExecutionMode");
 
         headlessCb.should(Condition.exist);
+        executionModeSelect.should(Condition.exist);
         
         final boolean initialHeadless = headlessCb.isSelected();
         final boolean initialVideo = videoCb.isSelected();
-        final boolean initialKeepOpen = keepOpenCb.isSelected();
 
         // Toggle each of them via JS and verify state inversion sequentially
         Selenide.executeJavaScript("document.getElementById('optHeadless').click();");
@@ -230,7 +230,48 @@ public final class AuraManagerRunQueueUiTest
         Selenide.executeJavaScript("document.getElementById('optVideo').click();");
         videoCb.shouldHave(initialVideo ? Condition.not(Condition.selected) : Condition.selected);
 
-        Selenide.executeJavaScript("document.getElementById('optKeepOpen').click();");
-        keepOpenCb.shouldHave(initialKeepOpen ? Condition.not(Condition.selected) : Condition.selected);
+        executionModeSelect.selectOptionByValue("LLM_RECORDING");
+        executionModeSelect.shouldHave(Condition.value("LLM_RECORDING"));
+    }
+
+    @NeodymiumTest
+    public final void testRemoveQueueItemDirectly()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        int targetIndex = -1;
+        final int fileCount = $$("#yamlFileList .file-container").size();
+        for (int i = 0; i < fileCount; i++)
+        {
+            $$("#yamlFileList .file-container").get(i).$(".list-item").shouldBe(Condition.visible).click();
+            $$("#yamlFileList .file-container").get(i).$(".dataset-list").shouldBe(Condition.visible);
+            final var currentCheckboxes = $$("#yamlFileList .file-container").get(i).$$(".dataset-select-cb");
+            if (currentCheckboxes.size() >= 1)
+            {
+                targetIndex = i;
+                break;
+            }
+            $$("#yamlFileList .file-container").get(i).$(".list-item").shouldBe(Condition.visible).click();
+        }
+
+        if (targetIndex == -1)
+        {
+            throw new IllegalStateException("No file container found with 1 or more datasets under #yamlFileList!");
+        }
+
+        final var checkbox = $$("#yamlFileList .file-container").get(targetIndex).$$(".dataset-select-cb").first();
+        checkbox.shouldBe(Condition.visible);
+        if (!checkbox.isSelected())
+        {
+            checkbox.click();
+        }
+
+        $$("#queueListContainer .queue-item").shouldHave(CollectionCondition.size(1));
+
+        final var removeBtn = $$("#queueListContainer .queue-item").first().$(".btn-remove-queue-item");
+        removeBtn.shouldBe(Condition.visible).click();
+
+        $$("#queueListContainer .queue-item").shouldHave(CollectionCondition.size(0));
+        checkbox.shouldNotBe(Condition.selected);
     }
 }

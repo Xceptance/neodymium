@@ -18,6 +18,7 @@ import io.qameta.allure.junit5.AllureJunit5;
 @Target({ElementType.TYPE, ElementType.METHOD})
 @TestTemplate
 @ExtendWith({ NeodymiumRunner.class, AllureJunit5.class })
+@Deprecated
 public @interface NeodymiumTestGenerator
 {
 }

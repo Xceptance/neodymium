@@ -23,7 +23,7 @@ import com.xceptance.neodymium.junit4.testclasses.multiplication.parameteranddat
 import com.xceptance.neodymium.junit4.testclasses.multiplication.parameteranddataset.TwoDataSetsTwoParameterSetsOneMethod;
 import com.xceptance.neodymium.junit4.testclasses.multiplication.parameteranddataset.TwoDataSetsTwoParameterSetsTwoMethods;
 import com.xceptance.neodymium.junit4.testclasses.multiplication.pkgdata.PackageDataDoNotAffectMethodMultiplication;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class MultiplicationTest extends NeodymiumTest
 {

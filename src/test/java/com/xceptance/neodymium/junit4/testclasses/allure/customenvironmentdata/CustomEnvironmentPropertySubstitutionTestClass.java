@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit4.testclasses.allure.customenvironmentdata;
 
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.junit4.NeodymiumRunner;
 import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
-import com.xceptance.neodymium.util.AllureAddons;
+import org.neodymium.util.AllureAddons;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 

@@ -1,6 +1,0 @@
-# Registration steps include
-steps:
-  - _include: navigate-registration.yaml
-  - Enter '${email}' into register email input.
-  - Enter '${password}' into register password input.
-  - Click register button.

@@ -27,6 +27,7 @@ import java.lang.annotation.Target;
 })
 @Inherited
 @Repeatable(Retries.class)
+@Deprecated
 public @interface Retry
 {
     int maxNumberOfRetries() default 3;

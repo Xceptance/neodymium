@@ -102,13 +102,43 @@
             </a>
             <ul class="nav-links">
                 <li><a href="#" class="active">Hub Home</a></li>
-                <li><a href="AuraGlanceTest/shop/index.html">Shop Home</a></li>
-                <li><a href="AuraGlanceTest/shop/forms.html">Forms Demo</a></li>
-                <li><a href="AuraGlanceTest/shop/escalation.html">Escalation Challenge</a></li>
-                <li><a href="AuraGlanceTest/shop/visual-escalation.html">Visual Escalation</a></li>
-                <li><a href="AuraGlanceTest/dashboard/index.html">Dashboard</a></li>
-                <li><a href="AuraGlanceTest/a11y/index.html">A11y Arena</a></li>
-                <li><a href="AuraGlanceTest/spa/index.html">React SPA</a></li>
+                <li class="dropdown">
+                    <a href="#" class="dropdown-trigger">
+                        Aura Sandbox
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: 4px; display: inline-block; vertical-align: middle;">
+                            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a href="AuraGlanceTest/dashboard/index.html">SaaS Dashboard</a></li>
+                        <li><a href="AuraGlanceTest/shop/index.html">Poster Store</a></li>
+                        <li><a href="AuraGlanceTest/shop/forms.html">Forms Demo</a></li>
+                        <li><a href="AuraGlanceTest/a11y/index.html">A11y Arena</a></li>
+                        <li><a href="AuraGlanceTest/spa/index.html">React SPA</a></li>
+                        <li><a href="AuraGlanceTest/shop/escalation.html">Escalation Challenge</a></li>
+                        <li><a href="AuraGlanceTest/shop/visual-escalation.html">Visual Escalation</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown">
+                    <a href="#" class="dropdown-trigger">
+                        VÉRLA Stores
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: 4px; display: inline-block; vertical-align: middle;">
+                            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a href="verla-tailwind/index.html">VÉRLA Tailwind</a></li>
+                        <li><a href="verla-tailwind-by-claude/index.html">VÉRLA Tailwind (by Claude)</a></li>
+                        <li><a href="verla-perfect/index.html">VÉRLA Perfect</a></li>
+                        <li><a href="verla-normal/index.html">VÉRLA Normal</a></li>
+                        <li><a href="verla-bad/index.html">VÉRLA Bad</a></li>
+                        <li><a href="verla-modern-bad/index.html">VÉRLA Modern Bad (WCAG)</a></li>
+                        <li><a href="verla-modern-bad-nowcag/index.html">VÉRLA Modern Bad (No WCAG)</a></li>
+                        <li><a href="verla-pwa-chaos/index.html">VÉRLA PWA Chaos</a></li>
+                    </ul>
+                </li>
+                <li><a href="AuraGlanceTest/shop/sandbox/index.html">Playground</a></li>
+                <li><a href="action-test-pages.html">Action Pages</a></li>
             </ul>
         </div>
     </header>
@@ -171,7 +201,7 @@
                     <span class="badge badge-cyan">AJAX & HTMX</span>
                 </div>
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Simulates modern Single Page Applications (SPAs) with initial loading suspense skeletons, async AJAX lists, and HTMX dynamic HTML swaps. Perfect for wait-assertion audits.</p>
-                <a href="AuraGlanceTest/spa/index.html" class="app-link">Launch React SPA &rarr;</a>
+                <a href="spa/index.html" class="app-link">Launch React SPA &rarr;</a>
             </div>
 
             <!-- Card 6: Escalation Challenge -->
@@ -180,15 +210,14 @@
                     <h3 style="font-size: 1.25rem; font-weight: 600;">Escalation Challenge</h3>
                     <span class="badge badge-success">AXTree to Lean</span>
                 </div>
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interact with custom interactive elements (divs, spans, hidden inputs) that are omitted from AXTree, forcing context escalation from AXTREE to LEAN.</p>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Interact with custom interactive elements (divs, spans, hidden inputs) that are omitted from LEAN context level, forcing context escalation from LEAN to STANDARD.</p>
                 <a href="AuraGlanceTest/shop/escalation.html" class="app-link">Launch Escalation Demo &rarr;</a>
             </div>
         </div>
 
-        <div class="aura-grid-3" style="grid-template-columns: repeat(3, 1fr);">
-            <div style="grid-column: span 1;"></div>
+        <div class="aura-grid-3">
             <!-- Card 7: Visual Escalation -->
-            <div class="aura-card" style="grid-column: span 1;">
+            <div class="aura-card">
                 <div class="card-header-flex">
                     <h3 style="font-size: 1.25rem; font-weight: 600;">Visual Escalation</h3>
                     <span class="badge badge-purple">Multimodal Visual</span>
@@ -196,7 +225,116 @@
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Verify text and click elements drawn purely graphically on canvas or via CSS pseudo-elements, forcing escalation from STANDARD to VISUAL.</p>
                 <a href="AuraGlanceTest/shop/visual-escalation.html" class="app-link">Launch Visual Escalation &rarr;</a>
             </div>
-            <div style="grid-column: span 1;"></div>
+
+            <!-- Card 8: Sandbox Playground -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Focused Playgrounds</h3>
+                    <span class="badge badge-cyan">Isolated Scenarios</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Navigate to our isolated web challenge pages (Shadow DOM, Canvas clicks, Click Interceptions, SVG icons, Scroll Overflows, Hover chains, etc.).</p>
+                <a href="AuraGlanceTest/shop/sandbox/index.html" class="app-link">Launch Scenario Playground &rarr;</a>
+            </div>
+
+            <!-- Card 9: Action Pages -->
+            <div class="aura-card">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">Action Test Pages</h3>
+                    <span class="badge badge-purple">Isolated Units</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Browse the full collection of simple, unstyled HTML pages designed for verifying individual Selenium / Selenide actions (Clicks, Typings, Drops, Frames, etc.).</p>
+                <a href="action-test-pages.html" class="app-link">Browse Action Pages &rarr;</a>
+            </div>
+        </div>
+
+        <h2 style="margin-top: 3.5rem; margin-bottom: 1rem; font-size: 1.75rem; font-weight: 700;">Dynamic VÉRLA Storefronts</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 2rem; max-width: 800px; font-size: 0.95rem;">
+            The dynamic e-commerce demo storefront served under multiple HTML/CSS markup configurations. Used to test self-healing, selector resilience, PWA state machines, and visual AI catalog/checkout operations.
+        </p>
+
+        <div class="aura-grid-3" style="margin-bottom: 1.5rem;">
+            <!-- Perfect Quality -->
+            <div class="aura-card" style="border-color: hsla(145, 80%, 45%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Perfect</h3>
+                    <span class="badge badge-success">Clean & Semantic</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Semantic HTML5 tags, stable and unique IDs, explicit labels, and complete W3C AAA accessibility compliance.</p>
+                <a href="verla-perfect/index.html" class="app-link" style="margin-top: 0;">Launch Perfect Store &rarr;</a>
+            </div>
+
+            <!-- Normal Quality -->
+            <div class="aura-card" style="border-color: hsla(38, 95%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Normal</h3>
+                    <span class="badge badge-cyan">Standard Quality</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Wrapper divs, basic placeholders without labels, average locators, representing standard commercial quality.</p>
+                <a href="verla-normal/index.html" class="app-link" style="margin-top: 0;">Launch Normal Store &rarr;</a>
+            </div>
+
+            <!-- Tailwind Version -->
+            <div class="aura-card" style="border-color: #38bdf8;">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Tailwind</h3>
+                    <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #0284c7; border: 1px solid rgba(56, 189, 248, 0.3);">Tailwind CSS</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Identical to normal quality, fully styled using modern Tailwind CSS utility classes and custom design tokens.</p>
+                <a href="verla-tailwind/index.html" class="app-link" style="margin-top: 0; background: #0284c7; color: white;">Launch Tailwind Store &rarr;</a>
+            </div>
+
+            <!-- Tailwind Version, utility-first rebuild -->
+            <div class="aura-card" style="border-color: #0ea5e9;">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Tailwind (by Claude)</h3>
+                    <span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #0369a1; border: 1px solid rgba(14, 165, 233, 0.3);">Utility-First</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Strict utility-first rebuild of normal quality: locally built Tailwind v4 stylesheet, no CDN, no semantic classes, no inline styles, state via data attributes.</p>
+                <a href="verla-tailwind-by-claude/index.html" class="app-link" style="margin-top: 0; background: #0369a1; color: white;">Launch Utility-First Store &rarr;</a>
+            </div>
+        </div>
+
+        <div class="aura-grid-3" style="margin-bottom: 1.5rem;">
+            <!-- Bad Quality -->
+            <div class="aura-card" style="border-color: hsla(355, 85%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Bad</h3>
+                    <span class="badge badge-purple" style="background: rgba(239, 68, 68, 0.15); color: hsl(355, 85%, 55%); border: 1px solid rgba(239, 68, 68, 0.25);">Obfuscated Code</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Duplicate IDs, randomized class selectors, styled divs with inline click triggers, and zero accessibility tags.</p>
+                <a href="verla-bad/index.html" class="app-link" style="margin-top: 0;">Launch Bad Store &rarr;</a>
+            </div>
+
+        <div class="aura-grid-3" style="margin-bottom: 2.5rem;">
+            <!-- Modern Bad Quality (WCAG) -->
+            <div class="aura-card" style="border-color: hsla(210, 85%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Modern Bad (WCAG)</h3>
+                    <span class="badge badge-purple">Tailwind & Semantic</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Heavy Tailwind CSS class soups and deep wrapper hierarchies, but retains full ARIA accessibility labels and button tags.</p>
+                <a href="verla-modern-bad/index.html" class="app-link" style="margin-top: 0;">Launch Modern Bad Store &rarr;</a>
+            </div>
+
+            <!-- Modern Bad Quality (No WCAG) -->
+            <div class="aura-card" style="border-color: hsla(0, 85%, 55%, 0.25);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600;">VÉRLA Modern Bad (No WCAG)</h3>
+                    <span class="badge badge-purple" style="background: rgba(239, 68, 68, 0.15); color: hsl(355, 85%, 55%); border: 1px solid rgba(239, 68, 68, 0.25);">Tailwind Div Soup</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Tailwind utility class noise, randomized React-style IDs, clickable divs replacing buttons and links, and zero ARIA tags.</p>
+                <a href="verla-modern-bad-nowcag/index.html" class="app-link" style="margin-top: 0;">Launch Modern Bad (No WCAG) &rarr;</a>
+            </div>
+
+            <!-- PWA Chaos Edition -->
+            <div class="aura-card" style="border-color: #E80070; background: linear-gradient(135deg, rgba(0,86,153,0.05) 0%, rgba(232,0,112,0.08) 100%);">
+                <div class="card-header-flex">
+                    <h3 style="font-size: 1.25rem; font-weight: 600; color: #005699;">VÉRLA PWA Chaos</h3>
+                    <span class="badge" style="background: #E80070; color: #fff;">Bath &amp; Body Works</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Chakra UI / Emotion CSS, Zag.js marquee ticker, rotating search prompts, VideoJS MEDIA_ERR_DECODE modal, OneTrust banner, and slide-over cart drawer.</p>
+                <a href="verla-pwa-chaos/index.html" class="app-link" style="margin-top: 0; background: #005699; color: #fff; text-align: center; border-radius: 4px; padding: 8px 16px;">Launch PWA Chaos Store &rarr;</a>
+            </div>
         </div>
 
         <div class="aura-card" style="margin-top: 2.5rem; background: radial-gradient(circle at center, hsla(260, 85%, 65%, 0.05), transparent 80%);">

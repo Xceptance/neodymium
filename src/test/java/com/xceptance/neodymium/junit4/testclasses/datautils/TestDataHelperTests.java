@@ -1,7 +1,7 @@
 package com.xceptance.neodymium.junit4.testclasses.datautils;
 
-import com.xceptance.neodymium.common.testdata.TestData;
-import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import org.neodymium.common.testdata.TestData;
+import org.neodymium.junit4.NeodymiumRunner;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;

@@ -46,16 +46,18 @@ public final class AuraManagerMainHandler implements HttpHandler
         final AuraChatSessionService sessionService = new AuraChatSessionService();
         final AuraReportingService reportingService = new AuraReportingService();
         this.interactiveService = new AuraInteractiveService();
+        reportingService.setInteractiveService(this.interactiveService);
         this.queueService = new AuraQueueService(reportingService, interactiveService);
 
         // Instantiate standalone public controller classes injecting stateless/stateful singletons and manager
         final AuraManagerQueueController queueController = new AuraManagerQueueController(queueService, fileService, interactiveService, manager);
+        chatService.setQueueController(queueController);
         final AuraManagerReportingController reportingController = new AuraManagerReportingController(reportingService, queueService, manager);
         final AuraManagerDashboardController dashboardController = new AuraManagerDashboardController(interactiveService, fileService, queueController, reportingController, sessionService, manager);
         final AuraManagerFileController fileController = new AuraManagerFileController(fileService, queueController, manager);
         final AuraManagerEditorController editorController = new AuraManagerEditorController(fileService, queueController, manager);
         final AuraManagerInteractiveController interactiveController = new AuraManagerInteractiveController(interactiveService, reportingService, queueService, manager);
-        final AuraManagerChatController chatController = new AuraManagerChatController(chatService, sessionService, manager);
+        final AuraManagerChatController chatController = new AuraManagerChatController(chatService, sessionService, queueController, manager);
         final AuraManagerSettingsController settingsController = new AuraManagerSettingsController(settingsService, manager);
 
         // Register GET & POST mappings declaratively
@@ -75,6 +77,7 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.POST("/api/files/toggle", fileController::handleToggleFileExpansion);
 
         router.GET("/api/editor", editorController::handleEditorPanel);
+        router.GET("/api/editor/include-tree", editorController::handleGetIncludeTree);
         router.GET("/api/read", editorController::handleReadFile);
         router.POST("/api/save", editorController::handleSaveFile);
         router.POST("/api/delete", editorController::handleDeleteFile);
@@ -82,12 +85,18 @@ public final class AuraManagerMainHandler implements HttpHandler
         router.GET("/api/modals/create", editorController::handleGetCreateModal);
         router.GET("/api/modals/delete", editorController::handleGetDeleteModal);
         router.POST("/api/editor/close", editorController::handleCloseEditor);
+        router.POST("/api/editor/review-steps", editorController::handleReviewSteps);
 
         router.POST("/api/queue/toggle", queueController::handleToggleQueue);
         router.POST("/api/queue/toggleAll", queueController::handleToggleAllQueue);
         router.POST("/api/queue/move", queueController::handleMoveQueue);
+        router.POST("/api/queue/remove", queueController::handleRemoveQueue);
         router.POST("/api/queue/clear", queueController::handleClearQueue);
+        router.POST("/api/queue/item-browser", queueController::handleUpdateItemBrowserProfiles);
         router.POST("/api/config/toggle", queueController::handleToggleConfig);
+        router.POST("/api/config/mode", queueController::handleToggleConfig);
+        router.POST("/api/config/browser/toggle", queueController::handleToggleBrowserProfile);
+        router.POST("/api/config/browser/preset", queueController::handleBrowserPreset);
 
         router.POST("/api/run", queueController::handleRunQueue);
         router.GET("/api/status", queueController::handleStatusStream);
@@ -96,6 +105,8 @@ public final class AuraManagerMainHandler implements HttpHandler
 
         // Serve Static Assets & Views
         router.prefix("GET", "/dashboard-", dashboardController::handleDashboardAssets);
+        router.GET("/material-symbols.css", dashboardController::handleDashboardAssets);
+        router.GET("/material-symbols-outlined.woff2", dashboardController::handleDashboardAssets);
         router.GET("/interactive_console.html", interactiveController::handleHtml);
         router.GET("/interactive_console.css", interactiveController::handleCss);
         router.GET("/interactive_console.js", interactiveController::handleJs);

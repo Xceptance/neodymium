@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -217,7 +217,7 @@ public final class AuraManagerReportingApiTest
         final File defaultDir = new AuraReportingService().getReportHistoryDir();
         Assertions.assertNotNull(defaultDir);
         Assertions.assertTrue(defaultDir.isAbsolute());
-        Assertions.assertEquals("report-history", defaultDir.getName());
+        Assertions.assertEquals("aura-history", defaultDir.getName());
 
         // 2. Verify custom absolute path configuration override (via system property)
         final String tempAbsoluteDir = System.getProperty("java.io.tmpdir") + File.separator + "absolute-report-history-test";

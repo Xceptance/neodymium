@@ -1,12 +1,11 @@
 package com.xceptance.neodymium.aura.manager.ui;
 
 import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
 
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
-import com.xceptance.neodymium.common.testdata.DataFile;
-import com.xceptance.neodymium.common.testdata.DataSet;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.testdata.DataSet;
 
 /**
  * Playbook-based UI test for Aura Manager core theme toggling and view switching.
@@ -16,7 +15,7 @@ import com.xceptance.neodymium.util.Neodymium;
  */
 @Tag("ui")
 @Tag("aura-manager")
-@DataFile("ai-test-pages/aura-manager-core-ui-test.yaml")
+@NeodymiumAiTest
 public class AuraManagerCoreUiTest extends BaseAuraManagerUiTest
 {
     public AuraManagerCoreUiTest()
@@ -24,17 +23,15 @@ public class AuraManagerCoreUiTest extends BaseAuraManagerUiTest
         super(18120);
     }
 
-    @NeodymiumTest
+    @AiPlaybook("ai-test-pages/aura-manager-core-ui-theme-test.yaml")
     @DataSet(id = "Theme_Toggling")
     public void testThemeToggling() throws Throwable
     {
-        Neodymium.ai().execute();
     }
 
-    @NeodymiumTest
+    @AiPlaybook("ai-test-pages/aura-manager-core-ui-view-test.yaml")
     @DataSet(id = "View_Switching")
     public void testViewSwitching() throws Throwable
     {
-        Neodymium.ai().execute();
     }
 }

@@ -45,11 +45,12 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<maven.compiler.source.version>17</maven.compiler.source.version>
-		<maven.compiler.target.version>17</maven.compiler.target.version>
+		<maven.compiler.source.version>21</maven.compiler.source.version>
+		<maven.compiler.target.version>21</maven.compiler.target.version>
 		<surefire.version>3.5.4</surefire.version>
 		<allure.version>2.32.0</allure.version>
 		<allure.maven.version>2.15.2</allure.maven.version>
+		<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
 		<selenide.version>7.16.0</selenide.version>
 		<cucumber.version>7.33.0</cucumber.version>
 		<browserup.version>3.2.2</browserup.version>
@@ -68,19 +69,38 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.14.1</version>
 				<configuration>
-					<source>${maven.compiler.source.version}</source>
-					<target>${maven.compiler.target.version}</target>
+					<release>${maven.compiler.target.version}</release>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.5.0</version>
+				<executions>
+					<execution>
+						<id>enforce-java</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireJavaVersion>
+									<version>[21,)</version>
+								</requireJavaVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
 				<configuration>
-					<testFailureIgnore>true</testFailureIgnore>
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
-						<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+						<allure.results.directory>${allure.results.directory}</allure.results.directory>
+						<selenide.headless>true</selenide.headless>
 					</systemPropertyVariables>
 					<forkCount>${surefire.forkCount}</forkCount>
 					<reuseForks>false</reuseForks>
@@ -88,6 +108,8 @@
 						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 						<include>com/xceptance/neodymium/common/**/*Test.java</include>
 						<include>com/xceptance/neodymium/aura/**/*Test.java</include>
+						<include>com/xceptance/neodymium/util/**/*Test.java</include>
+						<include>org/neodymium/**/*Test.java</include>
 					</includes>
 				</configuration>
 			</plugin>
@@ -97,7 +119,7 @@
 				<version>${allure.maven.version}</version>
 				<configuration>
 					<reportVersion>2.27.0</reportVersion>
-					<resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
+					<resultsDirectory>${allure.results.directory}</resultsDirectory>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -126,7 +148,7 @@
 					</execution>
 				</executions>
 				<configuration>
-					<source>16</source>
+					<source>21</source>
 					<detectJavaApiLink>false</detectJavaApiLink>
 				</configuration>
 			</plugin>
@@ -277,7 +299,11 @@
 								<include>
 									com/xceptance/neodymium/aura/**/*Test.java</include>
 							  <include> com/xceptance/neodymium/util/**/*JUnit5Test.java </include>
+								<include>org/neodymium/**/*Test.java</include>
 							</includes>
+							<excludes>
+								<exclude>**/*UiTest.java</exclude>
+							</excludes>
 						</configuration>
 					</plugin>
 				</plugins>
@@ -294,7 +320,7 @@
 							<forkCount>1</forkCount>
 							<reuseForks>true</reuseForks>
 							<includes>
-								<include>com/xceptance/neodymium/aura/**/*Test.java</include>
+								<include>com/xceptance/neodymium/aura/**/*UiTest.java</include>
 							</includes>
 						</configuration>
 					</plugin>
@@ -350,6 +376,11 @@
 			<groupId>io.github.bonigarcia</groupId>
 			<artifactId>webdrivermanager</artifactId>
 			<version>6.3.3</version>
+		</dependency>
+		<dependency>
+			<groupId>org.jsoup</groupId>
+			<artifactId>jsoup</artifactId>
+			<version>1.18.3</version>
 		</dependency>
 		
 		<dependency>
@@ -533,6 +564,16 @@
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-google-ai-gemini</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-mistral-ai</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-open-ai</artifactId>
 			<version>${langchain4j.version}</version>
 		</dependency>
 		<dependency>

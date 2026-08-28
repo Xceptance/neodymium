@@ -21,7 +21,7 @@ package com.xceptance.neodymium.aura;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;

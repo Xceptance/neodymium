@@ -13,8 +13,7 @@
           ],
           "description": "Call startManager with param ",
           "elementContext": {},
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "adjust": false
         }
       ],
@@ -32,8 +31,7 @@
           "description": "Open http://127.0.0.1:18140 in the browser",
           "elementDetails": "http://127.0.0.1:18140",
           "elementContext": {},
-          "durationMs": 0,
-          "replay": "(Replay)",
+          "replay": "",
           "adjust": false
         }
       ],
@@ -41,44 +39,42 @@
       "healedContextLevel": "AXTREE"
     },
     {
-      "promptLine": "Click on the \"Reports\" navigation item",
-      "reasoning": "I found the \u0027Reports\u0027 navigation item by its ID and generated a CLICK action.",
+      "promptLine": "Click on the \"History \u0026 Reports\" navigation item",
+      "reasoning": "Clicked on the \u0027History \u0026 Reports\u0027 navigation item using its ID.",
       "actions": [
         {
           "type": "CLICK",
           "target": "#navReports",
-          "description": "Click on the \u0027Reports\u0027 navigation item",
-          "elementDetails": "Reports navigation item",
+          "description": "Click on the \"History \u0026 Reports\" navigation item",
+          "elementDetails": "History \u0026 Reports",
           "elementContext": {
             "classes": "nav-item",
             "id": "navReports",
             "tagName": "div"
           },
-          "durationMs": 0,
           "replay": "",
-          "frameId": "win_0:main",
+          "frameId": "DF9FF34083AF1436AE93AB53F5049A9B:main",
           "adjust": false
         }
       ],
       "expectedFailure": false,
-      "healedContextLevel": "STANDARD"
+      "healedContextLevel": "LEAN"
     },
     {
-      "promptLine": "Verify that the Run History is displayed",
-      "reasoning": "The instruction is to verify that \u0027Run History\u0027 is displayed. I found a text element with \u0027Run History\u0027 and will assert its visibility.",
+      "promptLine": "Verify that the History view is displayed",
+      "reasoning": "The instruction is to verify the \u0027History view\u0027 is displayed. I found a heading with the text \u0027Run History\u0027 and data-neo-ref \u0027xc_ycdgoi\u0027, which confirms the view is displayed.",
       "actions": [
         {
           "type": "ASSERT",
-          "target": "text[data-neo-ref\u003d\"xc_ebk00\"]",
+          "target": "[data-neo-ref\u003d\u0027xc_ycdgoi\u0027]",
           "value": [
-            "visible"
+            "Run History"
           ],
-          "description": "Verify that \u0027Run History\u0027 text is displayed",
-          "elementDetails": "Run History",
+          "description": "Verify that the \u0027Run History\u0027 heading is displayed, indicating the History view.",
+          "elementDetails": "Run History heading",
           "elementContext": {},
-          "durationMs": 0,
           "replay": "",
-          "frameId": "win_0:main",
+          "frameId": "DF9FF34083AF1436AE93AB53F5049A9B:main",
           "adjust": false
         }
       ],
@@ -86,21 +82,70 @@
       "healedContextLevel": "STANDARD"
     },
     {
+      "promptLine": "Verify that the history list contains the expected column headers like \"Status\", \"Date \u0026 Time\", and \"Report\"",
+      "reasoning": "The DOM provided does not contain specific data-neo-ref or id attributes for the column headers. Therefore, I am asserting the presence of the required text within the page body, as per the last resort rule.",
+      "actions": [
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Status"
+          ],
+          "description": "Verify that the history list contains the column header \u0027Status\u0027",
+          "elementDetails": "Page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "DF9FF34083AF1436AE93AB53F5049A9B:main",
+          "adjust": false
+        },
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Date \u0026 Time"
+          ],
+          "description": "Verify that the history list contains the column header \u0027Date \u0026 Time\u0027",
+          "elementDetails": "Page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "DF9FF34083AF1436AE93AB53F5049A9B:main",
+          "adjust": false
+        },
+        {
+          "type": "ASSERT",
+          "target": "body",
+          "value": [
+            "Report"
+          ],
+          "description": "Verify that the history list contains the column header \u0027Report\u0027",
+          "elementDetails": "Page body",
+          "elementContext": {},
+          "replay": "",
+          "frameId": "DF9FF34083AF1436AE93AB53F5049A9B:main",
+          "adjust": false
+        }
+      ],
+      "screenshotHash": "0003800000000000400051004000000000000000000000000000400050000000",
+      "expectedFailure": false,
+      "healedContextLevel": "VISUAL"
+    },
+    {
       "promptLine": "java stopManager()",
-      "reasoning": "Invoked the Java method stopManager().",
+      "reasoning": "directly parsed or local validation succeeded",
       "actions": [
         {
           "type": "JAVA_METHOD",
           "target": "stopManager",
-          "description": "Invoke Java method stopManager()",
+          "value": [
+            ""
+          ],
+          "description": "Call stopManager with param ",
           "elementContext": {},
-          "durationMs": 0,
           "replay": "",
           "adjust": false
         }
       ],
-      "expectedFailure": false,
-      "healedContextLevel": "HINT"
+      "expectedFailure": false
     }
   ]
 }

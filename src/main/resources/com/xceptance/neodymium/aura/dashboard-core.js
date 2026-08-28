@@ -78,10 +78,10 @@ function showToast(message, type = 'info') {
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    let iconClass = 'fa-info-circle';
-    if (type === 'success') iconClass = 'fa-check-circle';
-    else if (type === 'error') iconClass = 'fa-exclamation-circle';
-    toast.innerHTML = `<i class="fa-solid ${iconClass}"></i> <span>${message}</span>`;
+    let iconName = 'info';
+    if (type === 'success') iconName = 'check_circle';
+    else if (type === 'error') iconName = 'warning';
+    toast.innerHTML = `<span class="material-symbols-outlined">${iconName}</span> <span>${message}</span>`;
     toast.style.cursor = 'pointer';
     toast.onclick = () => toast.remove();
     container.appendChild(toast);
@@ -269,6 +269,9 @@ function showView(viewId) {
             if (typeof applyHistoryState === 'function') {
                 applyHistoryState(historyNavState);
             }
+            if (typeof renderHistoryTable === 'function') {
+                renderHistoryTable();
+            }
         });
     }
 
@@ -327,6 +330,19 @@ function init() {
     if (typeof initResizers === 'function') initResizers();
     if (typeof applyHistoryState === 'function') applyHistoryState(1);
 
+    let savedYamlFileListScrollTop = 0;
+
+    document.addEventListener('htmx:beforeSwap', function(evt) {
+        if (evt.detail && evt.detail.target && evt.detail.target.id === 'yamlFileList') {
+            const isSearch = evt.detail.elt && evt.detail.elt.id === 'testSearchInput';
+            if (isSearch) {
+                savedYamlFileListScrollTop = 0;
+            } else {
+                savedYamlFileListScrollTop = evt.detail.target.scrollTop;
+            }
+        }
+    });
+
     document.addEventListener('htmx:oobAfterSwap', function(evt) {
         onEditorPanelSwapped();
         if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
@@ -337,8 +353,15 @@ function init() {
         onEditorPanelSwapped();
         if (evt.detail && evt.detail.target) {
             if (evt.detail.target.id === 'yamlFileList') {
+                const scrollPos = savedYamlFileListScrollTop;
+                evt.detail.target.scrollTop = scrollPos;
+                requestAnimationFrame(() => {
+                    if (evt.detail.target) {
+                        evt.detail.target.scrollTop = scrollPos;
+                    }
+                });
                 if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
-            } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls') {
+            } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls' || evt.detail.target.id === 'configPanel') {
                 if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
             } else if (evt.detail.target.id === 'colTests') {
                 if (typeof applyHistoryState === 'function') applyHistoryState(2);
@@ -405,6 +428,19 @@ function init() {
             if (getEditorContent()) getEditorContent().value = data.content;
             if (typeof updateCenterLayout === 'function') updateCenterLayout();
             if (getEditorContent()) getEditorContent().focus();
+        } else if (data.action === 'select_browser' || data.selectedBrowserProfiles) {
+            if (window.htmx) {
+                window.htmx.ajax('GET', '/', {
+                    target: '#configPanel',
+                    select: '#configPanel',
+                    swap: 'outerHTML'
+                });
+                window.htmx.ajax('GET', '/', {
+                    target: '#queueListContainer',
+                    select: '#queueListContainer',
+                    swap: 'innerHTML'
+                });
+            }
         }
     });
 

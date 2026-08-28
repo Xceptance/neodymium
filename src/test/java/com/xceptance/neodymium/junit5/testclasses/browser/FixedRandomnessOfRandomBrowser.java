@@ -4,14 +4,14 @@ import java.util.ArrayList;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.common.browser.RandomBrowsers;
-import com.xceptance.neodymium.common.browser.SuppressBrowsers;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.RandomBrowsers;
+import org.neodymium.common.browser.SuppressBrowsers;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
 
 @Browser("Chrome_1024x768")
-@Browser("Chrome_1500x1000")
+@Browser("Chrome_1500x1000_headless")
 @Browser("FF_1024x768")
 @Browser("FF_1500x1000")
 @RandomBrowsers(2)
@@ -30,7 +30,7 @@ public class FixedRandomnessOfRandomBrowser
     public void test2()
     {
         Assert.assertEquals(2, browsers.size());
-        Assert.assertEquals("Chrome_1500x1000", browsers.get(0));
+        Assert.assertEquals("Chrome_1500x1000_headless", browsers.get(0));
         Assert.assertEquals("FF_1500x1000", browsers.get(1));
     }
 }

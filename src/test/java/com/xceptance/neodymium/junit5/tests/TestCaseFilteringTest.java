@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import com.xceptance.neodymium.junit5.testclasses.filtering.TestCaseFiltering;
 import com.xceptance.neodymium.junit5.tests.utils.NeodymiumTestExecutionSummary;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class TestCaseFilteringTest extends AbstractNeodymiumTest
 {

@@ -1,16 +1,12 @@
 package com.xceptance.neodymium.util;
 
-import java.util.List;
-
-public class BrowserDataUtil
+/**
+ * @deprecated Use {@link org.neodymium.util.BrowserDataUtil} instead.
+ */
+@Deprecated
+public class BrowserDataUtil extends org.neodymium.util.BrowserDataUtil
 {
-    public static String convertBrowserListToString(List<String> browserTags)
+    public BrowserDataUtil()
     {
-        String resultString = "";
-        for (String s : browserTags)
-        {
-            resultString += s + ",\n";
-        }
-        return resultString.substring(0, resultString.length() - 2);
     }
 }

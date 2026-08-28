@@ -1,19 +1,24 @@
 <!--
   Xceptance Aura AI Assistant Chat Contents Fragment
   @author AI-generated: Antigravity
-  Xceptance GmbH 2026
+  @author Xceptance GmbH 2026
 -->
 <th:block th:fragment="chatContainerContent">
-    <div class="panel-header neo-u-23">
-        <div class="panel-title"><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent-purple);"></i> <span>Aura Assistant</span></div>
+    <div class="panel-header neo-u-23" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--bg-card);">
+        <div class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+            <div class="aura-sparkle-badge" style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; background: linear-gradient(135deg, var(--accent-purple), var(--accent)); color: white;">
+                <span class="material-symbols-outlined" style="font-size: 15px;">auto_awesome</span>
+            </div>
+            <span style="font-weight: 600; font-size: 13.5px;">Aura Assistant</span>
+        </div>
         <div class="neo-u-24" style="display: flex; gap: 4px; align-items: center;">
             <select class="neo-u-25" id="chatSessionSelect" name="sessionId"
                     hx-get="/api/chat/messages" 
                     hx-target="#chatMessages" 
-                    hx-swap="innerHTML"
+                    hx-swap="innerHTML" 
                     hx-trigger="change"
                     onchange="updateHiddenSessionId(this.value)"
-                    style="max-width: 110px; font-size: 11px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                    style="max-width: 120px; font-size: 11px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-primary);">
                 <option th:each="sess : ${chatSessions}" 
                         th:value="${sess.id}" 
                         th:text="${sess.name}"
@@ -23,43 +28,48 @@
                     hx-post="/api/chat/create" 
                     hx-target="#chatContainer" 
                     hx-swap="innerHTML" 
-                    title="New Chat"><i class="fa-solid fa-plus"></i></button>
+                    title="New Chat"><span class="material-symbols-outlined" style="font-size: 16px;">add</span></button>
             <button class="btn-edit" 
                     th:hx-post="'/api/chat/rename?id=' + ${currentSessionId}"
                     hx-prompt="Enter new chat session name:"
-                    hx-target="#chatContainer"
-                    hx-swap="innerHTML"
-                    title="Rename Chat"><i class="fa-solid fa-pen"></i></button>
+                    hx-target="#chatContainer" 
+                    hx-swap="innerHTML" 
+                    title="Rename Chat"><span class="material-symbols-outlined" style="font-size: 15px;">edit</span></button>
             <button class="btn-edit" 
                     th:hx-post="'/api/chat/delete?id=' + ${currentSessionId}"
                     hx-confirm="Are you sure you want to delete this chat session?"
-                    hx-target="#chatContainer"
-                    hx-swap="innerHTML"
-                    title="Delete Chat" style="color: var(--danger);"><i class="fa-solid fa-trash"></i></button>
+                    hx-target="#chatContainer" 
+                    hx-swap="innerHTML" 
+                    title="Delete Chat" style="color: var(--danger);"><span class="material-symbols-outlined" style="font-size: 15px;">delete</span></button>
+            <button type="button" class="btn-edit" onclick="closeAuraChat()" title="Close Assistant" style="margin-left: 2px;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+            </button>
         </div>
     </div>
     
     <div class="api-key-banner neo-u-27" id="apiKeyBanner" style="display: none;">
-        <i class="fa-solid fa-triangle-exclamation"></i> <span id="apiKeyBannerText"></span>
+        <span class="material-symbols-outlined">warning</span> <span id="apiKeyBannerText"></span>
     </div>
     <div class="api-key-banner neo-u-28" id="warningBanner" style="display: none;">
-        <i class="fa-solid fa-triangle-exclamation"></i> <span id="warningBannerText"></span>
+        <span class="material-symbols-outlined">warning</span> <span id="warningBannerText"></span>
     </div>
 
     <div class="chat-messages" id="chatMessages" th:fragment="chatMessages">
         <th:block th:replace="~{fragments/chat :: chatMessagesContent}"></th:block>
     </div>
 
+
+
     <form hx-post="/api/chat" 
           hx-target="#chatMessages" 
           hx-swap="innerHTML" 
           onsubmit="clearChatInput()"
-          class="chat-input-form">
+          class="chat-input-form" style="padding: 8px 12px 12px 12px; background: var(--bg-card); border-top: 1px solid var(--border);">
         <input type="hidden" name="sessionId" id="hiddenSessionId" th:value="${currentSessionId}"/>
-        <div class="chat-input-wrapper">
-            <input class="chat-input" id="chatInput" name="prompt" placeholder="Ask Aura anything about your tests..." type="text" autocomplete="off"/>
-            <button type="submit" class="chat-send-btn" title="Send Message">
-                <i class="fa-solid fa-paper-plane"></i>
+        <div class="chat-input-wrapper" style="display: flex; gap: 6px; align-items: center; background: var(--bg-main); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px;">
+            <input class="chat-input" id="chatInput" name="prompt" placeholder="Ask Aura or type a command..." type="text" autocomplete="off" style="flex: 1; border: none; background: transparent; color: var(--text-primary); font-size: 12.5px; outline: none; padding: 4px;"/>
+            <button type="submit" class="chat-send-btn" title="Send Message" style="background: var(--accent); color: white; border: none; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <span class="material-symbols-outlined" style="font-size: 15px;">send</span>
             </button>
         </div>
     </form>
@@ -67,12 +77,12 @@
 
 <th:block th:fragment="chatMessagesContent">
     <div th:if="${#lists.isEmpty(chatMessages)}" class="chat-welcome-card">
-        <div class="chat-welcome-icon"><i class="fa-solid fa-robot"></i></div>
-        <div class="chat-welcome-title">Hello I'm Aura. How can I help you today?</div>
-        <div class="chat-welcome-desc">I can select test cases using natural language and help you create new test cases.</div>
+        <div class="chat-welcome-icon"><span class="material-symbols-outlined">smart_toy</span></div>
+        <div class="chat-welcome-title">Hello, I'm Aura. How can I help?</div>
+        <div class="chat-welcome-desc">I can select test cases, configure multi-browser profiles, and help you create or repair tests.</div>
         <div class="chat-prompts">
-            <button type="button" class="prompt-chip" onclick="setChatPrompt('Select all test cases using the search')"><i class="fa-solid fa-list-check"></i> Select all "search" tests</button>
-            <button type="button" class="prompt-chip" onclick="setChatPrompt('Create a test case for searching items')"><i class="fa-solid fa-circle-plus"></i> Create a "search" test</button>
+            <button type="button" class="prompt-chip" onclick="setChatPrompt('Select all test cases using the search')"><span class="material-symbols-outlined">checklist</span> Select all "search" tests</button>
+            <button type="button" class="prompt-chip" onclick="setChatPrompt('Create a test case for searching items')"><span class="material-symbols-outlined">add_circle</span> Create a "search" test</button>
         </div>
     </div>
     
@@ -80,13 +90,13 @@
          th:class="'chat-message ' + ${msg.role} + ' message-' + ${msg.role}">
         <div class="chat-message-header">
             <div class="avatar" th:classappend="${msg.role == 'user' ? 'user-avatar' : 'ai-avatar'}">
-                <i th:class="${msg.role == 'user' ? 'fa-solid fa-user' : 'fa-solid fa-robot'}"></i>
+                <span class="material-symbols-outlined" th:text="${msg.role == 'user' ? 'person' : 'smart_toy'}"></span>
             </div>
             <span class="sender" th:text="${msg.role == 'user' ? 'You' : 'Aura Assistant'}">Sender</span>
         </div>
         <div th:if="${msg.thinking != null and msg.thinking != ''}" class="thinking-block">
             <details>
-                <summary><i class="fa-solid fa-brain" style="color: var(--accent-purple); font-size: 11px;"></i> Thinking Process</summary>
+                <summary><span class="material-symbols-outlined" style="color: var(--accent-purple); font-size: 14px;">psychology</span> Thinking Process</summary>
                 <pre class="thinking-text" th:text="${msg.thinking}"></pre>
             </details>
         </div>

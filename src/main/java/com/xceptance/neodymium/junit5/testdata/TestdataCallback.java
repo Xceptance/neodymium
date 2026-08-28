@@ -1,24 +1,13 @@
 package com.xceptance.neodymium.junit5.testdata;
 
-import org.junit.jupiter.api.extension.BeforeEachCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
-
-import com.xceptance.neodymium.common.testdata.TestdataContainer;
-import com.xceptance.neodymium.common.testdata.TestdataRunner;
-
-public class TestdataCallback implements BeforeEachCallback
+/**
+ * @deprecated Use {@link org.neodymium.junit5.testdata.TestdataCallback} instead.
+ */
+@Deprecated
+public class TestdataCallback extends org.neodymium.junit5.testdata.TestdataCallback
 {
-    private TestdataRunner testdataRunner;
-
-    public TestdataCallback(TestdataContainer testData, Object testClassInstance)
+    public TestdataCallback(org.neodymium.common.testdata.TestdataContainer testData, java.lang.Object testClassInstance)
     {
-        testdataRunner = new TestdataRunner(testData);
+        super(testData, testClassInstance);
     }
-
-    @Override
-    public void beforeEach(ExtensionContext context) throws Exception
-    {
-        testdataRunner.setUpTest(context.getRequiredTestInstance());
-    }
-
 }

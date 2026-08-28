@@ -69,11 +69,17 @@ public final class AuraManagerDashboardController
         context.setVariable("queue", queueController.getSelectedQueue());
         context.setVariable("selectedKeys", queueController.getSelectedQueueKeys());
         context.setVariable("selectedFileKeys", queueController.getFullySelectedFileKeys(filesList));
+        context.setVariable("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(filesList));
         context.setVariable("headless", queueController.isHeadless());
         context.setVariable("video", queueController.isVideo());
-        context.setVariable("keepOpen", queueController.isKeepOpen());
+        context.setVariable("executionMode", queueController.getExecutionMode());
         context.setVariable("interactive", queueController.isInteractive());
         context.setVariable("allure", queueController.isAllure());
+        context.setVariable("availableBrowserProfiles", queueController.getAvailableBrowserProfiles());
+        context.setVariable("globalBrowserProfiles", queueController.getGlobalBrowserProfiles());
+        context.setVariable("browserGroups", queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles()));
+        context.setVariable("totalRuns", queueController.getTotalExecutionRuns());
+        context.setVariable("queueController", queueController);
 
         // Inject chat session variables
         final List<ChatSessionDto> chatSessions = sessionService.getSessions();
@@ -140,7 +146,19 @@ public final class AuraManagerDashboardController
             AuraHttpUtils.sendError(exchange, 404, "Not found");
             return;
         }
-        final String contentType = path.endsWith(".css") ? "text/css" : "application/javascript";
+        final String contentType;
+        if (path.endsWith(".css"))
+        {
+            contentType = "text/css; charset=UTF-8";
+        }
+        else if (path.endsWith(".woff2"))
+        {
+            contentType = "font/woff2";
+        }
+        else
+        {
+            contentType = "application/javascript; charset=UTF-8";
+        }
         AuraHttpUtils.sendResponse(exchange, 200, contentType, is.readAllBytes());
     }
 }

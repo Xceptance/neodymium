@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base href="/verla-${quality}/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VÉRLA - Modern Premium Apparel</title>
+    <!-- Local fonts + locally built Tailwind CSS. No remote resources. -->
+    <link href="/shared/fonts.css" rel="stylesheet">
+    <link href="/shared/verla-tailwind.css" rel="stylesheet">
+</head>
+<body class="flex min-h-screen flex-col bg-white font-sans text-ink antialiased">
+    <!-- Announcement Bar -->
+    <div class="border-b border-sand-200 bg-sand-50 px-4 py-2.5 text-center text-[11px] font-medium uppercase tracking-[0.1em]">
+        ${lang_promoBanner}
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-[100] border-b border-sand-200 bg-white/95 backdrop-blur-[10px]">
+        <div class="mx-auto flex w-full max-w-7xl flex-col items-center gap-4 px-6 py-4 lg:h-20 lg:flex-row lg:justify-between lg:gap-0 lg:py-0">
+            <a href="index.html" class="font-serif text-[26px] font-semibold uppercase tracking-[0.15em]">VÉRLA<span class="text-terracotta-500">.</span></a>
+
+            <nav>
+                <ul class="flex flex-wrap justify-center gap-4 lg:gap-7">
+                    <li><a href="c/tops.html" class="relative py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-right after:scale-x-0 after:bg-terracotta-500 after:transition-transform after:duration-300 after:content-[''] hover:text-terracotta-500 hover:after:origin-left hover:after:scale-x-100 focus:after:origin-left focus:after:scale-x-100">${lang_tops}</a></li>
+                    <li><a href="c/bottoms.html" class="relative py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-right after:scale-x-0 after:bg-terracotta-500 after:transition-transform after:duration-300 after:content-[''] hover:text-terracotta-500 hover:after:origin-left hover:after:scale-x-100 focus:after:origin-left focus:after:scale-x-100">${lang_bottoms}</a></li>
+                    <li><a href="c/outerwear.html" class="relative py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-right after:scale-x-0 after:bg-terracotta-500 after:transition-transform after:duration-300 after:content-[''] hover:text-terracotta-500 hover:after:origin-left hover:after:scale-x-100 focus:after:origin-left focus:after:scale-x-100">${lang_outerwear}</a></li>
+                    <li><a href="c/footwear.html" class="relative py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-right after:scale-x-0 after:bg-terracotta-500 after:transition-transform after:duration-300 after:content-[''] hover:text-terracotta-500 hover:after:origin-left hover:after:scale-x-100 focus:after:origin-left focus:after:scale-x-100">${lang_footwear}</a></li>
+                    <li><a href="c/accessories.html" class="relative py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:origin-right after:scale-x-0 after:bg-terracotta-500 after:transition-transform after:duration-300 after:content-[''] hover:text-terracotta-500 hover:after:origin-left hover:after:scale-x-100 focus:after:origin-left focus:after:scale-x-100">${lang_accessories}</a></li>
+                </ul>
+            </nav>
+
+            <div class="flex flex-wrap items-center justify-center gap-4">
+                <form action="plp.html" method="GET" class="relative flex items-center" autocomplete="off">
+                    <svg class="pointer-events-none absolute left-3 h-3.5 w-3.5 fill-muted" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    <input type="search" id="search-input" name="q" class="w-45 rounded-[20px] border border-sand-200 bg-sand-50 py-2 pl-9 pr-4 text-[13px] outline-none transition-[width,border-color] duration-300 focus:w-60 focus:border-terracotta-500 focus:bg-white" placeholder="${lang_searchPlaceholder}" value="${search_query}" autocomplete="off"
+                           hx-get="api/search/suggest" hx-trigger="keyup changed delay:300ms" hx-target="#search-suggestions">
+                    <div id="search-suggestions" class="absolute left-0 top-full z-[1000] mt-2 max-h-80 w-70 overflow-y-auto rounded-lg border border-sand-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)] empty:hidden"></div>
+                </form>
+
+                <!-- Country Selector Trigger -->
+                <button class="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors hover:bg-sand-50 hover:text-terracotta-500 focus:bg-sand-50 focus:text-terracotta-500" id="country-trigger-btn" aria-label="Select Country">
+                    ${country_flag}
+                </button>
+
+                <!-- User Session details -->
+                ${user_nav_status}
+
+                <!-- Cart Button -->
+                ${cart_badge_html}
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 animate-fade-in py-10">
+        <div class="mx-auto w-full max-w-7xl px-6" id="main-body">
+            ${body}
+        </div>
+    </main>
+
+    <!-- Footer Area -->
+    <footer class="border-t border-sand-200 bg-sand-50 pb-7.5 pt-15 text-sm text-muted">
+        <div class="mx-auto w-full max-w-7xl px-6">
+            <div class="mb-10 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr]">
+                <div>
+                    <div class="mb-4 font-serif text-[22px] font-semibold uppercase tracking-[0.1em] text-ink">VÉRLA</div>
+                    <p class="mb-5 leading-[1.7]">${lang_footerDesc}</p>
+                </div>
+                <div>
+                    <div class="mb-5 text-xs font-semibold uppercase tracking-[0.1em] text-ink">${lang_shop}</div>
+                    <ul class="flex flex-col gap-3">
+                        <li><a href="c/tops.html" class="transition-colors hover:text-terracotta-500">${lang_tops}</a></li>
+                        <li><a href="c/bottoms.html" class="transition-colors hover:text-terracotta-500">${lang_bottoms}</a></li>
+                        <li><a href="c/outerwear.html" class="transition-colors hover:text-terracotta-500">${lang_outerwear}</a></li>
+                        <li><a href="c/footwear.html" class="transition-colors hover:text-terracotta-500">${lang_footwear}</a></li>
+                        <li><a href="c/accessories.html" class="transition-colors hover:text-terracotta-500">${lang_accessories}</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <div class="mb-5 text-xs font-semibold uppercase tracking-[0.1em] text-ink">${lang_support}</div>
+                    <ul class="flex flex-col gap-3">
+                        <li><a href="faq.html" class="transition-colors hover:text-terracotta-500">FAQ</a></li>
+                        <li><a href="shipping.html" class="transition-colors hover:text-terracotta-500">${lang_shippingReturns}</a></li>
+                        <li><a href="track-orders.html" class="transition-colors hover:text-terracotta-500">${lang_trackOrders}</a></li>
+                        <li><a href="about.html" class="transition-colors hover:text-terracotta-500">${lang_aboutUs}</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <div class="mb-5 text-xs font-semibold uppercase tracking-[0.1em] text-ink">${lang_contact}</div>
+                    <ul class="flex flex-col gap-3">
+                        <li><a href="stores.html" class="transition-colors hover:text-terracotta-500">${lang_ourStores}</a></li>
+                        <li><a href="careers.html" class="transition-colors hover:text-terracotta-500">${lang_careers}</a></li>
+                        <li><a href="about.html#contact" class="transition-colors hover:text-terracotta-500">${lang_getInTouch}</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="flex flex-col gap-4 border-t border-sand-200 pt-7.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <p>&copy; 2026 VÉRLA Apparel. ${lang_allRightsReserved}</p>
+                <div class="flex gap-6">
+                    <a href="about.html" class="transition-colors hover:text-terracotta-500">${lang_privacyPolicy}</a>
+                    <a href="about.html" class="transition-colors hover:text-terracotta-500">${lang_termsOfService}</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Country Selector Modal. Open state is a data attribute so the styling
+         stays in utilities (data-[open=true]:...) instead of a stateful class. -->
+    <div class="group invisible fixed inset-0 z-[200] flex items-center justify-center bg-black/40 opacity-0 transition-all duration-300 data-[open=true]:visible data-[open=true]:opacity-100" id="country-modal-overlay" data-open="false">
+        <div class="relative w-[90%] max-w-[450px] scale-95 rounded-lg border border-sand-200 bg-white p-8 shadow-[0_20px_40px_rgba(0,0,0,0.1)] transition-transform duration-300 group-data-[open=true]:scale-100">
+            <button class="absolute right-6 top-6 text-2xl leading-none text-muted transition-colors hover:text-ink" id="country-modal-close">&times;</button>
+            <h3 class="mb-5 font-serif text-2xl font-semibold">${lang_selectRegion}</h3>
+            <!-- HTMX-powered type-as-you-search -->
+            <input type="text" class="mb-4 w-full rounded-lg border border-sand-200 px-4 py-3 outline-none focus:border-terracotta-500" id="country-search" placeholder="${lang_searchCountry}"
+                   hx-get="api/countries" hx-target="#country-list-container" hx-trigger="keyup">
+            <ul class="max-h-[250px] overflow-y-auto rounded-lg border border-sand-200" id="country-list-container">
+                ${country_items_list}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Script imports -->
+    <script src="/shared/htmx.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Allow HTMX to swap content for 400 Bad Request responses (validation/auth errors)
+            document.body.addEventListener('htmx:beforeOnLoad', (evt) => {
+                if (evt.detail.xhr.status === 400) {
+                    evt.detail.shouldSwap = true;
+                    evt.detail.isError = false;
+                }
+            });
+
+            let cartCloseTimeout;
+            const modalOverlay = document.getElementById('country-modal-overlay');
+            const openModalBtn = document.getElementById('country-trigger-btn');
+            const closeModalBtn = document.getElementById('country-modal-close');
+
+            const setModalOpen = (open) => {
+                if (modalOverlay) {
+                    modalOverlay.dataset.open = open ? 'true' : 'false';
+                }
+            };
+
+            if (openModalBtn && modalOverlay) {
+                openModalBtn.addEventListener('click', () => setModalOpen(true));
+            }
+
+            if (closeModalBtn && modalOverlay) {
+                closeModalBtn.addEventListener('click', () => setModalOpen(false));
+            }
+
+            // Close modal on click outside box
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', (e) => {
+                    if (e.target === modalOverlay) {
+                        setModalOpen(false);
+                    }
+                });
+            }
+
+            // Temporarily open the cart dropdown when a product is added
+            document.body.addEventListener('htmx:afterSwap', (evt) => {
+                if (evt.detail.target.id === 'cart-btn-wrapper') {
+                    const dropdown = document.querySelector('#cart-btn-wrapper [data-cart-dropdown]');
+                    if (dropdown) {
+                        dropdown.dataset.show = 'true';
+                        if (cartCloseTimeout) {
+                            clearTimeout(cartCloseTimeout);
+                        }
+                        cartCloseTimeout = setTimeout(() => {
+                            dropdown.dataset.show = 'false';
+                        }, 6000);
+                    }
+                }
+            });
+
+            // Quick Add sizes dropdown function
+            window.showQuickAddSizes = (btn) => {
+                const category = btn.getAttribute('data-category') || 'tops';
+                let dropdown = btn.nextElementSibling;
+                if (!dropdown || !dropdown.hasAttribute('data-size-picker')) {
+                    dropdown = document.createElement('div');
+                    dropdown.setAttribute('data-size-picker', '');
+                    dropdown.dataset.open = 'false';
+                    dropdown.className = 'absolute bottom-[12%] left-1/2 z-[1000] hidden -translate-x-1/2 translate-y-2.5 gap-1.5 rounded-lg border border-sand-200 bg-white px-3 py-2 opacity-0 shadow-[0_10px_25px_rgba(0,0,0,0.1)] transition-[opacity,transform] duration-300 data-[open=true]:flex data-[open=true]:translate-y-0 data-[open=true]:opacity-100';
+
+                    let sizes = ['XS', 'S', 'M', 'L', 'XL'];
+                    if (category === 'bottoms') {
+                        sizes = ['28', '30', '32', '34', '36', '38'];
+                    } else if (category === 'footwear' || category === 'shoes') {
+                        sizes = ['39', '40', '41', '42', '43', '44'];
+                    }
+
+                    const sizeBtnClass = 'flex h-8.5 w-8.5 cursor-pointer items-center justify-center border border-sand-200 bg-white text-[11px] font-semibold transition-all duration-200 hover:border-terracotta-500 hover:bg-terracotta-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-sand-200 disabled:hover:bg-white disabled:hover:text-ink';
+                    const stockData = JSON.parse(btn.getAttribute('data-stock') || '{}');
+                    dropdown.innerHTML = sizes.map(size => {
+                        const stock = stockData[size] !== undefined ? stockData[size] : 0;
+                        if (stock <= 0) {
+                            return '<button class="' + sizeBtnClass + '" type="button" data-size-btn data-size="' + size + '" disabled>' + size + ' (0)</button>';
+                        } else {
+                            return '<button class="' + sizeBtnClass + '" type="button" data-size-btn data-size="' + size + '">' + size + '</button>';
+                        }
+                    }).join('');
+                    btn.after(dropdown);
+                }
+
+                document.querySelectorAll('[data-size-picker][data-open="true"]').forEach(d => {
+                    if (d !== dropdown) d.dataset.open = 'false';
+                });
+
+                dropdown.dataset.open = dropdown.dataset.open === 'true' ? 'false' : 'true';
+            };
+
+            // Event listener for product Quick Add button clicks and outside clicks
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-quick-add]');
+                if (btn) {
+                    if (btn.disabled || btn.dataset.state === 'adding') return;
+                    e.stopPropagation();
+
+                    const category = btn.getAttribute('data-category');
+                    if (category === 'accessories') {
+                        const productId = btn.getAttribute('data-product-id');
+                        const originalText = btn.textContent;
+                        btn.dataset.state = 'adding';
+                        btn.textContent = 'Adding...';
+
+                        if (typeof htmx !== 'undefined') {
+                            htmx.ajax('POST', 'api/cart/add?productId=' + productId + '&quantity=1', {
+                                target: '#cart-btn-wrapper',
+                                swap: 'outerHTML'
+                            });
+                        }
+
+                        setTimeout(() => {
+                            btn.dataset.state = 'added';
+                            btn.textContent = '${lang_added}';
+
+                            setTimeout(() => {
+                                btn.dataset.state = 'idle';
+                                btn.textContent = originalText;
+                            }, 1500);
+                        }, 800);
+                        return;
+                    }
+
+                    window.showQuickAddSizes(btn);
+                    return;
+                }
+
+                const sizeBtn = e.target.closest('[data-size-btn]');
+                if (sizeBtn) {
+                    e.stopPropagation();
+                    const dropdown = sizeBtn.parentElement;
+                    const quickBtn = dropdown.previousElementSibling;
+                    if (!quickBtn || quickBtn.disabled || quickBtn.dataset.state === 'adding') return;
+
+                    const productId = quickBtn.getAttribute('data-product-id');
+                    const size = sizeBtn.getAttribute('data-size');
+
+                    const originalText = quickBtn.textContent;
+                    quickBtn.textContent = '${lang_adding}';
+                    quickBtn.dataset.state = 'adding';
+                    dropdown.dataset.open = 'false';
+
+                    if (typeof htmx !== 'undefined') {
+                        htmx.ajax('POST', 'api/cart/add?productId=' + productId + ':' + size + '&quantity=1', {
+                            target: '#cart-btn-wrapper',
+                            swap: 'outerHTML'
+                        });
+                    }
+
+                    setTimeout(() => {
+                        quickBtn.dataset.state = 'added';
+                        quickBtn.textContent = '${lang_added}';
+
+                        setTimeout(() => {
+                            quickBtn.dataset.state = 'idle';
+                            quickBtn.textContent = originalText;
+                        }, 1500);
+                    }, 600);
+                    return;
+                }
+
+                // Close active size pickers when clicking outside
+                if (!e.target.closest('[data-size-picker]')) {
+                    document.querySelectorAll('[data-size-picker][data-open="true"]').forEach(d => {
+                        d.dataset.open = 'false';
+                    });
+                }
+                const searchDropdown = document.getElementById('search-suggestions');
+                const searchInput = document.getElementById('search-input');
+                if (searchDropdown && searchInput && !searchDropdown.contains(e.target) && e.target !== searchInput) {
+                    searchDropdown.innerHTML = '';
+                }
+            });
+
+            // PDP Add to Cart form submit feedback interaction
+            const pdpForm = document.querySelector('[data-pdp-form]');
+            if (pdpForm) {
+                pdpForm.addEventListener('submit', (e) => {
+                    const btn = pdpForm.querySelector('button[type="submit"]');
+                    if (btn) {
+                        if (btn.dataset.state === 'adding') {
+                            e.preventDefault();
+                            return;
+                        }
+
+                        btn.dataset.state = 'adding';
+                        const originalHtml = btn.innerHTML;
+                        btn.innerHTML = '${lang_adding}';
+
+                        setTimeout(() => {
+                            btn.dataset.state = 'added';
+                            btn.innerHTML = '${lang_added}';
+
+                            setTimeout(() => {
+                                btn.dataset.state = 'idle';
+                                btn.innerHTML = originalHtml;
+                            }, 1500);
+                        }, 800);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

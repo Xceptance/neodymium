@@ -21,17 +21,25 @@ package com.xceptance.neodymium.aura;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.aura.dto.BrowserGroupDto;
+import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +49,7 @@ import org.slf4j.LoggerFactory;
 import org.thymeleaf.context.Context;
 
 /**
- * Controller handling Run Queue management, test execution triggers,
+ * Controller managing test datasets selection queue, run execution trigger,
  * and live server-side polling of execution logs and events.
  *
  * @author AI-generated: Antigravity
@@ -57,9 +65,10 @@ public final class AuraManagerQueueController
     private final NeodymiumAuraManager manager;
 
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
+    private final Set<String> globalBrowserProfiles = Collections.synchronizedSet(new LinkedHashSet<>());
     private boolean headless = true;
     private boolean video = false;
-    private boolean keepOpen = false;
+    private String executionMode = "REPLAY_WITH_HEALING";
     private boolean interactive = false;
     private boolean allure = true;
 
@@ -69,11 +78,205 @@ public final class AuraManagerQueueController
         this.fileService = fileService;
         this.interactiveService = interactiveService;
         this.manager = manager;
+
+        final List<BrowserProfileDto> available = getAvailableBrowserProfiles();
+        if (!available.isEmpty())
+        {
+            boolean added = false;
+            for (final BrowserProfileDto p : available)
+            {
+                if ("Chrome_1024x768".equalsIgnoreCase(p.id))
+                {
+                    globalBrowserProfiles.add(p.id);
+                    added = true;
+                    break;
+                }
+            }
+            if (!added)
+            {
+                globalBrowserProfiles.add(available.get(0).id);
+            }
+        }
+        else
+        {
+            globalBrowserProfiles.add("Chrome_1024x768");
+        }
     }
 
     public final List<DatasetSelection> getSelectedQueue()
     {
         return this.selectedQueue;
+    }
+
+    public final Set<String> getGlobalBrowserProfiles()
+    {
+        return this.globalBrowserProfiles;
+    }
+
+    public final void setGlobalBrowserProfiles(final Collection<String> profiles)
+    {
+        synchronized (this.globalBrowserProfiles)
+        {
+            this.globalBrowserProfiles.clear();
+            if (profiles != null)
+            {
+                this.globalBrowserProfiles.addAll(profiles);
+            }
+        }
+    }
+
+    public final int getTotalExecutionRuns()
+    {
+        int total = 0;
+        final int globalCount = Math.max(1, globalBrowserProfiles.size());
+        synchronized (selectedQueue)
+        {
+            for (final DatasetSelection sel : selectedQueue)
+            {
+                if (sel.browserProfiles != null && !sel.browserProfiles.isEmpty())
+                {
+                    total += sel.browserProfiles.size();
+                }
+                else
+                {
+                    total += globalCount;
+                }
+            }
+        }
+        return total;
+    }
+
+    public List<BrowserProfileDto> getAvailableBrowserProfiles()
+    {
+        final MultibrowserConfiguration config = MultibrowserConfiguration.getInstance();
+        final Map<String, BrowserConfiguration> rawProfiles = config.getBrowserProfiles();
+        final List<BrowserProfileDto> list = new ArrayList<>();
+        if (rawProfiles != null)
+        {
+            for (final Map.Entry<String, BrowserConfiguration> entry : rawProfiles.entrySet())
+            {
+                final String tag = entry.getKey();
+                final BrowserConfiguration bc = entry.getValue();
+                if (tag == null || tag.trim().isEmpty() || "default".equalsIgnoreCase(tag) || "global".equalsIgnoreCase(tag))
+                {
+                    continue;
+                }
+                final String name = bc.getName() != null && !bc.getName().trim().isEmpty() ? bc.getName() : tag;
+                final String rawBrowserName = bc.getCapabilities() != null && bc.getCapabilities().getBrowserName() != null
+                        ? bc.getCapabilities().getBrowserName().toLowerCase()
+                        : "";
+                final String tagLower = tag.toLowerCase();
+                final String browser;
+                if (tagLower.contains("galaxy") || tagLower.contains("iphone") || tagLower.contains("pixel")
+                        || tagLower.contains("mobile") || tagLower.contains("nexus") || tagLower.contains("android")
+                        || tagLower.contains("ipad") || rawBrowserName.contains("android") || rawBrowserName.contains("iphone")
+                        || rawBrowserName.contains("ipad"))
+                {
+                    browser = "mobile";
+                }
+                else if (rawBrowserName.contains("chrome") || tagLower.startsWith("chrome") || tagLower.contains("_chrome")
+                        || tagLower.contains("chromium"))
+                {
+                    browser = "chrome";
+                }
+                else if (rawBrowserName.contains("firefox") || tagLower.startsWith("ff") || tagLower.contains("firefox")
+                        || tagLower.contains("_ff"))
+                {
+                    browser = "firefox";
+                }
+                else if (rawBrowserName.contains("safari") || tagLower.startsWith("safari") || tagLower.contains("_safari")
+                        || tagLower.contains("webkit"))
+                {
+                    browser = "safari";
+                }
+                else if (rawBrowserName.contains("edge") || rawBrowserName.contains("microsoftedge") || tagLower.startsWith("edge")
+                        || tagLower.contains("_edge"))
+                {
+                    browser = "edge";
+                }
+                else
+                {
+                    browser = "other";
+                }
+
+                final String res = (bc.getBrowserWidth() > 0 && bc.getBrowserHeight() > 0)
+                        ? bc.getBrowserWidth() + "x" + bc.getBrowserHeight()
+                        : "";
+                final boolean isHeadless = bc.isHeadless();
+
+                list.add(new BrowserProfileDto(tag, name, browser, res, isHeadless));
+            }
+        }
+        return list;
+    }
+
+    public List<BrowserGroupDto> getGroupedBrowserProfiles(final Set<String> activeProfiles)
+    {
+        final List<BrowserProfileDto> all = getAvailableBrowserProfiles();
+        final Map<String, BrowserGroupDto> groupMap = new LinkedHashMap<>();
+        groupMap.put("chrome", new BrowserGroupDto("chrome", "Google Chrome"));
+        groupMap.put("firefox", new BrowserGroupDto("firefox", "Mozilla Firefox"));
+        groupMap.put("safari", new BrowserGroupDto("safari", "Apple Safari"));
+        groupMap.put("edge", new BrowserGroupDto("edge", "Microsoft Edge"));
+        groupMap.put("mobile", new BrowserGroupDto("mobile", "Mobile Devices"));
+        groupMap.put("other", new BrowserGroupDto("other", "Other Profiles"));
+
+        for (final BrowserProfileDto p : all)
+        {
+            final String key = groupMap.containsKey(p.browser) ? p.browser : "other";
+            final BrowserGroupDto group = groupMap.get(key);
+            group.profiles.add(p);
+            if (activeProfiles != null && activeProfiles.contains(p.id))
+            {
+                group.selectedCount++;
+            }
+        }
+
+        final List<BrowserGroupDto> result = new ArrayList<>();
+        for (final BrowserGroupDto g : groupMap.values())
+        {
+            if (!g.profiles.isEmpty())
+            {
+                result.add(g);
+            }
+        }
+        return result;
+    }
+
+    public List<String> getBrowserTypesForProfiles(final List<String> profileIds)
+    {
+        final List<BrowserProfileDto> all = getAvailableBrowserProfiles();
+        final Set<String> targetIds = new HashSet<>(profileIds != null && !profileIds.isEmpty() ? profileIds : globalBrowserProfiles);
+        final Set<String> types = new LinkedHashSet<>();
+        for (final BrowserProfileDto p : all)
+        {
+            if (targetIds.contains(p.id))
+            {
+                types.add(p.browser);
+            }
+        }
+        if (types.isEmpty())
+        {
+            types.add("chrome");
+        }
+        return new ArrayList<>(types);
+    }
+
+    public void populateQueueContext(final Context context)
+    {
+        context.setVariable("queue", selectedQueue);
+        context.setVariable("availableBrowserProfiles", getAvailableBrowserProfiles());
+        context.setVariable("globalBrowserProfiles", getGlobalBrowserProfiles());
+        context.setVariable("browserGroups", getGroupedBrowserProfiles(globalBrowserProfiles));
+        context.setVariable("totalRuns", getTotalExecutionRuns());
+        context.setVariable("queueController", this);
+        context.setVariable("running", isRunning());
+        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        context.setVariable("headless", headless);
+        context.setVariable("video", video);
+        context.setVariable("executionMode", executionMode);
+        context.setVariable("interactive", interactive);
+        context.setVariable("allure", allure);
     }
 
     public Set<String> getSelectedQueueKeys()
@@ -121,6 +324,34 @@ public final class AuraManagerQueueController
         return fullFiles;
     }
 
+    public Set<String> getPartiallySelectedFileKeys(final List<YamlFileDto> files)
+    {
+        final Set<String> partialFiles = new HashSet<>();
+        final Set<String> keys = getSelectedQueueKeys();
+        if (files != null)
+        {
+            for (final YamlFileDto f : files)
+            {
+                if (f.datasets != null && !f.datasets.isEmpty())
+                {
+                    int selectedCount = 0;
+                    for (final DatasetDto d : f.datasets)
+                    {
+                        if (keys.contains(f.file + "::" + d.id))
+                        {
+                            selectedCount++;
+                        }
+                    }
+                    if (selectedCount > 0 && selectedCount < f.datasets.size())
+                    {
+                        partialFiles.add(f.file);
+                    }
+                }
+            }
+        }
+        return partialFiles;
+    }
+
     public final boolean isHeadless()
     {
         return this.headless;
@@ -131,9 +362,9 @@ public final class AuraManagerQueueController
         return this.video;
     }
 
-    public final boolean isKeepOpen()
+    public final String getExecutionMode()
     {
-        return this.keepOpen;
+        return this.executionMode;
     }
 
     public final boolean isInteractive()
@@ -204,9 +435,7 @@ public final class AuraManagerQueueController
         }
 
         final Context context = new Context();
-        context.setVariable("queue", selectedQueue);
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueContext(context);
         final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
@@ -287,9 +516,7 @@ public final class AuraManagerQueueController
         }
 
         final Context context = new Context();
-        context.setVariable("queue", selectedQueue);
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueContext(context);
         final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
@@ -340,9 +567,43 @@ public final class AuraManagerQueueController
         }
 
         final Context context = new Context();
-        context.setVariable("queue", selectedQueue);
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueContext(context);
+        final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void handleRemoveQueue(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String file = params.get("file");
+        final String id = params.get("id");
+        int index = -1;
+        if (params.containsKey("index"))
+        {
+            try
+            {
+                index = Integer.parseInt(params.get("index"));
+            }
+            catch (final NumberFormatException e)
+            {
+                // ignore
+            }
+        }
+
+        synchronized (selectedQueue)
+        {
+            if (index >= 0 && index < selectedQueue.size())
+            {
+                selectedQueue.remove(index);
+            }
+            else if (file != null && id != null)
+            {
+                selectedQueue.removeIf(item -> file.equals(item.file) && id.equals(item.id));
+            }
+        }
+
+        final Context context = new Context();
+        populateQueueContext(context);
         final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
@@ -351,9 +612,7 @@ public final class AuraManagerQueueController
     {
         selectedQueue.clear();
         final Context context = new Context();
-        context.setVariable("queue", selectedQueue);
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueContext(context);
         final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
@@ -362,6 +621,7 @@ public final class AuraManagerQueueController
     {
         final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
         final String key = params.get("key");
+        final String modeParam = params.get("mode") != null ? params.get("mode") : params.get("value");
 
         if (key != null)
         {
@@ -369,23 +629,190 @@ public final class AuraManagerQueueController
             {
                 case "headless" -> headless = !headless;
                 case "video" -> video = !video;
-                case "keepOpen" -> keepOpen = !keepOpen;
+                case "executionMode", "mode" -> {
+                    if (modeParam != null && !modeParam.isBlank())
+                    {
+                        executionMode = modeParam.trim();
+                    }
+                }
                 case "interactive" -> interactive = !interactive;
                 case "allure" -> allure = !allure;
             }
         }
+        else if (modeParam != null && !modeParam.isBlank())
+        {
+            executionMode = modeParam.trim();
+        }
 
         final Context context = new Context();
-        context.setVariable("headless", headless);
-        context.setVariable("video", video);
-        context.setVariable("keepOpen", keepOpen);
-        context.setVariable("interactive", interactive);
-        context.setVariable("allure", allure);
-        context.setVariable("queue", getSelectedQueue());
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueContext(context);
 
         final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void handleToggleBrowserProfile(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String profile = params.get("profile");
+        if (profile != null && !profile.isBlank())
+        {
+            final String trimmed = profile.trim();
+            synchronized (globalBrowserProfiles)
+            {
+                if (globalBrowserProfiles.contains(trimmed))
+                {
+                    globalBrowserProfiles.remove(trimmed);
+                }
+                else
+                {
+                    globalBrowserProfiles.add(trimmed);
+                }
+            }
+        }
+
+        final Context context = new Context();
+        populateQueueContext(context);
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel", "queueListContainer", "runControls"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void handleBrowserPreset(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String preset = params.get("preset");
+        final List<BrowserProfileDto> available = getAvailableBrowserProfiles();
+
+        if (preset != null)
+        {
+            synchronized (globalBrowserProfiles)
+            {
+                switch (preset.toLowerCase())
+                {
+                    case "chrome-ff" -> {
+                        globalBrowserProfiles.clear();
+                        for (final BrowserProfileDto p : available)
+                        {
+                            if ("chrome".equalsIgnoreCase(p.browser))
+                            {
+                                globalBrowserProfiles.add(p.id);
+                                break;
+                            }
+                        }
+                        for (final BrowserProfileDto p : available)
+                        {
+                            if ("firefox".equalsIgnoreCase(p.browser))
+                            {
+                                globalBrowserProfiles.add(p.id);
+                                break;
+                            }
+                        }
+                    }
+                    case "desktop" -> {
+                        globalBrowserProfiles.clear();
+                        for (final BrowserProfileDto p : available)
+                        {
+                            if (!"mobile".equalsIgnoreCase(p.browser))
+                            {
+                                globalBrowserProfiles.add(p.id);
+                            }
+                        }
+                    }
+                    case "mobile" -> {
+                        globalBrowserProfiles.clear();
+                        for (final BrowserProfileDto p : available)
+                        {
+                            if ("mobile".equalsIgnoreCase(p.browser))
+                            {
+                                globalBrowserProfiles.add(p.id);
+                            }
+                        }
+                    }
+                    case "all" -> {
+                        globalBrowserProfiles.clear();
+                        for (final BrowserProfileDto p : available)
+                        {
+                            globalBrowserProfiles.add(p.id);
+                        }
+                    }
+                    case "clear" -> {
+                        globalBrowserProfiles.clear();
+                    }
+                }
+            }
+        }
+
+        final Context context = new Context();
+        populateQueueContext(context);
+        final String html = manager.getTemplateEngine().process("dashboard", Set.of("configPanel", "queueListContainer", "runControls"), context);
+        AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void handleUpdateItemBrowserProfiles(final HttpExchange exchange) throws IOException
+    {
+        final Map<String, String> params = AuraHttpUtils.getRequestParams(exchange);
+        final String file = params.get("file");
+        final String id = params.get("id");
+        final boolean inherit = "true".equalsIgnoreCase(params.get("inherit"));
+        final String profilesParam = params.get("profiles");
+
+        int index = -1;
+        if (params.containsKey("index"))
+        {
+            try
+            {
+                index = Integer.parseInt(params.get("index"));
+            }
+            catch (final NumberFormatException e)
+            {
+                // ignore
+            }
+        }
+
+        synchronized (selectedQueue)
+        {
+            DatasetSelection target = null;
+            if (index >= 0 && index < selectedQueue.size())
+            {
+                target = selectedQueue.get(index);
+            }
+            else if (file != null && id != null)
+            {
+                for (final DatasetSelection item : selectedQueue)
+                {
+                    if (file.equals(item.file) && id.equals(item.id))
+                    {
+                        target = item;
+                        break;
+                    }
+                }
+            }
+
+            if (target != null)
+            {
+                if (inherit || profilesParam == null || profilesParam.isBlank())
+                {
+                    target.browserProfiles = null;
+                }
+                else
+                {
+                    final List<String> list = new ArrayList<>();
+                    for (final String part : profilesParam.split(","))
+                    {
+                        final String trimmed = part.trim();
+                        if (!trimmed.isEmpty())
+                        {
+                            list.add(trimmed);
+                        }
+                    }
+                    target.browserProfiles = list;
+                }
+            }
+        }
+
+        final Context context = new Context();
+        populateQueueContext(context);
+        final String html = manager.getTemplateEngine().process("fragments/queue", Set.of("queueListContainerContent", "runControls"), context);
         AuraHttpUtils.sendResponse(exchange, 200, "text/html; charset=UTF-8", html.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -417,8 +844,10 @@ public final class AuraManagerQueueController
                 sel.file = activeFile;
                 sel.id = null;
                 req.datasets = List.of(sel);
+                req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
                 req.headless = headless;
                 req.video = video;
+                req.executionMode = executionMode;
                 req.interactive = interactive;
                 req.allure = allure;
             }
@@ -437,10 +866,17 @@ public final class AuraManagerQueueController
         {
             req = new RunRequest();
             req.datasets = new ArrayList<>(selectedQueue);
+            req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
             req.headless = headless;
             req.video = video;
+            req.executionMode = executionMode;
             req.interactive = interactive;
             req.allure = allure;
+        }
+
+        if (req.globalBrowserProfiles == null)
+        {
+            req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
         }
 
         if (req.datasets == null || req.datasets.isEmpty())
@@ -552,10 +988,19 @@ public final class AuraManagerQueueController
         {
             for (final DatasetSelection selection : lastReq.datasets)
             {
-                final Map<String, String> m = new HashMap<>();
-                m.put("file", selection.file);
-                m.put("id", selection.id);
-                datasetsList.add(m);
+                final List<String> profiles = (selection.browserProfiles != null && !selection.browserProfiles.isEmpty())
+                        ? selection.browserProfiles
+                        : (lastReq.globalBrowserProfiles != null && !lastReq.globalBrowserProfiles.isEmpty()
+                                ? lastReq.globalBrowserProfiles
+                                : List.of("Chrome_1024x768"));
+                for (final String prof : profiles)
+                {
+                    final Map<String, String> m = new HashMap<>();
+                    m.put("file", selection.file);
+                    m.put("id", selection.id);
+                    m.put("browser", prof);
+                    datasetsList.add(m);
+                }
             }
         }
         status.put("tests", datasetsList);

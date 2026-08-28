@@ -69,7 +69,7 @@ public final class InteractiveViewStateTest extends BaseInteractiveViewTest
     @Test
     public final void testConsoleStatesAndFailureRecovery() throws Exception
     {
-        Configuration.headless = false;
+        Configuration.headless = true;
 
         // Load resources
         final String yamlContent;
@@ -182,6 +182,14 @@ public final class InteractiveViewStateTest extends BaseInteractiveViewTest
             // Click edit on Step 3
             jsClick(step3.$(".step-edit-btn"));
             step3.$(".inline-edit-textarea").should(Condition.exist);
+            // Verify Local tag badge on local dataset variable
+            step3.$$(".badge-tag").findBy(Condition.text("Local")).should(Condition.exist);
+            // Verify More properties button exists and can be expanded if other properties exist
+            if (step3.$(".btn-more-props").exists())
+            {
+                jsClick(step3.$(".btn-more-props"));
+                step3.$(".more-props-container").shouldBe(Condition.visible);
+            }
             // Click variable badge to autocomplete/insert variable
             jsClick(step3.$$(".binding-badge").findBy(Condition.text("email")));
             // Also click key in the Data Bindings table to verify auto-insertion of variable

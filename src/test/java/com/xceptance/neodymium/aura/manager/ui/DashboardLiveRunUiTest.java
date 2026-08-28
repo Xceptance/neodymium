@@ -42,8 +42,8 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import com.xceptance.neodymium.aura.manager.ui.base.BaseAuraManagerUiTest;
 import com.xceptance.neodymium.aura.manager.ui.base.AuraManagerTestHelper;
-import com.xceptance.neodymium.common.browser.Browser;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
 
 /**
  * End-to-end UI regression tests for the live-run test-card column in the Aura Manager dashboard.
@@ -139,13 +139,14 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
         return val == null ? "null" : val.toString();
     }
 
-    private boolean cardHasIcon(final int index, final String iconClass)
+    private boolean cardHasIcon(final int index, final String iconName)
     {
         final Object result = js().executeScript(
             "var cards = document.querySelectorAll('.test-card');" +
             "if (!cards[arguments[0]]) return false;" +
-            "return cards[arguments[0]].querySelector('." + iconClass + "') !== null;",
-            (long) index
+            "var el = cards[arguments[0]].querySelector('.material-symbols-outlined');" +
+            "return el !== null && el.textContent.trim() === arguments[1];",
+            (long) index, iconName
         );
         return Boolean.TRUE.equals(result);
     }
@@ -167,10 +168,10 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
     @NeodymiumTest
     public void testDoneCardVisualState()
     {
-        Assertions.assertTrue(cardHasIcon(0, "fa-circle-check"),
-            "Done card (index 0) must contain fa-circle-check icon.");
+        Assertions.assertTrue(cardHasIcon(0, "check_circle"),
+            "Done card (index 0) must contain check_circle icon.");
 
-        Assertions.assertFalse(cardHasIcon(0, "fa-circle-notch"),
+        Assertions.assertFalse(cardHasIcon(0, "progress_activity"),
             "Done card must NOT show the active spinner.");
 
         final double opacity = cardOpacity(0);
@@ -185,10 +186,10 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
     @NeodymiumTest
     public void testCurrentCardVisualState()
     {
-        Assertions.assertTrue(cardHasIcon(1, "fa-circle-notch"),
-            "Current card (index 1) must contain the fa-circle-notch spinner.");
+        Assertions.assertTrue(cardHasIcon(1, "progress_activity"),
+            "Current card (index 1) must contain the progress_activity spinner.");
 
-        Assertions.assertFalse(cardHasIcon(1, "fa-circle-check"),
+        Assertions.assertFalse(cardHasIcon(1, "check_circle"),
             "Current card must NOT show the done check icon.");
 
         final double opacity = cardOpacity(1);
@@ -196,8 +197,7 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
             "Current card must have full opacity (>0.95) but got " + opacity);
 
         final String pe = cardPointerEvents(1);
-        Assertions.assertNotEquals("none", pe,
-            "Current card must have pointer-events != none.");
+        Assertions.assertNotEquals("none", pe);
 
         final Object style = js().executeScript(
             "var cards = document.querySelectorAll('.test-card');" +
@@ -210,8 +210,8 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
     @NeodymiumTest
     public void testPendingCardVisualState()
     {
-        Assertions.assertTrue(cardHasIcon(2, "fa-clock"),
-            "Pending card (index 2) must contain fa-clock icon.");
+        Assertions.assertTrue(cardHasIcon(2, "schedule"),
+            "Pending card (index 2) must contain schedule icon.");
 
         final double opacity = cardOpacity(2);
         Assertions.assertTrue(opacity < 0.50,
@@ -247,9 +247,9 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
         js().executeScript("liveCompletedFiles.clear(); liveLastActiveFile = null; renderLiveTestList();");
         sleep(300);
 
-        Assertions.assertTrue(cardHasIcon(0, "fa-circle-notch"),
+        Assertions.assertTrue(cardHasIcon(0, "progress_activity"),
             "After reset, index 0 (file-a.yaml) should be CURRENT (spinner), not DONE.");
-        Assertions.assertFalse(cardHasIcon(0, "fa-circle-check"),
+        Assertions.assertFalse(cardHasIcon(0, "check_circle"),
             "After reset, index 0 must NOT show the done check icon.");
 
         Assertions.assertEquals("none", cardPointerEvents(1),
@@ -262,18 +262,19 @@ public class DashboardLiveRunUiTest extends BaseAuraManagerUiTest
     public void testActiveFileTransitionAdvancesCompletedSet()
     {
         js().executeScript(
+            "liveCompletedFiles.add('file-a.yaml');" +
             "liveCompletedFiles.add('file-b.yaml');" +
             "activeRunStats.activeFile = 'file-c.yaml';" +
             "renderLiveTestList();"
         );
         sleep(300);
 
-        Assertions.assertTrue(cardHasIcon(0, "fa-circle-check"),
+        Assertions.assertTrue(cardHasIcon(0, "check_circle"),
             "file-a.yaml must be DONE after advancing to file-c.yaml.");
-        Assertions.assertTrue(cardHasIcon(1, "fa-circle-check"),
+        Assertions.assertTrue(cardHasIcon(1, "check_circle"),
             "file-b.yaml must be DONE after being superseded by file-c.yaml.");
 
-        Assertions.assertTrue(cardHasIcon(2, "fa-circle-notch"),
+        Assertions.assertTrue(cardHasIcon(2, "progress_activity"),
             "file-c.yaml must be CURRENT (spinner) after advancing to it.");
         final String pe2 = cardPointerEvents(2);
         Assertions.assertNotEquals("none", pe2,

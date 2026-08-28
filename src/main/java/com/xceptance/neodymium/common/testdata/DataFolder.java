@@ -18,6 +18,7 @@ import java.lang.annotation.Target;
   TYPE
 })
 @Repeatable(DataFolders.class)
+@Deprecated
 public @interface DataFolder
 {
     /**

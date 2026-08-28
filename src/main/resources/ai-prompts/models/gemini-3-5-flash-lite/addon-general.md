@@ -1,0 +1,2 @@
+- **Locators**: Only use real HTML tags from the DOM (`button`, `a`, `input`, `div`, `span`). Never invent non-existent tags (e.g. `text`, `text:nth-of-type(N)`). If an element lacks a unique class or ID, target its parent container (e.g. `header > div`) or escalate.
+- **Values**: Copy the exact literal text from the instruction into 'value'. Do not substitute generic sample data (such as default passwords) or synthetic placeholders.

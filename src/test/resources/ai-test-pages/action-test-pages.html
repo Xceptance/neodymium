@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Sandbox - Isolated Action Test Pages</title>
+    <link rel="stylesheet" href="AuraGlanceTest/shared/style.css">
+    <style>
+        .glow-title {
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.02em;
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.15rem;
+            margin-bottom: 2.5rem;
+            max-width: 800px;
+        }
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 2.5rem;
+            margin-bottom: 1.25rem;
+            color: var(--accent-cyan);
+            border-bottom: 1px solid var(--bg-card-border);
+            padding-bottom: 0.5rem;
+        }
+        .test-list {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        .test-item-card {
+            background: var(--bg-card);
+            border: 1px solid var(--bg-card-border);
+            border-radius: var(--radius-sm);
+            padding: 1.25rem;
+            transition: var(--transition-smooth);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .test-item-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-purple);
+            box-shadow: 0 4px 20px var(--accent-purple-glow);
+        }
+        .test-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            word-break: break-all;
+        }
+        .test-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            line-height: 1.4;
+        }
+        .test-link {
+            text-decoration: none;
+            color: var(--accent-cyan);
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: var(--transition-smooth);
+            align-self: flex-start;
+        }
+        .test-link:hover {
+            color: var(--text-primary);
+            text-shadow: 0 0 6px var(--accent-cyan-glow);
+        }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+            transition: var(--transition-smooth);
+        }
+        .back-btn:hover {
+            color: var(--accent-cyan);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>AURA SANDBOX</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html">Hub Home</a></li>
+                <li class="dropdown">
+                    <a href="#" class="dropdown-trigger">
+                        Aura Sandbox
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: 4px; display: inline-block; vertical-align: middle;">
+                            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a href="AuraGlanceTest/dashboard/index.html">SaaS Dashboard</a></li>
+                        <li><a href="AuraGlanceTest/shop/index.html">Poster Store</a></li>
+                        <li><a href="AuraGlanceTest/shop/forms.html">Forms Demo</a></li>
+                        <li><a href="AuraGlanceTest/a11y/index.html">A11y Arena</a></li>
+                        <li><a href="AuraGlanceTest/spa/index.html">React SPA</a></li>
+                        <li><a href="AuraGlanceTest/shop/escalation.html">Escalation Challenge</a></li>
+                        <li><a href="AuraGlanceTest/shop/visual-escalation.html">Visual Escalation</a></li>
+                    </ul>
+                </li>
+                <li class="dropdown">
+                    <a href="#" class="dropdown-trigger">
+                        VÉRLA Stores
+                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: 4px; display: inline-block; vertical-align: middle;">
+                            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a href="verla-tailwind/index.html">VÉRLA Tailwind</a></li>
+                        <li><a href="verla-tailwind-by-claude/index.html">VÉRLA Tailwind (by Claude)</a></li>
+                        <li><a href="verla-perfect/index.html">VÉRLA Perfect</a></li>
+                        <li><a href="verla-normal/index.html">VÉRLA Normal</a></li>
+                        <li><a href="verla-bad/index.html">VÉRLA Bad</a></li>
+                        <li><a href="verla-modern-bad/index.html">VÉRLA Modern Bad (WCAG)</a></li>
+                        <li><a href="verla-modern-bad-nowcag/index.html">VÉRLA Modern Bad (No WCAG)</a></li>
+                        <li><a href="verla-pwa-chaos/index.html">VÉRLA PWA Chaos</a></li>
+                    </ul>
+                </li>
+                <li><a href="AuraGlanceTest/shop/sandbox/index.html">Playground</a></li>
+                <li><a href="#" class="active">Action Pages</a></li>
+            </ul>
+        </div>
+    </header>
+
+    <main class="aura-container" style="padding-top: 2rem;">
+        <a href="index.html" class="back-btn">&larr; Back to Hub Home</a>
+        <h1 class="glow-title">Isolated Action Test Pages</h1>
+        <p class="subtitle">A complete list of the minimalist, single-purpose HTML pages used by our core integration test suites to assert isolated AI actions.</p>
+
+        <!-- ClickActionTest -->
+        <h2 class="section-title">Click Action Tests (ClickActionTest/)</h2>
+        <ul class="test-list">
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testClickStandardButton.html</div>
+                    <div class="test-desc">Tests clicking a standard semantic button element.</div>
+                </div>
+                <a href="ClickActionTest/testClickStandardButton.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testClickAnchorLink.html</div>
+                    <div class="test-desc">Tests clicking standard text links and anchor elements.</div>
+                </div>
+                <a href="ClickActionTest/testClickAnchorLink.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testClickDisabledButton.html</div>
+                    <div class="test-desc">Tests clicking disabled buttons to verify action failure handling.</div>
+                </div>
+                <a href="ClickActionTest/testClickDisabledButton.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testClickHiddenElement.html</div>
+                    <div class="test-desc">Tests clicking elements that are visually hidden in the layout.</div>
+                </div>
+                <a href="ClickActionTest/testClickHiddenElement.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testClickInvisibleCheckbox.html</div>
+                    <div class="test-desc">Tests clicking checkbox elements overlayed with custom styled containers.</div>
+                </div>
+                <a href="ClickActionTest/testClickInvisibleCheckbox.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testClickSvgIcon.html</div>
+                    <div class="test-desc">Tests clicking bare SVG icons containing no text contents.</div>
+                </div>
+                <a href="ClickActionTest/testClickSvgIcon.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testClickTableRow.html</div>
+                    <div class="test-desc">Tests clicking clickable table row structures.</div>
+                </div>
+                <a href="ClickActionTest/testClickTableRow.html" class="test-link">Open Page &rarr;</a>
+            </li>
+        </ul>
+
+        <!-- TypeActionTest -->
+        <h2 class="section-title">Type Action Tests (TypeActionTest/)</h2>
+        <ul class="test-list">
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testTypeHappyPath.html</div>
+                    <div class="test-desc">Tests typing text into standard text inputs and textarea forms.</div>
+                </div>
+                <a href="TypeActionTest/testTypeHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">keyPressExtended.html</div>
+                    <div class="test-desc">Tests sending special keyboard commands and keypress events.</div>
+                </div>
+                <a href="TypeActionTest/keyPressExtended.html" class="test-link">Open Page &rarr;</a>
+            </li>
+        </ul>
+
+        <!-- NestedFrameTest -->
+        <h2 class="section-title">Nested Frame Tests (NestedFrameTest/)</h2>
+        <ul class="test-list">
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testNestedFrames.html</div>
+                    <div class="test-desc">Main portal containing nested sub-iframes.</div>
+                </div>
+                <a href="NestedFrameTest/testNestedFrames.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">multiFrames.html</div>
+                    <div class="test-desc">Tests switching contexts between multiple parallel iframes.</div>
+                </div>
+                <a href="NestedFrameTest/multiFrames.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">frame1.html</div>
+                    <div class="test-desc">Iframe sub-document source.</div>
+                </div>
+                <a href="NestedFrameTest/frame1.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">frame2.html</div>
+                    <div class="test-desc">Nested sub-iframe source.</div>
+                </div>
+                <a href="NestedFrameTest/frame2.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">iframe-button.html</div>
+                    <div class="test-desc">Iframe containing interactive buttons.</div>
+                </div>
+                <a href="NestedFrameTest/iframe-button.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">iframe-input.html</div>
+                    <div class="test-desc">Iframe containing input fields.</div>
+                </div>
+                <a href="NestedFrameTest/iframe-input.html" class="test-link">Open Page &rarr;</a>
+            </li>
+        </ul>
+
+        <!-- PageAnalyzerCheckableTest -->
+        <h2 class="section-title">Page Analyzer Checkable Tests (PageAnalyzerCheckableTest/)</h2>
+        <ul class="test-list">
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testStandardCheckableInputs.html</div>
+                    <div class="test-desc">Standard semantic checkboxes and radio inputs.</div>
+                </div>
+                <a href="PageAnalyzerCheckableTest/testStandardCheckableInputs.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testCustomCheckableControls.html</div>
+                    <div class="test-desc">Custom-styled div/span checkable checkbox replacements.</div>
+                </div>
+                <a href="PageAnalyzerCheckableTest/testCustomCheckableControls.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">testVisuallyHiddenCheckableInputs.html</div>
+                    <div class="test-desc">Visually hidden checkbox inputs with custom labels.</div>
+                </div>
+                <a href="PageAnalyzerCheckableTest/testVisuallyHiddenCheckableInputs.html" class="test-link">Open Page &rarr;</a>
+            </li>
+        </ul>
+
+        <!-- ActionEdgeCasesTest -->
+        <h2 class="section-title">Action Edge Cases (ActionEdgeCasesTest/)</h2>
+        <ul class="test-list">
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">elementIntercept.html</div>
+                    <div class="test-desc">Element click interception challenges.</div>
+                </div>
+                <a href="ActionEdgeCasesTest/elementIntercept.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">multiWindow.html</div>
+                    <div class="test-desc">Tests switching contexts between multiple browser windows.</div>
+                </div>
+                <a href="ActionEdgeCasesTest/multiWindow.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">popup.html</div>
+                    <div class="test-desc">Handling browser alerts and visual popup windows.</div>
+                </div>
+                <a href="ActionEdgeCasesTest/popup.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">shadowDom.html</div>
+                    <div class="test-desc">Isolated Shadow DOM piercer challenges.</div>
+                </div>
+                <a href="ActionEdgeCasesTest/shadowDom.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">staleElement.html</div>
+                    <div class="test-desc">Tests element lookup recovery when encountering stale references.</div>
+                </div>
+                <a href="ActionEdgeCasesTest/staleElement.html" class="test-link">Open Page &rarr;</a>
+            </li>
+        </ul>
+
+        <!-- Other Core Actions -->
+        <h2 class="section-title">Other Core Actions & Tests</h2>
+        <ul class="test-list">
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">AssertActionTest/testAssertHappyPath.html</div>
+                    <div class="test-desc">Assert actions validation page.</div>
+                </div>
+                <a href="AssertActionTest/testAssertHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">BranchActionTest/testBranchHappyPath.html</div>
+                    <div class="test-desc">Branch action and route selection.</div>
+                </div>
+                <a href="BranchActionTest/testBranchHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">CheckActionTest/testCheckHappyPath.html</div>
+                    <div class="test-desc">Checkbox checking and unchecking states.</div>
+                </div>
+                <a href="CheckActionTest/testCheckHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">HoverActionTest/testHoverDropdown.html</div>
+                    <div class="test-desc">Hover-triggered menus.</div>
+                </div>
+                <a href="HoverActionTest/testHoverDropdown.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">ScrollActionTest/testScrollHappyPath.html</div>
+                    <div class="test-desc">Viewport scrolling verification.</div>
+                </div>
+                <a href="ScrollActionTest/testScrollHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">SelectActionTest/testSelectHappyPath.html</div>
+                    <div class="test-desc">Dropdown option selections.</div>
+                </div>
+                <a href="SelectActionTest/testSelectHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">StoreActionTest/testStoreHappyPath.html</div>
+                    <div class="test-desc">Store actions caching check.</div>
+                </div>
+                <a href="StoreActionTest/testStoreHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">WaitActionTest/testWaitHappyPath.html</div>
+                    <div class="test-desc">Wait action settling states.</div>
+                </div>
+                <a href="WaitActionTest/testWaitHappyPath.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">DownloadTest/index.html & upload.html</div>
+                    <div class="test-desc">File upload and download handlers.</div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <a href="DownloadTest/index.html" class="test-link">Download Page</a>
+                    <a href="DownloadTest/upload.html" class="test-link">Upload Page</a>
+                </div>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">SwitchWindowActionTest/testSwitchWindow.html</div>
+                    <div class="test-desc">Switching between windows.</div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <a href="SwitchWindowActionTest/testSwitchWindow.html" class="test-link">Main Page</a>
+                    <a href="SwitchWindowActionTest/newWindow.html" class="test-link">Target Page</a>
+                </div>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">PositionalChallengesTest/...</div>
+                    <div class="test-desc">Checks element coordinates and spatial positions.</div>
+                </div>
+                <a href="PositionalChallengesTest/testPositionalChallenges.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">SplitMultiActionTest/...</div>
+                    <div class="test-desc">Validates batch action splits.</div>
+                </div>
+                <a href="SplitMultiActionTest/testSplitMultiAction.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">SplittableBranchTest/...</div>
+                    <div class="test-desc">Validates splittable branching logic.</div>
+                </div>
+                <a href="SplittableBranchTest/testSplittableBranch.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">FailureLineTracingTest/...</div>
+                    <div class="test-desc">Intentionally fails to test traceback extraction.</div>
+                </div>
+                <a href="FailureLineTracingTest/testFailure.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">IncludeTest/testInclude.html</div>
+                    <div class="test-desc">Template inclusion checks.</div>
+                </div>
+                <a href="IncludeTest/testInclude.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">InteractiveHudSelenideTest/...</div>
+                    <div class="test-desc">Visual Selenide interactive HUD verification.</div>
+                </div>
+                <a href="InteractiveHudSelenideTest/interactive-hud-test.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">SelenideActionPluginsTest/...</div>
+                    <div class="test-desc">Selenide plugin execution validation.</div>
+                </div>
+                <a href="SelenideActionPluginsTest/test.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">SelenideAddonsTest/slider.html</div>
+                    <div class="test-desc">Custom Selenide slider controls.</div>
+                </div>
+                <a href="SelenideAddonsTest/slider.html" class="test-link">Open Page &rarr;</a>
+            </li>
+            <li class="test-item-card">
+                <div>
+                    <div class="test-name">AllActionsTest/test.html</div>
+                    <div class="test-desc">Combined sequentially executed action steps page.</div>
+                </div>
+                <a href="AllActionsTest/test.html" class="test-link">Open Page &rarr;</a>
+            </li>
+        </ul>
+    </main>
+
+</body>
+</html>

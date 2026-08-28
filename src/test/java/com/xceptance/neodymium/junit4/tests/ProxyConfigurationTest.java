@@ -2,7 +2,7 @@ package com.xceptance.neodymium.junit4.tests;
 
 import com.xceptance.neodymium.junit4.testclasses.proxy.RunWithProxy;
 import com.xceptance.neodymium.junit4.testclasses.proxy.SetProxyForWebDriver;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.BeforeClass;
 import org.junit.Test;

@@ -1,8 +1,8 @@
 package com.xceptance.neodymium.junit4.tests;
 
 import com.xceptance.neodymium.junit4.testclasses.browser.FixedRandomnessOfRandomBrowser;
-import com.xceptance.neodymium.util.Neodymium;
-import com.xceptance.neodymium.util.NeodymiumRandom;
+import org.neodymium.util.Neodymium;
+import org.neodymium.util.NeodymiumRandom;
 import org.aeonbits.owner.ConfigFactory;
 import org.junit.Assert;
 import org.junit.Before;

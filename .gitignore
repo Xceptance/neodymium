@@ -33,9 +33,6 @@ embeddedLocalProxySelfSignedRootCertificate.p12
 /.allure/
 /allure-report/
 /aura-allure-results-temp/
-/target/aura-sandbox/
-/src/test/java/com/xceptance/neodymium/aura/sandbox/
-/chat-history/
 
 
 
@@ -54,16 +51,20 @@ neodymium.code-workspace
 tmp/
 
 # Neodymium Aura Reports History
-/report-history/
+/allure-reports-history/
 
 # Antigravity CLI
 .antigravitycli/
 
 # Neodymium AI playbooks
 /src/test/resources/ai-playbooks/
+/src/test/resources/playbooks/integration/programmatic/
 
-# Temporary UI test YAML files
-/src/test/resources/dummy-test-run-*.yaml
-/src/test/resources/dashboard-ui-dummy-*.yaml
-/src/test/resources/*-dummy*.yaml
+/chat-history/
 
+# Added by code-review-graph
+.code-review-graph/
+
+# Neodymium Aura Manager sandbox folders
+/src/test/java/com/xceptance/neodymium/aura/sandbox/
+/target/aura-sandbox/

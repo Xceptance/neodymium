@@ -6,7 +6,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.xceptance.neodymium.junit4.tests.NeodymiumWebDriverTest;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.util.Neodymium;
 
 public class BrowserChildTest extends BrowserParent
 {

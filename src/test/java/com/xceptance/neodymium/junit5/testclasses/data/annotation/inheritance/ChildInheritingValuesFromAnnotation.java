@@ -2,8 +2,8 @@ package com.xceptance.neodymium.junit5.testclasses.data.annotation.inheritance;
 
 import org.junit.Assert;
 
-import com.xceptance.neodymium.common.testdata.DataItem;
-import com.xceptance.neodymium.junit5.NeodymiumTest;
+import org.neodymium.common.testdata.DataItem;
+import org.neodymium.junit5.NeodymiumTest;
 
 public class ChildInheritingValuesFromAnnotation extends ParentClassWithValuesFromAnnotation
 {

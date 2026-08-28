@@ -122,7 +122,7 @@ function handleDevNeoRowInput(inputElem) {
             newRow.innerHTML = `
                 <input type="text" name="devNeoKey" class="modal-input dev-neo-key-input" list="autocompleteKeysList" value="" placeholder="Add new property key..." oninput="handleDevNeoRowInput(this)"/>
                 <input type="text" name="devNeoValue" class="modal-input dev-neo-val-input" value="" placeholder="Value..." oninput="handleDevNeoRowInput(this)"/>
-                <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><i class="fa-solid fa-trash"></i></button>
+                <button type="button" class="btn-icon-danger" onclick="removeDevNeoRow(this)" title="Delete property override"><span class="material-symbols-outlined">delete</span></button>
             `;
             container.appendChild(newRow);
         }

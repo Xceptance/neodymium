@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.xceptance.neodymium.common.retry.Retry;
+import org.neodymium.common.retry.Retry;
 
 @Retry(exceptions =
 {
