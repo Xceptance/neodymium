@@ -20,9 +20,11 @@ package org.neodymium.ai.report;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.neodymium.ai.prompt.VerificationResult;
 
 /**
  * Report generator producing GitHub-flavored Markdown documents from {@link TestExecutionReport}.
@@ -321,22 +323,55 @@ public final class MarkdownReportGenerator
             }
             sb.append("\n");
         }
-        if (step.getPesapCalls() > 0 || step.getStandardCalls() > 0)
+        if (step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0)
         {
             sb.append("- **LLM Invocations:** ");
+            final List<String> callSummaries = new ArrayList<>();
             if (step.getPesapCalls() > 0)
             {
-                sb.append("PESAP: ").append(step.getPesapCalls()).append(" calls (").append(NUMBER_FORMAT.format(step.getPesapInputTokens() + step.getPesapOutputTokens())).append(" tokens)");
+                callSummaries.add("PESAP: " + step.getPesapCalls() + " calls (" + NUMBER_FORMAT.format(step.getPesapInputTokens() + step.getPesapOutputTokens()) + " tokens)");
             }
             if (step.getStandardCalls() > 0)
             {
-                if (step.getPesapCalls() > 0)
-                {
-                    sb.append(" | ");
-                }
-                sb.append("Action: ").append(step.getStandardCalls()).append(" calls (").append(NUMBER_FORMAT.format(step.getStandardInputTokens() + step.getStandardOutputTokens())).append(" tokens)");
+                callSummaries.add("Action: " + step.getStandardCalls() + " calls (" + NUMBER_FORMAT.format(step.getStandardInputTokens() + step.getStandardOutputTokens()) + " tokens)");
+            }
+            if (step.getVerificationCalls() > 0)
+            {
+                callSummaries.add("Verification: " + step.getVerificationCalls() + " calls (" + NUMBER_FORMAT.format(step.getVerificationInputTokens() + step.getVerificationOutputTokens()) + " tokens)");
+            }
+            if (step.getRcaCalls() > 0)
+            {
+                callSummaries.add("Visual RCA: " + step.getRcaCalls() + " calls (" + NUMBER_FORMAT.format(step.getRcaInputTokens() + step.getRcaOutputTokens()) + " tokens)");
+            }
+            sb.append(String.join(" | ", callSummaries)).append("\n");
+        }
+        if (step.getVerificationResult() != null)
+        {
+            final VerificationResult vr = step.getVerificationResult();
+            final String vStatus = vr.passed() ? "✅ PASSED" : "❌ FAILED";
+            final String vSummary = vr.getOverallVerdict() != null && vr.getOverallVerdict().summary() != null ? vr.getOverallVerdict().summary() : "";
+            sb.append("- **Semantic Verification:** ").append(vStatus);
+            if (!vSummary.isBlank())
+            {
+                sb.append(" — _").append(escapeMarkdown(vSummary)).append("_");
             }
             sb.append("\n");
+            if (vr.getRubrics() != null)
+            {
+                final VerificationResult.Rubrics rubrics = vr.getRubrics();
+                if (rubrics.intentMatch() != null)
+                {
+                    sb.append("  - **Intent Check:** `[").append(rubrics.intentMatch().score()).append("]` ").append(escapeMarkdown(rubrics.intentMatch().analysis())).append("\n");
+                }
+                if (rubrics.visualDelta() != null)
+                {
+                    sb.append("  - **Visual Check:** `[").append(rubrics.visualDelta().score()).append("]` ").append(escapeMarkdown(rubrics.visualDelta().analysis())).append("\n");
+                }
+                if (rubrics.absenceOfErrors() != null)
+                {
+                    sb.append("  - **Error Check:** `[").append(rubrics.absenceOfErrors().score()).append("]` ").append(escapeMarkdown(rubrics.absenceOfErrors().analysis())).append("\n");
+                }
+            }
         }
         if (step.getReasoning() != null && !step.getReasoning().isBlank())
         {

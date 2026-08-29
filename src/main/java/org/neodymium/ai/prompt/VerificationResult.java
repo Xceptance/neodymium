@@ -75,9 +75,21 @@ public final class VerificationResult
      *
      * @return true if passed, false otherwise
      */
+    @JsonProperty("passed")
     public boolean passed()
     {
         return overallVerdict != null && overallVerdict.passed();
+    }
+
+    /**
+     * Checks if the verification passed (JavaBean accessor).
+     *
+     * @return true if passed, false otherwise
+     */
+    @JsonProperty("passed")
+    public boolean isPassed()
+    {
+        return passed();
     }
 
     /**

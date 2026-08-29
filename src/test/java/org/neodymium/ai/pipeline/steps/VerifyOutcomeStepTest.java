@@ -169,6 +169,10 @@ public class VerifyOutcomeStepTest
         final List<String> warnings = (List<String>) context.getTransientData().get("verificationWarnings");
         // Assert no verification warnings recorded for passing outcome
         Assertions.assertTrue(warnings == null || warnings.isEmpty());
+        Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
+        Assertions.assertTrue(playbookStep.getVerificationResult().passed());
+        Assertions.assertEquals("Step execution verified", playbookStep.getVerificationResult().getOverallVerdict().summary());
+        Assertions.assertEquals("PASS", playbookStep.getVerificationResult().getRubrics().intentMatch().score());
     }
 
     /**
@@ -204,6 +208,9 @@ public class VerifyOutcomeStepTest
         Assertions.assertNotNull(warnings);
         Assertions.assertEquals(1, warnings.size());
         Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
+        Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
+        Assertions.assertFalse(playbookStep.getVerificationResult().passed());
+        Assertions.assertEquals("FAIL", playbookStep.getVerificationResult().getRubrics().intentMatch().score());
     }
 
     /**

@@ -378,6 +378,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setSemanticIntent(pbStep.getSemanticIntent().name());
                     }
+                    if (pbStep.getVerificationResult() != null)
+                    {
+                        targetStep.setVerificationResult(pbStep.getVerificationResult());
+                    }
                 }
             }
         }
@@ -933,6 +937,16 @@ public final class PreliminaryReportListener implements ExecutionListener
         entry.setStandardInputTokens(stats.getStandardInputTokens());
         entry.setStandardOutputTokens(stats.getStandardOutputTokens());
         entry.setStandardCachedTokens(stats.getStandardCachedTokens());
+
+        entry.setVerificationCalls(stats.getVerificationCalls());
+        entry.setVerificationInputTokens(stats.getVerificationInputTokens());
+        entry.setVerificationOutputTokens(stats.getVerificationOutputTokens());
+        entry.setVerificationCachedTokens(stats.getVerificationCachedTokens());
+
+        entry.setRcaCalls(stats.getRcaCalls());
+        entry.setRcaInputTokens(stats.getRcaInputTokens());
+        entry.setRcaOutputTokens(stats.getRcaOutputTokens());
+        entry.setRcaCachedTokens(stats.getRcaCachedTokens());
 
         if (stats.getSubStats() != null && !stats.getSubStats().isEmpty())
         {

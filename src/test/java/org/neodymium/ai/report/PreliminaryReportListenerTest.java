@@ -20,6 +20,7 @@ package org.neodymium.ai.report;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,7 +45,9 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.diagnostic.DiagnosticWarningEvent;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
+import org.neodymium.ai.prompt.VerificationResult;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
@@ -1250,6 +1253,108 @@ public class PreliminaryReportListenerTest
         assertTrue(html.contains("LLM provider communication failed: connection timeout"), "Error message must be present in HTML");
         assertTrue(html.contains("inspErrorBanner"), "Inspector error banner element must be present");
         assertTrue(html.contains("tabErrorBadge"), "AI Notes error badge must be present in tab bar");
+    }
+
+    @Test
+    @DisplayName("Verify semantic outcome verification rubrics and verification token tracking across HTML, Markdown, and JSON reports")
+    public void testSemanticOutcomeVerificationReporting(@TempDir final Path reportDir) throws Exception
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON), true);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            // Populate category usages for verification
+            ctx.getTransientData().put(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 1);
+            ctx.getTransientData().put(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE, new TokenUsage(1500, 120, 1620, 300));
+
+            // Populate step stats with verification call
+            final StepStats stats1 = new StepStats("Click on Shopping Cart", 1000);
+            stats1.setDurationMs(2500);
+            stats1.addStandardCall(500, 50, 0);
+            stats1.addVerificationCall(1500, 120, 300);
+            ctx.getTransientData().put("execution.stepStatsList", List.of(stats1));
+
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            listener.getReport().setTestClass("org.neodymium.ai.integration.OutcomeVerificationReportTest");
+            listener.getReport().setTestMethod("testVerificationReporting");
+
+            // Create step with verification result
+            final PlaybookStep step = new PlaybookStep("Click on Shopping Cart");
+            step.setSourceFile("OutcomeTest.yaml");
+            step.setLineNumber(12);
+
+            final VerificationResult.Rubrics rubrics = new VerificationResult.Rubrics(
+                new VerificationResult.RubricItem("Cart icon clicked and badge updated", "PASS"),
+                new VerificationResult.RubricItem("Flyout drawer opened smoothly", "PASS"),
+                new VerificationResult.RubricItem("No error dialog visible", "PASS")
+            );
+            final VerificationResult.OverallVerdict overall = new VerificationResult.OverallVerdict(true, "Shopping cart drawer opened with updated total.");
+            final VerificationResult verifResult = new VerificationResult(rubrics, overall);
+            step.setVerificationResult(verifResult);
+
+            bus.dispatch(new StepStartedEvent(step, 0));
+
+            // Dispatch Action LLM call and Verification LLM call
+            final LlmRequest actReq = new LlmRequest("Action System", "Click action", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse actResp = new LlmResponse("{\"type\":\"CLICK\"}", new TokenUsage(500, 50, 550, 0), "mock-action-model");
+            bus.dispatch(new LlmRequestSentEvent(actReq, "ACTION"));
+            bus.dispatch(new LlmResponseReceivedEvent(actReq, actResp, 200, "ACTION"));
+
+            final LlmRequest verifReq = new LlmRequest("Verification System", "Verify outcome", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse verifResp = new LlmResponse("{\"overallVerdict\":{\"passed\":true}}", new TokenUsage(1500, 120, 1620, 300), "mock-verif-model");
+            bus.dispatch(new LlmRequestSentEvent(verifReq, "VERIFICATION"));
+            bus.dispatch(new LlmResponseReceivedEvent(verifReq, verifResp, 450, "VERIFICATION"));
+
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(3000, true));
+
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+            final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+            final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+
+            assertTrue(Files.exists(htmlPath), "HTML report must exist");
+            assertTrue(Files.exists(mdPath), "Markdown report must exist");
+            assertTrue(Files.exists(jsonPath), "JSON report must exist");
+
+            // Verify HTML content
+            final String html = Files.readString(htmlPath);
+            assertTrue(html.contains("VERIFIED"), "HTML must contain VERIFIED badge");
+            assertTrue(html.contains("tabBtn-verification"), "HTML must contain Verification tab button");
+            assertTrue(html.contains("panel-verification"), "HTML must contain Verification tab panel");
+            assertTrue(html.contains("VERIFICATION"), "HTML LLM table must list VERIFICATION capability call");
+            assertTrue(html.contains("Shopping cart drawer opened with updated total."), "HTML must contain verification summary");
+
+            // Verify Markdown content
+            final String md = Files.readString(mdPath);
+            assertTrue(md.contains("Semantic Verification:"), "Markdown must contain Semantic Verification section");
+            assertTrue(md.contains("PASSED"), "Markdown must show PASSED verification status");
+            assertTrue(md.contains("Intent Check:"), "Markdown must list Intent Check rubric");
+            assertTrue(md.contains("Visual Check:"), "Markdown must list Visual Check rubric");
+            assertTrue(md.contains("Error Check:"), "Markdown must list Error Check rubric");
+            assertTrue(md.contains("Verification: 1 calls (1,620 tokens)"), "Markdown must show Verification token breakdown");
+
+            // Verify JSON content
+            final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+            final JsonNode stepNode = root.get("steps").get(0);
+            assertEquals(1, stepNode.get("verificationCalls").asInt());
+            assertEquals(1500, stepNode.get("verificationInputTokens").asLong());
+            assertEquals(120, stepNode.get("verificationOutputTokens").asLong());
+            assertEquals(300, stepNode.get("verificationCachedTokens").asLong());
+            assertNotNull(stepNode.get("verificationResult"));
+            assertTrue(stepNode.get("verificationResult").get("passed").asBoolean());
+            assertEquals("Shopping cart drawer opened with updated total.", stepNode.get("verificationResult").get("overallVerdict").get("summary").asText());
+            assertEquals(2, root.get("llmCalls").size(), "Total LLM calls in report must include both Action and Verification calls");
+            assertEquals("VERIFICATION", root.get("llmCalls").get(1).get("capability").asText());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 }
 
