@@ -30,9 +30,10 @@ Predict minimal context level, semantic intent, and step splits for the given te
    - Default: Omit 'sp' (keep unsplit). Unsplit instructions are always safer.
    - Split ONLY when the instruction contains one of these two cases in ANY natural language:
      1. Multiple distinct target elements with explicit independent non-conditional actions or values (e.g. "Type user in #user, type pass in #pass, click Login", "Card number is '4111...', expiry '12/29', CVV '111'").
-     2. Sequential multi-action interaction chains requiring intermediate UI state changes before the next action can occur. This includes opening a menu, dropdown, modal, popup, accordion, or selector and selecting/clicking/typing into a revealed item (e.g. "Open the selector and click 'Option A'", "Locate a product card and click 'Add to Cart'").
+     2. Sequential multi-action interaction chains requiring intermediate UI state changes before the next action can occur. This includes opening a menu, dropdown, modal, popup, accordion, or selector and selecting/clicking/typing into a revealed item (e.g. "Open the selector and click 'Option A'", "Open country modal and select 'Sweden'").
    - Complete Action Invariant: Every split sub-step MUST be a complete standalone action containing its own distinct action verb or explicit target/value assignment.
-   - NEVER split prepositional, adverbial, origin, destination, location, or contextual clauses modifying a single action verb into standalone fragments in ANY natural language.
+   - NEVER split prepositional, adverbial, origin, destination, location, or contextual clauses modifying a single action verb into standalone fragments in ANY natural language (e.g. "Navigate to cart from mini-cart", "Gå till varukorgen från minivarukorgen" must remain unsplit).
+   - NEVER split scoped element targeting phrases into multi-step navigation (e.g. "Click 'Add to Cart' on the first product card", "Klicka på knappen 'Add to Cart' på det första produktkortet", "In header, click Login"). These are single atomic actions scoped to a container and MUST remain unsplit.
    - NEVER split instructions containing conditional logic, branch clauses, or state dependencies in ANY language (e.g. "If...", "When...", "Unless...", "In case..."), simple single-action element targeting ("Locate X and click it"), or referential dependencies ("...and hover over it"). All actions in a conditional sentence or target-and-action sentence must remain unsplit as a single step.
 
 ## Output Format

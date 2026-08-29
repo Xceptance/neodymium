@@ -188,6 +188,8 @@ public final class PesapPromptTest
         assertTrue(systemMessage.contains("Semantic Intent ('i')"));
         assertTrue(systemMessage.contains("Sequential multi-action interaction chains requiring intermediate UI state changes"));
         assertTrue(systemMessage.contains("Complete Action Invariant"));
+        assertTrue(systemMessage.contains("NEVER split scoped element targeting phrases"));
+        assertTrue(systemMessage.contains("NEVER split prepositional, adverbial, origin, destination, location, or contextual clauses"));
     }
 
     /**
@@ -231,5 +233,23 @@ public final class PesapPromptTest
         final PesapResult enResult = prompt.parseResponse(enJson, ctx);
         assertEquals(SemanticIntent.SELECT, enResult.intent());
         assertTrue(enResult.intent().isMutating());
+    }
+
+    /**
+     * Verifies that Swedish and multilingual scoped instructions parse as single atomic actions without splits.
+     */
+    @Test
+    public void testParseResponseScopedInstructionsRemainUnsplit() throws Exception
+    {
+        final PesapPrompt prompt = new PesapPrompt("Klicka på knappen 'Add to Cart' på det första produktkortet");
+        final ExecutionContext ctx = new ExecutionContext(null);
+
+        final String json = """
+            {"c":"LEAN","jm":false,"i":"CLICK"}
+            """;
+        final PesapResult result = prompt.parseResponse(json, ctx);
+        assertEquals(SemanticIntent.CLICK, result.intent());
+        assertEquals("LEAN", result.contextLevel());
+        assertTrue(result.splitSteps().isEmpty());
     }
 }
