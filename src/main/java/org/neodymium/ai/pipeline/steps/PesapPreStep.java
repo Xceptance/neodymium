@@ -35,6 +35,7 @@ import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.PesapClassificationException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
@@ -133,57 +134,89 @@ public final class PesapPreStep implements PipelineStep
                     LOGGER.trace("User Prompt:\n{}", request.userMessage());
                 }
 
-                if (this.session != null && this.session.getEventBus() != null)
+                PesapPrompt.PesapResult pesapResult = null;
+                Exception lastException = null;
+
+                for (int attempt = 1; attempt <= 2; attempt++)
                 {
-                    this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "PESAP"));
-                }
-
-                final long startTime = System.currentTimeMillis();
-                final LlmResponse response = provider.chat(request);
-                final long durationMs = System.currentTimeMillis() - startTime;
-
-                if (this.session != null && this.session.getEventBus() != null)
-                {
-                    this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "PESAP"));
-                }
-
-                LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)",
-                    response.content() != null ? response.content().length() : 0, durationMs);
-                if (LOGGER.isTraceEnabled())
-                {
-                    LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
-                }
-
-                context.getTransientData().compute("pesapCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
-
-                final TokenUsage newUsage = response.tokenUsage();
-                if (newUsage != null)
-                {
-                    if (stats != null)
+                    if (this.session != null && this.session.getEventBus() != null)
                     {
-                        stats.addPesapCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
+                        this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "PESAP"));
                     }
 
-                    LOGGER.debug("   📊 [Pre-Step PESAP] Tokens: {} in ({} cached) → {} out (total: {})",
-                        newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
+                    final long startTime = System.currentTimeMillis();
+                    try
+                    {
+                        final LlmResponse response = provider.chat(request);
+                        final long durationMs = System.currentTimeMillis() - startTime;
 
-                    final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
-                    if (existing == null)
-                    {
-                        context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, newUsage);
+                        if (this.session != null && this.session.getEventBus() != null)
+                        {
+                            this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "PESAP"));
+                        }
+
+                        LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms, attempt: {})",
+                            response.content() != null ? response.content().length() : 0, durationMs, attempt);
+                        if (LOGGER.isTraceEnabled())
+                        {
+                            LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                        }
+
+                        context.getTransientData().compute("pesapCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
+
+                        final TokenUsage newUsage = response.tokenUsage();
+                        if (newUsage != null)
+                        {
+                            if (stats != null)
+                            {
+                                stats.addPesapCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
+                            }
+
+                            LOGGER.debug("   📊 [Pre-Step PESAP] Tokens: {} in ({} cached) → {} out (total: {})",
+                                newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
+
+                            final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
+                            if (existing == null)
+                            {
+                                context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, newUsage);
+                            }
+                            else
+                            {
+                                context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new TokenUsage(
+                                    existing.inputTokenCount() + newUsage.inputTokenCount(),
+                                    existing.outputTokenCount() + newUsage.outputTokenCount(),
+                                    existing.totalTokenCount() + newUsage.totalTokenCount(),
+                                    existing.cachedTokenCount() + newUsage.cachedTokenCount()
+                                ));
+                            }
+                        }
+
+                        final PesapPrompt.PesapResult parsed = pesapPrompt.parseResponse(response.content(), context);
+                        if (parsed != null && parsed.intent() != null)
+                        {
+                            pesapResult = parsed;
+                            break;
+                        }
+                        LOGGER.warn("⚠️ [Pre-Step PESAP] Received void/unclassified intent on attempt {} for instruction '{}'",
+                            attempt, resolvedInstruction);
                     }
-                    else
+                    catch (final Exception e)
                     {
-                        context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new TokenUsage(
-                            existing.inputTokenCount() + newUsage.inputTokenCount(),
-                            existing.outputTokenCount() + newUsage.outputTokenCount(),
-                            existing.totalTokenCount() + newUsage.totalTokenCount(),
-                            existing.cachedTokenCount() + newUsage.cachedTokenCount()
-                        ));
+                        lastException = e;
+                        LOGGER.warn("⚠️ [Pre-Step PESAP] LLM call or response parsing failed on attempt {} for instruction '{}': {}",
+                            attempt, resolvedInstruction, e.getMessage());
                     }
                 }
 
-                final PesapPrompt.PesapResult pesapResult = pesapPrompt.parseResponse(response.content(), context);
+                if (pesapResult == null || pesapResult.intent() == null)
+                {
+                    context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+                    this.step.setSemanticIntent(null);
+                    throw new PesapClassificationException(
+                        "Pre-Step PESAP failed to classify semantic intent for instruction: '" + resolvedInstruction + "' after retry.",
+                        lastException
+                    );
+                }
 
                 final boolean isPureNavigation = resolvedInstruction != null && resolvedInstruction.trim().matches("(?i)^(open|navigate\\s+to|go\\s+to)\\s+https?://\\S+$");
                 if (!isPureNavigation && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
@@ -220,44 +253,26 @@ public final class PesapPreStep implements PipelineStep
                     return true;
                 }
 
-                if (pesapResult.intent() != null)
+                context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, pesapResult.intent());
+                this.step.setSemanticIntent(pesapResult.intent());
+                if (stats != null)
                 {
-                    context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, pesapResult.intent());
-                    this.step.setSemanticIntent(pesapResult.intent());
-                    if (stats != null)
-                    {
-                        stats.setSemanticIntent(pesapResult.intent().name());
-                    }
-                    LOGGER.debug("   🎯 [Pre-Step PESAP] Classified intent: {}", pesapResult.intent());
+                    stats.setSemanticIntent(pesapResult.intent().name());
                 }
-                else
-                {
-                    context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
-                    this.step.setSemanticIntent(null);
-                }
+                LOGGER.debug("   🎯 [Pre-Step PESAP] Classified intent: {}", pesapResult.intent());
 
-                if (pesapResult.intent() == org.neodymium.ai.model.SemanticIntent.ASSERT_METADATA)
+                final ContextLevel cleanedLevel = ContextLevel.clean(pesapResult.contextLevel(), pesapResult.intent(), ContextLevel.LEAN);
+                final ContextLevel currentLevel = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                final boolean isExplicitTag = (currentLevel == ContextLevel.HINT || (currentLevel != null && currentLevel.includesScreenshot()));
+                if (!isExplicitTag || (cleanedLevel.ordinal() > currentLevel.ordinal()))
                 {
-                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.MINIMAL);
-                    this.step.setContextLevel(ContextLevel.MINIMAL.name());
+                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, cleanedLevel);
+                    this.step.setContextLevel(cleanedLevel.name());
                 }
-                else if (pesapResult.contextLevel() != null)
-                {
-                    try
-                    {
-                        final ContextLevel predicted = ContextLevel.valueOf(pesapResult.contextLevel().toUpperCase().trim());
-                        final ContextLevel currentLevel = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                        final boolean isExplicitTag = (currentLevel == ContextLevel.HINT || (currentLevel != null && currentLevel.includesScreenshot()));
-                        if (!isExplicitTag || (predicted.ordinal() > currentLevel.ordinal()))
-                        {
-                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, predicted);
-                            this.step.setContextLevel(predicted.name());
-                        }
-                    }
-                    catch (final Exception ignored)
-                    {
-                    }
-                }
+            }
+            catch (final PesapClassificationException pce)
+            {
+                throw pce;
             }
             catch (final Exception e)
             {

@@ -384,7 +384,11 @@ public final class ExecuteActionsStep implements PipelineStep
                     final Long lastActionEndTime = (Long) context.getTransientData().get("KEY_LAST_ACTION_END_TIME");
                     if (lastActionEndTime != null && sanitized.getDelayMs() == null)
                     {
-                        sanitized.setDelayMs(Math.max(0L, actionStartTime - lastActionEndTime));
+                        final long rawDelay = Math.max(0L, actionStartTime - lastActionEndTime);
+                        // Clamp delay to max 3000ms to eliminate LLM retry turnaround inflation
+                        final long delayMs = Math.min(3000L, rawDelay);
+                        sanitized.setDelayMs(delayMs);
+                        action.setDelayMs(delayMs);
                     }
                 }
 
@@ -519,6 +523,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     if (!isReplayingStep)
                     {
                         sanitized.setDurationMs(actionDuration);
+                        action.setDurationMs(actionDuration);
                         context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis());
                     }
                 }
@@ -627,6 +632,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     cause = cause.getCause();
                 }
 
+                context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis());
                 if (action.getType() != null && action.getType().toUpperCase().startsWith("ASSERT"))
                 {
                     if (isAssertionFailure)

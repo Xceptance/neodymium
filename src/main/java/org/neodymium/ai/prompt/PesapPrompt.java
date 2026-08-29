@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 
@@ -127,7 +128,7 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
 
         final JsonNode root = MAPPER.readTree(jsonContent);
         
-        final String contextLevel = root.hasNonNull("c") ? root.path("c").asText("LEAN").toUpperCase().trim() : "LEAN";
+        final String rawContextLevel = root.hasNonNull("c") ? root.path("c").asText("LEAN").toUpperCase().trim() : "LEAN";
         final boolean requiresJavaMethods = root.hasNonNull("jm") && root.path("jm").asBoolean();
         
         final List<String> splitSteps = new ArrayList<>();
@@ -142,7 +143,8 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
 
         final String rawIntent = root.hasNonNull("i") ? root.path("i").asText(null) : null;
         final SemanticIntent intent = SemanticIntent.fromCode(rawIntent);
+        final ContextLevel cleanedLevel = ContextLevel.clean(rawContextLevel, intent, ContextLevel.LEAN);
 
-        return new PesapResult(contextLevel, requiresJavaMethods, splitSteps, intent);
+        return new PesapResult(cleanedLevel.name(), requiresJavaMethods, splitSteps, intent);
     }
 }

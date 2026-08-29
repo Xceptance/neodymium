@@ -76,6 +76,16 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
+        final ContextLevel activeLevel =
+            (context != null && context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl)
+                ? cl
+                : null;
+
+        if (activeLevel == ContextLevel.VISUAL)
+        {
+            return SystemPromptAddonHelper.appendAddon(AiAgentPrompts.getVisualOnlyPrompt(), "general", context);
+        }
+
         String basePrompt = AiAgentPrompts.getActionExtractionPrompt();
 
         final Object targetExecutor = context != null ? context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;

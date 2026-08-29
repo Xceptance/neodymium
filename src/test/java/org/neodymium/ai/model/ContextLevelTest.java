@@ -99,4 +99,59 @@ public class ContextLevelTest
         Assertions.assertTrue(ContextLevel.RICH.includesRichMetadata());
         Assertions.assertTrue(ContextLevel.VISUAL_RICH.includesRichMetadata());
     }
+
+    @Test
+    public void testCleanAssertIntentPromotion()
+    {
+        // ASSERT intent must promote non-text levels to STANDARD
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean(ContextLevel.MINIMAL, SemanticIntent.ASSERT));
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean(ContextLevel.LEAN, SemanticIntent.ASSERT));
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean(ContextLevel.HINT, SemanticIntent.ASSERT));
+        
+        // STANDARD, RICH, and VISUAL levels should be preserved
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean(ContextLevel.STANDARD, SemanticIntent.ASSERT));
+        Assertions.assertEquals(ContextLevel.RICH, ContextLevel.clean(ContextLevel.RICH, SemanticIntent.ASSERT));
+        Assertions.assertEquals(ContextLevel.VISUAL, ContextLevel.clean(ContextLevel.VISUAL, SemanticIntent.ASSERT));
+        Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.clean(ContextLevel.VISUAL_LEAN, SemanticIntent.ASSERT));
+        Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.clean(ContextLevel.VISUAL_RICH, SemanticIntent.ASSERT));
+    }
+
+    @Test
+    public void testCleanAssertMetadataClamping()
+    {
+        // ASSERT_METADATA intent must clamp to MINIMAL
+        Assertions.assertEquals(ContextLevel.MINIMAL, ContextLevel.clean(ContextLevel.STANDARD, SemanticIntent.ASSERT_METADATA));
+        Assertions.assertEquals(ContextLevel.MINIMAL, ContextLevel.clean(ContextLevel.RICH, SemanticIntent.ASSERT_METADATA));
+        Assertions.assertEquals(ContextLevel.MINIMAL, ContextLevel.clean(ContextLevel.LEAN, SemanticIntent.ASSERT_METADATA));
+        Assertions.assertEquals(ContextLevel.MINIMAL, ContextLevel.clean(ContextLevel.MINIMAL, SemanticIntent.ASSERT_METADATA));
+        
+        // Visual levels are still preserved
+        Assertions.assertEquals(ContextLevel.VISUAL, ContextLevel.clean(ContextLevel.VISUAL, SemanticIntent.ASSERT_METADATA));
+    }
+
+    @Test
+    public void testCleanInteractiveIntents()
+    {
+        // Interactive intents should preserve LEAN or STANDARD
+        Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.clean(ContextLevel.LEAN, SemanticIntent.CLICK));
+        Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.clean(ContextLevel.LEAN, SemanticIntent.TYPE));
+        Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.clean(ContextLevel.LEAN, SemanticIntent.SELECT));
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean(ContextLevel.STANDARD, SemanticIntent.CLICK));
+    }
+
+    @Test
+    public void testCleanStringOverloadWithFallbacks()
+    {
+        // Unparseable/null strings with ASSERT should produce STANDARD
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean("invalid_level", SemanticIntent.ASSERT, null));
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean((String) null, SemanticIntent.ASSERT, null));
+        
+        // Unparseable/null strings with CLICK should produce LEAN
+        Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.clean("invalid_level", SemanticIntent.CLICK, null));
+        Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.clean((String) null, SemanticIntent.CLICK, null));
+
+        // Valid strings
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.clean("standard", SemanticIntent.CLICK, null));
+        Assertions.assertEquals(ContextLevel.RICH, ContextLevel.clean("RICH", SemanticIntent.TYPE, null));
+    }
 }

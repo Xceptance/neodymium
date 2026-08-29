@@ -98,13 +98,15 @@ public final class PesapPromptTest
             """;
         final PesapResult assertResult = prompt.parseResponse(assertJson, new ExecutionContext(null));
         assertEquals(SemanticIntent.ASSERT, assertResult.intent());
+        assertEquals("STANDARD", assertResult.contextLevel());
         assertTrue(assertResult.intent().isAssertion());
 
         final String metaJson = """
-            {"c":"MINIMAL","jm":false,"i":"ASSERT_METADATA"}
+            {"c":"STANDARD","jm":false,"i":"ASSERT_METADATA"}
             """;
         final PesapResult metaResult = prompt.parseResponse(metaJson, new ExecutionContext(null));
         assertEquals(SemanticIntent.ASSERT_METADATA, metaResult.intent());
+        assertEquals("MINIMAL", metaResult.contextLevel());
         assertTrue(metaResult.intent().isAssertion());
 
         final String typeJson = """
@@ -112,6 +114,7 @@ public final class PesapPromptTest
             """;
         final PesapResult typeResult = prompt.parseResponse(typeJson, new ExecutionContext(null));
         assertEquals(SemanticIntent.TYPE, typeResult.intent());
+        assertEquals("LEAN", typeResult.contextLevel());
         assertTrue(typeResult.intent().isMutating());
     }
 
@@ -202,6 +205,7 @@ public final class PesapPromptTest
             """;
         final PesapResult frResult = prompt.parseResponse(frJson, ctx);
         assertEquals(SemanticIntent.ASSERT, frResult.intent());
+        assertEquals("STANDARD", frResult.contextLevel());
         assertTrue(frResult.intent().isAssertion());
 
         // German: "Klicken Sie auf den Button 'In den Warenkorb'" -> CLICK

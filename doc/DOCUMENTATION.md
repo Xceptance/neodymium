@@ -511,8 +511,8 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 
 | Property | Default | Description |
 | :--- | :--- | :--- |
-| `neodymium.ai.replay.useRecordedDelays` | `false` | When `true`, replay pauses proportionally to recorded delays between actions/steps. |
-| `neodymium.ai.replay.delayScale` | `1.0` | Multiplier for recorded delays (e.g. `0.5` for 2x replay speed, `1.0` for real-time pacing). |
+| `neodymium.ai.replay.delayScale` | `0.0` | Multiplier applied to recorded delays (`0.0` = off / instant execution for fast CI/CD builds; `1.0` = real-time pacing; `0.5` = 2x speed). |
+| `neodymium.ai.replay.useRecordedDelays` | `false` | (Legacy) When `true` without `delayScale`, enables replay pacing at scale `1.0`. |
 | `neodymium.ai.visual.postActionSettleMs` | `1000` | Minimum settling pause in milliseconds before capturing visual screenshots for SSIM baseline checks. |
 
 ---
@@ -1052,8 +1052,8 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 ### 8.1 Core Execution Settings
 * `neodymium.ai.executionMode` - Defines global fallback execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`). (Default: `REPLAY_WITH_HEALING`)
 * `neodymium.ai.playbook.recordingDirectory` - Primary directory for saving and loading Playbook JSON execution recordings.
-* `neodymium.ai.replay.useRecordedDelays` - (Boolean) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
-* `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. (Default: `1.0`)
+* `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. When `0.0`, pacing is disabled for maximum CI/CD speed. (Default: `0.0`)
+* `neodymium.ai.replay.useRecordedDelays` - (Boolean, Legacy) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
 
 ### 8.2 Provider and Model Configuration
 * `neodymium.ai.provider` - Global active LLM provider (`gemini`, `openai`, `vertex`, `mistral`, `mock`). (Default: `gemini`)

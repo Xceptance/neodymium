@@ -19,6 +19,9 @@
 package org.neodymium.ai.pipeline.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmCapability;
@@ -30,13 +33,16 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.PesapClassificationException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.session.AiSession;
 
 /**
- * Unit tests for {@link PesapPreStep}.
+ * Unit tests for {@link PesapPreStep} verifying intent classification, context level cleaning,
+ * 1-retry handling, and {@link PesapClassificationException} throwing on unresolvable intents.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -48,7 +54,7 @@ public class PesapPreStepTest
     {
         final MockTargetExecutor executor = new MockTargetExecutor();
         final MockLlmProvider provider = new MockLlmProvider();
-        provider.addResponse(new LlmResponse("{\"c\": \"RICH\"}", null, "mock-model"));
+        provider.addResponse(new LlmResponse("{\"c\": \"RICH\", \"i\": \"CLICK\"}", null, "mock-model"));
 
         final LlmRegistry registry = new LlmRegistry();
         registry.registerProvider(LlmCapability.PESAP, provider);
@@ -63,9 +69,10 @@ public class PesapPreStepTest
         final PesapPreStep pesapStep = new PesapPreStep(step, session);
         final boolean isSplit = pesapStep.executePreStep(context);
 
-        org.junit.jupiter.api.Assertions.assertFalse(isSplit);
+        assertFalse(isSplit);
         assertEquals(ContextLevel.RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
         assertEquals("RICH", step.getContextLevel());
+        assertEquals(SemanticIntent.CLICK, step.getSemanticIntent());
     }
 
     @Test
@@ -74,7 +81,7 @@ public class PesapPreStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         final MockLlmProvider provider = new MockLlmProvider();
         provider.addResponse(new LlmResponse(
-            "{\"c\": \"MINIMAL\", \"sp\": [\"Click username\", \"Type admin\"]}",
+            "{\"c\": \"MINIMAL\", \"i\": \"TYPE\", \"sp\": [\"Click username\", \"Type admin\"]}",
             null,
             "mock-model"
         ));
@@ -92,7 +99,7 @@ public class PesapPreStepTest
         final PesapPreStep pesapStep = new PesapPreStep(parentStep, session);
         final boolean isSplit = pesapStep.executePreStep(context);
 
-        org.junit.jupiter.api.Assertions.assertTrue(isSplit);
+        assertTrue(isSplit);
         assertEquals(2, parentStep.getSubSteps().size());
         assertEquals("Click username", parentStep.getSubSteps().get(0).getInstruction());
         assertEquals("Type admin", parentStep.getSubSteps().get(1).getInstruction());
@@ -104,7 +111,7 @@ public class PesapPreStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         final MockLlmProvider provider = new MockLlmProvider();
         provider.addResponse(new LlmResponse(
-            "{\"c\": \"MINIMAL\", \"sp\": [\"Type \\\"john.doe.us.123456@example.com\\\" into email\", \"Type \\\"SecretPass1!\\\" into password\"]}",
+            "{\"c\": \"MINIMAL\", \"i\": \"TYPE\", \"sp\": [\"Type \\\"john.doe.us.123456@example.com\\\" into email\", \"Type \\\"SecretPass1!\\\" into password\"]}",
             null,
             "mock-model"
         ));
@@ -126,19 +133,21 @@ public class PesapPreStepTest
         final PesapPreStep pesapStep = new PesapPreStep(parentStep, session);
         final boolean isSplit = pesapStep.executePreStep(context);
 
-        org.junit.jupiter.api.Assertions.assertTrue(isSplit);
+        assertTrue(isSplit);
         assertEquals(2, parentStep.getSubSteps().size());
         assertEquals("Type \"${email}\" into email", parentStep.getSubSteps().get(0).getInstruction());
         assertEquals("Type \"${password}\" into password", parentStep.getSubSteps().get(1).getInstruction());
     }
 
     @Test
-    public void testPesapClearsPreviousIntentAndHandlesUnclassifiedIntent() throws PipelineException
+    public void testPesapRetriesOnVoidIntentAndSucceeds() throws PipelineException
     {
         final MockTargetExecutor executor = new MockTargetExecutor();
         final MockLlmProvider provider = new MockLlmProvider();
-        // Emits unclassified/invalid intent code (e.g. LLM typo)
-        provider.addResponse(new LlmResponse("{\"c\": \"LEAN\", \"i\": \"NAVGIATE\"}", null, "mock-model"));
+        // Attempt 1: void/empty JSON
+        provider.addResponse(new LlmResponse("{}", null, "mock-model"));
+        // Attempt 2: valid JSON with CLICK intent
+        provider.addResponse(new LlmResponse("{\"c\": \"LEAN\", \"i\": \"CLICK\"}", null, "mock-model"));
 
         final LlmRegistry registry = new LlmRegistry();
         registry.registerProvider(LlmCapability.PESAP, provider);
@@ -149,15 +158,64 @@ public class PesapPreStepTest
         final ExecutionContext context = session.getExecutionContext();
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
 
-        // Simulate stale intent from a prior step
-        context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, org.neodymium.ai.model.SemanticIntent.ASSERT);
-
-        final PlaybookStep step = new PlaybookStep("Navigate to cart page.");
+        final PlaybookStep step = new PlaybookStep("Click Submit");
         final PesapPreStep pesapStep = new PesapPreStep(step, session);
         final boolean isSplit = pesapStep.executePreStep(context);
 
-        org.junit.jupiter.api.Assertions.assertFalse(isSplit);
-        org.junit.jupiter.api.Assertions.assertNull(context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT));
-        org.junit.jupiter.api.Assertions.assertNull(step.getSemanticIntent());
+        assertFalse(isSplit);
+        assertEquals(SemanticIntent.CLICK, step.getSemanticIntent());
+        assertEquals(ContextLevel.LEAN, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+    }
+
+    @Test
+    public void testPesapThrowsPesapClassificationExceptionAfterExhaustingRetries()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        // Attempt 1: invalid/unrecognized intent
+        provider.addResponse(new LlmResponse("{\"c\": \"LEAN\", \"i\": \"UNKNOWN_INTENT\"}", null, "mock-model"));
+        // Attempt 2: empty response
+        provider.addResponse(new LlmResponse("{}", null, "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.PESAP, provider);
+        registry.setDefaultProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+
+        final PlaybookStep step = new PlaybookStep("Unclassifiable instruction");
+        final PesapPreStep pesapStep = new PesapPreStep(step, session);
+
+        assertThrows(PesapClassificationException.class, () -> pesapStep.executePreStep(context));
+    }
+
+    @Test
+    public void testPesapAssertPromotesContextLevelToStandard() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        // LLM returns MINIMAL for ASSERT intent -> should be promoted to STANDARD
+        provider.addResponse(new LlmResponse("{\"c\": \"MINIMAL\", \"i\": \"ASSERT\"}", null, "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.PESAP, provider);
+        registry.setDefaultProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+
+        final PlaybookStep step = new PlaybookStep("An order number matching regex 'V-[0-9]+-DE' is displayed.");
+        final PesapPreStep pesapStep = new PesapPreStep(step, session);
+        final boolean isSplit = pesapStep.executePreStep(context);
+
+        assertFalse(isSplit);
+        assertEquals(SemanticIntent.ASSERT, step.getSemanticIntent());
+        assertEquals(ContextLevel.STANDARD, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+        assertEquals("STANDARD", step.getContextLevel());
     }
 }

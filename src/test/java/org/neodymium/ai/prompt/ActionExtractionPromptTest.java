@@ -217,6 +217,48 @@ public final class ActionExtractionPromptTest
     }
 
     /**
+     * Verifies that compileSystemMessage uses the dedicated lightweight visual prompt at ContextLevel.VISUAL
+     * and excludes DOM locator rules and candidate locator rules.
+     */
+    @Test
+    public void testCompileSystemMessageVisualLevelUsesVisualOnlyPrompt()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new SelenideTargetExecutor());
+
+        final String systemMsg = prompt.compileSystemMessage(context);
+        assertNotNull(systemMsg);
+        assertTrue(systemMsg.contains("Analyze the visual screenshot to fulfill the active test instruction."), "Visual system prompt must contain visual instruction.");
+        assertTrue(systemMsg.contains("## Execution Guidelines"), "Visual system prompt must contain execution guidelines.");
+        assertFalse(systemMsg.contains("## Selenide/Selenium Engine Locators"), "Visual system prompt must not include Selenide locator rule.");
+        assertFalse(systemMsg.contains("## Candidate Locators & Ambiguity Evaluation"), "Visual system prompt must not include candidate locators rule.");
+        assertFalse(systemMsg.contains("## Action Rules"), "Visual system prompt must not include DOM action rules.");
+    }
+
+    /**
+     * Verifies that compileSystemMessage uses the standard action extraction prompt at non-VISUAL levels (e.g. VISUAL_LEAN, VISUAL_RICH, STANDARD).
+     */
+    @Test
+    public void testCompileSystemMessageNonVisualLevelsUseStandardPrompt()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+
+        for (final ContextLevel level : new ContextLevel[] { ContextLevel.MINIMAL, ContextLevel.LEAN, ContextLevel.STANDARD, ContextLevel.RICH, ContextLevel.VISUAL_LEAN, ContextLevel.VISUAL_RICH })
+        {
+            final ExecutionContext context = new ExecutionContext(null);
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, level);
+
+            final String systemMsg = prompt.compileSystemMessage(context);
+            assertNotNull(systemMsg);
+            assertTrue(systemMsg.contains("Analyze current DOM and visual state"), "Level " + level + " must use standard action extraction prompt.");
+        }
+    }
+
+    /**
      * Verifies that compileSystemMessage includes the Selenide W3C locator rule in Selenide mode,
      * but excludes it when executing under non-Selenide mode (e.g. RestTargetExecutor).
      */

@@ -533,12 +533,15 @@ public final class AiConfiguration
 
     /**
      * Checks if replay execution should respect recorded delays and pacing.
+     * Evaluates whether {@code neodymium.ai.replay.delayScale} is greater than {@code 0.0},
+     * falling back to legacy {@code neodymium.ai.replay.useRecordedDelays} if specified.
      *
-     * @return true if neodymium.ai.replay.useRecordedDelays is set to true (default: false)
+     * @return true if replay delay scaling is enabled (> 0.0), false otherwise (default: false)
      */
     public boolean isUseRecordedDelays()
     {
-        return getBoolean("neodymium.ai.replay.useRecordedDelays", false);
+        final boolean legacyFlag = getBoolean("neodymium.ai.replay.useRecordedDelays", false);
+        return legacyFlag || getReplayDelayScale() > 0.0;
     }
 
     /**
@@ -556,13 +559,14 @@ public final class AiConfiguration
 
     /**
      * Returns the speed scaling multiplier applied to recorded delays during replay.
-     * For example, 1.0 is real-time, 0.5 is 2x speed, 2.0 is half speed.
+     * When <= 0.0, recorded delays are disabled (instant execution for fast CI/CD runs).
+     * For example, 1.0 is real-time recorded pacing, 0.5 is 2x speed.
      *
-     * @return the delay scale factor (default: 1.0)
+     * @return the delay scale factor (default: 0.0)
      */
     public double getReplayDelayScale()
     {
-        return getDouble("neodymium.ai.replay.delayScale", 1.0);
+        return getDouble("neodymium.ai.replay.delayScale", 0.0);
     }
     /**
      * Returns the minimum structural similarity index (SSIM) score required for visual assertion matches.

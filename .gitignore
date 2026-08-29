@@ -49,6 +49,8 @@ neodymium.code-workspace
 
 # Neodymium AI temporary scratch folder
 tmp/
+/ai-reports/
+/ai-reports-lean/
 
 # Neodymium Aura Reports History
 /allure-reports-history/
