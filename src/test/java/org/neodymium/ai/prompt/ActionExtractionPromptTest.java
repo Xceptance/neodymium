@@ -845,6 +845,18 @@ public final class ActionExtractionPromptTest
                   "locator": "url",
                   "value": "https://example.com/checkout",
                   "reasoning": "Verify page URL"
+                },
+                {
+                  "action": "ASSERT_ATTRIBUTE",
+                  "locator": "#username",
+                  "value": "placeholder=Enter username",
+                  "reasoning": "Verify placeholder attribute"
+                },
+                {
+                  "action": "ASSERT_COUNT",
+                  "locator": ".cart-item",
+                  "value": "3",
+                  "reasoning": "Verify 3 cart items"
                 }
               ]
             }
@@ -854,7 +866,7 @@ public final class ActionExtractionPromptTest
 
         final List<Action> actions = prompt.parseResponse(rawJson, context);
         assertNotNull(actions);
-        assertEquals(7, actions.size());
+        assertEquals(9, actions.size());
 
         assertEquals("ASSERT_EXISTS", actions.get(0).getType());
         assertEquals("#prefecture", actions.get(0).getTarget());
@@ -879,6 +891,14 @@ public final class ActionExtractionPromptTest
         assertEquals("ASSERT_URL", actions.get(6).getType());
         assertEquals("url", actions.get(6).getTarget());
         assertEquals("https://example.com/checkout", actions.get(6).getValue());
+
+        assertEquals("ASSERT_ATTRIBUTE", actions.get(7).getType());
+        assertEquals("#username", actions.get(7).getTarget());
+        assertEquals("placeholder=Enter username", actions.get(7).getValue());
+
+        assertEquals("ASSERT_COUNT", actions.get(8).getType());
+        assertEquals(".cart-item", actions.get(8).getTarget());
+        assertEquals("3", actions.get(8).getValue());
     }
 
     @Test

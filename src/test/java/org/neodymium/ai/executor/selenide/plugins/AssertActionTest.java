@@ -248,10 +248,10 @@ public class AssertActionTest extends BaseAiTest
         plugin.execute(new Action("ASSERT_HIDDEN", "#hidden-btn", "", "check hidden", "reasoning", false));
         plugin.execute(new Action("ASSERT_ABSENT", "#non-existent-element-xyz", "", "check non-existent is absent", "reasoning", false));
 
-        // Negative: asserting absent element exists
+        // Negative: asserting non-existent element exists or is visible
         Assertions.assertThrows(AssertionError.class, () ->
         {
-            plugin.execute(new Action("ASSERT_EXISTS", "#hidden-btn", "", "check hidden exists", "reasoning", false));
+            plugin.execute(new Action("ASSERT_EXISTS", "#non-existent-element-xyz", "", "check non-existent exists", "reasoning", false));
         });
         Assertions.assertThrows(AssertionError.class, () ->
         {
@@ -347,5 +347,101 @@ public class AssertActionTest extends BaseAiTest
         plugin.execute(new Action("ASSERT_TITLE", "title", "Assert Action Test", "check title contains", "reasoning", false));
         plugin.execute(new Action("ASSERT_URL", "url", ".*AssertActionTest.*", "check url regex", "reasoning", true));
         plugin.execute(new Action("ASSERT_TITLE", "title", "^Assert Action.*", "check title regex", "reasoning", true));
+    }
+
+    @Test
+    @DisplayName("AssertAction distinguishes ASSERT_EXISTS (in DOM) vs ASSERT_VISIBLE (on screen) on hidden elements")
+    public void testDistinctAssertExistsVsVisibleOnHiddenElement() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // #hidden-btn is display:none in the DOM
+        // 1. ASSERT_EXISTS succeeds because the element is in the DOM
+        plugin.execute(new Action("ASSERT_EXISTS", "#hidden-btn", "", "check hidden element exists in DOM", "reasoning", false));
+
+        // 2. ASSERT_HIDDEN succeeds
+        plugin.execute(new Action("ASSERT_HIDDEN", "#hidden-btn", "", "check hidden element is hidden", "reasoning", false));
+
+        // 3. ASSERT_VISIBLE must fail on display:none element
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_VISIBLE", "#hidden-btn", "", "check hidden is visible (should fail)", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles ASSERT_VALUE with isRegex=true correctly")
+    public void testDistinctAssertValueRegex() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+        $("#username").setValue("INV-98765-DE");
+
+        // Dynamic regex pattern matching on input value
+        plugin.execute(new Action("ASSERT_VALUE", "#username", "^INV-\\d+-DE$", "check invoice pattern", "reasoning", true));
+
+        // Negative: pattern mismatch
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_VALUE", "#username", "^ORD-\\d+$", "mismatched pattern", "reasoning", true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles ASSERT_ATTRIBUTE with name=value, name, and regex")
+    public void testDistinctAssertAttribute() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Attribute existence
+        plugin.execute(new Action("ASSERT_ATTRIBUTE", "#username", "placeholder", "check placeholder attribute exists", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ATTRIBUTE", "#disabled-input", "disabled", "check disabled attribute exists", "reasoning", false));
+
+        // Attribute name=value match
+        plugin.execute(new Action("ASSERT_ATTRIBUTE", "#username", "placeholder=Enter username", "check placeholder value", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ATTRIBUTE", "#total-price", "data-ai=\"xcuunj33\"", "check quoted data-ai attribute", "reasoning", false));
+
+        // Attribute regex match
+        plugin.execute(new Action("ASSERT_ATTRIBUTE", "#username", "placeholder=.*username", "check placeholder regex", "reasoning", true));
+
+        // Negative: wrong attribute value
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_ATTRIBUTE", "#username", "placeholder=WrongPlaceholder", "wrong placeholder", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles ASSERT_COUNT on element collections (exact, >=, >, <, <=)")
+    public void testDistinctAssertCount() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Exact count
+        plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", "2", "check exact 2 checkboxes", "reasoning", false));
+        plugin.execute(new Action("ASSERT_COUNT", "input[type='radio']", "2", "check exact 2 radios", "reasoning", false));
+
+        // Comparison operators
+        plugin.execute(new Action("ASSERT_COUNT", "input", ">=5", "check at least 5 inputs", "reasoning", false));
+        plugin.execute(new Action("ASSERT_COUNT", "input", ">4", "check more than 4 inputs", "reasoning", false));
+        plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", "<5", "check fewer than 5 checkboxes", "reasoning", false));
+        plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", "<=2", "check at most 2 checkboxes", "reasoning", false));
+
+        // Negative: count mismatch
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", "5", "wrong count", "reasoning", false));
+        });
     }
 }

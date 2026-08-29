@@ -141,6 +141,22 @@ public final class SelenideElementFinder
     }
 
     /**
+     * Resolves and returns an {@link ElementsCollection} matching the action's target locator.
+     *
+     * @param action the action containing target locator
+     * @return the resolved ElementsCollection
+     * @throws IllegalArgumentException if action or target is null or blank
+     */
+    public static ElementsCollection findElements(final Action action)
+    {
+        if (action == null || action.getTarget() == null || action.getTarget().isBlank())
+        {
+            throw new IllegalArgumentException("Action and target cannot be null or blank");
+        }
+        return Selenide.$$(LocatorResolver.resolveLocator(action.getTarget()));
+    }
+
+    /**
      * Resolves and returns a {@link SelenideElement} based on the given target locator and fallback candidates.
      * Continuously attempts strategies until the configured Selenide timeout expires.
      *

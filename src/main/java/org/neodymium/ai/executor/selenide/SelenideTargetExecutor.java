@@ -119,6 +119,8 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("ASSERT_SELECTED", assertPlugin);
         this.plugins.put("ASSERT_READONLY", assertPlugin);
         this.plugins.put("ASSERT_EDITABLE", assertPlugin);
+        this.plugins.put("ASSERT_ATTRIBUTE", assertPlugin);
+        this.plugins.put("ASSERT_COUNT", assertPlugin);
         this.plugins.put("ASSERT_URL", assertPlugin);
         this.plugins.put("ASSERT_TITLE", assertPlugin);
         this.plugins.put("CHECK", new CheckAction());
@@ -360,6 +362,8 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("ASSERT_SELECTED", "Assert element selected state", Collections.emptyMap()),
             new ActionDefinition("ASSERT_READONLY", "Assert input element readonly state", Collections.emptyMap()),
             new ActionDefinition("ASSERT_EDITABLE", "Assert input element editable state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_ATTRIBUTE", "Assert element HTML attribute value or existence", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_COUNT", "Assert matching element collection count", Collections.emptyMap()),
             new ActionDefinition("ASSERT_URL", "Assert browser URL matches value or regex", Collections.emptyMap()),
             new ActionDefinition("ASSERT_TITLE", "Assert page title matches value or regex", Collections.emptyMap()),
             new ActionDefinition("CHECK", "Check or select elements", Collections.emptyMap()),

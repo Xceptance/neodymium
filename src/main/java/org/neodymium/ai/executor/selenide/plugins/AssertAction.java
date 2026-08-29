@@ -27,8 +27,10 @@ import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.codeborne.selenide.CheckResult;
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Driver;
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
@@ -86,22 +88,52 @@ public final class AssertAction implements BrowserActionPlugin
             return;
         }
 
+        // Handle Element Count assertions
+        if ("ASSERT_COUNT".equals(type))
+        {
+            try
+            {
+                executeCountAssertion(action, expected);
+            }
+            catch (final Throwable e)
+            {
+                if (e instanceof AssertionError ae)
+                {
+                    throw ae;
+                }
+                throw new AssertionError(String.format("Count assertion failed on '%s': %s", action.getTarget(), e.getMessage()), e);
+            }
+            return;
+        }
+
         final SelenideElement element = SelenideElementFinder.findElement(action);
 
         try
         {
             switch (type)
             {
-                case "ASSERT_EXISTS", "ASSERT_VISIBLE" ->
+                case "ASSERT_EXISTS" ->
                 {
-                    element.shouldBe(Condition.visible);
-                    LOG.debug("   ✅ Element exists/visible: {}", action);
+                    element.should(Condition.exist);
+                    LOG.debug("   ✅ Element exists in DOM: {}", action);
                     return;
                 }
-                case "ASSERT_ABSENT", "ASSERT_HIDDEN" ->
+                case "ASSERT_VISIBLE" ->
+                {
+                    element.shouldBe(Condition.visible);
+                    LOG.debug("   ✅ Element visible: {}", action);
+                    return;
+                }
+                case "ASSERT_ABSENT" ->
                 {
                     element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                    LOG.debug("   ✅ Element absent/hidden: {}", action);
+                    LOG.debug("   ✅ Element absent: {}", action);
+                    return;
+                }
+                case "ASSERT_HIDDEN" ->
+                {
+                    element.shouldBe(Condition.hidden);
+                    LOG.debug("   ✅ Element hidden: {}", action);
                     return;
                 }
                 case "ASSERT_CHECKED" ->
@@ -167,8 +199,39 @@ public final class AssertAction implements BrowserActionPlugin
                 }
                 case "ASSERT_VALUE" ->
                 {
-                    element.shouldHave(Condition.value(expected != null ? expected : ""));
+                    if (action.isRegex() && expected != null)
+                    {
+                        final String cleanPattern = cleanRegexPattern(expected);
+                        final Pattern pat;
+                        try
+                        {
+                            pat = Pattern.compile(cleanPattern, Pattern.DOTALL | Pattern.MULTILINE);
+                        }
+                        catch (final PatternSyntaxException e)
+                        {
+                            throw new RuntimeException("Invalid regex pattern for ASSERT_VALUE: " + expected, e);
+                        }
+                        element.should(new WebElementCondition("Value regex match for '" + cleanPattern + "'")
+                        {
+                            @Override
+                            public CheckResult check(final Driver driver, final WebElement el)
+                            {
+                                final String val = el.getAttribute("value");
+                                final boolean ok = val != null && pat.matcher(val).find();
+                                return new CheckResult(ok, val);
+                            }
+                        });
+                    }
+                    else
+                    {
+                        element.shouldHave(Condition.value(expected != null ? expected : ""));
+                    }
                     LOG.debug("   ✅ Element value matches '{}': {}", expected, action);
+                    return;
+                }
+                case "ASSERT_ATTRIBUTE" ->
+                {
+                    executeAttributeAssertion(element, action, expected);
                     return;
                 }
                 case "ASSERT_TEXT" ->
@@ -187,6 +250,92 @@ public final class AssertAction implements BrowserActionPlugin
         {
             wrapAndRethrow(element, expected != null ? expected : type, e);
         }
+    }
+
+    private void executeAttributeAssertion(final SelenideElement element, final Action action, final String expected)
+    {
+        if (expected == null || expected.isBlank())
+        {
+            throw new RuntimeException("Attribute assertion requires a 'value' (e.g. 'name=value' or 'name')");
+        }
+
+        final int eqIdx = expected.indexOf('=');
+        if (eqIdx > 0)
+        {
+            final String attrName = expected.substring(0, eqIdx).trim();
+            String attrValue = expected.substring(eqIdx + 1).trim();
+            if ((attrValue.startsWith("\"") && attrValue.endsWith("\"")) || (attrValue.startsWith("'") && attrValue.endsWith("'")))
+            {
+                attrValue = attrValue.substring(1, attrValue.length() - 1);
+            }
+
+            if (action.isRegex())
+            {
+                final String cleanPattern = cleanRegexPattern(attrValue);
+                final Pattern pat;
+                try
+                {
+                    pat = Pattern.compile(cleanPattern, Pattern.DOTALL | Pattern.MULTILINE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    throw new RuntimeException("Invalid regex pattern for attribute '" + attrName + "': " + attrValue, e);
+                }
+                element.should(new WebElementCondition("Attribute regex match for '" + attrName + "=" + cleanPattern + "'")
+                {
+                    @Override
+                    public CheckResult check(final Driver driver, final WebElement el)
+                    {
+                        final String val = el.getAttribute(attrName);
+                        final boolean ok = val != null && pat.matcher(val).find();
+                        return new CheckResult(ok, val);
+                    }
+                });
+            }
+            else
+            {
+                element.shouldHave(Condition.attribute(attrName, attrValue));
+            }
+            LOG.debug("   ✅ Attribute Assertion passed for: {}={}", attrName, attrValue);
+        }
+        else
+        {
+            element.shouldHave(Condition.attribute(expected.trim()));
+            LOG.debug("   ✅ Attribute Existence Assertion passed for: {}", expected);
+        }
+    }
+
+    private void executeCountAssertion(final Action action, final String expected)
+    {
+        if (expected == null || expected.isBlank())
+        {
+            throw new RuntimeException("Count assertion requires a 'value' specifying expected element count");
+        }
+
+        final String trimmed = expected.trim();
+        final ElementsCollection collection = SelenideElementFinder.findElements(action);
+
+        if (trimmed.startsWith(">="))
+        {
+            collection.shouldHave(CollectionCondition.sizeGreaterThanOrEqual(Integer.parseInt(trimmed.substring(2).trim())));
+        }
+        else if (trimmed.startsWith(">"))
+        {
+            collection.shouldHave(CollectionCondition.sizeGreaterThan(Integer.parseInt(trimmed.substring(1).trim())));
+        }
+        else if (trimmed.startsWith("<="))
+        {
+            collection.shouldHave(CollectionCondition.sizeLessThanOrEqual(Integer.parseInt(trimmed.substring(2).trim())));
+        }
+        else if (trimmed.startsWith("<"))
+        {
+            collection.shouldHave(CollectionCondition.sizeLessThan(Integer.parseInt(trimmed.substring(1).trim())));
+        }
+        else
+        {
+            collection.shouldHave(CollectionCondition.size(Integer.parseInt(trimmed)));
+        }
+        LOG.debug("   ✅ Count Assertion passed for '{}': {}", expected, action);
     }
 
     private void executeUrlAssertion(final Action action, final String expected)
