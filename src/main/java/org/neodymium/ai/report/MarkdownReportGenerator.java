@@ -195,17 +195,17 @@ public final class MarkdownReportGenerator
 
                 if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
                 {
-                    sb.append("<sub>Template: `").append(escapeMarkdown(f.rawInstruction())).append("`</sub><br>");
-                    sb.append("<sub>Resolved: `").append(escapeMarkdown(f.resolvedInstruction())).append("`</sub><br>");
+                    sb.append("<br><sub>**Template Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                    sb.append("<sub>**Resolved Step:**</sub><br>`").append(escapeMarkdown(f.resolvedInstruction())).append("`<br>");
                 }
                 else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
                 {
-                    sb.append("<sub>Instruction: `").append(escapeMarkdown(f.rawInstruction())).append("`</sub><br>");
+                    sb.append("<br><sub>**Original Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
                 }
 
                 if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
                 {
-                    sb.append("💡 *Suggested Rewrite:*<br>`").append(escapeMarkdown(f.suggestedRewrite()).replace("\n", "`<br>`")).append("`");
+                    sb.append("<br>💡 *Suggested Rewrite:*<br>`").append(escapeMarkdown(f.suggestedRewrite()).replace("\n", "`<br>`")).append("`");
                 }
 
                 sb.append(" |\n");

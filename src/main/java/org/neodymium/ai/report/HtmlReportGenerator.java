@@ -250,23 +250,33 @@ public final class HtmlReportGenerator
                 final String cat = f.category() != null ? f.category().name() : "GENERAL";
 
                 sb.append("        <tr>\n");
-                sb.append("          <td><code>").append(escapeHtml(lineLabel)).append("</code></td>\n");
-                sb.append("          <td><span style=\"font-weight:600;font-size:0.85rem;\">").append(escapeHtml(cat)).append("</span></td>\n");
-                sb.append("          <td>").append(sevBadge).append("</td>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><code>").append(escapeHtml(lineLabel)).append("</code></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><span style=\"font-weight:600;font-size:0.85rem;\">").append(escapeHtml(cat)).append("</span></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\">").append(sevBadge).append("</td>\n");
                 sb.append("          <td>\n");
-                sb.append("            <div style=\"font-weight:600;margin-bottom:4px;\">").append(escapeHtml(f.message())).append("</div>\n");
+                sb.append("            <div style=\"font-weight:600;margin-bottom:6px;color:var(--text-primary,#1e293b);\">").append(escapeHtml(f.message())).append("</div>\n");
                 if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
                 {
-                    sb.append("            <div style=\"font-size:0.8rem;color:var(--text-secondary,#64748b);\">Template: <code>").append(escapeHtml(f.rawInstruction())).append("</code></div>\n");
-                    sb.append("            <div style=\"font-size:0.8rem;color:var(--text-secondary,#64748b);\">Resolved: <code>").append(escapeHtml(f.resolvedInstruction())).append("</code></div>\n");
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Template Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;margin-bottom:2px;\">Resolved Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.resolvedInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
                 }
                 else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
                 {
-                    sb.append("            <div style=\"font-size:0.8rem;color:var(--text-secondary,#64748b);\">Instruction: <code>").append(escapeHtml(f.rawInstruction())).append("</code></div>\n");
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Original Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
                 }
                 if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
                 {
-                    sb.append("            <div style=\"margin-top:6px;font-size:0.85rem;background:rgba(99,102,241,0.06);padding:6px 10px;border-radius:4px;border-left:3px solid #6366f1;\">💡 <em>Suggested Rewrite:</em><br><code style=\"white-space:pre-wrap;\">").append(escapeHtml(f.suggestedRewrite())).append("</code></div>\n");
+                    sb.append("            <div style=\"margin-top:6px;font-size:0.85rem;background:rgba(99,102,241,0.06);padding:6px 10px;border-radius:4px;border-left:3px solid #6366f1;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">💡 Suggested Rewrite:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#312e81;\">").append(escapeHtml(f.suggestedRewrite())).append("</code>\n");
+                    sb.append("            </div>\n");
                 }
                 sb.append("          </td>\n");
                 sb.append("        </tr>\n");
