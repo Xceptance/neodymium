@@ -15,7 +15,7 @@ steps: |
   Klicka på 'Kassa' eller 'Till kassan'
 
   Rubriken visar nu 'Kassa' eller 'Checkout'
-  Fyll i leveransformuläret till vänster.
+  Det finns formulär för datainmatning på vänster sida och ett beställningsöversiktsblock på höger sida (visual).
   Välj 'Sweden' som land.
   Ange 'Sven' som förnamn, 'Svensson' som efternamn och e-postadressen 'foo@varmail.net'.
   Ange 'Storgatan 1' som gatuadress, 'Stockholm' som ort och '111 22' som postnummer.
