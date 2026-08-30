@@ -222,7 +222,7 @@ public final class SelenideElementFinder
                     final WebElement matchedWebElement = new PageAnalyzer().findLiveElementByFeatureVector(
                         WebDriverRunner.getWebDriver(),
                         recordedVector,
-                        0.80);
+                        0.65);
                     if (matchedWebElement != null)
                     {
                         LOG.trace("   ✅ Proximity match found live element for target '{}'", target);

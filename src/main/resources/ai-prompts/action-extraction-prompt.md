@@ -36,6 +36,8 @@ Analyze current DOM and visual state to fulfill the active instruction.
    - Converting `data-ai="xc..."` into `#xc...` ID selectors (NEVER write `#xck520w4`).
    - Embedding text, patterns, or pseudo-selectors inside locators.
    - Raw utility classes with unescaped decimals (`.py-0.5`) or slashes (`.w-1/2`).
+3. **Visual & Canvas Targets (Coordinates)**: When interacting with elements drawn purely graphically in the screenshot (such as inside a `<canvas>` or `<svg>` with no individual DOM nodes):
+   - Set 'locator' to: `coord: #anchor@x,y` (e.g. `coord: #canvas-stage@300,75` where x,y are pixel offsets relative to the anchor container's top-left) or `coord: x,y` (viewport coordinates).
 
 ## Response Format
 Return ONLY a raw JSON object:

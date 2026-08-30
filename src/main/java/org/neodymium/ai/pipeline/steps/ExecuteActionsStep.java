@@ -152,7 +152,8 @@ public final class ExecuteActionsStep implements PipelineStep
         final boolean isReplayingStep = execMode != null && execMode.isReplay() && !isNoReplay
             && (currentStep == null || execMode == ExecutionMode.REPLAY_STRICT || (currentStep.getActions() != null && (!currentStep.getActions().isEmpty() || currentStep.getScreenshotHash() != null || (currentStep.getStatus() != null && currentStep.getStatus() != PlaybookStepStatus.PENDING))));
 
-        if (!isReplayingStep && currentStep != null)
+        final boolean isContinuationLoop = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
+        if (!isReplayingStep && currentStep != null && !isContinuationLoop)
         {
             currentStep.getActions().clear();
         }
@@ -321,7 +322,15 @@ public final class ExecuteActionsStep implements PipelineStep
                              step.getActions().clear();
                              context.getTransientData().put("KEY_CURRENT_STEP_FIRST_ACTION", false);
                          }
-                         step.getActions().add(sanitized);
+                         final int idx = step.getActions().indexOf(action);
+                         if (idx != -1)
+                         {
+                             step.getActions().set(idx, sanitized);
+                         }
+                         else if (!step.getActions().contains(sanitized))
+                         {
+                             step.getActions().add(sanitized);
+                         }
                      }
                 }
                 
@@ -487,9 +496,25 @@ public final class ExecuteActionsStep implements PipelineStep
                         }
                     }
 
-                    final CoordinateTarget coordinateTarget = ClickAction.parseCoordinateTarget(resolvedAction.getTarget());
+                    CoordinateTarget coordinateTarget = ClickAction.parseCoordinateTarget(resolvedAction.getTarget());
                     if (coordinateTarget != null && !isReplayingStep && step != null && executor != null)
                     {
+                        if (coordinateTarget.anchorSelector() == null && WebDriverRunner.hasWebDriverStarted())
+                        {
+                            final WebDriver driver = WebDriverRunner.getWebDriver();
+                            final String pinnedTarget = new PageAnalyzer(driver).resolveAnchorCoordinate(driver, coordinateTarget.x(), coordinateTarget.y());
+                            if (pinnedTarget != null && !pinnedTarget.equals(resolvedAction.getTarget()))
+                            {
+                                sanitized = sanitized.withTarget(pinnedTarget);
+                                actionToExecute = actionToExecute.withTarget(pinnedTarget);
+                                final int idx = stepActions.indexOf(sanitized);
+                                if (idx != -1)
+                                {
+                                    stepActions.set(idx, sanitized);
+                                }
+                            }
+                        }
+
                         try
                         {
                             final SutState preState = executor.captureState(ContextLevel.VISUAL_LEAN, false);
@@ -574,6 +599,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 if (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP")))
                 {
                     context.getTransientData().put("KEY_IS_CONTINUATION_STEP", false);
+                    context.getTransientData().put("KEY_IN_CONTINUATION_LOOP", true);
                     LOGGER.info("   🔄 Prelude action executed for instruction — initiating continuation LLM step with updated DOM context.");
 
                     @SuppressWarnings("unchecked")
@@ -827,6 +853,7 @@ public final class ExecuteActionsStep implements PipelineStep
             contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_STEP_ACTIONS, new CopyOnWriteArrayList<Action>());
+            contextState.getTransientData().remove("KEY_IN_CONTINUATION_LOOP");
 
             final boolean stepNoReplay = step.isNoReplay();
             contextState.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", stepNoReplay);

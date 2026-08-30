@@ -285,7 +285,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                         currentStep.setReasoning(sb.toString());
                     }
                 }
-                currentStep.getActions().clear();
+                final boolean isContinuation = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
+                if (!isContinuation)
+                {
+                    currentStep.getActions().clear();
+                }
                 currentStep.getActions().addAll(actions);
             }
         }
@@ -411,6 +415,40 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         if (actionType.equalsIgnoreCase("NAVIGATE") && locator.isEmpty() && !valueStr.isEmpty())
         {
             locator = valueStr;
+        }
+
+        if (locator.isEmpty())
+        {
+            if (node.hasNonNull("coord"))
+            {
+                final String rawCoord = node.path("coord").asText().trim();
+                locator = rawCoord.toLowerCase().startsWith("coord:") ? rawCoord : "coord: " + rawCoord;
+            }
+            else if (node.hasNonNull("coordinates") && node.path("coordinates").isArray() && node.path("coordinates").size() >= 2)
+            {
+                final int x = node.path("coordinates").get(0).asInt();
+                final int y = node.path("coordinates").get(1).asInt();
+                final String anchor = node.hasNonNull("anchor") ? node.path("anchor").asText().trim() + "@" : "";
+                locator = "coord: " + anchor + x + "," + y;
+            }
+            else if (node.hasNonNull("point") && node.path("point").isArray() && node.path("point").size() >= 2)
+            {
+                final int x = node.path("point").get(0).asInt();
+                final int y = node.path("point").get(1).asInt();
+                final String anchor = node.hasNonNull("anchor") ? node.path("anchor").asText().trim() + "@" : "";
+                locator = "coord: " + anchor + x + "," + y;
+            }
+            else if (node.hasNonNull("box_2d") && node.path("box_2d").isArray() && node.path("box_2d").size() >= 4)
+            {
+                final int ymin = node.path("box_2d").get(0).asInt();
+                final int xmin = node.path("box_2d").get(1).asInt();
+                final int ymax = node.path("box_2d").get(2).asInt();
+                final int xmax = node.path("box_2d").get(3).asInt();
+                final int cx = (xmin + xmax) / 2;
+                final int cy = (ymin + ymax) / 2;
+                final String anchor = node.hasNonNull("anchor") ? node.path("anchor").asText().trim() + "@" : "";
+                locator = "coord: " + anchor + cx + "," + cy;
+            }
         }
         
         final boolean isRegex = node.path("isRegex").asBoolean(false);

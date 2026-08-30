@@ -56,6 +56,7 @@ public class FloatingLabelsSandboxMockTest extends BaseAiTest
     {
         org.neodymium.util.Neodymium.getData().put("neodymium.ai.global.provider", "mock");
         org.neodymium.util.Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
+        org.neodymium.util.Neodymium.getData().put("neodymium.ai.linter.enabled", "false");
     }
 
     /**

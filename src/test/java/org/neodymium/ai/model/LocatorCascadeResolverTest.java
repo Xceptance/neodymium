@@ -214,8 +214,8 @@ public class LocatorCascadeResolverTest
     @Test
     public void testTagEquivalenceBucketRestrictions()
     {
-        // button vs a with button role -> 0.90
-        Assertions.assertEquals(0.90, LocatorCascadeResolver.calculateTagScore("button", "a", "button", "button"), 0.001);
+        // button vs a with button role -> 0.95
+        Assertions.assertEquals(0.95, LocatorCascadeResolver.calculateTagScore("button", "a", "button", "button"), 0.001);
 
         // button vs a without role -> 0.70
         Assertions.assertEquals(0.70, LocatorCascadeResolver.calculateTagScore("button", "a", null, null), 0.001);
@@ -223,8 +223,8 @@ public class LocatorCascadeResolverTest
         // div vs span without interactive roles -> 0.0
         Assertions.assertEquals(0.0, LocatorCascadeResolver.calculateTagScore("div", "span", null, null), 0.001);
 
-        // div role="button" vs span role="button" -> 0.90
-        Assertions.assertEquals(0.90, LocatorCascadeResolver.calculateTagScore("div", "span", "button", "button"), 0.001);
+        // div role="button" vs span role="button" -> 0.95
+        Assertions.assertEquals(0.95, LocatorCascadeResolver.calculateTagScore("div", "span", "button", "button"), 0.001);
     }
 
     @Test

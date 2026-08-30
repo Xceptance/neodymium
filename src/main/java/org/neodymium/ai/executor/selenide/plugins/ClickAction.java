@@ -135,7 +135,7 @@ public final class ClickAction implements BrowserActionPlugin
                     return;
                 }
             }
-            catch (final Exception ignored)
+            catch (final Throwable ignored)
             {
             }
 

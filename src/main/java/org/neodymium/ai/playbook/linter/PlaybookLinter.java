@@ -24,6 +24,7 @@ import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
@@ -112,6 +113,14 @@ public final class PlaybookLinter
             if (provider == null)
             {
                 LOGGER.warn("⚠️ No LLM provider registered for capability {}", LlmCapability.LINTER);
+                return Collections.emptyList();
+            }
+
+            if (provider instanceof MockLlmProvider
+                && !"true".equalsIgnoreCase(System.getProperty("neodymium.ai.linter.enabled"))
+                && (this.session == null || this.session.data() == null || !"true".equals(String.valueOf(this.session.data().get("neodymium.ai.linter.enabled")))))
+            {
+                LOGGER.debug("Playbook pre-flight linter is automatically bypassed for MockLlmProvider to protect test step response queue.");
                 return Collections.emptyList();
             }
 
