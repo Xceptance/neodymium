@@ -141,9 +141,9 @@ public final class StateMachineRunner
         {
             ExecutionContext.setActiveContext(context);
 
-            @SuppressWarnings("resource")
-            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-            final String activeFramework = executor != null ? executor.getFrameworkName().toUpperCase() : "SELENIUM_SELENIDE";
+            final String activeFramework = this.session != null && this.session.getTargetExecutor() != null
+                ? this.session.getTargetExecutor().getFrameworkName().toUpperCase()
+                : "SELENIUM_SELENIDE";
 
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
