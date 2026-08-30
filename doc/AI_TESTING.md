@@ -25,16 +25,21 @@ The v2 framework provides standard annotations for playbook-driven test cases:
 | :--- | :--- | :--- |
 | **`@NeodymiumAiTest`** | Class | Marks a test class as an AI playbook test class. Wires `NeodymiumAiRunner`. Resolves `ClassName.yaml` by default. |
 | **`@AiPlaybook`** | Method | Marks a method as playbook-driven. Allows overriding the playbook YAML path. |
-| **`@AiMode`** | Class / Method | Sets the execution mode (`RECORD`, `REPLAY_ONLY`, `REPLAY_AND_FIX`, `LLM_ONLY`). |
+| **`@AiInlinePlaybook`** | Method | Defines multi-line YAML playbook text blocks directly in Java test annotations. |
+| **`@AiMode`** | Class / Method | Sets execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). |
 | **`@AiDataSet`** | Class / Method | Filters datasets by `testId` using exact string matches or regex patterns. |
+| **`@AiLinter`** | Class / Method | Enables, disables, or parameterizes upfront pre-flight playbook quality linting (`{false, true}`). |
+| **`@AiJudge`** | Class / Method | Enables, disables, or parameterizes second-opinion Quality Judge evaluation (`{false, true}`). |
 | **`@AiSelenide`** | Class / Method | Specifies browser profile configuration settings. |
 
 ### Available Execution Modes
 
-* **`REPLAY_AND_FIX` (Default)**: If a `.recording.json` companion file exists on disk, steps replay offline in milliseconds. On element divergence, the engine invokes the LLM to self-heal and updates the companion file.
-* **`RECORD`**: Always invokes the LLM to execute steps and writes a new `.recording.json` baseline.
-* **`REPLAY_ONLY`**: Strict CI regression mode. Replays strictly from disk recording and fails hard if the SUT diverges (0 LLM network calls).
-* **`LLM_ONLY`**: Exploratory mode. Calls the LLM on every step without reading or writing companion recordings.
+* **`REPLAY_WITH_HEALING` (Default)**: Replays pre-recorded actions from the companion recording cache. If the SUT diverges or an element cannot be found, falls back to live LLM self-healing and updates the companion recording.
+* **`LIVE` / `LLM_RECORDING`**: Executes live with LLM action generation, recording newly executed steps and saving/updating the companion `.recording.json` file.
+* **`FORCE_RECORDING`**: Forces live LLM generation for all steps and overwrites the entire companion recording from scratch.
+* **`LLM_ONLY`**: Executes live with LLM reasoning on every step without reading or writing companion recording cache files.
+* **`REPLAY_STRICT`**: Strict deterministic playback. Replays recorded actions from disk; any divergence immediately fails without LLM fallback (0 network calls).
+* **`LINTER_ONLY`**: Runs upfront pre-flight playbook static linting against live LLMs, records token telemetry, and generates reports, bypassing browser action dispatch.
 
 ---
 

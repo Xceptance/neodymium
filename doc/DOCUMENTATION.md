@@ -784,7 +784,7 @@ To handle complex, compound, or ambiguous instructions, the pipeline executes a 
 
 ---
 
-### 4.2 Tiered Context Escalation Ladder & Payload Modes
+### 4.3 Tiered Context Escalation Ladder & Payload Modes
 
 Neodymium AI uses an **8-tier context level escalation hierarchy** organized into **Two Strictly Monotonic Escalation Tracks** ($L_i \subset L_{i+1}$) that ensure the model never loses DOM context when escalating:
 
@@ -813,7 +813,7 @@ $$\textbf{Track B (Visual Track): } \mathbf{VISUAL} \longrightarrow \mathbf{VISU
 
 ---
 
-### 4.3 Dynamic Step Escalation Budget Model
+### 4.4 Dynamic Step Escalation Budget Model
 
 To prevent infinite escalation loops while ensuring that steps starting at higher context levels are never blocked from reaching `VISUAL_RICH`, the framework enforces a **Dynamic Step Escalation Budget**:
 
@@ -825,7 +825,7 @@ $$\text{Total Step Budget} = (\text{VISUAL\_RICH.ordinal()} - \text{initialLevel
 
 ---
 
-### 4.4 The 360° LLM Taming & Safety Lifecycle
+### 4.5 The 360° LLM Taming & Safety Lifecycle
 
 To prevent LLM hallucination, destructive mutations, locator drift, and erroneous step approvals, Neodymium AI implements an end-to-end **360° Safety & Taming Lifecycle**. This multi-layered architecture acts at every stage of execution:
 
