@@ -15,6 +15,10 @@ The system SHALL support an upfront static linter that analyzes the full sequenc
 - **WHEN** a test session starts and `neodymium.ai.linter.enabled` is set to `false` or annotated with `@AiLinter(false)`
 - **THEN** the system SHALL proceed directly to test execution without making a linter LLM call
 
+#### Scenario: Pre-flight linter is bypassed in replay mode
+- **WHEN** a test session executes in a replay mode (such as `REPLAY_STRICT` or `REPLAY_WITH_HEALING`)
+- **THEN** the system SHALL bypass pre-flight static linting to avoid unnecessary LLM calls during deterministic playback
+
 #### Scenario: Graceful degradation on linter failure
 - **WHEN** the linter LLM call fails, times out, or returns invalid JSON
 - **THEN** the system SHALL log a warning and continue test execution without interrupting the test run

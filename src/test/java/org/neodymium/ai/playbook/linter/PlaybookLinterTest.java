@@ -38,6 +38,7 @@ import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
@@ -125,6 +126,27 @@ public final class PlaybookLinterTest
 
         final List<PlaybookStep> steps = List.of(new PlaybookStep("Click Login"));
         final List<PlaybookLinterFinding> findings = linter.lint(steps, "Test Scenario");
+
+        assertTrue(findings.isEmpty());
+        assertNull(context.getTransientData().get(ExecutionContext.KEY_LINTER_CALL_COUNT));
+    }
+
+    @Test
+    @DisplayName("Verify pre-flight linter is bypassed in replay strict mode")
+    public void testLinterBypassedInReplayStrictMode()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.LINTER, mockProvider);
+
+        final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT, new SessionData(), registry, new ExecutionEventBus(), null);
+        final ExecutionContext context = session.getExecutionContext();
+        ExecutionContext.setActiveContext(context);
+
+        final PlaybookLinter linter = new PlaybookLinter(session);
+
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click Login"));
+        final List<PlaybookLinterFinding> findings = linter.lint(steps, "Replay Test");
 
         assertTrue(findings.isEmpty());
         assertNull(context.getTransientData().get(ExecutionContext.KEY_LINTER_CALL_COUNT));

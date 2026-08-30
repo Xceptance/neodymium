@@ -28,6 +28,7 @@ import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.model.PlaybookStep;
@@ -72,6 +73,13 @@ public final class PlaybookLinter
     {
         if (steps == null || steps.isEmpty())
         {
+            return Collections.emptyList();
+        }
+
+        final ExecutionMode mode = this.session != null ? this.session.getExecutionMode() : null;
+        if (mode != null && !mode.isLive())
+        {
+            LOGGER.debug("Playbook pre-flight linter is bypassed in replay mode ({}).", mode);
             return Collections.emptyList();
         }
 
