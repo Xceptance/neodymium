@@ -233,12 +233,16 @@ public final class HtmlReportGenerator
         final List<PlaybookLinterFinding> linterFindings = report.getLinterFindings();
         if (!linterFindings.isEmpty())
         {
-            sb.append("  <section class=\"diagnostic-box\" style=\"border-left: 4px solid #6366f1; background: var(--card-bg, #ffffff); margin-bottom: 24px; padding: 18px 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);\">\n");
-            sb.append("    <div class=\"box-header\" style=\"font-size: 1.15rem; font-weight: 700; margin-bottom: 14px; color: var(--text-primary, #1e293b); display: flex; align-items: center; gap: 8px;\">📋 Playbook Quality & Pre-Flight Findings (").append(linterFindings.size()).append(")</div>\n");
-            sb.append("    <div class=\"table-container\">\n");
-            sb.append("      <table class=\"data-table\">\n");
-            sb.append("        <thead><tr><th>Line / Step</th><th>Category</th><th>Severity</th><th>Message & Suggested Rewrite</th></tr></thead>\n");
-            sb.append("        <tbody>\n");
+            sb.append("  <details open class=\"diagnostic-box linter-box\" style=\"border-left: 4px solid #6366f1; background: var(--card-bg, #ffffff); margin-bottom: 24px; padding: 18px 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);\">\n");
+            sb.append("    <summary class=\"box-header\" style=\"font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #1e293b); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; justify-content: space-between;\">\n");
+            sb.append("      <div style=\"display: flex; align-items: center; gap: 8px;\"><span>📋 Playbook Quality & Pre-Flight Findings (").append(linterFindings.size()).append(")</span></div>\n");
+            sb.append("      <span class=\"linter-toggle-icon\" style=\"font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s ease;\">▼</span>\n");
+            sb.append("    </summary>\n");
+            sb.append("    <div class=\"linter-content\" style=\"margin-top: 14px;\">\n");
+            sb.append("      <div class=\"table-container\">\n");
+            sb.append("        <table class=\"data-table\">\n");
+            sb.append("          <thead><tr><th>Line / Step</th><th>Category</th><th>Severity</th><th>Message & Suggested Rewrite</th></tr></thead>\n");
+            sb.append("          <tbody>\n");
             for (final PlaybookLinterFinding f : linterFindings)
             {
                 final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
@@ -281,10 +285,11 @@ public final class HtmlReportGenerator
                 sb.append("          </td>\n");
                 sb.append("        </tr>\n");
             }
-            sb.append("        </tbody>\n");
-            sb.append("      </table>\n");
+            sb.append("          </tbody>\n");
+            sb.append("        </table>\n");
+            sb.append("      </div>\n");
             sb.append("    </div>\n");
-            sb.append("  </section>\n");
+            sb.append("  </details>\n");
         }
 
         // 6. Interactive Execution Steps Section with Resizable Split Inspector
@@ -1557,6 +1562,19 @@ public final class HtmlReportGenerator
                 cursor: pointer;
                 color: var(--text-muted);
                 font-size: 0.85rem;
+            }
+            .linter-box summary::-webkit-details-marker {
+                display: none;
+            }
+            .linter-box summary {
+                list-style: none;
+                outline: none;
+            }
+            .linter-box[open] .linter-toggle-icon {
+                transform: rotate(0deg);
+            }
+            .linter-box:not([open]) .linter-toggle-icon {
+                transform: rotate(-90deg);
             }
             .code-block {
                 background: #f1f5f9;
