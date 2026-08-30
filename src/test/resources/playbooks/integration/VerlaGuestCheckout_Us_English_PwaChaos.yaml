@@ -4,11 +4,16 @@
 steps: |
   Open ${verla.url}/verla-pwa-chaos/index.html
   Validate that United States as country is selected.
+  
   Locate the first product card and click its 'Add to Cart' or 'Add' button.
   Click the size 'L' button
   Click the 'Add to Bag' button in the quick size modal to add the item to the cart.
   The mini cart quantity is now 1.
   Go to the cart using the mini cart.
+
+  An ecommerce cart is displayed with items on the left and an order summary on the right. All prices are display in US Dollar ($) (visual: full).
+  Click checkout button.
+
   The checkout page is displayed showing 'Shipping' or '1. Shipping Address' or 'Checkout'.
   There are data input forms on the left and and order summary block on the right (visual).
   Select 'United States' as country.

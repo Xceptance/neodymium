@@ -57,14 +57,28 @@ public enum ExecutionMode
      * Replays pre-recorded actions strictly.
      * Failures are conclusive and terminate execution immediately (no LLM fallback).
      */
-    REPLAY_STRICT;
+    REPLAY_STRICT,
 
     /**
-     * Returns true if this mode performs live LLM action generation.
+     * Static playbook pre-flight linting only.
+     * Executes upfront pre-flight linter analysis and generates quality reports, skipping browser/target step execution.
+     */
+    LINTER_ONLY;
+
+    /**
+     * Returns true if this mode performs live LLM action generation or live LLM linting.
      */
     public boolean isLive()
     {
-        return this == LLM_ONLY || this == LLM_RECORDING || this == FORCE_RECORDING;
+        return this == LLM_ONLY || this == LLM_RECORDING || this == FORCE_RECORDING || this == LINTER_ONLY;
+    }
+
+    /**
+     * Returns true if this mode performs static pre-flight linting only.
+     */
+    public boolean isLinterOnly()
+    {
+        return this == LINTER_ONLY;
     }
 
     /**

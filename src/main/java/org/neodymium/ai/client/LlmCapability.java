@@ -40,5 +40,8 @@ public enum LlmCapability
     PESAP,
 
     /** Specialized validation of step execution outcomes and assertions. */
-    VERIFICATION
+    VERIFICATION,
+
+    /** Static upfront pre-flight scenario playbook analysis and linting. */
+    LINTER
 }

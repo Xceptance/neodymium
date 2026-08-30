@@ -150,4 +150,14 @@ public final class AiAgentPrompts
     {
         return getPrompt("visual-only-prompt.md");
     }
+
+    /**
+     * Loads the upfront playbook pre-flight linter system prompt template.
+     *
+     * @return the playbook linter system prompt
+     */
+    public static String getPlaybookLinterPrompt()
+    {
+        return getPrompt("playbook-linter-prompt.md");
+    }
 }

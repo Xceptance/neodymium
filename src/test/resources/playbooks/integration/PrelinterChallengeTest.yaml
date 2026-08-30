@@ -1,0 +1,17 @@
+description: "Comprehensive multi-category pre-flight linter challenge scenario"
+data:
+  - testId: prelinter-all-rules
+    username: testuser
+    country: Canada
+steps: |
+  Open ${prelinter.test.url} in the browser
+  Enter "${username}" into the username field, type "secret" into password, and click the Login button.
+  The status badge is vibrant emerald green and aligned to the top right corner.
+  There is a settings card that allows updating account preferences.
+  Click the Action button.
+  Verify that the dashboard looks clean and appealing.
+  Click on it.
+  Click the "Confirm Delete" button inside the modal dialog, then click the "Open Delete Modal' trigger.
+  Verify the order confirmation ID matches #ORD-20260830-9948271.
+  If a cookie consent banner is displayed.
+

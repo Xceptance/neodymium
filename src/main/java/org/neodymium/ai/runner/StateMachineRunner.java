@@ -34,6 +34,7 @@ import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.IncompatibleFrameworkException;
+import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -41,6 +42,7 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
+import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
@@ -92,9 +94,9 @@ public final class StateMachineRunner
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
         LOGGER.debug("║ 🚀 STARTING TEST CASE: {}", testName != null ? testName : "Unknown Test");
-        LOGGER.debug("║ 📂 Active Dataset:    {}", datasetLabel != null ? datasetLabel : "default");
-        LOGGER.debug("║ ⚙️  Execution Mode:    {}", mode != null ? mode : "LLM_ONLY");
-        LOGGER.debug("║ 📜 Loaded Playbook:   {}", loadedPlaybook != null ? loadedPlaybook : "None");
+        LOGGER.debug("║ 📂 Active Dataset    : {}", datasetLabel != null ? datasetLabel : "default");
+        LOGGER.debug("║ ⚙️ Execution Mode    : {}", mode != null ? mode : "LLM_ONLY");
+        LOGGER.debug("║ 📜 Loaded Playbook   : {}", loadedPlaybook != null ? loadedPlaybook : "None");
         LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
 
         if (LOGGER.isTraceEnabled())
@@ -139,8 +141,9 @@ public final class StateMachineRunner
         {
             ExecutionContext.setActiveContext(context);
 
-            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-            final String activeFramework = executor != null ? executor.getFrameworkName().toUpperCase() : "SELENIUM_SELENIDE";
+            final String activeFramework = this.session != null && this.session.getTargetExecutor() != null
+                ? this.session.getTargetExecutor().getFrameworkName().toUpperCase()
+                : "SELENIUM_SELENIDE";
 
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
@@ -166,18 +169,40 @@ public final class StateMachineRunner
                         }
                     }
                 }
+
+                // Upfront Playbook Pre-Flight Linting
+                String scenarioDesc = (String) context.getTransientData().get(ExecutionContext.KEY_SCENARIO_DESCRIPTION);
+                if (scenarioDesc == null || scenarioDesc.isBlank())
+                {
+                    final Playbook playbook = (Playbook) context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                    if (playbook != null && playbook.getDescription() != null && !playbook.getDescription().isBlank())
+                    {
+                        scenarioDesc = playbook.getDescription();
+                    }
+                }
+
+                final PlaybookLinter linter = new PlaybookLinter(this.session);
+                linter.lint(sessionSteps, scenarioDesc);
             }
 
-            mainLoop: while (context.hasSteps())
+            if (this.session.getExecutionMode().isLinterOnly())
             {
-                final PipelineStep step = context.popStep();
-                try
+                LOGGER.info("🔍 ExecutionMode.LINTER_ONLY active: Upfront pre-flight linting completed. Skipping step execution loop.");
+                context.clearSteps();
+                success = true;
+            }
+            else
+            {
+                mainLoop: while (context.hasSteps())
                 {
-                    step.execute(context);
-                }
+                    final PipelineStep step = context.popStep();
+                    try
+                    {
+                        step.execute(context);
+                    }
                 catch (final Throwable t)
                 {
-                    if (t instanceof VirtualMachineError || t instanceof ThreadDeath || t instanceof LinkageError)
+                    if (t instanceof VirtualMachineError || t instanceof LinkageError)
                     {
                         throw (Error) t;
                     }
@@ -380,6 +405,7 @@ public final class StateMachineRunner
                     }
                     throw e;
                 }
+            }
             }
             success = true;
             context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);

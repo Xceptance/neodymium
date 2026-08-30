@@ -18,21 +18,18 @@
  */
 package org.neodymium.ai.integration.verla;
 
-import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.TestMethodOrder;
-import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -59,33 +56,18 @@ public class VerlaGuestCheckout_Us_English_PwaChaos extends BaseAiTest
     }
 
     /**
-     * Set up dynamic test parameters and judge configuration before each run.
-     *
-     * @param testInfo the JUnit TestInfo context
+     * Set up dynamic test parameters before each run.
      */
     @BeforeEach
-    public void setup(final TestInfo testInfo)
+    public void setup()
     {
-        if (server != null)
-        {
-            server.resetInventory();
-        }
+        server.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
-
-        final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
-        if (methodName.contains("WithJudge"))
-        {
-            Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
-        }
-        else
-        {
-            Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
-        }
-        AiConfiguration.resetInstance();
     }
 
     @Order(1)
+    @AiJudge(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("pwa-chaos")
     @AiPlaybook
@@ -94,6 +76,7 @@ public class VerlaGuestCheckout_Us_English_PwaChaos extends BaseAiTest
     }
 
     @Order(2)
+    @AiJudge(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("pwa-chaos")
     @AiPlaybook(recordingMethod = "testCheckoutLive")
@@ -102,6 +85,7 @@ public class VerlaGuestCheckout_Us_English_PwaChaos extends BaseAiTest
     }
 
     @Order(3)
+    @AiJudge(true)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("pwa-chaos")
     @AiPlaybook
@@ -110,6 +94,7 @@ public class VerlaGuestCheckout_Us_English_PwaChaos extends BaseAiTest
     }
 
     @Order(4)
+    @AiJudge(true)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("pwa-chaos")
     @AiPlaybook(recordingMethod = "testCheckoutLiveWithJudge")

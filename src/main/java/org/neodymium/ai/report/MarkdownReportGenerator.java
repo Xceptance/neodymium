@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
 
 /**
@@ -121,6 +123,7 @@ public final class MarkdownReportGenerator
         sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
         appendCategoryRow(sb, "**Total**", m.getTotal());
+        appendCategoryRow(sb, "├─ Linter (Pre-Flight)", m.getLinter());
         appendCategoryRow(sb, "├─ PESAP", m.getPesap());
         appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
         appendCategoryRow(sb, "├─ Judge", m.getJudge());
@@ -169,6 +172,43 @@ public final class MarkdownReportGenerator
             for (final String warning : report.getWarnings())
             {
                 sb.append("- ").append(warning).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        // Playbook Quality & Pre-Flight Findings
+        final List<PlaybookLinterFinding> linterFindings = report.getLinterFindings();
+        if (!linterFindings.isEmpty())
+        {
+            sb.append("## 📋 Playbook Quality & Pre-Flight Findings\n\n");
+            sb.append("| Step / Line | Category | Severity | Finding & Suggested Rewrite |\n");
+            sb.append("| :--- | :--- | :--- | :--- |\n");
+            for (final PlaybookLinterFinding f : linterFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevEmoji = f.severity() == LinterSeverity.ERROR ? "🔴 ERROR"
+                    : f.severity() == LinterSeverity.WARNING ? "🟡 WARNING" : "ℹ️ INFO";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("| `").append(lineLabel).append("` | `").append(cat).append("` | ").append(sevEmoji).append(" | ")
+                    .append("**").append(escapeMarkdown(f.message())).append("**<br>");
+
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("<br><sub>**Template Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                    sb.append("<sub>**Resolved Step:**</sub><br>`").append(escapeMarkdown(f.resolvedInstruction())).append("`<br>");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("<br><sub>**Original Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                }
+
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("<br>💡 *Suggested Rewrite:*<br>`").append(escapeMarkdown(f.suggestedRewrite()).replace("\n", "`<br>`")).append("`");
+                }
+
+                sb.append(" |\n");
             }
             sb.append("\n");
         }

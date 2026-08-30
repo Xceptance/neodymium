@@ -302,7 +302,7 @@ public final class CallLlmStep<T> implements PipelineStep
         }
     }
 
-    static String formatJsonForLogging(final String rawContent)
+    public static String formatJsonForLogging(final String rawContent)
     {
         if (rawContent == null || rawContent.trim().isEmpty())
         {

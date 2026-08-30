@@ -108,6 +108,10 @@ public final class ExecutionContext
     public static final String KEY_TOKEN_BUDGET_INPUT = "tokenBudgetInput";
     public static final String KEY_TOKEN_BUDGET_OUTPUT = "tokenBudgetOutput";
     public static final String KEY_PESAP_INTENT = "pesapIntent";
+    public static final String KEY_PLAYBOOK_LINTER_FINDINGS = "playbookLinterFindings";
+    public static final String KEY_LINTER_TOKEN_USAGE = "linterTokenUsage";
+    public static final String KEY_LINTER_CALL_COUNT = "linterCallCount";
+    public static final String KEY_SCENARIO_DESCRIPTION = "scenarioDescription";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.

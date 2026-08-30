@@ -49,6 +49,11 @@ public final class Playbook
     private final Map<String, String> promptAddons;
 
     /**
+     * Optional high-level scenario description.
+     */
+    private final String description;
+
+    /**
      * Constructs an immutable Playbook with defensive copies of steps and datasets.
      *
      * @param steps the list of logical playbook steps
@@ -56,7 +61,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets)
     {
-        this(steps, dataSets, Collections.emptyMap());
+        this(steps, dataSets, Collections.emptyMap(), null);
     }
 
     /**
@@ -67,6 +72,19 @@ public final class Playbook
      * @param promptAddons the map of custom prompt add-ons by type
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons)
+    {
+        this(steps, dataSets, promptAddons, null);
+    }
+
+    /**
+     * Constructs an immutable Playbook with defensive copies of steps, datasets, custom prompt add-ons, and scenario description.
+     *
+     * @param steps the list of logical playbook steps
+     * @param dataSets the list of dataset parameters maps
+     * @param promptAddons the map of custom prompt add-ons by type
+     * @param description optional scenario description
+     */
+    public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons, final String description)
     {
         // Defensive copy of steps
         this.steps = steps != null ? new ArrayList<>(steps) : new ArrayList<>();
@@ -85,6 +103,17 @@ public final class Playbook
         }
         this.dataSets = Collections.unmodifiableList(datasetsCopy);
         this.promptAddons = promptAddons != null ? Collections.unmodifiableMap(new HashMap<>(promptAddons)) : Collections.emptyMap();
+        this.description = description != null && !description.isBlank() ? description.trim() : null;
+    }
+
+    /**
+     * Returns the optional scenario description.
+     *
+     * @return the scenario description or null
+     */
+    public String getDescription()
+    {
+        return this.description;
     }
 
     /**
@@ -253,6 +282,20 @@ public final class Playbook
             return promptAddon("default", addon);
         }
 
+        private String description;
+
+        /**
+         * Sets the optional scenario description.
+         *
+         * @param description the scenario description
+         * @return this builder instance
+         */
+        public Builder description(final String description)
+        {
+            this.description = description;
+            return this;
+        }
+
         /**
          * Builds and returns the immutable {@link Playbook} instance.
          *
@@ -260,7 +303,7 @@ public final class Playbook
          */
         public Playbook build()
         {
-            return new Playbook(this.steps, this.dataSets, this.promptAddons);
+            return new Playbook(this.steps, this.dataSets, this.promptAddons, this.description);
         }
     }
 }
