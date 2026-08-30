@@ -121,8 +121,8 @@ public final class MarkdownReportGenerator
         sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
         appendCategoryRow(sb, "**Total**", m.getTotal());
-        appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
         appendCategoryRow(sb, "├─ PESAP", m.getPesap());
+        appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
         appendCategoryRow(sb, "├─ Judge", m.getJudge());
         appendCategoryRow(sb, "├─ Verification", m.getVerification());
         appendCategoryRow(sb, "└─ Visual RCA", m.getVisualRca());

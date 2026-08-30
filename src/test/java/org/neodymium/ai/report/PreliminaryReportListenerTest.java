@@ -276,12 +276,14 @@ public class PreliminaryReportListenerTest
             assertTrue(md.contains("75,572")); // 64582 + 10990 total tokens
             assertTrue(md.contains("PESAP"));
             assertTrue(md.contains("Action (Standard)"));
+            assertTrue(md.indexOf("├─ PESAP") < md.indexOf("├─ Action (Standard)"), "PESAP must precede Action in Markdown table");
             assertTrue(md.contains("Context Escalations"));
             assertTrue(md.contains("LEAN → STANDARD"));
 
             final String html = Files.readString(htmlPath);
             assertTrue(html.contains("75,572"));
             assertTrue(html.contains("PESAP (Pre-Execution Semantic Anchor)"));
+            assertTrue(html.indexOf("PESAP (Pre-Execution Semantic Anchor)") < html.indexOf("Action (Standard Generation)"), "PESAP must precede Action in HTML table");
             assertTrue(html.contains("LEAN → STANDARD"));
             assertTrue(html.contains("⚡ 1 esc"));
 

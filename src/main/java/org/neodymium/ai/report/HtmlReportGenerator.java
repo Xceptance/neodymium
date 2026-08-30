@@ -152,8 +152,8 @@ public final class HtmlReportGenerator
         sb.append("        <tbody>\n");
 
         appendHtmlCategoryRow(sb, "<strong>Total</strong>", m.getTotal(), "row-total");
-        appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
         appendHtmlCategoryRow(sb, "PESAP (Pre-Execution Semantic Anchor)", m.getPesap(), "");
+        appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
         appendHtmlCategoryRow(sb, "Self-Judging Validation", m.getJudge(), "");
         appendHtmlCategoryRow(sb, "Semantic Outcome Verification", m.getVerification(), "");
         appendHtmlCategoryRow(sb, "Visual Root Cause Analysis (RCA)", m.getVisualRca(), "");
