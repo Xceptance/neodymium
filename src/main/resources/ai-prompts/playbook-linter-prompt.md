@@ -22,40 +22,40 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
 ## 9 Quality Check Categories
 
 1. **`STEP_SPLITTING_CANDIDATE`**:
-   - Instruction contains multiple interactive operations (e.g. `Click button A and type text into B`, `Öffne das Menü und wähle 'Option'`).
-   - Instruction mixes an interactive action with a post-condition verification (e.g. `Click 'Save' and verify success banner appears`).
+   - Single step contains multiple interactive operations (e.g. joined by conjunctions like `and`, `then`, `und`, `et`, `そして`).
+   - Single step mixes an interactive action with a post-condition verification.
    - *Suggested Rewrite*: Split into discrete numbered atomic steps.
 
 2. **`MISSING_VISUAL_TAG`**:
-   - Instruction asserts visual appearance, colors, badges, icons, alignment, or spatial layouts without a visual tag.
+   - Instruction asserts visual appearance, colors, badges, icons, styling, alignment, or spatial layouts without a visual modality tag.
    - Recommend `(visual)` for viewport-local visual checks.
    - Recommend `(visual: full)` for whole-page, page-spanning, or below-the-fold/footer checks.
 
 3. **`AMBIGUOUS_AFFORDANCE`**:
-   - Phrasing describes what an element *can do* rather than what the test should do (e.g. `There is a link that allows exporting data`, `Ermöglicht das Abmelden`).
-   - *Suggested Rewrite*: Clarify into explicit imperative action (`Click export button`) or explicit assertion (`Verify export button is visible and enabled`).
+   - Phrasing passively describes what an element *can do* / enables rather than commanding what the test must do or explicitly asserting its presence.
+   - *Suggested Rewrite*: Clarify into an explicit imperative action or explicit assertion.
 
 4. **`VAGUE_TARGET`**:
-   - Target reference lacks container, section, or label context when multiple candidates could exist (e.g. `Click the button`, `Click the trash icon`, `Klicke darauf`).
-   - *Suggested Rewrite*: Scope the target with container or label context.
+   - Target reference refers to a generic element type without container, section, label, or text context to disambiguate it (e.g. `Click the button`, `Click the link`, `Click the trash icon`).
+   - *Suggested Rewrite*: Scope the target with container, section, or label context.
 
 5. **`VAGUE_VERIFICATION`**:
-   - Subjective, untestable, or non-verifiable test oracles (e.g. `Make sure the page looks good`, `Check that everything works properly`, `Prüfe ob alles passt`).
+   - Subjective, imprecise, or untestable verification oracle (e.g. `Make sure the page looks good`, `Check that everything works properly`).
    - *Suggested Rewrite*: Concrete state, text, or element assertion.
 
 6. **`DANGLING_ANAPHORA`**:
-   - Relative pronouns (`it`, `that one`, `the other option`, `dieses`) where the referent is ambiguous or separated across previous steps.
-   - *Suggested Rewrite*: Explicitly name the referenced element.
+   - Pronoun or relative reference (e.g. `it`, `that one`, `this`, `its`) where the antecedent is ambiguous among multiple preceding entities or separated across previous steps.
+   - *Suggested Rewrite*: Explicitly name the referenced target.
 
 7. **`TEMPORAL_FLOW_ANOMALY`**:
-   - Logical sequence inversion or attempting to interact with a modal/dialog/container before it was opened or navigated to.
+   - Logical sequence inversion across steps in the scenario (e.g. attempting to interact with a modal dialog, popup, or dropdown menu before the step that opens it, or submitting a form before filling it).
 
 8. **`HARDCODED_VOLATILE_DATA`**:
-   - Hardcoded execution-time dynamic timestamps, absolute current dates, or dynamic IDs in assertions instead of parameterized `${...}` variables.
+   - Hardcoded execution-time dynamic timestamps, absolute current dates, or generated IDs in assertions instead of parameterized `${...}` variables.
 
 9. **`INCOMPLETE_BRANCH_CLAUSE`**:
-   - Dangling or incomplete conditional clause (`If...`, `When...`, `Falls...`, `Wenn...`, `〜の場合`) that omits the imperative consequence or action to execute when the condition is met (e.g. `If the cookie banner appears.`, `Falls ein Dialog geöffnet ist.`).
-   - *Suggested Rewrite*: Complete the branch with an explicit action (e.g. `If the cookie banner appears, click "Accept All"`) or convert into an explicit assertion (`Verify cookie banner is visible`).
+   - Dangling conditional clause (e.g. `If...`, `When...`, `Falls...`, `Wenn...`, `〜の場合`) that omits the imperative consequence or action to execute when the condition is met.
+   - *Suggested Rewrite*: Complete the branch with an explicit action or convert into an explicit assertion.
 
 ---
 

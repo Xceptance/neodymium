@@ -135,9 +135,9 @@ public class PrelinterRuleMatrixLiveTest extends BaseAiTest
     @AiLinter(true)
     @AiMode(ExecutionMode.LINTER_ONLY)
     @AiInlinePlaybook("""
-        description: "Portail RH Validation des demandes de congé"
+        description: "Portail RH Validation des demandes"
         steps: |
-          Cliquez sur le bouton pour approuver la demande.
+          Cliquez sur le bouton.
         """)
     @DisplayName("Rule 4: VAGUE_TARGET (French - HR Onboarding)")
     public void testVagueTarget_French_HrOnboarding(final AiSession session)
@@ -177,8 +177,8 @@ public class PrelinterRuleMatrixLiveTest extends BaseAiTest
     @AiInlinePlaybook("""
         description: "Smart Home Gebäudeleittechnik Heizungssteuerung"
         steps: |
-          Wähle das Thermostat im Wohnbereich aus.
-          Stelle dessen Temperatur auf 22 Grad ein und schalte es ein.
+          Wähle das Wandthermostat und den Raumtemperatursensor aus.
+          Stelle dessen Zieltemperatur auf 22 Grad ein.
         """)
     @DisplayName("Rule 6: DANGLING_ANAPHORA (German - Smart Home IoT)")
     public void testDanglingAnaphora_German_SmartHomeIot(final AiSession session)
@@ -198,7 +198,8 @@ public class PrelinterRuleMatrixLiveTest extends BaseAiTest
     @AiInlinePlaybook("""
         description: "Cloud IAM Role Security Revocation"
         steps: |
-          Click "Revoke All Permissions" inside the confirmation dialog, then click the "Configure Role" menu item.
+          Click "Confirm Revocation" inside the modal dialog.
+          Click the "Configure Role" menu item to open settings.
         """)
     @DisplayName("Rule 7: TEMPORAL_FLOW_ANOMALY (English - Cloud IAM)")
     public void testTemporalFlowAnomaly_English_CloudIam(final AiSession session)
