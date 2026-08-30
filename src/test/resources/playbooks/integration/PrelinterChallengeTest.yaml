@@ -13,3 +13,5 @@ steps: |
   Click on it.
   Click the "Confirm Delete" button inside the modal dialog, then click the "Open Delete Modal' trigger.
   Verify the order confirmation ID matches #ORD-20260830-9948271.
+  If a cookie consent banner is displayed.
+

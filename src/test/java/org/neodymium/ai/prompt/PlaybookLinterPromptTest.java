@@ -89,7 +89,11 @@ public final class PlaybookLinterPromptTest
         s3.setLineNumber(20);
         s3.setSourceFile("test.yaml");
 
-        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Multilingual Scenario", List.of(s1, s2, s3), null);
+        final PlaybookStep s4 = new PlaybookStep("If a cookie consent banner is displayed.");
+        s4.setLineNumber(25);
+        s4.setSourceFile("test.yaml");
+
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Multilingual Scenario", List.of(s1, s2, s3, s4), null);
 
         final String jsonResponse = """
             ```json
@@ -118,6 +122,14 @@ public final class PlaybookLinterPromptTest
                   "message": "Action and verification combined.",
                   "suggestedRewrite": "1. ボタンをクリックする\\n2. 確認メッセージが表示されることを確認する",
                   "scope": null
+                },
+                {
+                  "stepIndex": 4,
+                  "category": "INCOMPLETE_BRANCH_CLAUSE",
+                  "severity": "WARNING",
+                  "message": "Dangling conditional clause without action.",
+                  "suggestedRewrite": "If a cookie consent banner is displayed, click \\"Accept All\\"",
+                  "scope": null
                 }
               ]
             }
@@ -125,7 +137,7 @@ public final class PlaybookLinterPromptTest
             """;
 
         final List<PlaybookLinterFinding> findings = prompt.parseResponse(jsonResponse, null);
-        assertEquals(3, findings.size());
+        assertEquals(4, findings.size());
 
         final PlaybookLinterFinding f1 = findings.get(0);
         assertEquals(1, f1.stepIndex());
@@ -147,6 +159,12 @@ public final class PlaybookLinterPromptTest
         assertEquals(20, f3.lineNumber());
         assertEquals(LinterCategory.STEP_SPLITTING_CANDIDATE, f3.category());
         assertTrue(f3.suggestedRewrite().contains("ボタンをクリックする"));
+
+        final PlaybookLinterFinding f4 = findings.get(3);
+        assertEquals(4, f4.stepIndex());
+        assertEquals(25, f4.lineNumber());
+        assertEquals(LinterCategory.INCOMPLETE_BRANCH_CLAUSE, f4.category());
+        assertTrue(f4.suggestedRewrite().contains("Accept All"));
     }
 
     @Test

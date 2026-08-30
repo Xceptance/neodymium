@@ -64,7 +64,12 @@ public enum LinterCategory
     /**
      * Hardcoded execution-time dynamic timestamps or IDs instead of parameterized variables (${...}).
      */
-    HARDCODED_VOLATILE_DATA;
+    HARDCODED_VOLATILE_DATA,
+
+    /**
+     * Dangling or incomplete conditional clause ("If...", "When...", "Falls...") lacking a consequence or action.
+     */
+    INCOMPLETE_BRANCH_CLAUSE;
 
     /**
      * Resolves an enum constant from a string code safely, case-insensitively.

@@ -140,6 +140,15 @@ The linter SHALL identify hardcoded absolute execution dates or dynamic IDs in a
 
 ---
 
+### Requirement: Incomplete Branch Clause Detection
+The linter SHALL identify dangling or incomplete conditional statements that introduce an "If..." / "When..." / "Falls..." clause but omit the consequential action to execute, classifying them under `INCOMPLETE_BRANCH_CLAUSE`.
+
+#### Scenario: Detecting dangling branch condition
+- **WHEN** an instruction specifies a conditional condition without an action (e.g., `"If a cookie consent banner is displayed."`)
+- **THEN** the linter SHALL generate a finding with category `INCOMPLETE_BRANCH_CLAUSE` recommending completion with an explicit action or conversion to an assertion
+
+---
+
 ### Requirement: Dedicated Linter Routing Configuration
 The system SHALL support dedicated provider and model configuration for the pre-flight linter, allowing the use of fast and cost-effective LLM models while falling back to the default LLM provider if unspecified.
 

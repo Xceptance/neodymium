@@ -27,11 +27,12 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [3.5 Centralized Locator Translation (`LocatorResolver`)](#35-centralized-locator-translation-locatorresolver)
    - [3.6 Target Safeguarding & Early Volatile ID Rejection](#36-target-safeguarding--early-volatile-id-rejection)
    - [3.7 Ranked Candidate Locators, Automatic Locator Improver & LLM Quality Judge](#37-ranked-candidate-locators-automatic-locator-improver--llm-quality-judge)
-4. [Context Escalation Ladder & Pre-Step Analysis (PESAP)](#4-context-escalation-ladder--pre-step-analysis-pesap)
-   - [4.1 Pre-Step Split Analysis (PESAP) & Upfront Splitting](#41-pre-step-split-analysis-pesap--upfront-splitting)
-   - [4.2 Tiered Context Escalation Ladder & Payload Modes](#42-tiered-context-escalation-ladder--payload-modes)
-   - [4.3 Dynamic Step Escalation Budget Model](#43-dynamic-step-escalation-budget-model)
-   - [4.4 The 360° LLM Taming & Safety Lifecycle](#44-the-360-llm-taming--safety-lifecycle)
+4. [Context Escalation Ladder, Pre-Flight Linting & Pre-Step Analysis (PESAP)](#4-context-escalation-ladder-pre-flight-linting--pre-step-analysis-pesap)
+   - [4.1 Upfront Playbook Pre-Flight Linter (`PlaybookLinter` & `@AiLinter`)](#41-upfront-playbook-pre-flight-linter-playbooklinter--ailinter)
+   - [4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting](#42-pre-step-split-analysis-pesap--upfront-splitting)
+   - [4.3 Tiered Context Escalation Ladder & Payload Modes](#43-tiered-context-escalation-ladder--payload-modes)
+   - [4.4 Dynamic Step Escalation Budget Model](#44-dynamic-step-escalation-budget-model)
+   - [4.5 The 360° LLM Taming & Safety Lifecycle](#45-the-360-llm-taming--safety-lifecycle)
 5. [Prompt Taxonomy, Custom Add-ons & Multilingual Support](#5-prompt-taxonomy-custom-add-ons--multilingual-support)
    - [5.1 AI Prompt Taxonomy](#51-ai-prompt-taxonomy)
    - [5.2 Multi-Dimensional Prompt Resolution Architecture](#52-multi-dimensional-prompt-resolution-architecture)
@@ -713,9 +714,43 @@ neodymium.ai.judge.mode=ON_AMBIGUITY
 
 ---
 
-## 4. Context Escalation Ladder & Pre-Step Analysis (PESAP)
+## 4. Context Escalation Ladder, Pre-Flight Linting & Pre-Step Analysis (PESAP)
 
-### 4.1 Pre-Step Split Analysis (PESAP) & Upfront Splitting
+### 4.1 Upfront Playbook Pre-Flight Linter (`PlaybookLinter` & `@AiLinter`)
+
+To detect linguistic defects, atomic step violations, and ambiguous assertions before runtime execution begins, the pipeline incorporates an **Upfront Playbook Pre-Flight Linter** (`PlaybookLinter.java`):
+
+* **Single-Batch Upfront Execution**: During session initialization (`StateMachineRunner`), all playbook scenario steps are compiled and analyzed in a single batch LLM call using `LlmCapability.LINTER` before any browser interaction or JIT step processing begins.
+* **Non-Blocking & Purely Advisory**: The pre-flight linter never fails, aborts, or halts test execution. Findings are recorded into the test execution context (`ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS`) and presented as advisory quality telemetry in test reports.
+* **Automatic Replay Mode Bypass**: In offline deterministic modes (`ExecutionMode.REPLAY_STRICT`, `ExecutionMode.REPLAY_WITH_HEALING`), the linter is automatically bypassed, ensuring zero LLM network requests during recorded playback.
+* **Granular Control (`@AiLinter`)**: Tests can enable, disable, or parameterize prelinting via the `@AiLinter` annotation on classes or test methods:
+  ```java
+  @AiLinter(false) // Disable prelinting for this specific test method
+  public void testQuickReplay() { ... }
+
+  @AiLinter({false, true}) // Run test variations with and without prelinting
+  public void testMatrix() { ... }
+  ```
+* **Property Toggles**: Enabled by default (`neodymium.ai.linter.enabled=true`). Can be globally disabled via `neodymium.ai.linter.enabled=false` (or aliases `neodymium.ai.prelinter.enabled=false`, `neodymium.ai.prelint.enabled=false`).
+* **Optional Scenario Description Grounding**: Reads high-level scenario context from playbook YAML `description:` headers or `@Description("...")` test annotations to ground linguistic evaluation without hardcoding domain assumptions.
+
+#### The 9 Universal Quality Check Categories
+
+| Category | Severity | Description | Example Suggested Rewrite |
+| :--- | :--- | :--- | :--- |
+| **`STEP_SPLITTING_CANDIDATE`** | `WARNING` | Compound actions or mixed action + verification in a single step. | Split into discrete numbered steps (`1. Open selector\n2. Click "Canada"`). |
+| **`MISSING_VISUAL_TAG`** | `INFO` | Visual/layout assertions lacking `(visual)` or `(visual: full)` tags. | Add visual tag (`"The status badge is vibrant emerald green (visual)"`). |
+| **`AMBIGUOUS_AFFORDANCE`** | `WARNING` | Passive capability phrasing ("allows to...") instead of actionable commands. | Convert to imperative action (`"Click Settings"`) or explicit check (`"Verify Settings card is visible"`). |
+| **`VAGUE_TARGET`** | `WARNING` | Underspecified targets lacking container or label scope. | Scope with container context (`"Click the Login button in the header"`). |
+| **`VAGUE_VERIFICATION`** | `WARNING` | Subjective or untestable test oracles ("looks good"). | Use concrete DOM assertion (`"Verify order summary is displayed"`). |
+| **`DANGLING_ANAPHORA`** | `ERROR` | Ambiguous relative pronouns ("it", "that one") without clear referents. | Replace with explicit element name (`"Click the Delete button"`). |
+| **`TEMPORAL_FLOW_ANOMALY`** | `WARNING` | Operating on an entity/modal before opening or creating it. | Reorder steps into prerequisite flow. |
+| **`HARDCODED_VOLATILE_DATA`** | `WARNING` | Hardcoded execution-time timestamps or dynamic generated IDs. | Parameterize with variable (`"Verify order ID matches #${orderId}"`). |
+| **`INCOMPLETE_BRANCH_CLAUSE`** | `WARNING` | Dangling conditional clause ("If...", "When...") lacking consequence. | Complete branch with action (`"If cookie banner appears, click Accept"`). |
+
+---
+
+### 4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting
 
 To handle complex, compound, or ambiguous instructions, the pipeline executes a **Pre-Step Split Analysis (PESAP)** using the `LlmCapability.PESAP` capability:
 * **Contextual Inputs**: The analysis receives the current step, the previously executed step's instruction (for flow context), and up to two subsequent steps' instructions.
@@ -1063,6 +1098,7 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 * `neodymium.ai.temperature` - Global LLM temperature. (Default: `0.0`)
 
 ### 8.3 Sub-System Toggles
+* `neodymium.ai.linter.enabled` - (Boolean) Upfront Playbook Pre-Flight Linter. Aliases: `neodymium.ai.prelinter.enabled`, `neodymium.ai.prelint.enabled`. (Default: `true`)
 * `neodymium.ai.pesap.enabled` - (Boolean) Pre-Execution Structural Analysis & Prediction. (Default: `true`)
 * `neodymium.ai.semanticVerification.enabled` - (Boolean) SSIM and Visual Anchor validation gates. (Default: `true`)
 * `neodymium.ai.visualRca.enabled` - (Boolean) Visual Root Cause Analysis on failure. (Default: `true`)

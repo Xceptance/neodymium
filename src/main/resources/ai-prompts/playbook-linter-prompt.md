@@ -19,7 +19,7 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
 
 ---
 
-## 8 Quality Check Categories
+## 9 Quality Check Categories
 
 1. **`STEP_SPLITTING_CANDIDATE`**:
    - Instruction contains multiple interactive operations (e.g. `Click button A and type text into B`, `Öffne das Menü und wähle 'Option'`).
@@ -52,6 +52,10 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
 
 8. **`HARDCODED_VOLATILE_DATA`**:
    - Hardcoded execution-time dynamic timestamps, absolute current dates, or dynamic IDs in assertions instead of parameterized `${...}` variables.
+
+9. **`INCOMPLETE_BRANCH_CLAUSE`**:
+   - Dangling or incomplete conditional clause (`If...`, `When...`, `Falls...`, `Wenn...`, `〜の場合`) that omits the imperative consequence or action to execute when the condition is met (e.g. `If the cookie banner appears.`, `Falls ein Dialog geöffnet ist.`).
+   - *Suggested Rewrite*: Complete the branch with an explicit action (e.g. `If the cookie banner appears, click "Accept All"`) or convert into an explicit assertion (`Verify cookie banner is visible`).
 
 ---
 
