@@ -249,6 +249,89 @@ public class PrelinterRuleMatrixLiveTest extends BaseAiTest
     }
 
     /**
+     * Rule 10: STEP_SPLITTING_CANDIDATE (Portuguese, Smart Grid & Energy Utilities)
+     *
+     * @param session the active AI session
+     */
+    @Order(10)
+    @AiLinter(true)
+    @AiMode(ExecutionMode.LINTER_ONLY)
+    @AiInlinePlaybook("""
+        description: "Gerenciamento da Rede Elétrica Inteligente e Subestação"
+        steps: |
+          Abra o painel do transformador e ajuste a tensão para "${tensao}".
+        data:
+          - testId: "pt-energy-1"
+            tensao: "220V"
+        """)
+    @DisplayName("Portuguese Rule Test: STEP_SPLITTING_CANDIDATE (Smart Grid)")
+    public void testStepSplittingCandidate_Portuguese_SmartGrid(final AiSession session)
+    {
+        final Set<LinterCategory> categories = extractDetectedCategories(session);
+        assertTrue(categories.contains(LinterCategory.STEP_SPLITTING_CANDIDATE), "Expected STEP_SPLITTING_CANDIDATE finding");
+    }
+
+    /**
+     * Rule 11: MISSING_VISUAL_TAG (Portuguese, Maritime Logistics & Fleet Monitor)
+     *
+     * @param session the active AI session
+     */
+    @Order(11)
+    @AiLinter(true)
+    @AiMode(ExecutionMode.LINTER_ONLY)
+    @AiInlinePlaybook("""
+        description: "Monitoramento de Frota de Carga Marítima"
+        steps: |
+          O indicador de status do navio é azul brilhante no canto superior direito.
+        """)
+    @DisplayName("Portuguese Rule Test: MISSING_VISUAL_TAG (Logistics Fleet)")
+    public void testMissingVisualTag_Portuguese_LogisticsFleet(final AiSession session)
+    {
+        final Set<LinterCategory> categories = extractDetectedCategories(session);
+        assertTrue(categories.contains(LinterCategory.MISSING_VISUAL_TAG), "Expected MISSING_VISUAL_TAG finding");
+    }
+
+    /**
+     * Rule 12: AMBIGUOUS_AFFORDANCE (Portuguese, Banking & PIX Payment Gateway)
+     *
+     * @param session the active AI session
+     */
+    @Order(12)
+    @AiLinter(true)
+    @AiMode(ExecutionMode.LINTER_ONLY)
+    @AiInlinePlaybook("""
+        description: "Autorização de Transferência Instantânea PIX"
+        steps: |
+          Existe um botão de segurança que permite autorizar o pagamento internacional.
+        """)
+    @DisplayName("Portuguese Rule Test: AMBIGUOUS_AFFORDANCE (Banking PIX)")
+    public void testAmbiguousAffordance_Portuguese_BankingPix(final AiSession session)
+    {
+        final Set<LinterCategory> categories = extractDetectedCategories(session);
+        assertTrue(categories.contains(LinterCategory.AMBIGUOUS_AFFORDANCE), "Expected AMBIGUOUS_AFFORDANCE finding");
+    }
+
+    /**
+     * Rule 13: INCOMPLETE_BRANCH_CLAUSE (Portuguese, Academic Student Enrollment)
+     *
+     * @param session the active AI session
+     */
+    @Order(13)
+    @AiLinter(true)
+    @AiMode(ExecutionMode.LINTER_ONLY)
+    @AiInlinePlaybook("""
+        description: "Portal do Aluno e Matrícula Acadêmica"
+        steps: |
+          Se o formulário de matrícula estiver disponível.
+        """)
+    @DisplayName("Portuguese Rule Test: INCOMPLETE_BRANCH_CLAUSE (Academic Portal)")
+    public void testIncompleteBranchClause_Portuguese_AcademicPortal(final AiSession session)
+    {
+        final Set<LinterCategory> categories = extractDetectedCategories(session);
+        assertTrue(categories.contains(LinterCategory.INCOMPLETE_BRANCH_CLAUSE), "Expected INCOMPLETE_BRANCH_CLAUSE finding");
+    }
+
+    /**
      * Helper to safely extract detected finding categories from session execution context.
      *
      * @param session the active AI session
