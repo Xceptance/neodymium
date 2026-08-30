@@ -13,7 +13,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [1.4 Session-Level Authentication Setup](#14-session-level-authentication-setup)
 2. [Test Authoring & Execution Patterns](#2-test-authoring--execution-patterns)
    - [2.1 The Structured Playbook Model & Replay Cache](#21-the-structured-playbook-model--replay-cache)
-   - [2.2 Execution Patterns & Developer APIs (The 8 Patterns)](#22-execution-patterns--developer-apis-the-8-patterns)
+   - [2.2 Execution Patterns & Developer APIs (The 9 Patterns)](#22-execution-patterns--developer-apis-the-9-patterns)
    - [2.3 `@AiPlaybook` Path Resolution & Scoping Rules](#23-aiplaybook-path-resolution--scoping-rules)
    - [2.4 Explicit Control Tags & Runtime Instruction Preparation](#24-explicit-control-tags--runtime-instruction-preparation)
    - [2.5 Dynamic Variable Parameterization & Outbound Secret Masking](#25-dynamic-variable-parameterization--outbound-secret-masking)
@@ -235,9 +235,9 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
 
 ---
 
-### 2.2 Execution Patterns & Developer APIs (The 8 Patterns)
+### 2.2 Execution Patterns & Developer APIs (The 9 Patterns)
 
-Neodymium AI provides 8 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
+Neodymium AI provides 9 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
 
 #### A. Annotation-Driven Execution
 
@@ -295,11 +295,34 @@ public void test4_JudgeMatrix(final AiSession session)
 }
 ```
 
+##### Pattern 5: Pre-Flight Static Linting & Variation Matrix (`@AiLinter`, `ExecutionMode.LINTER_ONLY`)
+Runs test cases with pre-flight linting or tests static playbook quality directly without executing browser steps:
+```java
+// Variation matrix: test with and without upfront linting
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+@AiLinter({false, true})
+@AiPlaybook
+public void test5_LinterMatrix(final AiSession session)
+{
+    // Executed 4 times: [FORCE_RECORDING, Linter: OFF], [FORCE_RECORDING, Linter: ON],
+    //                   [REPLAY_STRICT, Linter: OFF],    [REPLAY_STRICT, Linter: ON]
+}
+
+// Static-only execution: audits playbook quality without browser dispatch
+@AiMode(ExecutionMode.LINTER_ONLY)
+@AiLinter(true)
+@AiPlaybook("/playbooks/integration/prelinter-audit.yaml")
+public void test5_StaticLintOnly(final AiSession session)
+{
+    // Performs upfront static quality checks, generates reports, and finishes immediately
+}
+```
+
 ---
 
 #### B. Programmatic & Debugging APIs
 
-##### Pattern 5: Fully Programmatic Java Builder (`Playbook.builder()`)
+##### Pattern 6: Fully Programmatic Java Builder (`Playbook.builder()`)
 Construct steps programmatically using `PlaybookStep` and `Playbook.builder()`:
 ```java
 final Playbook playbook = Playbook.builder()
@@ -314,7 +337,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 6: Multiline Text Block String with Embedded YAML Data
+##### Pattern 7: Multiline Text Block String with Embedded YAML Data
 Execute raw multiline text blocks containing embedded YAML `steps:` and `data:` sections via `session.execute(...)`:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
@@ -332,7 +355,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 7: Multiline Text Block String with `SessionData` Container
+##### Pattern 8: Multiline Text Block String with `SessionData` Container
 Execute text block prompt strings seeded with a programmatic `SessionData` container:
 ```java
 final SessionData sessionData = new SessionData();
@@ -348,7 +371,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 8: Step-by-Step Java Statement Debugging
+##### Pattern 9: Step-by-Step Java Statement Debugging
 Execute single-statement prompts allowing standard IDE breakpoints on individual Java lines:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
