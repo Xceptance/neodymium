@@ -1,6 +1,6 @@
 ## Purpose
 
-Provides an upfront, single-batch linguistic pre-flight linter that validates playbook instructions across universal, domain-neutral semantic quality categories before test execution begins. Supports optional scenario description context, dual raw and data-substituted instruction representations with source line numbers, and strict natural language universality.
+Provides an upfront, single-batch linguistic pre-flight linter that validates playbook instructions across universal, domain-neutral semantic quality categories before test execution begins. Supports optional scenario description context, dual raw and data-substituted instruction representations with source line numbers, strict natural language universality, comprehensive token metrics accounting, and unified report generation (Markdown, HTML, JSON).
 
 ## ADDED Requirements
 
@@ -145,9 +145,22 @@ The system SHALL support dedicated provider and model configuration for the pre-
 
 ---
 
-### Requirement: Advisory Test Report Presentation with Line Numbers & Dual Step Views
-The test execution report and Markdown report generator SHALL present advisory findings in a dedicated report section detailing step index, line number, raw template instruction, resolved instruction, category, severity, message, and suggested rewrite.
+### Requirement: Pre-Flight Linter Token Accounting & Metrics Integration
+The system SHALL aggregate token usage (input, output, cached) and call counts resulting from pre-flight linting into `ReportMetrics.linter`, contributing to the scenario's total token volume and cost estimations.
 
-#### Scenario: Presenting findings in Markdown report
-- **WHEN** the test run completes with one or more linter advisory findings
-- **THEN** the Markdown report SHALL include a `Playbook Quality & Pre-Flight Findings` table with step index, source line number, raw template instruction, resolved instruction (if substituted), category, severity, message, and suggested rewrite
+#### Scenario: Token metrics aggregation
+- **WHEN** pre-flight linting is executed
+- **THEN** token usage and call count SHALL be tracked in `ExecutionContext` (`KEY_LINTER_TOKEN_USAGE`, `KEY_LINTER_CALL_COUNT`), recorded as an `LlmResponseReceivedEvent`, and aggregated into `ReportMetrics.linter` and `ReportMetrics.total`
+
+---
+
+### Requirement: Unified Advisory Report Presentation (Markdown, HTML, JSON)
+The test execution report and its format generators (Markdown, HTML, JSON) SHALL present advisory findings and metrics in dedicated sections with line numbers, dual template/resolved views, and category badges.
+
+#### Scenario: Markdown report generation
+- **WHEN** a test completes with linter findings
+- **THEN** the Markdown report SHALL include a `Playbook Quality & Pre-Flight Findings` table and a `Linter (Pre-Flight)` entry in the LLM Responsibility Breakdown
+
+#### Scenario: HTML and JSON report generation
+- **WHEN** a test completes with linter findings
+- **THEN** the HTML report SHALL render a pre-flight findings card/table and the JSON report SHALL include serialized `linterFindings`
