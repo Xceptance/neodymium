@@ -3001,7 +3001,7 @@ public final class EmbeddedHtmlServer
                    "      <span class=\"product-price\" style=\"font-size: 16px; font-weight: 700; color: var(--apoc-gold);\">" + nowPrice + "</span>" +
                    (salePrice != null ? "      <s style=\"font-size: 12px; color: var(--apoc-text-muted);\">" + wasPrice + "</s>" : "") +
                    "    </div>" +
-                   "    <button type=\"button\" class=\"apoc-btn-gold product-quick-add\" id=\"apoc-add-btn-" + p.id + "\" data-interactive=\"true\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" style=\"width: 100%; padding: 10px; font-size: 12px;\" onclick=\"quickAddApocalypseProduct('" + p.id + "', '" + p.category + "')\">" +
+                   "    <button type=\"button\" class=\"apoc-btn-gold product-quick-add\" id=\"apoc-add-btn-" + p.id + "\" data-interactive=\"true\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" style=\"width: 100%; padding: 10px; font-size: 12px;\" onclick=\"triggerApocalypseQuickSize(this)\">" +
                    "      <span class=\"ps-txt ps-txt-add-to-bag\"></span>" +
                    "      <span class=\"hydration-indicator\"></span>" +
                    "    </button>" +

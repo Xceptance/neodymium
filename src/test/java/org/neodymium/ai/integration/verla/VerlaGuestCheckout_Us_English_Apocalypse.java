@@ -62,8 +62,8 @@ public class VerlaGuestCheckout_Us_English_Apocalypse extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        this.server.resetInventory();
-        Neodymium.getData().put("verla.url", String.format("https://localhost:%d", this.server.getHttpsPort()));
+        server.resetInventory();
+        Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 

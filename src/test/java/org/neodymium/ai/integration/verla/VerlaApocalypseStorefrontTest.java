@@ -101,11 +101,12 @@ public class VerlaApocalypseStorefrontTest extends BaseAiTest
         Assertions.assertTrue(body.contains("id=\"apoc-spin-modal-overlay\""));
         Assertions.assertTrue(body.contains("id=\"apoc-gdpr-banner\""));
         Assertions.assertTrue(body.contains("id=\"apoc-mini-cart-drawer\""));
+        Assertions.assertTrue(body.contains("id=\"apoc-quick-size-overlay\""));
 
         // 6. Featured Product Cards
         Assertions.assertTrue(body.contains("class=\"apoc-product-tile\""));
         Assertions.assertTrue(body.contains("class=\"apoc-btn-gold product-quick-add\""));
-        Assertions.assertTrue(body.contains("quickAddApocalypseProduct"));
+        Assertions.assertTrue(body.contains("triggerApocalypseQuickSize"));
 
         // 7. Country Selector Trigger & Resolved Flag/Name
         Assertions.assertTrue(body.contains("id=\"country-trigger-btn\""));

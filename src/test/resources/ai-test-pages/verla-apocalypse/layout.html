@@ -504,6 +504,95 @@
             border-color: var(--apoc-gold);
         }
 
+        /* Quick Size Modal */
+        .apoc-quick-size-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 2500;
+            align-items: center;
+            justify-content: center;
+        }
+        .apoc-quick-size-modal-overlay.active {
+            display: flex !important;
+        }
+        .apoc-quick-size-modal {
+            background: var(--apoc-bg-surface);
+            border: 1px solid var(--apoc-gold);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(200, 170, 110, 0.15);
+            border-radius: 12px;
+            padding: 28px;
+            max-width: 480px;
+            width: 90%;
+            position: relative;
+        }
+        .apoc-quick-size-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            background: none;
+            border: none;
+            color: var(--apoc-text-muted);
+            font-size: 18px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .apoc-quick-size-close:hover {
+            color: #fff;
+        }
+        .apoc-quick-size-content {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .apoc-quick-size-thumb {
+            width: 90px;
+            height: 90px;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .apoc-quick-size-thumb svg {
+            width: 70%;
+            height: 70%;
+            color: var(--apoc-gold);
+        }
+        .apoc-quick-size-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .apoc-size-pill {
+            padding: 8px 14px;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .apoc-size-pill:hover:not(:disabled) {
+            border-color: var(--apoc-gold);
+            color: var(--apoc-gold);
+        }
+        .apoc-size-pill.selected {
+            border-color: var(--apoc-gold);
+            background: var(--apoc-gold);
+            color: #000;
+        }
+        .apoc-size-pill:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            text-decoration: line-through;
+        }
+
         /* Mini-Cart Slide-Over Drawer */
         #apoc-mini-cart-backdrop {
             display: none;
@@ -672,6 +761,28 @@
             <ul class="country-list" id="apoc-country-list">
                 ${country_items_list}
             </ul>
+        </div>
+    </div>
+
+    <!-- Quick Size Selection Modal -->
+    <div id="apoc-quick-size-overlay" class="apoc-quick-size-modal-overlay" role="dialog" aria-modal="true" onclick="if(event.target===this)closeApocalypseQuickSize()">
+        <div class="apoc-quick-size-modal">
+            <button type="button" class="apoc-quick-size-close" onclick="closeApocalypseQuickSize()">✕</button>
+            <div class="apoc-quick-size-content">
+                <div class="apoc-quick-size-thumb" id="apoc-quick-size-thumb"></div>
+                <div class="apoc-quick-size-info">
+                    <h3 id="apoc-quick-size-title" style="font-family: var(--apoc-font-serif); font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;"></h3>
+                    <div id="apoc-quick-size-price" style="font-size: 15px; font-weight: 700; color: var(--apoc-gold); margin-bottom: 12px;"></div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 8px;">Select Size</label>
+                        <div id="apoc-quick-size-options" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
+                    <button type="button" id="apoc-quick-size-submit" class="apoc-btn-gold" data-interactive="true" style="width: 100%; padding: 12px 20px;" disabled onclick="submitApocalypseQuickSize()">
+                        <span class="ps-txt ps-txt-add-to-bag"></span>
+                        <span class="hydration-indicator"></span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -851,7 +962,109 @@
                 });
         }
 
-        // 9. Quick Add & PDP Add Handlers
+        // 9. Quick Size Modal & PDP Add Handlers
+        let activeQuickSizeProduct = null;
+        let activeQuickSizeSelectedSize = null;
+
+        function triggerApocalypseQuickSize(btn) {
+            const card = btn.closest('.product-card') || btn.closest('article') || btn.parentElement;
+            const productId = btn.getAttribute('data-product-id');
+            const category = btn.getAttribute('data-category') || '';
+            const titleEl = card ? card.querySelector('.product-title a') : null;
+            const title = titleEl ? titleEl.innerText.trim() : 'Haute Creation';
+            const priceEl = card ? card.querySelector('.product-price') : null;
+            const price = priceEl ? priceEl.innerText.trim() : '';
+            const svgEl = card ? card.querySelector('svg') : null;
+            const svg = svgEl ? svgEl.outerHTML : '<svg viewBox="0 0 100 100"></svg>';
+            let stockMap = {};
+            try {
+                stockMap = JSON.parse(btn.getAttribute('data-stock') || '{}');
+            } catch(e) {}
+
+            openApocalypseQuickSize(productId, category, title, price, svg, stockMap);
+        }
+
+        function openApocalypseQuickSize(productId, category, name, price, svg, stockMap) {
+            activeQuickSizeProduct = { id: productId, category: category };
+            activeQuickSizeSelectedSize = null;
+            document.getElementById('apoc-quick-size-title').textContent = name;
+            document.getElementById('apoc-quick-size-price').textContent = price;
+            document.getElementById('apoc-quick-size-thumb').innerHTML = svg;
+
+            const optionsContainer = document.getElementById('apoc-quick-size-options');
+            optionsContainer.innerHTML = '';
+            const submitBtn = document.getElementById('apoc-quick-size-submit');
+            submitBtn.disabled = true;
+
+            let sizes = ['S', 'M', 'L', 'XL'];
+            if (category === 'bottoms') sizes = ['28', '30', '32', '34', '36'];
+            else if (category === 'footwear' || category === 'shoes') sizes = ['39', '40', '41', '42', '43', '44'];
+            else if (category === 'accessories') sizes = ['One Size'];
+
+            sizes.forEach(size => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'apoc-size-pill';
+                btn.textContent = size;
+                btn.setAttribute('data-size', size);
+                const stock = stockMap ? (stockMap[size] !== undefined ? stockMap[size] : 10) : 10;
+                if (stock <= 0) {
+                    btn.disabled = true;
+                    btn.title = 'Sold Out';
+                } else {
+                    btn.onclick = () => {
+                        optionsContainer.querySelectorAll('.apoc-size-pill').forEach(b => b.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        activeQuickSizeSelectedSize = size;
+                        submitBtn.disabled = false;
+                    };
+                }
+                optionsContainer.appendChild(btn);
+            });
+
+            document.getElementById('apoc-quick-size-overlay').classList.add('active');
+        }
+
+        function closeApocalypseQuickSize() {
+            document.getElementById('apoc-quick-size-overlay').classList.remove('active');
+            activeQuickSizeProduct = null;
+            activeQuickSizeSelectedSize = null;
+        }
+
+        function submitApocalypseQuickSize() {
+            if (!activeQuickSizeProduct || !activeQuickSizeSelectedSize) return;
+            const submitBtn = document.getElementById('apoc-quick-size-submit');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span style="display:inline-block; animation:spin 1s infinite linear;">↻</span> Adding...';
+            }
+            fetch('api/cart/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'productId=' + encodeURIComponent(activeQuickSizeProduct.id) + '&size=' + encodeURIComponent(activeQuickSizeSelectedSize)
+            })
+            .then(r => r.text())
+            .then(html => {
+                const cartBtn = document.getElementById('cart-btn-anchor');
+                if (cartBtn && html) {
+                    cartBtn.outerHTML = html;
+                }
+                closeApocalypseQuickSize();
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span class="ps-txt ps-txt-add-to-bag"></span><span class="hydration-indicator"></span>';
+                }
+                openMiniCartDrawer();
+            })
+            .catch(err => {
+                console.error(err);
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span class="ps-txt ps-txt-add-to-bag"></span><span class="hydration-indicator"></span>';
+                }
+            });
+        }
+
         function quickAddApocalypseProduct(productId, category) {
             let size = 'M';
             if (category === 'bottoms') size = '32';
