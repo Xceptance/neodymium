@@ -184,13 +184,21 @@ public final class StateMachineRunner
                 linter.lint(sessionSteps, scenarioDesc);
             }
 
-            mainLoop: while (context.hasSteps())
+            if (this.session.getExecutionMode().isLinterOnly())
             {
-                final PipelineStep step = context.popStep();
-                try
+                LOGGER.info("🔍 ExecutionMode.LINTER_ONLY active: Upfront pre-flight linting completed. Skipping step execution loop.");
+                context.clearSteps();
+                success = true;
+            }
+            else
+            {
+                mainLoop: while (context.hasSteps())
                 {
-                    step.execute(context);
-                }
+                    final PipelineStep step = context.popStep();
+                    try
+                    {
+                        step.execute(context);
+                    }
                 catch (final Throwable t)
                 {
                     if (t instanceof VirtualMachineError || t instanceof ThreadDeath || t instanceof LinkageError)
@@ -396,6 +404,7 @@ public final class StateMachineRunner
                     }
                     throw e;
                 }
+            }
             }
             success = true;
             context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);

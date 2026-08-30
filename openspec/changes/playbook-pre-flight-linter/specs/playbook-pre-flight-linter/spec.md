@@ -42,6 +42,15 @@ The linter SHALL support receiving an optional scenario description to ground se
 
 ---
 
+### Requirement: Static-Only Test Execution Mode (`ExecutionMode.LINTER_ONLY`)
+The test runner SHALL support `ExecutionMode.LINTER_ONLY` to execute upfront pre-flight linting against the live LLM, compile findings, record token telemetry, and produce reports, while safely bypassing browser/target step execution.
+
+#### Scenario: Running test in LINTER_ONLY mode
+- **WHEN** a test method or session is configured with `@AiMode(ExecutionMode.LINTER_ONLY)`
+- **THEN** the runner SHALL execute the pre-flight linter, record findings and token telemetry into `ExecutionContext` and reports, and complete the test successfully without dispatching steps to the browser
+
+---
+
 ### Requirement: Dual Raw and Resolved Instruction Representation with Line Numbers
 The linter finding data model and report presentation SHALL maintain both the raw template instruction (with `${...}` placeholders), the resolved instruction (with substituted test data), and the source line number and file path.
 

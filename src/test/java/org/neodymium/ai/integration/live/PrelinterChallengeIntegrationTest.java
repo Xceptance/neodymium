@@ -85,7 +85,7 @@ public class PrelinterChallengeIntegrationTest extends BaseAiTest
      */
     @Order(1)
     @AiLinter(true)
-    @AiMode(ExecutionMode.LLM_ONLY)
+    @AiMode(ExecutionMode.LINTER_ONLY)
     @AiDataSet("prelinter-all-rules")
     @AiPlaybook
     public void testPrelinterEnabledChallengesAllRules(final AiSession session)
