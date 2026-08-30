@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
 
 /**
@@ -55,6 +56,7 @@ public final class TestExecutionReport
     private String visualRcaExplanation;
 
     private final List<String> warnings = new ArrayList<>();
+    private final List<PlaybookLinterFinding> linterFindings = new ArrayList<>();
     private final List<ReportStepEntry> steps = new ArrayList<>();
     private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
     private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
@@ -1363,6 +1365,7 @@ public final class TestExecutionReport
         private CategoryTokenUsage judge = new CategoryTokenUsage();
         private CategoryTokenUsage verification = new CategoryTokenUsage();
         private CategoryTokenUsage visualRca = new CategoryTokenUsage();
+        private CategoryTokenUsage linter = new CategoryTokenUsage();
 
         public ReportMetrics()
         {
@@ -1572,6 +1575,37 @@ public final class TestExecutionReport
         public void setVisualRca(final CategoryTokenUsage visualRca)
         {
             this.visualRca = visualRca != null ? visualRca : new CategoryTokenUsage();
+        }
+
+        public CategoryTokenUsage getLinter()
+        {
+            return this.linter;
+        }
+
+        public void setLinter(final CategoryTokenUsage linter)
+        {
+            this.linter = linter != null ? linter : new CategoryTokenUsage();
+        }
+    }
+
+    public List<PlaybookLinterFinding> getLinterFindings()
+    {
+        return Collections.unmodifiableList(this.linterFindings);
+    }
+
+    public void addLinterFinding(final PlaybookLinterFinding finding)
+    {
+        if (finding != null)
+        {
+            this.linterFindings.add(finding);
+        }
+    }
+
+    public void addLinterFindings(final List<PlaybookLinterFinding> findings)
+    {
+        if (findings != null)
+        {
+            this.linterFindings.addAll(findings);
         }
     }
 }

@@ -242,7 +242,8 @@ public final class VertexAiLlamaProvider implements LlmProvider
             LlmCapability.TEXT_ONLY,
             LlmCapability.EXECUTION,
             LlmCapability.PESAP,
-            LlmCapability.VERIFICATION
+            LlmCapability.VERIFICATION,
+            LlmCapability.LINTER
         );
     }
 }

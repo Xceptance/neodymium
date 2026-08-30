@@ -59,6 +59,9 @@ import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.playbook.linter.LinterCategory;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 
 /**
  * Unit test suite for {@link PreliminaryReportListener}, {@link HtmlReportGenerator},
@@ -1352,6 +1355,68 @@ public class PreliminaryReportListenerTest
             assertEquals("Shopping cart drawer opened with updated total.", stepNode.get("verificationResult").get("overallVerdict").get("summary").asText());
             assertEquals(2, root.get("llmCalls").size(), "Total LLM calls in report must include both Action and Verification calls");
             assertEquals("VERIFICATION", root.get("llmCalls").get(1).get("capability").asText());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify that pre-flight linter findings and token metrics are integrated across Markdown and HTML reports")
+    public void testPreFlightLinterFindingsAndTokenAccountingInReports() throws Exception
+    {
+        final Path reportDir = tempFolder.resolve("linter-reports");
+        Files.createDirectories(reportDir);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+                1,
+                14,
+                "checkout.yaml",
+                "Open dropdown and click \"${country}\"",
+                "Open dropdown and click \"Germany\"",
+                LinterCategory.STEP_SPLITTING_CANDIDATE,
+                LinterSeverity.WARNING,
+                "Instruction combines two interactive actions.",
+                "1. Open dropdown\n2. Click \"${country}\"",
+                null
+            );
+            ctx.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS, List.of(finding));
+            ctx.getTransientData().put(ExecutionContext.KEY_LINTER_CALL_COUNT, 1);
+            ctx.getTransientData().put(ExecutionContext.KEY_LINTER_TOKEN_USAGE, new TokenUsage(350, 45, 395, 50));
+
+            final PreliminaryReportListener listener = new PreliminaryReportListener(
+                reportDir,
+                EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON)
+            );
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            final PlaybookStep step = new PlaybookStep("Open dropdown and click \"${country}\"");
+            bus.dispatch(new StepStartedEvent(step, 0));
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(1500, true));
+
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+            final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+
+            assertTrue(Files.exists(htmlPath), "HTML report must be generated");
+            assertTrue(Files.exists(mdPath), "Markdown report must be generated");
+
+            final String html = Files.readString(htmlPath);
+            assertTrue(html.contains("Playbook Quality &amp; Pre-Flight Findings") || html.contains("Playbook Quality & Pre-Flight Findings"), "HTML must contain pre-flight findings section");
+            assertTrue(html.contains("STEP_SPLITTING_CANDIDATE"), "HTML must show finding category");
+            assertTrue(html.contains("Playbook Pre-Flight Linter"), "HTML metrics table must include linter row");
+
+            final String md = Files.readString(mdPath);
+            assertTrue(md.contains("## 📋 Playbook Quality & Pre-Flight Findings"), "Markdown must contain pre-flight findings section");
+            assertTrue(md.contains("STEP_SPLITTING_CANDIDATE"), "Markdown must show finding category");
+            assertTrue(md.contains("├─ Linter (Pre-Flight)"), "Markdown metrics table must include linter row");
         }
         finally
         {

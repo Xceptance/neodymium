@@ -27,6 +27,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 
 /**
  * Report generator producing standalone, interactive, single-file HTML documents
@@ -152,6 +154,7 @@ public final class HtmlReportGenerator
         sb.append("        <tbody>\n");
 
         appendHtmlCategoryRow(sb, "<strong>Total</strong>", m.getTotal(), "row-total");
+        appendHtmlCategoryRow(sb, "Playbook Pre-Flight Linter", m.getLinter(), "");
         appendHtmlCategoryRow(sb, "PESAP (Pre-Execution Semantic Anchor)", m.getPesap(), "");
         appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
         appendHtmlCategoryRow(sb, "Self-Judging Validation", m.getJudge(), "");
@@ -223,6 +226,54 @@ public final class HtmlReportGenerator
                 sb.append("      <li>").append(escapeHtml(warning)).append("</li>\n");
             }
             sb.append("    </ul>\n");
+            sb.append("  </section>\n");
+        }
+
+        // Pre-Flight Findings Box (if any)
+        final List<PlaybookLinterFinding> linterFindings = report.getLinterFindings();
+        if (!linterFindings.isEmpty())
+        {
+            sb.append("  <section class=\"diagnostic-box\" style=\"border-left: 4px solid #6366f1; background: var(--card-bg, #ffffff); margin-bottom: 24px; padding: 18px 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);\">\n");
+            sb.append("    <div class=\"box-header\" style=\"font-size: 1.15rem; font-weight: 700; margin-bottom: 14px; color: var(--text-primary, #1e293b); display: flex; align-items: center; gap: 8px;\">📋 Playbook Quality & Pre-Flight Findings (").append(linterFindings.size()).append(")</div>\n");
+            sb.append("    <div class=\"table-container\">\n");
+            sb.append("      <table class=\"data-table\">\n");
+            sb.append("        <thead><tr><th>Line / Step</th><th>Category</th><th>Severity</th><th>Message & Suggested Rewrite</th></tr></thead>\n");
+            sb.append("        <tbody>\n");
+            for (final PlaybookLinterFinding f : linterFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevBadge = f.severity() == LinterSeverity.ERROR
+                    ? "<span class=\"badge badge-error\" style=\"background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">ERROR</span>"
+                    : f.severity() == LinterSeverity.WARNING
+                    ? "<span class=\"badge badge-warning\" style=\"background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">WARNING</span>"
+                    : "<span class=\"badge badge-info\" style=\"background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">INFO</span>";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("        <tr>\n");
+                sb.append("          <td><code>").append(escapeHtml(lineLabel)).append("</code></td>\n");
+                sb.append("          <td><span style=\"font-weight:600;font-size:0.85rem;\">").append(escapeHtml(cat)).append("</span></td>\n");
+                sb.append("          <td>").append(sevBadge).append("</td>\n");
+                sb.append("          <td>\n");
+                sb.append("            <div style=\"font-weight:600;margin-bottom:4px;\">").append(escapeHtml(f.message())).append("</div>\n");
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("            <div style=\"font-size:0.8rem;color:var(--text-secondary,#64748b);\">Template: <code>").append(escapeHtml(f.rawInstruction())).append("</code></div>\n");
+                    sb.append("            <div style=\"font-size:0.8rem;color:var(--text-secondary,#64748b);\">Resolved: <code>").append(escapeHtml(f.resolvedInstruction())).append("</code></div>\n");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("            <div style=\"font-size:0.8rem;color:var(--text-secondary,#64748b);\">Instruction: <code>").append(escapeHtml(f.rawInstruction())).append("</code></div>\n");
+                }
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("            <div style=\"margin-top:6px;font-size:0.85rem;background:rgba(99,102,241,0.06);padding:6px 10px;border-radius:4px;border-left:3px solid #6366f1;\">💡 <em>Suggested Rewrite:</em><br><code style=\"white-space:pre-wrap;\">").append(escapeHtml(f.suggestedRewrite())).append("</code></div>\n");
+                }
+                sb.append("          </td>\n");
+                sb.append("        </tr>\n");
+            }
+            sb.append("        </tbody>\n");
+            sb.append("      </table>\n");
+            sb.append("    </div>\n");
             sb.append("  </section>\n");
         }
 

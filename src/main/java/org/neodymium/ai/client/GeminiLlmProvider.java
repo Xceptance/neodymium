@@ -247,13 +247,13 @@ public final class GeminiLlmProvider implements LlmProvider
     @Override
     public Set<LlmCapability> getCapabilities()
     {
-        // Includes LlmCapability.VISION
         return EnumSet.of(
             LlmCapability.TEXT_ONLY,
             LlmCapability.VISION,
             LlmCapability.EXECUTION,
             LlmCapability.PESAP,
-            LlmCapability.VERIFICATION
+            LlmCapability.VERIFICATION,
+            LlmCapability.LINTER
         );
     }
 }

@@ -48,6 +48,7 @@ import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.StepStats;
@@ -673,6 +674,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                     this.report.setFailureReason(lastErr.toString());
                 }
             }
+
+            @SuppressWarnings("unchecked")
+            final List<PlaybookLinterFinding> linterFindings = (List<PlaybookLinterFinding>) ctx.getTransientData().get(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS);
+            if (linterFindings != null && !linterFindings.isEmpty())
+            {
+                this.report.addLinterFindings(linterFindings);
+            }
         }
 
         if (this.report.getFailureReason() == null && !this.report.isSuccess())
@@ -768,18 +776,21 @@ public final class PreliminaryReportListener implements ExecutionListener
             final Integer verifCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
             final Integer pesapCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
             final Integer rcaCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
+            final Integer linterCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_CALL_COUNT);
 
             final TokenUsage standardUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
             final TokenUsage judgeUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
             final TokenUsage verificationUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
             final TokenUsage pesapUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
             final TokenUsage rcaUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
+            final TokenUsage linterUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_TOKEN_USAGE);
 
             final int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
             final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
             final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
             final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
             final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
+            final int linterCalls = linterCallsObj != null ? linterCallsObj : (linterUsage != null ? 1 : 0);
 
             final String activeModel = (String) ctx.getTransientData().getOrDefault(ExecutionContext.KEY_ACTIVE_MODEL, "default");
 
@@ -788,18 +799,20 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TestExecutionReport.CategoryTokenUsage judgeCat = buildCategoryUsage(judgeCalls, judgeUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage verifCat = buildCategoryUsage(verificationCalls, verificationUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage rcaCat = buildCategoryUsage(rcaCalls, rcaUsage, activeModel);
+            final TestExecutionReport.CategoryTokenUsage linterCat = buildCategoryUsage(linterCalls, linterUsage, activeModel);
 
             m.setAction(actCat);
             m.setPesap(pesapCat);
             m.setJudge(judgeCat);
             m.setVerification(verifCat);
             m.setVisualRca(rcaCat);
+            m.setLinter(linterCat);
 
-            final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls;
-            final long totalIn = actCat.getInputTokens() + pesapCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens();
-            final long totalOut = actCat.getOutputTokens() + pesapCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens();
-            final long totalCached = actCat.getCachedTokens() + pesapCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens();
-            final double totalCost = actCat.getEstimatedCostUsd() + pesapCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd();
+            final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls + linterCalls;
+            final long totalIn = actCat.getInputTokens() + pesapCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens() + linterCat.getInputTokens();
+            final long totalOut = actCat.getOutputTokens() + pesapCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens() + linterCat.getOutputTokens();
+            final long totalCached = actCat.getCachedTokens() + pesapCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens() + linterCat.getCachedTokens();
+            final double totalCost = actCat.getEstimatedCostUsd() + pesapCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd() + linterCat.getEstimatedCostUsd();
 
             if (totalCalls > 0 || totalIn > 0)
             {

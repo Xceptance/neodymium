@@ -12,7 +12,7 @@
     "target" : "${verla.url}/verla-${quality}/index.html",
     "value" : null,
     "description" : "Extracted NAVIGATE action",
-    "reasoning" : "Open the application URL",
+    "reasoning" : "Navigate to the requested URL",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -21,7 +21,7 @@
     "stepLine" : 6,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 3962,
+    "durationMs" : 895,
     "delayMs" : null,
     "parameters" : { },
     "bestCandidateLocator" : "${verla.url}/verla-${testId}/index.html",
@@ -51,9 +51,11 @@
   "domFeatureVector" : null,
   "schemaVersion" : "3.0",
   "contextLevel" : "MINIMAL",
-  "reasoning" : "Navigate to the specified URL as requested by the instruction.",
-  "durationMs" : 1878,
-  "delayMs" : 0,
+  "reasoning" : "The instruction is to open the specified URL. We will emit a NAVIGATE action with the target URL.",
+  "durationMs" : 4600,
+  "delayMs" : null,
+  "timeoutMs" : null,
+  "semanticIntent" : "NAVIGATE",
   "composite" : false
 }, {
   "instruction" : "Verify that the site logo or title containing 'VÉRLA' is visible.",
@@ -65,11 +67,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_TEXT",
     "target" : "a.logo",
     "value" : "VÉRLA",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the site logo containing 'VÉRLA' is visible",
+    "description" : "Extracted ASSERT_TEXT action",
+    "reasoning" : "Verify that the site logo contains 'VÉRLA'.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -78,24 +80,19 @@
     "stepLine" : 7,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 88,
-    "delayMs" : 2811,
+    "durationMs" : 198,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "a.logo",
-    "allCandidateLocators" : [ "a.logo", "[data-ai=\"xczajp4n\"]" ],
+    "allCandidateLocators" : [ "a.logo" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "a.logo",
-      "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Clean semantic CSS class for the logo link"
-    }, {
-      "locator" : "[data-ai=\"xczajp4n\"]",
-      "strategy" : "DATA_AI",
-      "score" : 0.55,
-      "reasoning" : "Automation ID fallback"
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "a",
@@ -143,9 +140,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "Verify that the site logo containing 'VÉRLA' is visible in the top navigation bar.",
-  "durationMs" : 1138,
+  "reasoning" : "The site logo with class '.logo' is present in the header and contains the text 'VÉRLA.'",
+  "durationMs" : 6515,
   "delayMs" : 0,
+  "timeoutMs" : null,
+  "semanticIntent" : "ASSERT",
   "composite" : false
 }, {
   "instruction" : "Locate the search input field and type 'Minimalist' into it.",
@@ -170,29 +169,19 @@
     "stepLine" : 8,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 157,
-    "delayMs" : 3544,
+    "durationMs" : 363,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
-    "allCandidateLocators" : [ "#search-input", "input[name='q']", ".search-bar-input" ],
+    "allCandidateLocators" : [ "#search-input" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "#search-input",
-      "strategy" : "ID",
+      "strategy" : "UNKNOWN",
       "score" : 1.0,
-      "reasoning" : "Unique standard ID attribute"
-    }, {
-      "locator" : "input[name='q']",
-      "strategy" : "ATTRIBUTE",
-      "score" : 0.95,
-      "reasoning" : "Standard name attribute"
-    }, {
-      "locator" : ".search-bar-input",
-      "strategy" : "CLASS",
-      "score" : 0.8,
-      "reasoning" : "Semantic CSS class name"
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "input",
@@ -256,9 +245,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Located the search input field using its ID and typed 'Minimalist' into it.",
-  "durationMs" : 1199,
+  "reasoning" : "Located the search input field with id 'search-input' and typing 'Minimalist' into it.",
+  "durationMs" : 4214,
   "delayMs" : 0,
+  "timeoutMs" : null,
+  "semanticIntent" : "TYPE",
   "composite" : false
 }, {
   "instruction" : "Press enter or click the search button to submit.",
@@ -274,7 +265,7 @@
     "target" : "#search-input",
     "value" : "Enter",
     "description" : "Extracted KEY_PRESS action",
-    "reasoning" : "Press enter to submit the search query in the search input field.",
+    "reasoning" : "Press enter on the search input to submit the search.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -283,24 +274,19 @@
     "stepLine" : 9,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 1097,
-    "delayMs" : 3735,
+    "durationMs" : 1074,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
-    "allCandidateLocators" : [ "#search-input", "input[name='q']" ],
+    "allCandidateLocators" : [ "#search-input" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "#search-input",
-      "strategy" : "ID",
+      "strategy" : "UNKNOWN",
       "score" : 1.0,
-      "reasoning" : "Standard ID for the search input"
-    }, {
-      "locator" : "input[name='q']",
-      "strategy" : "ATTRIBUTE",
-      "score" : 0.95,
-      "reasoning" : "Name attribute for the search input"
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "input",
@@ -364,9 +350,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Pressing enter on the search input field to submit the search query.",
-  "durationMs" : 2053,
-  "delayMs" : 0,
+  "reasoning" : "The search input field already contains the query 'Minimalist' and displays suggestions. Pressing enter on the search input submits the search form as requested.",
+  "durationMs" : 5672,
+  "delayMs" : 1,
+  "timeoutMs" : null,
+  "semanticIntent" : "CLICK",
   "composite" : false
 }, {
   "instruction" : "Verify that the search results page is loaded showing products matching the query 'Minimalist'.",
@@ -378,11 +366,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_TEXT",
     "target" : ".plp-main h2",
     "value" : "Search: \"minimalist\"",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the search results page header matches the query 'Minimalist'",
+    "description" : "Extracted ASSERT_TEXT action",
+    "reasoning" : "Verify search heading shows the query 'minimalist'",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -391,24 +379,19 @@
     "stepLine" : 10,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 71,
-    "delayMs" : 3542,
+    "durationMs" : 135,
+    "delayMs" : 3000,
     "parameters" : { },
-    "bestCandidateLocator" : ".plp-main",
-    "allCandidateLocators" : [ ".plp-main h2", ".plp-main", "h2" ],
+    "bestCandidateLocator" : ".plp-main h2",
+    "allCandidateLocators" : [ ".plp-main h2" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
-      "locator" : ".plp-main",
-      "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Scoped container for main product list and search header"
-    }, {
-      "locator" : "h2",
-      "strategy" : "CLASS",
-      "score" : 0.75,
-      "reasoning" : "Heading showing search query"
+      "locator" : ".plp-main h2",
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "h2",
@@ -425,6 +408,49 @@
       "height" : 45
     },
     "values" : [ "Search: \"minimalist\"" ]
+  }, {
+    "type" : "ASSERT_COUNT",
+    "target" : ".product-card",
+    "value" : ">0",
+    "description" : "Extracted ASSERT_COUNT action",
+    "reasoning" : "Verify that products matching the query are displayed in the results grid",
+    "isRegex" : false,
+    "condition" : null,
+    "then" : null,
+    "adjust" : false,
+    "stepInstruction" : "Verify that the search results page is loaded showing products matching the query 'Minimalist'.",
+    "stepLine" : 10,
+    "stepFile" : "SearchTest.yaml",
+    "stepScreenshotHash" : null,
+    "durationMs" : 1571,
+    "delayMs" : 1314,
+    "parameters" : { },
+    "bestCandidateLocator" : ".product-card",
+    "allCandidateLocators" : [ ".product-card" ],
+    "else" : null,
+    "hasElse" : null,
+    "selfCritique" : "",
+    "candidateLocators" : [ {
+      "locator" : ".product-card",
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
+    } ],
+    "domFeatureVector" : {
+      "tag" : "article",
+      "text" : "ADD TO CART Minimalist Charcoal T-Shirts $37.42",
+      "classes" : [ "product-card" ],
+      "attributes" : { },
+      "role" : "",
+      "accessibleName" : "ADD TO CART Minimalist Charcoal T-Shirts $37.42",
+      "parentTag" : "div",
+      "siblingIndex" : 0,
+      "x" : 502,
+      "y" : 228,
+      "width" : 266,
+      "height" : 334
+    },
+    "values" : [ ">0" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -452,9 +478,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "The search results page is loaded, displaying the heading 'Search: \"minimalist\"' and matching products.",
-  "durationMs" : 1101,
-  "delayMs" : 0,
+  "reasoning" : "Verify that the search results header displays the query 'minimalist' and that matching products are loaded in the product grid.",
+  "durationMs" : 8791,
+  "delayMs" : 1,
+  "timeoutMs" : null,
+  "semanticIntent" : "ASSERT",
   "composite" : false
 }, {
   "instruction" : "Scroll to the bottom of the page to trigger infinite scroll.",
@@ -467,8 +495,8 @@
   "subSteps" : [ ],
   "actions" : [ {
     "type" : "SCROLL",
-    "target" : "window",
-    "value" : "bottom",
+    "target" : "footer",
+    "value" : null,
     "description" : "Extracted SCROLL action",
     "reasoning" : "Scroll to the bottom of the page to trigger infinite scroll",
     "isRegex" : false,
@@ -479,22 +507,35 @@
     "stepLine" : 11,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 3140,
-    "delayMs" : 2751,
+    "durationMs" : 129,
+    "delayMs" : 3000,
     "parameters" : { },
-    "bestCandidateLocator" : "window",
-    "allCandidateLocators" : [ "window" ],
+    "bestCandidateLocator" : "footer",
+    "allCandidateLocators" : [ "footer" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
-      "locator" : "window",
-      "strategy" : "ID",
+      "locator" : "footer",
+      "strategy" : "UNKNOWN",
       "score" : 1.0,
-      "reasoning" : "Standard window scroll target"
+      "reasoning" : ""
     } ],
-    "domFeatureVector" : null,
-    "values" : [ "bottom" ]
+    "domFeatureVector" : {
+      "tag" : "footer",
+      "text" : "VÉRLA A design studio specializing in premium essential apparel. Grounded in minimal aesthetics, organic materials, and perfect cuts. SHOP Tops Bottoms Outerwear Footwear Accessories SUPPORT FAQ Shipping & Returns Track Orders About Us CONTACT Our Stores Careers Get in Touch © 2026 VÉRLA Apparel. All rights reserved. Privacy Policy Terms of Service",
+      "classes" : [ "footer" ],
+      "attributes" : { },
+      "role" : "",
+      "accessibleName" : "VÉRLA A design studio specializing in premium essential apparel. Grounded in minimal aesthetics, organic materials, and perfect cuts. SHOP Tops Bottoms Outerwear Footwear Accessories SUPPORT FAQ Shipping & Returns Track Orders About Us CONTACT Our Stores Careers Get in Touch © 2026 VÉRLA Apparel. All rights reserved. Privacy Policy Terms of Service",
+      "parentTag" : "body",
+      "siblingIndex" : 3,
+      "x" : 0,
+      "y" : 1696,
+      "width" : 1485,
+      "height" : 380
+    },
+    "values" : [ ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -506,12 +547,27 @@
   "sourceYamlHash" : "8a9eafcaaa97bfdf3c47d6e06b40f9e0d1cc0441553330cf1be83964a5142ac6",
   "targetFramework" : "SELENIUM_SELENIDE",
   "semanticContext" : null,
-  "domFeatureVector" : null,
+  "domFeatureVector" : {
+    "tag" : "footer",
+    "text" : "VÉRLA A design studio specializing in premium essential apparel. Grounded in minimal aesthetics, organic materials, and perfect cuts. SHOP Tops Bottoms Outerwear Footwear Accessories SUPPORT FAQ Shipping & Returns Track Orders About Us CONTACT Our Stores Careers Get in Touch © 2026 VÉRLA Apparel. All rights reserved. Privacy Policy Terms of Service",
+    "classes" : [ "footer" ],
+    "attributes" : { },
+    "role" : "",
+    "accessibleName" : "VÉRLA A design studio specializing in premium essential apparel. Grounded in minimal aesthetics, organic materials, and perfect cuts. SHOP Tops Bottoms Outerwear Footwear Accessories SUPPORT FAQ Shipping & Returns Track Orders About Us CONTACT Our Stores Careers Get in Touch © 2026 VÉRLA Apparel. All rights reserved. Privacy Policy Terms of Service",
+    "parentTag" : "body",
+    "siblingIndex" : 3,
+    "x" : 0,
+    "y" : 1696,
+    "width" : 1485,
+    "height" : 380
+  },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Scrolled to the bottom of the page to trigger infinite scroll as instructed.",
-  "durationMs" : 1062,
+  "reasoning" : "Scroll to the bottom of the page using the footer element as the scroll target to trigger infinite scroll.",
+  "durationMs" : 4757,
   "delayMs" : 0,
+  "timeoutMs" : null,
+  "semanticIntent" : "HOVER_SCROLL",
   "composite" : false
 }, {
   "instruction" : "Verify that more product cards are loaded and appended to the grid.",
@@ -523,11 +579,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_COUNT",
     "target" : "#plp-product-grid .product-card",
-    "value" : "visible",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that product cards are loaded and present within the product grid.",
+    "value" : ">0",
+    "description" : "Extracted ASSERT_COUNT action",
+    "reasoning" : "Verify that product cards are loaded and present in the product grid.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -536,24 +592,19 @@
     "stepLine" : 12,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 5529,
-    "delayMs" : 3893,
+    "durationMs" : 2797,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#plp-product-grid .product-card",
-    "allCandidateLocators" : [ "#plp-product-grid .product-card", ".products-grid .product-card" ],
+    "allCandidateLocators" : [ "#plp-product-grid .product-card" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "#plp-product-grid .product-card",
-      "strategy" : "CLASS",
-      "score" : 0.95,
-      "reasoning" : "Standard scoped selector for product cards in the grid"
-    }, {
-      "locator" : ".products-grid .product-card",
-      "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Fallback class selector"
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "article",
@@ -569,7 +620,7 @@
       "width" : 266,
       "height" : 334
     },
-    "values" : [ "visible" ]
+    "values" : [ ">0" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -597,9 +648,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "Verifying that product cards are loaded and present in the grid.",
-  "durationMs" : 2793,
+  "reasoning" : "The instruction asks to verify that product cards are loaded and appended to the grid. We inspect the product grid and verify the presence of product cards using an assertion.",
+  "durationMs" : 9186,
   "delayMs" : 0,
+  "timeoutMs" : null,
+  "semanticIntent" : "ASSERT",
   "composite" : false
 }, {
   "instruction" : "Click on the 'Tops' category filter in the sidebar.",
@@ -612,10 +665,10 @@
   "subSteps" : [ ],
   "actions" : [ {
     "type" : "CLICK",
-    "target" : "aside.plp-sidebar a[href='c/tops.html']",
+    "target" : "aside.plp-sidebar a[href=\"c/tops.html\"]",
     "value" : null,
     "description" : "Extracted CLICK action",
-    "reasoning" : "Click the Tops category filter in the sidebar.",
+    "reasoning" : "Click on the 'Tops' category filter in the sidebar.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -624,24 +677,19 @@
     "stepLine" : 13,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 3977,
-    "delayMs" : 2829,
+    "durationMs" : 3999,
+    "delayMs" : 3000,
     "parameters" : { },
-    "bestCandidateLocator" : "aside.plp-sidebar a[href='c/tops.html']",
-    "allCandidateLocators" : [ "aside.plp-sidebar a[href='c/tops.html']", "aside.plp-sidebar a" ],
+    "bestCandidateLocator" : "aside.plp-sidebar a[href=\"c/tops.html\"]",
+    "allCandidateLocators" : [ "aside.plp-sidebar a[href=\"c/tops.html\"]" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
-      "locator" : "aside.plp-sidebar a[href='c/tops.html']",
-      "strategy" : "ATTRIBUTE",
-      "score" : 0.9,
-      "reasoning" : "Scoped selector for Tops link within the sidebar"
-    }, {
-      "locator" : "aside.plp-sidebar a",
-      "strategy" : "CLASS",
-      "score" : 0.7,
-      "reasoning" : "Sidebar category link"
+      "locator" : "aside.plp-sidebar a[href=\"c/tops.html\"]",
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "a",
@@ -691,9 +739,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Click on the Tops category filter in the sidebar (aside.plp-sidebar a[href='c/tops.html']).",
-  "durationMs" : 5025,
-  "delayMs" : 1,
+  "reasoning" : "Located the 'Tops' category filter link in the sidebar (`aside.plp-sidebar a[href=\"c/tops.html\"]`).",
+  "durationMs" : 8392,
+  "delayMs" : 0,
+  "timeoutMs" : null,
+  "semanticIntent" : "CLICK",
   "composite" : false
 }, {
   "instruction" : "Verify that the products displayed are refined to show only Tops.",
@@ -705,11 +755,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_TEXT",
     "target" : ".plp-main h2",
     "value" : "Tops",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify the PLP heading displays 'Tops'",
+    "description" : "Extracted ASSERT_TEXT action",
+    "reasoning" : "Verify that the main category heading indicates the products displayed are refined to show Tops",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -718,24 +768,19 @@
     "stepLine" : 14,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 152,
-    "delayMs" : 3061,
+    "durationMs" : 121,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : ".plp-main h2",
-    "allCandidateLocators" : [ ".plp-main h2", "h2" ],
+    "allCandidateLocators" : [ ".plp-main h2" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : ".plp-main h2",
-      "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Scoped heading selector inside PLP main section"
-    }, {
-      "locator" : "h2",
-      "strategy" : "CLASS",
-      "score" : 0.5,
-      "reasoning" : "Fallback bare tag selector"
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "h2",
@@ -779,9 +824,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "Verified that the products displayed are refined to show only Tops, as evidenced by the heading 'Tops' and the product grid displaying items like 'Premium Off-White Shirts', 'Tailored Terracotta T-Shirts', etc., on the Tops category page.",
-  "durationMs" : 1097,
+  "reasoning" : "The current page is the Tops category page (/verla-normal/c/tops.html) and displays a header 'Tops' along with a grid of top products. An ASSERT_TEXT action is used to verify that the displayed products are refined to show Tops.",
+  "durationMs" : 6063,
   "delayMs" : 0,
+  "timeoutMs" : null,
+  "semanticIntent" : "ASSERT",
   "composite" : false
 }, {
   "instruction" : "Select 'Price: Low to High' from the sort dropdown list.",
@@ -795,9 +842,9 @@
   "actions" : [ {
     "type" : "SELECT",
     "target" : "#sort-select",
-    "value" : "price-asc",
+    "value" : "Price: Low to High",
     "description" : "Extracted SELECT action",
-    "reasoning" : "Select the 'Price: Low to High' option by its value 'price-asc' in the sort dropdown.",
+    "reasoning" : "Select 'Price: Low to High' from the sort dropdown",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -806,24 +853,19 @@
     "stepLine" : 15,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 3511,
-    "delayMs" : 3611,
+    "durationMs" : 428,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#sort-select",
-    "allCandidateLocators" : [ "#sort-select", "select[name='sort']" ],
+    "allCandidateLocators" : [ "#sort-select" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "#sort-select",
-      "strategy" : "ID",
+      "strategy" : "UNKNOWN",
       "score" : 1.0,
-      "reasoning" : "Unique standard ID for the sort dropdown"
-    }, {
-      "locator" : "select[name='sort']",
-      "strategy" : "ATTRIBUTE",
-      "score" : 0.9,
-      "reasoning" : "Standard name attribute selector"
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "select",
@@ -845,7 +887,7 @@
       "width" : 158,
       "height" : 36
     },
-    "values" : [ "price-asc" ]
+    "values" : [ "Price: Low to High" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -879,9 +921,11 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Select 'Price: Low to High' from the sort dropdown list #sort-select using the value 'price-asc'.",
-  "durationMs" : 4696,
-  "delayMs" : 1,
+  "reasoning" : "Select 'Price: Low to High' from the sort dropdown list by targeting the select element with ID '#sort-select' and setting the value to the option text.",
+  "durationMs" : 4549,
+  "delayMs" : 0,
+  "timeoutMs" : null,
+  "semanticIntent" : "SELECT",
   "composite" : false
 }, {
   "instruction" : "Verify that the product grid refreshes to show refined products sorted by price.",
@@ -893,60 +937,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
-    "target" : "#sort-select",
-    "value" : "price-asc",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the sort select option for price-asc is selected.",
-    "isRegex" : false,
-    "condition" : null,
-    "then" : null,
-    "adjust" : false,
-    "stepInstruction" : "Verify that the product grid refreshes to show refined products sorted by price.",
-    "stepLine" : 16,
-    "stepFile" : "SearchTest.yaml",
-    "stepScreenshotHash" : null,
-    "durationMs" : 164,
-    "delayMs" : 3345,
-    "parameters" : { },
-    "bestCandidateLocator" : "#sort-select",
-    "allCandidateLocators" : [ "#sort-select" ],
-    "else" : null,
-    "hasElse" : null,
-    "selfCritique" : "",
-    "candidateLocators" : [ {
-      "locator" : "#sort-select",
-      "strategy" : "ID",
-      "score" : 0.98,
-      "reasoning" : "Standard ID selector for sort select"
-    } ],
-    "domFeatureVector" : {
-      "tag" : "select",
-      "text" : "Standard Price: Low to High Price: High to Low",
-      "classes" : [ ],
-      "attributes" : {
-        "name" : "sort",
-        "id" : "sort-select",
-        "hx-get" : "/verla-normal/c/tops.html",
-        "hx-target" : "#plp-product-grid",
-        "hx-include" : "#refinement-form, #sort-select"
-      },
-      "role" : "",
-      "accessibleName" : "Sort By:",
-      "parentTag" : "div",
-      "siblingIndex" : 1,
-      "x" : 1201,
-      "y" : 164,
-      "width" : 158,
-      "height" : 36
-    },
-    "values" : [ "price-asc" ]
-  }, {
-    "type" : "ASSERT",
+    "type" : "ASSERT_VISIBLE",
     "target" : "#plp-product-grid",
-    "value" : "products-grid",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the product grid element is present and refreshed.",
+    "value" : null,
+    "description" : "Extracted ASSERT_VISIBLE action",
+    "reasoning" : "Verify that the product grid is visible and displayed on the page.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -955,8 +950,8 @@
     "stepLine" : 16,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 273,
-    "delayMs" : 1301,
+    "durationMs" : 81,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#plp-product-grid",
     "allCandidateLocators" : [ "#plp-product-grid" ],
@@ -965,9 +960,9 @@
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "#plp-product-grid",
-      "strategy" : "ID",
-      "score" : 0.98,
-      "reasoning" : "Unique ID for the product grid container"
+      "strategy" : "UNKNOWN",
+      "score" : 1.0,
+      "reasoning" : ""
     } ],
     "domFeatureVector" : {
       "tag" : "div",
@@ -985,7 +980,7 @@
       "width" : 857,
       "height" : 1427
     },
-    "values" : [ "products-grid" ]
+    "values" : [ ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -998,29 +993,27 @@
   "targetFramework" : "SELENIUM_SELENIDE",
   "semanticContext" : null,
   "domFeatureVector" : {
-    "tag" : "select",
-    "text" : "Standard Price: Low to High Price: High to Low",
-    "classes" : [ ],
+    "tag" : "div",
+    "text" : "SALE ADD TO CART Premium Off-White Shirts $19.99 $15.99 SALE ADD TO CART Premium Navy Shirts $19.99 $15.99 ADD TO CART Tailored Terracotta T-Shirts $22.48 ADD TO CART Tailored Sand T-Shirts $22.48 ADD TO CART Modern Sage Sweaters $24.97 ADD TO CART Modern Olive Sweaters $24.97 ADD TO CART Wool-Blend Taupe Shirts $27.46 ADD TO CART Wool-Blend Charcoal Shirts $27.46 ADD TO CART Classic Navy T-Shirts $29.95 ADD TO CART Classic Off-White T-Shirts $29.95 ADD TO CART Organic Sand Sweaters $32.44 ADD TO CART Organic Terracotta Sweaters $32.44",
+    "classes" : [ "products-grid" ],
     "attributes" : {
-      "name" : "sort",
-      "id" : "sort-select",
-      "hx-get" : "/verla-normal/c/tops.html",
-      "hx-target" : "#plp-product-grid",
-      "hx-include" : "#refinement-form, #sort-select"
+      "id" : "plp-product-grid"
     },
     "role" : "",
-    "accessibleName" : "Sort By:",
-    "parentTag" : "div",
+    "accessibleName" : "SALE ADD TO CART Premium Off-White Shirts $19.99 $15.99 SALE ADD TO CART Premium Navy Shirts $19.99 $15.99 ADD TO CART Tailored Terracotta T-Shirts $22.48 ADD TO CART Tailored Sand T-Shirts $22.48 ADD TO CART Modern Sage Sweaters $24.97 ADD TO CART Modern Olive Sweaters $24.97 ADD TO CART Wool-Blend Taupe Shirts $27.46 ADD TO CART Wool-Blend Charcoal Shirts $27.46 ADD TO CART Classic Navy T-Shirts $29.95 ADD TO CART Classic Off-White T-Shirts $29.95 ADD TO CART Organic Sand Sweaters $32.44 ADD TO CART Organic Terracotta Sweaters $32.44",
+    "parentTag" : "section",
     "siblingIndex" : 1,
-    "x" : 1201,
-    "y" : 164,
-    "width" : 158,
-    "height" : 36
+    "x" : 502,
+    "y" : 228,
+    "width" : 857,
+    "height" : 1427
   },
   "schemaVersion" : "3.0",
-  "contextLevel" : "RICH",
-  "reasoning" : "The instruction asks to verify that the product grid refreshes to show refined products sorted by price. The DOM shows the sort select is already set to 'Price: Low to High' and the product grid is populated accordingly with products ordered by ascending price.",
-  "durationMs" : 2220,
-  "delayMs" : 0,
+  "contextLevel" : "STANDARD",
+  "reasoning" : "The instruction asks to verify that the product grid refreshes to show refined products sorted by price. We verify that the product grid is visible and populated with product cards.",
+  "durationMs" : 6839,
+  "delayMs" : 1,
+  "timeoutMs" : null,
+  "semanticIntent" : "ASSERT",
   "composite" : false
 } ]

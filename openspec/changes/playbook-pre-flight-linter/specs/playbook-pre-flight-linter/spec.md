@@ -7,12 +7,12 @@ Provides an upfront, single-batch linguistic pre-flight linter that validates pl
 ### Requirement: Upfront Pre-Flight Static Linting
 The system SHALL support an upfront static linter that analyzes the full sequence of playbook scenario instructions in a single batch LLM call during session initialization, before step execution and per-step pre-flight analysis. The linter findings SHALL be purely advisory and SHALL NOT cause test execution to fail or abort.
 
-#### Scenario: Pre-flight linter executes on enabled session
-- **WHEN** a test session starts and `neodymium.ai.linter.enabled` is set to `true`
+#### Scenario: Pre-flight linter executes by default
+- **WHEN** a test session starts and `neodymium.ai.linter.enabled` is not explicitly set or set to `true` (default: `true`)
 - **THEN** the system SHALL send all scenario steps in a single batch request to the configured linter LLM and record any returned advisory findings without stopping test execution
 
-#### Scenario: Pre-flight linter is bypassed when disabled
-- **WHEN** a test session starts and `neodymium.ai.linter.enabled` is `false` (default)
+#### Scenario: Pre-flight linter is bypassed when disabled via property or annotation
+- **WHEN** a test session starts and `neodymium.ai.linter.enabled` is set to `false` or annotated with `@AiLinter(false)`
 - **THEN** the system SHALL proceed directly to test execution without making a linter LLM call
 
 #### Scenario: Graceful degradation on linter failure

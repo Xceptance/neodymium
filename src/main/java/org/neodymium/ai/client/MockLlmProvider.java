@@ -48,7 +48,7 @@ public final class MockLlmProvider implements LlmProvider
      */
     public MockLlmProvider()
     {
-        this.capabilities = Set.of(LlmCapability.TEXT_ONLY, LlmCapability.VISION, LlmCapability.EXECUTION);
+        this.capabilities = Set.of(LlmCapability.values());
     }
 
     /**

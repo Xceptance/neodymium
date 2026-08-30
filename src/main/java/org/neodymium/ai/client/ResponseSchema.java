@@ -39,7 +39,10 @@ public enum ResponseSchema
     STEP_SPLITS,
 
     /** Free-form raw text response. */
-    TEXT;
+    TEXT,
+
+    /** Upfront playbook pre-flight quality findings. */
+    LINTER;
 
     /**
      * Resolves the maximum output token limit ceiling appropriate for the specified response schema.
@@ -59,7 +62,7 @@ public enum ResponseSchema
             case STEP_SPLITS -> 256;
             case JUDGE -> 1024;
             case TEXT -> 2048;
-            case ACTIONS, ASSERTION -> 4096;
+            case ACTIONS, ASSERTION, LINTER -> 4096;
         };
     }
 
@@ -79,7 +82,7 @@ public enum ResponseSchema
         return switch (schema)
         {
             case STEP_SPLITS -> ReasoningEffort.LOW;
-            case JUDGE, TEXT -> ReasoningEffort.MEDIUM;
+            case JUDGE, TEXT, LINTER -> ReasoningEffort.MEDIUM;
             case ACTIONS, ASSERTION -> ReasoningEffort.HIGH;
         };
     }

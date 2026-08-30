@@ -653,6 +653,65 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if the upfront playbook pre-flight linter is enabled.
+     *
+     * @return true if pre-flight linter is enabled (default: true), false otherwise
+     */
+    public boolean isLinterEnabled()
+    {
+        final String val = getProperty("neodymium.ai.linter.enabled", null);
+        if (val != null)
+        {
+            return Boolean.parseBoolean(val.trim());
+        }
+        final String prelintVal = getProperty("neodymium.ai.prelinter.enabled", null);
+        if (prelintVal != null)
+        {
+            return Boolean.parseBoolean(prelintVal.trim());
+        }
+        final String prelintShort = getProperty("neodymium.ai.prelint.enabled", null);
+        if (prelintShort != null)
+        {
+            return Boolean.parseBoolean(prelintShort.trim());
+        }
+        return true;
+    }
+
+    /**
+     * Resolves the configured provider identifier for the pre-flight linter,
+     * checking {@code neodymium.ai.llm.linter.provider} then {@code neodymium.ai.linter.provider}
+     * before falling back to the global default provider.
+     *
+     * @return the resolved linter provider name
+     */
+    public String getLinterProvider()
+    {
+        final String explicit = getProperty("neodymium.ai.llm.linter.provider", null);
+        if (explicit != null && !explicit.isBlank())
+        {
+            return explicit.trim();
+        }
+        return getProvider("linter");
+    }
+
+    /**
+     * Resolves the configured model identifier for the pre-flight linter,
+     * checking {@code neodymium.ai.llm.linter.model} then {@code neodymium.ai.linter.model}
+     * before falling back to the global default model.
+     *
+     * @return the resolved linter model name
+     */
+    public String getLinterModel()
+    {
+        final String explicit = getProperty("neodymium.ai.llm.linter.model", null);
+        if (explicit != null && !explicit.isBlank())
+        {
+            return explicit.trim();
+        }
+        return getModel("linter");
+    }
+
+    /**
      * Resolves the maximum number of retry attempts permitted at the highest escalation level.
      *
      * @return maximum retry count (default: 1)
