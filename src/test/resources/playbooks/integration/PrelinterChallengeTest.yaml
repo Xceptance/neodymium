@@ -7,7 +7,7 @@ steps: |
   Open ${prelinter.test.url} in the browser
   Enter "${username}" into the username field, type "secret" into password, and click the Login button.
   The status badge is vibrant emerald green and aligned to the top right corner.
-  On the left side is a settings card that allows updating account preferences.
+  There is a settings card that allows updating account preferences.
   Click the Action button.
   Verify that the dashboard looks clean and appealing.
   Click on it.
