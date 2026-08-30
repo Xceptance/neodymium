@@ -34,7 +34,6 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.resources.InMemoryResourceManager;
-import org.neodymium.ai.resources.PlaybookResourceManager;
 
 /**
  * Unit tests validating YAML system prompt add-ons parsing, resolution precedence,
@@ -255,6 +254,11 @@ public final class SystemPromptAddonTest
         assertNotNull(generalAddon);
         assertTrue(generalAddon.contains("Language Universality"));
         assertTrue(generalAddon.contains("button texts, labels"));
+
+        final String visualAddon = SystemPromptAddonHelper.getAddon("visual", context);
+        assertNotNull(visualAddon);
+        assertTrue(visualAddon.contains("Language Universality"));
+        assertTrue(visualAddon.contains("visual appearance"));
 
         final String basePrompt = "Base system prompt instructions";
         final String combined = SystemPromptAddonHelper.appendAddon(basePrompt, "pesap", context);

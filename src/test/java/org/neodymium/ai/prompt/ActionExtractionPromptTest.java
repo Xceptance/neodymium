@@ -24,7 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
@@ -32,6 +34,7 @@ import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.SemanticIntent;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.ToLevelEscalationException;
@@ -225,7 +228,10 @@ public final class ActionExtractionPromptTest
     {
         AiAgentPrompts.clearCache();
         final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
-        final ExecutionContext context = new ExecutionContext(null);
+        final Map<String, SessionData.DataEntry> data = new HashMap<>();
+        data.put("neodymium.ai.model", new SessionData.DataEntry("gemini-3.5-flash-lite", false));
+        data.put("neodymium.ai.multilingual", new SessionData.DataEntry("true", false));
+        final ExecutionContext context = new ExecutionContext(new SessionData(data));
         context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new SelenideTargetExecutor());
 
@@ -236,6 +242,8 @@ public final class ActionExtractionPromptTest
         assertFalse(systemMsg.contains("## Selenide/Selenium Engine Locators"), "Visual system prompt must not include Selenide locator rule.");
         assertFalse(systemMsg.contains("## Candidate Locators & Ambiguity Evaluation"), "Visual system prompt must not include candidate locators rule.");
         assertFalse(systemMsg.contains("## Action Rules"), "Visual system prompt must not include DOM action rules.");
+        assertFalse(systemMsg.contains("Only use real HTML tags from the DOM"), "Visual system prompt must not include general model DOM locators addon.");
+        assertTrue(systemMsg.contains("evaluating visual appearance"), "Visual system prompt should use visual multilingual addon if multilingual is active.");
     }
 
     /**

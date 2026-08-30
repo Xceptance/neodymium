@@ -83,7 +83,7 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
 
         if (activeLevel == ContextLevel.VISUAL)
         {
-            return SystemPromptAddonHelper.appendAddon(AiAgentPrompts.getVisualOnlyPrompt(), "general", context);
+            return SystemPromptAddonHelper.appendAddon(AiAgentPrompts.getVisualOnlyPrompt(), "visual", context);
         }
 
         String basePrompt = AiAgentPrompts.getActionExtractionPrompt();
