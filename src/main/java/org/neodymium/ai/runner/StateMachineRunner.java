@@ -94,9 +94,9 @@ public final class StateMachineRunner
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
         LOGGER.debug("║ 🚀 STARTING TEST CASE: {}", testName != null ? testName : "Unknown Test");
-        LOGGER.debug("║ 📂 Active Dataset:    {}", datasetLabel != null ? datasetLabel : "default");
-        LOGGER.debug("║ ⚙️  Execution Mode:    {}", mode != null ? mode : "LLM_ONLY");
-        LOGGER.debug("║ 📜 Loaded Playbook:   {}", loadedPlaybook != null ? loadedPlaybook : "None");
+        LOGGER.debug("║ 📂 Active Dataset    : {}", datasetLabel != null ? datasetLabel : "default");
+        LOGGER.debug("║ ⚙️ Execution Mode    : {}", mode != null ? mode : "LLM_ONLY");
+        LOGGER.debug("║ 📜 Loaded Playbook   : {}", loadedPlaybook != null ? loadedPlaybook : "None");
         LOGGER.debug("╚════════════════════════════════════════════════════════════════════════════════════");
 
         if (LOGGER.isTraceEnabled())
