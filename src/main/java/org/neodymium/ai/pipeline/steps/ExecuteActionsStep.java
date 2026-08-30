@@ -598,7 +598,7 @@ public final class ExecuteActionsStep implements PipelineStep
             }
             catch (final Throwable t)
             {
-                if (t instanceof VirtualMachineError || t instanceof ThreadDeath || t instanceof LinkageError)
+                if (t instanceof VirtualMachineError || t instanceof LinkageError)
                 {
                     throw (Error) t;
                 }

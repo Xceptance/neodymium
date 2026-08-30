@@ -141,6 +141,7 @@ public final class StateMachineRunner
         {
             ExecutionContext.setActiveContext(context);
 
+            @SuppressWarnings("resource")
             final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
             final String activeFramework = executor != null ? executor.getFrameworkName().toUpperCase() : "SELENIUM_SELENIDE";
 
@@ -201,7 +202,7 @@ public final class StateMachineRunner
                     }
                 catch (final Throwable t)
                 {
-                    if (t instanceof VirtualMachineError || t instanceof ThreadDeath || t instanceof LinkageError)
+                    if (t instanceof VirtualMachineError || t instanceof LinkageError)
                     {
                         throw (Error) t;
                     }
