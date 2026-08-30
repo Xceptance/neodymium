@@ -747,6 +747,12 @@ public final class EmbeddedHtmlServer
             sb.append("<label for=\"size\" class=\"text-[13px] font-semibold uppercase tracking-[0.05em]\">").append(sizeLabel).append(":</label>");
             sb.append("<select name=\"size\" id=\"size\" class=\"cursor-pointer rounded-lg border border-sand-200 bg-white px-4 py-2.5 outline-none focus:border-terracotta-500\" required>");
         }
+        else if ("apocalypse".equals(quality))
+        {
+            sb.append("<div style=\"display: flex; gap: 12px; align-items: center;\">");
+            sb.append("<label for=\"size\" style=\"font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary);\">").append(sizeLabel).append(":</label>");
+            sb.append("<select name=\"size\" id=\"size\" style=\"width: 100%; max-width: 320px; padding: 10px 14px; border: 1px solid var(--apoc-border); border-radius: 6px; background: var(--apoc-bg-elevated); color: #fff; outline: none; cursor: pointer; font-size: 13px;\" required>");
+        }
         else
         {
             sb.append("<div style=\"display: flex; gap: 12px; align-items: center;\">");
@@ -1014,6 +1020,7 @@ public final class EmbeddedHtmlServer
         this.server.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-apocalypse/", new LoggingHandler(verlaHandler));
         this.server.setExecutor(Executors.newCachedThreadPool());
 
         this.httpsServer = createHttpsServerWithFallback(httpsPort);
@@ -1047,6 +1054,7 @@ public final class EmbeddedHtmlServer
             this.httpsServer.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-apocalypse/", new LoggingHandler(verlaHandler));
             this.httpsServer.setExecutor(Executors.newCachedThreadPool());
         }
         catch (final Exception e)
@@ -1308,6 +1316,10 @@ public final class EmbeddedHtmlServer
             {
                 qualitySuffix = "pwa-chaos";
             }
+            else if (fullPath.startsWith("/verla-apocalypse/"))
+            {
+                qualitySuffix = "apocalypse";
+            }
             else
             {
                 sendResponse(exchange, 400, "text/plain", "Bad Request: Invalid SUT suffix");
@@ -1448,8 +1460,9 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("country/select".equals(apiMethod))
                 {
-                    final String selectCode = params.getOrDefault("code", "US");
-                    exchange.getResponseHeaders().add("Set-Cookie", "verla_country=" + selectCode + "; Path=/");
+                    final String queryCode = exchange.getRequestURI().getQuery() != null ? getQueryParam(exchange.getRequestURI().getQuery(), "code") : null;
+                    final String selectCode = queryCode != null && !queryCode.isEmpty() ? queryCode : params.getOrDefault("code", "US");
+                    exchange.getResponseHeaders().add("Set-Cookie", "verla_country=" + selectCode + "; Path=/; Max-Age=31536000");
                     
                     // HX-Refresh reloads the current page so country switch is applied immediately
                     exchange.getResponseHeaders().add("HX-Refresh", "true");
@@ -1470,6 +1483,12 @@ public final class EmbeddedHtmlServer
                             {
                                 sb.append("<li data-selected=\"").append(c.code.equals(activeCountry.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
                                   .append(c.name).append(" (").append(c.symbol).append(")</li>");
+                            }
+                            else if ("apocalypse".equals(qualitySuffix))
+                            {
+                                sb.append("<li class=\"country-item ").append(selectedClass).append("\" data-country=\"").append(c.code).append("\" style=\"display:flex; align-items:center; gap:8px; cursor:pointer;\" onclick=\"selectApocalypseCountry('").append(c.code).append("');\">")
+                                  .append("<span style=\"font-size:16px;\">").append(getCountryFlag(c.code)).append("</span> ")
+                                  .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
                             }
                             else if ("bad".equals(qualitySuffix) || "modern-bad-nowcag".equals(qualitySuffix))
                             {
@@ -1530,10 +1549,21 @@ public final class EmbeddedHtmlServer
                     sendResponse(exchange, 200, "text/html", getCartContentHtml(cart, activeCountry, trans, qualitySuffix));
                     return;
                 }
+                else if ("cart/drawer".equals(apiMethod))
+                {
+                    sendResponse(exchange, 200, "text/html", getCartDrawerHtmlApocalypse(cart, activeCountry, trans));
+                    return;
+                }
+                else if ("cart/badge".equals(apiMethod))
+                {
+                    sendResponse(exchange, 200, "text/html", getCartBadgeWrapperHtml(cart, trans, activeCountry, qualitySuffix));
+                    return;
+                }
                 else if ("cart/remove".equals(apiMethod))
                 {
                     VerlaConfiguration.getInstance().simulateCartRemove();
-                    final String productId = params.get("productId");
+                    final String queryProd = exchange.getRequestURI().getQuery() != null ? getQueryParam(exchange.getRequestURI().getQuery(), "productId") : null;
+                    final String productId = queryProd != null && !queryProd.isEmpty() ? queryProd : params.get("productId");
                     if (productId != null)
                     {
                         cart.items.remove(productId);
@@ -1829,10 +1859,10 @@ public final class EmbeddedHtmlServer
                     final String cardExpiry = params.getOrDefault("cardExpiry", "");
                     final String cardCvv = params.getOrDefault("cardCvv", "");
                     
-                    final String street = params.get("street");
-                    final String city = params.get("city");
-                    final String postcode = params.get("postcode");
-                    final String country = params.get("country");
+                    final String street = params.getOrDefault("address", params.getOrDefault("street", ""));
+                    final String city = params.getOrDefault("city", "");
+                    final String postcode = params.getOrDefault("postcode", params.getOrDefault("zipCode", ""));
+                    final String country = params.getOrDefault("country", "US");
                     final String state = params.getOrDefault("state", "");
 
                     final Map<String, String> model = new HashMap<>();
@@ -1944,21 +1974,43 @@ public final class EmbeddedHtmlServer
                     final String trackMsg = trans.getOrDefault("trackInstructions", "Use the Order Number and Shipping Zip Code to track your package on the <a href=\"track-orders.html\" style=\"color: var(--color-accent); font-weight: 600;\">Track Orders</a> page.");
                     final String continueShoppingMsg = trans.getOrDefault("continueShopping", "Continue Shopping");
 
-                    final String successHtml = "<div style=\"text-align:center; padding: 40px 20px;\">" +
-                                               "  <svg class=\"success-icon\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" style=\"margin: 0 auto 20px auto; display: block;\">" +
-                                               "    <circle cx=\"32\" cy=\"32\" r=\"30\" fill=\"#5F8766\" />" +
-                                               "    <path d=\"M20 32L28 40L44 24\" stroke=\"white\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-linejoin=\"round\" />" +
-                                               "  </svg>" +
-                                               "  <h2 id=\"success-message\" style=\"font-family: var(--font-family-serif); font-size: 28px; margin-bottom: 12px;\">" + thankYouMsg + "</h2>" +
-                                               "  <p id=\"order-placed-message\" style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
-                                               "  <div style=\"background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +
-                                               "    <div style=\"margin-bottom:10px;\"><strong>" + orderNumLabel + ":</strong> <span id=\"order-number-value\">" + orderNum + "</span></div>" +
-                                               "    <div style=\"margin-bottom:10px;\"><strong>" + zipCodeLabel + ":</strong> <span id=\"zip-code-value\">" + postcode + "</span></div>" +
-                                               "    <div style=\"margin-bottom:10px;\"><strong>" + totalPaidLabel + ":</strong> " + formatPrice(total, activeCountry) + "</div>" +
-                                               "    <div style=\"font-size: 12px; color: var(--color-text-secondary); margin-top: 16px;\">" + trackMsg + "</div>" +
-                                               "  </div>" +
-                                               "  <a href=\"index.html\" class=\"btn-primary\" style=\"display:inline-block;\">" + continueShoppingMsg + "</a>" +
-                                               "</div>";
+                    final String successHtml;
+                    if ("apocalypse".equals(qualitySuffix))
+                    {
+                        successHtml = "<div style=\"text-align:center; padding: 40px 20px; background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; max-width: 600px; margin: 0 auto;\">" +
+                                      "  <svg class=\"success-icon\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" style=\"margin: 0 auto 20px auto; display: block;\">" +
+                                      "    <circle cx=\"32\" cy=\"32\" r=\"30\" fill=\"var(--apoc-gold)\" />" +
+                                      "    <path d=\"M20 32L28 40L44 24\" stroke=\"#000\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />" +
+                                      "  </svg>" +
+                                      "  <h2 id=\"success-message\" style=\"font-family: var(--apoc-font-serif); font-size: 28px; color: #fff; margin-bottom: 12px;\">" + thankYouMsg + "</h2>" +
+                                      "  <p id=\"order-placed-message\" style=\"color: var(--apoc-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
+                                      "  <div style=\"background-color: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); padding: 24px; border-radius: 8px; text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +
+                                      "    <div style=\"margin-bottom:10px; color:var(--apoc-text-secondary);\"><strong>" + orderNumLabel + ":</strong> <span id=\"order-number-value\" style=\"color:var(--apoc-gold); font-weight:700;\">" + orderNum + "</span></div>" +
+                                      "    <div style=\"margin-bottom:10px; color:var(--apoc-text-secondary);\"><strong>" + zipCodeLabel + ":</strong> <span id=\"zip-code-value\" style=\"color:#fff;\">" + postcode + "</span></div>" +
+                                      "    <div style=\"margin-bottom:10px; color:var(--apoc-text-secondary);\"><strong>" + totalPaidLabel + ":</strong> <span style=\"color:var(--apoc-gold); font-weight:700;\">" + formatPrice(total, activeCountry) + "</span></div>" +
+                                      "    <div style=\"font-size: 12px; color: var(--apoc-text-muted); margin-top: 16px;\">" + trackMsg + "</div>" +
+                                      "  </div>" +
+                                      "  <a href=\"index.html\" class=\"apoc-btn-gold\" style=\"display:inline-block; padding: 12px 24px;\">" + continueShoppingMsg + "</a>" +
+                                      "</div>";
+                    }
+                    else
+                    {
+                        successHtml = "<div style=\"text-align:center; padding: 40px 20px;\">" +
+                                      "  <svg class=\"success-icon\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" style=\"margin: 0 auto 20px auto; display: block;\">" +
+                                      "    <circle cx=\"32\" cy=\"32\" r=\"30\" fill=\"#5F8766\" />" +
+                                      "    <path d=\"M20 32L28 40L44 24\" stroke=\"white\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-linejoin=\"round\" />" +
+                                      "  </svg>" +
+                                      "  <h2 id=\"success-message\" style=\"font-family: var(--font-family-serif); font-size: 28px; margin-bottom: 12px;\">" + thankYouMsg + "</h2>" +
+                                      "  <p id=\"order-placed-message\" style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
+                                      "  <div style=\"background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +
+                                      "    <div style=\"margin-bottom:10px;\"><strong>" + orderNumLabel + ":</strong> <span id=\"order-number-value\">" + orderNum + "</span></div>" +
+                                      "    <div style=\"margin-bottom:10px;\"><strong>" + zipCodeLabel + ":</strong> <span id=\"zip-code-value\">" + postcode + "</span></div>" +
+                                      "    <div style=\"margin-bottom:10px;\"><strong>" + totalPaidLabel + ":</strong> " + formatPrice(total, activeCountry) + "</div>" +
+                                      "    <div style=\"font-size: 12px; color: var(--color-text-secondary); margin-top: 16px;\">" + trackMsg + "</div>" +
+                                      "  </div>" +
+                                      "  <a href=\"index.html\" class=\"btn-primary\" style=\"display:inline-block;\">" + continueShoppingMsg + "</a>" +
+                                      "</div>";
+                    }
                     sendResponse(exchange, 200, "text/html", successHtml);
                     return;
                 }
@@ -2141,6 +2193,10 @@ public final class EmbeddedHtmlServer
                 {
                     model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"My account\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + user.email.split("@")[0] + "</span></a>");
                 }
+                else if ("apocalypse".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"apoc-icon-btn\" id=\"user-account-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> <span style=\"color:var(--apoc-gold);\">" + user.email.split("@")[0] + "</span></a>");
+                }
                 else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
                     model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/account.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + user.email.split("@")[0] + "</div>");
@@ -2159,6 +2215,10 @@ public final class EmbeddedHtmlServer
                 else if ("pwa-chaos".equals(quality))
                 {
                     model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"Sign In\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + loginText + "</span></a>");
+                }
+                else if ("apocalypse".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"apoc-icon-btn\" id=\"user-login-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> <span class=\"ps-txt ps-txt-login\"></span></a>");
                 }
                 else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
@@ -2643,6 +2703,12 @@ public final class EmbeddedHtmlServer
                     countriesList.append("<li data-selected=\"").append(c.code.equals(country.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
                                  .append(c.name).append(" (").append(c.symbol).append(")</li>");
                 }
+                else if ("apocalypse".equals(quality))
+                {
+                    countriesList.append("<li class=\"country-item ").append(selectedClass).append("\" data-country=\"").append(c.code).append("\" style=\"display:flex; align-items:center; gap:8px; cursor:pointer;\" onclick=\"selectApocalypseCountry('").append(c.code).append("');\">")
+                                 .append("<span style=\"font-size:16px;\">").append(getCountryFlag(c.code)).append("</span> ")
+                                 .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
+                }
                 else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
                 {
                     countriesList.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
@@ -2913,6 +2979,35 @@ public final class EmbeddedHtmlServer
                    "  </div>" +
                    "</div>";
         }
+        else if ("apocalypse".equals(quality))
+        {
+            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
+            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
+            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
+
+            return "<article class=\"apoc-product-tile\" data-product-id=\"" + p.id + "\" style=\"background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; transition: all 0.25s ease; position: relative;\">" +
+                   "  <div style=\"height: 180px; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 14px;\">" +
+                   "    <a href=\"" + pdpLink + "\" style=\"width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;\">" +
+                   "      <svg viewBox=\"0 0 100 100\" style=\"width: 65%; height: 65%; color: var(--apoc-gold); filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));\">" + p.svgPath + "</svg>" +
+                   "    </a>" +
+                   (badgeHtml.isEmpty() ? "" : "    <span style=\"position: absolute; top: 8px; left: 8px; background: var(--apoc-gold); color: #000; font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 2px 6px; border-radius: 3px;\">" + (!p.badge.isEmpty() ? escapeHtml(p.badge) : "Private Drop") + "</span>") +
+                   "  </div>" +
+                   "  <div style=\"flex: 1; display: flex; flex-direction: column;\">" +
+                   "    <div style=\"font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-gold); margin-bottom: 4px;\"><span class=\"ps-txt ps-txt-trending\"></span></div>" +
+                   "    <h3 class=\"product-title\" style=\"font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 600; color: #FFFFFF; line-height: 1.3; margin-bottom: 6px;\">" +
+                   "      <a href=\"" + pdpLink + "\" style=\"color: #fff;\">" + escapeHtml(localeName) + "</a>" +
+                   "    </h3>" +
+                   "    <div style=\"margin-top: auto; padding-top: 8px; display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;\">" +
+                   "      <span class=\"product-price\" style=\"font-size: 16px; font-weight: 700; color: var(--apoc-gold);\">" + nowPrice + "</span>" +
+                   (salePrice != null ? "      <s style=\"font-size: 12px; color: var(--apoc-text-muted);\">" + wasPrice + "</s>" : "") +
+                   "    </div>" +
+                   "    <button type=\"button\" class=\"apoc-btn-gold product-quick-add\" id=\"apoc-add-btn-" + p.id + "\" data-interactive=\"true\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" style=\"width: 100%; padding: 10px; font-size: 12px;\" onclick=\"quickAddApocalypseProduct('" + p.id + "', '" + p.category + "')\">" +
+                   "      <span class=\"ps-txt ps-txt-add-to-bag\"></span>" +
+                   "      <span class=\"hydration-indicator\"></span>" +
+                   "    </button>" +
+                   "  </div>" +
+                   "</article>";
+        }
         else
         {
             // Perfect and Normal layout structure
@@ -2962,6 +3057,14 @@ public final class EmbeddedHtmlServer
             return "<button type=\"button\" aria-label=\"Cart\" data-cart-qty=\"" + count + "\" data-dan-component=\"mini-cart--icon-btn\" class=\"wick-button emotion-s28hge\" id=\"cart-btn-anchor\" onclick=\"openMiniCartDrawer()\">" +
                    "  <svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-tn3ltr\"><path fill=\"currentColor\" d=\"M12 1.375c1.103 0 2.156.458 2.927 1.264a4.36 4.36 0 0 1 1.188 2.736h4.01v16.417H3.875V5.375h4.01a4.35 4.35 0 0 1 1.188-2.736A4.05 4.05 0 0 1 12 1.375M5.125 20.542h13.75V6.625H5.125zM12 2.625a2.8 2.8 0 0 0-2.023.878 3.1 3.1 0 0 0-.838 1.872h5.722a3.1 3.1 0 0 0-.838-1.872A2.8 2.8 0 0 0 12 2.625\"></path></svg>" +
                    "  <div class=\"emotion-1db0yyd\"><div class=\"emotion-16mjpn3 cart-badge\">" + count + "</div></div>" +
+                   "</button>";
+        }
+
+        if ("apocalypse".equals(quality))
+        {
+            return "<button type=\"button\" class=\"apoc-icon-btn\" id=\"cart-btn-anchor\" data-interactive=\"true\" onclick=\"openMiniCartDrawer()\" aria-label=\"Cart with " + count + " items\">" +
+                   "  <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg> " +
+                   "  <span class=\"cart-badge apoc-cart-badge\" id=\"cart-badge-count\">" + count + "</span>" +
                    "</button>";
         }
 
@@ -3021,6 +3124,10 @@ public final class EmbeddedHtmlServer
         if ("pwa-chaos".equals(quality))
         {
             return getCartDropdownHtmlPwaChaos(cart, trans, country, showTemp);
+        }
+        if ("apocalypse".equals(quality))
+        {
+            return getCartDropdownHtmlApocalypse(cart, trans, country);
         }
 
         final StringBuilder sb = new StringBuilder();
@@ -3200,6 +3307,192 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
+    private String getCartDropdownHtmlApocalypse(final Cart cart, final Map<String, String> trans, final Country country)
+    {
+        final StringBuilder sb = new StringBuilder();
+        if (cart.items.isEmpty())
+        {
+            sb.append("<div style=\"text-align:center; padding: 40px 0; color:var(--apoc-text-secondary);\">")
+              .append("<p style=\"margin-bottom:16px;\">").append(trans != null ? trans.getOrDefault("cartIsEmpty", "Your bag is empty.") : "Your bag is empty.").append("</p>")
+              .append("<a href=\"c/tops.html\" class=\"apoc-btn-gold\" style=\"display:inline-block; padding: 8px 16px;\"><span class=\"ps-txt ps-txt-shop-now\"></span></a>")
+              .append("</div>");
+        }
+        else
+        {
+            double subtotal = 0;
+            sb.append("<div style=\"display:flex; flex-direction:column; gap:16px;\">");
+            for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+            {
+                final Product p = lookupProductById(entry.getKey());
+                if (p == null)
+                {
+                    continue;
+                }
+                final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                subtotal += price * entry.getValue();
+                sb.append("<div style=\"display:flex; gap:12px; align-items:center; border-bottom:1px solid var(--apoc-border); padding-bottom:12px;\">")
+                  .append("  <div style=\"width:48px; height:48px; background:var(--apoc-bg-elevated); border:1px solid var(--apoc-border); border-radius:4px; display:flex; align-items:center; justify-content:center;\">")
+                  .append("    <svg viewBox=\"0 0 100 100\" style=\"width:70%;height:70%;color:var(--apoc-gold);\">").append(p.svgPath).append("</svg>")
+                  .append("  </div>")
+                  .append("  <div style=\"flex:1;\">")
+                  .append("    <div style=\"font-size:13px; font-weight:600; color:#fff;\">").append(p.names.getOrDefault(country.locale, p.names.get("en"))).append("</div>")
+                  .append("    <div style=\"font-size:12px; color:var(--apoc-gold);\">").append(entry.getValue()).append(" x ").append(formatPrice(price, country)).append("</div>")
+                  .append("  </div>")
+                  .append("</div>");
+            }
+            sb.append("</div>");
+            sb.append("<div style=\"margin-top:16px; font-size:14px; display:flex; justify-content:space-between; color:#fff;\"><span>Subtotal</span><b style=\"color:var(--apoc-gold);\">").append(formatPrice(subtotal, country)).append("</b></div>");
+        }
+        return sb.toString();
+    }
+
+    private String getCartContentHtmlApocalypse(final Cart cart, final Country country, final Map<String, String> trans, final String couponError)
+    {
+        if (cart.items.isEmpty())
+        {
+            return "<div id=\"cart-content-wrapper\" style=\"text-align:center; padding: 60px 0;\">" +
+                   "  <h2 style=\"font-family: var(--apoc-font-serif); font-size: 28px; color: #FFFFFF; margin-bottom: 16px;\">" + (trans != null ? trans.getOrDefault("cartIsEmpty", "Your bag is empty.") : "Your bag is empty.") + "</h2>" +
+                   "  <p style=\"color: var(--apoc-text-secondary); margin-bottom: 24px;\">Explore the private archive and select limited extraits.</p>" +
+                   "  <a href=\"c/tops.html\" class=\"apoc-btn-gold\"><span class=\"ps-txt ps-txt-shop-now\"></span></a>" +
+                   "</div>";
+        }
+
+        final double subtotal = calculateSubtotal(cart);
+        final double discount = calculateDiscount(cart, subtotal);
+        final double shipping = calculateShipping(cart, subtotal);
+        final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
+        final double total = subtotal - discount + shipping + tax;
+
+        final StringBuilder sb = new StringBuilder();
+        sb.append("<div id=\"cart-content-wrapper\" style=\"display: grid; grid-template-columns: 2fr 1fr; gap: 40px; align-items: flex-start;\">");
+        sb.append("  <div style=\"background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 32px;\">");
+        sb.append("    <h1 style=\"font-family: var(--apoc-font-serif); font-size: 26px; font-weight: 700; color: #FFFFFF; margin-bottom: 24px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 12px;\">Bespoke Bag</h1>");
+        sb.append("    <table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">");
+        sb.append("      <thead><tr style=\"border-bottom: 1px solid var(--apoc-border); color: var(--apoc-text-muted); font-size: 11px; text-transform: uppercase;\"><th style=\"text-align:left; padding-bottom:12px;\">Item</th><th style=\"text-align:center; padding-bottom:12px;\">Qty</th><th style=\"text-align:right; padding-bottom:12px;\">Total</th></tr></thead>");
+        sb.append("      <tbody>");
+
+        for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+        {
+            final String cartKey = entry.getKey();
+            final Product p = lookupProductById(cartKey);
+            if (p == null)
+            {
+                continue;
+            }
+            final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+            final double rowTotal = price * entry.getValue();
+            final String displayName = p.names.getOrDefault(country.locale, p.names.get("en"));
+            final String encKey = URLEncoder.encode(cartKey, StandardCharsets.UTF_8);
+
+            sb.append("      <tr class=\"cart-item-row\" data-product-id=\"").append(p.id).append("\" style=\"border-bottom: 1px solid var(--apoc-border);\">");
+            sb.append("        <td style=\"padding: 18px 0; display: flex; align-items: center; gap: 16px;\">");
+            sb.append("          <div style=\"width: 54px; height: 54px; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 6px; display: flex; align-items: center; justify-content: center;\">");
+            sb.append("            <svg viewBox=\"0 0 100 100\" style=\"width:70%;height:70%;color:var(--apoc-gold);\">").append(p.svgPath).append("</svg>");
+            sb.append("          </div>");
+            sb.append("          <div>");
+            sb.append("            <h4 class=\"product-title cart-product-title\" style=\"font-size: 15px; font-weight: 600; color: #fff;\">").append(escapeHtml(displayName)).append("</h4>");
+            sb.append("            <div class=\"cart-item-price\" style=\"font-size: 13px; color: var(--apoc-gold);\">").append(formatPrice(price, country)).append("</div>");
+            sb.append("          </div>");
+            sb.append("        </td>");
+            sb.append("        <td style=\"padding: 18px 0; text-align: center;\">");
+            sb.append("          <div style=\"display: inline-flex; align-items: center; border: 1px solid var(--apoc-border); border-radius: 4px;\">");
+            sb.append("            <button class=\"qty-decrease\" style=\"padding: 4px 10px; color: #fff;\" onclick=\"fetch('api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() - 1).append("', {method:'POST'}).then(r=>r.text()).then(h=>document.getElementById('cart-content-wrapper').outerHTML=h)\">&minus;</button>");
+            sb.append("            <span class=\"cart-qty-value\" style=\"padding: 0 10px; font-weight: 700; color: var(--apoc-gold);\">").append(entry.getValue()).append("</span>");
+            sb.append("            <button class=\"qty-increase\" style=\"padding: 4px 10px; color: #fff;\" onclick=\"fetch('api/cart/update?productId=").append(encKey).append("&quantity=").append(entry.getValue() + 1).append("', {method:'POST'}).then(r=>r.text()).then(h=>document.getElementById('cart-content-wrapper').outerHTML=h)\">&plus;</button>");
+            sb.append("          </div>");
+            sb.append("          <div style=\"margin-top: 4px;\">");
+            sb.append("            <button class=\"cart-remove-btn\" style=\"color: var(--apoc-accent-crimson); font-size: 11px;\" onclick=\"fetch('api/cart/remove?productId=").append(encKey).append("', {method:'POST'}).then(r=>r.text()).then(h=>document.getElementById('cart-content-wrapper').outerHTML=h)\">Remove</button>");
+            sb.append("          </div>");
+            sb.append("        </td>");
+            sb.append("        <td style=\"padding: 18px 0; text-align: right; font-weight: 700; color: #fff;\">").append(formatPrice(rowTotal, country)).append("</td>");
+            sb.append("      </tr>");
+        }
+
+        sb.append("      </tbody></table>");
+        sb.append("  </div>");
+
+        // Summary Sidebar
+        sb.append("  <div style=\"background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 28px;\">");
+        sb.append("    <h3 style=\"font-family: var(--apoc-font-serif); font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 20px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 10px;\">Order Summary</h3>");
+        sb.append("    <div style=\"display: flex; flex-direction: column; gap: 12px; font-size: 14px; margin-bottom: 20px;\">");
+        sb.append("      <div style=\"display: flex; justify-content: space-between; color: var(--apoc-text-secondary);\"><span>Subtotal</span><span style=\"color:#fff;font-weight:600;\">").append(formatPrice(subtotal, country)).append("</span></div>");
+        if (discount > 0)
+        {
+            sb.append("      <div style=\"display: flex; justify-content: space-between; color: var(--apoc-success);\"><span>Privilege Discount</span><span>-").append(formatPrice(discount, country)).append("</span></div>");
+        }
+        sb.append("      <div style=\"display: flex; justify-content: space-between; color: var(--apoc-text-secondary);\"><span>Shipping</span><span style=\"color:var(--apoc-gold);font-weight:600;\">").append(shipping == 0 ? "Complimentary" : formatPrice(shipping, country)).append("</span></div>");
+        sb.append("      <div style=\"display: flex; justify-content: space-between; color: var(--apoc-text-secondary);\"><span>Estimated Tax</span><span style=\"color:#fff;font-weight:600;\">").append(formatPrice(tax, country)).append("</span></div>");
+        sb.append("      <div style=\"display: flex; justify-content: space-between; font-size: 18px; font-weight: 800; color: var(--apoc-gold); border-top: 1px solid var(--apoc-border); padding-top: 14px;\"><span>Total</span><span>").append(formatPrice(total, country)).append("</span></div>");
+        sb.append("    </div>");
+
+        sb.append("    <a href=\"checkout.html\" class=\"apoc-btn-gold\" id=\"cart-checkout-btn\" data-interactive=\"true\" style=\"width: 100%; padding: 14px 28px; margin-top: 10px;\">");
+        sb.append("      <span class=\"ps-txt ps-txt-checkout\"></span>");
+        sb.append("      <span class=\"hydration-indicator\"></span>");
+        sb.append("    </a>");
+        sb.append("  </div>");
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private String getCartDrawerHtmlApocalypse(final Cart cart, final Country country, final Map<String, String> trans)
+    {
+        final StringBuilder sb = new StringBuilder();
+        if (cart.items.isEmpty())
+        {
+            sb.append("<div style=\"text-align: center; padding: 40px 16px; color: var(--apoc-text-secondary);\">");
+            sb.append("  <p style=\"font-size: 14px; margin-bottom: 16px;\">Your selection is currently empty.</p>");
+            sb.append("  <a href=\"plp.html\" class=\"apoc-btn-secondary\" style=\"font-size: 12px; padding: 8px 16px; display: inline-block;\" onclick=\"closeMiniCartDrawer()\">Discover Curations</a>");
+            sb.append("</div>");
+            return sb.toString();
+        }
+
+        double subtotal = 0.0;
+        sb.append("<div style=\"display: flex; flex-direction: column; gap: 12px;\">");
+        for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+        {
+            final String cartKey = entry.getKey();
+            final String[] parts = cartKey.split(":");
+            final String productId = parts[0];
+            final String size = parts.length > 1 ? parts[1] : "";
+            final Product p = lookupProductById(productId);
+            if (p == null)
+            {
+                continue;
+            }
+
+            final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+            final int qty = entry.getValue();
+            final double rowTotal = price * qty;
+            subtotal += rowTotal;
+
+            final String prodName = p.names.getOrDefault(country.locale, p.names.get("en"));
+            final String displayName = size.isEmpty() ? prodName : prodName + " (" + size + ")";
+            final String encKey = URLEncoder.encode(cartKey, StandardCharsets.UTF_8);
+
+            sb.append("<div class=\"drawer-item\" data-product-id=\"").append(p.id).append("\" style=\"display: flex; gap: 12px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--apoc-border);\">");
+            sb.append("  <div style=\"width: 48px; height: 48px; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;\">");
+            sb.append("    <svg viewBox=\"0 0 100 100\" style=\"width: 70%; height: 70%; color: var(--apoc-gold);\">").append(p.svgPath).append("</svg>");
+            sb.append("  </div>");
+            sb.append("  <div style=\"flex: 1; min-width: 0;\">");
+            sb.append("    <h4 style=\"font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\">").append(escapeHtml(displayName)).append("</h4>");
+            sb.append("    <div style=\"font-size: 12px; color: var(--apoc-gold); font-weight: 700;\">").append(formatPrice(price, country)).append(" &times; ").append(qty).append("</div>");
+            sb.append("  </div>");
+            sb.append("  <button type=\"button\" class=\"drawer-item-remove\" style=\"background: none; border: none; color: var(--apoc-accent-crimson); font-size: 11px; cursor: pointer;\" onclick=\"fetch('api/cart/remove?productId=").append(encKey).append("', {method:'POST'}).then(() => { openMiniCartDrawer(); refreshApocalypseCartBadge(); })\">Remove</button>");
+            sb.append("</div>");
+        }
+        sb.append("</div>");
+
+        sb.append("<div style=\"margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--apoc-border); display: flex; justify-content: space-between; align-items: center;\">");
+        sb.append("  <span style=\"font-size: 13px; color: var(--apoc-text-secondary);\">Subtotal</span>");
+        sb.append("  <span style=\"font-size: 15px; font-weight: 700; color: var(--apoc-gold);\">").append(formatPrice(subtotal, country)).append("</span>");
+        sb.append("</div>");
+        sb.append("<div style=\"margin-top: 12px;\">");
+        sb.append("  <a href=\"cart.html\" class=\"apoc-btn-secondary\" style=\"width: 100%; text-align: center; display: block; padding: 10px; font-size: 12px;\">View Shopping Bag</a>");
+        sb.append("</div>");
+
+        return sb.toString();
+    }
+
     private String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality)
     {
         return getCartContentHtml(cart, country, trans, quality, null);
@@ -3210,6 +3503,11 @@ public final class EmbeddedHtmlServer
         if (isTailwindByClaude(quality))
         {
             return getCartContentHtmlTailwind(cart, country, trans, couponError);
+        }
+
+        if ("apocalypse".equals(quality))
+        {
+            return getCartContentHtmlApocalypse(cart, country, trans, couponError);
         }
 
         if ("pwa-chaos".equals(quality))
@@ -3724,11 +4022,12 @@ public final class EmbeddedHtmlServer
         // The Tailwind SUT swaps every semantic form class for its utility equivalent;
         // the field structure itself is identical across variants.
         final boolean tw = isTailwindByClaude(quality);
-        final String cGroup = tw ? "mb-5" : "form-group";
-        final String cLabel = tw ? TW_FORM_LABEL : "form-label";
-        final String cControl = tw ? TW_FORM_CONTROL : "form-control";
-        final String cGrid2 = tw ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : "form-grid-2";
-        final String cGrid12 = tw ? "grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]" : "form-grid-1-2";
+        final boolean apoc = "apocalypse".equals(quality);
+        final String cGroup = tw ? "mb-5" : (apoc ? "apoc-form-group" : "form-group");
+        final String cLabel = tw ? TW_FORM_LABEL : (apoc ? "apoc-form-label" : "form-label");
+        final String cControl = tw ? TW_FORM_CONTROL : (apoc ? "apoc-form-control" : "form-control");
+        final String cGrid2 = tw ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : (apoc ? "apoc-grid-2" : "form-grid-2");
+        final String cGrid12 = tw ? "grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]" : (apoc ? "apoc-grid-1-2" : "form-grid-1-2");
         final String labelStreet = trans.getOrDefault("street", "Street Address");
         final String labelCity = trans.getOrDefault("city", "City");
         final String labelState = trans.getOrDefault("state", "State/Province");
@@ -4010,6 +4309,7 @@ public final class EmbeddedHtmlServer
             System.out.println("    - VÉRLA Modern Bad (WCAG):  http://localhost:" + server.getPort() + "/verla-modern-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (No WCAG): http://localhost:" + server.getPort() + "/verla-modern-bad-nowcag/index.html");
             System.out.println("    - VÉRLA PWA Chaos Store:    http://localhost:" + server.getPort() + "/verla-pwa-chaos/index.html");
+            System.out.println("    - VÉRLA Apocalypse Store:   http://localhost:" + server.getPort() + "/verla-apocalypse/index.html");
             System.out.println();
             System.out.println("  [HTTPS Secure Contexts]");
             System.out.println("    - Starter Hub Portal:       https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/index.html");
@@ -4026,6 +4326,7 @@ public final class EmbeddedHtmlServer
             System.out.println("    - VÉRLA Modern Bad (WCAG):  https://localhost:" + server.getHttpsPort() + "/verla-modern-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (No WCAG): https://localhost:" + server.getHttpsPort() + "/verla-modern-bad-nowcag/index.html");
             System.out.println("    - VÉRLA PWA Chaos Store:    https://localhost:" + server.getHttpsPort() + "/verla-pwa-chaos/index.html");
+            System.out.println("    - VÉRLA Apocalypse Store:   https://localhost:" + server.getHttpsPort() + "/verla-apocalypse/index.html");
             System.out.println();
             System.out.println("  NOTE: For HTTPS, you will get a self-signed certificate warning.");
             System.out.println("        You can safely bypass this or run with Chrome's '--ignore-certificate-errors' flag.");

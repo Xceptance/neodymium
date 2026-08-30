@@ -1,0 +1,29 @@
+<div style="max-width: 440px; margin: 40px auto; background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 36px;">
+    <h1 style="font-family: var(--apoc-font-serif); font-size: 26px; font-weight: 700; color: #FFFFFF; text-align: center; margin-bottom: 8px;">
+        VIP Client Access
+    </h1>
+    <p style="color: var(--apoc-text-secondary); font-size: 13px; text-align: center; margin-bottom: 28px;">
+        Sign in to unlock private reserves and allocation privileges.
+    </p>
+
+    <form action="api/auth/login" method="POST">
+        <div style="margin-bottom: 16px;">
+            <label for="email" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">Email Address</label>
+            <input type="email" name="email" id="email" required style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+        </div>
+
+        <div style="margin-bottom: 24px;">
+            <label for="password" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">Password</label>
+            <input type="password" name="password" id="password" required style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+        </div>
+
+        <button type="submit" class="apoc-btn-gold" data-interactive="true" style="width: 100%; padding: 12px 24px;">
+            <span class="ps-txt ps-txt-login"></span>
+            <span class="hydration-indicator"></span>
+        </button>
+    </form>
+
+    <div style="text-align: center; margin-top: 24px; font-size: 12px; color: var(--apoc-text-secondary);">
+        Don't have an account? <a href="register.html" style="color: var(--apoc-gold); font-weight: 600; text-decoration: underline;">Request Membership &rarr;</a>
+    </div>
+</div>

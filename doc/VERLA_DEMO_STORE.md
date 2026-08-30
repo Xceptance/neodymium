@@ -20,6 +20,7 @@ graph TD
     A --> F["Modern Bad - WCAG (/verla-modern-bad/)"]
     A --> G["Modern Bad - No WCAG (/verla-modern-bad-nowcag/)"]
     A --> H["PWA Chaos (/verla-pwa-chaos/)"]
+    A --> I["Apocalypse (/verla-apocalypse/)"]
 ```
 
 ### 1.1. Perfect Quality (`/verla-perfect/`)
@@ -65,6 +66,14 @@ This makes it a useful contrast case for the locator pipeline: identical busines
 ### 1.6. PWA Chaos (`/verla-pwa-chaos/`)
 - **Bath & Body Works Architecture**: Replicates complex real-world headless PWA anti-patterns.
 - **DOM & Styling**: Chakra UI / Emotion CSS-in-JS class hashes (`emotion-jvwy60`, `emotion-1ss52ls`), Wick Design System components (`wick-linkbox`, `wick-stack`, `wick-marquee__root`), Zag.js state machines (`data-scope="marquee"`), rotating reveal search prompt, VideoJS `MEDIA_ERR_DECODE` error modal dialog, OneTrust cookie banner, delayed 20% discount marketing popup, and slide-over mini-cart drawer.
+
+### 1.7. Apocalypse (`/verla-apocalypse/`)
+- **Extreme Web Anti-Patterns**: Pushes AI multimodal reasoning, waiting mechanisms, and locator pipelines to the limit.
+- **Progressive Hydration Ghost Clicks**: SSR HTML renders instantly, but JavaScript event listeners intentionally delay attachment for 1500ms, dropping unhydrated clicks without errors.
+- **Cumulative Layout Shift (CLS)**: Delayed announcement bar pops in at $t=350\text{ms}$, pushing all viewport coordinates down by 44px.
+- **Pure CSS Pseudo-Element Text**: Buttons, badges, and headings have empty DOM text nodes (`<span class="ps-txt ps-txt-add-to-bag"></span>`), rendering visual text purely via CSS `::before { content: '...' }` so standard `.getText()` returns empty strings.
+- **Floating Overlay Storm**: Concurrently active GDPR banner, bouncing Intercom-style live chat bubble at `bottom: 24px; right: 24px; z-index: 2500` occluding checkout action zones, dynamic social proof toasts every 6s, and a delayed spin-to-win discount modal at $t=4500\text{ms}$.
+- **Torture Form Controls**: 4-box split credit card inputs (`card-part-1` through `card-part-4`) with auto-advancing focus.
 
 ---
 

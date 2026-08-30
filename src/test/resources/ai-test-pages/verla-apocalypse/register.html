@@ -1,0 +1,40 @@
+<div id="register-wrapper" style="max-width: 440px; margin: 40px auto; background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 36px;">
+    <h1 style="font-family: var(--apoc-font-serif); font-size: 26px; font-weight: 700; color: #FFFFFF; text-align: center; margin-bottom: 8px;">
+        ${lang_register}
+    </h1>
+    <p style="color: var(--apoc-text-secondary); font-size: 13px; text-align: center; margin-bottom: 24px;">
+        Request private club allocation and concierge ordering.
+    </p>
+
+    <!-- Error container -->
+    <div style="margin-bottom: 16px; text-align: center; font-weight: 600; color: var(--apoc-accent-crimson); font-size: 13px;">${auth_error}</div>
+
+    <form action="api/auth/register" method="POST" onsubmit="event.preventDefault(); fetch('api/auth/register', { method: 'PUT', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(this)) }).then(r => r.ok ? location.href='account.html' : r.text().then(t => document.getElementById('register-wrapper').outerHTML = t));">
+        <div style="margin-bottom: 16px;">
+            <label for="email" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">${lang_email}</label>
+            <input type="email" id="email" name="email" required value="${input_email}" placeholder="client@privatedomain.com" style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+            <div style="color: var(--apoc-accent-crimson); font-size: 11px; margin-top: 4px;">${err_email}</div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+            <label for="password" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">${lang_password}</label>
+            <input type="password" id="password" name="password" required minlength="6" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+            <div style="color: var(--apoc-accent-crimson); font-size: 11px; margin-top: 4px;">${err_password}</div>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+            <label for="confirmPassword" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">Confirm Password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+            <div style="color: var(--apoc-accent-crimson); font-size: 11px; margin-top: 4px;">${err_confirmPassword}</div>
+        </div>
+
+        <button type="submit" class="apoc-btn-gold" data-interactive="true" style="width: 100%; padding: 12px 24px; margin-bottom: 16px;">
+            <span class="ps-txt ps-txt-register"></span>
+            <span class="hydration-indicator"></span>
+        </button>
+
+        <div style="text-align: center; font-size: 12px; color: var(--apoc-text-secondary);">
+            Already verified? <a href="login.html" style="color: var(--apoc-gold); font-weight: 600; text-decoration: underline;">${lang_login} &rarr;</a>
+        </div>
+    </form>
+</div>
