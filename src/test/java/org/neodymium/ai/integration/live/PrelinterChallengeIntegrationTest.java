@@ -103,15 +103,16 @@ public class PrelinterChallengeIntegrationTest extends BaseAiTest
             .map(PlaybookLinterFinding::category)
             .collect(Collectors.toSet());
 
-        // Verify presence of core categories
-        assertTrue(detectedCategories.contains(LinterCategory.STEP_SPLITTING_CANDIDATE)
-            || detectedCategories.contains(LinterCategory.MISSING_VISUAL_TAG)
-            || detectedCategories.contains(LinterCategory.AMBIGUOUS_AFFORDANCE)
-            || detectedCategories.contains(LinterCategory.VAGUE_TARGET)
-            || detectedCategories.contains(LinterCategory.VAGUE_VERIFICATION)
-            || detectedCategories.contains(LinterCategory.DANGLING_ANAPHORA)
-            || detectedCategories.contains(LinterCategory.TEMPORAL_FLOW_ANOMALY)
-            || detectedCategories.contains(LinterCategory.HARDCODED_VOLATILE_DATA));
+        // Verify all 8 universal rule categories are challenged and detected
+        assertTrue(detectedCategories.contains(LinterCategory.STEP_SPLITTING_CANDIDATE), "Expected STEP_SPLITTING_CANDIDATE finding");
+        assertTrue(detectedCategories.contains(LinterCategory.MISSING_VISUAL_TAG), "Expected MISSING_VISUAL_TAG finding");
+        assertTrue(detectedCategories.contains(LinterCategory.AMBIGUOUS_AFFORDANCE), "Expected AMBIGUOUS_AFFORDANCE finding");
+        assertTrue(detectedCategories.contains(LinterCategory.VAGUE_TARGET), "Expected VAGUE_TARGET finding");
+        assertTrue(detectedCategories.contains(LinterCategory.VAGUE_VERIFICATION), "Expected VAGUE_VERIFICATION finding");
+        assertTrue(detectedCategories.contains(LinterCategory.DANGLING_ANAPHORA), "Expected DANGLING_ANAPHORA finding");
+        assertTrue(detectedCategories.contains(LinterCategory.TEMPORAL_FLOW_ANOMALY), "Expected TEMPORAL_FLOW_ANOMALY finding");
+        assertTrue(detectedCategories.contains(LinterCategory.HARDCODED_VOLATILE_DATA), "Expected HARDCODED_VOLATILE_DATA finding");
+        assertTrue(detectedCategories.size() >= 8, "Expected at least 8 distinct linter categories detected");
 
         // Verify token accounting
         final TokenUsage usage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_LINTER_TOKEN_USAGE);
