@@ -28,9 +28,11 @@ import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.steps.CallLlmStep;
 import org.neodymium.ai.prompt.PlaybookLinterPrompt;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
@@ -109,6 +111,12 @@ public final class PlaybookLinter
             final String sysMsg = prompt.compileSystemMessage(context);
             final String userMsg = prompt.compileUserMessage(context);
 
+            if (LOGGER.isTraceEnabled())
+            {
+                LOGGER.trace("Playbook Linter System Prompt:\n{}", sysMsg);
+                LOGGER.trace("Playbook Linter User Prompt:\n{}", userMsg);
+            }
+
             final double temperature = config.getTemperature("linter");
             final int timeoutSeconds = config.getTimeoutSeconds("linter");
 
@@ -122,10 +130,20 @@ public final class PlaybookLinter
                 ReasoningEffort.LOW
             );
 
+            if (this.session != null && this.session.getEventBus() != null)
+            {
+                this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "LINTER"));
+            }
+
             LOGGER.debug("🔍 Executing upfront playbook pre-flight linting on {} step(s)...", steps.size());
             final long startTime = System.currentTimeMillis();
             final LlmResponse response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;
+
+            if (LOGGER.isDebugEnabled() && response != null && response.content() != null)
+            {
+                LOGGER.debug("   🔍 [Playbook Linter Response]:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+            }
 
             // Track tokens and call count
             if (context != null && response != null)
@@ -160,7 +178,27 @@ public final class PlaybookLinter
             }
 
             final List<PlaybookLinterFinding> findings = prompt.parseResponse(response != null ? response.content() : "", context);
-            LOGGER.info("🔍 Pre-flight playbook linter completed in {} ms: {} advisory finding(s) detected.", durationMs, findings.size());
+            if (findings.isEmpty())
+            {
+                LOGGER.info("🔍 Pre-flight playbook linter completed in {} ms: 0 advisory finding(s) detected.", durationMs);
+            }
+            else
+            {
+                LOGGER.info("🔍 Pre-flight playbook linter completed in {} ms: {} advisory finding(s) detected.", durationMs, findings.size());
+                for (final PlaybookLinterFinding finding : findings)
+                {
+                    LOGGER.info("   ⚠️  [Step #{}{}] [{} / {}] {}",
+                        finding.stepIndex(),
+                        finding.lineNumber() > 0 ? ", line " + finding.lineNumber() : "",
+                        finding.category(),
+                        finding.severity(),
+                        finding.message());
+                    if (finding.suggestedRewrite() != null && !finding.suggestedRewrite().isBlank())
+                    {
+                        LOGGER.info("      💡 Suggested Rewrite: {}", finding.suggestedRewrite().replace("\n", "\n         "));
+                    }
+                }
+            }
 
             if (context != null)
             {
