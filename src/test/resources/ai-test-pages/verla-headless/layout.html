@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-session-state="BOOTSTRAPPING" data-hydrated="false">
+<html lang="en" data-session-state="BOOTSTRAPPING" data-hydrated="false" data-route-state="ready">
 <head>
     <base href="/verla-${quality}/">
     <meta charset="UTF-8">
@@ -1182,7 +1182,7 @@
 
     <!-- Main Content Area -->
     <main>
-        <div class="container" id="main-body">
+        <div class="container" id="main-body" data-route-root="true" data-route-state="ready">
             ${body}
         </div>
     </main>
@@ -1297,113 +1297,15 @@
                 }
             });
 
-            // Quick Add sizes dropdown function
-            window.showQuickAddSizes = (btn) => {
-                const category = btn.getAttribute('data-category') || 'tops';
-                let dropdown = btn.nextElementSibling;
-                if (!dropdown || !dropdown.classList.contains('quick-add-dropdown')) {
-                    dropdown = document.createElement('div');
-                    dropdown.className = 'quick-add-dropdown';
-                    
-                    let sizes = ['XS', 'S', 'M', 'L', 'XL'];
-                    if (category === 'bottoms') {
-                        sizes = ['28', '30', '32', '34', '36', '38'];
-                    } else if (category === 'footwear' || category === 'shoes') {
-                        sizes = ['39', '40', '41', '42', '43', '44'];
-                    }
-                    
-                    const stockData = JSON.parse(btn.getAttribute('data-stock') || '{}');
-                    dropdown.innerHTML = sizes.map(size => {
-                        const stock = stockData[size] !== undefined ? stockData[size] : 0;
-                        if (stock <= 0) {
-                            return '<button class="size-btn" type="button" data-size="' + size + '" disabled>' + size + ' (0)</button>';
-                        } else {
-                            return '<button class="size-btn" type="button" data-size="' + size + '">' + size + '</button>';
-                        }
-                    }).join('');
-                    btn.after(dropdown);
-                }
-                
-                document.querySelectorAll('.quick-add-dropdown.active').forEach(d => {
-                    if (d !== dropdown) d.classList.remove('active');
-                });
-                
-                dropdown.classList.toggle('active');
-            };
+            // The markup-driven quick add helper from the server-rendered variants is
+            // deliberately absent here: this SUT builds the control from the product
+            // document instead, so sizes and stock arrive over the API. See buildQuickAdd().
 
             // Event listener for product Quick Add button clicks and outside clicks
             document.addEventListener('click', (e) => {
-                const btn = e.target.closest('.product-quick-add');
-                if (btn) {
-                    if (btn.disabled || btn.classList.contains('adding')) return;
-                    e.stopPropagation();
-                    
-                    const category = btn.getAttribute('data-category');
-                    if (category === 'accessories') {
-                        const productId = btn.getAttribute('data-product-id');
-                        const originalText = btn.textContent;
-                        btn.classList.add('adding');
-                        btn.textContent = 'Adding...';
-                        
-                        if (typeof htmx !== 'undefined') {
-                            htmx.ajax('POST', 'api/cart/add?productId=' + productId + '&quantity=1', {
-                                target: '#cart-btn-wrapper',
-                                swap: 'outerHTML'
-                            });
-                        }
-                        
-                        setTimeout(() => {
-                            btn.classList.remove('adding');
-                            btn.classList.add('added');
-                            btn.textContent = '${lang_added}';
-                            
-                            setTimeout(() => {
-                                btn.classList.remove('added');
-                                btn.textContent = originalText;
-                            }, 1500);
-                        }, 800);
-                        return;
-                    }
-                    
-                    window.showQuickAddSizes(btn);
-                    return;
-                }
-
-                const sizeBtn = e.target.closest('.size-btn');
-                if (sizeBtn) {
-                    e.stopPropagation();
-                    const dropdown = sizeBtn.parentElement;
-                    const quickBtn = dropdown.previousElementSibling;
-                    const productId = quickBtn.getAttribute('data-product-id');
-                    const size = sizeBtn.getAttribute('data-size');
-                    
-                    if (!quickBtn || quickBtn.disabled || quickBtn.classList.contains('adding')) return;
-                    
-                    const originalText = quickBtn.textContent;
-                    quickBtn.textContent = '${lang_adding}';
-                    quickBtn.classList.add('adding');
-                    dropdown.classList.remove('active');
-
-                    if (typeof htmx !== 'undefined') {
-                        htmx.ajax('POST', 'api/cart/add?productId=' + productId + ':' + size + '&quantity=1', {
-                            target: '#cart-btn-wrapper',
-                            swap: 'outerHTML'
-                        });
-                    }
-                    
-                    setTimeout(() => {
-                        quickBtn.classList.remove('adding');
-                        quickBtn.classList.add('added');
-                        quickBtn.textContent = '${lang_added}';
-                        
-                        setTimeout(() => {
-                            quickBtn.classList.remove('added');
-                            quickBtn.textContent = originalText;
-                        }, 1500);
-                    }, 600);
-                    return;
-                }
-
+                // Quick add and size selection are handled by the headless data layer
+                // further down, which knows the variant list. Falling through here would
+                // toggle the dropdown a second time and immediately close it.
                 // Close active quick-add dropdowns when clicking outside
                 if (!e.target.closest('.quick-add-dropdown')) {
                     document.querySelectorAll('.quick-add-dropdown.active').forEach(d => {
@@ -1474,6 +1376,18 @@
         [data-testid="product-tile"][data-state="ready"] [data-part="media"] img { width: 100%; display: block; }
         @keyframes vrl-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
         [data-cms-slot][data-state="pending"] { min-height: 0; }
+
+        /* Quick add is appended into the tile's media box once the product document lands.
+           The inherited rules key off .product-media, which these tiles do not use. */
+        [data-testid="product-tile"] [data-part="media"] { position: relative; overflow: hidden; }
+        [data-testid="product-tile"] [data-part="media"]:hover .product-quick-add,
+        [data-testid="product-tile"] [data-part="media"]:focus-within .product-quick-add,
+        [data-testid="product-tile"] .product-quick-add[data-state="adding"],
+        [data-testid="product-tile"] .product-quick-add[data-state="added"] { transform: translateY(0); }
+        [data-testid="product-tile"] .product-quick-add[data-state="added"] { background-color: var(--color-success, #2E7D32); }
+        [data-testid="product-tile"] .product-quick-add[data-state="error"] { background-color: var(--color-error, #B3261E); }
+        [data-testid="product-tile"] .product-quick-add[data-state="sold-out"] { background-color: #8A8A8A; cursor: not-allowed; }
+        [data-testid="product-tile"] .quick-add-dropdown { bottom: 56px; }
     </style>
 
     <!-- Preloaded application state. Everything the tiles need is already here as JSON;
@@ -1550,6 +1464,7 @@
                             root.setAttribute('data-session-state', 'SETTLED');
                             root.setAttribute('data-customer-id', st.customerId || '');
                             loadCustomerScopedData(st.customerId).then(function () {
+                                refreshCartBadge();
                                 resolve(st);
                             });
                         } else {
@@ -1604,10 +1519,104 @@
                 price.textContent = (doc.currency || '') + Number(doc.price).toFixed(2);
             }
 
+            // The quick add control is built from the document, not from the markup, so it does
+            // not exist until this tile's own request has returned. A test that reaches for it
+            // right after the grid appears finds nothing to click.
+            buildQuickAdd(tile, doc);
+
             var href = 'p/' + (doc.slug || '') + '.html';
             tile.setAttribute('data-href', href);
             tile.setAttribute('data-state', 'ready');
             tile.setAttribute('aria-busy', 'false');
+        }
+
+        // --- 2b. Quick add ------------------------------------------------------
+        // Same contract as the server-rendered variants (.product-quick-add, data-product-id,
+        // data-category, .quick-add-dropdown, .size-btn, data-size), but assembled client-side
+        // from the product document's variant list.
+        function buildQuickAdd(tile, doc) {
+            var media = tile.querySelector('[data-part="media"]');
+            if (!media || tile.querySelector('.product-quick-add')) { return; }
+
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'product-quick-add ' + emotionClass('quick-add');
+            btn.setAttribute('data-quick-add', '');
+            btn.setAttribute('data-state', 'idle');
+            btn.setAttribute('data-product-id', doc.id);
+            btn.setAttribute('data-category', doc.primaryCategoryId || '');
+            btn.setAttribute('data-requires-size', doc.requiresSize ? 'true' : 'false');
+            btn.setAttribute('aria-label', 'Add ' + (doc.name || '') + ' to shopping cart');
+            btn.textContent = QUICK_ADD_LABEL;
+
+            // Availability is exposed but not enforced here, matching the server-rendered
+            // variants: the basket endpoint remains the authority on what can be added.
+            var orderable = !!(doc.inventory && doc.inventory.orderable);
+            btn.setAttribute('data-orderable', orderable ? 'true' : 'false');
+            media.appendChild(btn);
+
+            // Stash the variant list on the element so the dropdown can be built on demand.
+            btn.__variants = doc.variants || [];
+        }
+
+        function openSizeDropdown(btn) {
+            var existing = btn.nextElementSibling;
+            if (!existing || existing.className.indexOf('quick-add-dropdown') === -1) {
+                existing = document.createElement('div');
+                existing.className = 'quick-add-dropdown ' + emotionClass('size-dropdown');
+                var variants = btn.__variants || [];
+                var html = '';
+                for (var i = 0; i < variants.length; i++) {
+                    var v = variants[i];
+                    if (v.orderable) {
+                        html += '<button class="size-btn" type="button" data-size="' + v.size + '">' + v.size + '</button>';
+                    } else {
+                        html += '<button class="size-btn" type="button" data-size="' + v.size + '" disabled>' + v.size + ' (0)</button>';
+                    }
+                }
+                existing.innerHTML = html;
+                btn.parentNode.insertBefore(existing, btn.nextSibling);
+            }
+
+            var open = document.querySelectorAll('.quick-add-dropdown.active');
+            Array.prototype.forEach.call(open, function (d) {
+                if (d !== existing) { d.classList.remove('active'); }
+            });
+            existing.classList.toggle('active');
+        }
+
+        // Adds go through the basket API with the settled customer id. Before the session settles
+        // the server rejects them, and the button reports the failure rather than pretending.
+        function quickAdd(btn, size) {
+            if (btn.disabled || btn.getAttribute('data-state') === 'adding') { return; }
+            var productId = btn.getAttribute('data-product-id');
+            var label = btn.textContent;
+            btn.setAttribute('data-state', 'adding');
+            btn.textContent = ADDING_LABEL;
+
+            var url = 'api/cart/add?productId=' + encodeURIComponent(productId + (size ? ':' + size : '')) + '&quantity=1';
+            fetch(api(url), { method: 'POST' }).then(function (r) {
+                if (!r.ok) {
+                    // A 400 here is the session race: the basket is not writable yet.
+                    btn.setAttribute('data-state', 'error');
+                    btn.textContent = label;
+                    return;
+                }
+                return r.text().then(function (html) {
+                    var wrapper = document.getElementById('cart-btn-wrapper');
+                    if (wrapper) { wrapper.outerHTML = html; }
+                    btn.setAttribute('data-state', 'added');
+                    btn.textContent = ADDED_LABEL;
+                    refreshCartBadge();
+                    setTimeout(function () {
+                        btn.setAttribute('data-state', 'idle');
+                        btn.textContent = label;
+                    }, 1500);
+                });
+            }).catch(function () {
+                btn.setAttribute('data-state', 'error');
+                btn.textContent = label;
+            });
         }
 
         // --- 3. Content slots ----------------------------------------------------
@@ -1626,16 +1635,176 @@
             });
         }
 
-        // --- 4. Deferred hydration ----------------------------------------------
-        // Tile navigation is wired only after the boot delay. Clicks before that land on
-        // inert markup and are dropped without an error, the way an unhydrated SPA drops them.
+        // --- 4. Client-side router ----------------------------------------------
+        // Navigation never reloads the document. The shell - header, search, cart badge,
+        // footer, sprite and preloaded state - is created once and outlives every route.
+        // Only the route body is swapped, so there is no fresh document to wait on and no
+        // load event to synchronise against after the first one.
+        var routeRoot = document.getElementById('main-body');
+
+        var QUICK_ADD_LABEL = '${lang_addToCart}';
+        var ADDING_LABEL = '${lang_adding}';
+        var ADDED_LABEL = '${lang_added}';
+
+        // Mirrors the server-side style hash so client-built nodes carry the same class shape
+        // as the ones delivered in the shell.
+        function emotionClass(seed) {
+            var h = 0;
+            for (var i = 0; i < seed.length; i++) {
+                h = (31 * h + seed.charCodeAt(i)) | 0;
+            }
+            var base = Math.abs(h).toString(36);
+            return 'css-' + (base.length > 7 ? base.substring(0, 7) : base + Array(8 - base.length).join('0'));
+        }
+
+        function isInternalHref(href) {
+            if (!href) { return false; }
+            if (href.charAt(0) === '#') { return false; }
+            if (/^[a-z]+:/i.test(href) && href.indexOf(window.location.origin) !== 0) { return false; }
+            if (href.indexOf('mailto:') === 0 || href.indexOf('tel:') === 0) { return false; }
+            return true;
+        }
+
+        function setRouteState(state) {
+            root.setAttribute('data-route-state', state);
+            if (routeRoot) { routeRoot.setAttribute('data-route-state', state); }
+        }
+
+        // Route transitions are announced through data-route-state, which is the signal to
+        // wait on when navigating. It reads "loading" for as long as the route body is in
+        // flight and returns to "ready" only once the new body is in the DOM.
+        function navigate(url, isPopState) {
+            if (!routeRoot) {
+                window.location.href = url;
+                return;
+            }
+            setRouteState('loading');
+
+            // Ask the API what this route is before rendering it. A composable storefront
+            // resolves the route through its own data layer rather than trusting the URL.
+            var meta = jsonFetch('api/scapi/route?path=' + encodeURIComponent(url));
+
+            var body = fetch(url, {
+                headers: { 'X-PWA-Router': 'true', 'HX-Request': 'true' }
+            }).then(function (r) {
+                if (!r.ok) { throw new Error('route ' + r.status); }
+                return r.text();
+            });
+
+            Promise.all([meta, body]).then(function (results) {
+                routeRoot.innerHTML = results[1];
+
+                if (!isPopState) {
+                    window.history.pushState({ verlaHeadless: true }, '', url);
+                }
+                window.scrollTo(0, 0);
+
+                // Re-arm the parts of the page that only ever ran on first load.
+                if (window.htmx && window.htmx.process) {
+                    window.htmx.process(routeRoot);
+                }
+                runFragmentScripts(routeRoot);
+                hydrateTiles();
+                refreshCartBadge();
+                setRouteState('ready');
+            }).catch(function () {
+                // A failed route falls back to a document load rather than stranding the shell.
+                window.location.href = url;
+            });
+        }
+
+        // Scripts injected via innerHTML never execute; re-create them so route bodies that
+        // carry their own behaviour keep working after a swap.
+        function runFragmentScripts(container) {
+            var scripts = container.querySelectorAll('script');
+            Array.prototype.forEach.call(scripts, function (old) {
+                var fresh = document.createElement('script');
+                Array.prototype.forEach.call(old.attributes, function (attr) {
+                    fresh.setAttribute(attr.name, attr.value);
+                });
+                fresh.appendChild(document.createTextNode(old.innerHTML));
+                old.parentNode.replaceChild(fresh, old);
+            });
+        }
+
+        // The cart badge lives in the shell, so it is refreshed from the basket API rather
+        // than re-rendered with the page. Before the session settles this returns nothing,
+        // which is why the badge can lag behind an add that appeared to succeed.
+        function refreshCartBadge() {
+            var customerId = root.getAttribute('data-customer-id');
+            if (!customerId) { return; }
+            jsonFetch('api/bff/basket?customerId=' + encodeURIComponent(customerId)).then(function (res) {
+                if (!res.ok || !res.body) { return; }
+                var badge = document.querySelector('#cart-btn-wrapper [data-cart-count], #cart-btn-wrapper .cart-badge');
+                if (badge) { badge.textContent = res.body.totalQuantity; }
+                root.setAttribute('data-cart-quantity', res.body.totalQuantity);
+            });
+        }
+
+        // Tile navigation and link interception are wired only after the boot delay. Clicks
+        // before that land on inert markup and are dropped without an error, the way an
+        // unhydrated SPA drops them.
         function attachInteractions() {
             document.addEventListener('click', function (ev) {
-                var tile = ev.target.closest ? ev.target.closest('[data-testid="product-tile"]') : null;
-                if (tile && tile.getAttribute('data-href')) {
-                    window.location.href = api(tile.getAttribute('data-href'));
+                if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) {
+                    return;
                 }
+                if (!ev.target.closest) { return; }
+
+                // Quick add and size selection must win over tile navigation, otherwise
+                // pressing Add would route to the product page instead.
+                var sizeBtn = ev.target.closest('.size-btn');
+                if (sizeBtn) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    if (sizeBtn.disabled) { return; }
+                    var dropdown = sizeBtn.parentElement;
+                    var owner = dropdown.previousElementSibling;
+                    dropdown.classList.remove('active');
+                    quickAdd(owner, sizeBtn.getAttribute('data-size'));
+                    return;
+                }
+
+                var quickBtn = ev.target.closest('.product-quick-add');
+                if (quickBtn) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    if (quickBtn.getAttribute('data-requires-size') === 'true') {
+                        openSizeDropdown(quickBtn);
+                    } else {
+                        quickAdd(quickBtn, null);
+                    }
+                    return;
+                }
+
+                if (!ev.target.closest('.quick-add-dropdown')) {
+                    var stillOpen = document.querySelectorAll('.quick-add-dropdown.active');
+                    Array.prototype.forEach.call(stillOpen, function (d) { d.classList.remove('active'); });
+                }
+
+                var tile = ev.target.closest('[data-testid="product-tile"]');
+                if (tile && tile.getAttribute('data-href')) {
+                    ev.preventDefault();
+                    navigate(api(tile.getAttribute('data-href')), false);
+                    return;
+                }
+
+                var link = ev.target.closest('a[href]');
+                if (!link) { return; }
+                if (link.hasAttribute('target') || link.hasAttribute('download')) { return; }
+                if (link.hasAttribute('hx-get') || link.hasAttribute('hx-post')) { return; }
+
+                var href = link.getAttribute('href');
+                if (!isInternalHref(href)) { return; }
+
+                ev.preventDefault();
+                navigate(link.href, false);
             });
+
+            window.addEventListener('popstate', function () {
+                navigate(window.location.href, true);
+            });
+
             document.body.setAttribute('data-hydrated', 'true');
             root.setAttribute('data-hydrated', 'true');
         }

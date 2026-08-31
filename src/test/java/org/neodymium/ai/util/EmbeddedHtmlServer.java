@@ -1563,6 +1563,54 @@ public final class EmbeddedHtmlServer
                                  new Gson().toJson(headlessProductDocument(found, activeCountry)));
                     return;
                 }
+                else if ("scapi/route".equals(apiMethod))
+                {
+                    // A composable storefront resolves routes through its own data layer rather
+                    // than trusting the URL, so every client-side navigation costs an extra call
+                    // before the route body is even requested.
+                    VerlaConfiguration.getInstance().simulateHeadlessCmsSlot();
+                    final String path = getQueryParam(exchange.getRequestURI().toString(), "path");
+                    final String stripped = path.contains("?") ? path.substring(0, path.indexOf('?')) : path;
+                    // The router may pass an absolute URL or a route-relative path; normalise so
+                    // segment matching behaves the same either way.
+                    final String cleaned = stripped.startsWith("/") ? stripped : "/" + stripped;
+                    final String leaf = cleaned.substring(cleaned.lastIndexOf('/') + 1);
+
+                    final String routeType;
+                    if (cleaned.contains("/c/"))
+                    {
+                        routeType = "category";
+                    }
+                    else if (cleaned.contains("/p/"))
+                    {
+                        routeType = "product";
+                    }
+                    else if (leaf.startsWith("cart"))
+                    {
+                        routeType = "cart";
+                    }
+                    else if (leaf.startsWith("checkout"))
+                    {
+                        routeType = "checkout";
+                    }
+                    else if (leaf.startsWith("index") || leaf.isEmpty())
+                    {
+                        routeType = "home";
+                    }
+                    else
+                    {
+                        routeType = "content";
+                    }
+
+                    final Map<String, Object> route = new LinkedHashMap<>();
+                    route.put("path", cleaned);
+                    route.put("type", routeType);
+                    route.put("identifier", leaf.replace(".html", ""));
+                    route.put("locale", activeCountry.locale);
+                    route.put("ssr", false);
+                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(route));
+                    return;
+                }
                 else if ("scapi/image".equals(apiMethod))
                 {
                     // The tile image is a second request per tile, and the response weight tracks
@@ -4957,6 +5005,17 @@ public final class EmbeddedHtmlServer
         final Map<String, Integer> inv = this.productInventory.getOrDefault(p.id, Map.of());
         doc.put("inventory", Map.of("orderable", inv.values().stream().mapToInt(Integer::intValue).sum() > 0,
                                     "stockLevel", inv.values().stream().mapToInt(Integer::intValue).sum()));
+
+        // Per-size availability travels with the product document rather than with the markup,
+        // so the tile cannot offer a quick add until its own request has come back.
+        final List<Map<String, Object>> variants = new ArrayList<>();
+        for (final String size : getSizesForCategory(p.category))
+        {
+            final int stock = inv.getOrDefault(size, 0);
+            variants.add(Map.of("size", size, "stock", stock, "orderable", stock > 0));
+        }
+        doc.put("variants", variants);
+        doc.put("requiresSize", !variants.isEmpty());
         // Only the large rendition is published, so tiles a few hundred pixels wide still pull it.
         doc.put("imageGroups", List.of(Map.of("viewType", "large",
                                               "images", List.of(Map.of("link", "api/scapi/image?id=" + p.id + "&sw=960", "alt", "")))));

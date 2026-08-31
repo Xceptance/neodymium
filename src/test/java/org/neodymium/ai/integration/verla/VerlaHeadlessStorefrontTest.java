@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.junit5.NeodymiumTest;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -136,6 +137,80 @@ public class VerlaHeadlessStorefrontTest extends BaseAiTest
         // Content slots are declared but empty in the delivered document.
         Assertions.assertTrue(body.contains("data-cms-slot=\"PWA_StripBanner\""), "Strip banner must be a deferred slot");
         Assertions.assertTrue(body.contains("data-cms-slot=\"PWA_FooterLinkList\""), "Footer links must be a deferred slot");
+
+        // The shell carries a client router, so navigation never replaces the document.
+        Assertions.assertTrue(body.contains("pushState"), "Shell must carry a client-side router");
+        Assertions.assertTrue(body.contains("popstate"), "Router must handle browser history navigation");
+        Assertions.assertTrue(body.contains("X-PWA-Router"), "Router must request route bodies as fragments");
+        Assertions.assertTrue(body.contains("data-route-state=\"ready\""), "Shell must expose a route readiness signal");
+    }
+
+    /**
+     * A route requested by the client router must come back as a bare body fragment. If the shell
+     * came back with it, every navigation would rebuild the header, footer and preloaded state -
+     * which is what separates this variant from the server-rendered ones.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if the thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testRouterReceivesFragmentsRatherThanDocuments() throws IOException, InterruptedException
+    {
+        for (final String route : new String[] { "c/tops.html", "cart.html", "checkout.html", "faq.html" })
+        {
+            final HttpResponse<String> fragment = this.client.send(
+                HttpRequest.newBuilder()
+                           .uri(URI.create(baseUrl() + route))
+                           .header("X-PWA-Router", "true")
+                           .header("HX-Request", "true")
+                           .GET()
+                           .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+            Assertions.assertEquals(200, fragment.statusCode(), route + " must resolve for the router");
+            final String body = fragment.body();
+
+            Assertions.assertFalse(body.contains("<html"), route + " fragment must not carry a document shell");
+            Assertions.assertFalse(body.contains("__PRELOADED_STATE__"),
+                                   route + " fragment must not repeat the hydration blob");
+            Assertions.assertFalse(body.contains("__SVG_SPRITE_NODE__"),
+                                   route + " fragment must not repeat the icon sprite");
+
+            // The same route requested as a document must include the shell.
+            final HttpResponse<String> document = get(route);
+            Assertions.assertTrue(document.body().contains("<html"), route + " must still deep-link as a document");
+            Assertions.assertTrue(document.body().length() > body.length(),
+                                  route + " document must be larger than its fragment");
+        }
+    }
+
+    /**
+     * The router resolves each route through the API before rendering it, so route classification
+     * must be served rather than inferred from the URL by the client.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if the thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testRouteResolutionEndpoint() throws IOException, InterruptedException
+    {
+        final String[][] cases = {
+            { "c/tops.html", "category" },
+            { "p/modern-sage-sweaters-2.html", "product" },
+            { "cart.html", "cart" },
+            { "checkout.html", "checkout" },
+            { "index.html", "home" },
+            { "faq.html", "content" }
+        };
+
+        for (final String[] testCase : cases)
+        {
+            final HttpResponse<String> resp = get("api/scapi/route?path=" + testCase[0]);
+            Assertions.assertEquals(200, resp.statusCode(), "Route " + testCase[0] + " must resolve");
+            final JsonObject route = JsonParser.parseString(resp.body()).getAsJsonObject();
+            Assertions.assertEquals(testCase[1], route.get("type").getAsString(),
+                                    "Route " + testCase[0] + " must classify as " + testCase[1]);
+        }
     }
 
     /**
@@ -210,6 +285,74 @@ public class VerlaHeadlessStorefrontTest extends BaseAiTest
 
         final HttpResponse<String> settledBasket = get("api/bff/basket?customerId=" + settledId);
         Assertions.assertEquals(200, settledBasket.statusCode(), "Basket must accept the settled customer id");
+    }
+
+    /**
+     * Quick add on the grid is driven by the product document, not by the markup. The variant list
+     * must carry per-size availability so the client can build the size selector, and out-of-stock
+     * sizes must be distinguishable.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if the thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testQuickAddVariantsComeFromTheProductDocument() throws IOException, InterruptedException
+    {
+        // A sized product publishes its size ladder with per-size stock.
+        final JsonObject top = JsonParser.parseString(get("api/scapi/product?id=SKU-TOP-1000").body()).getAsJsonObject();
+        Assertions.assertTrue(top.get("requiresSize").getAsBoolean(), "Apparel must require a size choice");
+
+        final JsonArray variants = top.getAsJsonArray("variants");
+        Assertions.assertFalse(variants.isEmpty(), "Apparel must publish size variants");
+
+        boolean sawOrderable = false;
+        boolean sawOutOfStock = false;
+        for (int i = 0; i < variants.size(); i++)
+        {
+            final JsonObject variant = variants.get(i).getAsJsonObject();
+            Assertions.assertTrue(variant.has("size"), "Variant must name its size");
+            Assertions.assertTrue(variant.has("stock"), "Variant must publish its stock level");
+            Assertions.assertEquals(variant.get("stock").getAsInt() > 0, variant.get("orderable").getAsBoolean(),
+                                    "Orderability must follow the stock level");
+            sawOrderable |= variant.get("orderable").getAsBoolean();
+            sawOutOfStock |= !variant.get("orderable").getAsBoolean();
+        }
+        Assertions.assertTrue(sawOrderable, "Seeded catalog must expose at least one orderable size");
+        Assertions.assertTrue(sawOutOfStock, "Seeded catalog must expose at least one exhausted size");
+
+        // Accessories skip size selection entirely, as they do in the server-rendered variants.
+        final JsonObject accessory = JsonParser.parseString(get("api/scapi/product?id=SKU-ACC-1280").body()).getAsJsonObject();
+        Assertions.assertFalse(accessory.get("requiresSize").getAsBoolean(), "Accessories must not require a size");
+        Assertions.assertTrue(accessory.getAsJsonArray("variants").isEmpty(), "Accessories must publish no size variants");
+    }
+
+    /**
+     * The quick add control must be absent from the delivered grid markup. It is assembled from
+     * each tile's product document, so it cannot exist before that request returns - which is the
+     * behaviour that separates this variant from the server-rendered grids.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if the thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testQuickAddIsAbsentFromDeliveredMarkup() throws IOException, InterruptedException
+    {
+        final String headless = get("c/tops.html").body();
+        Assertions.assertTrue(headless.contains("data-testid=\"product-tile\""), "Grid must ship tiles");
+        Assertions.assertFalse(headless.contains("class=\"product-quick-add"),
+                               "Quick add must not be server-rendered into the headless grid");
+        Assertions.assertFalse(headless.contains("data-stock="),
+                               "Stock must travel in the product document, not in tile markup");
+
+        // The server-rendered baseline does the opposite, which is the contrast being modelled.
+        final HttpResponse<String> perfect = this.client.send(
+            HttpRequest.newBuilder()
+                       .uri(URI.create("http://localhost:" + server.getPort() + "/verla-perfect/c/tops.html"))
+                       .GET()
+                       .build(),
+            HttpResponse.BodyHandlers.ofString());
+        Assertions.assertTrue(perfect.body().contains("product-quick-add"),
+                              "Baseline variant must server-render its quick add control");
     }
 
     /**
