@@ -515,6 +515,127 @@
 
     <!-- Client-Side Runtime JavaScript -->
     <script>
+        // Headless / SPA Micro-Router for VÉRLA Apparel
+        window.apparelRouter = {
+            navigate: async function(url, isPopState) {
+                var mainEl = document.getElementById('main-content');
+                if (!mainEl) {
+                    window.location.href = url;
+                    return;
+                }
+
+                try {
+                    // Close drawers and modals on navigation
+                    closeCartDrawer();
+                    closeMarketingModal();
+                    closeSizeGuideModal();
+                    var searchDropdown = document.getElementById('search-suggestions');
+                    if (searchDropdown) searchDropdown.innerHTML = '';
+
+                    var resp = await fetch(url, {
+                        headers: {
+                            'X-PWA-Router': 'true',
+                            'HX-Request': 'true'
+                        }
+                    });
+
+                    if (resp.ok) {
+                        var html = await resp.text();
+                        mainEl.innerHTML = html;
+                        if (!isPopState) {
+                            window.history.pushState({ apparelSpa: true }, '', url);
+                        }
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        window.apparelRouter.initPageWidgets(mainEl);
+                        window.apparelRouter.updateActiveNav(url);
+                    } else {
+                        window.location.href = url;
+                    }
+                } catch (e) {
+                    console.error('Headless navigation error:', e);
+                    window.location.href = url;
+                }
+            },
+            initPageWidgets: function(container) {
+                var target = container || document.getElementById('main-content');
+                if (!target) return;
+
+                // Process new nodes with HTMX
+                if (window.htmx) {
+                    window.htmx.process(target);
+                }
+
+                // Execute embedded scripts in swapped fragment
+                var scripts = target.querySelectorAll('script');
+                scripts.forEach(function(oldScript) {
+                    var newScript = document.createElement('script');
+                    Array.from(oldScript.attributes).forEach(function(attr) {
+                        newScript.setAttribute(attr.name, attr.value);
+                    });
+                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                });
+            },
+            updateActiveNav: function(url) {
+                var normUrl = url.replace(/^[a-z]+:\/\/[^/]+/i, '');
+                document.querySelectorAll('.mbf-nav-link').forEach(function(link) {
+                    var href = link.getAttribute('href');
+                    if (href && normUrl.includes(href)) {
+                        link.classList.add('text-terracotta-500');
+                        link.classList.remove('text-ink');
+                    } else {
+                        link.classList.remove('text-terracotta-500');
+                        link.classList.add('text-ink');
+                    }
+                });
+            }
+        };
+
+        // Popstate listener for browser Back / Forward history navigation
+        window.addEventListener('popstate', function() {
+            window.apparelRouter.navigate(window.location.href, true);
+        });
+
+        // Global delegated click listener to intercept internal link navigations
+        document.addEventListener('click', function(e) {
+            var anchor = e.target.closest('a');
+            if (!anchor || !anchor.href) return;
+
+            // Allow default behavior for special clicks
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            if (anchor.target && anchor.target !== '_self') return;
+            if (anchor.hasAttribute('download')) return;
+
+            var rawHref = anchor.getAttribute('href');
+            if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('javascript:') || rawHref.startsWith('mailto:') || rawHref.startsWith('tel:')) {
+                return;
+            }
+
+            try {
+                var targetUrl = new URL(anchor.href, window.location.href);
+                if (targetUrl.origin === window.location.origin) {
+                    var path = targetUrl.pathname;
+                    if (path.includes('/verla-apparel') || path.includes('/verla-apperal') || path.endsWith('.html') || path.includes('/c/') || path.includes('/p/')) {
+                        e.preventDefault();
+                        window.apparelRouter.navigate(anchor.href);
+                    }
+                }
+            } catch (err) {
+                // Ignore parse errors, let default handle
+            }
+        });
+
+        // Search input Enter key handler for headless routing
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target && e.target.id === 'search-input') {
+                e.preventDefault();
+                var q = e.target.value.trim();
+                if (q) {
+                    window.apparelRouter.navigate('plp.html?q=' + encodeURIComponent(q));
+                }
+            }
+        });
+
         // 1. Simulated Delayed Hydration & Cumulative Layout Shift (CLS)
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
@@ -555,34 +676,34 @@
                     openSizeGuideModal();
                 });
             }
+        });
 
-            // PDP Add to Cart Form listener
-            var pdpForm = document.querySelector('[data-pdp-form]');
-            if (pdpForm) {
-                pdpForm.addEventListener('submit', function(e) {
-                    var submitBtn = pdpForm.querySelector('button[type="submit"]');
-                    if (submitBtn) {
-                        if (submitBtn.dataset.state === 'adding') {
-                            e.preventDefault();
-                            return;
-                        }
-                        submitBtn.dataset.state = 'adding';
-                        var originalText = submitBtn.innerHTML;
-                        submitBtn.innerHTML = '<span>Adding...</span>';
+        // Delegated PDP Add to Cart Form listener
+        document.addEventListener('submit', function(e) {
+            var pdpForm = e.target.closest('[data-pdp-form]');
+            if (!pdpForm) return;
 
-                        setTimeout(function() {
-                            submitBtn.dataset.state = 'added';
-                            submitBtn.innerHTML = '<span>Added!</span>';
-                            refreshCartDrawer().then(function() {
-                                openCartDrawer();
-                            });
-                            setTimeout(function() {
-                                submitBtn.dataset.state = 'idle';
-                                submitBtn.innerHTML = originalText;
-                            }, 1500);
-                        }, 500);
-                    }
-                });
+            var submitBtn = pdpForm.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                if (submitBtn.dataset.state === 'adding') {
+                    e.preventDefault();
+                    return;
+                }
+                submitBtn.dataset.state = 'adding';
+                var originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<span>Adding...</span>';
+
+                setTimeout(function() {
+                    submitBtn.dataset.state = 'added';
+                    submitBtn.innerHTML = '<span>Added!</span>';
+                    refreshCartDrawer().then(function() {
+                        openCartDrawer();
+                    });
+                    setTimeout(function() {
+                        submitBtn.dataset.state = 'idle';
+                        submitBtn.innerHTML = originalText;
+                    }, 1500);
+                }, 500);
             }
         });
 

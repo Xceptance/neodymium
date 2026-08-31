@@ -367,4 +367,62 @@ public class VerlaApparelStorefrontTest extends BaseAiTest
         Assertions.assertTrue(body.contains("🇩🇪"), "Country modal must list Germany flag");
         Assertions.assertTrue(body.contains("🇬🇧"), "Country modal must list UK flag");
     }
+
+    private String getHeadless(final String endpoint) throws IOException, InterruptedException
+    {
+        final HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + this.server.getPort() + endpoint))
+            .header("X-PWA-Router", "true")
+            .GET()
+            .build();
+        final HttpResponse<String> resp = this.client.send(req, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertEquals(200, resp.statusCode(), "Expected 200 OK for headless " + endpoint);
+        return resp.body();
+    }
+
+    /**
+     * Test headless SPA client router behavior: initial landing returns full HTML document,
+     * while subsequent route requests (with X-PWA-Router header) return pure inner body fragments.
+     *
+     * @throws IOException if network fails
+     * @throws InterruptedException if thread is interrupted
+     */
+    @NeodymiumTest
+    public final void testHeadlessNavigationAndFragmentEndpoints() throws IOException, InterruptedException
+    {
+        // 1. Full landing page load (SSR initial shell)
+        final String fullHtml = get("/verla-apparel/index.html");
+        Assertions.assertTrue(fullHtml.contains("<!DOCTYPE html>"), "Initial landing must include full HTML DOCTYPE");
+        Assertions.assertTrue(fullHtml.contains("<header class=\"mbf-header"), "Initial landing must contain header");
+        Assertions.assertTrue(fullHtml.contains("<main class=\"mbf-main-content"), "Initial landing must contain main wrapper");
+        Assertions.assertTrue(fullHtml.contains("<footer class=\"mbf-footer"), "Initial landing must contain footer");
+
+        // 2. Client SPA Micro-Router and link click interceptors in layout.html
+        Assertions.assertTrue(fullHtml.contains("window.apparelRouter"), "Must define window.apparelRouter object");
+        Assertions.assertTrue(fullHtml.contains("window.apparelRouter.navigate"), "Must define navigate function");
+        Assertions.assertTrue(fullHtml.contains("window.addEventListener('popstate'"), "Must listen for popstate history events");
+        Assertions.assertTrue(fullHtml.contains("X-PWA-Router"), "Router must send X-PWA-Router header");
+
+        // 3. Headless Category PLP fragment request (between categories)
+        final String categoryFragment = getHeadless("/verla-apparel/c/bottoms.html");
+        Assertions.assertFalse(categoryFragment.contains("<!DOCTYPE html>"), "Fragment must not contain DOCTYPE");
+        Assertions.assertFalse(categoryFragment.contains("<header class=\"mbf-header"), "Fragment must not contain header");
+        Assertions.assertFalse(categoryFragment.contains("<footer class=\"mbf-footer"), "Fragment must not contain footer");
+        Assertions.assertTrue(categoryFragment.contains("mbf-plp-container"), "Fragment must contain PLP container");
+        Assertions.assertTrue(categoryFragment.contains("id=\"plp-product-grid\""), "Fragment must contain product grid");
+
+        // 4. Headless Homepage return fragment request
+        final String homeFragment = getHeadless("/verla-apparel/index.html");
+        Assertions.assertFalse(homeFragment.contains("<!DOCTYPE html>"), "Homepage fragment must not contain DOCTYPE");
+        Assertions.assertFalse(homeFragment.contains("<header class=\"mbf-header"), "Homepage fragment must not contain header");
+        Assertions.assertFalse(homeFragment.contains("<footer class=\"mbf-footer"), "Homepage fragment must not contain footer");
+        Assertions.assertTrue(homeFragment.contains("mbf-hotspot-pin"), "Homepage fragment must contain interactive hotspots");
+
+        // 5. Headless Cart fragment request
+        final String cartFragment = getHeadless("/verla-apparel/cart.html");
+        Assertions.assertFalse(cartFragment.contains("<!DOCTYPE html>"), "Cart fragment must not contain DOCTYPE");
+        Assertions.assertFalse(cartFragment.contains("<header class=\"mbf-header"), "Cart fragment must not contain header");
+        Assertions.assertFalse(cartFragment.contains("<footer class=\"mbf-footer"), "Cart fragment must not contain footer");
+        Assertions.assertTrue(cartFragment.contains("mbf-cart-container"), "Cart fragment must contain cart container");
+    }
 }
