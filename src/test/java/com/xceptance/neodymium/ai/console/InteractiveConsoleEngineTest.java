@@ -78,6 +78,7 @@ public class InteractiveConsoleEngineTest
         {
             System.clearProperty("neodymium.ai.consoleExecutionLogs");
         }
+        System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
         AiConfiguration.resetInstance();
     }
 
@@ -113,6 +114,23 @@ public class InteractiveConsoleEngineTest
 
         final File expectedLogFile = new File(tempResultsDir, "console-execution-1.json");
         assertFalse(expectedLogFile.exists(), "console-execution-1.json should NOT be created when logging is disabled");
+    }
+
+    @Test
+    public void testPushStateWritesFileToCustomConfiguredDirectory(@org.junit.jupiter.api.io.TempDir final java.nio.file.Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-custom");
+        final String jsonPayload = "{\"testName\":\"CustomDirTestCase\",\"status\":\"passed\",\"steps\":[]}";
+
+        engine.pushState(jsonPayload);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File expectedLogFile = new File(customDir.toFile(), runFolder + "/CustomDirTestCase/console-execution-1.json");
+        assertTrue(expectedLogFile.exists(), "console-execution-1.json should be created in custom configured run_ directory");
     }
 
     @Test

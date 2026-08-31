@@ -49,6 +49,12 @@ import org.junit.jupiter.api.TestTemplate;
 public @interface AiPlaybook
 {
     /**
+     * Constant representing programmatic playbook execution where steps are executed
+     * directly in Java code via an injected {@link org.neodymium.ai.session.AiSession}.
+     */
+    public static final String PROGRAMMATIC = "programmatic";
+
+    /**
      * The playbook resource path (e.g. {@code "HomepageTest.yaml"} or {@code "/playbooks/integration/store.yaml"}).
      *
      * @return the playbook resource path

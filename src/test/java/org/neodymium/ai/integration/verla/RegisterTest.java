@@ -23,13 +23,13 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -63,8 +63,16 @@ public final class RegisterTest extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
+        // the server must exist here, otherwise something is wrong
+        server.resetAll();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
+        Neodymium.getData().put("random", String.valueOf(Neodymium.getRandom().nextInt(1_000, 100_000_000)));
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
+        Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
+        AiConfiguration.resetInstance();
     }
 
     /**
@@ -73,73 +81,73 @@ public final class RegisterTest extends BaseAiTest
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("us")
-    @AiPlaybook("/verla/RegisterTest.yaml")
+    @AiPlaybook
     public void testRegisterLiveUs()
-    {
-    }
-
-    /**
-     * Strict replay mode execution using recorded playbook for dataset 'us'.
-     */
-    @Order(2)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("us")
-    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveUs")
-    public void testRegisterReplayUs()
     {
     }
 
     /**
      * Live recording mode execution for dataset 'de'.
      */
-    @Order(3)
+    @Order(2)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("de")
-    @AiPlaybook("/verla/RegisterTest.yaml")
+    @AiPlaybook
     public void testRegisterLiveDe()
-    {
-    }
-
-    /**
-     * Strict replay mode execution using recorded playbook for dataset 'de'.
-     */
-    @Order(4)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("de")
-    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveDe")
-    public void testRegisterReplayDe()
     {
     }
 
     /**
      * Live recording mode execution for dataset 'jp'.
      */
-    @Order(5)
+    @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("jp")
-    @AiPlaybook("/verla/RegisterTest.yaml")
+    @AiPlaybook
     public void testRegisterLiveJp()
-    {
-    }
-
-    /**
-     * Strict replay mode execution using recorded playbook for dataset 'jp'.
-     */
-    @Order(6)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("jp")
-    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveJp")
-    public void testRegisterReplayJp()
     {
     }
 
     /**
      * Live recording mode execution across all datasets in the playbook.
      */
-    @Order(7)
+    @Order(4)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("/verla/RegisterTest.yaml")
+    @AiPlaybook
     public void testRegisterLiveAllDataSets()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'us'.
+     */
+    @Order(5)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("us")
+    @AiPlaybook(recordingMethod = "testRegisterLiveUs")
+    public void testRegisterReplayUs()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'de'.
+     */
+    @Order(6)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("de")
+    @AiPlaybook(recordingMethod = "testRegisterLiveDe")
+    public void testRegisterReplayDe()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'jp'.
+     */
+    @Order(7)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("jp")
+    @AiPlaybook(recordingMethod = "testRegisterLiveJp")
+    public void testRegisterReplayJp()
     {
     }
 
@@ -148,7 +156,7 @@ public final class RegisterTest extends BaseAiTest
      */
     @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook(value = "/verla/RegisterTest.yaml", recordingMethod = "testRegisterLiveAllDataSets")
+    @AiPlaybook(recordingMethod = "testRegisterLiveAllDataSets")
     public void testRegisterReplayAllDataSets()
     {
     }

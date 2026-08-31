@@ -45,30 +45,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJudgeResult>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(QualityJudgePrompt.class);
-    private static final String PROMPT_RESOURCE = "/ai-prompts/quality-judge-prompt.md";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final String systemPrompt;
 
     public QualityJudgePrompt()
     {
-        this.systemPrompt = loadResourcePrompt();
-    }
-
-    private String loadResourcePrompt()
-    {
-        try (final InputStream is = getClass().getResourceAsStream(PROMPT_RESOURCE))
-        {
-            if (is != null)
-            {
-                return new String(is.readAllBytes(), StandardCharsets.UTF_8).trim();
-            }
-        }
-        catch (final Exception e)
-        {
-            LOGGER.warn("Failed to load {}, falling back to default judge system prompt.", PROMPT_RESOURCE, e);
-        }
-        return "You are the Neodymium AI Quality Judge. Review proposed actions and candidate locators for stability, accuracy, and text targeting.";
+        this.systemPrompt = AiAgentPrompts.getQualityJudgePrompt().trim();
     }
 
     @Override

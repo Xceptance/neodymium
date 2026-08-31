@@ -18,11 +18,16 @@
  */
 package org.neodymium.ai.report;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.imageio.ImageIO;
 
 /**
  * Data model encapsulating full execution metadata, steps, actions, LLM calls,
@@ -965,6 +970,8 @@ public final class TestExecutionReport
         private String mediaType;
         private String base64Data;
         private long timestamp;
+        private Integer width;
+        private Integer height;
 
         public ReportScreenshotEntry()
         {
@@ -978,11 +985,30 @@ public final class TestExecutionReport
             final long timestamp
         )
         {
+            this(name, stepIndex, mediaType, base64Data, timestamp, null, null);
+        }
+
+        public ReportScreenshotEntry(
+            final String name,
+            final int stepIndex,
+            final String mediaType,
+            final String base64Data,
+            final long timestamp,
+            final Integer width,
+            final Integer height
+        )
+        {
             this.name = name;
             this.stepIndex = stepIndex;
             this.mediaType = mediaType;
             this.base64Data = base64Data;
             this.timestamp = timestamp;
+            this.width = width;
+            this.height = height;
+            if (this.width == null || this.height == null)
+            {
+                resolveDimensionsFromBase64();
+            }
         }
 
         public String getName()
@@ -1023,6 +1049,10 @@ public final class TestExecutionReport
         public void setBase64Data(final String base64Data)
         {
             this.base64Data = base64Data;
+            if (this.width == null || this.height == null)
+            {
+                resolveDimensionsFromBase64();
+            }
         }
 
         public long getTimestamp()
@@ -1033,6 +1063,71 @@ public final class TestExecutionReport
         public void setTimestamp(final long timestamp)
         {
             this.timestamp = timestamp;
+        }
+
+        public Integer getWidth()
+        {
+            if (this.width == null && this.base64Data != null)
+            {
+                resolveDimensionsFromBase64();
+            }
+            return this.width;
+        }
+
+        public void setWidth(final Integer width)
+        {
+            this.width = width;
+        }
+
+        public Integer getHeight()
+        {
+            if (this.height == null && this.base64Data != null)
+            {
+                resolveDimensionsFromBase64();
+            }
+            return this.height;
+        }
+
+        public void setHeight(final Integer height)
+        {
+            this.height = height;
+        }
+
+        public String getDimensions()
+        {
+            final Integer w = getWidth();
+            final Integer h = getHeight();
+            if (w != null && h != null)
+            {
+                return w + "x" + h + " px";
+            }
+            return null;
+        }
+
+        public void resolveDimensionsFromBase64()
+        {
+            if ((this.width == null || this.height == null) && this.base64Data != null && !this.base64Data.isEmpty())
+            {
+                try
+                {
+                    String raw = this.base64Data;
+                    final int commaIdx = raw.indexOf(',');
+                    if (commaIdx != -1)
+                    {
+                        raw = raw.substring(commaIdx + 1);
+                    }
+                    final byte[] bytes = Base64.getDecoder().decode(raw);
+                    final BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+                    if (img != null)
+                    {
+                        this.width = img.getWidth();
+                        this.height = img.getHeight();
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
         }
     }
 

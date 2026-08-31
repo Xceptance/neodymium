@@ -50,6 +50,10 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.visualRca.enabled");
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.managerActive");
+        System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        System.clearProperty("neodymium.ai.consoleLog.directory");
+        System.clearProperty("neodymium.ai.report.disk.directory");
+        System.clearProperty("neodymium.ai.reportDirectory");
     }
 
     @Test
@@ -140,6 +144,38 @@ public class AiConfigurationTest
 
         System.clearProperty("MY_TEST_SECRET");
         System.clearProperty("neodymium.ai.testProp");
+    }
+
+    @Test
+    public void testConsoleExecutionLogsDirectoryDefaultAndOverride()
+    {
+        AiConfiguration.resetInstance();
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        final String expectedDefault = System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results");
+        assertEquals(expectedDefault, defaultConfig.getConsoleExecutionLogsDirectory(),
+            "Console execution logs directory should fall back to default path.");
+
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", "target/custom-console-logs");
+        AiConfiguration.resetInstance();
+        final AiConfiguration customConfig = AiConfiguration.getInstance();
+        assertEquals("target/custom-console-logs", customConfig.getConsoleExecutionLogsDirectory(),
+            "Console execution logs directory should resolve custom configured folder path.");
+    }
+
+    @Test
+    public void testDiskReportDirectoryDefaultAndOverrides()
+    {
+        AiConfiguration.resetInstance();
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        final String expectedDefault = defaultConfig.getProperty("neodymium.ai.report.disk.directory", "target/ai-reports");
+        assertEquals(expectedDefault, defaultConfig.getDiskReportDirectory(),
+            "Disk report directory should default to configured default path.");
+
+        System.setProperty("neodymium.ai.report.disk.directory", "target/custom-ai-reports");
+        AiConfiguration.resetInstance();
+        final AiConfiguration customConfig = AiConfiguration.getInstance();
+        assertEquals("target/custom-ai-reports", customConfig.getDiskReportDirectory(),
+            "Disk report directory should resolve property override.");
     }
 }
 

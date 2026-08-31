@@ -255,6 +255,18 @@ public class TestDataUtils
                 {
                     currentTestId = dataSet.get("TEST_ID");
                 }
+                if (StringUtils.isBlank(currentTestId))
+                {
+                    currentTestId = dataSet.get("id");
+                }
+                if (StringUtils.isBlank(currentTestId))
+                {
+                    currentTestId = dataSet.get("testid");
+                }
+                if (StringUtils.isBlank(currentTestId))
+                {
+                    currentTestId = dataSet.get("testID");
+                }
 
                 if (currentTestId == null)
                 {

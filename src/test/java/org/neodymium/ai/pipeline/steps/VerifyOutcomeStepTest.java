@@ -18,8 +18,14 @@
  */
 package org.neodymium.ai.pipeline.steps;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,15 +34,18 @@ import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
  * Unit test suite for {@link VerifyOutcomeStep}.
@@ -238,5 +247,69 @@ public class VerifyOutcomeStepTest
         final String userMessage = mockLlmProvider.getLastRequest().userMessage();
         Assertions.assertTrue(userMessage.contains("[MASKED_VAR_api_key]"), "Outbound verification request user prompt should contain masked variable placeholder.");
         Assertions.assertFalse(userMessage.contains("SecretKey999!"), "Outbound verification request user prompt should NOT contain raw secret key.");
+    }
+
+    /**
+     * Goal: Verifies that pure visual verification steps with empty actions do NOT consume
+     * stale `KEY_POST_ACTION_STATE` from preceding action steps, and instead record their
+     * visual baseline hash from the active `KEY_LAST_STATE` viewport capture.
+     */
+    @Test
+    public void testVisualStepDoesNotConsumeStalePostActionState() throws Exception
+    {
+        final BufferedImage staleImg = new BufferedImage(1500, 2117, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = staleImg.createGraphics();
+        g1.setColor(Color.RED);
+        g1.fillRect(0, 0, 1500, 2117);
+        g1.dispose();
+
+        final BufferedImage viewportImg = new BufferedImage(1500, 857, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = viewportImg.createGraphics();
+        g2.setColor(Color.GREEN);
+        g2.fillRect(0, 0, 1500, 857);
+        g2.dispose();
+
+        final String staleBase64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(staleImg, "png", baos);
+            staleBase64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final String viewportBase64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(viewportImg, "png", baos);
+            viewportBase64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final MockSutState staleState = new MockSutState(
+            "<html>stale</html>",
+            List.of(new SutAttachment("image/png", "stale.png", staleBase64)),
+            "stale_hash");
+
+        final MockSutState viewportState = new MockSutState(
+            "<html>viewport</html>",
+            List.of(new SutAttachment("image/png", "viewport.png", viewportBase64)),
+            "viewport_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put("KEY_POST_ACTION_STATE", staleState);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, viewportState);
+
+        final PlaybookStep pureVisualStep = new PlaybookStep("Verify page header (visual)");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, pureVisualStep);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        final String expectedViewportHash = ScreenshotHasher.computeSsimMatrix(viewportBase64);
+        final String expectedStaleHash = ScreenshotHasher.computeSsimMatrix(staleBase64);
+
+        Assertions.assertNotNull(pureVisualStep.getScreenshotHash(), "Screenshot hash should be recorded.");
+        Assertions.assertEquals(expectedViewportHash, pureVisualStep.getScreenshotHash(), "Baseline hash MUST match active viewport state, NOT stale full-page action state.");
+        Assertions.assertNotEquals(expectedStaleHash, pureVisualStep.getScreenshotHash(), "Baseline hash must NOT match stale action state.");
+        Assertions.assertNull(context.getTransientData().get("KEY_POST_ACTION_STATE"), "KEY_POST_ACTION_STATE must be removed.");
     }
 }

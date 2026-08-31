@@ -68,7 +68,7 @@ public final class ActionExtractionPromptTest
         assertTrue(userMessage.contains("## Execution Context"));
         assertTrue(userMessage.contains("[INSTRUCTION]      Verify free gift item"));
         assertTrue(userMessage.contains("[CURRENT_LEVEL]    RICH"));
-        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL_LEAN"));
+        assertTrue(userMessage.contains("[NEXT_ESCALATION]  VISUAL_RICH"));
     }
 
     /**
@@ -149,8 +149,8 @@ public final class ActionExtractionPromptTest
             prompt.parseResponse(rawJson, context);
         });
 
-        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL_LEAN
-        assertEquals("VISUAL_LEAN", ex.getTargetLevel());
+        // Current level is RICH, so requesting STANDARD should auto-correct to VISUAL_RICH
+        assertEquals("VISUAL_RICH", ex.getTargetLevel());
     }
 
     /**
@@ -396,7 +396,6 @@ public final class ActionExtractionPromptTest
               ]
             }
             """;
-
         final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
         final ExecutionContext context = new ExecutionContext(null);
         context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
@@ -409,4 +408,154 @@ public final class ActionExtractionPromptTest
         assertEquals("#checkout-form-container h1", actions.get(0).getTarget());
         assertEquals("Checkout", actions.get(0).getValue());
     }
+
+    @Test
+    public void testVisualLevelPreservesNavigateActionsOnNavigationStep() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "targetContextLevel": "VISUAL",
+              "reasoning": "Open the specified URL.",
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "https://localhost:8543/verla-perfect/index.html",
+                  "value": "",
+                  "isRegex": false,
+                  "reasoning": "Navigate to the given URL."
+                }
+              ]
+            }
+            """;
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep(
+            "Open https://localhost:8543/verla-perfect/index.html"
+        );
+        step.setLineNumber(2);
+        step.setSourceFile("RegisterTest.yaml");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+        assertEquals("NAVIGATE", actions.get(0).getType());
+        assertEquals("https://localhost:8543/verla-perfect/index.html", actions.get(0).getTarget());
+        assertEquals(1, step.getActions().size());
+        assertEquals("NAVIGATE", step.getActions().get(0).getType());
+    }
+
+    @Test
+    public void testCompileSystemMessageContainsDeclarativeVsImperativeRule()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final String systemMsg = prompt.compileSystemMessage(null);
+        assertNotNull(systemMsg);
+        assertTrue(systemMsg.contains("Declarative vs. Imperative Instructions"), "System prompt must contain declarative vs imperative rule.");
+        assertTrue(systemMsg.contains("NOT an imperative command to execute"), "System prompt must clarify that descriptive affordances are not commands to execute.");
+    }
+
+    /**
+     * Verifies that the compiled system message contains the strict data fidelity guideline
+     * and the dedicated TYPE action rule to prevent LLM value hallucination.
+     */
+    @Test
+    public void testCompileSystemMessageContainsDataFidelityAndTypeRule()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final String systemMsg = prompt.compileSystemMessage(null);
+        assertNotNull(systemMsg);
+        assertTrue(systemMsg.contains("Input & Assertion Data Fidelity"), "System prompt must contain data fidelity guideline.");
+        assertTrue(systemMsg.contains("NEVER invent, hallucinate, or substitute synthetic sample data"), "System prompt must forbid synthetic sample data.");
+        assertTrue(systemMsg.contains("- **TYPE**: Target `input`, `textarea`, or `contenteditable`"), "System prompt must contain explicit TYPE action rule.");
+    }
+
+    /**
+     * Verifies that the lite model add-on includes the value fidelity directive for gemini-3.5-flash-lite.
+     */
+    @Test
+    public void testLiteModelAddonContainsValueFidelityDirective()
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, "gemini-3.5-flash-lite");
+
+        final String addon = SystemPromptAddonHelper.getAddon("general", context);
+        assertNotNull(addon, "Addon for gemini-3.5-flash-lite should not be null.");
+        assertTrue(addon.contains("Values"), "Lite model addon must contain values directive.");
+        assertTrue(addon.contains("Copy the exact literal text from the instruction into 'value'"), "Lite model addon must mandate copying literal text.");
+        assertTrue(addon.contains("Locators"), "Lite model addon must contain locators directive.");
+    }
+
+    /**
+     * Verifies that compileUserMessage adds ceiling level notice and omits next escalation when at VISUAL_RICH.
+     */
+    @Test
+    public void testCompileUserMessageCeilingLevelNotice()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify bonus gift");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+
+        final String userMessage = prompt.compileUserMessage(context);
+
+        assertNotNull(userMessage);
+        assertTrue(userMessage.contains("[CURRENT_LEVEL]    VISUAL_RICH"));
+        assertFalse(userMessage.contains("[NEXT_ESCALATION]"));
+        assertTrue(userMessage.contains("MAXIMUM CONTEXT LEVEL REACHED"));
+        assertTrue(userMessage.contains("Do NOT emit speculative actions"));
+    }
+
+    /**
+     * Verifies that compileUserMessage does not output previous attempt failure when error is ToLevelEscalationException.
+     */
+    @Test
+    public void testCompileUserMessageSuppressesToLevelEscalationException()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify bonus gift");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+        context.getTransientData().put(
+            ExecutionContext.KEY_LAST_EXECUTION_ERROR,
+            new ToLevelEscalationException("Escalating context", "VISUAL_RICH")
+        );
+
+        final String userMessage = prompt.compileUserMessage(context);
+
+        assertNotNull(userMessage);
+        assertFalse(userMessage.contains("⚠️ PREVIOUS ATTEMPT FAILURE"));
+    }
+
+    /**
+     * Verifies that parseResponse throws DivergenceException when escalation is requested at the ceiling (VISUAL_RICH).
+     */
+    @Test
+    public void testParseResponseEscalateAtCeilingThrowsDivergenceException()
+    {
+        final String rawJson = """
+            {
+              "status": "ESCALATE",
+              "targetContextLevel": "VISUAL_RICH",
+              "reasoning": "The cart table does not show 'Free Bonus Gift'."
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> {
+            prompt.parseResponse(rawJson, context);
+        });
+
+        assertTrue(ex.getMessage().contains("The cart table does not show 'Free Bonus Gift'."));
+    }
 }
+
+

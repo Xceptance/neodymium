@@ -110,4 +110,34 @@ public final class AiAgentPrompts
     {
         return getPrompt("visual-rca-prompt.md");
     }
+
+    /**
+     * Loads the Selenide engine locator rule template.
+     *
+     * @return the Selenide locator rule markdown
+     */
+    public static String getSelenideLocatorRule()
+    {
+        return getPrompt("selenide-locator-rule.md");
+    }
+
+    /**
+     * Loads the candidate locators rule template for Quality Judge evaluations.
+     *
+     * @return the candidate locators rule markdown
+     */
+    public static String getCandidateLocatorsRule()
+    {
+        return getPrompt("candidate-locators-rule.md");
+    }
+
+    /**
+     * Loads the Quality Judge system prompt template.
+     *
+     * @return the quality judge system prompt
+     */
+    public static String getQualityJudgePrompt()
+    {
+        return getPrompt("quality-judge-prompt.md");
+    }
 }

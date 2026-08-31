@@ -316,13 +316,14 @@ public class AuraReportViewController
     @GetMapping("/fragments/test-base/variation-history")
     public String getVariationHistoryFragment(
         @RequestParam(name = "testClass", defaultValue = "") final String testClass,
+        @RequestParam(name = "testMethod", defaultValue = "") final String testMethod,
         @RequestParam(name = "dataSet", defaultValue = "") final String dataSet,
         @RequestParam(name = "location", defaultValue = "") final String location,
         @RequestParam(name = "browser", defaultValue = "") final String browser,
         final Model model)
     {
         final List<TestBaseVariationHistoryDto> historyRuns = dataService.getVariationHistory(
-            testClass, dataSet, location, browser
+            testClass, testMethod, dataSet, location, browser
         );
 
         model.addAttribute("historyRuns", historyRuns);

@@ -24,6 +24,7 @@ import java.util.List;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
@@ -139,16 +140,26 @@ public final class CallLlmStep<T> implements PipelineStep
         final double temp = config.getTemperature("action");
         final int timeoutSeconds = config.getTimeoutSeconds("action");
 
+        final ContextLevel activeLevel =
+            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl
+                ? cl
+                : null;
+
+        final boolean shouldIncludeAttachments = (this.capability == LlmCapability.VISION)
+            || (activeLevel != null && activeLevel.includesScreenshot());
+
+        final List<SutAttachment> requestAttachments = shouldIncludeAttachments ? attachments : Collections.emptyList();
+
         final LlmRequest request = new LlmRequest(
             system,
             user,
-            attachments,
+            requestAttachments,
             this.prompt.getResponseSchema(),
             temp,
             timeoutSeconds
         );
 
-        final LlmCapability effectiveCapability = (attachments != null && !attachments.isEmpty()) ? LlmCapability.VISION : this.capability;
+        final LlmCapability effectiveCapability = (requestAttachments != null && !requestAttachments.isEmpty()) ? LlmCapability.VISION : this.capability;
         final LlmProvider provider = session.getLlmRegistry().getProvider(effectiveCapability);
         LOGGER.debug("Calling LLM provider '{}' via capability: {}", provider.getClass().getSimpleName(), effectiveCapability);
         final String capName = effectiveCapability != null ? effectiveCapability.name() : "DEFAULT";

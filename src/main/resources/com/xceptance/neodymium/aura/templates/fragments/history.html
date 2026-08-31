@@ -65,7 +65,7 @@
             </div>
             <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
                 <button class="run-action-btn danger" style="font-size: 10px; padding: 2px 6px; opacity: 0.65;"
-                        th:hx-post="@{/api/reporting/delete(id=${item.id})}"
+                        th:hx-post="'/api/reporting/delete?id=' + ${item.id}"
                         hx-target="#allureHistoryList"
                         hx-swap="outerHTML"
                         th:hx-confirm="'Are you sure you want to delete report &quot;' + ${item.id} + '&quot;?'"

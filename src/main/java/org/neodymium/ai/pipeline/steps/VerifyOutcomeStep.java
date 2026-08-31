@@ -105,7 +105,17 @@ public final class VerifyOutcomeStep implements PipelineStep
         {
             try
             {
-                SutState capturedState = (SutState) context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                    || step.isFullPageVisualStep();
+                SutState capturedState = null;
+                if (step.getActions() != null && !step.getActions().isEmpty())
+                {
+                    capturedState = (SutState) context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                }
+                else
+                {
+                    context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                }
                 if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
                 {
                     final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
@@ -117,19 +127,18 @@ public final class VerifyOutcomeStep implements PipelineStep
                     {
                         final ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
                             ? activeLevel 
-                            : ((step != null && step.isVisualStep()) 
-                                ? ContextLevel.VISUAL 
-                                : ContextLevel.VISUAL_LEAN);
-                        final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                            : (isFullPageReq 
+                                ? ContextLevel.VISUAL_LEAN 
+                                : ContextLevel.VISUAL);
                         capturedState = executor.captureState(level, isFullPageReq);
+                        if (session != null && session.getEventBus() != null && capturedState != null)
+                        {
+                            session.getEventBus().dispatch(new StateCapturedEvent(capturedState));
+                        }
                     }
                 }
                 if (capturedState != null && capturedState.getAttachments() != null)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new StateCapturedEvent(capturedState));
-                    }
 
                     CoordinateTarget coordinateTarget = null;
                     if (step.getActions() != null)
@@ -171,6 +180,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                             if (ssimMatrix != null)
                             {
                                 step.setScreenshotHash(ssimMatrix);
+                                if (isFullPageReq || (activeLevel != null && activeLevel.isFullPageScreenshot()))
+                                {
+                                    step.setFullPage(true);
+                                }
                                 final String resolvedInstr = context.getSessionData() != null
                                     ? context.getSessionData().resolveVariables(step.getInstruction())
                                     : step.getInstruction();
@@ -276,7 +289,8 @@ public final class VerifyOutcomeStep implements PipelineStep
         try
         {
             // 4. Capture the post-execution SUT state (with temporal visual stability settling for visual assertions)
-            final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+            final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                || (step != null && step.isFullPageVisualStep());
             final SutState finalState;
             if (step != null && (step.isVisualStep() || isFullPageReq))
             {
@@ -480,6 +494,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                         : step.getInstruction();
                     LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
                     step.setScreenshotHash(dHash);
+                    if (isFullPageReq)
+                    {
+                        step.setFullPage(true);
+                    }
 
 
                     // 12. Create synthetic NONE action if no explicit DOM actions were generated to hold visual baseline

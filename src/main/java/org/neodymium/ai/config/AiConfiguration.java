@@ -657,6 +657,19 @@ public final class AiConfiguration
     }
 
     /**
+     * Resolves the target directory path where console execution log files are stored.
+     * Defaults to System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results").
+     *
+     * @return console execution logs target directory path
+     */
+    public String getConsoleExecutionLogsDirectory()
+    {
+        return getProperty("neodymium.ai.consoleExecutionLogs.directory",
+            getProperty("neodymium.ai.consoleLog.directory",
+                System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results")));
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *
@@ -773,7 +786,11 @@ public final class AiConfiguration
      */
     public String getDiskReportDirectory()
     {
-        return getProperty("neodymium.ai.report.disk.directory", "target/ai-reports");
+        return getProperty("neodymium.ai.report.disk.directory",
+            getProperty("neodymium.ai.reportDirectory",
+                getProperty("neodymium.ai.report.directory",
+                    getProperty("neodymium.ai.logDirectory",
+                        getProperty("neodymium.ai.log.directory", "target/ai-reports")))));
     }
 
     /**

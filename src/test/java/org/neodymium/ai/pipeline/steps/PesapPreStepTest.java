@@ -97,4 +97,38 @@ public class PesapPreStepTest
         assertEquals("Click username", parentStep.getSubSteps().get(0).getInstruction());
         assertEquals("Type admin", parentStep.getSubSteps().get(1).getInstruction());
     }
+
+    @Test
+    public void testPesapStepSplittingSanitizesVariables() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        provider.addResponse(new LlmResponse(
+            "{\"c\": \"MINIMAL\", \"sp\": [\"Type \\\"john.doe.us.123456@example.com\\\" into email\", \"Type \\\"SecretPass1!\\\" into password\"]}",
+            null,
+            "mock-model"
+        ));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.PESAP, provider);
+        registry.setDefaultProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("random", "123456", false);
+        sessionData.putDynamic("email", "john.doe.us.${random}@example.com", false);
+        sessionData.putDynamic("password", "SecretPass1!", true);
+
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+        final PlaybookStep parentStep = new PlaybookStep("Type \"${email}\" into email and \"${password}\" into password");
+        final PesapPreStep pesapStep = new PesapPreStep(parentStep, session);
+        final boolean isSplit = pesapStep.executePreStep(context);
+
+        org.junit.jupiter.api.Assertions.assertTrue(isSplit);
+        assertEquals(2, parentStep.getSubSteps().size());
+        assertEquals("Type \"${email}\" into email", parentStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Type \"${password}\" into password", parentStep.getSubSteps().get(1).getInstruction());
+    }
 }

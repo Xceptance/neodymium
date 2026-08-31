@@ -64,6 +64,13 @@
     </div>
 </th:block>
 
+<div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel" style="flex: 1; overflow-y: auto;">
+    <th:block th:replace="~{fragments/queue :: configPanelContent}"></th:block>
+    <div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
+        <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
+    </div>
+</div>
+
 <th:block th:fragment="configPanelContent">
     <!-- Scrollable Top: Global Multi-Browser & Multi-Profile Selection Section -->
     <div class="browser-selection-container">
@@ -89,14 +96,15 @@
 
             <!-- Grouped Collapsible Accordion List -->
             <div class="profile-group-accordion" style="display: flex; flex-direction: column; gap: 6px;">
-                <details th:each="grp : ${browserGroups}" class="browser-group-card" th:open="${grp.selectedCount > 0}">
+                <details th:each="grp : ${browserGroups}" class="browser-group-card" th:open="${grp.selectedCount > 0 or grp.key == 'chrome' or grp.key == 'firefox' or grp.key == 'safari'}">
                     <summary class="browser-group-summary">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <th:block th:replace="~{fragments/icons :: browserIcon(type=${grp.key})}"></th:block>
                             <span style="font-weight: 600; font-size: 12px;" th:text="${grp.title}">Google Chrome</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span class="group-selected-count" th:if="${grp.selectedCount > 0}" th:text="${grp.selectedCount}" title="Selected count in this group">2</span>
+                            <span class="browser-info-icon" th:if="${grp.key == 'chrome'}" style="font-size: 15px; color: var(--accent); background: rgba(37, 99, 235, 0.12); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;" title="Default Primary Browser">info</span>
+                            <span class="group-selected-count" th:if="${grp.selectedCount > 0 and grp.key != 'chrome'}" th:text="${grp.selectedCount}" title="Selected count in this group">2</span>
                             <span class="material-symbols-outlined group-caret" style="font-size: 18px; color: var(--text-secondary); transition: transform 0.2s ease;">expand_more</span>
                         </div>
                     </summary>
@@ -118,12 +126,6 @@
                         </div>
                     </div>
                 </details>
-            </div>
-            
-            <!-- Global Info Box matching Mockup -->
-            <div class="browser-info-box" style="margin-top: 8px; padding: 6px 10px; background: rgba(37, 99, 235, 0.07); border: 1px solid rgba(37, 99, 235, 0.18); border-radius: 6px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary);">
-                <span class="material-symbols-outlined" style="font-size: 15px; color: var(--accent);">info</span>
-                <span><strong style="color: var(--text-primary);"><span th:text="${globalBrowserProfiles != null ? globalBrowserProfiles.size() : 0}">6</span> profiles</strong> selected globally for inherited queue items.</span>
             </div>
         </div>
     </div>

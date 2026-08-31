@@ -70,6 +70,7 @@ public final class PreliminaryReportListener implements ExecutionListener
     private static final Logger LOGGER = LoggerFactory.getLogger(PreliminaryReportListener.class);
     private static final SimpleDateFormat FILE_TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
 
+    private final boolean isCustomOutputDirectory;
     private final Path outputDirectory;
     private final Set<DiskReportFormat> formats;
     private final boolean enabled;
@@ -92,6 +93,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         this.enabled = config.isDiskReportEnabled();
         this.outputDirectory = Paths.get(config.getDiskReportDirectory());
         this.formats = DiskReportFormat.parseFormats(config.getDiskReportFormat());
+        this.isCustomOutputDirectory = false;
         this.report.setStartTimeMs(System.currentTimeMillis());
     }
 
@@ -115,7 +117,8 @@ public final class PreliminaryReportListener implements ExecutionListener
      */
     public PreliminaryReportListener(final Path outputDirectory, final Set<DiskReportFormat> formats, final boolean enabled)
     {
-        this.outputDirectory = outputDirectory != null ? outputDirectory : Paths.get("target/ai-reports");
+        this.isCustomOutputDirectory = outputDirectory != null;
+        this.outputDirectory = outputDirectory != null ? outputDirectory : Paths.get(AiConfiguration.getInstance().getDiskReportDirectory());
         this.formats = formats != null ? formats : Set.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON);
         this.enabled = enabled;
         this.report.setStartTimeMs(System.currentTimeMillis());
@@ -287,7 +290,47 @@ public final class PreliminaryReportListener implements ExecutionListener
             final PlaybookStep pbStep = stepFinished.getStep();
             final PlaybookStepStatus status = stepFinished.getStatus();
 
-            TestExecutionReport.ReportStepEntry targetStep = this.currentStep;
+            TestExecutionReport.ReportStepEntry targetStep = null;
+            if (pbStep != null)
+            {
+                final String pbInstr = pbStep.getInstruction();
+                if (this.currentStep != null && pbInstr != null
+                    && (pbInstr.equals(this.currentStep.getRawInstruction()) || pbInstr.equals(this.currentStep.getInstruction())))
+                {
+                    targetStep = this.currentStep;
+                }
+
+                if (targetStep == null && pbInstr != null)
+                {
+                    for (int i = this.report.getSteps().size() - 1; i >= 0; i--)
+                    {
+                        final TestExecutionReport.ReportStepEntry rootEntry = this.report.getSteps().get(i);
+                        if (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction()))
+                        {
+                            targetStep = rootEntry;
+                            break;
+                        }
+                        for (int j = rootEntry.getSubSteps().size() - 1; j >= 0; j--)
+                        {
+                            final TestExecutionReport.ReportStepEntry sub = rootEntry.getSubSteps().get(j);
+                            if (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction()))
+                            {
+                                targetStep = sub;
+                                break;
+                            }
+                        }
+                        if (targetStep != null)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (targetStep == null)
+            {
+                targetStep = this.currentStep;
+            }
             if (targetStep == null && !this.report.getSteps().isEmpty())
             {
                 targetStep = this.report.getSteps().get(this.report.getSteps().size() - 1);
@@ -425,6 +468,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                         {
                             this.currentStep.addScreenshot(screenshot);
                         }
+                        LOGGER.debug("   📸 Recorded screenshot for step #{}: \"{}\" | Dimensions: {}",
+                            stepIdx + 1, label, screenshot.getDimensions() != null ? screenshot.getDimensions() : "unknown");
                     }
                 }
             }
@@ -472,59 +517,78 @@ public final class PreliminaryReportListener implements ExecutionListener
         final List<TestExecutionReport.ReportStepEntry> steps = this.report.getSteps();
         for (int i = 0; i < steps.size(); i++)
         {
-            final TestExecutionReport.ReportStepEntry step = steps.get(i);
-            if (!step.getSubSteps().isEmpty())
+            resolveStep(steps.get(i));
+        }
+    }
+
+    private void resolveStep(final TestExecutionReport.ReportStepEntry step)
+    {
+        if (step == null)
+        {
+            return;
+        }
+
+        if (!step.getSubSteps().isEmpty())
+        {
+            boolean anySubFailed = false;
+            boolean allSubSuccess = true;
+            long totalSubDuration = 0;
+
+            for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
             {
-                boolean allSubSuccess = true;
-                boolean anySubFailed = false;
-                long totalSubDuration = 0;
-
-                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                resolveStep(sub);
+                totalSubDuration += sub.getDurationMs();
+                if ("FAILED".equalsIgnoreCase(sub.getStatus()))
                 {
-                    totalSubDuration += sub.getDurationMs();
-                    if ("FAILED".equalsIgnoreCase(sub.getStatus()))
-                    {
-                        anySubFailed = true;
-                        allSubSuccess = false;
-                    }
-                    else if (!"SUCCESS".equalsIgnoreCase(sub.getStatus()) && !"PASSED".equalsIgnoreCase(sub.getStatus()) && !"HEALED".equalsIgnoreCase(sub.getStatus()))
-                    {
-                        allSubSuccess = false;
-                    }
+                    anySubFailed = true;
+                    allSubSuccess = false;
                 }
-
-                if (anySubFailed)
+                else if (!"SUCCESS".equalsIgnoreCase(sub.getStatus()) && !"PASSED".equalsIgnoreCase(sub.getStatus()) && !"HEALED".equalsIgnoreCase(sub.getStatus()))
                 {
-                    step.setStatus("FAILED");
-                }
-                else if (allSubSuccess || (!step.getSubSteps().isEmpty() && !anySubFailed))
-                {
-                    step.setStatus("SUCCESS");
-                }
-                if (step.getDurationMs() <= 0)
-                {
-                    step.setDurationMs(totalSubDuration);
+                    allSubSuccess = false;
                 }
             }
-            else if ("RUNNING".equalsIgnoreCase(step.getStatus()) || "PENDING".equalsIgnoreCase(step.getStatus()))
-            {
-                if (!this.report.isSuccess())
-                {
-                    step.setStatus("FAILED");
-                    if (step.getFailureReason() == null && this.report.getFailureReason() != null)
-                    {
-                        step.setFailureReason(this.report.getFailureReason());
-                    }
-                }
-                else
-                {
-                    step.setStatus("SUCCESS");
-                }
 
-                if (step.getDurationMs() <= 0 && step.getStartTimeMs() > 0)
+            if (anySubFailed || (!this.report.isSuccess() && !allSubSuccess))
+            {
+                step.setStatus("FAILED");
+                if (step.getFailureReason() == null && this.report.getFailureReason() != null)
                 {
-                    step.setDurationMs(Math.max(1, System.currentTimeMillis() - step.getStartTimeMs()));
+                    step.setFailureReason(this.report.getFailureReason());
                 }
+            }
+            else if (allSubSuccess)
+            {
+                step.setStatus("SUCCESS");
+            }
+            else
+            {
+                step.setStatus(!this.report.isSuccess() ? "FAILED" : "SUCCESS");
+            }
+
+            if (step.getDurationMs() <= 0)
+            {
+                step.setDurationMs(totalSubDuration);
+            }
+        }
+        else if ("RUNNING".equalsIgnoreCase(step.getStatus()) || "PENDING".equalsIgnoreCase(step.getStatus()) || step.getStatus() == null)
+        {
+            if (!this.report.isSuccess())
+            {
+                step.setStatus("FAILED");
+                if (step.getFailureReason() == null && this.report.getFailureReason() != null)
+                {
+                    step.setFailureReason(this.report.getFailureReason());
+                }
+            }
+            else
+            {
+                step.setStatus("SUCCESS");
+            }
+
+            if (step.getDurationMs() <= 0 && step.getStartTimeMs() > 0)
+            {
+                step.setDurationMs(Math.max(1, System.currentTimeMillis() - step.getStartTimeMs()));
             }
         }
     }
@@ -598,6 +662,30 @@ public final class PreliminaryReportListener implements ExecutionListener
                 else if (lastErr != null)
                 {
                     this.report.setFailureReason(lastErr.toString());
+                }
+            }
+        }
+
+        if (this.report.getFailureReason() == null && !this.report.isSuccess())
+        {
+            for (final TestExecutionReport.ReportStepEntry st : this.report.getSteps())
+            {
+                if (st.getFailureReason() != null && !st.getFailureReason().isBlank())
+                {
+                    this.report.setFailureReason(st.getFailureReason());
+                    break;
+                }
+                for (final TestExecutionReport.ReportStepEntry subSt : st.getSubSteps())
+                {
+                    if (subSt.getFailureReason() != null && !subSt.getFailureReason().isBlank())
+                    {
+                        this.report.setFailureReason(subSt.getFailureReason());
+                        break;
+                    }
+                }
+                if (this.report.getFailureReason() != null)
+                {
+                    break;
                 }
             }
         }
@@ -890,19 +978,17 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         try
         {
+            final Path configuredDiskReportDir = Paths.get(AiConfiguration.getInstance().getDiskReportDirectory());
+            final Path rootOutputDir = (this.isCustomOutputDirectory && !this.outputDirectory.equals(configuredDiskReportDir))
+                ? this.outputDirectory
+                : Paths.get("target/ai-results");
+            if (!Files.exists(rootOutputDir))
+            {
+                Files.createDirectories(rootOutputDir);
+            }
             if (!Files.exists(this.outputDirectory))
             {
                 Files.createDirectories(this.outputDirectory);
-            }
-
-            final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
-            final String testClassFolder = this.report.getTestClass() != null && !this.report.getTestClass().isBlank()
-                ? extractSimpleClassName(this.report.getTestClass())
-                : "DefaultTestClass";
-            final Path structuredOutputDir = this.outputDirectory.resolve(runFolder).resolve(testClassFolder);
-            if (!Files.exists(structuredOutputDir))
-            {
-                Files.createDirectories(structuredOutputDir);
             }
 
             final String baseFileName = computeBaseFileName();
@@ -914,26 +1000,20 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     case HTML -> {
                         final String htmlContent = this.htmlGenerator.generate(this.report);
-                        final Path htmlFile = this.outputDirectory.resolve(baseFileName + ".html");
+                        final Path htmlFile = rootOutputDir.resolve(baseFileName + ".html");
                         Files.writeString(htmlFile, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        final Path structuredHtmlFile = structuredOutputDir.resolve(baseFileName + ".html");
-                        Files.writeString(structuredHtmlFile, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("📊 Preliminary HTML report written: {}", htmlFile.toAbsolutePath());
                     }
                     case MARKDOWN -> {
                         final String mdContent = this.markdownGenerator.generate(this.report);
-                        final Path mdFile = this.outputDirectory.resolve(baseFileName + ".md");
+                        final Path mdFile = rootOutputDir.resolve(baseFileName + ".md");
                         Files.writeString(mdFile, mdContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        final Path structuredMdFile = structuredOutputDir.resolve(baseFileName + ".md");
-                        Files.writeString(structuredMdFile, mdContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("📝 Preliminary Markdown report written: {}", mdFile.toAbsolutePath());
                     }
                     case JSON -> {
                         final String jsonContent = this.jsonGenerator.generate(this.report);
-                        final Path jsonFile = this.outputDirectory.resolve(baseFileName + ".json");
+                        final Path jsonFile = rootOutputDir.resolve(baseFileName + ".json");
                         Files.writeString(jsonFile, jsonContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        final Path structuredJsonFile = structuredOutputDir.resolve(baseFileName + ".json");
-                        Files.writeString(structuredJsonFile, jsonContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("💾 Preliminary JSON report written: {}", jsonFile.toAbsolutePath());
                     }
                     case ALL -> {
@@ -944,7 +1024,7 @@ public final class PreliminaryReportListener implements ExecutionListener
 
             if (this.formats.contains(DiskReportFormat.HTML) || this.formats.contains(DiskReportFormat.ALL))
             {
-                this.indexGenerator.updateIndex(this.outputDirectory, this.report, baseFileName);
+                this.indexGenerator.updateIndex(rootOutputDir, this.report, baseFileName);
             }
         }
         catch (final Exception e)

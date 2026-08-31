@@ -1249,6 +1249,56 @@ function renderSidePanelStatusBugs() {
     }
 }
 
+function resolveTestMethod(activeRow, blocksObj) {
+    if (!activeRow && !blocksObj) return '';
+
+    let method = activeRow ? (activeRow.getAttribute('data-test-method') || '') : '';
+    if (!method && blocksObj) {
+        method = blocksObj.testMethod || '';
+    }
+    if (method && method.trim().length > 0 && method.trim() !== 'null' && method.trim() !== 'undefined') {
+        return method.trim();
+    }
+
+    const testFile = (activeRow ? (activeRow.getAttribute('data-test-file') || '') : '') || (blocksObj ? (blocksObj.testFile || '') : '');
+    if (testFile && testFile.includes('#')) {
+        const parts = testFile.split('#');
+        if (parts.length > 1 && parts[1].trim().length > 0) {
+            return parts[1].trim();
+        }
+    }
+
+    let rowId = activeRow ? (activeRow.getAttribute('data-row-id') || activeRow.id || '') : '';
+    if (rowId) {
+        if (rowId.includes('%23')) {
+            try { rowId = decodeURIComponent(rowId); } catch (e) {}
+        }
+        if (rowId.includes('#')) {
+            const parts = rowId.split('#');
+            if (parts.length > 1 && parts[1].trim().length > 0) {
+                return parts[1].trim();
+            }
+        }
+    }
+
+    const testName = activeRow ? (activeRow.getAttribute('data-test-name') || '') : '';
+    if (testName) {
+        if (testName.includes('::')) {
+            const parts = testName.split('::');
+            if (parts.length > 1 && parts[1].trim().length > 0) {
+                return parts[1].trim();
+            }
+        } else if (testName.includes('#')) {
+            const parts = testName.split('#');
+            if (parts.length > 1 && parts[1].trim().length > 0) {
+                return parts[1].trim();
+            }
+        }
+    }
+
+    return '';
+}
+
 function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId) {
     currentActiveRowId = rowId || null;
     currentTestNameStr = testName || '';
@@ -1304,7 +1354,15 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     const nameEl = document.getElementById('sidePageTestName');
     const dsEl = document.getElementById('sidePageTestDataSet');
     const startTimeEl = document.getElementById('sidePageTestStartTimeVal');
-    if (nameEl) nameEl.innerText = testName;
+    
+    const resolvedMethod = resolveTestMethod(activeRow, null);
+    if (nameEl) {
+        if (resolvedMethod && currentTestNameStr && !currentTestNameStr.includes('::') && !currentTestNameStr.includes(resolvedMethod)) {
+            nameEl.innerText = `${currentTestNameStr} :: ${resolvedMethod}`;
+        } else {
+            nameEl.innerText = currentTestNameStr || testName;
+        }
+    }
     if (dsEl) dsEl.innerText = currentDataSetStr;
 
     if (startTimeEl) {
@@ -1337,6 +1395,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         const loc = activeRow?.getAttribute('data-location') || 'Unknown';
         const browser = activeRow?.getAttribute('data-browser') || 'Chrome';
         const testClass = activeRow?.getAttribute('data-test-name') || testName || '';
+        const testMethod = activeRow?.getAttribute('data-test-method') || '';
         const dataSetVal = activeRow?.getAttribute('data-dataset') || dataSet || '';
 
         const locBadge = document.getElementById('tbSideLocaleBadge');
@@ -1344,7 +1403,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         if (locBadge) locBadge.innerHTML = `<span class="material-symbols-outlined">location_on</span> ${loc}`;
         if (browserBadge) browserBadge.innerHTML = `<span class="material-symbols-outlined text-accent">language</span> ${browser}`;
 
-        loadTestBaseVariationHistory(testClass, dataSetVal, loc, browser);
+        loadTestBaseVariationHistory(testClass, testMethod, dataSetVal, loc, browser);
     } else {
         if (testBaseControls) testBaseControls.style.display = 'none';
         if (singleRunControls) singleRunControls.style.display = 'flex';
@@ -1359,7 +1418,10 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     if (panel) {
         const savedWidth = localStorage.getItem('aura_side_panel_width');
         if (savedWidth) {
-            panel.style.width = savedWidth + 'px';
+            const parsedWidth = parseInt(savedWidth, 10);
+            panel.style.width = (isTestBaseRow ? Math.max(920, parsedWidth) : parsedWidth) + 'px';
+        } else {
+            panel.style.width = '920px';
         }
         panel.classList.add('active');
     }
@@ -1525,7 +1587,11 @@ function renderStepsForExecution(activeRow) {
                         if (execDto.stepsJson) activeRow.setAttribute('data-steps', execDto.stepsJson);
                         if (execDto.localDataBindingsJson) activeRow.setAttribute('data-local-bindings', execDto.localDataBindingsJson);
                         if (execDto.playbookFile) activeRow.setAttribute('data-playbook-file', execDto.playbookFile);
+                        if (execDto.testMethod) activeRow.setAttribute('data-test-method', execDto.testMethod);
                         if (execDto.failure) activeRow.setAttribute('data-failure', execDto.failure);
+                        if (execDto.failureReason) activeRow.setAttribute('data-failure-reason', execDto.failureReason);
+                        if (execDto.failureStackTrace) activeRow.setAttribute('data-failure-stack-trace', execDto.failureStackTrace);
+                        if (execDto.visualRcaExplanation) activeRow.setAttribute('data-visual-rca-explanation', execDto.visualRcaExplanation);
                         if (execDto.durationMs) activeRow.setAttribute('data-duration-ms', execDto.durationMs);
                         if (execDto.durationFormatted) activeRow.setAttribute('data-duration-formatted', execDto.durationFormatted);
                         if (execDto.startTime) activeRow.setAttribute('data-start-time', execDto.startTime);
@@ -1557,12 +1623,12 @@ function renderStepsForExecution(activeRow) {
     const playbookFile = activeRow.getAttribute('data-playbook-file') || '';
     const failureText = activeRow.getAttribute('data-failure') || '';
 
-    // Update Top Error Card
+    // Update Top Error Card (Initial check from row data-failure attribute)
     const errorCard = document.getElementById('sidePageErrorDisplayCard');
     const errorTextEl = document.getElementById('sidePageErrorText');
     if (errorCard && errorTextEl) {
         if (failureText && failureText !== 'NONE' && failureText.trim().length > 0) {
-            errorTextEl.innerText = failureText;
+            errorTextEl.innerText = failureText.trim();
             errorCard.style.display = 'flex';
         } else {
             errorCard.style.display = 'none';
@@ -1730,6 +1796,56 @@ function renderStepsForExecution(activeRow) {
     const beforeSteps = blocksObj.before || [];
     const coreSteps = blocksObj.steps || [];
     const afterSteps = blocksObj.after || [];
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    const failureReason = activeRow.getAttribute('data-failure-reason') || blocksObj?.failureReason || '';
+    const failureStackTrace = activeRow.getAttribute('data-failure-stack-trace') || blocksObj?.failureStackTrace || '';
+    const visualRcaExplanation = activeRow.getAttribute('data-visual-rca-explanation') || blocksObj?.visualRcaExplanation || '';
+
+    if (errorCard && errorTextEl) {
+        const errorParts = [];
+        if (failureText && failureText !== 'NONE' && failureText.trim().length > 0) {
+            errorParts.push(failureText.trim());
+        }
+        if (failureReason && failureReason.trim().length > 0) {
+            errorParts.push(`Failure Reason:\n${failureReason.trim()}`);
+        }
+        if (visualRcaExplanation && visualRcaExplanation.trim().length > 0) {
+            errorParts.push(`Visual Root Cause Analysis (RCA):\n${visualRcaExplanation.trim()}`);
+        }
+
+        const allStackTraces = [];
+        if (failureStackTrace && failureStackTrace.trim().length > 0) {
+            allStackTraces.push(failureStackTrace.trim());
+        }
+
+        if (errorParts.length > 0 || allStackTraces.length > 0) {
+            let htmlContent = '';
+            if (errorParts.length > 0) {
+                htmlContent += `<div style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(errorParts.join('\n\n'))}</div>`;
+            }
+            if (allStackTraces.length > 0) {
+                const combinedTrace = allStackTraces.join('\n\n');
+                htmlContent += `
+                    <details class="error-stacktrace-collapsible">
+                        <summary class="error-stacktrace-summary">
+                            <span class="material-symbols-outlined" style="font-size: 0.95rem;">terminal</span>
+                            Failure Stack Trace
+                        </summary>
+                        <pre class="error-stacktrace-pre">${escapeHtml(combinedTrace)}</pre>
+                    </details>
+                `;
+            }
+            errorTextEl.innerHTML = htmlContent;
+            errorCard.style.display = 'flex';
+        } else {
+            errorCard.style.display = 'none';
+        }
+    }
 
     let html = '';
 
@@ -2129,8 +2245,16 @@ function renderStepsForExecution(activeRow) {
         return secHtml;
     }
 
+    const testMethod = resolveTestMethod(activeRow, blocksObj);
+    let coreSectionTitle = 'CORE EXECUTION STEPS';
+    if (testMethod && testMethod.trim().length > 0) {
+        const cleanMethod = testMethod.trim();
+        const formattedMethod = cleanMethod.endsWith('()') ? cleanMethod : `${cleanMethod}()`;
+        coreSectionTitle = `CORE EXECUTION STEPS &mdash; <span style="font-family: var(--font-mono); font-weight: normal; font-size: 0.85em; text-transform: none; color: var(--text-secondary);">${escapeHtml(formattedMethod)}</span>`;
+    }
+
     html += renderSection('BEFORE STEPS / SETUP', beforeSteps, 'before', 'play_arrow', 'var(--status-fixed)');
-    html += renderSection('CORE EXECUTION STEPS', coreSteps, 'core', 'checklist', 'var(--status-pass)');
+    html += renderSection(coreSectionTitle, coreSteps, 'core', 'checklist', 'var(--status-pass)');
     html += renderSection('AFTER STEPS / TEARDOWN', afterSteps, 'after', 'stop', 'var(--text-muted)');
 
     stepListEl.innerHTML = html;
@@ -2166,9 +2290,16 @@ function toggleStepActionInspector(stepCardEl) {
 
 function closeTestSidePagePanel() {
     const panel = document.getElementById('testSidePagePanel');
-    const resizer = document.getElementById('allurePanelResizer');
+    const resizer = document.getElementById('allurePanelResizer') || document.getElementById('panelResizer');
+    const varDrawer = document.getElementById('variationHistoryDrawer');
+    const varResizer = document.getElementById('variationHistoryResizer');
+
     if (panel) panel.classList.remove('active');
     if (resizer) resizer.classList.remove('active');
+    if (varDrawer) varDrawer.classList.remove('active');
+    if (varResizer) varResizer.classList.remove('active');
+
+    currentActiveRowId = null;
 
     document.querySelectorAll('tr.clickable-row').forEach(r => {
         r.classList.remove('selected', 'active-selected-row');
@@ -2376,6 +2507,12 @@ function bindGlobalListeners() {
         row.addEventListener('click', handleRowClick);
     });
 
+    // Close button listeners for side panel
+    document.querySelectorAll('.js-close-side-panel, .side-page-close').forEach(btn => {
+        btn.removeEventListener('click', closeTestSidePagePanel);
+        btn.addEventListener('click', closeTestSidePagePanel);
+    });
+
     // Synchronize sidebar active tab highlighting
     const isTestBase = document.getElementById('pageTestBase') !== null;
     const navRuns = document.getElementById('navRunsList');
@@ -2581,6 +2718,16 @@ function handleRowClick(e) {
 
     const isTestBasePage = document.getElementById('pageTestBase') !== null || row.closest('#pageTestBase') !== null;
 
+    const panel = document.getElementById('testSidePagePanel');
+    const varDrawer = document.getElementById('variationHistoryDrawer');
+    const isAlreadyOpenForThisRow = (panel && panel.classList.contains('active') && (currentActiveRowId === rowId || row.classList.contains('selected'))) ||
+                                   (varDrawer && varDrawer.classList.contains('active') && (currentActiveRowId === rowId || row.classList.contains('selected')));
+
+    if (isTestBasePage && isAlreadyOpenForThisRow) {
+        closeTestSidePagePanel();
+        return;
+    }
+
     if (rowId) {
         lastHandledTargetExecutionId = rowId;
     }
@@ -2596,6 +2743,7 @@ function handleRowClick(e) {
         }
     }
 
+    closeTestSidePagePanel();
     openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId);
 }
 
@@ -2929,13 +3077,25 @@ function escapeTextHelper(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function loadTestBaseVariationHistory(testClass, dataSet, location, browser) {
+function loadTestBaseVariationHistory(testClass, testMethod, dataSet, location, browser) {
+    let methodVal = testMethod;
+    let dataSetVal = dataSet;
+    let locVal = location;
+    let browserVal = browser;
+
+    if (arguments.length === 4) {
+        methodVal = '';
+        dataSetVal = arguments[1];
+        locVal = arguments[2];
+        browserVal = arguments[3];
+    }
+
     const tbody = document.getElementById('tbVariationHistoryTableBody');
     if (!tbody) return;
 
     tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted p-3" style="font-size: 0.82rem;"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Loading execution history...</td></tr>';
 
-    const url = `/fragments/test-base/variation-history?testClass=${encodeURIComponent(testClass)}&dataSet=${encodeURIComponent(dataSet)}&location=${encodeURIComponent(location)}&browser=${encodeURIComponent(browser)}`;
+    const url = `/fragments/test-base/variation-history?testClass=${encodeURIComponent(testClass || '')}&testMethod=${encodeURIComponent(methodVal || '')}&dataSet=${encodeURIComponent(dataSetVal || '')}&location=${encodeURIComponent(locVal || '')}&browser=${encodeURIComponent(browserVal || '')}`;
 
     fetch(url, { headers: { 'HX-Request': 'true' } })
         .then(res => res.text())

@@ -67,7 +67,10 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
     @BeforeEach
     public void setup(final TestInfo testInfo)
     {
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
 

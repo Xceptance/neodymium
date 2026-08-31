@@ -52,6 +52,7 @@ import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.util.ScreenshotHasher;
 
@@ -329,6 +330,52 @@ public class ExecuteActionsStepTest
         assertNotNull(finishedEventRef.get(), "StepFinishedEvent must be dispatched when visual gate bypasses step");
         assertEquals(PlaybookStepStatus.SUCCESS, finishedEventRef.get().getStatus());
         assertEquals(visualStep, finishedEventRef.get().getStep());
+    }
+
+    @Test
+    public void testVisualRichEscalationStaysOnVisualRichAndAbortsAfterThreeAttempts() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", "dummy-base64");
+        final MockSutState visualState = new MockSutState("<html><body>Content</body></html>", List.of(screenshot), "hash-1");
+        for (int i = 0; i < 10; i++)
+        {
+            executor.enqueueState(visualState);
+        }
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        // 1. PESAP predicts VISUAL_RICH
+        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL_RICH\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
+        // 2-5. Action extraction requests escalation on VISUAL_RICH repeatedly
+        for (int i = 0; i < 5; i++)
+        {
+            mockProvider.addResponse(new LlmResponse("{\"status\": \"ESCALATE\", \"reasoning\": \"Cannot resolve visually\"}", new TokenUsage(200, 30, 230, 0), "mock-model"));
+        }
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.LLM_RECORDING);
+
+        final PlaybookStep step = new PlaybookStep();
+        step.setInstruction("Look at complex interactive chart (visual)");
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        context.pushStep(pipelineStep);
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        final org.neodymium.ai.pipeline.DivergenceException ex = assertThrows(org.neodymium.ai.pipeline.DivergenceException.class, runner::run);
+
+        assertTrue(ex.getMessage().contains("Cannot resolve visually"));
+        assertEquals(org.neodymium.ai.model.ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
 
     private static String encodeToBase64(final BufferedImage image) throws IOException

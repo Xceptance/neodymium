@@ -134,4 +134,167 @@ public class DefaultActionSanitizerTest
         Assertions.assertEquals("#item1-input", sanitized.getTarget(), "Target selector #item1-input should NOT be corrupted into #item${qty}-input.");
         Assertions.assertEquals("${password}", sanitized.getValues().get(0), "Sensitive value should be parameterized into ${password}.");
     }
+
+    @Test
+    public void testSanitizeTextWithCompoundVariablesAndDynamicSeed()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("random", "95089506", false);
+        sessionData.putDynamic("email", "john.doe.us.${random}@example.com", false);
+        sessionData.putDynamic("password", "Password123!", true);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final String rawInstruction = "Type \"john.doe.us.95089506@example.com\" into the email address field";
+        final String sanitized = sanitizer.sanitizeText(rawInstruction, sessionData);
+
+        Assertions.assertEquals("Type \"${email}\" into the email address field", sanitized);
+
+        final String rawCompound = "Type \"john.doe.us.95089506@example.com\" into the email address field, \"Password123!\" into the password field and \"Password123!\" into the confirm password field.";
+        final String sanitizedCompound = sanitizer.sanitizeText(rawCompound, sessionData);
+
+        Assertions.assertEquals("Type \"${email}\" into the email address field, \"${password}\" into the password field and \"${password}\" into the confirm password field.", sanitizedCompound);
+    }
+
+    @Test
+    public void testSanitizeActionStepInstruction()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("random", "95089506", false);
+        sessionData.putDynamic("email", "john.doe.us.${random}@example.com", false);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action rawAction = new Action(
+            "TYPE",
+            "#email",
+            List.of("john.doe.us.95089506@example.com"),
+            "Type email into email input",
+            "Reasoning"
+        );
+        rawAction.setStepInstruction("Type \"john.doe.us.95089506@example.com\" into the email address field");
+
+        final Action sanitized = sanitizer.sanitize(rawAction, sessionData);
+
+        Assertions.assertEquals("${email}", sanitized.getValues().get(0));
+        Assertions.assertEquals("Type \"${email}\" into the email address field", sanitized.getStepInstruction());
+    }
+
+    @Test
+    public void testSanitizeTextIgnoresInternalFrameworkProperties()
+    {
+        final String sysPropKey = "neodymium.junit.viewmode";
+        final String sysPropVal = "headless";
+        System.setProperty(sysPropKey, sysPropVal);
+
+        try
+        {
+            final SessionData sessionData = new SessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+            final String text = "Running browser in headless mode";
+            final String sanitized = sanitizer.sanitizeText(text, sessionData);
+
+            Assertions.assertEquals("Running browser in headless mode", sanitized);
+        }
+        finally
+        {
+            System.clearProperty(sysPropKey);
+        }
+    }
+
+    @Test
+    public void testSanitizeTargetWithStepInstructionPlaceholders()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("verla.url", "https://localhost:8543", false);
+        sessionData.putDynamic("quality", "perfect", false);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action rawAction = new Action(
+            "NAVIGATE",
+            "https://localhost:8543/verla-perfect/index.html",
+            List.of("https://localhost:8543/verla-perfect/index.html"),
+            "Open https://localhost:8543/verla-perfect/index.html",
+            "Reasoning"
+        );
+        rawAction.setStepInstruction("Open ${verla.url}/verla-${quality}/index.html");
+
+        final Action sanitized = sanitizer.sanitize(rawAction, sessionData);
+
+        Assertions.assertEquals("${verla.url}/verla-${quality}/index.html", sanitized.getTarget());
+        Assertions.assertEquals("${verla.url}/verla-${quality}/index.html", sanitized.getValues().get(0));
+        Assertions.assertEquals("Open ${verla.url}/verla-${quality}/index.html", sanitized.getDescription());
+    }
+
+    @Test
+    public void testSanitizeTargetDoesNotCorruptWithUnreferencedSystemOrEnvVariables()
+    {
+        final String sysPropKey = "user.name";
+        final String origProp = System.getProperty(sysPropKey);
+
+        try
+        {
+            System.setProperty(sysPropKey, "verla");
+
+            final SessionData sessionData = new SessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+            final Action rawAction = new Action(
+                "NAVIGATE",
+                "https://localhost:8543/verla-perfect/index.html",
+                List.of("https://localhost:8543/verla-perfect/index.html"),
+                "Navigate to index",
+                "Reasoning"
+            );
+            rawAction.setStepInstruction("Open https://localhost:8543/verla-perfect/index.html");
+
+            final Action sanitized = sanitizer.sanitize(rawAction, sessionData);
+
+            Assertions.assertEquals("https://localhost:8543/verla-perfect/index.html", sanitized.getTarget(),
+                "Target URL should NOT be corrupted with unreferenced system property 'user.name'.");
+        }
+        finally
+        {
+            if (origProp != null)
+            {
+                System.setProperty(sysPropKey, origProp);
+            }
+        }
+    }
+
+    @Test
+    public void testSanitizeActionWithExplicitStepVariablesAndSensitivePassword()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("email", "test.user@example.com", false);
+        sessionData.putDynamic("password", "SecretPass123!", true);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action emailAction = new Action(
+            "TYPE",
+            "#email",
+            List.of("test.user@example.com"),
+            "Type test.user@example.com into email",
+            "Reasoning"
+        );
+        emailAction.setStepInstruction("Type \"${email}\" into email and \"${password}\" into password");
+
+        final Action passwordAction = new Action(
+            "TYPE",
+            "#password",
+            List.of("SecretPass123!"),
+            "Type password into password input",
+            "Reasoning"
+        );
+        passwordAction.setStepInstruction("Type \"${email}\" into email and \"${password}\" into password");
+
+        final Action sanitizedEmail = sanitizer.sanitize(emailAction, sessionData);
+        final Action sanitizedPassword = sanitizer.sanitize(passwordAction, sessionData);
+
+        Assertions.assertEquals("${email}", sanitizedEmail.getValues().get(0));
+        Assertions.assertEquals("${password}", sanitizedPassword.getValues().get(0));
+    }
 }

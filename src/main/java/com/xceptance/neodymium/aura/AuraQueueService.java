@@ -391,7 +391,7 @@ public final class AuraQueueService
                             {
                                 idFilterBuilder.append("^(");
                             }
-                            idFilterBuilder.append(Pattern.quote(ids.get(j)));
+                            idFilterBuilder.append(ids.get(j).replaceAll("([\\\\.*+?^${}()|\\[\\]])", "\\\\$1"));
                             hasIds = true;
                         }
                     }
@@ -404,9 +404,22 @@ public final class AuraQueueService
                             + "]...");
 
                     final List<String> command = new ArrayList<>();
-                    final String runId = "run-" + System.currentTimeMillis();
+                    final String runId = "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
                     final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
                     interactiveService.setCurrentConsoleEngine(engine);
+
+                    final List<File> runStorageDirs = List.of(
+                        new File("storage/runs", runId),
+                        new File(AiConfiguration.getInstance().getConsoleExecutionLogsDirectory(), runId)
+                    );
+                    for (final File runDir : runStorageDirs)
+                    {
+                        if (!runDir.exists())
+                        {
+                            runDir.mkdirs();
+                        }
+                    }
+
                     if (req.interactive)
                     {
                         broadcastInteractiveConsoleReady("/interactive_console.html");
@@ -451,6 +464,7 @@ public final class AuraQueueService
                     command.add("-Dneodymium.managerActive=true");
                     command.add("-Dneodymium.aura.test=" + System.getProperty("neodymium.aura.test", "false"));
                     command.add("-Dneodymium.managerRunId=" + runId);
+                    command.add("-Dneodymium.runId=" + runId);
                     command.add("-Dneodymium.managerUrl=http://localhost:" + serverPort);
                     command.add("-Dfile.encoding=UTF-8");
                     command.add("-Dsun.stdout.encoding=UTF-8");
@@ -618,6 +632,34 @@ public final class AuraQueueService
 
                     completedFiles.add(file);
                     activeProcess.set(null);
+
+                    final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
+                    final String statusStr = (exitCode == 0) ? "passed" : "failed";
+
+                    for (final File baseDir : runStorageDirs)
+                    {
+                        final File classDir = new File(baseDir, className);
+                        if (!classDir.exists())
+                        {
+                            classDir.mkdirs();
+                        }
+                        final File execJson = new File(classDir, "console-execution-1.json");
+                        if (!execJson.exists())
+                        {
+                            final String fallbackJson = String.format(
+                                "{\"runId\":\"%s\",\"status\":\"%s\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\"}",
+                                runId, statusStr, className, primaryBrowser, new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new java.util.Date())
+                            );
+                            try
+                            {
+                                Files.writeString(execJson.toPath(), fallbackJson, StandardCharsets.UTF_8);
+                            }
+                            catch (final Exception e)
+                            {
+                                LOGGER.warn("[Aura Server] Could not write fallback execution snapshot to {}: {}", baseDir.getPath(), e.getMessage());
+                            }
+                        }
+                    }
                 }
 
                 if (!manuallyStopped.get())

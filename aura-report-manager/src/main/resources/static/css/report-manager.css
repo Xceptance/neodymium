@@ -308,7 +308,23 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .table-responsive { overflow-x: auto; }
 table.aura-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
 table.history-table { table-layout: fixed; width: 100%; }
-table.history-table th, table.history-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.history-table th, table.history-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.25rem 0.4rem !important; }
+table.history-table .btn-fake-link {
+    padding: 0.15rem 0.3rem !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 0.8rem !important;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+table.history-table .btn-fake-link:hover {
+    background: #eff6ff !important;
+    color: #1d4ed8 !important;
+    text-decoration: underline !important;
+}
 table.aura-table th { background-color: #f1f5f9; color: var(--text-muted); font-weight: 600; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
 table.aura-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-main); vertical-align: middle; }
 table.aura-table tr.clickable-row { cursor: pointer; transition: background 0.2s; }
@@ -398,7 +414,7 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .panel-resizer::after { content: ''; width: 3px; height: 36px; background: #cbd5e1; border-radius: 2px; transition: background 0.2s, height 0.2s; }
 .panel-resizer:hover::after, .panel-resizer.is-resizing::after { background: #2563eb; height: 60px; width: 4px; }
 
-.allure-side-page-panel { width: 720px; min-width: 320px; max-width: calc(100vw - 320px); flex-shrink: 0; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); display: none; flex-direction: column; overflow: hidden; animation: slideInRight 0.2s ease-out; }
+.allure-side-page-panel { width: 920px; min-width: 320px; max-width: calc(100vw - 320px); flex-shrink: 0; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); display: none; flex-direction: column; overflow: hidden; animation: slideInRight 0.2s ease-out; }
 .allure-side-page-panel.active { display: flex; }
 @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 
@@ -436,6 +452,10 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .step-error-box-top { background: #fff5f5; border: 1px solid #fca5a5; border-radius: var(--radius-md); padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.825rem; animation: fadeIn 0.2s ease; margin-top: 0.2rem; }
 .error-box-top-header { font-weight: 800; font-size: 0.8rem; color: #dc2626; display: flex; align-items: center; justify-content: space-between; text-transform: uppercase; letter-spacing: 0.04em; }
 .error-box-top-text { font-family: var(--font-mono); font-size: 0.78rem; color: #991b1b; white-space: pre-wrap; word-break: break-word; background: #ffffff; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 0.65rem 0.75rem; margin: 0; user-select: text; }
+.error-stacktrace-collapsible { margin-top: 0.5rem; border: 1px solid #fecaca; border-radius: var(--radius-sm); background: #ffffff; overflow: hidden; font-family: var(--font-family); }
+.error-stacktrace-summary { cursor: pointer; padding: 0.45rem 0.65rem; font-weight: 700; color: #b91c1c; font-size: 0.78rem; user-select: none; display: flex; align-items: center; gap: 0.35rem; background: #fef2f2; transition: background 0.15s; }
+.error-stacktrace-summary:hover { background: #fee2e2; }
+.error-stacktrace-pre { margin: 0; padding: 0.65rem 0.75rem; border-top: 1px solid #fecaca; background: #fff1f2; color: #991b1b; font-family: var(--font-mono); font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; max-height: 250px; overflow-y: auto; }
 
 /* IGNORED REASON BOX STYLING */
 .step-ignored-box-top { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: var(--radius-md); padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.825rem; animation: fadeIn 0.2s ease; margin-top: 0.2rem; }

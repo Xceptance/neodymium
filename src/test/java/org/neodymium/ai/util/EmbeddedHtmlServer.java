@@ -71,6 +71,7 @@ public final class EmbeddedHtmlServer
     private final HttpsServer httpsServer;
     private final int port;
     private final int httpsPort;
+    private volatile boolean running = false;
 
     // --- VÉRLA E-Commerce Domain Models ---
     
@@ -297,45 +298,240 @@ public final class EmbeddedHtmlServer
 
     // --- VÉRLA Store In-Memory Databases ---
 
-    private static final Map<String, User> usersDb = new ConcurrentHashMap<>();
-    private static final Map<String, String> activeSessions = new ConcurrentHashMap<>();
-    private static final Map<String, Cart> activeCarts = new ConcurrentHashMap<>();
-    private static final Map<String, Order> ordersDb = new ConcurrentHashMap<>();
+    // --- VÉRLA Store Prototype Catalog & Static Configuration ---
 
     private static CatalogConfig catalogConfig;
     private static final List<Product> catalogProducts = new ArrayList<>();
-    private static final Map<String, Map<String, Integer>> productInventory = new ConcurrentHashMap<>();
     private static final Map<String, Country> countriesMap = new HashMap<>();
-    private static final Random SEEDED_RANDOM = new Random(42L);
 
     static
     {
-        // Pre-load default test user
-        final User defaultUser = new User("johndoe@example.com", "topsecret");
-        defaultUser.addresses.add(new Address("addr-default", "123 Main St", "Boston", "MA", "02108", "US"));
-        defaultUser.cards.add(new Card("card-default", "1111222233334100", "Visa", "12/29", "123"));
-        usersDb.put(defaultUser.email, defaultUser);
-        
         loadCatalogData();
     }
 
+    // --- VÉRLA Store Instance-Scoped In-Memory Databases ---
+
+    private final Map<String, User> usersDb = new ConcurrentHashMap<>();
+    private final Map<String, String> activeSessions = new ConcurrentHashMap<>();
+    private final Map<String, Cart> activeCarts = new ConcurrentHashMap<>();
+    private final Map<String, Order> ordersDb = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, Integer>> productInventory = new ConcurrentHashMap<>();
+    private final Random seededRandom = new Random(42L);
+
+    private static volatile EmbeddedHtmlServer lastInstance;
+
     /**
-     * Resets product inventory levels to initial values, resets seeded random, and clears active carts/orders.
+     * Resets product inventory levels to initial values and resets seeded random on this server instance.
      */
-    public static void resetInventory()
+    public void resetInventory()
     {
-        SEEDED_RANDOM.setSeed(42L);
-        productInventory.clear();
+        this.seededRandom.setSeed(42L);
+        this.productInventory.clear();
         for (final Product p : catalogProducts)
         {
             if (p.initialStock != null)
             {
-                productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
+                this.productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
             }
         }
-        activeCarts.clear();
-        ordersDb.clear();
-        LOG.info("VÉRLA Product inventory, carts, and random seed reset to initial state.");
+        LOG.info("VÉRLA Product inventory and random seed reset to initial state on server port {}.", this.port);
+    }
+
+    /**
+     * Clears active shopping carts on this server instance.
+     */
+    public void resetCarts()
+    {
+        this.activeCarts.clear();
+        LOG.info("VÉRLA active carts reset on server port {}.", this.port);
+    }
+
+    /**
+     * Clears placed orders on this server instance.
+     */
+    public void resetOrders()
+    {
+        this.ordersDb.clear();
+        LOG.info("VÉRLA orders database reset on server port {}.", this.port);
+    }
+
+    /**
+     * Clears all active authenticated sessions on this server instance.
+     */
+    public void resetSessions()
+    {
+        this.activeSessions.clear();
+        LOG.info("VÉRLA active sessions reset on server port {}.", this.port);
+    }
+
+    /**
+     * Resets registered users back to the default test user on this server instance.
+     */
+    public void resetUsers()
+    {
+        this.usersDb.clear();
+        final User defaultUser = new User("johndoe@example.com", "topsecret");
+        defaultUser.addresses.add(new Address("addr-default", "123 Main St", "Boston", "MA", "02108", "US"));
+        defaultUser.cards.add(new Card("card-default", "1111222233334100", "Visa", "12/29", "123"));
+        this.usersDb.put(defaultUser.email, defaultUser);
+        LOG.info("VÉRLA users database reset to default test user on server port {}.", this.port);
+    }
+
+    /**
+     * Resets all server state (inventory, carts, orders, sessions, and users) on this server instance.
+     */
+    public void resetAll()
+    {
+        resetInventory();
+        resetCarts();
+        resetOrders();
+        resetSessions();
+        resetUsers();
+        LOG.info("VÉRLA full server state (inventory, carts, orders, sessions, users) reset on server port {}.", this.port);
+    }
+
+    /**
+     * Alias for {@link #resetAll()} to reset full server state.
+     */
+    public void resetState()
+    {
+        resetAll();
+    }
+
+    /**
+     * Static compatibility delegate to reset inventory on the most recently created server instance.
+     */
+    public static void resetInventoryStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetInventory();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset carts on the most recently created server instance.
+     */
+    public static void resetCartsStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetCarts();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset orders on the most recently created server instance.
+     */
+    public static void resetOrdersStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetOrders();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset sessions on the most recently created server instance.
+     */
+    public static void resetSessionsStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetSessions();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset users on the most recently created server instance.
+     */
+    public static void resetUsersStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetUsers();
+        }
+    }
+
+    /**
+     * Static compatibility delegate to reset all server state on the most recently created server instance.
+     */
+    public static void resetAllStatic()
+    {
+        final EmbeddedHtmlServer instance = lastInstance;
+        if (instance != null)
+        {
+            instance.resetAll();
+        }
+    }
+
+    /**
+     * Checks if a user is registered in the server's user database.
+     *
+     * @param email the user email to check
+     * @return true if the user exists, false otherwise
+     */
+    public boolean hasUser(final String email)
+    {
+        return email != null && this.usersDb.containsKey(email);
+    }
+
+    /**
+     * Adds or overrides a user in the server's user database for test setup.
+     *
+     * @param user the user to add
+     */
+    public void addUser(final User user)
+    {
+        if (user != null && user.email != null)
+        {
+            this.usersDb.put(user.email, user);
+        }
+    }
+
+    /**
+     * Gets the count of registered users.
+     *
+     * @return registered users count
+     */
+    public int getUserCount()
+    {
+        return this.usersDb.size();
+    }
+
+    /**
+     * Gets the count of active carts.
+     *
+     * @return active carts count
+     */
+    public int getCartCount()
+    {
+        return this.activeCarts.size();
+    }
+
+    /**
+     * Gets the count of placed orders.
+     *
+     * @return placed orders count
+     */
+    public int getOrderCount()
+    {
+        return this.ordersDb.size();
+    }
+
+    /**
+     * Gets the count of active sessions.
+     *
+     * @return active sessions count
+     */
+    public int getSessionCount()
+    {
+        return this.activeSessions.size();
     }
 
     /**
@@ -380,12 +576,6 @@ public final class EmbeddedHtmlServer
             final List<Product> generated = generateCatalogProducts(catalogConfig);
             catalogProducts.clear();
             catalogProducts.addAll(generated);
-
-            productInventory.clear();
-            for (final Product p : catalogProducts)
-            {
-                productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
-            }
             LOG.info("VÉRLA Dynamic catalog loaded. Generated {} localized products.", catalogProducts.size());
         }
         catch (final Exception e)
@@ -537,7 +727,7 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    private static String getProductSizesSelectHtml(final String productId, final String category, final Map<String, String> trans, final String quality)
+    private String getProductSizesSelectHtml(final String productId, final String category, final Map<String, String> trans, final String quality)
     {
         if ("accessories".equals(category))
         {
@@ -799,9 +989,19 @@ public final class EmbeddedHtmlServer
      */
     public EmbeddedHtmlServer(final int httpPort, final int httpsPort) throws IOException
     {
+        lastInstance = this;
+
+        // Pre-load default test user for this instance
+        final User defaultUser = new User("johndoe@example.com", "topsecret");
+        defaultUser.addresses.add(new Address("addr-default", "123 Main St", "Boston", "MA", "02108", "US"));
+        defaultUser.cards.add(new Card("card-default", "1111222233334100", "Visa", "12/29", "123"));
+        this.usersDb.put(defaultUser.email, defaultUser);
+
         this.server = createHttpServerWithFallback(httpPort);
         this.port = this.server.getAddress().getPort();
         
+        resetInventory();
+
         final ResourceHandler resourceHandler = new ResourceHandler();
         final VerlaHandler verlaHandler = new VerlaHandler();
 
@@ -855,20 +1055,35 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    public void start()
+    public synchronized void start()
     {
+        if (this.running)
+        {
+            return;
+        }
         LOG.info("Starting embedded HTML HTTP server on port {}", port);
         server.start();
         LOG.info("Starting embedded HTML HTTPS server on port {}", httpsPort);
         httpsServer.start();
+        this.running = true;
     }
 
-    public void stop()
+    public synchronized void stop()
     {
+        if (!this.running)
+        {
+            return;
+        }
         LOG.info("Stopping embedded HTML HTTP server on port {}", port);
         server.stop(0);
         LOG.info("Stopping embedded HTML HTTPS server on port {}", httpsPort);
         httpsServer.stop(0);
+        this.running = false;
+    }
+
+    public boolean isRunning()
+    {
+        return this.running;
     }
 
     public int getPort()
@@ -1042,7 +1257,7 @@ public final class EmbeddedHtmlServer
      * VÉRLA Handler: Handles e-commerce path routing, dynamic template rendering,
      * cookies, localization, HTMX infinite scroll page loading, auth, cart, checkout actions.
      */
-    private static final class VerlaHandler implements HttpHandler
+    private final class VerlaHandler implements HttpHandler
     {
         @Override
         public void handle(final HttpExchange exchange) throws IOException
@@ -1851,14 +2066,14 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    private static String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
+    private String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
                                          final Country country, final Map<String, String> trans, final User user,
                                          final Cart cart, final String requestUri, final boolean isHtmx)
     {
         return renderTemplate(quality, pageName, customModel, country, trans, user, cart, requestUri, isHtmx, null, false);
     }
 
-    private static String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
+    private String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
                                          final Country country, final Map<String, String> trans, final User user,
                                          final Cart cart, final String requestUri, final boolean isHtmx,
                                          final String hxTarget, final boolean isPwaRouter)
@@ -2456,9 +2671,9 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    private static String getDynamicId(final String prefix)
+    private String getDynamicId(final String prefix)
     {
-        final int rand = 100000 + SEEDED_RANDOM.nextInt(900000);
+        final int rand = 100000 + this.seededRandom.nextInt(900000);
         return prefix + "-" + rand;
     }
 
@@ -2489,7 +2704,7 @@ public final class EmbeddedHtmlServer
 
     private static final String TW_COUNTRY_ITEM = "flex cursor-pointer items-center justify-between px-4 py-3 text-sm transition-colors [&:not(:last-child)]:border-b [&:not(:last-child)]:border-sand-200 hover:bg-sand-50 hover:font-medium hover:text-terracotta-500 data-[selected=true]:bg-sand-50 data-[selected=true]:font-medium data-[selected=true]:text-terracotta-500";
 
-    private static String renderProductCard(final Product p, final Country country, final Map<String, String> trans, final String quality)
+    private String renderProductCard(final Product p, final Country country, final Map<String, String> trans, final String quality)
     {
         final double basePrice = p.basePrice;
         final Double salePrice = p.salePrice;
@@ -2724,7 +2939,7 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    private static String renderProductCardInfinite(final Product p, final Country country, final Map<String, String> trans, final String quality, final String nextUrl)
+    private String renderProductCardInfinite(final Product p, final Country country, final Map<String, String> trans, final String quality, final String nextUrl)
     {
         // Wrap normal card in hx-get revealed trigger tag
         final String normalCard = renderProductCard(p, country, trans, quality);
@@ -2733,12 +2948,12 @@ public final class EmbeddedHtmlServer
         return "<div hx-get=\"" + nextUrl + "\" hx-trigger=\"revealed\" hx-swap=\"afterend\">" + normalCard + "</div>";
     }
 
-    private static String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
+    private String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
     {
         return getCartBadgeWrapperHtml(cart, trans, country, quality, false);
     }
 
-    private static String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
+    private String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
         final int count = cart.items.values().stream().mapToInt(Integer::intValue).sum();
         final String dropdownHtml = getCartDropdownHtml(cart, trans, country, quality, showTemp);
@@ -2793,12 +3008,12 @@ public final class EmbeddedHtmlServer
                "</div>";
     }
 
-    private static String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
+    private String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
     {
         return getCartDropdownHtml(cart, trans, country, quality, false);
     }
 
-    private static String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
+    private String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
         if (isTailwindByClaude(quality))
         {
@@ -2870,7 +3085,7 @@ public final class EmbeddedHtmlServer
      * group-hover plus a data-show attribute that the layout script flips after an
      * add-to-cart swap, so no stateful CSS class is needed.
      */
-    private static String getCartDropdownHtmlTailwind(final Cart cart, final Map<String, String> trans, final Country country, final boolean showTemp)
+    private String getCartDropdownHtmlTailwind(final Cart cart, final Map<String, String> trans, final Country country, final boolean showTemp)
     {
         final StringBuilder sb = new StringBuilder();
         sb.append("<div data-cart-dropdown data-show=\"").append(showTemp ? "true" : "false").append("\" id=\"cart-dropdown-panel\"")
@@ -2925,12 +3140,12 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
-    private static String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality)
+    private String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality)
     {
         return getCartContentHtml(cart, country, trans, quality, null);
     }
 
-    private static String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality, final String couponError)
+    private String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality, final String couponError)
     {
         if (isTailwindByClaude(quality))
         {
@@ -3303,7 +3518,7 @@ public final class EmbeddedHtmlServer
     }
 
     /** Cart page for the Tailwind SUT: utility classes only, no inline styles. */
-    private static String getCartContentHtmlTailwind(final Cart cart, final Country country, final Map<String, String> trans, final String couponError)
+    private String getCartContentHtmlTailwind(final Cart cart, final Country country, final Map<String, String> trans, final String couponError)
     {
         if (cart.items.isEmpty())
         {
@@ -3444,7 +3659,7 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
-    private static String getAddressFieldsHtml(final String countryCode, final String locale, final Map<String, String> trans, final String prefix, final String quality)
+    private String getAddressFieldsHtml(final String countryCode, final String locale, final Map<String, String> trans, final String prefix, final String quality)
     {
         // The Tailwind SUT swaps every semantic form class for its utility equivalent;
         // the field structure itself is identical across variants.

@@ -54,11 +54,38 @@ public final class TestBaseVariationHistoryDto
         this.executionId = executionId != null ? executionId : "";
         this.batchName = batchName != null ? batchName : "Unknown";
         this.engine = engine != null ? engine : "Java";
-        this.timestamp = timestamp != null ? timestamp : "Recently";
+        this.timestamp = formatTimestamp(timestamp);
         this.status = status != null ? status : "passed-clean";
         this.statusClass = statusClass != null ? statusClass : "badge-pass";
         this.statusLabel = statusLabel != null ? statusLabel : "PASSED";
         this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
+    }
+
+    private static String formatTimestamp(final String raw)
+    {
+        if (raw == null || raw.trim().isEmpty() || "Recently".equalsIgnoreCase(raw.trim()))
+        {
+            return "Recently";
+        }
+        final String trimmed = raw.trim();
+        try
+        {
+            final java.time.Instant instant = java.time.Instant.parse(trimmed);
+            final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
+            return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        }
+        catch (final Exception e1)
+        {
+            try
+            {
+                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(trimmed.replace(" ", "T"));
+                return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            }
+            catch (final Exception e2)
+            {
+                return trimmed;
+            }
+        }
     }
 
     public TestBaseVariationHistoryDto(

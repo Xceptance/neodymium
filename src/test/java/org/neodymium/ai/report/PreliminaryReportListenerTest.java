@@ -41,6 +41,7 @@ import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.diagnostic.DiagnosticWarningEvent;
@@ -74,6 +75,26 @@ public class PreliminaryReportListenerTest
     public void resetContext()
     {
         ExecutionContext.setActiveContext(null);
+    }
+
+    @Test
+    @DisplayName("Verify that index generation handles unmappable characters safely")
+    public void testIndexGenerationHandlesUnmappableSurrogatesSafely() throws Exception
+    {
+        final Path testDir = tempFolder.resolve("surrogate-reports");
+        Files.createDirectories(testDir);
+
+        final TestExecutionReport reportWithSurrogate = new TestExecutionReport();
+        reportWithSurrogate.setTestName("SurrogateTest");
+        reportWithSurrogate.setStatus("FAILED");
+        reportWithSurrogate.setFailureReason("Malformed character \uD83D (lone surrogate) in output");
+        reportWithSurrogate.setStartTimeMs(System.currentTimeMillis());
+
+        final HtmlIndexReportGenerator generator = new HtmlIndexReportGenerator();
+        generator.updateIndex(testDir, reportWithSurrogate, "SurrogateTest_20260826-000000");
+
+        final Path indexPath = testDir.resolve("index.html");
+        assertTrue(Files.exists(indexPath), "index.html must be generated even with lone surrogate characters");
     }
 
     @Test
@@ -448,6 +469,10 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new StepStartedEvent(subStep1, 0));
         final Action act1 = new Action("CLEAR", "#couponCode", Collections.emptyList(), "Clear coupon", "Input reset");
         bus.dispatch(new ActionExecutedEvent(act1, true));
+        final String fakeBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        final SutAttachment attachment = new SutAttachment("image/png", null, fakeBase64);
+        final MockSutState state = new MockSutState("<html><body>Coupon</body></html>", List.of(attachment), "hash123");
+        bus.dispatch(new StateCapturedEvent(state));
         bus.dispatch(new StepFinishedEvent(subStep1, PlaybookStepStatus.SUCCESS));
 
         // Sub-step 2
@@ -457,6 +482,9 @@ public class PreliminaryReportListenerTest
         bus.dispatch(new StepStartedEvent(subStep2, 0));
         final Action act2 = new Action("TYPE", "#couponCode", List.of("FREEGIFT"), "Type coupon code", "Apply promo");
         bus.dispatch(new ActionExecutedEvent(act2, true));
+        final LlmRequest subLlmReq = new LlmRequest("Action Execution", "Perform type...", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse subLlmResp = new LlmResponse("{\"action\":\"TYPE\"}", new TokenUsage(100, 20, 120, 50), "gemini-3.5-flash");
+        bus.dispatch(new LlmResponseReceivedEvent(subLlmReq, subLlmResp, 90, "Standard"));
         bus.dispatch(new StepFinishedEvent(subStep2, PlaybookStepStatus.SUCCESS));
 
         // Parent step finished (all sub-steps passed)
@@ -472,6 +500,11 @@ public class PreliminaryReportListenerTest
         assertTrue(html.contains("sub-steps-container"), "HTML report must contain sub-steps container");
         assertTrue(html.contains("#1.1"), "HTML report must show sub-step 1.1");
         assertTrue(html.contains("#1.2"), "HTML report must show sub-step 1.2");
+        assertTrue(html.contains("sub-step-footer"), "HTML report must render sub-step-footer for sub-steps with actions/screenshots/LLM calls");
+        assertTrue(html.contains("1 action(s)"), "HTML report must display action count tags for sub-steps");
+        assertTrue(html.contains("1 screenshot(s)"), "HTML report must display screenshot count tags for sub-steps");
+        assertTrue(html.contains("1 LLM call(s)"), "HTML report must display LLM call count tags for sub-steps");
+        assertTrue(html.contains("preview-thumb"), "HTML report must render screenshot preview thumbnails for sub-steps");
         assertTrue(html.contains("btn-toggle-inspector"), "HTML report must contain toggle inspector button");
 
         final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
@@ -1073,4 +1106,187 @@ public class PreliminaryReportListenerTest
         assertTrue(md.contains("https://localhost:8543/index.html (Tpl: ${verla.url}/index.html)"));
         assertTrue(md.contains("john_doe (Tpl: ${user})"));
     }
+
+    @Test
+    @DisplayName("Verify PreliminaryReportListener default constructor resolves configured disk report directory")
+    public void testDefaultConstructorUsesConfiguredDiskReportDirectory() throws Exception
+    {
+        final Path customDir = this.tempFolder.resolve("custom-ai-reports");
+        System.setProperty("neodymium.ai.report.disk.directory", customDir.toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final PreliminaryReportListener listener = new PreliminaryReportListener();
+            listener.getReport().setTestClass("org.neodymium.ai.integration.CustomReportDirTest");
+            listener.getReport().setTestMethod("testCustomDir");
+
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            final PlaybookStep step = new PlaybookStep("Custom Step");
+            bus.dispatch(new StepStartedEvent(step, 0));
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(100, true));
+
+            final Path rootJsonPath = Path.of("target/ai-results").resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(rootJsonPath), "Root report file must always land in target/ai-results directory");
+
+            final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
+            final Path structuredJsonPath = customDir.resolve(runFolder).resolve("CustomReportDirTest").resolve(listener.getLastBaseFileName() + ".json");
+            assertFalse(Files.exists(structuredJsonPath), "Structured run_ report file should NOT land in custom configured directory, as run_ folders are reserved for console logs");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.report.disk.directory");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    @Test
+    @DisplayName("Verify unfinished sub-steps and parent compound step are marked FAILED on test failure")
+    public void testUnfinishedSubStepMarkedFailedWhenTestFails(@TempDir final Path tempDir) throws Exception
+    {
+        final Path reportDir = tempDir.resolve("ai-reports-substeps");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("org.neodymium.ai.integration.RegisterTest");
+        listener.getReport().setTestMethod("testRegisterLiveDe");
+        listener.getReport().setDatasetId("de");
+        listener.getReport().setExecutionMode("FORCE_RECORDING");
+        listener.getReport().setPlaybookFile("verla/RegisterTest.yaml");
+
+        // Parent Step 5 with 3 sub-steps
+        final PlaybookStep parentStep = new PlaybookStep("Type email, password and confirm password");
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+
+        final PlaybookStep subStep1 = new PlaybookStep("Type email");
+        subStep1.setParent(parentStep);
+        bus.dispatch(new StepStartedEvent(subStep1, 0));
+        bus.dispatch(new StepFinishedEvent(subStep1, PlaybookStepStatus.SUCCESS));
+
+        final PlaybookStep subStep2 = new PlaybookStep("Type password");
+        subStep2.setParent(parentStep);
+        bus.dispatch(new StepStartedEvent(subStep2, 1));
+        bus.dispatch(new StepFinishedEvent(subStep2, PlaybookStepStatus.SUCCESS));
+
+        // SubStep 3 started but never received StepFinishedEvent because pipeline aborted with exception
+        final PlaybookStep subStep3 = new PlaybookStep("Type confirm password");
+        subStep3.setParent(parentStep);
+        bus.dispatch(new StepStartedEvent(subStep3, 2));
+
+        // Session finishes with failure (e.g. DivergenceException)
+        bus.dispatch(new DiagnosticErrorEvent("DivergenceException: missing confirm password field"));
+        bus.dispatch(new SessionFinishedEvent(3500, false, List.of("DivergenceException: missing confirm password field")));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        assertTrue(Files.exists(jsonPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        assertFalse(root.get("success").asBoolean());
+
+        final JsonNode stepsNode = root.get("steps");
+        assertEquals(1, stepsNode.size());
+
+        final JsonNode parentNode = stepsNode.get(0);
+        assertEquals("FAILED", parentNode.get("status").asText());
+
+        final JsonNode subStepsNode = parentNode.get("subSteps");
+        assertEquals(3, subStepsNode.size());
+        assertEquals("SUCCESS", subStepsNode.get(0).get("status").asText());
+        assertEquals("SUCCESS", subStepsNode.get(1).get("status").asText());
+        assertEquals("FAILED", subStepsNode.get(2).get("status").asText());
+        assertTrue(subStepsNode.get(2).get("failureReason").asText().contains("DivergenceException"));
+    }
+
+    @Test
+    @DisplayName("Verify that visual baseline SSIM metrics and matrix thumbnail data URIs are recorded in report on divergence failure")
+    public void testVisualBaselineSsimFailureReporting() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-ssim-fail");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("VisualAuditTest");
+        listener.getReport().setTestMethod("testVisualMismatch");
+
+        final PlaybookStep visualStep = new PlaybookStep("Verify that the page is displayed in German (visual)");
+        visualStep.setScreenshotHash("dummyHashRecorded");
+        visualStep.setScreenshotHashDim(128);
+
+        bus.dispatch(new StepStartedEvent(visualStep, 0));
+
+        // Simulate VisualBaselineGateStep calculating SSIM and setting fields on divergence failure
+        visualStep.setSsimScore(0.4708);
+        visualStep.setSsimMinScore(0.99);
+        visualStep.setBaselineMatrixPng("data:image/png;base64,recordedBaselineData");
+        visualStep.setReplayMatrixPng("data:image/png;base64,replayCurrentData");
+        visualStep.setStatus(PlaybookStepStatus.FAILED);
+        visualStep.setFailureReason("Visual mismatch: SSIM score below threshold (0.4708 < 0.99)");
+
+        bus.dispatch(new StepFinishedEvent(visualStep, PlaybookStepStatus.FAILED));
+        bus.dispatch(new DiagnosticErrorEvent("Visual mismatch: SSIM score below threshold (0.4708 < 0.99)"));
+        bus.dispatch(new SessionFinishedEvent(2000, false, List.of("Visual mismatch: SSIM score below threshold")));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode stepNode = root.get("steps").get(0);
+
+        assertEquals("FAILED", stepNode.get("status").asText());
+        assertEquals(0.4708, stepNode.get("ssimScore").asDouble(), 0.0001);
+        assertEquals(0.99, stepNode.get("ssimMinScore").asDouble(), 0.0001);
+        assertEquals("data:image/png;base64,recordedBaselineData", stepNode.get("baselineMatrixPng").asText());
+        assertEquals("data:image/png;base64,replayCurrentData", stepNode.get("replayMatrixPng").asText());
+        assertEquals(128, stepNode.get("screenshotHashDim").asInt());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("data:image/png;base64,recordedBaselineData"));
+        assertTrue(html.contains("data:image/png;base64,replayCurrentData"));
+    }
+
+    @Test
+    @DisplayName("Verify that step failure reason is rendered on step card and inspector in HTML report")
+    public void testStepFailureReasonRenderedInHtmlReport() throws Exception
+    {
+        final Path reportDir = tempFolder.resolve("failure-reason-reports");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Open https://example.com/login");
+        step.setSourceFile("LoginTest.yaml");
+        step.setLineNumber(5);
+
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        step.setStatus(PlaybookStepStatus.FAILED);
+        step.setFailureReason("LLM provider communication failed: connection timeout");
+
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(1500, false, List.of()));
+
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+
+        assertTrue(Files.exists(htmlPath));
+        assertTrue(Files.exists(jsonPath));
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("step-card-error-banner"), "Step card must render error banner");
+        assertTrue(html.contains("LLM provider communication failed: connection timeout"), "Error message must be present in HTML");
+        assertTrue(html.contains("inspErrorBanner"), "Inspector error banner element must be present");
+        assertTrue(html.contains("tabErrorBadge"), "AI Notes error badge must be present in tab bar");
+    }
 }
+

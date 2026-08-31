@@ -36,7 +36,7 @@ public class ContextLevelTest
         Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.MINIMAL.escalate());
         Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.LEAN.escalate());
         Assertions.assertEquals(ContextLevel.RICH, ContextLevel.STANDARD.escalate());
-        Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.RICH.escalate());
+        Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.RICH.escalate());
         Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.VISUAL.escalate());
         Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.VISUAL_LEAN.escalate());
         Assertions.assertNull(ContextLevel.VISUAL_RICH.escalate());

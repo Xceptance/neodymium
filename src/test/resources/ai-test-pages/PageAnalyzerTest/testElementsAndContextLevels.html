@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PageAnalyzer Test Sandbox</title>
+    <style>
+        .custom-btn { cursor: pointer; display: inline-block; padding: 4px 8px; border: 1px solid #ccc; }
+        .hidden-el { display: none; }
+    </style>
+</head>
+<body>
+    <header class="main-header" data-testid="site-header">
+        <a href="index.html" class="logo-link"><img src="logo.png" alt="Company Brand Logo" /></a>
+        <nav class="nav-bar">
+            <a href="catalog.html">Catalog</a>
+            <a href="about.html">About Us</a>
+        </nav>
+    </header>
+
+    <main class="content-area">
+        <h1 id="page-title">Welcome to Our Store</h1>
+        
+        <p class="marketing-copy">Discover our exclusive premium products curated just for you.</p>
+
+        <p class="auth-notice">Already have an account? <a href="login.html" id="login-link">Log in here</a></p>
+
+        <section class="auth-form-section">
+            <form id="register-form" action="/register" method="POST">
+                <label for="reg-email">Email Address</label>
+                <input id="reg-email" type="email" name="email" data-testid="email-input" placeholder="user@example.com" required />
+
+                <label for="reg-pass">Password</label>
+                <input id="reg-pass" type="password" name="password" data-testid="password-input" required />
+
+                <select id="country-select" name="country" data-testid="country-dropdown">
+                    <option value="us">United States</option>
+                    <option value="de" selected>Germany</option>
+                </select>
+
+                <button id="submit-btn" type="submit" data-testid="submit-register">Create Account</button>
+            </form>
+        </section>
+
+        <section class="interactive-widgets">
+            <div role="button" aria-label="Close Banner" class="custom-btn" data-test="close-banner-btn">Dismiss Banner</div>
+            <span role="tab" aria-label="User Profile Tab" class="tab-item">Profile</span>
+        </section>
+
+        <section class="data-table-section">
+            <table id="inventory-table" data-testid="items-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Price</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="row-1">
+                        <td>Premium Hoodie</td>
+                        <td>$89.00</td>
+                        <td><button id="btn-buy-1" data-testid="buy-hoodie">Add to Cart</button></td>
+                    </tr>
+                    <tr id="row-2">
+                        <td>Canvas Sneakers</td>
+                        <td>$65.00</td>
+                        <td><button id="btn-buy-2" data-testid="buy-sneakers">Add to Cart</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p class="copyright">&copy; 2026 Xceptance GmbH. All rights reserved.</p>
+    </footer>
+</body>
+</html>

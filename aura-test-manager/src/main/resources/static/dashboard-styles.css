@@ -3223,9 +3223,9 @@
     background: var(--bg-card);
     border: 1px solid var(--border);
     color: var(--text-secondary);
-    border-radius: 4px;
-    padding: 2px 7px;
-    font-size: 10px;
+    border-radius: 12px;
+    padding: 3px 9px;
+    font-size: 10.5px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -3256,7 +3256,7 @@
 }
 
 .profile-checkbox-row.checked {
-    background: rgba(99, 102, 241, 0.08);
+    background: rgba(37, 99, 235, 0.08);
     border-color: var(--accent);
 }
 

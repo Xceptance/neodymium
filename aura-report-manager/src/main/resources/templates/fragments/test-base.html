@@ -125,19 +125,38 @@
                                     th:id="'row-var-' + ${var.id}" 
                                     th:data-row-id="'row-var-' + ${var.id}" 
                                     th:data-test-name="${var.testClassName}" 
+                                    th:data-test-method="${var.testMethodName ?: ''}"
                                     th:data-dataset="${var.dataSetLabel}" 
                                     th:data-status="${var.lastStatus}" 
                                     th:data-location="${var.location}" 
                                     th:data-browser="${var.browser}">
-                                    <td><strong class="text-mono" th:text="${(var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default'}">[Data Set 1: US CreditCard]</strong></td>
+                                    <td>
+                                        <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                                            <strong class="text-mono" style="color: var(--text-main);" th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default')}">testMethodName</strong>
+                                            <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)}" class="text-muted font-mono" style="font-size: 0.78rem;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
+                                        </div>
+                                    </td>
                                     <td><span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${var.location}">US</span></span></td>
                                     <td><span class="material-symbols-outlined text-accent">language</span> <span th:text="${var.browser}">Chrome</span></td>
-                                    <td>
-                                        <span class="badge-status" 
-                                              th:classappend="${var.lastStatus == 'passed-clean' ? 'badge-pass' : (var.lastStatus == 'succeeded-fixed' ? 'badge-fixed' : (var.lastStatus == 'failed-known' ? 'badge-known' : 'badge-unknown'))}">
-                                            <span th:text="${var.lastStatus != null ? var.lastStatus : 'passed-clean'}">passed-clean</span> 
-                                            (<span th:text="${var.totalExecutionsCount}">1</span> runs)
-                                        </span>
+                                    <td class="col-status-badge">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                            <span class="badge-status badge-pass" th:if="${var.lastStatus == 'passed-clean' or var.lastStatus == 'passed' or var.lastStatus == 'succeeded' or var.lastStatus == null}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED
+                                            </span>
+                                            <span class="badge-status badge-healed" th:if="${var.lastStatus == 'succeeded-fixed' or var.lastStatus == 'fixed' or var.lastStatus == 'healed'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED
+                                            </span>
+                                            <span class="badge-status badge-known-fail" th:if="${var.lastStatus == 'failed-known' or var.lastStatus == 'known'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
+                                            </span>
+                                            <span class="badge-status badge-unknown-fail" th:if="${var.lastStatus == 'failed-unknown' or var.lastStatus == 'unknown' or var.lastStatus == 'failed' or var.lastStatus == 'error'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL
+                                            </span>
+                                            <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
+                                            </span>
+                                            <span class="text-muted font-mono" style="font-size: 0.78rem;" th:text="${'(' + var.totalExecutionsCount + ' runs)'}">(1 runs)</span>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>

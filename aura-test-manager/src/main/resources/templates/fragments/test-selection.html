@@ -48,13 +48,13 @@
                                th:checked="${selectedFileKeys != null and selectedFileKeys.contains(item.file)}"
                                th:data-indeterminate="${partiallySelectedFileKeys != null and partiallySelectedFileKeys.contains(item.file)}"
                                onchange="if(typeof toggleFileCheckboxesInstant==='function') toggleFileCheckboxesInstant(this);"
-                               th:hx-post="@{/api/queue/toggleAll(file=${item.file})}"
+                               th:hx-post="'/api/queue/toggleAll?file=' + ${item.file}"
                                hx-target="#queueListContainer" hx-swap="innerHTML">
                     </label>
                     <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:text="${item.file}">filename.yaml</span>
                 </div>
                 <button class="edit-icon-btn" th:data-file="${item.file}"
-                        th:hx-get="@{/api/editor(file=${item.file})}"
+                        th:hx-get="'/api/editor?file=' + ${item.file}"
                         hx-target="#editorPanel" hx-swap="outerHTML"
                         onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
                         style="padding: 4px 8px; color: var(--text-secondary);" 
@@ -70,7 +70,7 @@
                             <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 
                                    th:checked="${selectedKeys != null and selectedKeys.contains(item.file + '::' + dataset.id)}"
                                    onchange="if(typeof toggleDatasetCheckboxInstant==='function') toggleDatasetCheckboxInstant(this);"
-                                   th:hx-post="@{/api/queue/toggle(file=${item.file},id=${dataset.id})}"
+                                   th:hx-post="'/api/queue/toggle?file=' + ${item.file} + '&amp;id=' + ${dataset.id}"
                                    hx-target="#queueListContainer" hx-swap="innerHTML">
                         </label>
                         <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>

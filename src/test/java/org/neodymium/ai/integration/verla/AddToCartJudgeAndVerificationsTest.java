@@ -30,7 +30,6 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -49,7 +48,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraJudge")
 @Tag("AuraVerification")
 @NeodymiumAiTest
-@AiPlaybook(recordingDirectory = "target/playbooks/integration")
+@AiPlaybook(value = "verla/AddToCartTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
 {
@@ -66,8 +65,12 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        EmbeddedHtmlServer.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
+        Neodymium.getData().put("neodymium.ai.multilingual", "true");
         Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
         Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "true");
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "true");
@@ -80,7 +83,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
-    @AiPlaybook("/verla/AddToCartTest.yaml")
+    @AiPlaybook
     public void testCartLivePerfect()
     {
     }
@@ -91,7 +94,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
-    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLivePerfect")
+    @AiPlaybook(recordingMethod = "testCartLivePerfect")
     public void testCartReplayPerfect()
     {
     }
@@ -102,7 +105,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
-    @AiPlaybook("/verla/AddToCartTest.yaml")
+    @AiPlaybook
     public void testCartLiveNormal()
     {
     }
@@ -113,7 +116,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @Order(4)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
-    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLiveNormal")
+    @AiPlaybook(recordingMethod = "testCartLiveNormal")
     public void testCartReplayNormal()
     {
     }
@@ -124,7 +127,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @Order(5)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
-    @AiPlaybook("/verla/AddToCartTest.yaml")
+    @AiPlaybook
     public void testCartLiveBad()
     {
     }
@@ -135,7 +138,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
     @Order(6)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
-    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLiveBad")
+    @AiPlaybook(recordingMethod = "testCartLiveBad")
     public void testCartReplayBad()
     {
     }
@@ -145,7 +148,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
      */
     @Order(7)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiPlaybook("/verla/AddToCartTest.yaml")
+    @AiPlaybook
     public void testCartLiveAllDataSets()
     {
     }
@@ -155,7 +158,7 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
      */
     @Order(8)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingMethod = "testCartLiveAllDataSets")
+    @AiPlaybook(recordingMethod = "testCartLiveAllDataSets")
     public void testCartReplayAllDataSets()
     {
     }

@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.PesapPrompt.PesapResult;
@@ -43,25 +42,17 @@ public final class PesapPromptTest
     }
 
     /**
-     * Verifies that the prompt correctly compiles the flow context.
+     * Verifies that the prompt correctly compiles the active instruction.
      */
     @Test
     public void testCompileUserMessage()
     {
-        final PesapPrompt prompt = new PesapPrompt(
-            "Click Submit button",
-            "Fill in username",
-            List.of("Verify order success", "Go back to catalog")
-        );
-
+        final PesapPrompt prompt = new PesapPrompt("Click Submit button");
         final String userMessage = prompt.compileUserMessage(new ExecutionContext(null));
         
         assertNotNull(userMessage);
-        assertTrue(userMessage.contains("[PREVIOUS] Step: Fill in username"));
-        assertTrue(userMessage.contains("[CURRENT]  Step: Click Submit button"));
-        assertTrue(userMessage.contains("[NEXT]     Step: Verify order success"));
-        // Should only contain at most 2 next steps as context, but we check first
-        assertTrue(userMessage.contains("## Flow Context"));
+        assertTrue(userMessage.contains("## Active Instruction"));
+        assertTrue(userMessage.contains("Click Submit button"));
     }
 
     /**
@@ -78,7 +69,7 @@ public final class PesapPromptTest
             }
             """;
 
-        final PesapPrompt prompt = new PesapPrompt("instruction", null, null);
+        final PesapPrompt prompt = new PesapPrompt("instruction");
         final PesapResult result = prompt.parseResponse(rawJson, new ExecutionContext(null));
 
         assertNotNull(result);
@@ -90,7 +81,7 @@ public final class PesapPromptTest
     }
 
     /**
-     * Verifies that the prompt successfully parses VISUAL_MINIMAL context level from minified JSON response.
+     * Verifies that the prompt successfully parses VISUAL context level from minified JSON response.
      */
     @Test
     public void testParseResponseVisualMinimal() throws Exception
@@ -102,7 +93,7 @@ public final class PesapPromptTest
             }
             """;
 
-        final PesapPrompt prompt = new PesapPrompt("There is a green checkmark (visual)", null, null);
+        final PesapPrompt prompt = new PesapPrompt("There is a green checkmark (visual)");
         final PesapResult result = prompt.parseResponse(rawJson, new ExecutionContext(null));
 
         assertNotNull(result);
@@ -117,7 +108,7 @@ public final class PesapPromptTest
     @Test
     public void testParseResponseFallback() throws Exception
     {
-        final PesapPrompt prompt = new PesapPrompt("instruction", null, null);
+        final PesapPrompt prompt = new PesapPrompt("instruction");
         final PesapResult result = prompt.parseResponse("", new ExecutionContext(null));
 
         assertNotNull(result);
@@ -127,25 +118,33 @@ public final class PesapPromptTest
     }
 
     /**
-     * Verifies that context window bounds next steps to max 3 and truncates excessively long instructions.
+     * Verifies that excessively long instructions are truncated.
      */
     @Test
-    public void testCompileUserMessage_boundedContextAndLength()
+    public void testCompileUserMessage_truncatesExcessiveLength()
     {
         final String longInstruction = "A".repeat(1000);
-        final PesapPrompt prompt = new PesapPrompt(
-            longInstruction,
-            "Previous step",
-            List.of("Next 1", "Next 2", "Next 3", "Next 4 overflow")
-        );
-
+        final PesapPrompt prompt = new PesapPrompt(longInstruction);
         final String userMessage = prompt.compileUserMessage(new ExecutionContext(null));
 
         assertNotNull(userMessage);
-        assertTrue(userMessage.contains("Next 1"));
-        assertTrue(userMessage.contains("Next 2"));
-        assertTrue(userMessage.contains("Next 3"));
-        assertFalse(userMessage.contains("Next 4 overflow"), "Next step list should be bounded to 3 next steps.");
+        assertTrue(userMessage.contains("## Active Instruction"));
+        assertTrue(userMessage.contains("[TRUNCATED]"));
         assertFalse(userMessage.contains("A".repeat(600)), "Instruction should be truncated to prevent context bloat.");
+    }
+
+    /**
+     * Verifies that the system message properly includes language-agnostic multi-action step splitting instructions.
+     */
+    @Test
+    public void testCompileSystemMessage_containsLanguageAgnosticSplittingRules()
+    {
+        final PesapPrompt prompt = new PesapPrompt("Open the country selector and click \"Poland\"");
+        final String systemMessage = prompt.compileSystemMessage(new ExecutionContext(null));
+
+        assertNotNull(systemMessage);
+        assertTrue(systemMessage.contains("Step Splitting ('sp')"));
+        assertTrue(systemMessage.contains("Sequential multi-action interaction chains requiring intermediate UI state changes"));
+        assertTrue(systemMessage.contains("Language & Token Preservation"));
     }
 }

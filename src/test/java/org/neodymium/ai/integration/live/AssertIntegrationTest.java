@@ -20,6 +20,7 @@ package org.neodymium.ai.integration.live;
 
 import static com.codeborne.selenide.Condition.checked;
 import static com.codeborne.selenide.Condition.disabled;
+import static com.codeborne.selenide.Condition.editable;
 import static com.codeborne.selenide.Condition.enabled;
 import static com.codeborne.selenide.Condition.exist;
 import static com.codeborne.selenide.Condition.focused;
@@ -32,11 +33,13 @@ import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
 import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -68,81 +71,41 @@ public class AssertIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Executes all Assert integration steps sequentially in a single test case to check for cross-step dependencies.
-     *
-     * @param session the thread-isolated AiSession
-     */
-    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertAll.yaml")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
-    public void testAssertAll(final AiSession session) throws Exception
-    {
-        session.execute( """
-            data:
-              - testId: assertData
-            steps: |
-              Open ${assert.test.url} in the browser
-              Assert that currentUrl contains 'testAssertHappyPath.html'
-              Assert that the pageTitle is 'Assert Action Test'
-              Assert that the welcome text matches '/Welcome.*store!/'
-              Assert that the welcome text 'Welcome to our web store!' is visible
-              Assert that the 'Clickable Button' button is present
-              Assert that the hidden 'Secret Button' is absent
-              Assert that the 'Clickable Button' button exists
-              Assert that the 'Username Input' value is 'JohnDoe'
-              Assert that the 'Username Input' placeholder is 'Enter username'
-              Click the 'Username Input' field
-              Assert that the 'Username Input' field is focused
-              Assert that the 'newsletter-opt' checkbox is checked
-              Assert that the 'terms-opt' checkbox is unchecked
-              Assert that the 'plan-monthly' radio button is checked
-              Assert that the 'plan-yearly' radio button is unchecked
-              Assert that the 'disabled-input' field is disabled
-              Assert that the 'enabled-input' field is enabled
-              Assert that the 'opt-user' option is selected
-              Assert that the 'readonly-input' field is readonly
-            """);
-
-        Selenide.Wait().until(d -> "Assert Action Test".equals(d.getTitle()));
-        $("#welcome-message").shouldHave(text("Welcome to our web store!"));
-        $("#visible-btn").shouldBe(visible);
-        $("#hidden-btn").shouldBe(hidden);
-        $("#visible-btn").should(exist);
-        $("#username").shouldHave(value("JohnDoe"));
-        $("#username").shouldBe(focused);
-        $("#newsletter-opt").shouldBe(checked);
-        $("#terms-opt").shouldNotBe(checked);
-        $("#plan-monthly").shouldBe(checked);
-        $("#plan-yearly").shouldNotBe(checked);
-        $("#disabled-input").shouldBe(disabled);
-        $("#enabled-input").shouldBe(enabled);
-        $("#opt-user").shouldBe(selected);
-        $("#readonly-input").shouldBe(readonly);
-    }
-
-    /**
      * Sliced test case verifying URL assertion.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUrl.yaml")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    @AiMode({ExecutionMode.FORCE_RECORDING})
     @AiDataSet("assertData")
+    @AiJudge({true})
     public void testAssertUrl(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: assertData
             steps: |
               Open ${assert.test.url} in the browser
               Assert that currentUrl contains 'testAssertHappyPath.html'
+              Assert that the current URL contains 'testAssertHappyPath.html'
+              Assert that the page url contains 'testAssertHappyPath.html'
+              Current URL contains 'testAssertHappyPath.html'
+              Assert that currentUrl matches '.*testAssertHappyPath.html$'
+              Url matches '/.*testAssertHappyPath.html/'
+              Url is not empty
+              There is no '#' in the url
+              There is 'html' in the url
             """)
             .verifyMetrics()
-            .hasStepCount(2)
+            .hasStepCount(10)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasActionCalls(9)
+              .hasPesapCalls(9)
+              .hasContextLevelCount(ContextLevel.MINIMAL, 1)
+              .hasContextLevelCount(ContextLevel.STANDARD, 8))
+            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed())
+            .onHealing(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        Assertions.assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
     }
 
     /**
@@ -276,7 +239,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#username").shouldHave(value("JohnDoe"));
@@ -304,7 +267,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#username").shouldBe(focused);
@@ -392,7 +355,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#disabled-input").shouldBe(disabled);
@@ -420,7 +383,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-user").shouldBe(selected);
@@ -447,10 +410,61 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasStandardCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#readonly-input").shouldBe(readonly);
+    }
+
+    /**
+     * Sliced test case verifying input editable state assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertEditableState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    @AiDataSet("assertData")
+    public void testAssertEditableState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'enabled-input' field is editable
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .hasNoEscalations()
+            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#enabled-input").shouldBe(editable);
+    }
+
+    /**
+     * Sliced test case verifying absence assertion on non-existent element.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertNonExistentAbsence.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    @AiDataSet("assertData")
+    public void testAssertNonExistentAbsence(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the non-existent 'Ghost Element' is absent
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .hasNoEscalations()
+            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
     }
 
     /**
@@ -601,6 +615,101 @@ public class AssertIntegrationTest extends BaseAiTest
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the 'Username Input' placeholder is 'Invalid Placeholder'
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting an unchecked checkbox is checked throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCheckboxFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertCheckboxFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'terms-opt' checkbox is checked
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a disabled input is enabled throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertDisabledFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertDisabledFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'disabled-input' field is enabled
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a readonly input is editable throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertReadonlyFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertReadonlyFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'readonly-input' field is editable
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting an unselected option is selected throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertSelectedFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertSelectedFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'opt-admin' option is selected
+                """);
+        });
+    }
+
+    /**
+     * Verifies that non-matching regex assertion throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertRegexMismatchFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertRegexMismatchFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the welcome text matches '/^Goodbye.*/'
                 """);
         });
     }

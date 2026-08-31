@@ -74,4 +74,53 @@ public class EmbeddedHtmlServerTest
             primaryServer.stop();
         }
     }
+
+    /**
+     * Tests that granular reset methods independently reset specific components without wiping others.
+     *
+     * @throws IOException if server fails to initialize
+     */
+    @Test
+    public void testGranularResets() throws IOException
+    {
+        final EmbeddedHtmlServer server = new EmbeddedHtmlServer();
+        server.start();
+
+        try
+        {
+            // Initial state has 1 default user
+            Assertions.assertEquals(1, server.getUserCount());
+            Assertions.assertTrue(server.hasUser("johndoe@example.com"));
+
+            // Add custom test user
+            final EmbeddedHtmlServer.User customUser = new EmbeddedHtmlServer.User("custom@example.com", "pass123");
+            server.addUser(customUser);
+            Assertions.assertEquals(2, server.getUserCount());
+            Assertions.assertTrue(server.hasUser("custom@example.com"));
+
+            // Resetting inventory or carts does not remove custom user
+            server.resetInventory();
+            server.resetCarts();
+            server.resetOrders();
+            Assertions.assertEquals(2, server.getUserCount());
+            Assertions.assertTrue(server.hasUser("custom@example.com"));
+
+            // Resetting users explicitly restores only default user
+            server.resetUsers();
+            Assertions.assertEquals(1, server.getUserCount());
+            Assertions.assertFalse(server.hasUser("custom@example.com"));
+            Assertions.assertTrue(server.hasUser("johndoe@example.com"));
+
+            // Resetting all cleans entire state
+            server.addUser(customUser);
+            Assertions.assertEquals(2, server.getUserCount());
+            server.resetAll();
+            Assertions.assertEquals(1, server.getUserCount());
+            Assertions.assertFalse(server.hasUser("custom@example.com"));
+        }
+        finally
+        {
+            server.stop();
+        }
+    }
 }

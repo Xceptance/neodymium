@@ -297,6 +297,19 @@ public void test3_InlinePlaybookTextBlocks(final AiSession session)
 }
 ```
 
+##### Pattern 4: Quality Judge Matrix Execution (`@AiJudge`)
+Runs test cases across Quality Judge variations (e.g. `{false, true}`) to evaluate second-opinion judge behavior with zero code duplication:
+```java
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+@AiJudge({false, true})
+@AiPlaybook
+public void test4_JudgeMatrix(final AiSession session)
+{
+    // Executed 4 times: [FORCE_RECORDING, Judge: OFF], [FORCE_RECORDING, Judge: ON],
+    //                   [REPLAY_STRICT, Judge: OFF],    [REPLAY_STRICT, Judge: ON]
+}
+```
+
 ---
 
 #### B. Programmatic & Debugging APIs
@@ -871,6 +884,12 @@ When an action step cannot be fulfilled at the initial context level, the framew
 4. **Escalation 3 (`STANDARD` $\rightarrow$ `RICH`)**: Expands to all `data-*` attributes, ARIA descriptions, tables, and deep parent ancestry.
 5. **Escalation 4 (`RICH` $\rightarrow$ `VISUAL_RICH`)**: Cross-track escalation attaches full-page screenshot while **strictly preserving all rich DOM text and attributes** (never regressing to 0 DOM nodes).
 
+#### Neutral Escalation Framing & Ceiling Guidance
+
+* **Suppression of False Failure Attribution**: Context escalations (`ToLevelEscalationException`) represent neutral context expansions rather than SUT execution failures. The pipeline suppresses `⚠️ PREVIOUS ATTEMPT FAILURE` warning banners during normal tier escalations so the model is not misled into believing an attempted action failed.
+* **Ceiling-Level Context Guidance**: When reaching `VISUAL_RICH` (the maximum context level), the prompt provides explicit ceiling guidance informing the model that full DOM and visual state are available and instructing it to return `status: "FAILED"` if an element or assertion condition is absent, rather than inventing speculative mutating actions.
+* **Deterministic Ceiling Termination**: If the model requests escalation at `VISUAL_RICH`, the state machine immediately terminates the step with `DivergenceException(reasoning)`, allowing expected bug steps (`(bug)`) to reproduce deterministically and assertions to fail cleanly without unneeded re-prompt loops.
+
 ---
 
 ### 4.3 Dynamic Step Escalation Budget Model
@@ -1019,11 +1038,8 @@ To handle model-specific quirks (such as `gemini-3-5-flash-lite` requiring expli
 2. **Example (`gemini-3-5-flash-lite`)**:
    File: `src/main/resources/ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`
    ```markdown
-   CRITICAL FOR LITE MODEL LOCATORS: DOM dump element tags represent real HTML tags 
-   (<p>, <div>, <span>, <h1>, <button>, <input>, <link>). Never invent synthetic 
-   tag names or pseudotags (such as 'text' or 'text:nth-of-type(N)') in locators. 
-   If a target element lacks a direct class or id attribute, select its parent 
-   element (e.g., 'div:has(...)') or set 'status' to 'ESCALATE' to request visual context.
+   - **Locators**: Only use real HTML tags from the DOM (`button`, `a`, `input`, `div`, `span`). Never invent non-existent tags (e.g. `text`, `text:nth-of-type(N)`). If an element lacks a unique class or ID, target its parent container (e.g. `header > div`) or escalate.
+   - **Values**: Copy the exact literal text from the instruction into 'value'. Do not substitute generic sample data (such as default passwords) or synthetic placeholders.
    ```
 
 ---
@@ -1062,6 +1078,23 @@ When automated tests target localized applications (e.g. French, German, Japanes
    - **PESAP (`pesap`)**: Instructs the pre-step analyzer that English splitting examples are illustrative only, applying identical splitting, context escalation, and non-splitting rules to equivalent phrasing in the target language while preserving the original natural language in generated sub-steps.
    - **Action Extraction (`general`)**: Directs the LLM to target localized button text, forms, labels, and links in the SUT DOM according to the active locale.
    - **Outcome Verification (`verification`)**: Verifies post-action outcomes against localized page content and currency/date formatting.
+
+---
+
+### 5.6 Language-Agnostic Input Data Fidelity & Anti-Hallucination Directives
+
+Lightweight or fast LLMs (such as `gemini-3.5-flash-lite`) can exhibit strong pretraining token priors on password or credential fields, occasionally drifting towards generic dummy defaults (e.g., `"Password123!"`) or placeholder variable tokens (e.g., `"${password}"`) instead of copying the literal string passed in the test instruction (e.g., `Type "SecurePass3!" into the confirm password field`).
+
+To guarantee 100% data fidelity while remaining strictly language-neutral and domain-agnostic, Neodymium enforces two layers of anti-hallucination guidance:
+
+1. **Universal Execution Guideline (Rule 4 in `action-extraction-prompt.md`)**:
+   > *"Input & Assertion Data Fidelity: In any natural language, whenever the active instruction commands entering data (typing text, numbers, codes, credentials, or selecting options) or asserting values, extract and populate the 'value' field with the exact literal characters, string, or parameter specified in the instruction. NEVER invent, hallucinate, or substitute synthetic sample data (e.g. generic passwords, dummy emails, placeholder names, or default text). NEVER emit synthetic variable placeholder expressions unless literally written as such in the active instruction."*
+
+2. **Dedicated `- TYPE:` Action Rule**:
+   > *"`- TYPE:` set 'locator' to the input, textarea, or contenteditable element, and set 'value' to the exact literal text, digits, or characters specified in the instruction. Regardless of the natural language used in the instruction, preserve the exact specified data verbatim; NEVER substitute, hallucinate, or default to generic sample values or synthetic variable placeholders."*
+
+3. **Model-Specific Add-on Directives (`addon-general.md`)**:
+   Model add-ons (such as `ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`) explicitly reinforce literal value extraction to prevent flash/lite models from falling back to training distribution priors.
 
 ---
 
@@ -1321,7 +1354,7 @@ session.execute(playbook)
     .verifyMetrics()
     .hasStepCount(12)
     .hasNoSoftFailures()
-    .onLive(m -> m.hasStandardCalls(12).hasLlmCalls(12, 24))
+    .onLive(m -> m.hasActionCalls(12).hasLlmCalls(12, 24))
     .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed())
     .onMode(ExecutionMode.REPLAY_WITH_HEALING, m -> {
         if (m.isHealed()) {
@@ -1341,7 +1374,7 @@ asserter
     .hasStepCount(12)                // exact step count
     .hasStepCount(10, 15)            // range [10, 15]
     .hasLlmCalls(12, 24)             // total LLM calls between 12 and 24
-    .hasStandardCalls(12)            // exact standard action extraction calls
+    .hasActionCalls(12)            // exact standard action extraction calls
     .hasPesapCalls(0, 12)            // PESAP pre-step analysis calls
     .hasVerificationCalls(0)         // post-action verification calls
     .hasJudgeCalls(0)                // quality judge calls
@@ -1364,6 +1397,16 @@ asserter
     .hasContextLevelCount(ContextLevel.MINIMAL, 12)  // MINIMAL used 12 times
     .hasContextLevelCount(ContextLevel.LEAN, 0, 5)   // LEAN used between 0 and 5 times
     .hasContextLevelCount("MINIMAL", 12);            // String level overload
+```
+
+##### Quality Judge Conditional Assertions (`onJudge`, `onNoJudge`)
+
+When parameterized across Quality Judge variations using `@AiJudge({false, true})`, assertions can branch conditionally:
+
+```java
+asserter
+    .onJudge(m -> m.hasJudgeCalls(6))
+    .onNoJudge(m -> m.hasJudgeCalls(0));
 ```
 
 ##### Automated Mode Invariants (`matchesModeExpectations()`)
@@ -1404,9 +1447,20 @@ Providers support role-based scoping (e.g., configuring `neodymium.ai.pesap.prov
 
 * `neodymium.ai.provider` - Global active LLM provider. Supports `gemini`, `openai`, `vertex`, `mistral`, and `mock`. (Default: `gemini`)
 * `neodymium.ai.model` - Global active model. (Default: `gemini-3.5-flash-lite`)
-* `neodymium.ai.apiKey` - Global API Key. It is highly recommended to inject this via the `NEODYMIUM_AI_APIKEY` environment variable or store it strictly in `config/credentials.properties` which should be `.gitignore`d.
+* `neodymium.ai.apiKey` - Global API Key (`${GEMINI_API_KEY}`). All API keys must be injected dynamically via environment variables (such as `GEMINI_API_KEY`, `OPENAI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Never commit API keys to git or configuration files.
 * `neodymium.ai.timeoutSeconds` - Global network timeout for LLM HTTP calls. (Default: `180`)
 * `neodymium.ai.temperature` - Global LLM temperature. (Default: `0.0`)
+
+#### CLI Test Execution & API Key Injection Examples
+
+```bash
+# Option 1: Export environment variable (recommended for interactive shell & CI)
+export GEMINI_API_KEY="your-gemini-api-key"
+mvn test -Dtest=AddToCartJudgeAndVerificationsTest
+
+# Option 2: Pass as runtime JVM argument
+mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-gemini-api-key"
+```
 
 ### 8.3 Sub-System Toggles
 * `neodymium.ai.pesap.enabled` - (Boolean) Toggles Pre-Execution Structural Analysis & Prediction. (Default: `true`)

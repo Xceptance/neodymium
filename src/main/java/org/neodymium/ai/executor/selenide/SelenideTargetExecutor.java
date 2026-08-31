@@ -384,13 +384,13 @@ public final class SelenideTargetExecutor implements TargetExecutor
         String resolvedTarget = interpolateString(origTarget);
         final String resolvedValue = interpolateString(origValue);
 
-        if (resolvedTarget != null && resolvedTarget.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+        if (resolvedTarget != null && resolvedTarget.matches("https?://(localhost|127\\.0\\.0\\.1):\\d+.*"))
         {
             final String activeUrl = getActiveServerUrl();
-            if (activeUrl != null && activeUrl.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+            if (activeUrl != null && activeUrl.matches("https?://(localhost|127\\.0\\.0\\.1):\\d+.*"))
             {
-                final String targetPort = resolvedTarget.replaceAll("http://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
-                final String activePort = activeUrl.replaceAll("http://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
+                final String targetPort = resolvedTarget.replaceAll("https?://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
+                final String activePort = activeUrl.replaceAll("https?://(localhost|127\\.0\\.0\\.1):(\\d+).*", "$2");
                 if (!targetPort.equals(activePort))
                 {
                     resolvedTarget = resolvedTarget.replace(":" + targetPort, ":" + activePort);
@@ -471,7 +471,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
                     if (entry.getValue() != null)
                     {
                         final String strVal = String.valueOf(entry.getValue());
-                        if (strVal.matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+                        if (strVal.matches("https?://(localhost|127\\.0\\.0\\.1):\\d+.*"))
                         {
                             return strVal;
                         }
@@ -482,7 +482,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             {
                 for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
                 {
-                    if (entry.getValue() != null && entry.getValue().matches("http://(localhost|127\\.0\\.0\\.1):\\d+.*"))
+                    if (entry.getValue() != null && entry.getValue().matches("https?://(localhost|127\\.0\\.0\\.1):\\d+.*"))
                     {
                         return entry.getValue();
                     }

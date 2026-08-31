@@ -148,6 +148,9 @@ public final class AuraBrowserSelectionTest
 
             final int svgCount = summaryHtml.split("<svg", -1).length - 1;
             Assertions.assertEquals(1, svgCount, "Google Chrome header must contain exactly 1 SVG icon");
+
+            // Verify Google Chrome header contains the blue info icon
+            Assertions.assertTrue(summaryHtml.contains("browser-info-icon"), "Google Chrome header summary must contain browser-info-icon");
         }
         finally
         {

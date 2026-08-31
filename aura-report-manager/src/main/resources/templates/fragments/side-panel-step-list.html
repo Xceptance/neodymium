@@ -54,10 +54,10 @@
                     <table class="aura-table history-table" style="table-layout: fixed; width: 100%;">
                         <thead>
                             <tr>
-                                <th style="width: 18%;">RUN ID</th>
-                                <th style="width: 26%;">BATCH NAME</th>
-                                <th style="width: 16%;">ENGINE ORIGIN</th>
-                                <th style="width: 18%;">TIMESTAMP</th>
+                                <th style="width: 30%;">RUN ID</th>
+                                <th style="width: 16%;">BATCH NAME</th>
+                                <th style="width: 12%;">ENGINE</th>
+                                <th style="width: 20%;">TIMESTAMP</th>
                                 <th style="width: 22%;">STATUS / BUGS</th>
                             </tr>
                         </thead>
@@ -73,7 +73,11 @@
                                 <td><span class="tag-chip" th:text="${exec.engine}">Java</span></td>
                                 <td><span class="text-muted font-mono" style="font-size: 0.8rem;" th:text="${exec.timestamp}">Recently</span></td>
                                 <td>
-                                    <span th:class="'badge-status ' + ${exec.statusClass}" th:text="${exec.statusLabel}">PASSED</span>
+                                    <span th:class="'badge-status ' + ${exec.statusClass}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;" 
+                                              th:text="${exec.statusClass == 'badge-pass' ? 'check_circle' : (exec.statusClass == 'badge-healed' or exec.statusClass == 'badge-fixed' ? 'healing' : (exec.statusClass == 'badge-known-fail' or exec.statusClass == 'badge-known' ? 'bug_report' : (exec.statusClass == 'badge-ignored' ? 'skip_next' : 'cancel')))}">check_circle</span>
+                                        <span th:text="${exec.statusLabel}">PASSED</span>
+                                    </span>
                                     <span th:if="${exec.bugs != null and !exec.bugs.isEmpty()}" th:each="bug : ${exec.bugs}" class="tag-chip tag-bug ms-1" th:text="${bug}">BUG-123</span>
                                 </td>
                             </tr>
@@ -242,7 +246,7 @@
                     <span><span class="material-symbols-outlined">warning</span> Failure / Exception Details</span>
                     <span class="tag-chip" style="background: #fef2f2; color: #dc2626; border-color: #fecaca;">FAILED</span>
                 </div>
-                <pre class="error-box-top-text" id="sidePageErrorText"></pre>
+                <div class="error-box-top-text" id="sidePageErrorText"></div>
             </div>
 
             <!-- TOP IGNORED REASON DISPLAY BOX -->

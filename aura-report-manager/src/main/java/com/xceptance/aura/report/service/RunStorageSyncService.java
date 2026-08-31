@@ -558,10 +558,14 @@ public class RunStorageSyncService
                         {
                             varEntity.setDataSetLabel(dataSet);
                         }
+                        if (testMethod != null && !testMethod.isBlank() && (varEntity.getTestMethodName() == null || varEntity.getTestMethodName().isBlank()))
+                        {
+                            varEntity.setTestMethodName(testMethod);
+                        }
                     }
                     else
                     {
-                        varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
+                        varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
                     }
 
                     varEntity.setTotalExecutionsCount(varEntity.getTotalExecutionsCount() + 1);

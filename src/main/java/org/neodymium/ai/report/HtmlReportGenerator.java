@@ -281,6 +281,7 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"inspector-instruction\" id=\"inspInstruction\">Select a step</div>\n");
             sb.append("            <div class=\"inspector-raw-template\" id=\"inspRawTemplate\" style=\"display:none;\"></div>\n");
             sb.append("            <div class=\"inspector-sub-meta\" id=\"inspSourceFile\"></div>\n");
+            sb.append("            <div class=\"inspector-error-banner\" id=\"inspErrorBanner\" style=\"display:none;\"></div>\n");
             sb.append("          </div>\n");
 
             // Tab Navigation Bar
@@ -288,7 +289,7 @@ public final class HtmlReportGenerator
             sb.append("            <button class=\"tab-btn active\" id=\"tabBtn-llm\" onclick=\"switchInspectorTab('llm')\">🤖 LLM Details (<span id=\"tabLlmCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-actions\" onclick=\"switchInspectorTab('actions')\">🎯 Actions (<span id=\"tabActionsCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-visuals\" onclick=\"switchInspectorTab('visuals')\">📸 Visuals (<span id=\"tabVisualsCount\">0</span>)</button>\n");
-            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes</button>\n");
+            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes <span class=\"pill-error-count\" id=\"tabErrorBadge\" style=\"display:none;\">Error</span></button>\n");
             sb.append("          </div>\n");
 
             // Tab Content Panels
@@ -353,11 +354,26 @@ public final class HtmlReportGenerator
                     dataSrc = "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + dataSrc;
                 }
                 final String scName = sc.getName() != null ? sc.getName() : "Screenshot #" + (s + 1);
+                final String dims = sc.getDimensions();
+                final Integer width = sc.getWidth();
+                final Integer height = sc.getHeight();
                 sb.append("      <div class=\"screenshot-card\">\n");
-                sb.append("        <div class=\"screenshot-header\">").append(escapeHtml(scName)).append("</div>\n");
+                sb.append("        <div class=\"screenshot-header\"><span>").append(escapeHtml(scName)).append("</span>");
+                if (dims != null && !dims.isEmpty())
+                {
+                    sb.append("<span class=\"screenshot-dim-badge\">").append(escapeHtml(dims)).append("</span>");
+                }
+                sb.append("</div>\n");
                 if (dataSrc != null)
                 {
-                    sb.append("        <img src=\"").append(dataSrc).append("\" alt=\"Captured screenshot\" class=\"screenshot-img\" loading=\"lazy\" onclick=\"openLightbox(this.src, '").append(escapeAttr(scName)).append("')\" title=\"Click to view full size\" />\n");
+                    sb.append("        <img src=\"").append(dataSrc).append("\" alt=\"Captured screenshot\" class=\"screenshot-img\" loading=\"lazy\" onclick=\"openLightbox(this.src, '").append(escapeAttr(scName + (dims != null ? " (" + dims + ")" : ""))).append("')\" title=\"Click to view full size\" />\n");
+                }
+                if (width != null && height != null)
+                {
+                    sb.append("        <div class=\"screenshot-meta-bar\">")
+                      .append("<span class=\"dim-pill\">Width: <strong>").append(width).append("px</strong></span>")
+                      .append("<span class=\"dim-pill\">Height: <strong>").append(height).append("px</strong></span>")
+                      .append("</div>\n");
                 }
                 sb.append("      </div>\n");
             }
@@ -416,22 +432,8 @@ public final class HtmlReportGenerator
         sb.append("          </tr>\n");
     }
 
-    private static void renderStepCardWithSubSteps(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final int index)
+    private static void appendStepBadges(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step)
     {
-        final String stepStatus = step.getStatus() != null ? step.getStatus().toUpperCase() : "PENDING";
-        final String stepPillClass = "PASSED".equals(stepStatus) || "SUCCESS".equals(stepStatus) ? "pill-pass"
-            : "HEALED".equals(stepStatus) ? "pill-heal"
-            : "FAILED".equals(stepStatus) ? "pill-fail"
-            : "SKIPPED".equals(stepStatus) ? "pill-skip" : "pill-pending";
-
-        final boolean hasSubSteps = !step.getSubSteps().isEmpty();
-
-        sb.append("        <div class=\"step-card step-select-item\" id=\"step-item-").append(index).append("\">\n");
-        sb.append("          <div class=\"step-header\">\n");
-        sb.append("            <div class=\"step-header-left\">\n");
-        sb.append("              <span class=\"step-number\">#").append(index + 1).append("</span>\n");
-        sb.append("              <span class=\"step-status-pill ").append(stepPillClass).append("\">").append(stepStatus).append("</span>\n");
-
         if (step.isBug())
         {
             final String tooltip = step.getBugDetails() != null ? "Expected bug: " + escapeHtml(step.getBugDetails()) : "Expected bug";
@@ -462,6 +464,90 @@ public final class HtmlReportGenerator
         {
             sb.append("              <span class=\"escalation-badge\">⚡ ").append(step.getEscalations()).append(" esc</span>\n");
         }
+    }
+
+    private static void appendScreenshotPreviews(final StringBuilder sb, final List<TestExecutionReport.ReportScreenshotEntry> screenshots, final String labelPrefix)
+    {
+        if (screenshots.isEmpty())
+        {
+            return;
+        }
+
+        sb.append("            <div class=\"step-card-screenshots-preview\">\n");
+        for (int scIdx = 0; scIdx < Math.min(3, screenshots.size()); scIdx++)
+        {
+            final TestExecutionReport.ReportScreenshotEntry sc = screenshots.get(scIdx);
+            final String dataSrc = sc.getBase64Data() != null && sc.getBase64Data().startsWith("data:")
+                ? sc.getBase64Data()
+                : "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + (sc.getBase64Data() != null ? sc.getBase64Data() : "");
+            final String scName = sc.getName() != null ? sc.getName() : labelPrefix + " Screenshot";
+            final String dims = sc.getDimensions();
+            final String dimAnnotation = (dims != null ? " (" + dims + ")" : "");
+            final String scTitle = scName + (sc.getWidth() != null && sc.getHeight() != null ? " (Width: " + sc.getWidth() + "px, Height: " + sc.getHeight() + "px)" : dimAnnotation);
+            sb.append("              <img src=\"").append(dataSrc).append("\" alt=\"Step screenshot preview\" class=\"preview-thumb\" onclick=\"event.stopPropagation(); openLightbox(this.src, '").append(escapeAttr(scName + dimAnnotation)).append("')\" title=\"").append(escapeHtml(scTitle)).append(" - Click to expand\" loading=\"lazy\" />\n");
+        }
+        if (screenshots.size() > 3)
+        {
+            sb.append("              <span class=\"preview-more-badge\">+").append(screenshots.size() - 3).append(" more</span>\n");
+        }
+        sb.append("            </div>\n");
+    }
+
+    private static void appendFooterTags(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final int parentIndex, final int subIndex, final boolean hasSubSteps)
+    {
+        final boolean isSub = subIndex >= 0;
+        final String footerClass = isSub ? "sub-step-footer" : "step-card-footer";
+        final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls());
+
+        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty() || step.getSsimScore() != null)
+        {
+            sb.append("          <div class=\"").append(footerClass).append("\">\n");
+            if (step.getSsimScore() != null)
+            {
+                final double score = step.getSsimScore();
+                final double min = step.getSsimMinScore() != null ? step.getSsimMinScore() : 0.99;
+                final boolean pass = score >= min;
+                sb.append("            <span class=\"footer-tag ").append(pass ? "ssim-pass" : "ssim-fail").append("\">🖼️ SSIM: ")
+                    .append(String.format("%.4f", score)).append(" (Min: ").append(String.format("%.2f", min)).append(")</span>\n");
+            }
+            if (!step.getActions().isEmpty())
+            {
+                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'actions')\">🎯 ").append(step.getActions().size()).append(" action(s)</span>\n");
+            }
+            if (!step.getScreenshots().isEmpty())
+            {
+                final String firstDims = step.getScreenshots().get(0).getDimensions();
+                final String dimText = firstDims != null ? " (" + firstDims + ")" : "";
+                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'visuals')\">📸 ").append(step.getScreenshots().size()).append(" screenshot(s)").append(dimText).append("</span>\n");
+            }
+            if (llmCount > 0)
+            {
+                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'llm')\">🤖 ").append(llmCount).append(" LLM call(s)</span>\n");
+            }
+            if (hasSubSteps)
+            {
+                sb.append("            <span class=\"footer-tag highlight\">✂️ Split into ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
+            }
+            sb.append("          </div>\n");
+        }
+    }
+
+    private static void renderStepCardWithSubSteps(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final int index)
+    {
+        final String stepStatus = step.getStatus() != null ? step.getStatus().toUpperCase() : "PENDING";
+        final String stepPillClass = "PASSED".equals(stepStatus) || "SUCCESS".equals(stepStatus) ? "pill-pass"
+            : "HEALED".equals(stepStatus) ? "pill-heal"
+            : "FAILED".equals(stepStatus) ? "pill-fail"
+            : "SKIPPED".equals(stepStatus) ? "pill-skip" : "pill-pending";
+
+        final boolean hasSubSteps = !step.getSubSteps().isEmpty();
+
+        sb.append("        <div class=\"step-card step-select-item\" id=\"step-item-").append(index).append("\">\n");
+        sb.append("          <div class=\"step-header\">\n");
+        sb.append("            <div class=\"step-header-left\">\n");
+        sb.append("              <span class=\"step-number\">#").append(index + 1).append("</span>\n");
+        sb.append("              <span class=\"step-status-pill ").append(stepPillClass).append("\">").append(stepStatus).append("</span>\n");
+        appendStepBadges(sb, step);
         sb.append("            </div>\n");
         sb.append("            <div class=\"step-header-right\">\n");
         if (step.getDurationMs() > 0)
@@ -479,57 +565,16 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"step-source-meta\">📄 ").append(escapeHtml(step.getSourceFile()))
               .append(step.getLineNumber() > 0 ? ":" + step.getLineNumber() : "").append("</div>\n");
         }
-        if (!step.getScreenshots().isEmpty())
+        if (step.getFailureReason() != null && !step.getFailureReason().isBlank())
         {
-            sb.append("            <div class=\"step-card-screenshots-preview\">\n");
-            for (int scIdx = 0; scIdx < Math.min(3, step.getScreenshots().size()); scIdx++)
-            {
-                final TestExecutionReport.ReportScreenshotEntry sc = step.getScreenshots().get(scIdx);
-                final String dataSrc = sc.getBase64Data() != null && sc.getBase64Data().startsWith("data:")
-                    ? sc.getBase64Data()
-                    : "data:" + (sc.getMediaType() != null ? sc.getMediaType() : "image/png") + ";base64," + (sc.getBase64Data() != null ? sc.getBase64Data() : "");
-                final String scName = sc.getName() != null ? sc.getName() : "Step #" + (index + 1) + " Screenshot";
-                sb.append("              <img src=\"").append(dataSrc).append("\" alt=\"Step screenshot preview\" class=\"preview-thumb\" onclick=\"event.stopPropagation(); openLightbox(this.src, '").append(escapeAttr(scName)).append("')\" title=\"").append(escapeHtml(scName)).append(" - Click to expand\" loading=\"lazy\" />\n");
-            }
-            if (step.getScreenshots().size() > 3)
-            {
-                sb.append("              <span class=\"preview-more-badge\">+").append(step.getScreenshots().size() - 3).append(" more</span>\n");
-            }
-            sb.append("            </div>\n");
+            sb.append("            <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
+              .append(escapeHtml(step.getFailureReason())).append("</div>\n");
         }
+        appendScreenshotPreviews(sb, step.getScreenshots(), "Step #" + (index + 1));
         sb.append("          </div>\n");
 
-        // Render Action and LLM Summary tags
-        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty() || step.getSsimScore() != null)
-        {
-            sb.append("          <div class=\"step-card-footer\">\n");
-            if (step.getSsimScore() != null)
-            {
-                final double score = step.getSsimScore();
-                final double min = step.getSsimMinScore() != null ? step.getSsimMinScore() : 0.99;
-                final boolean pass = score >= min;
-                sb.append("            <span class=\"footer-tag ").append(pass ? "ssim-pass" : "ssim-fail").append("\">🖼️ SSIM: ")
-                    .append(String.format("%.4f", score)).append(" (Min: ").append(String.format("%.2f", min)).append(")</span>\n");
-            }
-            if (!step.getActions().isEmpty())
-            {
-                sb.append("            <span class=\"footer-tag\">🎯 ").append(step.getActions().size()).append(" action(s)</span>\n");
-            }
-            if (!step.getScreenshots().isEmpty())
-            {
-                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(index).append(", -1, 'visuals')\">📸 ").append(step.getScreenshots().size()).append(" screenshot(s)</span>\n");
-            }
-            final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls());
-            if (llmCount > 0)
-            {
-                sb.append("            <span class=\"footer-tag\">🤖 ").append(llmCount).append(" LLM call(s)</span>\n");
-            }
-            if (hasSubSteps)
-            {
-                sb.append("            <span class=\"footer-tag highlight\">✂️ Split into ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
-            }
-            sb.append("          </div>\n");
-        }
+        // Render Action and LLM Summary tags for parent
+        appendFooterTags(sb, step, index, -1, hasSubSteps);
 
         // Render Nested Sub-Steps Hierarchy if compound step was split
         if (hasSubSteps)
@@ -546,15 +591,35 @@ public final class HtmlReportGenerator
 
                 sb.append("            <div class=\"sub-step-card\" id=\"substep-item-").append(index).append("-").append(s).append("\">\n");
                 sb.append("              <div class=\"sub-step-header\">\n");
-                sb.append("                <span class=\"sub-step-number\">#").append(index + 1).append(".").append(s + 1).append("</span>\n");
-                sb.append("                <span class=\"step-status-pill ").append(subPillClass).append("\">").append(subStatus).append("</span>\n");
-                sb.append("                <span class=\"sub-step-instruction\">").append(escapeHtml(sub.getInstruction())).append("</span>\n");
+                sb.append("                <div class=\"sub-step-header-left\">\n");
+                sb.append("                  <span class=\"sub-step-number\">#").append(index + 1).append(".").append(s + 1).append("</span>\n");
+                sb.append("                  <span class=\"step-status-pill ").append(subPillClass).append("\">").append(subStatus).append("</span>\n");
+                appendStepBadges(sb, sub);
+                sb.append("                  <span class=\"sub-step-instruction\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">").append(escapeHtml(sub.getInstruction())).append("</span>\n");
+                sb.append("                </div>\n");
+                sb.append("                <div class=\"sub-step-header-right\">\n");
                 if (sub.getDurationMs() > 0)
                 {
-                    sb.append("                <span class=\"sub-step-duration\">").append(NUMBER_FORMAT.format(sub.getDurationMs())).append(" ms</span>\n");
+                    sb.append("                  <span class=\"sub-step-duration\">").append(NUMBER_FORMAT.format(sub.getDurationMs())).append(" ms</span>\n");
                 }
-                sb.append("                <button class=\"btn-inspect-substep\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">🔍 Inspect</button>\n");
+                sb.append("                  <button class=\"btn-inspect-substep\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">🔍 Inspect</button>\n");
+                sb.append("                </div>\n");
                 sb.append("              </div>\n");
+
+                if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
+                {
+                    sb.append("              <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
+                      .append(escapeHtml(sub.getFailureReason())).append("</div>\n");
+                }
+
+                if (!sub.getScreenshots().isEmpty())
+                {
+                    sb.append("              <div class=\"sub-step-body\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">\n");
+                    appendScreenshotPreviews(sb, sub.getScreenshots(), "Step #" + (index + 1) + "." + (s + 1));
+                    sb.append("              </div>\n");
+                }
+
+                appendFooterTags(sb, sub, index, s, false);
                 sb.append("            </div>\n");
             }
             sb.append("          </div>\n");
@@ -822,6 +887,19 @@ public final class HtmlReportGenerator
                     ctxBadge.style.display = 'none';
                 }
 
+                var errEl = document.getElementById('inspErrorBanner');
+                if (step.failureReason) {
+                    errEl.innerHTML = '❌ <strong>Error:</strong> <span>' + escapeHtml(step.failureReason) + '</span>';
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+
+                var errBadge = document.getElementById('tabErrorBadge');
+                if (errBadge) {
+                    errBadge.style.display = (step.failureReason && !step.bug) ? 'inline-block' : 'none';
+                }
+
                 // Update Tab Counts
                 var llmCalls = step.llmCalls || [];
                 var actions = step.actions || [];
@@ -834,8 +912,12 @@ public final class HtmlReportGenerator
                 // Tab Auto-Selection
                 if (preferredTab) {
                     window.switchInspectorTab(preferredTab);
+                } else if (step.failureReason && llmCalls.length === 0) {
+                    window.switchInspectorTab('reasoning');
                 } else if (step.visual || (visuals.length > 0 && llmCalls.length === 0)) {
                     window.switchInspectorTab('visuals');
+                } else {
+                    window.switchInspectorTab('llm');
                 }
 
                 // 1. Render LLM Panel (Safe Text Rendering via DOM textContent)
@@ -969,7 +1051,16 @@ public final class HtmlReportGenerator
 
                         var header = document.createElement('div');
                         header.className = 'screenshot-header';
-                        header.textContent = sc.name || ('Screenshot #' + (si + 1));
+                        var nameSpan = document.createElement('span');
+                        nameSpan.textContent = sc.name || ('Screenshot #' + (si + 1));
+                        header.appendChild(nameSpan);
+                        var dims = sc.dimensions || (sc.width && sc.height ? (sc.width + 'x' + sc.height + ' px') : '');
+                        if (dims) {
+                            var dimBadge = document.createElement('span');
+                            dimBadge.className = 'screenshot-dim-badge';
+                            dimBadge.textContent = dims;
+                            header.appendChild(dimBadge);
+                        }
                         card.appendChild(header);
 
                         var src = sc.base64Data || '';
@@ -980,8 +1071,17 @@ public final class HtmlReportGenerator
                         img.src = src;
                         img.className = 'screenshot-img';
                         img.title = 'Click to expand';
-                        img.onclick = function() { window.openLightbox(this.src, sc.name || ('Screenshot #' + (si + 1))); };
+                        var scLabel = (sc.name || ('Screenshot #' + (si + 1))) + (dims ? ' (' + dims + ')' : '');
+                        img.onclick = function() { window.openLightbox(this.src, scLabel); };
                         card.appendChild(img);
+
+                        if (sc.width && sc.height) {
+                            var metaBar = document.createElement('div');
+                            metaBar.className = 'screenshot-meta-bar';
+                            metaBar.innerHTML = '<span class="dim-pill">Width: <strong>' + sc.width + 'px</strong></span>' +
+                                                '<span class="dim-pill">Height: <strong>' + sc.height + 'px</strong></span>';
+                            card.appendChild(metaBar);
+                        }
                         grid.appendChild(card);
                     });
                     visualsPanel.appendChild(grid);
@@ -1529,8 +1629,11 @@ public final class HtmlReportGenerator
                 background: #ffffff;
                 border: 1px solid var(--border);
                 border-radius: 6px;
-                padding: 0.5rem 0.75rem;
+                padding: 0.6rem 0.75rem;
                 transition: all 0.15s ease;
+                display: flex;
+                flex-direction: column;
+                gap: 0.4rem;
             }
             .sub-step-card.active {
                 border-color: var(--accent-primary);
@@ -1540,8 +1643,21 @@ public final class HtmlReportGenerator
             .sub-step-header {
                 display: flex;
                 align-items: center;
+                justify-content: space-between;
                 gap: 0.6rem;
                 flex-wrap: wrap;
+            }
+            .sub-step-header-left {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                flex: 1;
+            }
+            .sub-step-header-right {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
             }
             .sub-step-number {
                 font-family: var(--font-mono);
@@ -1554,11 +1670,23 @@ public final class HtmlReportGenerator
                 color: var(--text);
                 font-weight: 500;
                 flex: 1;
+                cursor: pointer;
             }
             .sub-step-duration {
                 font-size: 0.75rem;
                 font-family: var(--font-mono);
                 color: var(--text-muted);
+            }
+            .sub-step-body {
+                padding: 0.2rem 0;
+                cursor: pointer;
+            }
+            .sub-step-footer {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                padding-top: 0.35rem;
+                border-top: 1px solid #f1f5f9;
             }
             .steps-inspector-pane {
                 display: none;
@@ -1667,6 +1795,37 @@ public final class HtmlReportGenerator
                 font-size: 0.8rem;
                 color: var(--text-muted);
                 font-family: var(--font-mono);
+            }
+            .step-card-error-banner {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                border-left: 4px solid var(--accent-danger);
+                border-radius: 6px;
+                color: #991b1b;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.82rem;
+                margin-top: 0.5rem;
+                word-break: break-word;
+            }
+            .inspector-error-banner {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                border-left: 4px solid var(--accent-danger);
+                border-radius: 6px;
+                color: #991b1b;
+                padding: 0.6rem 0.85rem;
+                font-size: 0.85rem;
+                margin-top: 0.4rem;
+                word-break: break-word;
+            }
+            .pill-error-count {
+                background: var(--accent-danger);
+                color: #ffffff;
+                padding: 0.1rem 0.4rem;
+                border-radius: 9999px;
+                font-size: 0.7rem;
+                font-weight: 700;
+                margin-left: 0.3rem;
             }
             .inspector-tabs {
                 display: flex;
@@ -1957,6 +2116,41 @@ public final class HtmlReportGenerator
                 font-weight: 600;
                 color: var(--text-muted);
                 border-bottom: 1px solid var(--border);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.5rem;
+            }
+            .screenshot-dim-badge {
+                display: inline-block;
+                background: #e2e8f0;
+                color: #475569;
+                font-size: 0.7rem;
+                font-weight: 600;
+                padding: 0.15rem 0.4rem;
+                border-radius: 4px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            }
+            .screenshot-meta-bar {
+                background: #f8fafc;
+                padding: 0.4rem 0.8rem;
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                border-top: 1px solid var(--border);
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+            }
+            .dim-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
+                font-size: 0.72rem;
+                color: #475569;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            }
+            .dim-pill strong {
+                color: #0f172a;
             }
             .screenshot-img {
                 width: 100%;

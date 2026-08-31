@@ -59,6 +59,7 @@ public abstract class BaseAiTest extends BaseLlmTest
     protected static EmbeddedHtmlServer server;
     protected String currentTestUrl;
     private TestInfo testInfo;
+    private static volatile boolean shutdownHookRegistered = false;
 
     /**
      * Starts the embedded server before any tests in the class are run.
@@ -66,27 +67,39 @@ public abstract class BaseAiTest extends BaseLlmTest
      * @throws IOException if server fails to start
      */
     @BeforeAll
-    public static void startServer() throws IOException
+    public static synchronized void startServer() throws IOException
     {
         Configuration.headless = true;
         if (System.getProperty("selenide.headless") != null)
         {
             Configuration.headless = Boolean.parseBoolean(System.getProperty("selenide.headless"));
         }
-        server = new EmbeddedHtmlServer();
-        server.start();
+        if (server == null || !server.isRunning())
+        {
+            server = new EmbeddedHtmlServer();
+            server.start();
+        }
+        if (!shutdownHookRegistered)
+        {
+            shutdownHookRegistered = true;
+            Runtime.getRuntime().addShutdownHook(new Thread(() ->
+            {
+                if (server != null && server.isRunning())
+                {
+                    server.stop();
+                }
+            }));
+        }
     }
 
     /**
      * Stops the embedded server after all tests in the class have finished.
      */
     @AfterAll
-    public static void stopServer()
+    public static synchronized void stopServer()
     {
-        if (server != null)
-        {
-            server.stop();
-        }
+        // Server is kept running across test classes to prevent OS socket TIME_WAIT port exhaustion.
+        // It will shut down automatically on JVM exit via shutdown hook.
     }
 
     /**
@@ -98,7 +111,18 @@ public abstract class BaseAiTest extends BaseLlmTest
     public void setupPageUrl(final TestInfo testInfo)
     {
         this.testInfo = testInfo;
-        EmbeddedHtmlServer.resetInventory();
+        if (server == null || !server.isRunning())
+        {
+            try
+            {
+                startServer();
+            }
+            catch (final IOException e)
+            {
+                throw new RuntimeException("Failed to ensure EmbeddedHtmlServer is running", e);
+            }
+        }
+        server.resetAll();
 
         final boolean isInteractive = org.neodymium.ai.config.AiConfiguration.getInstance().isInteractive();
         org.junit.jupiter.api.Assertions.assertFalse(isInteractive,

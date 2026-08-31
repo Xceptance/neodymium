@@ -21,15 +21,19 @@ package org.neodymium.ai.prompt;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.executor.selenide.VolatileIdDetector;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.ToLevelEscalationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,23 +52,12 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     /**
      * Selenide/Selenium engine locator constraint rule appended dynamically when operating in Selenide mode.
      */
-    public static final String SELENIDE_LOCATOR_RULE =
-        "\n\n## Selenide/Selenium Engine Locators\n"
-        + "- Locators MUST be standard W3C CSS selectors compatible with Selenium/WebDriver. "
-        + "FORBIDDEN: Playwright pseudo-selectors (such as ':has-text(...)', ':text(...)', ':text-is(...)', ':has(...)').";
+    public static final String SELENIDE_LOCATOR_RULE = "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
 
     /**
      * Candidate locators instruction appended dynamically when the Quality Judge is active.
      */
-    public static final String CANDIDATE_LOCATORS_RULE =
-        "\n\n## Candidate Locators & Ambiguity Evaluation\n"
-        + "- For each action, in addition to 'locator', provide a 'candidateLocators' array containing 1 to 3 alternate locator strategies (e.g. ID, clean CSS class, aria-label, data-ai) with confidence 'score' (0.0 to 1.0) and 'strategy'.\n"
-        + "- Example format inside each action:\n"
-        + "  \"candidateLocators\": [\n"
-        + "    {\"locator\": \"#submit-order\", \"strategy\": \"ID\", \"score\": 0.95},\n"
-        + "    {\"locator\": \".btn-checkout[type='submit']\", \"strategy\": \"CLASS_ATTRIBUTE\", \"score\": 0.85},\n"
-        + "    {\"locator\": \"[data-ai='xc123']\", \"strategy\": \"AUTOMATION_ID\", \"score\": 0.60}\n"
-        + "  ]";
+    public static final String CANDIDATE_LOCATORS_RULE = "\n\n" + AiAgentPrompts.getCandidateLocatorsRule().trim();
 
     /**
      * Constructs the extraction prompt.
@@ -108,11 +101,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
         final Object lastError = context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
-        final org.neodymium.ai.model.ContextLevel activeLevel =
-            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.model.ContextLevel cl
+        final ContextLevel activeLevel =
+            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl
                 ? cl
-                : org.neodymium.ai.model.ContextLevel.MINIMAL;
-        final org.neodymium.ai.model.ContextLevel nextLevel = activeLevel.escalate();
+                : ContextLevel.MINIMAL;
+        final ContextLevel nextLevel = activeLevel.escalate();
 
         final StringBuilder sb = new StringBuilder();
         sb.append("## Execution Context\n");
@@ -124,13 +117,20 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         }
         sb.append("\n");
 
-        if (lastError != null)
+        if (lastError != null && !(lastError instanceof ToLevelEscalationException))
         {
             final String errorMsg = lastError instanceof Throwable t ? t.getMessage() : lastError.toString();
             sb.append("⚠️ PREVIOUS ATTEMPT FAILURE:\n")
               .append("The previous action execution failed with error:\n")
               .append(errorMsg).append("\n")
               .append("Please inspect the DOM elements below and select a different, valid CSS selector or locator.\n\n");
+        }
+
+        if (nextLevel == null || nextLevel == activeLevel)
+        {
+            sb.append("ℹ️ MAXIMUM CONTEXT LEVEL REACHED:\n")
+              .append("You are at the maximum context level (VISUAL_RICH) with complete DOM and visual state.\n")
+              .append("If the target element, state, or assertion condition described in the instruction is not present or cannot be satisfied, return status: \"FAILED\" with your reasoning. Do NOT emit speculative actions.\n\n");
         }
 
         if (diffSummary != null && !diffSummary.trim().isEmpty())
@@ -162,28 +162,31 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
-        final org.neodymium.ai.model.ContextLevel activeLevel =
-            (context != null && context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof org.neodymium.ai.model.ContextLevel cl)
+        final ContextLevel activeLevel =
+            (context != null && context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl)
                 ? cl
                 : null;
 
-        if (activeLevel == org.neodymium.ai.model.ContextLevel.VISUAL && "SUCCESS".equalsIgnoreCase(status))
+        final Object currentStepObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
+        final PlaybookStep currentStep = currentStepObj instanceof PlaybookStep ps ? ps : null;
+
+        if (activeLevel == ContextLevel.VISUAL && "SUCCESS".equalsIgnoreCase(status) && currentStep != null && currentStep.isVisualStep())
         {
-            if (!actions.isEmpty())
+            final boolean hasNavigate = actions.stream().anyMatch(a -> a != null && "NAVIGATE".equalsIgnoreCase(a.getType()));
+            if (!hasNavigate && !actions.isEmpty())
             {
-                LOGGER.debug("🛡️ [Visual Guard] Visual check passed at ContextLevel.VISUAL. Discarded {} synthetic action(s).", actions.size());
+                LOGGER.debug("🛡️ [Visual Guard] Visual check passed at ContextLevel.VISUAL for visual step '{}'. Discarded {} synthetic action(s).", currentStep.getInstruction(), actions.size());
                 actions.clear();
             }
         }
 
         if (context != null)
         {
-            final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-            if (currentStepObj instanceof org.neodymium.ai.model.PlaybookStep step)
+            if (currentStep != null)
             {
                 if (statusReasoning != null && !statusReasoning.isBlank())
                 {
-                    step.setReasoning(statusReasoning.trim());
+                    currentStep.setReasoning(statusReasoning.trim());
                 }
                 else if (!actions.isEmpty())
                 {
@@ -201,11 +204,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                     }
                     if (!sb.isEmpty())
                     {
-                        step.setReasoning(sb.toString());
+                        currentStep.setReasoning(sb.toString());
                     }
                 }
-                step.getActions().clear();
-                step.getActions().addAll(actions);
+                currentStep.getActions().clear();
+                currentStep.getActions().addAll(actions);
             }
         }
 
@@ -223,8 +226,8 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
 
         if (!isEscalationRequested && targetLevelCandidate != null && actions.isEmpty())
         {
-            final org.neodymium.ai.model.ContextLevel candidateLevel =
-                org.neodymium.ai.model.ContextLevel.fromString(targetLevelCandidate, null);
+            final ContextLevel candidateLevel =
+                ContextLevel.fromString(targetLevelCandidate, null);
             if (candidateLevel != null && activeLevel != null && candidateLevel.ordinal() > activeLevel.ordinal())
             {
                 isEscalationRequested = true;
@@ -233,7 +236,7 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
 
         if (!isEscalationRequested && ("FAILED".equalsIgnoreCase(status) || "ERROR".equalsIgnoreCase(status)) && actions.isEmpty())
         {
-            if (activeLevel != null && activeLevel.ordinal() < org.neodymium.ai.model.ContextLevel.STANDARD.ordinal())
+            if (activeLevel != null && activeLevel.ordinal() < ContextLevel.STANDARD.ordinal())
             {
                 isEscalationRequested = true;
             }
@@ -241,18 +244,24 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
 
         if (isEscalationRequested)
         {
+            if (activeLevel != null && activeLevel.escalate() == null)
+            {
+                throw new DivergenceException(
+                    statusReasoning.isEmpty() ? "Element or condition not found at highest context level." : statusReasoning
+                );
+            }
             String targetLevelStr = targetLevelCandidate != null ? targetLevelCandidate : "STANDARD";
             if (activeLevel != null)
             {
-                final org.neodymium.ai.model.ContextLevel reqLevel =
-                    org.neodymium.ai.model.ContextLevel.fromString(targetLevelStr, null);
+                final ContextLevel reqLevel =
+                    ContextLevel.fromString(targetLevelStr, null);
                 if (reqLevel == null || reqLevel.ordinal() <= activeLevel.ordinal())
                 {
-                    final org.neodymium.ai.model.ContextLevel nextLevel = activeLevel.escalate();
+                    final ContextLevel nextLevel = activeLevel.escalate();
                     targetLevelStr = nextLevel != null ? nextLevel.name() : activeLevel.name();
                 }
             }
-            throw new org.neodymium.ai.pipeline.ToLevelEscalationException(statusReasoning.isEmpty() ? "LLM requested escalation" : statusReasoning, targetLevelStr);
+            throw new ToLevelEscalationException(statusReasoning.isEmpty() ? "LLM requested escalation" : statusReasoning, targetLevelStr);
         }
         else if ("FAILED".equalsIgnoreCase(status) || "ERROR".equalsIgnoreCase(status))
         {
@@ -260,10 +269,10 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             {
                 return actions;
             }
-            throw new org.neodymium.ai.pipeline.DivergenceException(statusReasoning.isEmpty() ? "Visual check assertion failed." : statusReasoning);
+            throw new DivergenceException(statusReasoning.isEmpty() ? "Visual check assertion failed." : statusReasoning);
         }
 
-        final org.neodymium.ai.executor.selenide.VolatileIdDetector volatileDetector = new org.neodymium.ai.executor.selenide.VolatileIdDetector();
+        final VolatileIdDetector volatileDetector = new VolatileIdDetector();
         for (final Action action : actions)
         {
             final String target = action.getTarget();
@@ -272,9 +281,13 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 final String idVal = target.substring(target.indexOf('#') + 1);
                 if (volatileDetector.isVolatile(idVal))
                 {
-                    final org.neodymium.ai.model.ContextLevel currentLevel = activeLevel != null ? activeLevel : org.neodymium.ai.model.ContextLevel.MINIMAL;
-                    final String nextLevelStr = currentLevel.escalate() != null ? currentLevel.escalate().name() : currentLevel.name();
-                    throw new org.neodymium.ai.pipeline.ToLevelEscalationException(
+                    final ContextLevel currentLevel = activeLevel != null ? activeLevel : ContextLevel.MINIMAL;
+                    if (currentLevel.escalate() == null)
+                    {
+                        break;
+                    }
+                    final String nextLevelStr = currentLevel.escalate().name();
+                    throw new ToLevelEscalationException(
                         "Extracted target selector '" + target + "' uses an invalid volatile ID. Escalating context level.",
                         nextLevelStr
                     );

@@ -38,6 +38,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
@@ -107,27 +108,7 @@ public final class PesapPreStep implements PipelineStep
             alreadySplitSteps.add(this.step);
             try
             {
-                String previousInstruction = null;
-                final List<String> nextInstructions = new ArrayList<>();
-                @SuppressWarnings("unchecked")
-                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-                if (flatSteps != null)
-                {
-                    final int idx = flatSteps.indexOf(this.step);
-                    if (idx != -1)
-                    {
-                        if (idx > 0)
-                        {
-                            previousInstruction = context.getSessionData().resolveVariables(flatSteps.get(idx - 1).getInstruction());
-                        }
-                        for (int i = idx + 1; i < flatSteps.size() && nextInstructions.size() < 2; i++)
-                        {
-                            nextInstructions.add(context.getSessionData().resolveVariables(flatSteps.get(i).getInstruction()));
-                        }
-                    }
-                }
-
-                final PesapPrompt pesapPrompt = new PesapPrompt(resolvedInstruction, previousInstruction, nextInstructions);
+                final PesapPrompt pesapPrompt = new PesapPrompt(resolvedInstruction);
                 final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.PESAP);
                 final double temp = config.getTemperature("action");
                 final int timeoutSeconds = config.getTimeoutSeconds("action");
@@ -200,12 +181,15 @@ public final class PesapPreStep implements PipelineStep
 
                 final PesapPrompt.PesapResult pesapResult = pesapPrompt.parseResponse(response.content(), context);
 
-                if (pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
+                final boolean isPureNavigation = resolvedInstruction != null && resolvedInstruction.trim().matches("(?i)^(open|navigate\\s+to|go\\s+to)\\s+https?://\\S+$");
+                if (!isPureNavigation && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
                 {
                     LOGGER.info("✂️ Upfront JIT step split detected: \"{}\" split into {}", resolvedInstruction, pesapResult.splitSteps());
+                    final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
                     for (final String part : pesapResult.splitSteps())
                     {
-                        final PlaybookStep subStep = new PlaybookStep(part);
+                        final String cleanPart = sanitizer.sanitizeText(part, context.getSessionData());
+                        final PlaybookStep subStep = new PlaybookStep(cleanPart);
                         subStep.setSourceFile(this.step.getSourceFile());
                         subStep.setLineNumber(this.step.getLineNumber());
                         subStep.setParent(this.step);
