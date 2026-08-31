@@ -27,7 +27,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @author AI-generated: Gemini Advanced
  * @author Xceptance GmbH 2026
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.xceptance.aura.report", "com.xceptance.aura.test"})
 public class AuraReportManagerApplication
 {
     public static void main(final String[] args)

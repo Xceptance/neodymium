@@ -21,7 +21,6 @@ package com.xceptance.aura.report.controller;
 import com.xceptance.aura.report.dto.BatchSummaryDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.service.AuraReportDataService;
-import com.xceptance.aura.report.service.AuraTestManagerProcessService;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,14 +38,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuraReportRestController
 {
     private final AuraReportDataService dataService;
-    private final AuraTestManagerProcessService auraTestManagerProcessService;
 
-    public AuraReportRestController(
-        final AuraReportDataService dataService,
-        final AuraTestManagerProcessService auraTestManagerProcessService)
+    public AuraReportRestController(final AuraReportDataService dataService)
     {
         this.dataService = dataService;
-        this.auraTestManagerProcessService = auraTestManagerProcessService;
     }
 
     @GetMapping("/report/batches")
@@ -64,6 +59,6 @@ public class AuraReportRestController
     @GetMapping("/v1/aura-manager/status")
     public Map<String, Object> getAuraManagerStatus()
     {
-        return auraTestManagerProcessService.getStatus();
+        return Map.of("running", true, "embedded", true, "url", "/aura-test-manager");
     }
 }

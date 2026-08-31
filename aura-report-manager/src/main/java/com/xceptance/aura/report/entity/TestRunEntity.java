@@ -213,6 +213,28 @@ public class TestRunEntity
             );
             return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         }
+        if (timestampLabel != null && !timestampLabel.trim().isEmpty() && !"Recently".equalsIgnoreCase(timestampLabel.trim()))
+        {
+            final String trimmed = timestampLabel.trim();
+            try
+            {
+                final java.time.Instant instant = java.time.Instant.parse(trimmed);
+                final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
+                return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            }
+            catch (final Exception e1)
+            {
+                try
+                {
+                    final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(trimmed.replace(" ", "T"));
+                    return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                }
+                catch (final Exception e2)
+                {
+                    return trimmed;
+                }
+            }
+        }
         return timestampLabel != null ? timestampLabel : "Recently";
     }
 

@@ -120,7 +120,7 @@
                     <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">tune</span> <span>Run Configuration</span></div>
                 </div>
                 <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel">
-                    <div th:replace="~{fragments/queue :: configPanelContent}"></div>
+                    <th:block th:replace="~{fragments/queue :: configPanelContent}"></th:block>
                 </div>
                 <div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
                     <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>

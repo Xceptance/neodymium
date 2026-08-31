@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,15 +190,47 @@ public final class AuraManagerInteractiveController
 
         try
         {
-            final File resultsDir = new File("target/aura-sandbox/allure-results");
-            if (!resultsDir.exists())
-            {
-                resultsDir.mkdirs();
-            }
             final String executionKey = extractExecutionKey(json);
             final int index = interactiveService.getExecutionIndex(executionKey);
-            final File executionJson = new File(resultsDir, "console-execution-" + index + ".json");
-            Files.writeString(executionJson.toPath(), body, StandardCharsets.UTF_8);
+
+            final String runFolder = (engine.getRunId() != null && !engine.getRunId().isBlank())
+                ? (engine.getRunId().startsWith("run_") || engine.getRunId().startsWith("run-") ? engine.getRunId() : "run_" + engine.getRunId())
+                : InteractiveConsoleEngine.getRunFolder();
+            final String testClassFolder = InteractiveConsoleEngine.extractTestClassFolder(json);
+
+            final List<File> baseDirs = List.of(
+                new File("storage/runs"),
+                new File(AiConfiguration.getInstance().getConsoleExecutionLogsDirectory())
+            );
+
+            for (final File baseDir : baseDirs)
+            {
+                try
+                {
+                    final File structuredDir = new File(baseDir, runFolder + "/" + testClassFolder);
+                    if (!structuredDir.exists())
+                    {
+                        structuredDir.mkdirs();
+                    }
+                    final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
+                    Files.writeString(structuredJson.toPath(), body, StandardCharsets.UTF_8);
+
+                    final File runLevelDir = new File(baseDir, runFolder);
+                    if (!structuredDir.getCanonicalPath().equals(runLevelDir.getCanonicalPath()))
+                    {
+                        // Remove any stale run-level duplicate if present
+                        final File runLevelJson = new File(runLevelDir, "console-execution-" + index + ".json");
+                        if (runLevelJson.exists())
+                        {
+                            runLevelJson.delete();
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("[Aura Server] Could not save execution snapshot in {}: {}", baseDir.getPath(), e.getMessage());
+                }
+            }
         }
         catch (final Exception e)
         {
@@ -216,26 +249,41 @@ public final class AuraManagerInteractiveController
         {
             return "default";
         }
+        String key = "";
         if (json.has("testName") && !json.get("testName").isJsonNull())
         {
             final String testName = json.get("testName").getAsString();
             if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
             {
-                return testName;
+                key = testName;
             }
         }
-        String key = "";
-        if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
+        if (key.isEmpty())
         {
-            key += json.get("playbookFile").getAsString();
+            if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
+            {
+                key += json.get("playbookFile").getAsString();
+            }
+            else if (json.has("testFile") && !json.get("testFile").isJsonNull())
+            {
+                key += json.get("testFile").getAsString();
+            }
+            if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
+            {
+                key += "::" + json.get("datasetId").getAsString();
+            }
         }
-        else if (json.has("testFile") && !json.get("testFile").isJsonNull())
+        if (json.has("browser") && !json.get("browser").isJsonNull())
         {
-            key += json.get("testFile").getAsString();
-        }
-        if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
-        {
-            key += "::" + json.get("datasetId").getAsString();
+            final String browser = json.get("browser").getAsString();
+            if (browser != null && !browser.isEmpty())
+            {
+                if (!key.isEmpty())
+                {
+                    key += "::";
+                }
+                key += browser;
+            }
         }
         return key.isEmpty() ? "default" : key;
     }

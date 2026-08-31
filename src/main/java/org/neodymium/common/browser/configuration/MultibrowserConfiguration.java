@@ -2,6 +2,7 @@ package org.neodymium.common.browser.configuration;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.HashMap;
@@ -248,9 +249,32 @@ public class MultibrowserConfiguration
             File source = new File(path);
             if (source.exists())
             {
-                FileInputStream fileInputStream = new FileInputStream(source);
-                properties.load(fileInputStream);
-                fileInputStream.close();
+                try (FileInputStream fileInputStream = new FileInputStream(source))
+                {
+                    properties.load(fileInputStream);
+                }
+            }
+            else
+            {
+                File parentSource = new File(".." + File.separator + path);
+                if (parentSource.exists())
+                {
+                    try (FileInputStream parentInputStream = new FileInputStream(parentSource))
+                    {
+                        properties.load(parentInputStream);
+                    }
+                }
+                else
+                {
+                    String resourcePath = path.startsWith("./") ? path.substring(2) : path;
+                    try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath))
+                    {
+                        if (is != null)
+                        {
+                            properties.load(is);
+                        }
+                    }
+                }
             }
         }
         catch (Exception e)

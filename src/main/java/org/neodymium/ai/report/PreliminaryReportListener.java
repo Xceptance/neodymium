@@ -70,6 +70,7 @@ public final class PreliminaryReportListener implements ExecutionListener
     private static final Logger LOGGER = LoggerFactory.getLogger(PreliminaryReportListener.class);
     private static final SimpleDateFormat FILE_TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
 
+    private final boolean isCustomOutputDirectory;
     private final Path outputDirectory;
     private final Set<DiskReportFormat> formats;
     private final boolean enabled;
@@ -92,6 +93,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         this.enabled = config.isDiskReportEnabled();
         this.outputDirectory = Paths.get(config.getDiskReportDirectory());
         this.formats = DiskReportFormat.parseFormats(config.getDiskReportFormat());
+        this.isCustomOutputDirectory = false;
         this.report.setStartTimeMs(System.currentTimeMillis());
     }
 
@@ -115,7 +117,8 @@ public final class PreliminaryReportListener implements ExecutionListener
      */
     public PreliminaryReportListener(final Path outputDirectory, final Set<DiskReportFormat> formats, final boolean enabled)
     {
-        this.outputDirectory = outputDirectory != null ? outputDirectory : Paths.get("target/ai-reports");
+        this.isCustomOutputDirectory = outputDirectory != null;
+        this.outputDirectory = outputDirectory != null ? outputDirectory : Paths.get(AiConfiguration.getInstance().getDiskReportDirectory());
         this.formats = formats != null ? formats : Set.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON);
         this.enabled = enabled;
         this.report.setStartTimeMs(System.currentTimeMillis());
@@ -975,19 +978,17 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         try
         {
+            final Path configuredDiskReportDir = Paths.get(AiConfiguration.getInstance().getDiskReportDirectory());
+            final Path rootOutputDir = (this.isCustomOutputDirectory && !this.outputDirectory.equals(configuredDiskReportDir))
+                ? this.outputDirectory
+                : Paths.get("target/ai-results");
+            if (!Files.exists(rootOutputDir))
+            {
+                Files.createDirectories(rootOutputDir);
+            }
             if (!Files.exists(this.outputDirectory))
             {
                 Files.createDirectories(this.outputDirectory);
-            }
-
-            final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
-            final String testClassFolder = this.report.getTestClass() != null && !this.report.getTestClass().isBlank()
-                ? extractSimpleClassName(this.report.getTestClass())
-                : "DefaultTestClass";
-            final Path structuredOutputDir = this.outputDirectory.resolve(runFolder).resolve(testClassFolder);
-            if (!Files.exists(structuredOutputDir))
-            {
-                Files.createDirectories(structuredOutputDir);
             }
 
             final String baseFileName = computeBaseFileName();
@@ -998,25 +999,21 @@ public final class PreliminaryReportListener implements ExecutionListener
                 switch (format)
                 {
                     case HTML -> {
+                        final String htmlContent = this.htmlGenerator.generate(this.report);
+                        final Path htmlFile = rootOutputDir.resolve(baseFileName + ".html");
                         Files.writeString(htmlFile, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        final Path structuredHtmlFile = structuredOutputDir.resolve(baseFileName + ".html");
-                        Files.writeString(structuredHtmlFile, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("📊 Preliminary HTML report written: {}", htmlFile.toAbsolutePath());
                     }
                     case MARKDOWN -> {
                         final String mdContent = this.markdownGenerator.generate(this.report);
-                        final Path mdFile = this.outputDirectory.resolve(baseFileName + ".md");
+                        final Path mdFile = rootOutputDir.resolve(baseFileName + ".md");
                         Files.writeString(mdFile, mdContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        final Path structuredMdFile = structuredOutputDir.resolve(baseFileName + ".md");
-                        Files.writeString(structuredMdFile, mdContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("📝 Preliminary Markdown report written: {}", mdFile.toAbsolutePath());
                     }
                     case JSON -> {
                         final String jsonContent = this.jsonGenerator.generate(this.report);
-                        final Path jsonFile = this.outputDirectory.resolve(baseFileName + ".json");
+                        final Path jsonFile = rootOutputDir.resolve(baseFileName + ".json");
                         Files.writeString(jsonFile, jsonContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        final Path structuredJsonFile = structuredOutputDir.resolve(baseFileName + ".json");
-                        Files.writeString(structuredJsonFile, jsonContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                         LOGGER.info("💾 Preliminary JSON report written: {}", jsonFile.toAbsolutePath());
                     }
                     case ALL -> {
@@ -1027,7 +1024,7 @@ public final class PreliminaryReportListener implements ExecutionListener
 
             if (this.formats.contains(DiskReportFormat.HTML) || this.formats.contains(DiskReportFormat.ALL))
             {
-                this.indexGenerator.updateIndex(this.outputDirectory, this.report, baseFileName);
+                this.indexGenerator.updateIndex(rootOutputDir, this.report, baseFileName);
             }
         }
         catch (final Exception e)

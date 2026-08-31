@@ -207,6 +207,15 @@ public final class AuraManagerQueueController
                 list.add(new BrowserProfileDto(tag, name, browser, res, isHeadless));
             }
         }
+        if (list.isEmpty())
+        {
+            list.add(new BrowserProfileDto("Chrome_1024x768", "Chrome 1024x768", "chrome", "1024x768", false));
+            list.add(new BrowserProfileDto("Chrome_1500x1000", "Chrome 1500x1000", "chrome", "1500x1000", false));
+            list.add(new BrowserProfileDto("Chrome_Headless", "Headless Google Chrome", "chrome", "1024x768", true));
+            list.add(new BrowserProfileDto("FF_1024x768", "Firefox 1024x768", "firefox", "1024x768", false));
+            list.add(new BrowserProfileDto("FF_1500x1000", "Firefox 1500x1000", "firefox", "1500x1000", false));
+            list.add(new BrowserProfileDto("Safari_1024x768", "Safari 1024x768", "safari", "1024x768", false));
+        }
         return list;
     }
 

@@ -457,13 +457,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 for (final Map<String, SessionData.DataEntry> ds : allDataSets)
                 {
                     String dsId = getDataSetId(ds);
+                    final String indexStr = String.valueOf(dsIndex);
                     if (dsId == null)
                     {
-                        dsId = String.valueOf(dsIndex);
+                        dsId = indexStr;
                     }
-                    boolean legacyMatch = (legacyDsIdFilter == null) || legacyDsIdFilter.equalsIgnoreCase(dsId);
-                    boolean globalMatch = (globalTestIdPattern == null) || globalTestIdPattern.matcher(dsId).find();
-                    if (legacyMatch && globalMatch && shouldIncludeDataSet(dsId, datasetFilters))
+                    final boolean legacyMatch = (legacyDsIdFilter == null) || legacyDsIdFilter.equalsIgnoreCase(dsId) || legacyDsIdFilter.equalsIgnoreCase(indexStr);
+                    final boolean globalMatch = (globalTestIdPattern == null) || globalTestIdPattern.matcher(dsId).find() || globalTestIdPattern.matcher(indexStr).find();
+                    final boolean includesDataSet = shouldIncludeDataSet(dsId, datasetFilters) || shouldIncludeDataSet(indexStr, datasetFilters);
+                    if (legacyMatch && globalMatch && includesDataSet)
                     {
                         filteredDataSets.add(ds);
                     }

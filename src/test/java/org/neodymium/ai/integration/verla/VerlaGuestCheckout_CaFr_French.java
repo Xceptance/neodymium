@@ -63,7 +63,10 @@ public class VerlaGuestCheckout_CaFr_French extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        server.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }

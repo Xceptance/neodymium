@@ -180,7 +180,7 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals("RUN_100", history.get(0).getRunId());
         Assertions.assertEquals("exec-100", history.get(0).getExecutionId());
         Assertions.assertEquals("Nightly Regression", history.get(0).getBatchName());
-        Assertions.assertEquals("HEALED / FIXED", history.get(0).getStatusLabel());
+        Assertions.assertEquals("SUCCEEDED-FIXED", history.get(0).getStatusLabel());
         Assertions.assertEquals(List.of("BUG-1", "BUG-2"), history.get(0).getBugs());
     }
 
@@ -208,7 +208,80 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals(1, history.size());
         Assertions.assertEquals("RUN_200", history.get(0).getRunId());
         Assertions.assertEquals("failed-unknown", history.get(0).getStatus());
-        Assertions.assertEquals("FAILED", history.get(0).getStatusLabel());
+        Assertions.assertEquals("UNKNOWN FAIL", history.get(0).getStatusLabel());
         Assertions.assertTrue(history.get(0).getBugs().isEmpty());
     }
+
+    @Test
+    public void testTestMethodNameEntityPersistence()
+    {
+        final String testClass = "com.xceptance.aura.CheckoutTest";
+        final String testMethod = "testGuestCheckoutPaymentBad";
+        final String dataSet = "bad";
+        final String location = "US";
+        final String browser = "Chrome";
+        final String varId = AuraReportDataService.generateVariationId(testClass, testMethod, dataSet, location, browser);
+
+        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
+
+        Assertions.assertEquals(varId, varEntity.getId());
+        Assertions.assertEquals(testClass, varEntity.getTestClassName());
+        Assertions.assertEquals(testMethod, varEntity.getTestMethodName());
+        Assertions.assertEquals(dataSet, varEntity.getDataSetLabel());
+        Assertions.assertEquals(location, varEntity.getLocation());
+        Assertions.assertEquals(browser, varEntity.getBrowser());
+
+        varEntity.setTestMethodName("testGuestCheckoutPaymentUpdated");
+        Assertions.assertEquals("testGuestCheckoutPaymentUpdated", varEntity.getTestMethodName());
+    }
+
+    @Test
+    public void testGetVariationHistoryFiltersByTestMethod()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Manual", "Java", "Chrome", "10:00", 1000L);
+
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(run1));
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "id": "e3",
+                  "testClass": "PlaybookTest",
+                  "testMethod": "test3",
+                  "title": "default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "engine": "Java"
+                },
+                {
+                  "id": "e7",
+                  "testClass": "PlaybookTest",
+                  "testMethod": "test7_AnnotationDrivenExternalPlaybookConvention",
+                  "title": "default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "engine": "Java"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+
+        final List<TestBaseVariationHistoryDto> historyTest7 = dataService.getVariationHistory(
+            "PlaybookTest",
+            "test7_AnnotationDrivenExternalPlaybookConvention",
+            "default",
+            "US",
+            "Chrome"
+        );
+
+        Assertions.assertNotNull(historyTest7);
+        Assertions.assertEquals(1, historyTest7.size());
+        Assertions.assertEquals("e7", historyTest7.get(0).getExecutionId());
+    }
 }
+

@@ -24,7 +24,7 @@
             </button>
             <button class="btn-editor save"
                     id="saveYamlBtn"
-                    th:hx-post="@{/api/save(file=${activeEditingFile != null ? activeEditingFile : ''})}"
+                    th:hx-post="'/api/save?file=' + ${activeEditingFile != null ? activeEditingFile : ''}"
                     hx-include="#editorContent"
                     hx-swap="none"
                     onclick="if(typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml(); if(typeof saveYamlFile === 'function') saveYamlFile();">

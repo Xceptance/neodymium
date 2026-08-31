@@ -3,255 +3,283 @@
 <head></head>
 <body>
 
-<!-- Native Neodymium Aura Test Manager Fragment -->
-<div th:fragment="auraTestManager" class="d-flex flex-column gap-3">
+<!-- Integrated Neodymium Aura Test Manager Dashboard Fragment -->
+<div th:fragment="auraTestManager" class="aura-manager-integrated-root" style="width: 100%; height: 100%; display: flex; flex-direction: column; position: relative;">
 
-    <!-- PAGE SUB-TABS HEADER BAR -->
-    <div class="sub-tab-bar">
-        <button class="sub-tab-btn active" id="tabBtnQueue" onclick="switchAuraManagerTab('tabQueue', this)">
-            <span class="material-symbols-outlined">play_circle</span> Queue & Live Execution
+    <!-- TOP CONTROL TOOLBAR BAR -->
+    <div class="top-navbar" id="themeContainer" th:fragment="themeContainer" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; background: var(--bg-card); border-bottom: 1px solid var(--border-color); margin-bottom: 1rem; border-radius: 8px;">
+        <div style="font-weight: 700; font-size: 1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+            <span class="material-symbols-outlined text-accent">auto_awesome</span>
+            <span>Neodymium Aura Test Manager Dashboard</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn-edit btn-secondary" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem;">settings</span> Settings
+            </button>
+            <div class="d-flex align-items-center gap-1" style="background: var(--bg-main); padding: 2px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" title="Light Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">light_mode</span></button>
+                <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">dark_mode</span></button>
+                <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')" title="System Theme" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">desktop_windows</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUB-NAV SUB-TABS (Workspace Explorer vs History & Reports) -->
+    <div class="sub-tab-bar" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+        <button class="sub-tab-btn" id="navWorkspace" th:classappend="${activeView != 'history'} ? ' active' : ''" onclick="showView('dashboardView')" title="Workspace Explorer" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <span class="material-symbols-outlined" style="font-size: 1.15rem;">account_tree</span> Workspace Explorer
+            <span class="nav-badge neo-u-1" id="sidebarRunBadge" style="display: none;"><span class="material-symbols-outlined spinner">progress_activity</span></span>
         </button>
-        <button class="sub-tab-btn" id="tabBtnEditor" onclick="switchAuraManagerTab('tabEditor', this)">
-            <span class="material-symbols-outlined">edit_document</span> Test Data Editor
-        </button>
-        <button class="sub-tab-btn" id="tabBtnSettings" onclick="switchAuraManagerTab('tabSettings', this)">
-            <span class="material-symbols-outlined">settings</span> Runner Settings
+        <button class="sub-tab-btn" id="navReports" th:classappend="${activeView == 'history'} ? ' active' : ''" onclick="showView('reportViewContainer')" title="History & Reports" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <span class="material-symbols-outlined" style="font-size: 1.15rem;">schedule</span> History & Execution Reports
         </button>
     </div>
 
-    <!-- TAB 1: QUEUE & LIVE EXECUTION -->
-    <div id="tabQueue" class="view-state active d-flex flex-column gap-3">
-        
-        <!-- HEADER STATS & CONTROL TOOLBAR -->
-        <div class="panel" style="padding: 1rem 1.25rem;">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                
-                <!-- LEFT TITLE & STATUS BADGE -->
-                <div class="d-flex align-items-center gap-3">
-                    <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
-                        <span class="material-symbols-outlined text-accent" style="font-size: 1.5rem;">play_circle</span>
-                        <span>Active Target: <strong th:text="${queueData['activeSuite']}">ALL</strong></span>
-                    </div>
-
-                    <div>
-                        <span class="badge-status badge-pass" th:if="${queueData['running'] == true}" style="display: inline-flex; align-items: center; gap: 0.4rem;">
-                            <span class="pulse-dot" style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
-                            <span>Executing Tests...</span>
-                        </span>
-                        <span class="badge-status badge-ignored" th:if="${queueData['running'] == false}" style="display: inline-flex; align-items: center; gap: 0.4rem;">
-                            <span style="width: 8px; height: 8px; background: #64748b; border-radius: 50%;"></span>
-                            <span>Queue Idle</span>
-                        </span>
-                    </div>
-                </div>
-
-                <!-- RIGHT CONTROLS & TEST CLASS SELECTOR FORM -->
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <form hx-post="/aura-test-manager/queue/run" hx-target="#mainViewContainer" hx-swap="innerHTML" class="d-flex align-items-center gap-2">
-                        <div style="min-width: 280px; max-width: 380px;">
-                            <select name="suiteName" class="form-select" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border-radius: 6px;" title="Select a test class or suite from src/test/java">
-                                <option value="ALL">All Test Classes (*Test)</option>
-                                <optgroup label="Detected Test Classes in src/test/java">
-                                    <option th:each="cls : ${detectedTestClasses}" 
-                                            th:value="${cls.fullyQualifiedName}" 
-                                            th:text="${cls.simpleName + ' (' + cls.packageName + ')'}"
-                                            th:selected="${cls.fullyQualifiedName == queueData['activeSuite']}">
-                                        CheckoutProcessTest
-                                    </option>
-                                </optgroup>
-                            </select>
+    <!-- Layout Container: Workspace -->
+    <div class="workspace-layout neo-u-6" id="dashboardView" th:style="${activeView != 'history'} ? 'display: flex;' : 'display: none;'">
+        <!-- LEFT AREA -->
+        <div class="left-area neo-u-7" id="leftArea">
+            <!-- STATE: Selection & Queue -->
+            <div class="view-state active" id="state-selection">
+                <div class="selection-queue-grid">
+                    <!-- Insert Test Selection Panel Fragment -->
+                    <div th:replace="~{fragments/test-selection :: testSelectionContent}"></div>
+                    
+                    <!-- Insert Run Queue Panel Fragment -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">format_list_numbered</span> <span>Run Queue</span></div>
                         </div>
-
-                        <button type="submit" class="btn-primary" style="padding: 0.45rem 1rem; font-size: 0.85rem;" 
-                                th:disabled="${queueData['running'] == true}">
-                            <span class="material-symbols-outlined">play_arrow</span> Start Execution
-                        </button>
-                    </form>
-
-                    <button class="btn-secondary" style="padding: 0.45rem 1rem; font-size: 0.85rem;" 
-                            th:disabled="${queueData['running'] == false}"
-                            hx-post="/aura-test-manager/queue/stop" 
-                            hx-target="#mainViewContainer" 
-                            hx-swap="innerHTML">
-                        <span class="material-symbols-outlined">stop</span> Stop
-                    </button>
-
-                    <button class="btn-secondary" style="padding: 0.45rem 0.8rem; font-size: 0.85rem;" 
-                            hx-post="/aura-test-manager/queue/clear-logs" 
-                            hx-target="#mainViewContainer" 
-                            hx-swap="innerHTML">
-                        <span class="material-symbols-outlined">delete_sweep</span> Clear Logs
-                    </button>
+                        <div class="content-scroll">
+                            <div class="queue-list" id="queueListContainer" th:fragment="queueListContainer">
+                                <div th:replace="~{fragments/queue :: queueListContainerContent}"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <!-- METRICS CARDS ROW -->
-            <div class="metrics-grid" style="margin-top: 1rem;">
-                <div class="metric-card" style="--card-accent: var(--accent-primary)">
-                    <div class="metric-label">Total Tests Run</div>
-                    <div class="metric-val" style="color: var(--accent-primary);" th:text="${queueData['testsRun']}">0</div>
+            
+            <!-- STATE: Editor -->
+            <div class="view-state" id="state-editor">
+                <!-- Insert Editor Panel Fragment -->
+                <div class="panel editor-container" id="editorPanel" th:fragment="editorPanel">
+                    <div th:replace="~{fragments/editor :: editorPanelContent}"></div>
                 </div>
-                <div class="metric-card" style="--card-accent: var(--status-pass)">
-                    <div class="metric-label">Passed</div>
-                    <div class="metric-val" style="color: var(--status-pass);" th:text="${queueData['passed']}">0</div>
-                </div>
-                <div class="metric-card" style="--card-accent: var(--status-unknown-fail)">
-                    <div class="metric-label">Failed / Errors</div>
-                    <div class="metric-val" style="color: var(--status-unknown-fail);" th:text="${queueData['failed']}">0</div>
-                </div>
-                <div class="metric-card" style="--card-accent: var(--status-ignored)">
-                    <div class="metric-label">Skipped</div>
-                    <div class="metric-val" style="color: var(--status-ignored);" th:text="${queueData['skipped']}">0</div>
+            </div>
+            
+            <!-- Insert Progress Stats Panel Fragment -->
+            <div class="panel neo-u-13" id="statsPanel" th:fragment="statsPanel" hx-swap-oob="true"
+                 th:style="${running or (total != null and total > 0) ? 'display: block;' : 'display: none;'}">
+                <div th:replace="~{fragments/queue :: statsPanelContent}"></div>
+            </div>
+            
+            <!-- Terminal Panel -->
+            <div class="resizer-v neo-u-1" id="consoleResizer"></div>
+            <div class="panel neo-u-19" id="consolePanel">
+                <div class="terminal-panel">
+                    <div class="neo-u-20">
+                        <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
+                        <div class="neo-u-22">
+                            <input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
+                            <label for="aiOnlyCb">AI Only</label>
+                            <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
+                            <label for="errorsOnlyCb">Errors Only</label>
+                            <button id="copyTerminalBtn" class="btn-edit" onclick="copyTerminalOutput()" title="Copy terminal output" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+                                <span class="material-symbols-outlined" id="copyTerminalIcon">content_copy</span>
+                                <span id="copyTerminalText">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="terminalConsole">Console idle.</div>
                 </div>
             </div>
         </div>
-
-        <!-- LIVE TERMINAL CONSOLE -->
-        <div class="panel d-flex flex-column" style="padding: 0; overflow: hidden;">
-            <div class="panel-header" style="padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border-color);">
-                <div class="panel-title" style="font-size: 0.95rem;">
-                    <span class="material-symbols-outlined text-accent">terminal</span> Live Stdout Console Output
+        
+        <!-- HORIZONTAL RESIZER -->
+        <div class="resizer-h" id="sidebarResizer"></div>
+        
+        <!-- RIGHT AREA: RUN CONFIGURATION -->
+        <div class="right-area" id="rightArea">
+            <div class="panel config-container" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="panel-header">
+                    <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">tune</span> <span>Run Configuration</span></div>
                 </div>
-                <div class="panel-subtitle">Auto-updates every second during execution.</div>
-            </div>
-
-            <div id="liveConsoleContainer" 
-                 th:attr="hx-get=${queueData['running'] == true ? '/aura-test-manager/queue/live-data' : null}, hx-trigger=${queueData['running'] == true ? 'every 1s' : null}"
-                 hx-target="#liveConsoleContainer"
-                 hx-swap="innerHTML"
-                 style="background: #0f172a; color: #f8fafc; font-family: 'JetBrains Mono', monospace, Courier; font-size: 0.825rem; padding: 1.25rem; height: 420px; overflow-y: auto; line-height: 1.6;">
-                
-                <div th:fragment="liveConsolePartial">
-                    <div th:each="log : ${queueData['logs']}" th:text="${log}" style="white-space: pre-wrap; word-break: break-all;"></div>
-                    <div th:if="${#lists.isEmpty(queueData['logs'])}" style="color: #64748b; font-style: italic;">
-                        No logs recorded yet. Select a test class and click "Start Execution" to run tests and view live stdout console logs.
-                    </div>
+                <div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel" style="flex: 1; overflow-y: auto;">
+                    <th:block th:replace="~{fragments/queue :: configPanelContent}"></th:block>
+                </div>
+                <div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
+                    <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- TAB 2: TEST DATA EDITOR -->
-    <div id="tabEditor" class="view-state d-flex flex-column gap-3">
-        <div class="panel" id="editorContainer" style="padding: 1.25rem;">
-            <div th:fragment="editorPartial" class="d-flex flex-column gap-3">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div style="font-weight: 700; color: var(--text-main); font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span class="material-symbols-outlined text-accent">edit_document</span>
-                        <span>YAML Test Dataset Editor</span>
-                    </div>
-
-                    <!-- FILE SELECTOR DROPDOWN -->
-                    <div class="d-flex align-items-center gap-2">
-                        <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Select Test Data File:</label>
-                        <select class="form-select" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; width: auto; border-radius: 6px;" 
-                                name="filePath" 
-                                hx-get="/aura-test-manager/editor/file" 
-                                hx-target="#editorContainer" 
-                                hx-swap="innerHTML">
-                            <option th:each="f : ${testFiles}" 
-                                    th:value="${f}" 
-                                    th:text="${f}" 
-                                    th:selected="${f == selectedFilePath}">
-                                sample.yaml
-                            </option>
-                        </select>
+    <!-- HISTORY & REPORTS VIEW -->
+    <div class="workspace-layout neo-u-34" id="reportViewContainer" th:style="${activeView == 'history'} ? 'display: flex;' : 'display: none;'">
+        <!-- Mini-runs status bar -->
+        <div class="col-runs-mini" id="colRunsMini">
+            <div class="col-runs-mini-header">Runs</div>
+        </div>
+        <!-- Left Side: History List -->
+        <div class="left-area" id="colRuns">
+            <div class="panel neo-u-35">
+                <div class="panel-header">
+                    <span>Run History</span>
+                    <button class="btn btn-secondary neo-u-36" hx-get="/api/reporting/history" hx-target="#allureHistoryList" hx-swap="outerHTML"><span aria-hidden="true" class="material-symbols-outlined">sync</span></button>
+                </div>
+                <div class="neo-u-37" id="reportingHistoryList">
+                    <table class="history-table neo-u-38">
+                        <!-- Insert History List Fragment -->
+                        <tbody id="allureHistoryList" th:fragment="reportingHistoryList">
+                            <th:block th:replace="~{fragments/history :: reportingHistoryListContent}"></th:block>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="resizer-h neo-u-34" id="historyResizer1"></div>
+        <!-- Middle Side: Tests List -->
+        <div class="left-area" id="colTests" th:fragment="historyTests" hx-on:htmx:after-swap="applyHistoryState(2)">
+            <th:block th:replace="~{fragments/history :: historyTestsContent}"></th:block>
+        </div>
+        <div class="resizer-h neo-u-34" id="historyResizer2"></div>
+        <!-- Mini-tests status bar -->
+        <div class="col-runs-mini" id="colTestsMini">
+            <div class="col-runs-mini-header">Tests</div>
+        </div>
+        <div class="resizer-h neo-u-34" id="historyResizer3"></div>
+        <!-- Right Side: Interactive Console -->
+        <div class="right-area neo-u-34" id="colReport">
+            <div class="panel neo-u-39">
+                <div class="panel-header">
+                    <span id="historyDetailsHeader">Test Case Details</span>
+                </div>
+                <div class="neo-u-40">
+                    <iframe class="neo-u-41" id="historyConsoleIframe"></iframe>
+                    <div class="neo-u-42" id="historyPlaceholder">
+                        <span class="material-symbols-outlined neo-u-43">schedule</span>
+                        <p>Select a run from the history to view its interactive report.</p>
                     </div>
                 </div>
-
-                <div th:if="${saveSuccess == true}" class="alert alert-success" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;">
-                    ✓ Test dataset file saved successfully!
-                </div>
-
-                <!-- TEXTAREA CODE EDITOR -->
-                <form hx-post="/aura-test-manager/editor/save" hx-target="#editorContainer" hx-swap="innerHTML" class="d-flex flex-column gap-3">
-                    <input type="hidden" name="filePath" th:value="${selectedFilePath}">
-                    <textarea name="content" 
-                              style="width: 100%; height: 380px; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; padding: 1rem; background: var(--bg-main, #f8fafc); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); resize: vertical; line-height: 1.5;" 
-                              th:text="${fileContent}">
-                    </textarea>
-
-                    <div class="d-flex justify-content-end">
-                        <button type="submit" class="btn-primary" style="padding: 0.5rem 1.25rem; font-size: 0.85rem;">
-                            <span class="material-symbols-outlined">save</span> Save YAML Dataset
-                        </button>
-                    </div>
-                </form>
             </div>
         </div>
     </div>
-
-    <!-- TAB 3: RUNNER SETTINGS -->
-    <div id="tabSettings" class="view-state d-flex flex-column gap-3">
-        <div class="panel" style="padding: 1.5rem; max-width: 720px;">
-            <div style="font-weight: 700; color: var(--text-main); font-size: 1.05rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
-                <span class="material-symbols-outlined text-accent">settings</span>
-                <span>Test Execution & Profile Settings</span>
-            </div>
-
-            <div th:if="${settingsSuccess == true}" class="alert alert-success" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; margin-bottom: 1rem;">
-                ✓ Settings updated successfully!
-            </div>
-
-            <form hx-post="/aura-test-manager/settings/save" hx-target="#mainViewContainer" hx-swap="innerHTML" class="d-flex flex-column gap-3">
-                <div>
-                    <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.35rem; display: block;">Target Environment Profile</label>
-                    <select name="environment" class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem; border-radius: 6px; width: 100%;">
-                        <option th:each="env : ${settings['availableEnvironments']}" 
-                                th:value="${env}" 
-                                th:text="${env}" 
-                                th:selected="${env == settings['selectedEnvironment']}">
-                            Environment
-                        </option>
-                    </select>
-                </div>
-
-                <div>
-                    <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.35rem; display: block;">Default Execution Browser</label>
-                    <select name="browser" class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem; border-radius: 6px; width: 100%;">
-                        <option th:each="b : ${settings['availableBrowsers']}" 
-                                th:value="${b}" 
-                                th:text="${b}" 
-                                th:selected="${b == settings['selectedBrowser']}">
-                            Chrome
-                        </option>
-                    </select>
-                </div>
-
-                <div class="d-flex align-items-center gap-2">
-                    <input type="checkbox" name="headless" value="true" id="chkHeadless" th:checked="${settings['headless']}">
-                    <label for="chkHeadless" style="font-size: 0.85rem; color: var(--text-main); font-weight: 500;">Run Browser Headless Mode</label>
-                </div>
-
-                <div>
-                    <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.35rem; display: block;">Parallel Execution Threads</label>
-                    <input type="number" name="threads" class="form-control" style="padding: 0.45rem 0.75rem; font-size: 0.85rem; border-radius: 6px; width: 180px;" th:value="${settings['threadCount']}">
-                </div>
-
-                <div style="margin-top: 1rem;">
-                    <button type="submit" class="btn-primary" style="padding: 0.5rem 1.25rem; font-size: 0.85rem;">
-                        <span class="material-symbols-outlined">save</span> Save Settings
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-function switchAuraManagerTab(tabId, btn) {
-    document.querySelectorAll('#tabQueue, #tabEditor, #tabSettings').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.sub-tab-bar .sub-tab-btn').forEach(el => el.classList.remove('active'));
     
-    const target = document.getElementById(tabId);
-    if (target) {
-        target.classList.add('active');
-    }
-    if (btn) {
-        btn.classList.add('active');
-    }
-}
-</script>
+    <!-- REPORT IFRAME VIEW (Hidden until report opened) -->
+    <div class="iframe-view-pane" id="reportView">
+        <div class="neo-report-header">
+            <div class="neo-u-44"><span class="material-symbols-outlined neo-u-45">bar_chart</span>
+                Test Report: <span id="reportDisplayName"></span></div>
+            <button class="btn-edit" onclick="closeReportView()"><span class="material-symbols-outlined">arrow_back</span> Back</button>
+        </div>
+        <iframe class="report-iframe" id="reportIframe" src="about:blank"></iframe>
+    </div>
+    
+    <!-- INTERACTIVE CONSOLE VIEW -->
+    <div class="iframe-view-pane" id="interactiveConsoleView">
+        <div class="neo-report-header">
+            <div class="neo-u-44"><span class="material-symbols-outlined neo-u-46">terminal</span> Interactive Console</div>
+            <button class="btn-edit" onclick="closeInteractiveConsoleView()"><span class="material-symbols-outlined">arrow_back</span> Back</button>
+        </div>
+        <iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
+    </div>
+
+    <!-- FLOATING AURA AI CHAT LAUNCHER BUBBLE -->
+    <div id="auraChatLauncher" class="aura-chat-launcher" onclick="toggleAuraChat()" title="Open Aura AI Assistant">
+        <div class="aura-chat-launcher-icon">
+            <span class="material-symbols-outlined">auto_awesome</span>
+        </div>
+        <span class="aura-chat-launcher-label">Aura AI</span>
+        <span class="aura-chat-launcher-badge" id="chatBadgeDot"></span>
+    </div>
+
+    <!-- FLOATING AURA AI CHAT OVERLAY -->
+    <div id="auraChatOverlay" class="aura-chat-overlay" style="display: none;">
+        <div class="aura-chat-overlay-card">
+            <div class="panel chat-container" id="chatContainer" th:fragment="chatContainer">
+                <div th:replace="~{fragments/chat :: chatContainerContent}"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PER-ITEM BROWSER PICKER MODAL -->
+    <div class="modal-overlay" id="itemBrowserModal" style="display: none; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9999; backdrop-filter: blur(3px);">
+        <div class="modal-card" style="width: 380px; max-width: 92vw; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.6); padding: 18px; animation: modalSlideIn 0.2s ease-out;">
+            <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="material-symbols-outlined" style="color: var(--accent); font-size: 20px;">tune</span>
+                    <span style="font-weight: 700; font-size: 14px;" id="itemBrowserHeaderTitle">Item #1 Profiles</span>
+                </div>
+                <button type="button" class="btn-edit" onclick="closeItemBrowserModal()" style="padding: 2px 6px; font-size: 12px; border: none; background: transparent; cursor: pointer;">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px;">
+                <span>Target:</span>
+                <span id="itemBrowserTargetFile" style="color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis;">file.yaml</span> 
+                <span id="itemBrowserTargetId" class="badge-dataset" style="margin-left: 2px;"></span>
+            </div>
+
+            <input type="hidden" id="itemBrowserTargetIndex" value="-1"/>
+
+            <div class="config-row-wrapper" style="background: var(--bg-main); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px;">
+                <div class="config-row" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 12.5px; font-weight: 600;">Inherit Global Profiles</span>
+                    <label class="switch" for="itemBrowserInheritSwitch">
+                        <input type="checkbox" id="itemBrowserInheritSwitch" onchange="toggleItemBrowserInherit()"/>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <span id="itemBrowserInheritHint" style="font-size: 11px; color: var(--text-secondary); display: block; margin-top: 4px;">Uses the global browser selection.</span>
+            </div>
+
+            <div id="itemBrowserCustomList" style="display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; margin-bottom: 14px; padding-right: 2px;">
+                <div th:each="p : ${availableBrowserProfiles}" class="item-profile-row profile-checkbox-row"
+                     th:data-profile-id="${p.id}"
+                     onclick="toggleItemProfileRow(this)">
+                    <div class="profile-info" style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                        <input type="checkbox" class="item-profile-cb" th:value="${p.id}" style="pointer-events: none; accent-color: var(--accent); cursor: pointer; border-radius: 4px;"/>
+                        <span style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" th:text="${p.name}">Chrome 1024x768</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                        <span class="profile-res-tag" th:if="${p.res != null and !p.res.isEmpty()}" th:text="${p.res}">1024x768</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 12px;">
+                <span id="itemBrowserCountText" style="font-size: 11.5px; color: var(--text-secondary); font-weight: 500;">0 profiles selected</span>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn-edit" onclick="closeItemBrowserModal()" style="padding: 6px 12px; font-size: 12px;">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="saveItemBrowserModal()" style="padding: 6px 16px; font-size: 12px; font-weight: 600;">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW LOG MODAL -->
+    <div class="modal-overlay neo-u-49" id="logModal">
+        <div class="modal-card neo-u-50">
+            <div class="modal-header neo-u-31">
+                <span>Execution Log</span>
+                <button class="btn-editor neo-u-51" id="downloadLogBtn"><span class="material-symbols-outlined">download</span> Download</button>
+            </div>
+            <div class="modal-body neo-u-52">
+                <pre class="neo-u-53" id="logModalContent"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary neo-u-51" onclick="closeLogModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Polling Trigger Container -->
+    <div id="executionTrigger" th:fragment="executionTrigger" hx-swap-oob="true">
+        <th:block th:replace="~{fragments/queue :: executionTriggerContent}"></th:block>
+    </div>
+
+</div>
 
 </body>
 </html>

@@ -28,6 +28,7 @@ import jakarta.persistence.Table;
 /**
  * JPA entity representing a unique Test Base variation / signature.
  *
+ * @author AI-generated: Gemini 3.6 Flash (High)
  * @author Xceptance GmbH 2026
  */
 @Entity
@@ -44,6 +45,9 @@ public class TestBaseVariationEntity
 
     @Column(name = "test_class_name", nullable = false, length = 150)
     private String testClassName;
+
+    @Column(name = "test_method_name", length = 150)
+    private String testMethodName;
 
     @Column(name = "data_set_label", length = 150)
     private String dataSetLabel;
@@ -76,8 +80,14 @@ public class TestBaseVariationEntity
 
     public TestBaseVariationEntity(final String id, final String testClassName, final String dataSetLabel, final String areaTag, final String location, final String browser)
     {
+        this(id, testClassName, null, dataSetLabel, areaTag, location, browser);
+    }
+
+    public TestBaseVariationEntity(final String id, final String testClassName, final String testMethodName, final String dataSetLabel, final String areaTag, final String location, final String browser)
+    {
         this.id = id;
         this.testClassName = testClassName;
+        this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
         this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
         this.areaTag = areaTag;
         this.location = location;
@@ -102,6 +112,16 @@ public class TestBaseVariationEntity
     public void setTestClassName(final String testClassName)
     {
         this.testClassName = testClassName;
+    }
+
+    public String getTestMethodName()
+    {
+        return testMethodName != null ? testMethodName : "";
+    }
+
+    public void setTestMethodName(final String testMethodName)
+    {
+        this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
     }
 
     public String getDataSetLabel()

@@ -101,7 +101,8 @@ public final class InteractiveConsoleEngine {
 
     private static String initializeRunFolder()
     {
-        final String sysRunId = System.getProperty("neodymium.runId", System.getProperty("aura.runId"));
+        final String sysRunId = System.getProperty("neodymium.runId",
+            System.getProperty("neodymium.managerRunId", System.getProperty("aura.runId")));
         if (sysRunId != null && !sysRunId.isBlank())
         {
             return (sysRunId.startsWith("run_") || sysRunId.startsWith("run-")) ? sysRunId : "run_" + sysRunId;
@@ -311,24 +312,25 @@ public final class InteractiveConsoleEngine {
         {
             try
             {
-                final String resultsDirPath = System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results");
-                final File resultsDir = new File(resultsDirPath);
-                if (!resultsDir.exists())
+                final String defaultResultsDirPath = System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results");
+                final File defaultResultsDir = new File(defaultResultsDirPath);
+                if (!defaultResultsDir.exists())
                 {
-                    resultsDir.mkdirs();
+                    defaultResultsDir.mkdirs();
                 }
                 final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
                 final String executionKey = extractExecutionKey(parsedState);
                 final int index = getExecutionIndex(executionKey);
 
-                // 1. Root file for compatibility
-                final File executionJson = new File(resultsDir, "console-execution-" + index + ".json");
+                // 1. Root file for compatibility in default allure.results.directory
+                final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
                 Files.writeString(executionJson.toPath(), minified, StandardCharsets.UTF_8);
 
-                // 2. Structured run and test class folders
+                // 2. Structured run and test class folders in configured console logs directory
+                final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
                 final String testClassFolder = extractTestClassFolder(parsedState);
                 final String runFolder = getRunFolder();
-                final File structuredDir = new File(resultsDir, runFolder + "/" + testClassFolder);
+                final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
                 if (!structuredDir.exists())
                 {
                     structuredDir.mkdirs();
@@ -336,7 +338,7 @@ public final class InteractiveConsoleEngine {
                 final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
                 Files.writeString(structuredJson.toPath(), minified, StandardCharsets.UTF_8);
 
-                // 3. Structured copy in target/ai-reports
+                // 3. Structured copy in configured target/ai-reports directory
                 final String reportsDirPath = AiConfiguration.getInstance().getDiskReportDirectory();
                 final File reportsDir = new File(reportsDirPath);
                 final File reportsStructuredDir = new File(reportsDir, runFolder + "/" + testClassFolder);
@@ -362,22 +364,46 @@ public final class InteractiveConsoleEngine {
         {
             return "default";
         }
-        if (json.has("testName") && !json.get("testName").isJsonNull())
+        String key = "";
+        if (json.has("testFile") && !json.get("testFile").isJsonNull())
+        {
+            key += json.get("testFile").getAsString();
+        }
+        else if (json.has("testName") && !json.get("testName").isJsonNull())
         {
             final String testName = json.get("testName").getAsString();
             if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
             {
-                return testName;
+                key += testName;
             }
         }
-        String key = "";
         if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
         {
+            if (!key.isEmpty())
+            {
+                key += "_";
+            }
             key += json.get("playbookFile").getAsString();
         }
         if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
         {
-            key += "_" + json.get("datasetId").getAsString();
+            if (!key.isEmpty())
+            {
+                key += "_";
+            }
+            key += json.get("datasetId").getAsString();
+        }
+        if (json.has("browser") && !json.get("browser").isJsonNull())
+        {
+            final String browser = json.get("browser").getAsString();
+            if (browser != null && !browser.isEmpty())
+            {
+                if (!key.isEmpty())
+                {
+                    key += "::";
+                }
+                key += browser;
+            }
         }
         return key.isEmpty() ? "default" : key;
     }

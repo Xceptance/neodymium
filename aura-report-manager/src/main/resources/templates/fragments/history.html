@@ -1,0 +1,146 @@
+<!--
+  Xceptance Aura Execution History and Reports Contents Fragment
+  @author AI-generated: Antigravity
+  Xceptance GmbH 2026
+-->
+<th:block th:fragment="reportingHistoryListContent">
+    <!-- Running row at top -->
+    <tr th:if="${running}" class="history-row" style="cursor: pointer; border-left: 3px solid var(--accent);" onclick="openCurrentRunView()">
+        <td style="padding: 10px 12px;">
+            <div class="run-row-header">
+                <span class="run-number">#—</span>
+                <span class="run-timestamp" th:text="${runningStartTime}">Running Time</span>
+                <span style="background: rgba(59,130,246,0.1); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 500;">
+                    <span class="material-symbols-outlined spinner" style="margin-right: 4px;">progress_activity</span> Running
+                </span>
+            </div>
+        </td>
+    </tr>
+
+    <!-- Empty placeholder if no reports -->
+    <tr th:if="${#lists.isEmpty(history) and !running}">
+        <td style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No historical reports.</td>
+    </tr>
+
+    <!-- Main loop over history items -->
+    <tr th:each="item : ${history}"
+        class="history-row"
+        th:style="${item.id == reportId ? 'cursor: pointer; background-color: var(--bg-hover); border-left: 3px solid var(--accent);' : 'cursor: pointer;'}"
+        th:id="'run-' + ${item.id}"
+        th:hx-get="'/api/reporting/run?id=' + ${item.id}"
+        hx-target="#colTests"
+        hx-swap="outerHTML">
+        <td style="padding: 10px 12px;">
+            <div class="run-row-header">
+                <span class="run-number" th:text="${item.runNumber != null ? '#' + item.runNumber : ''}">#1</span>
+                <span class="run-timestamp" th:text="${item.formattedTime}">2026-07-22 14:15:00</span>
+                <span th:if="${item.status == 'Passed'}" class="badge-success">Passed</span>
+                <span th:if="${item.status == 'Aborted'}" class="badge-aborted">Aborted</span>
+                <span th:if="${item.status != 'Passed' and item.status != 'Aborted'}" class="badge-failed" th:text="${item.status}">Failed</span>
+                <span th:if="${item.durationLabel != ''}" class="run-duration-chip">
+                    <span class="material-symbols-outlined">schedule</span> <span th:text="${item.durationLabel}">45s</span>
+                </span>
+            </div>
+            <div class="run-stats-row">
+                <span class="run-stat-passed"><span class="material-symbols-outlined" aria-hidden="true">check</span> <span th:text="${item.passed != null ? item.passed : 0}">1</span> passed</span>
+                <span class="run-stat-failed"><span class="material-symbols-outlined" aria-hidden="true">close</span> <span th:text="${item.failed != null ? item.failed : 0}">0</span> failed</span>
+                <span th:if="${item.skipped != null and item.skipped != '0'}" class="run-stat-skipped" style="color:var(--text-muted); font-weight:600;">
+                    <span class="material-symbols-outlined" aria-hidden="true">skip_next</span> <span th:text="${item.skipped}">0</span> skipped
+                </span>
+            </div>
+            <div class="run-actions-row">
+                <button class="run-action-btn"
+                        th:disabled="${!item.hasReport or !item.allureEnabled}"
+                        th:title="${!item.allureEnabled ? 'Allure was disabled for this run' : (!item.hasReport ? 'Allure report not available' : '')}"
+                        th:data-report-id="${item.hasReport ? item.id : ''}"
+                        onclick="event.stopPropagation(); const rid = this.getAttribute('data-report-id'); if (rid) { window.open('/api/reporting/report/' + rid + '/allure-report/index.html', '_blank'); }">
+                    <span class="material-symbols-outlined">bar_chart</span> Allure Report
+                </button>
+                <button th:if="${item.runConfig != null and !running}" class="run-action-btn"
+                        th:data-run-config="${item.runConfigJson}"
+                        onclick="event.stopPropagation(); rerunFullRun(this.getAttribute('data-run-config'))"
+                        title="Re-run this entire suite with the same configuration">
+                    <span class="material-symbols-outlined">sync</span> Rerun
+                </button>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                <button class="run-action-btn danger" style="font-size: 10px; padding: 2px 6px; opacity: 0.65;"
+                        th:hx-post="@{/api/reporting/delete(id=${item.id})}"
+                        hx-target="#allureHistoryList"
+                        hx-swap="outerHTML"
+                        th:hx-confirm="'Are you sure you want to delete report &quot;' + ${item.id} + '&quot;?'"
+                        onclick="event.stopPropagation();"
+                        title="Delete this run">
+                    <span class="material-symbols-outlined">delete</span> Delete
+                </button>
+            </div>
+            <div th:if="${!item.allureEnabled}" class="run-allure-note">
+                <span class="material-symbols-outlined">info</span> Allure was disabled for this run
+            </div>
+        </td>
+    </tr>
+</th:block>
+
+<div class="panel" th:fragment="historyTestsContent">
+    <div class="panel-header">
+        <span id="historyTestsHeader" th:text="${selectedRunNumber != null ? 'Test Cases - Run #' + selectedRunNumber : 'Test Cases'}">Test Cases</span>
+    </div>
+    <div class="neo-u-37" id="historyTestsList">
+        <!-- Empty placeholder if no tests -->
+        <div th:if="${#lists.isEmpty(tests)}" style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 24px;">No tests available.</div>
+
+        <!-- Iterate over tests -->
+        <div th:each="t : ${tests}"
+             th:class="'test-card history-row ' + ${t.status == 'Passed' ? 'passed' : (t.status == 'Aborted' ? 'aborted' : 'failed')}"
+             th:data-test-name="${t.name}"
+             th:data-report-id="${reportId}"
+             th:data-file="${t.file}"
+             onclick="loadInteractiveTest(this.getAttribute('data-report-id'), this.getAttribute('data-file'), this.getAttribute('data-test-name'), this)">
+            
+            <div class="test-card-title-row">
+                <span class="test-card-title" th:text="${t.yamlLabel != null ? t.yamlLabel : (t.displayName != null ? t.displayName : t.name)}">file.yaml</span>
+                <span th:if="${t.status == 'Passed'}" class="badge-success">Passed</span>
+                <span th:if="${t.status == 'Aborted'}" class="badge-aborted">Aborted</span>
+                <span th:if="${t.status != 'Passed' and t.status != 'Aborted'}" class="badge-failed" th:text="${t.status}">Failed</span>
+            </div>
+            
+            <div class="test-card-subtitle">
+                <span th:if="${t.testId != null and !t.testId.isEmpty()}" class="badge-dataset">
+                    <span class="material-symbols-outlined">database</span> <span th:text="${t.testId}">dataset_id</span>
+                </span>
+                <span th:if="${t.testId == null or t.testId.isEmpty()}" th:text="${t.name}" style="opacity: 0.7;">test_name</span>
+            </div>
+            
+            <div class="test-card-footer">
+                <div class="test-card-meta-chips">
+                    <span th:if="${t.durationLabel != null and t.durationLabel != ''}" class="duration-chip">
+                        <span class="material-symbols-outlined">schedule</span> <span th:text="${t.durationLabel}">29.0s</span>
+                    </span>
+                    
+                    <!-- Playbook Badge -->
+                    <span th:class="'pb-badge ' + ${t.playbookMode != null ? t.playbookMode : 'llm'}">
+                        <span class="material-symbols-outlined" th:text="${t.playbookMode == 'playbook' ? 'sync' : (t.playbookMode == 'healing' ? 'build' : 'auto_awesome')}"></span>
+                        <span th:text="${t.playbookMode == 'playbook' ? 'Playbook' : (t.playbookMode == 'healing' ? 'Healing' : 'AI')}">AI</span>
+                    </span>
+                </div>
+                
+                <!-- Actions (Log / Rerun) -->
+                <div th:if="${t.hasLog == 'true' or (t.rerunPayload != null and !running)}" class="test-card-actions">
+                    <button th:if="${t.hasLog == 'true'}" class="btn-edit" style="font-size:10px; padding:2px 7px;"
+                            th:data-report-id="${reportId}"
+                            th:data-test-name="${t.name}"
+                            onclick="event.stopPropagation(); openTestLog(this.getAttribute('data-report-id'), this.getAttribute('data-test-name'))"
+                            title="View test log">
+                        <span class="material-symbols-outlined">description</span> Log
+                    </button>
+                    <button th:if="${t.rerunPayload != null and !running}" class="btn-edit" style="font-size:10px; padding:2px 7px;"
+                            th:data-payload="${t.rerunPayload}"
+                            onclick="event.stopPropagation(); rerunSingleTest(this.getAttribute('data-payload'))"
+                            title="Re-run this test case with the same configuration">
+                        <span class="material-symbols-outlined">sync</span> Rerun
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

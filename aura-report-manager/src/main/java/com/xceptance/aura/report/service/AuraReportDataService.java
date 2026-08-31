@@ -327,6 +327,29 @@ public class AuraReportDataService
                 Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
             ));
 
+        for (final TestBaseVariationEntity var : variations)
+        {
+            final boolean hasBugs = (bugsMap.containsKey(var.getId()) && !bugsMap.get(var.getId()).isEmpty())
+                                 || hasBugsInLatestHistoryLink(var.getHistoryLinks());
+            final String curStatus = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+            String effectiveLastStatus = curStatus;
+
+            if ("failed".equalsIgnoreCase(curStatus) || "failed-unknown".equalsIgnoreCase(curStatus) || "failed-known".equalsIgnoreCase(curStatus) || "error".equalsIgnoreCase(curStatus))
+            {
+                effectiveLastStatus = hasBugs ? "failed-known" : "failed-unknown";
+            }
+            else if ("passed".equalsIgnoreCase(curStatus) || "succeeded-fixed".equalsIgnoreCase(curStatus) || "passed-clean".equalsIgnoreCase(curStatus) || "succeeded".equalsIgnoreCase(curStatus))
+            {
+                effectiveLastStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
+            }
+
+            if (!effectiveLastStatus.equalsIgnoreCase(curStatus))
+            {
+                var.setLastStatus(effectiveLastStatus);
+                variationRepository.save(var);
+            }
+        }
+
         // 1. Dynamic Batches
         final List<String> batchNamesFromBatches = batchRepository.findAll().stream()
             .map(TestBatchEntity::getBatchName)
@@ -1026,8 +1049,12 @@ public class AuraReportDataService
             {
                 final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
                 final TestBaseVariationEntity var = variationRepository.findById(varId)
-                    .orElseGet(() -> new TestBaseVariationEntity(varId, dto.getTestClass(), dto.getTitle(), "@" + dto.getAreaName(), dto.getLocation(), dto.getBrowser()));
+                    .orElseGet(() -> new TestBaseVariationEntity(varId, dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), "@" + dto.getAreaName(), dto.getLocation(), dto.getBrowser()));
 
+                if (dto.getTestMethod() != null && !dto.getTestMethod().isBlank())
+                {
+                    var.setTestMethodName(dto.getTestMethod());
+                }
                 if (dto.getTitle() != null && !dto.getTitle().isBlank())
                 {
                     var.setDataSetLabel(dto.getTitle());
@@ -1087,6 +1114,18 @@ public class AuraReportDataService
                     effectiveStatus = "ignored";
                 }
                 dto.setStatus(effectiveStatus);
+
+                if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
+                {
+                    final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
+                    final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
+                    if (varOpt.isPresent())
+                    {
+                        final TestBaseVariationEntity varEntity = varOpt.get();
+                        varEntity.setLastStatus(effectiveStatus);
+                        variationRepository.save(varEntity);
+                    }
+                }
 
                 run.setTotalTests(run.getTotalTests() + 1);
                 switch (effectiveStatus)
@@ -1327,9 +1366,67 @@ public class AuraReportDataService
             LOG.info("[PERF] reevaluateBatchRunsFrom recalculated runId={} in {} ms", run.getId(), runMs);
         }
 
+        if (targetVariationId != null && !targetVariationId.isBlank())
+        {
+            syncVariationLastStatus(targetVariationId);
+        }
+
         final long totalReevalMs = System.currentTimeMillis() - reevalStart;
         LOG.info("[PERF] reevaluateBatchRunsFrom completed for batch='{}', totalAffectedRuns={} in {} ms",
             batchName, affectedRuns.size(), totalReevalMs);
+    }
+
+    static boolean hasBugsInLatestHistoryLink(final String historyLinks)
+    {
+        if (historyLinks == null || historyLinks.trim().isEmpty())
+        {
+            return false;
+        }
+        final String[] links = historyLinks.split(",");
+        if (links.length > 0)
+        {
+            final String first = links[0].trim();
+            final Map<String, String> params = parseQueryParams(first);
+            final String status = params.get("status");
+            final String bugs = params.get("bugs");
+            if ("failed-known".equalsIgnoreCase(status) || "succeeded-fixed".equalsIgnoreCase(status) || (bugs != null && !bugs.trim().isEmpty()))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void syncVariationLastStatus(final String varId)
+    {
+        if (varId == null || varId.isBlank())
+        {
+            return;
+        }
+        final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
+        if (varOpt.isPresent())
+        {
+            final TestBaseVariationEntity var = varOpt.get();
+            final List<TestBaseBugEntity> activeBugs = bugRepository.findByVariationId(varId).stream()
+                .filter(b -> b.getRemovedRunId() == null)
+                .collect(Collectors.toList());
+            final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(var.getHistoryLinks());
+            final String cur = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+            String effective = cur;
+            if ("failed".equalsIgnoreCase(cur) || "failed-unknown".equalsIgnoreCase(cur) || "failed-known".equalsIgnoreCase(cur) || "error".equalsIgnoreCase(cur))
+            {
+                effective = hasBugs ? "failed-known" : "failed-unknown";
+            }
+            else if ("passed".equalsIgnoreCase(cur) || "succeeded-fixed".equalsIgnoreCase(cur) || "passed-clean".equalsIgnoreCase(cur) || "succeeded".equalsIgnoreCase(cur))
+            {
+                effective = hasBugs ? "succeeded-fixed" : "passed-clean";
+            }
+            if (!effective.equalsIgnoreCase(cur))
+            {
+                var.setLastStatus(effective);
+                variationRepository.save(var);
+            }
+        }
     }
 
     public void saveRunReportToDisk(final String runId, final RunReportDto report)
@@ -1681,11 +1778,36 @@ public class AuraReportDataService
         final String targetLocation,
         final String targetBrowser)
     {
+        return getVariationHistory(targetTestClass, null, targetDataSet, targetLocation, targetBrowser);
+    }
+
+    public List<TestBaseVariationHistoryDto> getVariationHistory(
+        final String targetTestClass,
+        final String targetTestMethod,
+        final String targetDataSet,
+        final String targetLocation,
+        final String targetBrowser)
+    {
         final String normTargetBrowser = normalizeBrowser(targetBrowser);
         final String cleanTargetDataSet = cleanDataSetString(targetDataSet);
-        final String varId = generateVariationId(targetTestClass, targetDataSet, targetLocation, targetBrowser);
+        final String primaryVarId;
+        if (targetTestMethod != null && !targetTestMethod.trim().isEmpty())
+        {
+            primaryVarId = generateVariationId(targetTestClass, targetTestMethod, targetDataSet, targetLocation, targetBrowser);
+        }
+        else
+        {
+            primaryVarId = generateVariationId(targetTestClass, targetDataSet, targetLocation, targetBrowser);
+        }
 
-        final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
+        Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(primaryVarId);
+        if (varOpt.isEmpty() && (targetTestMethod == null || targetTestMethod.trim().isEmpty()))
+        {
+            final String legacyVarId = generateVariationId(targetTestClass, targetDataSet, targetLocation, targetBrowser);
+            varOpt = variationRepository.findById(legacyVarId);
+        }
+
+        final String varId = varOpt.map(TestBaseVariationEntity::getId).orElse(primaryVarId);
         if (varOpt.isPresent())
         {
             final TestBaseVariationEntity varEntity = varOpt.get();
@@ -1837,6 +1959,13 @@ public class AuraReportDataService
                                             continue;
                                         }
 
+                                        final String execMethod = exec.getTestMethod();
+                                        if (targetTestMethod != null && !targetTestMethod.trim().isEmpty() && execMethod != null && !execMethod.trim().isEmpty()
+                                            && !targetTestMethod.equalsIgnoreCase(execMethod.trim()))
+                                        {
+                                            continue;
+                                        }
+
                                         final String execData = cleanDataSetString(exec.getTitle());
                                         if (!cleanTargetDataSet.isEmpty() && !execData.isEmpty()
                                             && !cleanTargetDataSet.equalsIgnoreCase(execData))
@@ -1891,14 +2020,23 @@ public class AuraReportDataService
                         }
                     }
 
-                    if (modifiedAny && !upgradedLinks.isEmpty())
-                    {
-                        varEntity.setHistoryLinks(String.join(",", upgradedLinks));
-                        variationRepository.save(varEntity);
-                    }
-
                     if (!historyList.isEmpty())
                     {
+                        final String latestStatus = historyList.get(0).getStatus();
+                        if (latestStatus != null && !latestStatus.equalsIgnoreCase(varEntity.getLastStatus()))
+                        {
+                            varEntity.setLastStatus(latestStatus);
+                            if (modifiedAny && !upgradedLinks.isEmpty())
+                            {
+                                varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                            }
+                            variationRepository.save(varEntity);
+                        }
+                        else if (modifiedAny && !upgradedLinks.isEmpty())
+                        {
+                            varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                            variationRepository.save(varEntity);
+                        }
                         return historyList;
                     }
                 }
@@ -1926,7 +2064,15 @@ public class AuraReportDataService
                     continue;
                 }
 
+                final String execMethod = exec.getTestMethod();
+                if (targetTestMethod != null && !targetTestMethod.trim().isEmpty() && execMethod != null && !execMethod.trim().isEmpty()
+                    && !targetTestMethod.equalsIgnoreCase(execMethod.trim()))
+                {
+                    continue;
+                }
+
                 final String execData = cleanDataSetString(exec.getTitle());
+
                 if (!cleanTargetDataSet.isEmpty() && !execData.isEmpty()
                     && !cleanTargetDataSet.equalsIgnoreCase(execData))
                 {
@@ -2024,30 +2170,30 @@ public class AuraReportDataService
 
         switch (status.toLowerCase())
         {
-            case "succeeded-fixed", "healed" ->
+            case "succeeded-fixed", "healed", "fixed" ->
             {
-                statusClass = "badge-fixed";
-                statusLabel = "HEALED / FIXED";
+                statusClass = "badge-healed";
+                statusLabel = "SUCCEEDED-FIXED";
             }
             case "passed-clean", "passed", "succeeded" ->
             {
                 statusClass = "badge-pass";
                 statusLabel = "PASSED";
             }
-            case "failed-known" ->
+            case "failed-known", "known" ->
             {
-                statusClass = "badge-known";
-                statusLabel = "FAILED KNOWN";
+                statusClass = "badge-known-fail";
+                statusLabel = "KNOWN FAIL";
             }
-            case "failed-unknown", "failed", "error" ->
+            case "failed-unknown", "unknown", "failed", "error" ->
             {
-                statusClass = "badge-fail";
-                statusLabel = "FAILED";
+                statusClass = "badge-unknown-fail";
+                statusLabel = "UNKNOWN FAIL";
             }
-            case "ignored" ->
+            case "ignored", "skipped" ->
             {
                 statusClass = "badge-ignored";
-                statusLabel = "IGNORED";
+                statusLabel = "SKIPPED";
             }
             default ->
             {

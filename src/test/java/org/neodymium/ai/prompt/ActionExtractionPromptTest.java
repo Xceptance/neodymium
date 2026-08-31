@@ -556,7 +556,6 @@ public final class ActionExtractionPromptTest
 
         assertTrue(ex.getMessage().contains("The cart table does not show 'Free Bonus Gift'."));
     }
-
     /**
      * Verifies that parseResponse throws DivergenceException when assertionSatisfied is false despite status SUCCESS.
      */

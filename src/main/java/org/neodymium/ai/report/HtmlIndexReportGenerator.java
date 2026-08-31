@@ -40,6 +40,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import org.neodymium.ai.config.AiConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -528,7 +530,7 @@ public final class HtmlIndexReportGenerator
      */
     public static void main(final String[] args)
     {
-        final Path dir = args != null && args.length > 0 ? Path.of(args[0]) : Path.of("target/ai-reports");
+        final Path dir = args != null && args.length > 0 ? Path.of(args[0]) : Path.of(AiConfiguration.getInstance().getDiskReportDirectory());
         new HtmlIndexReportGenerator().refreshIndex(dir);
     }
 

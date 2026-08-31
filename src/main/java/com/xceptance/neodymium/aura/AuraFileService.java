@@ -219,7 +219,10 @@ public final class AuraFileService
                             {
                                 final Map<?, ?> itemMap = (Map<?, ?>) item;
                                 final Object tId = itemMap.get("testId") != null ? itemMap.get("testId")
-                                        : itemMap.get("TEST_ID");
+                                        : itemMap.get("TEST_ID") != null ? itemMap.get("TEST_ID")
+                                        : itemMap.get("id") != null ? itemMap.get("id")
+                                        : itemMap.get("testid") != null ? itemMap.get("testid")
+                                        : itemMap.get("testID");
                                 if (tId != null && !String.valueOf(tId).trim().isEmpty())
                                 {
                                     datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true));
@@ -242,7 +245,11 @@ public final class AuraFileService
                 }
                 else
                 {
-                    final Object tId = root.get("testId") != null ? root.get("testId") : root.get("TEST_ID");
+                    final Object tId = root.get("testId") != null ? root.get("testId")
+                            : root.get("TEST_ID") != null ? root.get("TEST_ID")
+                            : root.get("id") != null ? root.get("id")
+                            : root.get("testid") != null ? root.get("testid")
+                            : root.get("testID");
                     if (tId != null && !String.valueOf(tId).trim().isEmpty())
                     {
                         datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true));

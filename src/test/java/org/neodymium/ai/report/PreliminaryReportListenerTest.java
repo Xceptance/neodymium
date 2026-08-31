@@ -41,6 +41,7 @@ import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.diagnostic.DiagnosticWarningEvent;
@@ -1104,6 +1105,42 @@ public class PreliminaryReportListenerTest
         final String md = Files.readString(mdPath);
         assertTrue(md.contains("https://localhost:8543/index.html (Tpl: ${verla.url}/index.html)"));
         assertTrue(md.contains("john_doe (Tpl: ${user})"));
+    }
+
+    @Test
+    @DisplayName("Verify PreliminaryReportListener default constructor resolves configured disk report directory")
+    public void testDefaultConstructorUsesConfiguredDiskReportDirectory() throws Exception
+    {
+        final Path customDir = this.tempFolder.resolve("custom-ai-reports");
+        System.setProperty("neodymium.ai.report.disk.directory", customDir.toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final PreliminaryReportListener listener = new PreliminaryReportListener();
+            listener.getReport().setTestClass("org.neodymium.ai.integration.CustomReportDirTest");
+            listener.getReport().setTestMethod("testCustomDir");
+
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            final PlaybookStep step = new PlaybookStep("Custom Step");
+            bus.dispatch(new StepStartedEvent(step, 0));
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(100, true));
+
+            final Path rootJsonPath = Path.of("target/ai-results").resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(rootJsonPath), "Root report file must always land in target/ai-results directory");
+
+            final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
+            final Path structuredJsonPath = customDir.resolve(runFolder).resolve("CustomReportDirTest").resolve(listener.getLastBaseFileName() + ".json");
+            assertFalse(Files.exists(structuredJsonPath), "Structured run_ report file should NOT land in custom configured directory, as run_ folders are reserved for console logs");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.report.disk.directory");
+            AiConfiguration.resetInstance();
+        }
     }
 
     @Test
