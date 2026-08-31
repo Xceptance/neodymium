@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -318,6 +319,28 @@ public final class EmbeddedHtmlServer
     private final Map<String, Map<String, Integer>> productInventory = new ConcurrentHashMap<>();
     private final Random seededRandom = new Random(42L);
 
+    /**
+     * Epoch millisecond timestamp at which a headless session finishes its bootstrap handshake,
+     * keyed by cart id. Until that moment the BFF endpoints reject the stale customer id with
+     * HTTP 400, exactly as the reference storefront does while its two OAuth token requests race.
+     */
+    private final Map<String, Long> headlessSessionSettleAt = new ConcurrentHashMap<>();
+
+    /** Bootstrap customer id handed out before the session settles; rejected by the BFF endpoints. */
+    private final Map<String, String> headlessStaleCustomerId = new ConcurrentHashMap<>();
+
+    /** Customer id that becomes valid once the session has settled. */
+    private final Map<String, String> headlessSettledCustomerId = new ConcurrentHashMap<>();
+
+    /**
+     * Remaining number of product tiles the current headless render may emit as client-hydrated
+     * skeletons. Scoped per request thread and refilled at the top of every page render.
+     */
+    private static final ThreadLocal<int[]> headlessTileBudget = ThreadLocal.withInitial(() -> new int[1]);
+
+    /** Products emitted as skeletons during the current render, used to seed the hydration blob. */
+    private static final ThreadLocal<List<Product>> headlessRenderedTiles = ThreadLocal.withInitial(ArrayList::new);
+
     private static volatile EmbeddedHtmlServer lastInstance;
 
     /**
@@ -343,6 +366,7 @@ public final class EmbeddedHtmlServer
     public void resetCarts()
     {
         this.activeCarts.clear();
+        resetHeadlessSessions();
         LOG.info("VÉRLA active carts reset on server port {}.", this.port);
     }
 
@@ -361,6 +385,7 @@ public final class EmbeddedHtmlServer
     public void resetSessions()
     {
         this.activeSessions.clear();
+        resetHeadlessSessions();
         LOG.info("VÉRLA active sessions reset on server port {}.", this.port);
     }
 
@@ -741,7 +766,11 @@ public final class EmbeddedHtmlServer
         final String outOfStockText = trans != null ? trans.getOrDefault("outOfStock", "Out of stock") : "Out of stock";
 
         final StringBuilder sb = new StringBuilder();
-        if (isTailwindByClaude(quality))
+        if (isApparel(quality))
+        {
+            sb.append("<select name=\"size\" id=\"size\" class=\"w-full cursor-pointer rounded-lg border border-sand-200 bg-white px-4 py-2.5 text-xs font-bold outline-none focus:border-terracotta-500\" required>");
+        }
+        else if (isTailwindByClaude(quality))
         {
             sb.append("<div class=\"flex items-center gap-3\">");
             sb.append("<label for=\"size\" class=\"text-[13px] font-semibold uppercase tracking-[0.05em]\">").append(sizeLabel).append(":</label>");
@@ -822,7 +851,10 @@ public final class EmbeddedHtmlServer
         }
 
         sb.append("</select>");
-        sb.append("</div>");
+        if (!isApparel(quality))
+        {
+            sb.append("</div>");
+        }
         return sb.toString();
     }
 
@@ -1013,6 +1045,8 @@ public final class EmbeddedHtmlServer
 
         this.server.createContext("/", new LoggingHandler(resourceHandler));
         this.server.createContext("/verla-tailwind-by-claude/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-apparel/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-apperal/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-tailwind/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
@@ -1021,6 +1055,7 @@ public final class EmbeddedHtmlServer
         this.server.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
         this.server.createContext("/verla-apocalypse/", new LoggingHandler(verlaHandler));
+        this.server.createContext("/verla-headless/", new LoggingHandler(verlaHandler));
         this.server.setExecutor(Executors.newCachedThreadPool());
 
         this.httpsServer = createHttpsServerWithFallback(httpsPort);
@@ -1047,6 +1082,8 @@ public final class EmbeddedHtmlServer
             this.httpsServer.setHttpsConfigurator(new HttpsConfigurator(sslContext));
             this.httpsServer.createContext("/", new LoggingHandler(resourceHandler));
             this.httpsServer.createContext("/verla-tailwind-by-claude/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-apparel/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-apperal/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-tailwind/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
@@ -1055,6 +1092,7 @@ public final class EmbeddedHtmlServer
             this.httpsServer.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
             this.httpsServer.createContext("/verla-apocalypse/", new LoggingHandler(verlaHandler));
+            this.httpsServer.createContext("/verla-headless/", new LoggingHandler(verlaHandler));
             this.httpsServer.setExecutor(Executors.newCachedThreadPool());
         }
         catch (final Exception e)
@@ -1288,6 +1326,10 @@ public final class EmbeddedHtmlServer
             {
                 qualitySuffix = "tailwind-by-claude";
             }
+            else if (fullPath.startsWith("/verla-apparel/") || fullPath.startsWith("/verla-apperal/"))
+            {
+                qualitySuffix = "apparel";
+            }
             else if (fullPath.startsWith("/verla-tailwind/"))
             {
                 qualitySuffix = "tailwind";
@@ -1320,13 +1362,17 @@ public final class EmbeddedHtmlServer
             {
                 qualitySuffix = "apocalypse";
             }
+            else if (fullPath.startsWith("/verla-headless/"))
+            {
+                qualitySuffix = "headless";
+            }
             else
             {
                 sendResponse(exchange, 400, "text/plain", "Bad Request: Invalid SUT suffix");
                 return;
             }
 
-            final String contextPrefix = "/verla-" + qualitySuffix + "/";
+            final String contextPrefix = fullPath.startsWith("/verla-apperal/") ? "/verla-apperal/" : "/verla-" + qualitySuffix + "/";
             final String pagePath = fullPath.substring(contextPrefix.length());
 
             if (LOG.isDebugEnabled())
@@ -1450,12 +1496,190 @@ public final class EmbeddedHtmlServer
                         filtered.sort((p1, p2) -> Double.compare(p2.salePrice != null ? p2.salePrice : p2.basePrice, p1.salePrice != null ? p1.salePrice : p1.basePrice));
                     }
 
+                    // This fragment path does not go through renderTemplate, so the per-request
+                    // tile budget has to be set here too. Without it a pooled worker thread would
+                    // carry a stale budget into the next request it happens to serve.
+                    final VerlaConfiguration snippetCfg = VerlaConfiguration.getInstance();
+                    headlessTileBudget.get()[0] = (isHeadless(qualitySuffix) && snippetCfg.isHeadlessEnabled())
+                                                  ? snippetCfg.getHeadlessTileFanout()
+                                                  : 0;
+                    headlessRenderedTiles.get().clear();
+
                     final StringBuilder sb = new StringBuilder();
                     for (final Product p : filtered)
                     {
                         sb.append(renderProductCard(p, activeCountry, trans, qualitySuffix));
                     }
                     sendResponse(exchange, 200, "text/html", sb.toString());
+                    return;
+                }
+                // --- Headless PWA SUT endpoints -------------------------------------
+                // These model a composable storefront's client-side data layer: an OAuth
+                // handshake that races, per-entity product documents fetched one call per
+                // tile, BFF endpoints that reject a stale customer id, and CMS slots that
+                // arrive after first paint.
+                else if ("scapi/token".equals(apiMethod))
+                {
+                    VerlaConfiguration.getInstance().simulateHeadlessToken();
+                    ensureHeadlessSession(cartId);
+                    final Map<String, Object> tok = new LinkedHashMap<>();
+                    tok.put("access_token", UUID.randomUUID().toString().replace("-", ""));
+                    tok.put("token_type", "BEARER");
+                    tok.put("expires_in", 1800);
+                    tok.put("usid", UUID.randomUUID().toString());
+                    tok.put("customer_id", headlessCustomerId(cartId));
+                    tok.put("enc_user_id", Long.toHexString(cartId.hashCode() & 0xFFFFFFFFL));
+                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(tok));
+                    return;
+                }
+                else if ("scapi/session".equals(apiMethod))
+                {
+                    // The readiness signal a well-written test waits on instead of sleeping.
+                    final boolean settled = isHeadlessSessionSettled(cartId);
+                    final Map<String, Object> st = new LinkedHashMap<>();
+                    st.put("ready", settled);
+                    st.put("customerId", headlessCustomerId(cartId));
+                    st.put("state", settled ? "SETTLED" : "BOOTSTRAPPING");
+                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(st));
+                    return;
+                }
+                else if ("scapi/product".equals(apiMethod))
+                {
+                    // One request per tile. Latency is jittered so the grid settles progressively
+                    // and there is never a single moment at which "the page" is done.
+                    VerlaConfiguration.getInstance().simulateHeadlessTileFetch();
+                    final String pid = getQueryParam(exchange.getRequestURI().toString(), "id");
+                    final Product found = catalogProducts.stream()
+                                                         .filter(pr -> pr.id.equals(pid))
+                                                         .findFirst()
+                                                         .orElse(null);
+                    if (found == null)
+                    {
+                        sendResponse(exchange, 404, "application/json; charset=utf-8",
+                                     "{\"title\":\"Not Found\",\"type\":\"product-not-found\",\"detail\":\"No product with id " + escapeHtml(pid) + "\"}");
+                        return;
+                    }
+                    sendResponse(exchange, 200, "application/json; charset=utf-8",
+                                 new Gson().toJson(headlessProductDocument(found, activeCountry)));
+                    return;
+                }
+                else if ("scapi/image".equals(apiMethod))
+                {
+                    // The tile image is a second request per tile, and the response weight tracks
+                    // the requested width even though every tile asks for the same large rendition.
+                    VerlaConfiguration.getInstance().simulateHeadlessTileFetch();
+                    final String reqUri = exchange.getRequestURI().toString();
+                    final String pid = getQueryParam(reqUri, "id");
+                    final Product img = catalogProducts.stream()
+                                                       .filter(pr -> pr.id.equals(pid))
+                                                       .findFirst()
+                                                       .orElse(null);
+                    if (img == null)
+                    {
+                        sendResponse(exchange, 404, "text/plain", "Not Found");
+                        return;
+                    }
+                    int sw;
+                    try
+                    {
+                        sw = Integer.parseInt(getQueryParam(reqUri, "sw"));
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                        sw = 960;
+                    }
+                    sw = Math.max(64, Math.min(2048, sw));
+
+                    final StringBuilder svg = new StringBuilder();
+                    svg.append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\" width=\"").append(sw)
+                       .append("\" height=\"").append(Math.round(sw * 4 / 3.0)).append("\">")
+                       .append("<rect width=\"100\" height=\"100\" fill=\"").append(getColorHex(img.color)).append("\" opacity=\"0.18\"/>")
+                       .append("<g fill=\"").append(getColorHex(img.color)).append("\">").append(img.svgPath).append("</g>");
+                    // Pad the rendition to its configured weight, scaled by how much of the
+                    // published width was actually asked for, so an oversized request costs more.
+                    final int renditionBytes = Math.round(VerlaConfiguration.getInstance().getHeadlessImageKb() * 1024f * (sw / 960f));
+                    final StringBuilder meta = new StringBuilder();
+                    final Random rnd = new Random(img.id.hashCode());
+                    while (meta.length() < renditionBytes)
+                    {
+                        meta.append(Integer.toHexString(rnd.nextInt(16)));
+                    }
+                    svg.append("<metadata>").append(meta).append("</metadata></svg>");
+
+                    exchange.getResponseHeaders().set("Cache-Control", "public, max-age=60");
+                    sendResponse(exchange, 200, "image/svg+xml; charset=utf-8", svg.toString());
+                    return;
+                }
+                else if (apiMethod.startsWith("bff/"))
+                {
+                    // basket, wishlist and getWishlist all validate the customer id. The client
+                    // fires them once with the bootstrap id (rejected) and again once settled.
+                    final String claimed = getQueryParam(exchange.getRequestURI().toString(), "customerId");
+                    ensureHeadlessSession(cartId);
+                    final boolean settled = isHeadlessSessionSettled(cartId);
+                    final String valid = headlessSettledCustomerId.get(cartId);
+                    if (!settled || claimed == null || claimed.isEmpty() || !claimed.equals(valid))
+                    {
+                        sendResponse(exchange, 400, "application/json; charset=utf-8",
+                                     "{\"title\":\"Bad Request\",\"type\":\"invalid-customer\",\"detail\":\"Customer id is not valid for this session\"}");
+                        return;
+                    }
+
+                    final String resource = apiMethod.substring(4);
+                    final Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("customerId", valid);
+                    if (resource.startsWith("basket"))
+                    {
+                        int units = 0;
+                        for (final Integer q : cart.items.values())
+                        {
+                            units += q;
+                        }
+                        payload.put("basketId", cartId);
+                        payload.put("productItems", cart.items.size());
+                        payload.put("totalQuantity", units);
+                    }
+                    else
+                    {
+                        payload.put("wishlistId", "wl-" + Long.toHexString(cartId.hashCode() & 0xFFFFFFL));
+                        payload.put("items", List.of());
+                    }
+                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(payload));
+                    return;
+                }
+                else if ("cms/slot".equals(apiMethod))
+                {
+                    // Each content slot is its own document, so the footer and banners land well
+                    // after first paint and shift the layout underneath anything already clicked.
+                    VerlaConfiguration.getInstance().simulateHeadlessCmsSlot();
+                    final String slotId = getQueryParam(exchange.getRequestURI().toString(), "id");
+                    final Map<String, Object> slot = new LinkedHashMap<>();
+                    slot.put("id", slotId);
+                    slot.put("type", "content-asset");
+                    switch (slotId)
+                    {
+                        case "PWA_StripBanner":
+                            slot.put("html", "<span class=\"" + emotionHash("strip-banner") + "\">"
+                                             + escapeHtml(trans.getOrDefault("promoBanner", "Free worldwide shipping on orders over $150 USD")) + "</span>");
+                            break;
+                        case "PWA_FooterLinkList":
+                            slot.put("html", "<ul class=\"" + emotionHash("footer-links") + "\">"
+                                             + "<li><a href=\"shipping.html\">" + escapeHtml(trans.getOrDefault("shippingReturns", "Shipping &amp; Returns")) + "</a></li>"
+                                             + "<li><a href=\"faq.html\">FAQ</a></li>"
+                                             + "<li><a href=\"contact.html\">" + escapeHtml(trans.getOrDefault("contact", "Contact")) + "</a></li>"
+                                             + "<li><a href=\"stores.html\">" + escapeHtml(trans.getOrDefault("ourStores", "Our Stores")) + "</a></li>"
+                                             + "<li><a href=\"careers.html\">" + escapeHtml(trans.getOrDefault("careers", "Careers")) + "</a></li>"
+                                             + "</ul>");
+                            break;
+                        case "PWA_FooterLegal":
+                            slot.put("html", "<p class=\"" + emotionHash("footer-legal") + "\">&copy; 2026 V&Eacute;RLA. "
+                                             + escapeHtml(trans.getOrDefault("allRightsReserved", "All rights reserved.")) + "</p>");
+                            break;
+                        default:
+                            slot.put("html", "");
+                            break;
+                    }
+                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(slot));
                     return;
                 }
                 else if ("country/select".equals(apiMethod))
@@ -1479,7 +1703,7 @@ public final class EmbeddedHtmlServer
                         {
                             final String selectedClass = c.code.equals(activeCountry.code) ? "selected" : "";
                             // Perfect vs Normal/Bad styling
-                            if (isTailwindByClaude(qualitySuffix))
+                            if (isTailwindByClaude(qualitySuffix) || isApparel(qualitySuffix))
                             {
                                 sb.append("<li data-selected=\"").append(c.code.equals(activeCountry.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
                                   .append(c.name).append(" (").append(c.symbol).append(")</li>");
@@ -1515,6 +1739,17 @@ public final class EmbeddedHtmlServer
                 else if ("cart/add".equals(apiMethod))
                 {
                     VerlaConfiguration.getInstance().simulateCartAdd();
+
+                    // The headless SUT cannot mutate a basket until its bootstrap handshake has
+                    // settled. Adds issued too early are rejected, which is what makes a naive
+                    // "click add to bag straight after load" test fail intermittently.
+                    if (isHeadless(qualitySuffix) && !isHeadlessSessionSettled(cartId))
+                    {
+                        sendResponse(exchange, 400, "application/json; charset=utf-8",
+                                     "{\"title\":\"Bad Request\",\"type\":\"session-not-ready\",\"detail\":\"Basket is not available until the session has settled\"}");
+                        return;
+                    }
+
                     String productId = params.get("productId");
                     final String size = params.get("size");
                     if (productId != null)
@@ -1551,6 +1786,11 @@ public final class EmbeddedHtmlServer
                 }
                 else if ("cart/drawer".equals(apiMethod))
                 {
+                    if (isApparel(qualitySuffix))
+                    {
+                        sendResponse(exchange, 200, "application/json; charset=utf-8", getCartDrawerHtmlApparel(cart, activeCountry, trans));
+                        return;
+                    }
                     sendResponse(exchange, 200, "text/html", getCartDrawerHtmlApocalypse(cart, activeCountry, trans));
                     return;
                 }
@@ -1636,7 +1876,7 @@ public final class EmbeddedHtmlServer
                         final Product p = matches.get(i);
                         final double price = p.salePrice != null ? p.salePrice : p.basePrice;
                         final String name = p.names.getOrDefault(locale, p.names.get("en"));
-                        if (isTailwindByClaude(qualitySuffix))
+                        if (isTailwindByClaude(qualitySuffix) || isApparel(qualitySuffix))
                         {
                             sb.append("<a href=\"p/").append(p.slug).append(".html\" class=\"flex items-center gap-3 border-b border-sand-200 px-4 py-2.5 text-ink transition-colors last:border-b-0 hover:bg-sand-50\">")
                               .append("  <div class=\"flex h-9 w-9 shrink-0 items-center justify-center rounded border border-sand-200 bg-sand-50\">")
@@ -1666,7 +1906,7 @@ public final class EmbeddedHtmlServer
                     {
                         final int extra = matches.size() - 6;
                         final String viewAllUrl = "plp.html?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8.name());
-                        final String moreLinkClass = isTailwindByClaude(qualitySuffix)
+                        final String moreLinkClass = (isTailwindByClaude(qualitySuffix) || isApparel(qualitySuffix))
                             ? "block bg-sand-50 p-2.5 text-center text-xs font-medium text-terracotta-500 transition-colors hover:text-terracotta-700"
                             : "search-more-link";
                         sb.append("<a href=\"").append(viewAllUrl).append("\" class=\"").append(moreLinkClass).append("\">")
@@ -2158,6 +2398,13 @@ public final class EmbeddedHtmlServer
             final Map<String, String> model = new HashMap<>(customModel);
             model.put("quality", quality);
 
+            // Refill the per-request budget of client-hydrated tiles for the headless SUT.
+            final VerlaConfiguration headlessCfg = VerlaConfiguration.getInstance();
+            headlessTileBudget.get()[0] = (isHeadless(quality) && headlessCfg.isHeadlessEnabled())
+                                          ? headlessCfg.getHeadlessTileFanout()
+                                          : 0;
+            headlessRenderedTiles.get().clear();
+
             // Generic translations mappings
             for (final Map.Entry<String, String> entry : trans.entrySet())
             {
@@ -2172,12 +2419,81 @@ public final class EmbeddedHtmlServer
             model.putIfAbsent("lang_added", trans.getOrDefault("added", "de".equals(country.locale) ? "Hinzugefügt!" : "Added!"));
 
             model.put("country_name", country.name);
+            model.put("country_code", country.code);
             model.put("country_symbol", country.symbol);
+            model.put("currency_symbol", country.symbol);
             model.put("country_flag", getCountryFlag(country.code));
             model.put("cart_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
             model.put("cart_items_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
             model.put("cart_badge_html", getCartBadgeWrapperHtml(cart, trans, country, quality));
             model.put("cart_dropdown_items_html", getCartDropdownHtml(cart, trans, country, quality));
+
+            if (isApparel(quality))
+            {
+                final double drawerSubtotal = calculateSubtotal(cart);
+                final int drawerCount = cart.items.values().stream().mapToInt(Integer::intValue).sum();
+                final double freeShippingThreshold = 75.0;
+                final double remaining = Math.max(0.0, freeShippingThreshold - drawerSubtotal);
+                final int progressPct = drawerSubtotal >= freeShippingThreshold ? 100 : (int) Math.min(100, Math.round((drawerSubtotal / freeShippingThreshold) * 100));
+
+                final String shippingStatus;
+                if (drawerSubtotal <= 0)
+                {
+                    shippingStatus = "Add " + formatPrice(freeShippingThreshold, country) + " for FREE delivery!";
+                }
+                else if (remaining <= 0)
+                {
+                    shippingStatus = "🎉 FREE delivery unlocked!";
+                }
+                else
+                {
+                    shippingStatus = "Add " + formatPrice(remaining, country) + " for FREE delivery!";
+                }
+
+                final StringBuilder sbDrawerItems = new StringBuilder();
+                if (cart.items.isEmpty())
+                {
+                    sbDrawerItems.append("<p class=\"text-sm text-muted py-8 text-center\" id=\"drawer-empty-msg\">")
+                                 .append(trans.getOrDefault("cartIsEmpty", "Your shopping bag is empty."))
+                                 .append("</p>");
+                }
+                else
+                {
+                    for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+                    {
+                        final String cartKey = entry.getKey();
+                        final Product p = lookupProductById(cartKey);
+                        if (p == null)
+                        {
+                            continue;
+                        }
+                        final String size = cartKey.contains(":") ? " (" + cartKey.split(":")[1] + ")" : "";
+                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                        final double rowTotal = price * entry.getValue();
+                        final String displayName = escapeHtml(p.names.getOrDefault(country.locale, p.names.get("en"))) + size;
+
+                        sbDrawerItems.append("<div class=\"flex items-center gap-4 py-4 first:pt-0 border-b border-sand-200 last:border-b-0\">")
+                                     .append("  <div class=\"w-16 h-16 rounded-xl bg-sand-50 border border-sand-200 flex items-center justify-center p-2 shrink-0\">")
+                                     .append("    <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-terracotta-500\">").append(p.svgPath).append("</svg>")
+                                     .append("  </div>")
+                                     .append("  <div class=\"flex-grow min-w-0\">")
+                                     .append("    <div class=\"font-serif text-sm font-bold text-espresso truncate\">").append(displayName).append("</div>")
+                                     .append("    <div class=\"text-xs text-muted mt-0.5\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
+                                     .append("  </div>")
+                                     .append("  <div class=\"text-right shrink-0\">")
+                                     .append("    <div class=\"text-xs font-bold text-ink\">").append(formatPrice(rowTotal, country)).append("</div>")
+                                     .append("    <button type=\"button\" class=\"text-[11px] text-terracotta-600 hover:text-terracotta-800 underline mt-1 cursor-pointer\" onclick=\"removeFromDrawer('").append(escapeHtml(cartKey)).append("')\">").append(trans.getOrDefault("remove", "Remove")).append("</button>")
+                                     .append("  </div>")
+                                     .append("</div>");
+                    }
+                }
+
+                model.put("drawer_cart_count", String.valueOf(drawerCount));
+                model.put("drawer_subtotal", formatPrice(drawerSubtotal, country));
+                model.put("drawer_shipping_status", shippingStatus);
+                model.put("drawer_shipping_progress", String.valueOf(progressPct));
+                model.put("drawer_cart_items_html", sbDrawerItems.toString());
+            }
 
             final String loginText = trans.getOrDefault("login", "Login");
             final String accountText = trans.getOrDefault("account", "Account");
@@ -2188,6 +2504,10 @@ public final class EmbeddedHtmlServer
                 if (isTailwindByClaude(quality))
                 {
                     model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + accountText + "</a>");
+                }
+                else if (isApparel(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 transition-colors shrink-0\" id=\"user-nav-link\"><svg class=\"w-5 h-5\"><use xlink:href=\"#icon-user\"></use></svg> <span class=\"hidden xl:inline\">" + user.email.split("@")[0] + "</span></a>");
                 }
                 else if ("pwa-chaos".equals(quality))
                 {
@@ -2211,6 +2531,10 @@ public final class EmbeddedHtmlServer
                 if (isTailwindByClaude(quality))
                 {
                     model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + loginText + "</a>");
+                }
+                else if (isApparel(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 transition-colors shrink-0\" id=\"user-nav-link\"><svg class=\"w-5 h-5\"><use xlink:href=\"#icon-user\"></use></svg> <span class=\"hidden xl:inline\">" + loginText + "</span></a>");
                 }
                 else if ("pwa-chaos".equals(quality))
                 {
@@ -2461,11 +2785,26 @@ public final class EmbeddedHtmlServer
                     model.put("product_category_name", trans.getOrDefault(prod.category, prod.category));
                     model.put("product_subcategory_name", prod.subcategory.toUpperCase());
                     
-                    final double price = prod.salePrice != null ? prod.salePrice : prod.basePrice;
-                    model.put("product_price_html", formatPrice(price, country));
+                    if (prod.salePrice != null)
+                    {
+                        if (isTailwindByClaude(quality) || isApparel(quality))
+                        {
+                            model.put("product_price_html", "<span class=\"text-muted line-through text-lg mr-2\">" + formatPrice(prod.basePrice, country) + "</span>" +
+                                                            "<span class=\"font-bold text-terracotta-600 text-2xl\">" + formatPrice(prod.salePrice, country) + "</span>");
+                        }
+                        else
+                        {
+                            model.put("product_price_html", "<span class=\"original\" style=\"text-decoration: line-through; opacity: 0.6; margin-right: 8px;\">" + formatPrice(prod.basePrice, country) + "</span>" +
+                                                            "<span class=\"sale\" style=\"color: #c87a53;\">" + formatPrice(prod.salePrice, country) + "</span>");
+                        }
+                    }
+                    else
+                    {
+                        model.put("product_price_html", "<span>" + formatPrice(prod.basePrice, country) + "</span>");
+                    }
                     model.put("product_desc", prod.descriptions.getOrDefault(country.locale, prod.descriptions.get("en")));
                     model.put("product_svg_content", prod.svgPath);
-                    model.put("product_badge_html", prod.badge.isEmpty() ? "" : "<span class=\"" + (isTailwindByClaude(quality) ? "absolute left-4 top-4 z-[5] rounded-sm bg-terracotta-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white" : "product-badge") + "\">" + prod.badge.toUpperCase() + "</span>");
+                    model.put("product_badge_html", prod.badge.isEmpty() ? "" : "<span class=\"" + (isTailwindByClaude(quality) || isApparel(quality) ? "absolute left-4 top-4 z-[5] rounded-sm bg-terracotta-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white" : "product-badge") + "\">" + prod.badge.toUpperCase() + "</span>");
                     model.put("product_sizes_html", getProductSizesSelectHtml(prod.id, prod.category, trans, quality));
                 }
                 else
@@ -2505,7 +2844,7 @@ public final class EmbeddedHtmlServer
 
                 if (discount > 0)
                 {
-                    model.put("checkout_discount_row", "<div " + (isTailwindByClaude(quality) ? "class=\"flex justify-between text-success\"" : "style=\"display:flex;justify-content:space-between;color:var(--color-success);\"") + ">" +
+                    model.put("checkout_discount_row", "<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"flex justify-between text-success\"" : "style=\"display:flex;justify-content:space-between;color:var(--color-success);\"") + ">" +
                               "  <span>Discount (" + cart.coupon.toUpperCase() + ")</span>" +
                               "  <span>-" + formatPrice(discount, country) + "</span>" +
                               "</div>");
@@ -2524,7 +2863,7 @@ public final class EmbeddedHtmlServer
                         final String[] parts = entry.getKey().split(":");
                         final String size = parts.length > 1 ? " (" + parts[1] + ")" : "";
                         final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                        itemsSum.append("<div " + (isTailwindByClaude(quality) ? "class=\"mb-2 flex justify-between text-[13px]\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;\"") + ">")
+                        itemsSum.append("<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"mb-2 flex justify-between text-[13px]\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;\"") + ">")
                                 .append("  <span>").append(p.names.getOrDefault(country.locale, p.names.get("en"))).append(size).append(" &times; ").append(entry.getValue()).append("</span>")
                                 .append("  <span>").append(formatPrice(price * entry.getValue(), country)).append("</span>")
                                 .append("</div>");
@@ -2532,7 +2871,7 @@ public final class EmbeddedHtmlServer
                 }
                 if ("freegift".equals(cart.coupon))
                 {
-                    itemsSum.append("<div " + (isTailwindByClaude(quality) ? "class=\"mb-2 flex justify-between text-[13px] text-success\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;color:var(--color-success);\"") + ">")
+                    itemsSum.append("<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"mb-2 flex justify-between text-[13px] text-success\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;color:var(--color-success);\"") + ">")
                             .append("  <span>VÉRLA Signature Tote Bag &times; 1</span>")
                             .append("  <span>Free Gift</span>")
                             .append("</div>");
@@ -2698,10 +3037,11 @@ public final class EmbeddedHtmlServer
             for (final Country c : catalogConfig.countries)
             {
                 final String selectedClass = c.code.equals(country.code) ? "selected" : "";
-                if (isTailwindByClaude(quality))
+                if (isTailwindByClaude(quality) || isApparel(quality))
                 {
-                    countriesList.append("<li data-selected=\"").append(c.code.equals(country.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
-                                 .append(c.name).append(" (").append(c.symbol).append(")</li>");
+                    countriesList.append("<li data-selected=\"").append(c.code.equals(country.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append(" flex items-center gap-2 cursor-pointer\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
+                                 .append("<span class=\"text-base leading-none\">").append(getCountryFlag(c.code)).append("</span> ")
+                                 .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
                 }
                 else if ("apocalypse".equals(quality))
                 {
@@ -2721,6 +3061,38 @@ public final class EmbeddedHtmlServer
                 }
             }
             layoutModel.put("country_items_list", countriesList.toString());
+
+            // Headless SUT payload: the hydration blob, the icon sprite and the CSS-in-JS style
+            // elements are all inlined into the shell, which is what makes the document heavy.
+            if (isHeadless(quality))
+            {
+                final VerlaConfiguration cfg = VerlaConfiguration.getInstance();
+                if (cfg.isHeadlessEnabled())
+                {
+                    final List<Product> tiles = new ArrayList<>(headlessRenderedTiles.get());
+                    if (tiles.isEmpty())
+                    {
+                        for (int i = 0; i < 8 && i < catalogProducts.size(); i++)
+                        {
+                            tiles.add(catalogProducts.get(i));
+                        }
+                    }
+                    layoutModel.put("hydration_state", buildHydrationBlob(tiles, country, cfg.getHeadlessHydrationKb()));
+                    layoutModel.put("icon_sprite", buildIconSprite(cfg.getHeadlessSpriteKb()));
+                    layoutModel.put("injected_styles", buildInjectedStyleTags(cfg.getHeadlessStyleTagCount()));
+                    layoutModel.put("headless_boot_ms",
+                                    Long.toString(cfg.calculateDelay(cfg.getHeadlessBootMinMs(), cfg.getHeadlessBootMaxMs())));
+                    layoutModel.put("headless_enabled", "true");
+                }
+                else
+                {
+                    layoutModel.put("hydration_state", "{}");
+                    layoutModel.put("icon_sprite", "");
+                    layoutModel.put("injected_styles", "");
+                    layoutModel.put("headless_boot_ms", "0");
+                    layoutModel.put("headless_enabled", "false");
+                }
+            }
 
             String layoutHtml = rawLayout;
             for (final Map.Entry<String, String> entry : layoutModel.entrySet())
@@ -2758,6 +3130,14 @@ public final class EmbeddedHtmlServer
         return "tailwind-by-claude".equals(quality);
     }
 
+    /**
+     * True for the apparel SUT variant served at /verla-apparel/ (or alias /verla-apperal/).
+     */
+    private static boolean isApparel(final String quality)
+    {
+        return "apparel".equals(quality);
+    }
+
     /** Shared utility strings for the Tailwind SUT, kept here so the class lists stay in one place. */
     private static final String TW_FORM_LABEL = "mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]";
 
@@ -2771,6 +3151,17 @@ public final class EmbeddedHtmlServer
 
     private String renderProductCard(final Product p, final Country country, final Map<String, String> trans, final String quality)
     {
+        // The headless SUT ships tiles as empty skeletons and lets the client fetch each product
+        // document separately. Nothing about the product is in the markup except its id, so a test
+        // that reads the grid before the fan-out completes sees structure but no data.
+        final int[] budget = headlessTileBudget.get();
+        if (isHeadless(quality) && budget[0] > 0)
+        {
+            budget[0]--;
+            headlessRenderedTiles.get().add(p);
+            return renderHeadlessTileSkeleton(p);
+        }
+
         final double basePrice = p.basePrice;
         final Double salePrice = p.salePrice;
         final boolean tw = isTailwindByClaude(quality);
@@ -2778,7 +3169,12 @@ public final class EmbeddedHtmlServer
         final String badgeHtml;
         if (!p.badge.isEmpty())
         {
-            if (tw)
+            if (isApparel(quality))
+            {
+                final String badgeTone = "sold-out".equalsIgnoreCase(p.badge) ? "bg-muted" : "bg-terracotta-500";
+                badgeHtml = "<span class=\"mbf-sale-badge rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white " + badgeTone + "\">" + p.badge.toUpperCase() + "</span>";
+            }
+            else if (tw)
             {
                 final String badgeTone = "sold-out".equalsIgnoreCase(p.badge) ? "bg-muted" : "bg-terracotta-500";
                 badgeHtml = "<span class=\"absolute left-4 top-4 z-[5] rounded-sm px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white " + badgeTone + "\">" + p.badge.toUpperCase() + "</span>";
@@ -2796,7 +3192,7 @@ public final class EmbeddedHtmlServer
         final String priceHtml;
         if (salePrice != null)
         {
-            if (tw)
+            if (tw || isApparel(quality))
             {
                 priceHtml = "<span class=\"text-muted line-through\">" + formatPrice(basePrice, country) + "</span>" +
                             "<span class=\"font-semibold text-terracotta-500\">" + formatPrice(salePrice, country) + "</span>";
@@ -2814,6 +3210,50 @@ public final class EmbeddedHtmlServer
 
         final String localeName = p.names.getOrDefault(country.locale, p.names.get("en"));
         final String pdpLink = "/verla-" + quality + "/p/" + p.slug + ".html";
+
+        if (isApparel(quality))
+        {
+            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
+            final String cardId = getDynamicId("mbf-tile-root");
+            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
+            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
+
+            return "<div id=\"" + cardId + "\" class=\"mbf-card-root group relative flex flex-col bg-white rounded-2xl border border-sand-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow\" data-mbf-component=\"product-card\" data-pid=\"" + p.id + "\">" +
+                   "  <div class=\"mbf-tile-wrapper relative flex aspect-square items-center justify-center bg-sand-50 p-4\">" +
+                   "    <div class=\"mbf-badge-layer absolute top-4 left-4 z-10 flex flex-col items-start gap-1\">" +
+                   "      <span class=\"mbf-bundle-badge bg-terracotta-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider\">4+1 FREE</span>" +
+                   (badgeHtml.isEmpty() ? "" : "      " + badgeHtml) +
+                   "    </div>" +
+                   "    <div class=\"mbf-link-overlay w-full h-full flex items-center justify-center cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\" role=\"link\" tabindex=\"0\">" +
+                   "      <div class=\"chakra-stack w-3/4 h-3/4 flex items-center justify-center transition-transform duration-300 group-hover:scale-105\">" +
+                   "        <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-terracotta-500\">" + p.svgPath + "</svg>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "  <div class=\"mbf-card-body p-4 flex flex-col flex-1 justify-between\">" +
+                   "    <div class=\"mbf-swatch-pills flex items-center gap-1.5 mb-2.5\">" +
+                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#1A1A1A] border-2 border-white shadow-xs cursor-pointer\" title=\"Nero\"></span>" +
+                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#B66A45] border-2 border-white shadow-xs cursor-pointer\" title=\"Terracotta\"></span>" +
+                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#E6E2DA] border-2 border-white shadow-xs cursor-pointer\" title=\"Sabbia\"></span>" +
+                   "    </div>" +
+                   "    <div class=\"mbf-card-meta\">" +
+                   "      <div class=\"mbf-product-title font-serif text-sm font-bold text-espresso cursor-pointer hover:text-terracotta-500 transition-colors\" onclick=\"location.href='" + pdpLink + "'\">" +
+                   "        <span>" + escapeHtml(localeName) + "</span>" +
+                   "      </div>" +
+                   "      <div class=\"mbf-price-row mt-1 flex items-baseline gap-2\">" +
+                   "        <span class=\"mbf-now-price text-sm font-bold text-ink\">" + nowPrice + "</span>" +
+                   (salePrice != null ? "        <span class=\"mbf-was-price text-xs text-muted line-through\">" + wasPrice + "</span>" : "") +
+                   "      </div>" +
+                   "    </div>" +
+                   "    <div class=\"mbf-quick-add-wrap mt-3 relative\">" +
+                   "      <button type=\"button\" class=\"product-quick-add w-full py-2.5 px-4 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold rounded-lg text-xs uppercase tracking-wider text-center cursor-pointer shadow-sm transition-colors\" " +
+                   "              data-quick-add data-state=\"idle\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + escapeHtml(localeName) + " to shopping bag\">" +
+                   "        " + trans.getOrDefault("addToCart", "Add to Bag") +
+                   "      </button>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "</div>";
+        }
 
         // Generate card layout based on perfect/normal/bad/modern-bad-wcag/modern-bad rules
         if (tw)
@@ -3102,6 +3542,16 @@ public final class EmbeddedHtmlServer
                    "</div>";
         }
 
+        if (isApparel(quality))
+        {
+            return "<div class=\"relative inline-block\" id=\"cart-btn-wrapper\">" +
+                   "  <button type=\"button\" onclick=\"openCartDrawer()\" class=\"flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 text-ink transition-colors cursor-pointer\" id=\"cart-btn-anchor\" aria-label=\"Shopping Cart Drawer with " + count + " items\">" +
+                   "    <svg class=\"w-5 h-5\"><use xlink:href=\"#icon-bag\"></use></svg>" +
+                   "    <span class=\"cart-badge inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-terracotta-500 text-[10px] font-bold text-white\" id=\"cart-badge-count\">" + count + "</span>" +
+                   "  </button>" +
+                   "</div>";
+        }
+
         return "<div style=\"position: relative; display: inline-block;\" id=\"cart-btn-wrapper\">" +
                "  <a href=\"cart.html\" class=\"utility-btn\" id=\"cart-btn-anchor\">" +
                "    <svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg> " + trans.getOrDefault("cart", "Cart") + " <span class=\"cart-badge\">" + count + "</span>" +
@@ -3117,7 +3567,7 @@ public final class EmbeddedHtmlServer
 
     private String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
-        if (isTailwindByClaude(quality))
+        if (isTailwindByClaude(quality) || isApparel(quality))
         {
             return getCartDropdownHtmlTailwind(cart, trans, country, showTemp);
         }
@@ -3434,6 +3884,76 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
+    private String getCartDrawerHtmlApparel(final Cart cart, final Country country, final Map<String, String> trans)
+    {
+        final double subtotal = calculateSubtotal(cart);
+        final int count = cart.items.values().stream().mapToInt(Integer::intValue).sum();
+        final double freeShippingThreshold = 75.0;
+        final double remaining = Math.max(0.0, freeShippingThreshold - subtotal);
+        final int progressPct = subtotal >= freeShippingThreshold ? 100 : (int) Math.min(100, Math.round((subtotal / freeShippingThreshold) * 100));
+
+        final String shippingStatus;
+        if (subtotal <= 0)
+        {
+            shippingStatus = "Add " + formatPrice(freeShippingThreshold, country) + " for FREE delivery!";
+        }
+        else if (remaining <= 0)
+        {
+            shippingStatus = "🎉 FREE delivery unlocked!";
+        }
+        else
+        {
+            shippingStatus = "Add " + formatPrice(remaining, country) + " for FREE delivery!";
+        }
+
+        final StringBuilder sbItems = new StringBuilder();
+        if (cart.items.isEmpty())
+        {
+            sbItems.append("<p class=\"text-sm text-muted py-8 text-center\" id=\"drawer-empty-msg\">")
+                   .append(trans != null ? trans.getOrDefault("cartIsEmpty", "Your shopping bag is empty.") : "Your shopping bag is empty.")
+                   .append("</p>");
+        }
+        else
+        {
+            for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+            {
+                final String cartKey = entry.getKey();
+                final Product p = lookupProductById(cartKey);
+                if (p == null)
+                {
+                    continue;
+                }
+                final String size = cartKey.contains(":") ? " (" + cartKey.split(":")[1] + ")" : "";
+                final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                final double rowTotal = price * entry.getValue();
+                final String displayName = escapeHtml(p.names.getOrDefault(country.locale, p.names.get("en"))) + size;
+
+                sbItems.append("<div class=\"flex items-center gap-4 py-4 first:pt-0 border-b border-sand-200 last:border-b-0\">")
+                       .append("  <div class=\"w-16 h-16 rounded-xl bg-sand-50 border border-sand-200 flex items-center justify-center p-2 shrink-0\">")
+                       .append("    <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-terracotta-500\">").append(p.svgPath).append("</svg>")
+                       .append("  </div>")
+                       .append("  <div class=\"flex-grow min-w-0\">")
+                       .append("    <div class=\"font-serif text-sm font-bold text-espresso truncate\">").append(displayName).append("</div>")
+                       .append("    <div class=\"text-xs text-muted mt-0.5\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
+                       .append("  </div>")
+                       .append("  <div class=\"text-right shrink-0\">")
+                       .append("    <div class=\"text-xs font-bold text-ink\">").append(formatPrice(rowTotal, country)).append("</div>")
+                       .append("    <button type=\"button\" class=\"text-[11px] text-terracotta-600 hover:text-terracotta-800 underline mt-1 cursor-pointer\" onclick=\"removeFromDrawer('").append(escapeHtml(cartKey)).append("')\">").append(trans != null ? trans.getOrDefault("remove", "Remove") : "Remove").append("</button>")
+                       .append("  </div>")
+                       .append("</div>");
+            }
+        }
+
+        final Map<String, Object> json = new HashMap<>();
+        json.put("count", count);
+        json.put("subtotal", formatPrice(subtotal, country));
+        json.put("shippingStatus", shippingStatus);
+        json.put("shippingProgress", progressPct);
+        json.put("itemsHtml", sbItems.toString());
+
+        return new Gson().toJson(json);
+    }
+
     private String getCartDrawerHtmlApocalypse(final Cart cart, final Country country, final Map<String, String> trans)
     {
         final StringBuilder sb = new StringBuilder();
@@ -3500,7 +4020,7 @@ public final class EmbeddedHtmlServer
 
     private String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality, final String couponError)
     {
-        if (isTailwindByClaude(quality))
+        if (isTailwindByClaude(quality) || isApparel(quality))
         {
             return getCartContentHtmlTailwind(cart, country, trans, couponError);
         }
@@ -4021,7 +4541,7 @@ public final class EmbeddedHtmlServer
     {
         // The Tailwind SUT swaps every semantic form class for its utility equivalent;
         // the field structure itself is identical across variants.
-        final boolean tw = isTailwindByClaude(quality);
+        final boolean tw = isTailwindByClaude(quality) || isApparel(quality);
         final boolean apoc = "apocalypse".equals(quality);
         final String cGroup = tw ? "mb-5" : (apoc ? "apoc-form-group" : "form-group");
         final String cLabel = tw ? TW_FORM_LABEL : (apoc ? "apoc-form-label" : "form-label");
@@ -4252,6 +4772,262 @@ public final class EmbeddedHtmlServer
         }
     }
 
+    // =========================================================================
+    // Headless PWA SUT (/verla-headless/) - runtime quality simulation
+    //
+    // The variant models a composable storefront: the server ships a shell plus a
+    // large hydration blob, and the browser assembles the page from per-entity API
+    // calls. The traps this creates for automation are request fan-out (no single
+    // "page loaded" signal), a session handshake that races, and content slots that
+    // arrive after first paint. Magnitude is driven by verla.headless.* properties.
+    // =========================================================================
+
+    /**
+     * Renders an unpopulated product tile. Only the product id is present; the name, price, image
+     * and availability arrive later over a per-tile request.
+     *
+     * @param p the product the tile will eventually show
+     * @return skeleton markup carrying no product text
+     */
+    private String renderHeadlessTileSkeleton(final Product p)
+    {
+        final String root = emotionHash("product-tile");
+        final String media = emotionHash("tile-media");
+        final String body = emotionHash("tile-body");
+        final String name = emotionHash("tile-name");
+        final String price = emotionHash("tile-price");
+        return "<article class=\"" + root + "\" data-testid=\"product-tile\" data-pid=\"" + p.id
+               + "\" data-state=\"pending\" aria-busy=\"true\">"
+               + "<div class=\"" + media + "\" data-part=\"media\"></div>"
+               + "<div class=\"" + body + "\" data-part=\"body\">"
+               + "<span class=\"" + name + "\" data-part=\"name\"></span>"
+               + "<span class=\"" + price + "\" data-part=\"price\"></span>"
+               + "</div></article>";
+    }
+
+    /** True for the headless SUT served at /verla-headless/. */
+    private static boolean isHeadless(final String quality)
+    {
+        return "headless".equals(quality);
+    }
+
+    /**
+     * Registers a headless session for the given cart if one does not exist yet, choosing a
+     * randomized settle deadline. Returns the moment the session becomes usable.
+     *
+     * @param cartId the cart cookie value identifying the browser session
+     * @return epoch millisecond timestamp at which the session settles
+     */
+    private long ensureHeadlessSession(final String cartId)
+    {
+        return this.headlessSessionSettleAt.computeIfAbsent(cartId, id -> {
+            final VerlaConfiguration cfg = VerlaConfiguration.getInstance();
+            final long settleIn = cfg.isHeadlessSessionRaceEnabled() ? cfg.calculateHeadlessSessionSettleMs() : 0L;
+            this.headlessStaleCustomerId.put(id, "guest" + Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFFFL));
+            this.headlessSettledCustomerId.put(id, "cust" + Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFFFL));
+            return System.currentTimeMillis() + settleIn;
+        });
+    }
+
+    /**
+     * Reports whether the headless bootstrap handshake for a cart has completed.
+     *
+     * @param cartId the cart cookie value
+     * @return true once the session is usable for basket and wishlist operations
+     */
+    private boolean isHeadlessSessionSettled(final String cartId)
+    {
+        return System.currentTimeMillis() >= ensureHeadlessSession(cartId);
+    }
+
+    /**
+     * Returns the customer id the client should currently be using. Before the session settles
+     * this is the stale bootstrap id that the BFF endpoints reject.
+     *
+     * @param cartId the cart cookie value
+     * @return the active customer id
+     */
+    private String headlessCustomerId(final String cartId)
+    {
+        ensureHeadlessSession(cartId);
+        return isHeadlessSessionSettled(cartId)
+               ? this.headlessSettledCustomerId.get(cartId)
+               : this.headlessStaleCustomerId.get(cartId);
+    }
+
+    /** Clears headless session bookkeeping. Invoked from the session reset helpers. */
+    private void resetHeadlessSessions()
+    {
+        this.headlessSessionSettleAt.clear();
+        this.headlessStaleCustomerId.clear();
+        this.headlessSettledCustomerId.clear();
+    }
+
+    /**
+     * Produces a stable CSS-in-JS style hash for a logical component name, mirroring the
+     * {@code css-1tpd03i} convention that Emotion emits.
+     *
+     * @param seed the logical component name
+     * @return a class name such as {@code css-1tpd03i}
+     */
+    private static String emotionHash(final String seed)
+    {
+        int h = 0;
+        for (int i = 0; i < seed.length(); i++)
+        {
+            h = 31 * h + seed.charAt(i);
+        }
+        final String base = Integer.toString(Math.abs(h), 36);
+        return "css-" + (base.length() > 7 ? base.substring(0, 7) : base + "0".repeat(7 - base.length()));
+    }
+
+    /**
+     * Builds the inlined hydration state blob. It carries the real catalog documents for the
+     * tiles on the page, which means the data is present in the DOM as JSON well before it is
+     * rendered as text - a deliberate trap for scrapers that read the source instead of the page.
+     *
+     * @param products the products referenced by the current page
+     * @param country the active country
+     * @param targetKb the configured blob size in kilobytes
+     * @return a JSON string
+     */
+    private String buildHydrationBlob(final List<Product> products, final Country country, final int targetKb)
+    {
+        final Map<String, Object> state = new LinkedHashMap<>();
+        state.put("__INITIAL_CORRELATION_ID__", Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFFFFFL) + "-VRL");
+        final Map<String, Object> config = new LinkedHashMap<>();
+        config.put("app", Map.of("url", Map.of("site", "path", "locale", "path"),
+                                 "defaultSite", "verla-headless",
+                                 "commerceApi", Map.of("organizationId", "f_ecom_verla_prd", "shortCode", "vrl0001")));
+        state.put("__CONFIG__", config);
+        state.put("locale", country.locale);
+        state.put("currency", country.symbol);
+
+        final Map<String, Object> productCache = new LinkedHashMap<>();
+        for (final Product p : products)
+        {
+            productCache.put(p.id, headlessProductDocument(p, country));
+        }
+        state.put("queryCache", Map.of("products", productCache));
+
+        final com.google.gson.Gson gson = new com.google.gson.Gson();
+        String json = gson.toJson(state);
+
+        // Pad to the configured weight with a filler field, the way a real preloaded store ends up
+        // carrying merchandising metadata, translations and A/B assignments nothing on screen uses.
+        final int targetBytes = Math.max(0, targetKb) * 1024;
+        if (json.length() < targetBytes)
+        {
+            final int padLen = targetBytes - json.length() - 32;
+            if (padLen > 0)
+            {
+                final StringBuilder pad = new StringBuilder(padLen);
+                final String alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+                final Random rnd = new Random(1337L);
+                while (pad.length() < padLen)
+                {
+                    pad.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
+                }
+                json = json.substring(0, json.length() - 1) + ",\"_ssrPayload\":\"" + pad + "\"}";
+            }
+        }
+        return json;
+    }
+
+    /**
+     * Serializes one product into the shopper-products style document returned per tile.
+     *
+     * @param p the product
+     * @param country the active country
+     * @return a map ready for JSON serialization
+     */
+    private Map<String, Object> headlessProductDocument(final Product p, final Country country)
+    {
+        final Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("id", p.id);
+        doc.put("name", p.names.getOrDefault(country.locale, p.names.getOrDefault("en", p.id)));
+        doc.put("shortDescription", p.descriptions.getOrDefault(country.locale, p.descriptions.getOrDefault("en", "")));
+        doc.put("slug", p.slug);
+        doc.put("primaryCategoryId", p.category);
+        doc.put("currency", country.symbol);
+        doc.put("price", p.salePrice != null ? p.salePrice : p.basePrice);
+        doc.put("listPrice", p.basePrice);
+        doc.put("c_badge", p.badge);
+        doc.put("c_color", p.color);
+        final Map<String, Integer> inv = this.productInventory.getOrDefault(p.id, Map.of());
+        doc.put("inventory", Map.of("orderable", inv.values().stream().mapToInt(Integer::intValue).sum() > 0,
+                                    "stockLevel", inv.values().stream().mapToInt(Integer::intValue).sum()));
+        // Only the large rendition is published, so tiles a few hundred pixels wide still pull it.
+        doc.put("imageGroups", List.of(Map.of("viewType", "large",
+                                              "images", List.of(Map.of("link", "api/scapi/image?id=" + p.id + "&sw=960", "alt", "")))));
+        return doc;
+    }
+
+    /**
+     * Builds the inlined SVG icon sprite. Icons are referenced with {@code <use>}, so icon-only
+     * controls carry no text node at all.
+     *
+     * @param targetKb the configured sprite size in kilobytes
+     * @return an inline svg element
+     */
+    private static String buildIconSprite(final int targetKb)
+    {
+        final String[] names = {
+            "cart", "search", "account", "heart", "close", "chevron-down", "chevron-right", "filter",
+            "star", "truck", "gift", "lock", "globe", "menu", "plus", "minus", "check", "info"
+        };
+        final StringBuilder sb = new StringBuilder();
+        sb.append("<svg id=\"__SVG_SPRITE_NODE__\" aria-hidden=\"true\" style=\"position:absolute;width:0;height:0;overflow:hidden\">");
+        final Random rnd = new Random(4242L);
+        final int targetBytes = Math.max(0, targetKb) * 1024;
+        int i = 0;
+        while (sb.length() < targetBytes || i < names.length)
+        {
+            final String name = i < names.length ? names[i] : names[i % names.length] + "-" + (i / names.length);
+            sb.append("<symbol id=\"icn-").append(name).append("\" viewBox=\"0 0 24 24\"><path d=\"");
+            // Path data is what makes a real sprite heavy; generate a plausible amount of it.
+            final int segments = 8 + rnd.nextInt(12);
+            sb.append('M').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24));
+            for (int sIdx = 0; sIdx < segments; sIdx++)
+            {
+                sb.append(" C").append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24))
+                  .append(',').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24))
+                  .append(',').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24));
+            }
+            sb.append("Z\"/></symbol>");
+            i++;
+            if (i > 4000)
+            {
+                break;
+            }
+        }
+        sb.append("</svg>");
+        return sb.toString();
+    }
+
+    /**
+     * Emits the per-component style elements a CSS-in-JS runtime injects. Each is its own
+     * element, so the document ends up with dozens of style nodes rather than one stylesheet.
+     *
+     * @param count how many style elements to emit
+     * @return concatenated style elements
+     */
+    private static String buildInjectedStyleTags(final int count)
+    {
+        final StringBuilder sb = new StringBuilder();
+        final Random rnd = new Random(99L);
+        for (int i = 0; i < Math.max(0, count); i++)
+        {
+            final String cls = emotionHash("vrl-component-" + i);
+            sb.append("<style data-emotion=\"css ").append(cls.substring(4)).append("\">.")
+              .append(cls).append("{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;")
+              .append("-webkit-box-pack:").append(rnd.nextBoolean() ? "justify" : "center").append(';')
+              .append("padding:").append(rnd.nextInt(3)).append("rem ").append(rnd.nextInt(2)).append("rem;")
+              .append("margin:0;box-sizing:border-box;}</style>");
+        }
+        return sb.toString();
+    }
+
     private static void sendResponse(final HttpExchange exchange, final int code, final String contentType, final String response) throws IOException
     {
         final byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
@@ -4303,12 +5079,14 @@ public final class EmbeddedHtmlServer
             System.out.println("    - React SPA:            http://localhost:" + server.getPort() + "/AuraGlanceTest/spa/index.html");
             System.out.println("    - VÉRLA Tailwind Store:     http://localhost:" + server.getPort() + "/verla-tailwind/index.html");
             System.out.println("    - VÉRLA Tailwind (by Claude): http://localhost:" + server.getPort() + "/verla-tailwind-by-claude/index.html");
+            System.out.println("    - VÉRLA Apparel Store:      http://localhost:" + server.getPort() + "/verla-apparel/index.html");
             System.out.println("    - VÉRLA Perfect Store:      http://localhost:" + server.getPort() + "/verla-perfect/index.html");
             System.out.println("    - VÉRLA Normal Store:       http://localhost:" + server.getPort() + "/verla-normal/index.html");
             System.out.println("    - VÉRLA Bad Store:          http://localhost:" + server.getPort() + "/verla-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (WCAG):  http://localhost:" + server.getPort() + "/verla-modern-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (No WCAG): http://localhost:" + server.getPort() + "/verla-modern-bad-nowcag/index.html");
             System.out.println("    - VÉRLA PWA Chaos Store:    http://localhost:" + server.getPort() + "/verla-pwa-chaos/index.html");
+            System.out.println("    - VÉRLA Headless Store:     http://localhost:" + server.getPort() + "/verla-headless/index.html");
             System.out.println("    - VÉRLA Apocalypse Store:   http://localhost:" + server.getPort() + "/verla-apocalypse/index.html");
             System.out.println();
             System.out.println("  [HTTPS Secure Contexts]");
@@ -4320,12 +5098,14 @@ public final class EmbeddedHtmlServer
             System.out.println("    - React SPA:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/spa/index.html");
             System.out.println("    - VÉRLA Tailwind Store:     https://localhost:" + server.getHttpsPort() + "/verla-tailwind/index.html");
             System.out.println("    - VÉRLA Tailwind (by Claude): https://localhost:" + server.getHttpsPort() + "/verla-tailwind-by-claude/index.html");
+            System.out.println("    - VÉRLA Apparel Store:      https://localhost:" + server.getHttpsPort() + "/verla-apparel/index.html");
             System.out.println("    - VÉRLA Perfect Store:      https://localhost:" + server.getHttpsPort() + "/verla-perfect/index.html");
             System.out.println("    - VÉRLA Normal Store:       https://localhost:" + server.getHttpsPort() + "/verla-normal/index.html");
             System.out.println("    - VÉRLA Bad Store:          https://localhost:" + server.getHttpsPort() + "/verla-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (WCAG):  https://localhost:" + server.getHttpsPort() + "/verla-modern-bad/index.html");
             System.out.println("    - VÉRLA Modern Bad (No WCAG): https://localhost:" + server.getHttpsPort() + "/verla-modern-bad-nowcag/index.html");
             System.out.println("    - VÉRLA PWA Chaos Store:    https://localhost:" + server.getHttpsPort() + "/verla-pwa-chaos/index.html");
+            System.out.println("    - VÉRLA Headless Store:     https://localhost:" + server.getHttpsPort() + "/verla-headless/index.html");
             System.out.println("    - VÉRLA Apocalypse Store:   https://localhost:" + server.getHttpsPort() + "/verla-apocalypse/index.html");
             System.out.println();
             System.out.println("  NOTE: For HTTPS, you will get a self-signed certificate warning.");

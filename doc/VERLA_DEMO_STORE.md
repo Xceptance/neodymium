@@ -21,6 +21,7 @@ graph TD
     A --> G["Modern Bad - No WCAG (/verla-modern-bad-nowcag/)"]
     A --> H["PWA Chaos (/verla-pwa-chaos/)"]
     A --> I["Apocalypse (/verla-apocalypse/)"]
+    A --> J["Headless (/verla-headless/)"]
 ```
 
 ### 1.1. Perfect Quality (`/verla-perfect/`)
@@ -74,6 +75,40 @@ This makes it a useful contrast case for the locator pipeline: identical busines
 - **Pure CSS Pseudo-Element Text**: Buttons, badges, and headings have empty DOM text nodes (`<span class="ps-txt ps-txt-add-to-bag"></span>`), rendering visual text purely via CSS `::before { content: '...' }` so standard `.getText()` returns empty strings.
 - **Floating Overlay Storm**: Concurrently active GDPR banner, bouncing Intercom-style live chat bubble at `bottom: 24px; right: 24px; z-index: 2500` occluding checkout action zones, dynamic social proof toasts every 6s, and a delayed spin-to-win discount modal at $t=4500\text{ms}$.
 - **Torture Form Controls**: 4-box split credit card inputs (`card-part-1` through `card-part-4`) with auto-advancing focus.
+
+### 1.8. Headless (`/verla-headless/`)
+
+A composable-commerce SPA profile. Where `verla-pwa-chaos` models a chaotic *rendered* page, this variant models a page that is **not rendered yet**: the server ships a shell and the browser assembles the content from per-entity API calls. It is the only variant in the suite whose product markup contains no product data.
+
+The profile was measured against a production SFCC PWA Kit storefront (1.77 MB initial HTML, 3.27 MB total across 210 requests, 87 of them XHR, `load` at 10.7 s against `DOMContentLoaded` at 0.72 s).
+
+- **Client-Side Tile Rendering (N+1 fan-out)**: Product tiles are delivered as skeletons carrying only `data-pid`. Each tile then fetches its own product document (`api/scapi/product?id=…`) plus its own image rendition (`api/scapi/image?id=…&sw=960`) - two requests per tile. Tiles flip `data-state` from `pending` to `loading` to `ready` individually, so **there is no moment at which "the grid" is complete**, only tiles that have each arrived.
+- **Hydration Blob Trap**: A `<script id="__PRELOADED_STATE__" type="application/json">` element carries the full product documents for every tile on the page. The data is therefore present in the delivered source *before* it is rendered anywhere - a page scrape reads prices the user cannot yet see, while a DOM assertion on the same tile returns an empty string.
+- **Session Bootstrap Race**: Two OAuth token requests (`api/scapi/token`) are issued concurrently. The customer id the page holds during its first moments is a bootstrap id, and `api/bff/basket`, `api/bff/wishlist` and `api/bff/getWishlist` **reject it with HTTP 400**. The failures are swallowed, so nothing on screen indicates the basket is unusable. Add-to-cart issued before the session settles is rejected the same way. The settle window is **randomized per session**, which defeats fixed sleeps by design.
+  - The correct readiness signal is `api/scapi/session`, which reports `{"ready":true,…}` and flips `data-session-state` on `<html>` from `BOOTSTRAPPING` to `SETTLED`.
+- **Deferred Content Slots**: The announcement bar, footer link list and footer legal line are empty `data-cms-slot` containers in the delivered document, each filled by its own `api/cms/slot?id=…` request after first paint. The footer therefore grows underneath anything the user has already reached.
+- **Deferred Hydration**: Tile navigation listeners attach only after a configured boot delay. Clicks before that land on inert markup and are dropped without an error. `data-hydrated` on `<html>` and `<body>` flips to `true` when listeners are live.
+- **CSS-in-JS Emission**: Styling is emitted as dozens of separate `<style>` elements carrying `css-1tpd03i`-style hashes, rather than one stylesheet.
+- **Icon Sprite via `<use>`**: An inlined `__SVG_SPRITE_NODE__` sprite backs icon-only controls, which consequently carry no text node.
+- **Oversized Renditions**: Only the 960px rendition is published, so every tile pulls it regardless of display size.
+
+#### 1.8.1. Configuration
+
+Every anti-pattern above is always structurally present; `config/verla.properties` controls only their *magnitude*, so CI runs stay affordable while demos can be brutal. See the `verla.headless.*` block for the full set.
+
+| Property | Default | Real-world reference |
+| --- | --- | --- |
+| `verla.headless.hydration.kb` | 120 | 907 |
+| `verla.headless.sprite.kb` | 40 | 621 |
+| `verla.headless.image.kb` | 24 | ~27 per image |
+| `verla.headless.styletags` | 60 | 176 |
+| `verla.headless.tile.fanout` | 12 | ~28 |
+| `verla.headless.session.race.min/max` | 400 / 1600 ms | randomized |
+| `verla.headless.boot.min/max` | 600 / 1200 ms | ~1500 ms |
+
+Setting `verla.headless.enabled = false` renders the variant server-side, which makes it a direct A/B control for the cost of the client-side pipeline. Setting `verla.headless.tile.fanout = 0` removes the fan-out while keeping the rest of the profile.
+
+> **Note on overlap**: the CSS-in-JS hash dimension is shared with `verla-pwa-chaos`. The axis unique to this variant is client-side assembly - request fan-out, the session race, and deferred content - not class-name obfuscation. Static content pages (`about`, `faq`, `contact`, `shipping`, `stores`, `careers`, `track-orders`) reuse the `verla-normal` bodies unchanged, since their markup quality does not carry the profile.
 
 ---
 
