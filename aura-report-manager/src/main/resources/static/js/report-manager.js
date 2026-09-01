@@ -1873,7 +1873,8 @@ function renderStepsForExecution(activeRow) {
             
             const stepClass = isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored');
             const stepId = `stepCard_${sectionClass}_${idx}`;
-            const contextLevel = s.contextLevel || (idx % 2 === 0 ? 'MINIMAL' : 'LEAN');
+			console.log(s.stats);
+            const contextLevel = s.stats.contextLevels || (idx % 2 === 0 ? 'MINIMAL' : 'LEAN');
 
             // Format Timing
             const rawStart = s.startTimestamp || s.startTime || s.startTimeMs;
@@ -2195,7 +2196,7 @@ function renderStepsForExecution(activeRow) {
                     </div>
 
                     <div style="padding: 0 0.85rem 0.5rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.playbookSource || 'Playbook.yaml:L' + stepNum}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.file +':L'+ s.line || 'Playbook.yaml:L' + stepNum}</div>
                     </div>
 
                     <div class="step-action-inspector" onclick="event.stopPropagation()">

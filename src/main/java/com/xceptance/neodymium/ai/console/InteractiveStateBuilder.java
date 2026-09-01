@@ -541,7 +541,7 @@ public final class InteractiveStateBuilder
         final JsonObject obj = new JsonObject();
         obj.addProperty("id", source + "_" + stepIndex);
         obj.addProperty("index", stepIndex + 1);
-        obj.addProperty("instruction", step.getInstruction() != null ? step.getInstruction() : "");
+        obj.addProperty("instruction", step.getInstruction() != null ?ExecutionContext.getActiveContext().getSessionData().resolveVariables(step.getInstruction()) : "");
         obj.addProperty("line", step.getLineNumber());
         obj.addProperty("file", step.getSourceFile() != null ? step.getSourceFile() : "");
 
