@@ -1979,11 +1979,21 @@ function renderStepsForExecution(activeRow) {
                     const actTarget = act.target || '';
                     const actVal = act.value ? ` ➔ ${act.value}` : '';
                     const actDesc = act.description ? ` (${act.description})` : '';
+                    const hasSuccess = typeof act.success === 'boolean';
+                    const successModifier = hasSuccess ? (act.success ? ' action-success' : ' action-failed') : '';
+                    const successBadge = hasSuccess
+                        ? `<span class="action-status-badge ${act.success ? 'action-status-ok' : 'action-status-fail'}" title="${act.success ? 'Action succeeded' : 'Action failed'}"><span class="material-symbols-outlined">${act.success ? 'check_circle' : 'cancel'}</span></span>`
+                        : '';
+                    const actReasoning = act.reasoning
+                        ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${act.reasoning}</span></div>`
+                        : '';
 
                     actionsHtml += `
-                        <div class="action-item-pill-row">
+                        <div class="action-item-pill-row${successModifier}">
+                            ${successBadge}
                             <span class="action-type-pill">${actName}</span>
                             <span class="action-code-text">${actTarget}${actVal}${actDesc}</span>
+                            ${actReasoning}
                         </div>
                     `;
                 });

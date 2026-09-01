@@ -953,6 +953,15 @@ public class LocalRunJsonStorageService
                         actObj.put("target", actNode.path("target").asText(""));
                         actObj.put("value", actNode.path("value").asText(""));
                         actObj.put("description", actNode.path("description").asText("Executed " + actName + " action"));
+                        final String reasoning = actNode.path("reasoning").asText("");
+                        if (!reasoning.isEmpty())
+                        {
+                            actObj.put("reasoning", reasoning);
+                        }
+                        if (actNode.has("success") && actNode.get("success").isBoolean())
+                        {
+                            actObj.put("success", actNode.get("success").asBoolean());
+                        }
                         actionsArr.add(actObj);
                     }
                 }

@@ -514,9 +514,18 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .actions-performed-box { border: 1px solid #e2e8f0; border-radius: 10px; background: #ffffff; padding: 0.65rem 0.85rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .actions-performed-title { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; display: flex; align-items: center; gap: 0.45rem; }
 
-.action-item-pill-row { display: flex; align-items: center; gap: 0.65rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.4rem 0.65rem; font-size: 0.825rem; }
+.action-item-pill-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.4rem 0.65rem; font-size: 0.825rem; }
+.action-item-pill-row.action-success { border-left: 3px solid #16a34a; background: #f0fdf4; }
+.action-item-pill-row.action-failed { border-left: 3px solid #dc2626; background: #fef2f2; }
+.action-status-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.action-status-badge .material-symbols-outlined { font-size: 1.05rem; }
+.action-status-ok { color: #16a34a; }
+.action-status-fail { color: #dc2626; }
 .action-type-pill { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; padding: 0.15rem 0.5rem; border-radius: 6px; font-weight: 800; font-size: 0.72rem; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
 .action-code-text { font-family: var(--font-mono); color: #0f172a; font-weight: 500; word-break: break-all; font-size: 0.8rem; user-select: text; }
+.action-reasoning { display: flex; align-items: flex-start; gap: 0.35rem; flex-basis: 100%; margin-top: 0.15rem; padding-top: 0.35rem; border-top: 1px dashed #e2e8f0; color: #6366f1; font-size: 0.78rem; line-height: 1.45; }
+.action-reasoning .material-symbols-outlined { font-size: 0.95rem; flex-shrink: 0; margin-top: 0.05rem; }
+.action-reasoning-text { user-select: text; }
 
 .reasoning-brain-row { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.25rem 0; margin-top: 0.2rem; }
 .brain-icon-wrapper { font-size: 1.4rem; color: #a855f7; flex-shrink: 0; margin-top: 0.1rem; }
