@@ -200,6 +200,5 @@ public class AiConfigurationTest
         assertEquals("target/custom-ai-reports", customConfig.getDiskReportDirectory(),
             "Disk report directory should resolve property override.");
     }
-    }
 }
 
