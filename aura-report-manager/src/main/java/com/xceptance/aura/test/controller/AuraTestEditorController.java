@@ -19,7 +19,6 @@
 package com.xceptance.aura.test.controller;
 
 import com.xceptance.neodymium.aura.AuraFileService;
-import com.xceptance.neodymium.aura.dto.SaveRequest;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +28,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -111,20 +109,24 @@ public class AuraTestEditorController
 
     @PostMapping("/api/save")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> saveFile(@RequestBody final SaveRequest saveRequest)
+    public ResponseEntity<Map<String, Object>> saveFile(@RequestParam("file") final String file,
+                                                       @RequestParam(value = "content", required = false) final String content)
     {
         boolean success = false;
-        try
+        if (file != null && !file.isBlank())
         {
-            fileService.saveYamlFileContent(saveRequest.file, saveRequest.content);
-            success = true;
-        }
-        catch (final Exception ignored)
-        {
+            try
+            {
+                fileService.saveYamlFileContent(file, content != null ? content : "");
+                success = true;
+            }
+            catch (final Exception ignored)
+            {
+            }
         }
         final Map<String, Object> response = new HashMap<>();
         response.put("status", success ? "SUCCESS" : "ERROR");
-        response.put("file", saveRequest.file);
+        response.put("file", file);
         return ResponseEntity.ok(response);
     }
 
