@@ -1909,11 +1909,38 @@ public class AuraReportDataService
 
                             final String joinedBugs = String.join(";", bugsList);
                             final String[] badgeInfo = getStatusBadgeInfo(effectiveStatus);
+                            String legacyMode = params.get("mode");
+                            if (legacyMode == null || legacyMode.isBlank())
+                            {
+                                final RunReportDto legacyReport = getRunReport(runId);
+                                if (legacyReport != null && legacyReport.getExecutions() != null)
+                                {
+                                    for (final TestExecutionDto legacyExec : legacyReport.getExecutions())
+                                    {
+                                        if (execId != null && !execId.isEmpty() && execId.equals(legacyExec.getId()))
+                                        {
+                                            legacyMode = legacyExec.getMode();
+                                            break;
+                                        }
+                                    }
+                                    if (legacyMode == null || legacyMode.isBlank())
+                                    {
+                                        for (final TestExecutionDto legacyExec : legacyReport.getExecutions())
+                                        {
+                                            if (legacyExec.getMode() != null && !legacyExec.getMode().isBlank())
+                                            {
+                                                legacyMode = legacyExec.getMode();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             historyList.add(new TestBaseVariationHistoryDto(
                                 runId,
                                 execId != null ? execId : "",
                                 batchName,
-                                engine,
+                                legacyMode,
                                 timestamp,
                                 effectiveStatus,
                                 badgeInfo[0],
@@ -1925,6 +1952,7 @@ public class AuraReportDataService
                                 + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
                                 + "&batch=" + java.net.URLEncoder.encode(batchName, StandardCharsets.UTF_8)
                                 + "&engine=" + java.net.URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                                + (legacyMode != null && !legacyMode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(legacyMode, StandardCharsets.UTF_8) : "")
                                 + "&ts=" + java.net.URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
                                 + "&status=" + java.net.URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
                                 + (!joinedBugs.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(joinedBugs, StandardCharsets.UTF_8) : "");
@@ -1989,6 +2017,7 @@ public class AuraReportDataService
                                     final String execRawStatus = matchedExec.getStatus() != null ? matchedExec.getStatus() : "passed-clean";
                                     final String[] badgeInfo = getStatusBadgeInfo(execRawStatus);
                                     final String curEngine = matchedExec.getEngine() != null ? matchedExec.getEngine() : "Java";
+                                    final String curMode = matchedExec.getMode() != null && !matchedExec.getMode().isBlank() ? matchedExec.getMode() : "FORCE_RECORDING";
                                     final String curTs = run.getTimestampLabel() != null ? run.getTimestampLabel() : "Recently";
                                     final List<String> curBugs = matchedExec.getBugs() != null ? matchedExec.getBugs() : List.of();
                                     final String bugsStr = !curBugs.isEmpty() ? String.join(";", curBugs) : "";
@@ -1997,7 +2026,7 @@ public class AuraReportDataService
                                         runId,
                                         matchedExec.getId(),
                                         run.getBatchName(),
-                                        curEngine,
+                                        curMode,
                                         curTs,
                                         execRawStatus,
                                         badgeInfo[0],
@@ -2009,6 +2038,7 @@ public class AuraReportDataService
                                         + (matchedExec.getId() != null && !matchedExec.getId().trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(matchedExec.getId().trim(), StandardCharsets.UTF_8) : "")
                                         + "&batch=" + java.net.URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
                                         + "&engine=" + java.net.URLEncoder.encode(curEngine, StandardCharsets.UTF_8)
+                                        + (curMode != null && !curMode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(curMode, StandardCharsets.UTF_8) : "")
                                         + "&ts=" + java.net.URLEncoder.encode(curTs, StandardCharsets.UTF_8)
                                         + "&status=" + java.net.URLEncoder.encode(execRawStatus, StandardCharsets.UTF_8)
                                         + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
@@ -2096,12 +2126,14 @@ public class AuraReportDataService
                 final String[] badgeInfo = getStatusBadgeInfo(rawStatus);
                 final String timestamp = run.getTimestampLabel() != null ? run.getTimestampLabel() : "Recently";
                 final String engine = exec.getEngine() != null ? exec.getEngine() : "Java";
+                final String mode = exec.getMode() != null && !exec.getMode().isBlank() ? exec.getMode() : "FORCE_RECORDING";
                 final String bugsStr = exec.getBugs() != null && !exec.getBugs().isEmpty() ? String.join(";", exec.getBugs()) : "";
 
                 final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(run.getId(), StandardCharsets.UTF_8)
                     + (exec.getId() != null && !exec.getId().trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(exec.getId().trim(), StandardCharsets.UTF_8) : "")
                     + "&batch=" + java.net.URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
                     + "&engine=" + java.net.URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                    + (mode != null && !mode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(mode, StandardCharsets.UTF_8) : "")
                     + "&ts=" + java.net.URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
                     + "&status=" + java.net.URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
                     + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
@@ -2115,7 +2147,7 @@ public class AuraReportDataService
                     run.getId(),
                     exec.getId(),
                     run.getBatchName(),
-                    engine,
+                    mode,
                     timestamp,
                     rawStatus,
                     badgeInfo[0],

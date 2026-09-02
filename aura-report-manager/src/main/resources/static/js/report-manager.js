@@ -2188,6 +2188,18 @@ function renderStepsForExecution(activeRow) {
                 llmCallsHtml = `<div style="font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem;">No LLM call details recorded for this step.</div>`;
             }
 
+            // Per-step totals (number of actions, screenshots and LLM calls) from console-log.json step data.
+            const stepActionsCount = Array.isArray(s.actions) ? s.actions.length : 0;
+            const stepScreenshotsCount = screenshotSources.length;
+            const stepLlmCallsCount = Array.isArray(calls) ? calls.length : 0;
+            const countsSummaryHtml = `
+                <div class="step-exec-stats" style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.25rem;">
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #7e22ce;">terminal</span> ${stepActionsCount} action(s)</span>
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #2563eb;">image</span> ${stepScreenshotsCount} screenshot(s)</span>
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)</span>
+                </div>
+            `;
+
             secHtml += `
                 <div class="step-item ${stepClass}" id="${stepId}" onclick="toggleStepActionInspector(this)">
                     <div class="step-header">
@@ -2199,6 +2211,7 @@ function renderStepsForExecution(activeRow) {
                             <span class="context-badge level-${contextLevel.toLowerCase()}">${contextLevel}</span>
                             <span style="color: var(--text-main); font-weight: 600; margin-left: 0.2rem;">${title}</span>
                         </div>
+                        ${countsSummaryHtml}
                         <div class="flex-gap-2">
                             <span style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">${formattedDuration}</span>
                             <span class="material-symbols-outlined step-expand-chevron">chevron_right</span>

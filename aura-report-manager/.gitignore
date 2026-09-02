@@ -4,6 +4,8 @@ storage/
 storage1/
 storage2/
 storage_was/
+/.allure/
+/allure-results/
 *.db
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**

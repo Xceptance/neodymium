@@ -20,7 +20,9 @@ package com.xceptance.aura.test.controller;
 
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.dto.SaveRequest;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -64,6 +66,14 @@ public class AuraTestEditorController
             model.addAttribute("editingFileContent", content);
             model.addAttribute("currentTestFile", relativePath);
             model.addAttribute("fileContent", content);
+
+            final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+            model.addAttribute("beforeSteps", sections.get("beforeSteps"));
+            model.addAttribute("mainSteps", sections.get("mainSteps"));
+            model.addAttribute("afterSteps", sections.get("afterSteps"));
+            model.addAttribute("dataMatrix", sections.get("dataMatrix"));
+            model.addAttribute("varKeys", sections.get("varKeys"));
+            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         else
         {
@@ -71,6 +81,12 @@ public class AuraTestEditorController
             model.addAttribute("editingFileContent", "");
             model.addAttribute("currentTestFile", "");
             model.addAttribute("fileContent", "");
+            model.addAttribute("beforeSteps", List.of());
+            model.addAttribute("mainSteps", List.of());
+            model.addAttribute("afterSteps", List.of());
+            model.addAttribute("dataMatrix", List.of());
+            model.addAttribute("varKeys", List.of());
+            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         return "fragments/editor :: editorPanelContent";
     }
