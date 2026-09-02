@@ -1110,8 +1110,27 @@ window.insertStepBelow = insertStepBelow;
 function deleteStep(lineNum) {
     const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
     if (row) {
+        const container = row.closest('.steps-container');
+        if (container && container.id === 'stepsList' && container.querySelectorAll(':scope > .step-row').length === 1) {
+            const content = row.querySelector('.step-content');
+            if (content) {
+                content.setAttribute('data-raw', '');
+                content.innerText = '';
+                content.innerHTML = '';
+                content.focus();
+                formatStepToTokens(lineNum);
+            }
+            reindexSteps();
+            if (typeof pushEditorSnapshot === 'function') {
+                pushEditorSnapshot(false);
+            }
+            return;
+        }
         row.remove();
         reindexSteps();
+        if (typeof pushEditorSnapshot === 'function') {
+            pushEditorSnapshot(false);
+        }
     }
 }
 window.deleteStep = deleteStep;
