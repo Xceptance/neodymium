@@ -32,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.pipeline.ExecutionContext;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleEngine} console execution logging.
@@ -262,6 +263,40 @@ public class InteractiveConsoleEngineTest
         assertTrue(stateJson.contains("\"startTime\":"), "Top-level state JSON should contain startTime");
         assertTrue(stateJson.contains("\"startTimestamp\":"), "Step JSON should contain startTimestamp");
         assertTrue(stateJson.contains("\"duration\":1250"), "Step JSON should contain duration");
+    }
+
+    @Test
+    public void testBuildStateJsonSerializesSsimFields()
+    {
+        final org.neodymium.ai.model.SessionData sessionData = new org.neodymium.ai.model.SessionData();
+        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(sessionData);
+        ExecutionContext.setActiveContext(context);
+
+        try
+        {
+            final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep();
+            step.setInstruction("Verify neodymium metal picture is displayed");
+            step.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+            step.setSsimScore(0.4708);
+            step.setSsimMinScore(0.99);
+            step.setBaselineMatrixPng("data:image/png;base64,recordedBaselineData");
+            step.setReplayMatrixPng("data:image/png;base64,replayCurrentData");
+            step.setScreenshotHashDim(128);
+
+            context.getTransientData().put("playbook.flatSteps", java.util.List.of(step));
+
+            final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-ssim", 0, "failed");
+
+            assertTrue(stateJson.contains("\"ssimScore\":0.4708"), "State JSON should contain ssimScore from PlaybookStep");
+            assertTrue(stateJson.contains("\"ssimMinScore\":0.99"), "State JSON should contain ssimMinScore from PlaybookStep");
+            assertTrue(stateJson.contains("recordedBaselineData"), "State JSON should contain baselineMatrixPng from PlaybookStep");
+            assertTrue(stateJson.contains("replayCurrentData"), "State JSON should contain replayMatrixPng from PlaybookStep");
+            assertTrue(stateJson.contains("\"screenshotHashDim\":128"), "State JSON should contain screenshotHashDim from PlaybookStep");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 
     @Test

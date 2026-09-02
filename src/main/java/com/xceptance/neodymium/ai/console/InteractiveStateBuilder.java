@@ -645,6 +645,27 @@ public final class InteractiveStateBuilder
             }
         }
 
+        if (step.getSsimScore() != null)
+        {
+            obj.addProperty("ssimScore", step.getSsimScore());
+        }
+        if (step.getSsimMinScore() != null)
+        {
+            obj.addProperty("ssimMinScore", step.getSsimMinScore());
+        }
+        if (step.getBaselineMatrixPng() != null)
+        {
+            obj.addProperty("baselineMatrixPng", step.getBaselineMatrixPng());
+        }
+        if (step.getReplayMatrixPng() != null)
+        {
+            obj.addProperty("replayMatrixPng", step.getReplayMatrixPng());
+        }
+        if (step.getScreenshotHashDim() != null)
+        {
+            obj.addProperty("screenshotHashDim", step.getScreenshotHashDim());
+        }
+
         final JsonArray actionsArray = new JsonArray();
         if (step.getActions() != null)
         {

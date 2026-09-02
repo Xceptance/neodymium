@@ -1005,6 +1005,28 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
     border-color: #3b82f6;
 }
 
+.step-ssim-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    padding: 0.65rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.step-ssim-card figure {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+.step-ssim-card figcaption {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
 /* Lightbox Modal */
 .image-lightbox-modal {
     position: fixed;

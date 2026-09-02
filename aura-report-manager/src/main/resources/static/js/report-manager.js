@@ -1962,6 +1962,46 @@ function renderStepsForExecution(activeRow) {
                 screenshotHtml += `</div></div>`;
             }
 
+            // Format Visual SSIM Compare
+            let ssimHtml = '';
+            const baselineSrc = formatScreenshotSrc(s.baselineMatrixPng, 'image/png');
+            const replaySrc = formatScreenshotSrc(s.replayMatrixPng, 'image/png');
+            if (baselineSrc || replaySrc || s.ssimScore != null || s.ssimMinScore != null || s.screenshotHashDim) {
+                const scoreVal = (typeof s.ssimScore === 'number') ? s.ssimScore : null;
+                const scorePct = scoreVal != null ? (scoreVal * 100).toFixed(2) + '%' : 'N/A';
+                const scoreClass = scoreVal != null && scoreVal >= 0.95 ? 'badge-pass'
+                    : scoreVal != null && scoreVal >= 0.80 ? 'badge-healed'
+                    : 'badge-unknown-fail';
+                const minScoreVal = (typeof s.ssimMinScore === 'number') ? s.ssimMinScore : null;
+                const minScorePct = minScoreVal != null ? (minScoreVal * 100).toFixed(2) + '%' : null;
+                const dimLabel = s.screenshotHashDim != null ? String(s.screenshotHashDim) : null;
+                const dimSuffix = dimLabel ? ` (${escapeHtml(dimLabel)}x${escapeHtml(dimLabel)})` : '';
+                ssimHtml = `
+                    <div class="step-ssim-card" style="margin-top: 0.5rem; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; padding: 0.65rem 0.85rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                            <span class="material-symbols-outlined" style="font-size: 0.95rem;">compare</span>
+                            <span>Visual SSIM Compare</span>
+                            <span class="badge-status ${scoreClass}" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SSIM ${scorePct}</span>
+                            ${minScorePct != null ? `<span class="badge-status" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">Min ${minScorePct}</span>` : ''}
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
+                            ${baselineSrc ? `
+                                <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                                    <img src="${baselineSrc}" class="preview-thumb" alt="Baseline matrix" title="Click to enlarge" onclick="event.stopPropagation(); openImageModal(this.src, 'Baseline Matrix')" style="max-width: 100%; border-radius: 6px; border: 1px solid var(--border);">
+                                    <figcaption style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">Baseline${dimSuffix}</figcaption>
+                                </figure>
+                            ` : ''}
+                            ${replaySrc ? `
+                                <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+                                    <img src="${replaySrc}" class="preview-thumb" alt="Replay matrix" title="Click to enlarge" onclick="event.stopPropagation(); openImageModal(this.src, 'Replay Matrix')" style="max-width: 100%; border-radius: 6px; border: 1px solid var(--border);">
+                                    <figcaption style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">Replay${dimSuffix}</figcaption>
+                                </figure>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
             // Format Actions
             let actionsHtml = '';
             const actions = s.actions || [];
@@ -2192,11 +2232,13 @@ function renderStepsForExecution(activeRow) {
             const stepActionsCount = Array.isArray(s.actions) ? s.actions.length : 0;
             const stepScreenshotsCount = screenshotSources.length;
             const stepLlmCallsCount = Array.isArray(calls) ? calls.length : 0;
+            const hasSsim = s.baselineMatrixPng || s.replayMatrixPng || s.ssimScore != null || s.ssimMinScore != null || s.screenshotHashDim;
             const countsSummaryHtml = `
                 <div class="step-exec-stats" style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.25rem;">
                     <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #7e22ce;">terminal</span> ${stepActionsCount} action(s)</span>
                     <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #2563eb;">image</span> ${stepScreenshotsCount} screenshot(s)</span>
                     <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)</span>
+                    ${hasSsim ? `<span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #0d9488;">compare</span> Visual SSIM</span>` : ''}
                 </div>
             `;
 
@@ -2246,6 +2288,7 @@ function renderStepsForExecution(activeRow) {
                                     ${reasoningHtml}
                                     ${errorBoxHtml}
                                     ${screenshotHtml}
+                                    ${ssimHtml}
                                     ${actionsHtml}
                                     ${subStepsHtml}
                                 </div>
