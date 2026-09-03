@@ -4,10 +4,25 @@
 <body>
 
 <!-- Run Report Fragment -->
-<div th:fragment="runReport" class="d-flex flex-column gap-4" th:data-target-execution-id="${targetExecutionId}">
+<div th:fragment="runReport" class="d-flex flex-column gap-4" th:data-target-execution-id="${targetExecutionId}" th:data-run-id="${runId}" th:data-in-progress="${report.inProgress}">
 
     <!-- PAGE HEADER / SUB-TABS BAR -->
-    <div class="sub-tab-bar">
+    <div class="sub-tab-bar" style="border-bottom: none; padding-bottom: 0; margin-bottom: 0;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1;">
+            <span class="material-symbols-outlined text-accent">pie_chart</span>
+            <span style="font-weight: 600; font-size: 1rem;">Run Report</span>
+            <span th:if="${report.inProgress}" class="badge bg-danger js-live-badge" style="font-size: 0.75rem; padding: 0.35rem 0.6rem; animation: pulse 2s infinite;">LIVE</span>
+            <span th:text="${'# ' + report.runId}" style="font-size: 0.85rem; color: var(--text-muted);"></span>
+        </div>
+        <button class="btn-secondary js-refresh-run-report" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;"
+                th:attr="hx-get='/run-report?runId=' + ${runId}, hx-target='#mainViewContainer', hx-swap='innerHTML'"
+                title="Refresh report">
+            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">refresh</span> Refresh
+        </button>
+    </div>
+
+    <!-- SUB-TABS -->
+    <div class="sub-tab-bar" style="margin-top: -0.5rem;">
         <button class="sub-tab-btn active" id="runReportTabBtnOverview" onclick="switchRunReportSubTab('runReportSubTabOverview', this)">
             <span class="material-symbols-outlined">pie_chart</span> Overview
         </button>
@@ -360,6 +375,45 @@
         </div>
     </div>
 </div>
+
+<script th:inline="javascript">
+/*[[*/
+(function() {
+    const runId = /*[[${runId}]]*/ '';
+    const inProgress = /*[[${report.inProgress}]]*/ false;
+
+    // Each re-render executes this script again; clear a previously scheduled poll to avoid
+    // accumulating intervals that would make the page refresh faster and faster.
+    if (window.__runReportAutoRefresh) {
+        clearInterval(window.__runReportAutoRefresh);
+        window.__runReportAutoRefresh = null;
+    }
+
+    if (inProgress && runId) {
+        window.__runReportAutoRefresh = setInterval(function() {
+            htmx.ajax('GET', '/run-report?runId=' + encodeURIComponent(runId), {
+                target: '#mainViewContainer',
+                swap: 'innerHTML'
+            });
+        }, 5000);
+
+        const liveBadge = document.querySelector('.js-live-badge');
+        if (liveBadge) {
+            liveBadge.addEventListener('click', function() {
+                if (window.__runReportAutoRefresh) {
+                    clearInterval(window.__runReportAutoRefresh);
+                    window.__runReportAutoRefresh = null;
+                }
+                htmx.ajax('GET', '/run-report?runId=' + encodeURIComponent(runId), {
+                    target: '#mainViewContainer',
+                    swap: 'innerHTML'
+                });
+            });
+        }
+    }
+})();
+/*]]*/
+</script>
 
 </body>
 </html>

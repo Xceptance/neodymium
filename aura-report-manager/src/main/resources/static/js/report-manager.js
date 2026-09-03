@@ -1860,8 +1860,7 @@ function renderStepsForExecution(activeRow) {
             
             const stepClass = isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored');
             const stepId = `stepCard_${sectionClass}_${idx}`;
-			console.log(s.stats);
-            const contextLevel = s.stats.contextLevels || (idx % 2 === 0 ? 'MINIMAL' : 'LEAN');
+            const contextLevel = s.stats?.contextLevels || (idx % 2 === 0 ? 'MINIMAL' : 'LEAN');
 
             // Format Timing
             const rawStart = s.startTimestamp || s.startTime || s.startTimeMs;

@@ -18,6 +18,8 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
@@ -27,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -83,10 +86,17 @@ public final class AuraQueueService
     private final AuraReportingService reportingService;
     private final AuraInteractiveService interactiveService;
 
+    private QueueRunProgressListener queueRunProgressListener;
+
     public AuraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService)
     {
         this.reportingService = reportingService;
         this.interactiveService = interactiveService;
+    }
+
+    public void setQueueRunProgressListener(final QueueRunProgressListener listener)
+    {
+        this.queueRunProgressListener = listener;
     }
 
     public List<String> getCurrentRunLogs()
@@ -321,6 +331,20 @@ public final class AuraQueueService
                 runStartTimeMs.set(System.currentTimeMillis());
                 lastRunRequest.set(req);
 
+                final String queueRunId = "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+
+                if (queueRunProgressListener != null)
+                {
+                    try
+                    {
+                        queueRunProgressListener.onRunStarted(queueRunId, "Queue", "Unknown");
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] QueueRunProgressListener.onRunStarted failed: {}", e.getMessage());
+                    }
+                }
+
                 for (int i = 0; i < batches.size(); i++)
                 {
                     final ExecutionBatch batch = batches.get(i);
@@ -404,7 +428,7 @@ public final class AuraQueueService
                             + "]...");
 
                     final List<String> command = new ArrayList<>();
-                    final String runId = "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+                    final String runId = queueRunId;
                     final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
                     interactiveService.setCurrentConsoleEngine(engine);
 
@@ -504,6 +528,47 @@ public final class AuraQueueService
                         globalFailed.incrementAndGet();
                         completedFiles.add(file);
                         continue;
+                    }
+
+                    // Scan for finished execution JSONs while the subprocess is still alive, so that
+                    // completed tests show up in the run report without waiting for the whole batch
+                    // (one Maven subprocess runs all datasets of a test file) to terminate.
+                    final AtomicBoolean midRunScanActive = new AtomicBoolean(true);
+                    final Thread midRunScanThread;
+                    if (queueRunProgressListener != null)
+                    {
+                        midRunScanThread = new Thread(() -> {
+                            while (midRunScanActive.get())
+                            {
+                                try
+                                {
+                                    Thread.sleep(3000L);
+                                }
+                                catch (final InterruptedException e)
+                                {
+                                    Thread.currentThread().interrupt();
+                                    return;
+                                }
+                                if (!midRunScanActive.get())
+                                {
+                                    return;
+                                }
+                                try
+                                {
+                                    ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, true);
+                                }
+                                catch (final Exception e)
+                                {
+                                    LOGGER.warn("[Aura Server] Mid-run execution scan failed: {}", e.getMessage());
+                                }
+                            }
+                        }, "AuraQueueMidRunExecutionScanner");
+                        midRunScanThread.setDaemon(true);
+                        midRunScanThread.start();
+                    }
+                    else
+                    {
+                        midRunScanThread = null;
                     }
 
                     final AtomicInteger fileTestsRun = new AtomicInteger(0);
@@ -609,6 +674,20 @@ public final class AuraQueueService
 
                     LOGGER.info("[Aura Server] Subprocess for {} completed with exit code: {}", file, exitCode);
 
+                    midRunScanActive.set(false);
+                    if (midRunScanThread != null)
+                    {
+                        midRunScanThread.interrupt();
+                        try
+                        {
+                            midRunScanThread.join(2000L);
+                        }
+                        catch (final InterruptedException e)
+                        {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+
                     if (manuallyStopped.get())
                     {
                         broadcastLog("[WARN] Process execution aborted by user.");
@@ -660,6 +739,18 @@ public final class AuraQueueService
                             }
                         }
                     }
+
+                    if (queueRunProgressListener != null)
+                    {
+                        try
+                        {
+                            ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, false);
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.warn("[Aura Server] QueueRunProgressListener.onTestExecutionCompleted failed for batch {}: {}", file, e.getMessage());
+                        }
+                    }
                 }
 
                 if (!manuallyStopped.get())
@@ -684,6 +775,18 @@ public final class AuraQueueService
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}",
                         globalTestsRun.get(), globalPassed.get(), globalFailed.get());
                 broadcastLog("\n[INFO] Queue execution completed.");
+
+                if (queueRunProgressListener != null)
+                {
+                    try
+                    {
+                        queueRunProgressListener.onRunFinished(queueRunId);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] QueueRunProgressListener.onRunFinished failed: {}", e.getMessage());
+                    }
+                }
             }
             catch (final Exception e)
             {
@@ -724,6 +827,118 @@ public final class AuraQueueService
         });
         thread.setName("NeodymiumAuraQueueExecutor");
         thread.start();
+    }
+
+    private final Set<File> ingestedExecutionFiles = Collections.synchronizedSet(new HashSet<>());
+
+    /**
+     * Scans the given run storage directories for {@code console-execution-*.json} files of the current batch class
+     * and reports every not yet ingested execution to the given listener.
+     * <p>
+     * When {@code onlyFinalStatus} is {@code true} (used for the periodic mid-run scan), only executions whose status
+     * represents a final outcome are reported; files that are still running are skipped without being marked as
+     * ingested so they are picked up by a later scan once they complete. When {@code false} (used after the batch
+     * subprocess has exited), all parseable files are reported as before.
+     *
+     * @param listener the progress listener to notify
+     * @param runId the current queue run id
+     * @param className the batch runner class name
+     * @param runStorageDirs the run storage base directories to scan
+     * @param onlyFinalStatus whether to report only completed executions
+     */
+    private void ingestBatchExecutionFiles(
+            final QueueRunProgressListener listener,
+            final String runId,
+            final String className,
+            final List<File> runStorageDirs,
+            final boolean onlyFinalStatus)
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+        for (final File baseDir : runStorageDirs)
+        {
+            final File classDir = new File(baseDir, className);
+            if (!classDir.isDirectory())
+            {
+                continue;
+            }
+            final File[] files = classDir.listFiles();
+            if (files == null)
+            {
+                continue;
+            }
+            for (final File execFile : files)
+            {
+                if (!execFile.isFile() || !execFile.getName().endsWith(".json"))
+                {
+                    continue;
+                }
+                if ("run.json".equalsIgnoreCase(execFile.getName()) || "batch.json".equalsIgnoreCase(execFile.getName()))
+                {
+                    continue;
+                }
+                if (!execFile.canRead())
+                {
+                    continue;
+                }
+                final Map<String, Object> payload;
+                try
+                {
+                    payload = mapper.readValue(execFile, new TypeReference<Map<String, Object>>() {});
+                }
+                catch (final Exception e)
+                {
+                    // File may be written concurrently by the subprocess; leave it unmarked so it is retried later.
+                    LOGGER.warn("[Aura Server] Failed to parse execution JSON {}: {}", execFile.getAbsolutePath(), e.getMessage());
+                    continue;
+                }
+                if (onlyFinalStatus)
+                {
+                    final String rawStatus = payload.get("status") != null ? String.valueOf(payload.get("status")) : "";
+                    if (!isFinalExecutionStatus(rawStatus))
+                    {
+                        continue;
+                    }
+                    if ("finished".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                    {
+                        payload.put("status", "passed");
+                    }
+                }
+                synchronized (ingestedExecutionFiles)
+                {
+                    if (ingestedExecutionFiles.contains(execFile.getAbsoluteFile()))
+                    {
+                        continue;
+                    }
+                    ingestedExecutionFiles.add(execFile.getAbsoluteFile());
+                }
+                payload.put("runId", runId);
+                payload.put("testClass", className);
+                listener.onTestExecutionCompleted(runId, payload);
+            }
+        }
+    }
+
+    /**
+     * Determines whether the given execution status represents a final test outcome that is safe to ingest while the
+     * batch subprocess is still running. Transient states such as "running" or "paused" are excluded because they
+     * would be reported with a misleading final status and never be updated afterwards.
+     *
+     * @param status the status string from the execution JSON, may be {@code null}
+     * @return {@code true} if the status represents a final outcome, {@code false} otherwise
+     */
+    private static boolean isFinalExecutionStatus(final String status)
+    {
+        if (status == null || status.isBlank())
+        {
+            return false;
+        }
+        return switch (status.toLowerCase())
+        {
+            case "passed", "failed", "error", "finished", "ignored", "skipped",
+                 "passed-clean", "failed-known", "failed-unknown", "succeeded-fixed",
+                 "succeeded", "fixed", "healed" -> true;
+            default -> false;
+        };
     }
 
     private static final class ExecutionBatch

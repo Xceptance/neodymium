@@ -44,6 +44,7 @@ public final class RunReportDto
     private final int totalLlmCalls;
     private final long totalLlmTokens;
     private final double totalLlmCost;
+    private final boolean inProgress;
 
     public RunReportDto(
         final String runId,
@@ -60,7 +61,8 @@ public final class RunReportDto
         final List<AreaSummaryDto> areaSummaries,
         final int totalLlmCalls,
         final long totalLlmTokens,
-        final double totalLlmCost)
+        final double totalLlmCost,
+        final boolean inProgress)
     {
         this.runId = runId;
         this.batchName = batchName;
@@ -77,6 +79,7 @@ public final class RunReportDto
         this.totalLlmCalls = totalLlmCalls;
         this.totalLlmTokens = totalLlmTokens;
         this.totalLlmCost = totalLlmCost;
+        this.inProgress = inProgress;
     }
 
     public RunReportDto(
@@ -93,7 +96,7 @@ public final class RunReportDto
         final List<TestExecutionDto> executions,
         final List<AreaSummaryDto> areaSummaries)
     {
-        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions, areaSummaries, 0, 0L, 0.0);
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions, areaSummaries, 0, 0L, 0.0, false);
     }
 
     public RunReportDto(
@@ -109,7 +112,7 @@ public final class RunReportDto
         final int ignoredCount,
         final List<TestExecutionDto> executions)
     {
-        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions, new ArrayList<>());
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions, new ArrayList<>(), 0, 0L, 0.0, false);
     }
 
     public String getRunId()
@@ -322,5 +325,10 @@ public final class RunReportDto
             .distinct()
             .sorted()
             .collect(Collectors.toList());
+    }
+
+    public boolean isInProgress()
+    {
+        return inProgress;
     }
 }

@@ -25,6 +25,9 @@ import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.QueueRunProgressListener;
+import com.xceptance.aura.report.service.AuraReportDataService;
+import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -76,8 +79,29 @@ public class AuraServiceConfiguration
     }
 
     @Bean
-    public AuraQueueService auraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService)
+    public AuraQueueService auraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService, final AuraReportDataService reportDataService)
     {
-        return new AuraQueueService(reportingService, interactiveService);
+        final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
+        queueService.setQueueRunProgressListener(new QueueRunProgressListener()
+        {
+            @Override
+            public void onRunStarted(final String runId, final String batchName, final String environment)
+            {
+                reportDataService.startRun(runId, batchName, environment, "queue");
+            }
+
+            @Override
+            public void onTestExecutionCompleted(final String runId, final Map<String, Object> executionData)
+            {
+                reportDataService.ingestExecution(runId, executionData);
+            }
+
+            @Override
+            public void onRunFinished(final String runId)
+            {
+                reportDataService.finishRun(runId);
+            }
+        });
+        return queueService;
     }
 }

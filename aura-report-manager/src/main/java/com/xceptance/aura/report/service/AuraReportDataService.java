@@ -530,59 +530,70 @@ public class AuraReportDataService
                 System.currentTimeMillis()
             ));
 
-            List<TestExecutionDto> rawExecutions = new ArrayList<>();
-            final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(effectiveRunId);
+            // While a run is in progress, the live run buffer is the authoritative source: it contains every
+            // execution ingested so far, whereas run.json on disk may be stale (created lazily at an earlier
+            // point of the run) and would mask freshly completed tests. Completed runs read from disk instead.
+            final boolean inProgressWithLiveData = runEntity.getStatus() != null
+                    && "IN_PROGRESS".equalsIgnoreCase(runEntity.getStatus())
+                    && liveRunBuffer.containsKey(effectiveRunId)
+                    && !liveRunBuffer.get(effectiveRunId).isEmpty();
 
-            if (runJsonOpt.isPresent())
+            List<TestExecutionDto> rawExecutions = new ArrayList<>();
+            if (!inProgressWithLiveData)
             {
-                try
+                final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(effectiveRunId);
+
+                if (runJsonOpt.isPresent())
                 {
-                    final JsonNode root = objectMapper.readTree(runJsonOpt.get());
-                    final JsonNode execMetrics = root.path("executionMetrics");
-                    if (execMetrics.isObject() && !execMetrics.isEmpty())
+                    try
                     {
-                        final List<TestExecutionDto> metricsList = new ArrayList<>();
-                        final java.util.Set<String> seenIds = new java.util.HashSet<>();
-                        execMetrics.fields().forEachRemaining(entry -> {
-                            try
-                            {
-                                final TestExecutionDto exec = objectMapper.treeToValue(entry.getValue(), TestExecutionDto.class);
-                                if (exec.getId() == null || exec.getId().isBlank() || seenIds.contains(exec.getId())
-                                        || "bad".equalsIgnoreCase(exec.getId()) || "perfect".equalsIgnoreCase(exec.getId()) || "default".equalsIgnoreCase(exec.getId()))
-                                {
-                                    exec.setId(entry.getKey());
-                                }
-                                seenIds.add(exec.getId());
-                                metricsList.add(exec);
-                            }
-                            catch (final Exception e)
-                            {
-                                LOG.warn("Failed to deserialize execution metric for key {}: {}", entry.getKey(), e.getMessage());
-                            }
-                        });
-                        rawExecutions = metricsList;
-                    }
-                    else
-                    {
-                        final JsonNode execArray = root.path("executions");
-                        if (execArray.isArray())
+                        final JsonNode root = objectMapper.readTree(runJsonOpt.get());
+                        final JsonNode execMetrics = root.path("executionMetrics");
+                        if (execMetrics.isObject() && !execMetrics.isEmpty())
                         {
-                            rawExecutions = objectMapper.readValue(
-                                execArray.traverse(objectMapper),
-                                objectMapper.getTypeFactory().constructCollectionType(List.class, TestExecutionDto.class)
-                            );
+                            final List<TestExecutionDto> metricsList = new ArrayList<>();
+                            final java.util.Set<String> seenIds = new java.util.HashSet<>();
+                            execMetrics.fields().forEachRemaining(entry -> {
+                                try
+                                {
+                                    final TestExecutionDto exec = objectMapper.treeToValue(entry.getValue(), TestExecutionDto.class);
+                                    if (exec.getId() == null || exec.getId().isBlank() || seenIds.contains(exec.getId())
+                                            || "bad".equalsIgnoreCase(exec.getId()) || "perfect".equalsIgnoreCase(exec.getId()) || "default".equalsIgnoreCase(exec.getId()))
+                                    {
+                                        exec.setId(entry.getKey());
+                                    }
+                                    seenIds.add(exec.getId());
+                                    metricsList.add(exec);
+                                }
+                                catch (final Exception e)
+                                {
+                                    LOG.warn("Failed to deserialize execution metric for key {}: {}", entry.getKey(), e.getMessage());
+                                }
+                            });
+                            rawExecutions = metricsList;
+                        }
+                        else
+                        {
+                            final JsonNode execArray = root.path("executions");
+                            if (execArray.isArray())
+                            {
+                                rawExecutions = objectMapper.readValue(
+                                    execArray.traverse(objectMapper),
+                                    objectMapper.getTypeFactory().constructCollectionType(List.class, TestExecutionDto.class)
+                                );
+                            }
                         }
                     }
-                }
-                catch (final Exception e)
-                {
-                    LOG.error("Failed to parse run.json for runId {}: {}", effectiveRunId, e.getMessage());
+                    catch (final Exception e)
+                    {
+                        LOG.error("Failed to parse run.json for runId {}: {}", effectiveRunId, e.getMessage());
+                    }
                 }
             }
 
             if (rawExecutions.isEmpty() && liveRunBuffer.containsKey(effectiveRunId))
             {
-                rawExecutions = liveRunBuffer.get(effectiveRunId);
+                rawExecutions = new ArrayList<>(liveRunBuffer.get(effectiveRunId));
             }
 
             final String runEnv = runEntity.getEnvironment() != null ? runEntity.getEnvironment() : "ALL";
@@ -931,7 +942,11 @@ public class AuraReportDataService
             unknown,
             ignored,
             updatedExecutions,
-            updatedAreas
+            updatedAreas,
+            cachedReport.getTotalLlmCalls(),
+            cachedReport.getTotalLlmTokens(),
+            cachedReport.getTotalLlmCost(),
+            cachedReport.isInProgress()
         );
 
         runReportCache.put(runId, updatedReport);
@@ -1033,6 +1048,35 @@ public class AuraReportDataService
         liveRunBuffer.put(runId, new ArrayList<>());
 
         LOG.info("Started new test run: runId={}, batch={}", runId, batchName);
+        return runId;
+    }
+
+    @Transactional
+    public String startRun(final String runId, final String batchName, final String environment, final String triggerSource)
+    {
+        if (runId == null || runId.isEmpty())
+        {
+            return startRun(batchName, environment, triggerSource);
+        }
+
+        final String timestampLabel = "Just Now";
+
+        final TestRunEntity newRun = new TestRunEntity(
+            runId,
+            batchName != null ? batchName : "Unknown",
+            "IN_PROGRESS",
+            triggerSource != null ? triggerSource : "Unknown",
+            environment != null ? environment : "Unknown",
+            "Unknown",
+            "Chrome",
+            timestampLabel,
+            System.currentTimeMillis()
+        );
+
+        runRepository.save(newRun);
+        liveRunBuffer.put(runId, new ArrayList<>());
+
+        LOG.info("Started new test run with explicit runId={}, batch={}", runId, batchName);
         return runId;
     }
 
@@ -1174,6 +1218,15 @@ public class AuraReportDataService
                     batchNode.put("environment", run.getEnvironment() != null ? run.getEnvironment() : "Unknown");
                     Files.createDirectories(batchJsonPath.getParent());
                     objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonPath.toFile(), batchNode);
+                }
+
+                try
+                {
+                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), runId, true);
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("Failed to rebuild run.json for finished runId {}: {}", runId, e.getMessage());
                 }
             }
             catch (final Exception e)
@@ -1712,6 +1765,8 @@ public class AuraReportDataService
 
         final List<AreaSummaryDto> areas = buildAreaSummaries(executions);
 
+        final boolean inProgress = runEntity.getStatus() != null && "IN_PROGRESS".equalsIgnoreCase(runEntity.getStatus());
+
         return new RunReportDto(
             runEntity.getId(),
             runEntity.getBatchName(),
@@ -1726,7 +1781,8 @@ public class AuraReportDataService
             executions, areas,
             runEntity.getTotalLlmCalls(),
             runEntity.getTotalLlmTokens(),
-            runEntity.getTotalLlmCost()
+            runEntity.getTotalLlmCost(),
+            inProgress
         );
     }
 
