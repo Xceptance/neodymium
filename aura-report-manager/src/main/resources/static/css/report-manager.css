@@ -177,6 +177,8 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
    instead of stretching to the viewport. ID selectors beat the later-loaded dashboard rules. */
 #pageRunsList.view-state { flex-grow: 0; }
 #pageRunsList > .panel { height: auto; flex: 0 0 auto; overflow: visible; }
+#pageBatchHistoryOverview.view-state { flex-grow: 0; }
+#pageBatchHistoryOverview .panel { height: auto; flex: 0 0 auto; overflow: visible; }
 
 /* BATCH METADATA ENVIRONMENT BANNER CARD */
 .batch-env-card { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; }
