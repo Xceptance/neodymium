@@ -172,6 +172,12 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .panel-title { font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.6rem; color: var(--text-main); }
 .panel-subtitle { font-size: 0.825rem; color: var(--text-muted); font-weight: 400; margin-top: 0.2rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 
+/* dashboard-styles.css sets .panel { height: 100% } and .view-state { flex-grow: 1 } for the
+   Aura Test Manager workspace. Override here so the batch directory panels hug their content
+   instead of stretching to the viewport. ID selectors beat the later-loaded dashboard rules. */
+#pageRunsList.view-state { flex-grow: 0; }
+#pageRunsList > .panel { height: auto; flex: 0 0 auto; overflow: visible; }
+
 /* BATCH METADATA ENVIRONMENT BANNER CARD */
 .batch-env-card { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; }
 .env-meta-item { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: var(--text-main); }
