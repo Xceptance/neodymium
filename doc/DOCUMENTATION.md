@@ -895,6 +895,23 @@ To guarantee 100% data fidelity while remaining strictly language-neutral and do
 
 ---
 
+### 5.6 Language-Agnostic Input Data Fidelity & Anti-Hallucination Directives
+
+Lightweight or fast LLMs (such as `gemini-3.5-flash-lite`) can exhibit strong pretraining token priors on password or credential fields, occasionally drifting towards generic dummy defaults (e.g., `"Password123!"`) or placeholder variable tokens (e.g., `"${password}"`) instead of copying the literal string passed in the test instruction (e.g., `Type "SecurePass3!" into the confirm password field`).
+
+To guarantee 100% data fidelity while remaining strictly language-neutral and domain-agnostic, Neodymium enforces two layers of anti-hallucination guidance:
+
+1. **Universal Execution Guideline (Rule 4 in `action-extraction-prompt.md`)**:
+   > *"Input & Assertion Data Fidelity: In any natural language, whenever the active instruction commands entering data (typing text, numbers, codes, credentials, or selecting options) or asserting values, extract and populate the 'value' field with the exact literal characters, string, or parameter specified in the instruction. NEVER invent, hallucinate, or substitute synthetic sample data (e.g. generic passwords, dummy emails, placeholder names, or default text). NEVER emit synthetic variable placeholder expressions unless literally written as such in the active instruction."*
+
+2. **Dedicated `- TYPE:` Action Rule**:
+   > *"`- TYPE:` set 'locator' to the input, textarea, or contenteditable element, and set 'value' to the exact literal text, digits, or characters specified in the instruction. Regardless of the natural language used in the instruction, preserve the exact specified data verbatim; NEVER substitute, hallucinate, or default to generic sample values or synthetic variable placeholders."*
+
+3. **Model-Specific Add-on Directives (`addon-general.md`)**:
+   Model add-ons (such as `ai-prompts/models/gemini-3-5-flash-lite/addon-general.md`) explicitly reinforce literal value extraction to prevent flash/lite models from falling back to training distribution priors.
+
+---
+
 ## 6. Visual Testing, Stability & Failure Diagnostics
 
 ### 6.1 SSIM Visual Matrix Verification & Progressive Downsampling

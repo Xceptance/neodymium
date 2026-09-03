@@ -2261,7 +2261,7 @@ function renderStepsForExecution(activeRow) {
                     </div>
 
                     <div style="padding: 0 0.85rem 0.5rem;">
-                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.file +':L'+ s.line || 'Playbook.yaml:L' + stepNum}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.playbookSource || s.file +':L'+ s.line || 'Playbook.yaml:L' + stepNum}</div>
                     </div>
 
                     <div class="step-action-inspector" onclick="event.stopPropagation()">

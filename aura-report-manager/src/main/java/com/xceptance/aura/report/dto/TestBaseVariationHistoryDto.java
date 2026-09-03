@@ -33,6 +33,7 @@ public final class TestBaseVariationHistoryDto
     private final String executionId;
     private final String batchName;
     private final String mode;
+    private final String engine;
     private final String timestamp;
     private final String status;
     private final String statusClass;
@@ -44,6 +45,7 @@ public final class TestBaseVariationHistoryDto
         final String executionId,
         final String batchName,
         final String mode,
+        final String engine,
         final String timestamp,
         final String status,
         final String statusClass,
@@ -54,6 +56,7 @@ public final class TestBaseVariationHistoryDto
         this.executionId = executionId != null ? executionId : "";
         this.batchName = batchName != null ? batchName : "Unknown";
         this.mode = mode != null && !mode.isBlank() ? mode : "FORCE_RECORDING";
+        this.engine = engine != null ? engine : "Java";
         this.timestamp = formatTimestamp(timestamp);
         this.status = status != null ? status : "passed-clean";
         this.statusClass = statusClass != null ? statusClass : "badge-pass";
@@ -92,13 +95,14 @@ public final class TestBaseVariationHistoryDto
         final String runId,
         final String batchName,
         final String mode,
+        final String engine,
         final String timestamp,
         final String status,
         final String statusClass,
         final String statusLabel,
         final List<String> bugs)
     {
-        this(runId, "", batchName, mode, timestamp, status, statusClass, statusLabel, bugs);
+        this(runId, "", batchName, mode, engine, timestamp, status, statusClass, statusLabel, bugs);
     }
 
     public String getRunId()
@@ -119,6 +123,11 @@ public final class TestBaseVariationHistoryDto
     public String getMode()
     {
         return mode;
+    }
+
+    public String getEngine()
+    {
+        return engine;
     }
 
     public String getTimestamp()

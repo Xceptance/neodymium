@@ -56,7 +56,8 @@
                             <tr>
                                 <th style="width: 30%;">RUN ID</th>
                                 <th style="width: 16%;">BATCH NAME</th>
-                                <th style="width: 12%;">MODE</th>
+                                <th style="width: 6%;">MODE</th>
+                                <th style="width: 6%;">ENGINE</th>
                                 <th style="width: 20%;">TIMESTAMP</th>
                                 <th style="width: 22%;">STATUS / BUGS</th>
                             </tr>
@@ -71,6 +72,7 @@
                                 </td>
                                 <td><span th:text="${exec.batchName}">Batch Name</span></td>
                                 <td><span class="tag-chip" th:text="${exec.mode}">FORCE_RECORDING</span></td>
+                                <td><span class="tag-chip" th:text="${exec.engine}">Java</span></td>
                                 <td><span class="text-muted font-mono" style="font-size: 0.8rem;" th:text="${exec.timestamp}">Recently</span></td>
                                 <td>
                                     <span th:class="'badge-status ' + ${exec.statusClass}">
@@ -82,7 +84,7 @@
                                 </td>
                             </tr>
                             <tr th:if="${#lists.isEmpty(historyRuns)}">
-                                <td colspan="5" class="text-center text-muted p-3" style="font-size: 0.82rem;">No execution history found for this variation across batches.</td>
+                                <td colspan="6" class="text-center text-muted p-3" style="font-size: 0.82rem;">No execution history found for this variation across batches.</td>
                             </tr>
                         </tbody>
                     </table>

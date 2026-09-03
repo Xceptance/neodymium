@@ -51,13 +51,13 @@
             </button>
         </div>
         <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
-            <button th:hx-post="'/api/queue/move?index=' + ${iter.index} + '&amp;dir=-1'" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
+            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:-1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
                 <span class="material-symbols-outlined">keyboard_arrow_up</span>
             </button>
-            <button th:hx-post="'/api/queue/move?index=' + ${iter.index} + '&amp;dir=1'" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
+            <button hx-post="/api/queue/move" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;dir\&quot;:1}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
                 <span class="material-symbols-outlined">keyboard_arrow_down</span>
             </button>
-            <button th:hx-post="'/api/queue/remove?index=' + ${iter.index} + '&amp;file=' + ${ds.file} + '&amp;id=' + ${ds.id}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
+            <button hx-post="/api/queue/remove" th:hx-vals="${'{\&quot;index\&quot;:' + iter.index + ',\&quot;file\&quot;:\&quot;' + ds.file + '\&quot;,\&quot;id\&quot;:\&quot;' + ds.id + '\&quot;}'}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
@@ -72,141 +72,147 @@
 </div>
 
 <th:block th:fragment="configPanelContent">
-    <!-- Global Multi-Browser & Multi-Profile Selection Section -->
-    <div class="config-row-wrapper neo-u-30" style="padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border);">
-        <div class="browser-section-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span class="material-symbols-outlined" style="font-size: 17px; color: var(--accent);">language</span>
-                <span style="font-weight: 700; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-primary);">Browser Profiles</span>
-            </div>
-            <span class="badge-count" id="globalProfileCountBadge" 
-                  style="background: rgba(37, 99, 235, 0.12); color: var(--accent); font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 12px;"
-                  th:text="${globalBrowserProfiles != null ? globalBrowserProfiles.size() : 0} + ' selected'">6 selected</span>
-        </div>
-        
-        <!-- Quick Preset Filter Buttons -->
-        <div class="quick-presets-bar" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px;">
-            <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=chrome-ff" hx-target="#configPanel" hx-swap="outerHTML">Chrome + FF</button>
-            <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=desktop" hx-target="#configPanel" hx-swap="outerHTML">All Desktop</button>
-            <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=mobile" hx-target="#configPanel" hx-swap="outerHTML">Mobile Only</button>
-            <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=all" hx-target="#configPanel" hx-swap="outerHTML">Select All</button>
-            <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=clear" hx-target="#configPanel" hx-swap="outerHTML">Clear</button>
-        </div>
-
-        <!-- Grouped Collapsible Accordion List -->
-        <div class="profile-group-accordion" style="display: flex; flex-direction: column; gap: 6px;">
-            <details th:each="grp : ${browserGroups}" class="browser-group-card" th:open="${grp.selectedCount > 0 or grp.key == 'chrome' or grp.key == 'firefox' or grp.key == 'safari'}">
-                <summary class="browser-group-summary">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <th:block th:replace="~{fragments/icons :: browserIcon(type=${grp.key})}"></th:block>
-                        <span style="font-weight: 600; font-size: 12px;" th:text="${grp.title}">Google Chrome</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span class="browser-info-icon" th:if="${grp.key == 'chrome'}" style="font-size: 15px; color: var(--accent); background: rgba(37, 99, 235, 0.12); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;" title="Default Primary Browser">info</span>
-                        <span class="group-selected-count" th:if="${grp.selectedCount > 0 and grp.key != 'chrome'}" th:text="${grp.selectedCount}" title="Selected count in this group">2</span>
-                        <span class="material-symbols-outlined group-caret" style="font-size: 18px; color: var(--text-secondary); transition: transform 0.2s ease;">expand_more</span>
-                    </div>
-                </summary>
-                <div class="browser-group-content" style="display: flex; flex-direction: column; gap: 3px; padding: 4px 6px 6px 6px;">
-                    <div th:each="p : ${grp.profiles}" class="profile-checkbox-row"
-                         th:classappend="${globalBrowserProfiles != null and globalBrowserProfiles.contains(p.id) ? 'checked' : ''}"
-                          th:hx-post="'/api/config/browser/toggle?profile=' + ${p.id}"
-                         hx-target="#configPanel"
-                         hx-swap="outerHTML">
-                        <div class="profile-info" style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
-                            <input type="checkbox" style="pointer-events: none; accent-color: var(--accent); cursor: pointer; border-radius: 4px;" 
-                                   th:checked="${globalBrowserProfiles != null and globalBrowserProfiles.contains(p.id)}"/>
-                            <span style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" th:text="${p.name}">Chrome 1024x768</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                            <span class="profile-res-tag" th:if="${p.res != null and !p.res.isEmpty()}" th:text="${p.res}">1024x768</span>
-                        </div>
-                    </div>
+    <!-- Scrollable Top: Global Multi-Browser & Multi-Profile Selection Section -->
+    <div class="browser-selection-container">
+        <div class="config-row-wrapper neo-u-30">
+            <div class="browser-section-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="material-symbols-outlined" style="font-size: 17px; color: var(--accent);">language</span>
+                    <span style="font-weight: 700; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-primary);">Browser Profiles</span>
                 </div>
-            </details>
+                <span class="badge-count" id="globalProfileCountBadge" 
+                      style="background: rgba(37, 99, 235, 0.12); color: var(--accent); font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 12px;"
+                      th:text="${globalBrowserProfiles != null ? globalBrowserProfiles.size() : 0} + ' selected'">6 selected</span>
+            </div>
+            
+            <!-- Quick Preset Filter Buttons -->
+            <div class="quick-presets-bar" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px;">
+                <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=chrome-ff" hx-target="#configPanel" hx-swap="outerHTML">Chrome + FF</button>
+                <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=desktop" hx-target="#configPanel" hx-swap="outerHTML">All Desktop</button>
+                <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=mobile" hx-target="#configPanel" hx-swap="outerHTML">Mobile Only</button>
+                <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=all" hx-target="#configPanel" hx-swap="outerHTML">Select All</button>
+                <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=clear" hx-target="#configPanel" hx-swap="outerHTML">Clear</button>
+            </div>
+
+            <!-- Grouped Collapsible Accordion List -->
+            <div class="profile-group-accordion" style="display: flex; flex-direction: column; gap: 6px;">
+                <details th:each="grp : ${browserGroups}" class="browser-group-card" th:open="${grp.selectedCount > 0 or grp.key == 'chrome' or grp.key == 'firefox' or grp.key == 'safari'}">
+                    <summary class="browser-group-summary">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <th:block th:replace="~{fragments/icons :: browserIcon(type=${grp.key})}"></th:block>
+                            <span style="font-weight: 600; font-size: 12px;" th:text="${grp.title}">Google Chrome</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="browser-info-icon" th:if="${grp.key == 'chrome'}" style="font-size: 15px; color: var(--accent); background: rgba(37, 99, 235, 0.12); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;" title="Default Primary Browser">info</span>
+                            <span class="group-selected-count" th:if="${grp.selectedCount > 0 and grp.key != 'chrome'}" th:text="${grp.selectedCount}" title="Selected count in this group">2</span>
+                            <span class="material-symbols-outlined group-caret" style="font-size: 18px; color: var(--text-secondary); transition: transform 0.2s ease;">expand_more</span>
+                        </div>
+                    </summary>
+                    <div class="browser-group-content" style="display: flex; flex-direction: column; gap: 3px; padding: 4px 6px 6px 6px;">
+                        <div th:each="p : ${grp.profiles}" class="profile-checkbox-row"
+                             th:classappend="${globalBrowserProfiles != null and globalBrowserProfiles.contains(p.id) ? 'checked' : ''}"
+                             hx-post="/api/config/browser/toggle" 
+                             th:hx-vals="${'{\&quot;profile\&quot;:\&quot;' + p.id + '\&quot;}'}"
+                             hx-target="#configPanel"
+                             hx-swap="outerHTML">
+                            <div class="profile-info" style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                                <input type="checkbox" style="pointer-events: none; accent-color: var(--accent); cursor: pointer; border-radius: 4px;" 
+                                       th:checked="${globalBrowserProfiles != null and globalBrowserProfiles.contains(p.id)}"/>
+                                <span style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" th:text="${p.name}">Chrome 1024x768</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                                <span class="profile-res-tag" th:if="${p.res != null and !p.res.isEmpty()}" th:text="${p.res}">1024x768</span>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
         </div>
     </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Headless Mode</span>
-            <label class="switch" for="optHeadless">
-                <input type="checkbox" id="optHeadless" 
-                       th:checked="${headless != null ? headless : false}" 
-                       hx-post="/api/config/toggle?key=headless" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
+    <!-- Fixed Bottom: Run Configuration Options -->
+    <div class="run-config-container">
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Headless Mode</span>
+                <label class="switch" for="optHeadless">
+                    <input type="checkbox" id="optHeadless" 
+                           th:checked="${headless != null ? headless : false}" 
+                           hx-post="/api/config/toggle?key=headless" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32">Runs the browser in the background without a GUI.</span>
         </div>
-        <span class="neo-u-32">Runs the browser in the background without a GUI.</span>
-    </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Record Video</span>
-            <label class="switch" for="optVideo">
-                <input type="checkbox" id="optVideo" 
-                       th:checked="${video != null ? video : false}" 
-                       hx-post="/api/config/toggle?key=video" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Record Video</span>
+                <label class="switch" for="optVideo">
+                    <input type="checkbox" id="optVideo" 
+                           th:checked="${video != null ? video : false}" 
+                           hx-post="/api/config/toggle?key=video" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32">Records execution video and attaches it to the report.</span>
         </div>
-        <span class="neo-u-32">Records execution video and attaches it to the report.</span>
-    </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Interactive Mode</span>
-            <label class="switch" for="optInteractive">
-                <input type="checkbox" id="optInteractive" 
-                       th:checked="${interactive != null ? interactive : false}" 
-                       hx-post="/api/config/toggle?key=interactive" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Interactive Mode</span>
+                <label class="switch" for="optInteractive">
+                    <input type="checkbox" id="optInteractive" 
+                           th:checked="${interactive != null ? interactive : false}" 
+                           hx-post="/api/config/toggle?key=interactive" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32">Enables interactive AI elements in the browser during execution.</span>
         </div>
-        <span class="neo-u-32">Enables interactive AI elements in the browser during execution.</span>
-    </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Test Report</span>
-            <label class="switch" for="optAllure">
-                <input type="checkbox" id="optAllure" 
-                       th:checked="${allure != null ? allure : false}" 
-                       hx-post="/api/config/toggle?key=allure" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Test Report</span>
+                <label class="switch" for="optAllure">
+                    <input type="checkbox" id="optAllure" 
+                           th:checked="${allure != null ? allure : false}" 
+                           hx-post="/api/config/toggle?key=allure" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32">Compiles and opens the visual test report after execution completes.</span>
         </div>
-        <span class="neo-u-32">Compiles and opens the visual test report after execution completes.</span>
-    </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Execution Mode</span>
-            <select id="optExecutionMode" name="mode" class="neo-select" 
-                    hx-post="/api/config/mode" 
-                    hx-target="#configPanel" 
-                    hx-swap="outerHTML" 
-                    onclick="event.stopPropagation()">
-                <option value="REPLAY_WITH_HEALING" th:selected="${executionMode == null or executionMode == 'REPLAY_WITH_HEALING'}">Replay with Healing</option>
-                <option value="REPLAY_STRICT" th:selected="${executionMode == 'REPLAY_STRICT'}">Replay Strict</option>
-                <option value="LLM_RECORDING" th:selected="${executionMode == 'LLM_RECORDING'}">LLM Recording</option>
-                <option value="FORCE_RECORDING" th:selected="${executionMode == 'FORCE_RECORDING'}">Force Recording</option>
-                <option value="LLM_ONLY" th:selected="${executionMode == 'LLM_ONLY'}">LLM Only</option>
-            </select>
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Execution Mode</span>
+                <select id="optExecutionMode" name="mode" class="neo-select" 
+                        hx-post="/api/config/mode" 
+                        hx-target="#configPanel" 
+                        hx-swap="outerHTML" 
+                        onclick="event.stopPropagation()">
+                    <option value="REPLAY_WITH_HEALING" th:selected="${executionMode == null or executionMode == 'REPLAY_WITH_HEALING'}">Replay with Healing</option>
+                    <option value="REPLAY_STRICT" th:selected="${executionMode == 'REPLAY_STRICT'}">Replay Strict</option>
+                    <option value="LLM_RECORDING" th:selected="${executionMode == 'LLM_RECORDING'}">LLM Recording</option>
+                    <option value="FORCE_RECORDING" th:selected="${executionMode == 'FORCE_RECORDING'}">Force Recording</option>
+                    <option value="LLM_ONLY" th:selected="${executionMode == 'LLM_ONLY'}">LLM Only</option>
+                </select>
+            </div>
+            <span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
         </div>
-        <span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
     </div>
 </th:block>
 
@@ -242,6 +248,7 @@
             id="stopQueueBtn" 
             hx-post="/api/stop" 
             hx-swap="none"
+            onclick="stopQueue()"
             th:classappend="${running ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">stop</span> Stop Execution
     </button>
