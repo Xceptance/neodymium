@@ -30,6 +30,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.aura.report.dto.AreaSummaryDto;
+import com.xceptance.aura.report.dto.RunReportDto;
+import com.xceptance.aura.report.dto.TestClassSummaryDto;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
@@ -118,7 +123,7 @@ public class RunStorageSyncServiceTest
     }
 
     @Test
-    public void testUnassignedCategoryDefaultsToBrowsingAndMovesFile() throws IOException
+    public void testUnassignedCategoryDefaultsToBrowsingWithoutMovingFile() throws IOException
     {
         final String unassignedRunId = "run-unassigned-test-888";
         final Path runDir = Paths.get("storage", "runs", unassignedRunId);
@@ -143,21 +148,19 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
             Assertions.assertTrue(runJsonOpt.get().contains("executionMetrics"), "Expected run.json to contain executionMetrics");
 
-            final Path expectedMovedPath = runDir.resolve("Browsing (default)").resolve("UnassignedTest").resolve("unassigned-exec.json");
-            Assertions.assertTrue(Files.exists(expectedMovedPath), "Expected execution JSON file to be moved to Browsing (default)/UnassignedTest/unassigned-exec.json");
-            Assertions.assertFalse(Files.exists(flatExecFile), "Old flat file should no longer exist at run root");
+            Assertions.assertTrue(Files.exists(flatExecFile), "Flat execution JSON file must stay at the run root");
+            Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on disk");
+
+            Assertions.assertEquals("Browsing (default)", findAreaForClass(dataService.getRunReport(unassignedRunId), "UnassignedTest"),
+                "Flat execution without a category should be grouped under the default category in the run report");
+
+            final JsonNode enrichedExec = new ObjectMapper().readTree(flatExecFile.toFile());
+            Assertions.assertEquals("Browsing (default)", enrichedExec.path("areaName").asText(),
+                "Enriched execution JSON should carry the default category while staying in place");
         }
         finally
         {
-            if (Files.exists(runDir))
-            {
-                try (var stream = Files.walk(runDir))
-                {
-                    stream.sorted(Comparator.reverseOrder())
-                          .map(Path::toFile)
-                          .forEach(File::delete);
-                }
-            }
+            deleteRecursively(runDir);
         }
     }
 
@@ -187,22 +190,120 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
             Assertions.assertTrue(runJsonOpt.get().contains("executionMetrics"), "Expected run.json to contain executionMetrics");
 
-            final Path expectedMovedPath = runDir.resolve("Browsing (default)").resolve("GoogleTest").resolve("console-execution-1.json");
-            Assertions.assertTrue(Files.exists(expectedMovedPath), "Expected execution JSON file to be moved into Browsing (default)/GoogleTest/console-execution-1.json");
-            Assertions.assertFalse(Files.exists(execFile), "Old 2-level execution file should no longer exist at GoogleTest/console-execution-1.json");
-            Assertions.assertFalse(Files.exists(classDir), "Old class folder should be removed when empty");
+            Assertions.assertTrue(Files.exists(execFile), "Execution JSON file must stay in its uncategorized class folder");
+            Assertions.assertTrue(Files.exists(classDir), "Class folder without a category must not be removed");
+            Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on disk");
+
+            final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
+            final JsonNode metrics = runJsonRoot.path("executionMetrics");
+            Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "Expected run.json executionMetrics to be present");
+            Assertions.assertEquals("Browsing (default)", metrics.fields().next().getValue().path("areaName").asText(),
+                "Expected run.json executionMetrics to carry the default category for the uncategorized class");
+            Assertions.assertEquals("GoogleTest", metrics.fields().next().getValue().path("testClass").asText(),
+                "Expected run.json executionMetrics to map the execution to the class folder name");
+
+            Assertions.assertEquals("Browsing (default)", findAreaForClass(dataService.getRunReport(twoLevelRunId), "GoogleTest"),
+                "Class folder without a category should be grouped under the default category in the run report");
         }
         finally
         {
-            if (Files.exists(runDir))
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testMixedLayoutKeepsUncategorizedClassFoldersInPlace() throws IOException
+    {
+        final String mixedRunId = "run-mixed-layout-666";
+        final Path runDir = Paths.get("storage", "runs", mixedRunId);
+
+        final Path categorizedExecFile = runDir.resolve("Checkout").resolve("CheckoutProcessTest").resolve("exec-1.json");
+        Files.createDirectories(categorizedExecFile.getParent());
+        Files.writeString(categorizedExecFile, """
             {
-                try (var stream = Files.walk(runDir))
-                {
-                    stream.sorted(Comparator.reverseOrder())
-                          .map(Path::toFile)
-                          .forEach(File::delete);
-                }
+                "id": "exec-666-1",
+                "title": "CheckoutProcessTest [US Chrome]",
+                "testClass": "CheckoutProcessTest",
+                "status": "passed-clean",
+                "location": "US",
+                "browser": "Chrome"
             }
+            """);
+
+        final Path uncategorizedClassDir = runDir.resolve("StandaloneTest");
+        Files.createDirectories(uncategorizedClassDir);
+        final Path uncategorizedExecFile = uncategorizedClassDir.resolve("exec-2.json");
+        Files.writeString(uncategorizedExecFile, """
+            {
+                "id": "exec-666-2",
+                "title": "StandaloneTest [US Chrome]",
+                "testClass": "StandaloneTest",
+                "status": "failed",
+                "location": "US",
+                "browser": "Chrome"
+            }
+            """);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(mixedRunId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+
+            Assertions.assertTrue(Files.exists(categorizedExecFile), "Categorized execution JSON must stay in its category class folder");
+            Assertions.assertTrue(Files.exists(uncategorizedExecFile), "Uncategorized execution JSON must stay in its class folder at the run root");
+            Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on disk");
+
+            final RunReportDto report = dataService.getRunReport(mixedRunId);
+            Assertions.assertEquals("Checkout", findAreaForClass(report, "CheckoutProcessTest"),
+                "Class folder inside a category folder should keep the category from its folder");
+            Assertions.assertEquals("Browsing (default)", findAreaForClass(report, "StandaloneTest"),
+                "Class folder without subfolders at the run root should be grouped under the default category");
+
+            final JsonNode enrichedExec = new ObjectMapper().readTree(uncategorizedExecFile.toFile());
+            Assertions.assertEquals("Browsing (default)", enrichedExec.path("areaName").asText(),
+                "Enriched uncategorized execution JSON should carry the default category while staying in place");
+            Assertions.assertEquals("StandaloneTest", enrichedExec.path("testClass").asText(),
+                "Enriched uncategorized execution JSON should keep its class name");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testUpdateExecutionInRunKeepsUncategorizedClassFolderInPlace() throws IOException
+    {
+        final String updateRunId = "run-update-in-place-555";
+        final Path runDir = Paths.get("storage", "runs", updateRunId);
+        final Path classDir = runDir.resolve("StandaloneUpdateTest");
+        Files.createDirectories(classDir);
+        final Path execFile = classDir.resolve("exec-1.json");
+        Files.writeString(execFile, """
+            {
+                "id": "exec-update-1",
+                "title": "StandaloneUpdateTest [US Chrome]",
+                "testClass": "StandaloneUpdateTest",
+                "status": "passed-clean",
+                "location": "US",
+                "browser": "Chrome"
+            }
+            """);
+
+        try
+        {
+            final boolean updated = storageService.updateExecutionInRun(updateRunId, "exec-update-1", node -> node.put("status", "failed"));
+            Assertions.assertTrue(updated, "updateExecutionInRun should update the matching execution");
+
+            Assertions.assertTrue(Files.exists(execFile), "Updated execution JSON must stay in its uncategorized class folder");
+            Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on update");
+
+            final JsonNode updatedExec = new ObjectMapper().readTree(execFile.toFile());
+            Assertions.assertEquals("failed", updatedExec.path("status").asText(), "Execution JSON content should be updated in place");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
         }
     }
 
@@ -515,6 +616,45 @@ public class RunStorageSyncServiceTest
                           .map(Path::toFile)
                           .forEach(File::delete);
                 }
+            }
+        }
+    }
+
+    /**
+     * Returns the area name that groups the given test class in the run report, or {@code null} if the class is not
+     * listed.
+     */
+    private String findAreaForClass(final RunReportDto report, final String className)
+    {
+        if (report == null)
+        {
+            return null;
+        }
+        for (final AreaSummaryDto area : report.getAreaSummaries())
+        {
+            for (final TestClassSummaryDto testClass : area.getTestClasses())
+            {
+                if (className.equals(testClass.getClassName()))
+                {
+                    return area.getAreaName();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Deletes the given directory recursively, ignoring a missing path.
+     */
+    private void deleteRecursively(final Path path) throws IOException
+    {
+        if (Files.exists(path))
+        {
+            try (var stream = Files.walk(path))
+            {
+                stream.sorted(Comparator.reverseOrder())
+                      .map(Path::toFile)
+                      .forEach(File::delete);
             }
         }
     }

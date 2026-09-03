@@ -142,6 +142,8 @@ public class LocalRunJsonStorageService
 
             final ArrayNode mergedExecutions = objectMapper.createArrayNode();
             final Map<String, Map<String, List<String>>> areasMap = new LinkedHashMap<>();
+            // Cache remembering which first-level folders are category folders (contain class subfolders)
+            final Map<String, Boolean> categoryFolderCache = new LinkedHashMap<>();
             final Set<String> localesSet = new LinkedHashSet<>();
             final Set<String> browsersSet = new LinkedHashSet<>();
             final List<String> existingLocales = new ArrayList<>();
@@ -231,8 +233,19 @@ public class LocalRunJsonStorageService
                             }
                             else if (relPath.getNameCount() == 2)
                             {
-                                folderArea = "";
-                                folderClass = relPath.getName(0).toString();
+                                // A first-level folder counts as a category folder only when it contains
+                                // subdirectories (class folders). Otherwise it is a plain class folder
+                                // without a category that logically belongs to the default category while
+                                // staying at its current location on disk.
+                                final String firstSegment = relPath.getName(0).toString();
+                                if (categoryFolderCache.computeIfAbsent(firstSegment, segment -> hasSubdirectories(runDir.toPath().resolve(segment))))
+                                {
+                                    folderArea = firstSegment;
+                                }
+                                else
+                                {
+                                    folderClass = firstSegment;
+                                }
                             }
 
                             String rawClass = objNode.has("testClass") ? objNode.path("testClass").asText("") : "";
@@ -408,68 +421,21 @@ public class LocalRunJsonStorageService
                                 objNode.set("blocks", blocksNode);
                             }
 
-                            // Relocate file on disk if not currently in runDir / areaName / testClass / f.getName()
-                            final Path targetDir = runDir.toPath().resolve(areaName).resolve(testClass);
-                            final Path targetFilePath = targetDir.resolve(f.getName());
-                            File targetFile = f;
-
-                            if (!f.toPath().toAbsolutePath().equals(targetFilePath.toAbsolutePath()))
+                            // Keep the execution JSON at its current location on disk (class folders
+                            // without a category are only logically associated with the default
+                            // category); persist the enriched JSON content in place.
+                            try
                             {
-                                Files.createDirectories(targetDir);
-                                final Path oldParent = f.toPath().getParent();
-                                targetFile = targetFilePath.toFile();
-                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
-                                try
+                                final JsonNode existingNode = objectMapper.readTree(f);
+                                if (!existingNode.equals(objNode))
                                 {
-                                    Files.deleteIfExists(f.toPath());
-                                    if (oldParent != null && Files.exists(oldParent) && !oldParent.equals(runDir.toPath()))
-                                    {
-                                        try (final var entries = Files.list(oldParent))
-                                        {
-                                            if (entries.findFirst().isEmpty())
-                                            {
-                                                Files.deleteIfExists(oldParent);
-                                                final Path oldGrandParent = oldParent.getParent();
-                                                if (oldGrandParent != null && Files.exists(oldGrandParent) && !oldGrandParent.equals(runDir.toPath()))
-                                                {
-                                                    try (final var grandEntries = Files.list(oldGrandParent))
-                                                    {
-                                                        if (grandEntries.findFirst().isEmpty())
-                                                        {
-                                                            Files.deleteIfExists(oldGrandParent);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                catch (final Exception ignored)
-                                {
+                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, objNode);
                                 }
                             }
-                            else
+                            catch (final Exception ignored)
                             {
-                                try
-                                {
-                                    if (!targetFile.exists())
-                                    {
-                                        objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
-                                    }
-                                    else
-                                    {
-                                        final JsonNode existingNode = objectMapper.readTree(targetFile);
-                                        if (!existingNode.equals(objNode))
-                                        {
-                                            objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFile, objNode);
-                                        }
-                                    }
-                                }
-                                catch (final Exception ignored)
-                                {
-                                }
                             }
-                            areasMap.computeIfAbsent(areaName, k -> new LinkedHashMap<>()).computeIfAbsent(testClass, k -> new ArrayList<>()).add(targetFile.getName());
+                            areasMap.computeIfAbsent(areaName, k -> new LinkedHashMap<>()).computeIfAbsent(testClass, k -> new ArrayList<>()).add(f.getName());
                             mergedExecutions.add(objNode);
                         }
 
@@ -623,6 +589,7 @@ public class LocalRunJsonStorageService
                     metricObj.put("location", loc);
                     metricObj.put("browser", tBrowser);
                     metricObj.put("status", objNode.path("status").asText("passed-clean"));
+                    metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
                     if (objNode.has("startTime"))
                     {
                         metricObj.put("startTime", objNode.path("startTime").asText(""));
@@ -995,6 +962,31 @@ public class LocalRunJsonStorageService
         return node.isObject() && (node.has("status") || node.has("testClass") || node.has("id") || node.has("testName"));
     }
 
+    /**
+     * Checks whether the given directory contains at least one subdirectory. Used to distinguish
+     * category folders (holding class subfolders) from plain class folders without a category,
+     * which directly contain their execution JSON files.
+     *
+     * @param dir the directory to inspect, may be {@code null}
+     * @return {@code true} if the directory exists and contains at least one subdirectory, otherwise {@code false}
+     */
+    private boolean hasSubdirectories(final Path dir)
+    {
+        if (dir == null || !Files.isDirectory(dir))
+        {
+            return false;
+        }
+        try (final var entries = Files.list(dir))
+        {
+            return entries.anyMatch(Files::isDirectory);
+        }
+        catch (final IOException e)
+        {
+            LOG.warn("Could not list directory {} to detect subfolders: {}", dir, e.getMessage());
+            return false;
+        }
+    }
+
     public static class BatchInfo
     {
         public final String name;
@@ -1295,27 +1287,13 @@ public class LocalRunJsonStorageService
                             }
                             updater.accept(objNode);
 
-                            final String areaName = objNode.has("areaName") && !objNode.path("areaName").asText().trim().isEmpty() ? objNode.path("areaName").asText().trim() : "Browsing (default)";
-                            final String testClass = objNode.has("testClass") && !objNode.path("testClass").asText().trim().isEmpty() ? objNode.path("testClass").asText().trim() : "DefaultClass";
-                            final Path targetDir = runDir.resolve(areaName).resolve(testClass);
-                            final Path targetFilePath = targetDir.resolve(jsonPath.getFileName().toString());
-
-                            if (!jsonPath.toAbsolutePath().equals(targetFilePath.toAbsolutePath()))
+                            // Keep the execution JSON at its current location on disk (class folders
+                            // without a category are only logically associated with the default
+                            // category); write updates in place instead of relocating the file.
+                            if (!beforeNode.equals(objNode))
                             {
-                                Files.createDirectories(targetDir);
-                                final Path oldParent = jsonPath.getParent();
-                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(targetFilePath.toFile(), objNode);
-                                Files.deleteIfExists(jsonPath);
-                                cleanEmptyParentDirectories(oldParent, runDir);
-                                LOG.info("Updated and relocated execution JSON on disk: {} -> {}", jsonPath.toAbsolutePath(), targetFilePath.toAbsolutePath());
-                            }
-                            else
-                            {
-                                if (!beforeNode.equals(objNode))
-                                {
-                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
-                                    LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
-                                }
+                                objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
+                                LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
                             }
                             return true;
                         }
@@ -1371,30 +1349,6 @@ public class LocalRunJsonStorageService
             }
         }
         Files.delete(path);
-    }
-
-    private void cleanEmptyParentDirectories(final Path dir, final Path stopDir)
-    {
-        Path current = dir;
-        while (current != null && Files.exists(current) && !current.equals(stopDir))
-        {
-            try (final var entries = Files.list(current))
-            {
-                if (entries.findFirst().isEmpty())
-                {
-                    Files.deleteIfExists(current);
-                    current = current.getParent();
-                }
-                else
-                {
-                    break;
-                }
-            }
-            catch (final Exception e)
-            {
-                break;
-            }
-        }
     }
 
     private void extractLocalesFromNode(final JsonNode node, final Set<String> localesSet)

@@ -132,6 +132,7 @@ def extract_browsers_from_execution(exec_data):
     return result
 
 def extract_execution_metrics(exec_data, test_class_name):
+    exec_id = exec_data.get("id") or ""
     title = exec_data.get("title") or exec_data.get("dataSet") or ""
     browser = exec_data.get("browser") or "Chrome"
     if isinstance(browser, list):
@@ -248,6 +249,7 @@ def extract_execution_metrics(exec_data, test_class_name):
         "location": exec_data.get("location") or exec_data.get("locale") or "Unknown",
         "browser": browser,
         "status": exec_data.get("status") or "passed-clean",
+        "areaName": exec_data.get("areaName") or "Browsing (default)",
         "executionMode": exec_data.get("executionMode") or exec_data.get("mode") or "FORCE_RECORDING",
         "startTime": time_str or "",
         "dateFormatted": date_formatted,
@@ -336,8 +338,16 @@ def analyze_and_generate_run_json(run_dir_path):
             folder_area = parts[0]
             folder_class = parts[1]
         elif len(parts) == 2:
-            folder_area = ""
-            folder_class = parts[0]
+            # A first-level folder counts as a category folder only when it contains subdirectories
+            # (class folders). Otherwise it is a plain class folder without a category that logically
+            # belongs to the default category while staying at its current location on disk.
+            first_folder = run_dir / parts[0]
+            if any(child.is_dir() for child in first_folder.iterdir()):
+                folder_area = parts[0]
+                folder_class = ""
+            else:
+                folder_area = ""
+                folder_class = parts[0]
         else:
             folder_area = ""
             folder_class = ""
@@ -423,24 +433,18 @@ def analyze_and_generate_run_json(run_dir_path):
         metric_key, metric_data = extract_execution_metrics(exec_data, test_class_name)
         execution_metrics[metric_key] = metric_data
 
-        # Ensure file is moved to target area and test class folder on disk if needed
-        target_dir = run_dir / area_name / test_class_name
-        target_file = target_dir / full_path.name
+        # Keep the execution JSON at its current location on disk (class folders without a
+        # category are only logically associated with the default category); persist the
+        # enriched JSON content in place.
+        try:
+            with open(full_path, "r", encoding="utf-8") as existing_f:
+                existing_data = json.load(existing_f)
+        except Exception:
+            existing_data = None
 
-        if full_path.resolve() != target_file.resolve():
-            target_dir.mkdir(parents=True, exist_ok=True)
-            with open(target_file, "w", encoding="utf-8") as out_f:
+        if existing_data != exec_data:
+            with open(full_path, "w", encoding="utf-8") as out_f:
                 json.dump(exec_data, out_f, indent=2)
-            try:
-                old_parent = full_path.parent
-                full_path.unlink()
-                if old_parent.exists() and not any(old_parent.iterdir()):
-                    old_parent.rmdir()
-                    if old_parent.parent.exists() and old_parent.parent != run_dir and not any(old_parent.parent.iterdir()):
-                        old_parent.parent.rmdir()
-            except Exception:
-                pass
-            full_path = target_file
 
         area_folder = area_name
         class_folder = test_class_name
