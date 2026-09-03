@@ -4,12 +4,13 @@ storage/
 storage1/
 storage2/
 storage_was/
-/.allure/
-/allure-results/
+.allure/
+allure-results/
 *.db
+chat-history/
+*.class
+bin/
 !.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**
-!**/src/test/**
 
 ### IntelliJ IDEA ###
 .idea
@@ -32,4 +33,3 @@ storage_was/
 ### OS ###
 .DS_Store
 Thumbs.db
-/bin/

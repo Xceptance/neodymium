@@ -1,7 +1,10 @@
-/target/
-/.classpath
-/.project
-/.allure/
-/build/
-/bin/
-/.settings/
+target/
+.classpath
+.project
+.allure/
+allure-results/
+chat-history/
+build/
+bin/
+*.class
+.settings/
