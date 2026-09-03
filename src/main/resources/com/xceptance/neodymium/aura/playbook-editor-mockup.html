@@ -328,7 +328,8 @@
             border-left-color: var(--accent);
         }
 
-        .step-row:hover .step-actions {
+        .step-row:hover .step-actions,
+        .step-row:focus-within .step-actions {
             opacity: 1;
         }
 
@@ -568,7 +569,7 @@
         .step-actions {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 2px;
             opacity: 0;
             transition: opacity 0.15s ease;
         }
@@ -590,6 +591,12 @@
         .icon-btn:hover {
             background: var(--border);
             color: var(--text-primary);
+        }
+
+        .icon-btn:disabled {
+            opacity: 0.25;
+            cursor: default;
+            pointer-events: none;
         }
 
         .icon-btn.danger:hover {
@@ -953,7 +960,9 @@
                             <span class="step-number">1</span>
                             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Open ${verla.url}/verla-${quality}/index.html" onkeydown="handleKeyDown(event, 1)" onfocus="handleStepFocus(1)" onblur="handleStepBlur(1)">Open ${verla.url}/verla-${quality}/index.html</div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(1)"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(1, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(1, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(1)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
@@ -962,7 +971,9 @@
                             <span class="step-number">2</span>
                             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Click the country trigger button #country-trigger-btn" onkeydown="handleKeyDown(event, 2)" onfocus="handleStepFocus(2)" onblur="handleStepBlur(2)">Click the country trigger button #country-trigger-btn</div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(2)"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(2, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(2, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(2)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
@@ -971,7 +982,9 @@
                             <span class="step-number">3</span>
                             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="_include: playbooks/includes/accept_cookies.yaml" onkeydown="handleKeyDown(event, 3)" onfocus="handleStepFocus(3)" onblur="handleStepBlur(3)">_include: playbooks/includes/accept_cookies.yaml</div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(3)"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(3, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(3, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(3)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
@@ -1062,7 +1075,9 @@
                             <span class="step-number">9</span>
                             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Perform search for tshirt, then _include: playbooks/includes/accept_cookies.yaml and verify cart count" onkeydown="handleKeyDown(event, 4)" onfocus="handleStepFocus(4)" onblur="handleStepBlur(4)">Perform search for tshirt, then _include: playbooks/includes/accept_cookies.yaml and verify cart count</div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(4)"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(4, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(4, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(4)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
@@ -1105,7 +1120,9 @@
                             <span class="step-number">12</span>
                             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="_include: missing_file.yaml" onkeydown="handleKeyDown(event, 5)" onfocus="handleStepFocus(5)" onblur="handleStepBlur(5)">_include: missing_file.yaml</div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(5)"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(5, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(5, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(5)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
@@ -1114,7 +1131,9 @@
                             <span class="step-number">13</span>
                             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Assert that mini-cart price currency symbol is '£'" onkeydown="handleKeyDown(event, 6)" onfocus="handleStepFocus(6)" onblur="handleStepBlur(6)">Assert that mini-cart price currency symbol is '£'</div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(6)"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(6, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(6, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(6)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
@@ -1444,9 +1463,10 @@ data:
 
         // Initialize formatted pills and global static line numbering on page load
         window.addEventListener('DOMContentLoaded', () => {
-            for (let i = 1; i <= 6; i++) {
-                formatStepToTokens(i);
-            }
+            reindexSteps();
+            document.querySelectorAll('.step-row').forEach(row => {
+                formatStepToTokens(row);
+            });
             updateAllLineNumbers();
         });
 
@@ -1589,7 +1609,9 @@ data:
                     <span class="step-number">1</span>
                     <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})"></div>
                     <div class="step-actions">
-                        <button class="icon-btn danger" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+                        <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                        <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                        <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
                     </div>
                 `;
                 container.appendChild(newRow);
@@ -1598,7 +1620,7 @@ data:
                 const newContent = newRow.querySelector('.step-content');
                 if (newContent) newContent.focus();
             }
-            updateAllLineNumbers();
+            reindexSteps();
         }
 
         function removeBeforeBlock() {
@@ -1608,7 +1630,7 @@ data:
             if (panel) panel.style.display = 'none';
             if (btnContainer) btnContainer.style.display = 'block';
             if (container) container.innerHTML = '';
-            updateAllLineNumbers();
+            reindexSteps();
         }
 
         function addAfterBlock() {
@@ -1630,7 +1652,9 @@ data:
                     <span class="step-number">1</span>
                     <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})"></div>
                     <div class="step-actions">
-                        <button class="icon-btn danger" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+                        <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                        <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                        <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
                     </div>
                 `;
                 container.appendChild(newRow);
@@ -1639,7 +1663,7 @@ data:
                 const newContent = newRow.querySelector('.step-content');
                 if (newContent) newContent.focus();
             }
-            updateAllLineNumbers();
+            reindexSteps();
         }
 
         function removeAfterBlock() {
@@ -1649,7 +1673,7 @@ data:
             if (panel) panel.style.display = 'none';
             if (btnContainer) btnContainer.style.display = 'block';
             if (container) container.innerHTML = '';
-            updateAllLineNumbers();
+            reindexSteps();
         }
 
         function assignIncludeTreeLineNumbers(treeCard, startLine) {
@@ -1763,7 +1787,7 @@ data:
                     stepContent.innerText = firstLineText;
                     formatStepToTokens(lineNum);
 
-                    let currentRefLine = lineNum;
+                    let currentRefRow = stepRow;
                     let lastInsertedContent = null;
 
                     for (let i = 1; i < lines.length; i++) {
@@ -1772,10 +1796,10 @@ data:
                             lineText = lineText + tailText;
                         }
 
-                        const insertedRow = insertStepBelow(currentRefLine, lineText);
+                        const insertedRow = insertStepBelow(currentRefRow, lineText);
                         if (insertedRow) {
-                            currentRefLine = parseInt(insertedRow.getAttribute('data-line'), 10) || (currentRefLine + 1);
-                            formatStepToTokens(currentRefLine);
+                            currentRefRow = insertedRow;
+                            formatStepToTokens(insertedRow);
                             lastInsertedContent = insertedRow.querySelector('.step-content');
                         }
                     }
@@ -1865,15 +1889,24 @@ data:
         }
 
         /* Focus & Blur Line Edit Mode Handlers */
-        function handleStepFocus(lineNum) {
+        function handleStepFocus(lineNumOrElement) {
+            let row = null;
+            let lineNum = null;
+            if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+                row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+                lineNum = row ? row.getAttribute('data-line') : null;
+            } else {
+                lineNum = lineNumOrElement;
+                row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+            }
+
             if (activeLineNum && activeLineNum !== lineNum) {
                 const prevRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
                 if (prevRow) prevRow.classList.remove('active-line');
-                formatStepToTokens(activeLineNum);
+                if (activeLineNum) formatStepToTokens(activeLineNum);
             }
 
             activeLineNum = lineNum;
-            const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
             if (!row) return;
 
             row.classList.add('active-line');
@@ -1888,11 +1921,22 @@ data:
 
             // Update status bar
             const statLine = document.getElementById('statLine');
-            if (statLine) statLine.innerText = lineNum;
+            if (statLine) {
+                const numSpan = row.querySelector('.step-number');
+                statLine.innerText = numSpan ? numSpan.innerText : (lineNum || '1');
+            }
         }
 
-        function handleStepBlur(lineNum) {
-            const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+        function handleStepBlur(lineNumOrElement) {
+            let row = null;
+            let lineNum = null;
+            if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+                row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+                lineNum = row ? row.getAttribute('data-line') : null;
+            } else {
+                lineNum = lineNumOrElement;
+                row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+            }
             if (!row) return;
 
             const content = row.querySelector('.step-content');
@@ -1910,55 +1954,122 @@ data:
             setTimeout(() => {
                 const activeEl = document.activeElement;
                 if (!activeEl || !row.contains(activeEl)) {
-                    formatStepToTokens(lineNum);
+                    formatStepToTokens(row);
                 }
             }, 120);
+        }
+
+        /* Visual Row Traversal across Active Code Panels */
+        function getAllVisibleStepRows() {
+            const containers = ['#beforeStepsList', '#stepsList', '#afterStepsList'];
+            const rows = [];
+            containers.forEach(selector => {
+                const container = document.querySelector(selector);
+                if (!container) return;
+                const panel = container.closest('.editor-code-panel');
+                if (panel && (panel.style.display === 'none' || getComputedStyle(panel).display === 'none')) return;
+                container.querySelectorAll(':scope > .step-row').forEach(r => rows.push(r));
+            });
+            return rows;
+        }
+
+        function getAdjacentStepRow(currentRow, direction) {
+            if (!currentRow) return null;
+            const allRows = getAllVisibleStepRows();
+            const idx = allRows.indexOf(currentRow);
+            if (idx === -1) return null;
+            const targetIdx = idx + direction;
+            if (targetIdx >= 0 && targetIdx < allRows.length) {
+                return allRows[targetIdx];
+            }
+            return null;
         }
 
         /* Keyboard Navigation with Column Preservation across lines */
         function handleKeyDown(event, lineNum) {
             const content = event.target;
+            const currentRow = content.closest('.step-row') || document.querySelector(`.step-row[data-line="${lineNum}"]`);
             const currentOffset = getCaretOffset(content);
+            const raw = content.getAttribute('data-raw') || content.innerText || '';
+
+            // Alt+Up / Alt+Down: Move Step Line
+            if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+                event.preventDefault();
+                const dir = event.key === 'ArrowUp' ? -1 : 1;
+                moveStep(currentRow || lineNum, dir);
+                return;
+            }
 
             if (event.key === 'ArrowUp') {
-                if (lineNum > 1) {
+                const prevRow = getAdjacentStepRow(currentRow, -1);
+                if (prevRow) {
                     event.preventDefault();
                     lastCaretOffset = currentOffset;
-                    focusLine(lineNum - 1, currentOffset);
+                    focusRow(prevRow, currentOffset);
                 }
             } else if (event.key === 'ArrowDown') {
-                const nextRow = document.querySelector(`.step-row[data-line="${lineNum + 1}"]`);
+                const nextRow = getAdjacentStepRow(currentRow, 1);
                 if (nextRow) {
                     event.preventDefault();
                     lastCaretOffset = currentOffset;
-                    focusLine(lineNum + 1, currentOffset);
+                    focusRow(nextRow, currentOffset);
                 }
             } else if (event.key === 'Enter') {
                 event.preventDefault();
-                insertStepBelow(lineNum);
+                const headText = raw.substring(0, currentOffset).replace(/[\r\n]+/g, ' ').trim();
+                const tailText = raw.substring(currentOffset).replace(/[\r\n]+/g, ' ').trim();
+
+                content.setAttribute('data-raw', headText);
+                content.innerText = headText;
+                formatStepToTokens(currentRow || lineNum);
+
+                const newRow = insertStepBelow(currentRow || lineNum, tailText);
+                if (newRow) {
+                    formatStepToTokens(newRow);
+                    const newContent = newRow.querySelector('.step-content');
+                    if (newContent) {
+                        newContent.focus();
+                        setCaretOffset(newContent, 0);
+                    }
+                }
             }
         }
 
-        function focusLine(lineNum, targetOffset = -1) {
-            const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+        function focusRow(row, targetOffset = -1) {
             if (!row) return;
 
             const content = row.querySelector('.step-content');
             if (!content) return;
 
+            const lineNum = row.getAttribute('data-line');
             content.focus();
-            handleStepFocus(lineNum);
+            handleStepFocus(lineNum || row);
 
             if (targetOffset >= 0) {
-                const raw = content.getAttribute('data-raw') || content.innerText;
+                const raw = content.getAttribute('data-raw') || content.innerText || '';
                 const clampedOffset = Math.min(targetOffset, raw.length);
                 setCaretOffset(content, clampedOffset);
                 lastCaretOffset = clampedOffset;
             }
         }
 
-        function insertStepBelow(lineNum, initialText = '') {
-            const targetRow = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+        function focusLine(lineNumOrElement, targetOffset = -1) {
+            let row = null;
+            if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+                row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+            } else {
+                row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+            }
+            focusRow(row, targetOffset);
+        }
+
+        function insertStepBelow(lineNumOrElement, initialText = '') {
+            let targetRow = null;
+            if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+                targetRow = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+            } else {
+                targetRow = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+            }
             if (!targetRow) return null;
 
             currentLineCount++;
@@ -1972,11 +2083,17 @@ data:
                 <span class="step-number">${currentLineCount}</span>
                 <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">${safeInitial}</div>
                 <div class="step-actions">
-                    <button class="icon-btn danger" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
+                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${currentLineCount}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${currentLineCount}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
                 </div>
             `;
 
-            targetRow.after(newRow);
+            const lineId = targetRow.getAttribute('data-line');
+            const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+            const insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+            insertAfterRef.after(newRow);
+
             reindexSteps();
 
             const newContent = newRow.querySelector('.step-content');
@@ -1984,59 +2101,167 @@ data:
             return newRow;
         }
 
-        function deleteStep(lineNum) {
-            const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
-            if (row) {
-                const container = row.closest('.steps-container');
-                if (container && container.id === 'stepsList' && container.querySelectorAll(':scope > .step-row').length === 1) {
-                    const content = row.querySelector('.step-content');
-                    if (content) {
-                        content.setAttribute('data-raw', '');
-                        content.innerText = '';
-                        content.innerHTML = '';
-                        content.focus();
-                        formatStepToTokens(lineNum);
+        function moveStep(lineNumOrElement, direction) {
+            let row = null;
+            if (typeof lineNumOrElement === 'number' || typeof lineNumOrElement === 'string') {
+                row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+            } else if (lineNumOrElement && lineNumOrElement.closest) {
+                row = lineNumOrElement.closest('.step-row');
+            }
+            if (!row) return;
+
+            const container = row.closest('.steps-container');
+            if (!container) return;
+
+            const lineId = row.getAttribute('data-line');
+            const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+
+            const content = row.querySelector('.step-content');
+            const savedCaret = content ? getCaretOffset(content) : 0;
+
+            const allRows = Array.from(container.querySelectorAll(':scope > .step-row'));
+            const currentIndex = allRows.indexOf(row);
+            if (currentIndex === -1) return;
+
+            if (direction === -1) {
+                // Move Up
+                if (currentIndex > 0) {
+                    const targetPrevRow = allRows[currentIndex - 1];
+                    container.insertBefore(row, targetPrevRow);
+                    if (treeCard && treeCard.parentElement === container) {
+                        row.after(treeCard);
                     }
-                    reindexSteps();
-                    if (typeof pushEditorSnapshot === 'function') {
-                        pushEditorSnapshot(false);
-                    }
+                } else {
                     return;
                 }
-                row.remove();
+            } else if (direction === 1) {
+                // Move Down
+                if (currentIndex < allRows.length - 1) {
+                    const targetNextRow = allRows[currentIndex + 1];
+                    const nextLineId = targetNextRow.getAttribute('data-line');
+                    const nextTreeCard = document.getElementById(`includeTreeCard_${nextLineId}`) || document.getElementById(`includeTreeCard${nextLineId}`);
+                    
+                    const insertAfterRef = (nextTreeCard && nextTreeCard.parentElement === container) ? nextTreeCard : targetNextRow;
+                    insertAfterRef.after(row);
+                    if (treeCard && treeCard.parentElement === container) {
+                        row.after(treeCard);
+                    }
+                } else {
+                    return;
+                }
+            }
+
+            reindexSteps();
+            if (content) {
+                content.focus();
+                if (savedCaret > 0) {
+                    setCaretOffset(content, savedCaret);
+                }
+            }
+            if (typeof pushEditorSnapshot === 'function') {
+                pushEditorSnapshot(false);
+            }
+        }
+
+        function deleteStep(lineNumOrElement) {
+            let row = null;
+            if (typeof lineNumOrElement === 'number' || typeof lineNumOrElement === 'string') {
+                row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+            } else if (lineNumOrElement && lineNumOrElement.nodeType) {
+                row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+            }
+            if (!row) return;
+
+            const lineId = row.getAttribute('data-line');
+            const container = row.closest('.steps-container');
+
+            // If it's the last remaining row in the main steps list, clear its content instead of removing the row
+            if (container && container.id === 'stepsList' && container.querySelectorAll(':scope > .step-row').length === 1) {
+                const content = row.querySelector('.step-content');
+                if (content) {
+                    content.setAttribute('data-raw', '');
+                    content.innerText = '';
+                    content.innerHTML = '';
+                    content.focus();
+                    formatStepToTokens(row);
+                }
+                const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+                if (treeCard) treeCard.remove();
+
                 reindexSteps();
                 if (typeof pushEditorSnapshot === 'function') {
                     pushEditorSnapshot(false);
                 }
+                return;
+            }
+
+            const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+            if (treeCard) treeCard.remove();
+
+            row.remove();
+            reindexSteps();
+            if (typeof pushEditorSnapshot === 'function') {
+                pushEditorSnapshot(false);
             }
         }
 
         function reindexSteps() {
+            let globalLineCounter = 1;
             const containers = ['#beforeStepsList', '#stepsList', '#afterStepsList'];
             containers.forEach(containerSelector => {
                 const container = document.querySelector(containerSelector);
                 if (!container) return;
                 const rows = container.querySelectorAll(':scope > .step-row');
-                rows.forEach((row) => {
-                    const lNum = row.getAttribute('data-line');
+                rows.forEach((row, idx) => {
+                    const oldLineId = row.getAttribute('data-line');
+                    const lNum = globalLineCounter++;
+                    row.setAttribute('data-line', lNum);
+
+                    // If an include tree card is associated with the old line id, update its ID
+                    if (oldLineId && oldLineId !== String(lNum)) {
+                        const treeCard = document.getElementById(`includeTreeCard_${oldLineId}`) || document.getElementById(`includeTreeCard${oldLineId}`);
+                        if (treeCard) {
+                            treeCard.id = `includeTreeCard_${lNum}`;
+                        }
+                    }
+
                     const content = row.querySelector('.step-content');
                     if (content) {
                         content.setAttribute('onkeydown', `handleKeyDown(event, ${lNum})`);
                         content.setAttribute('onfocus', `handleStepFocus(${lNum})`);
                         content.setAttribute('onblur', `handleStepBlur(${lNum})`);
                     }
-                    const delBtn = row.querySelector('.step-actions .icon-btn');
+                    const moveUpBtn = row.querySelector('.step-actions .btn-move-up');
+                    if (moveUpBtn) {
+                        moveUpBtn.setAttribute('onclick', `moveStep(${lNum}, -1)`);
+                        moveUpBtn.disabled = (idx === 0);
+                    }
+                    const moveDownBtn = row.querySelector('.step-actions .btn-move-down');
+                    if (moveDownBtn) {
+                        moveDownBtn.setAttribute('onclick', `moveStep(${lNum}, 1)`);
+                        moveDownBtn.disabled = (idx === rows.length - 1);
+                    }
+                    const delBtn = row.querySelector('.step-actions .btn-delete-step, .step-actions .icon-btn.danger');
                     if (delBtn) {
                         delBtn.setAttribute('onclick', `deleteStep(${lNum})`);
                     }
                 });
             });
+            currentLineCount = Math.max(1, globalLineCounter - 1);
             updateAllLineNumbers();
         }
 
         /* Token Rendering Parser with MouseDown Event Prevention on Arrow Toggle */
-        function formatStepToTokens(lineNum) {
-            const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+        function formatStepToTokens(lineNumOrElement) {
+            let row = null;
+            let lineNum = null;
+            if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+                row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+                lineNum = row ? row.getAttribute('data-line') : null;
+            } else {
+                lineNum = lineNumOrElement;
+                row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+            }
             if (!row) return;
             const content = row.querySelector('.step-content');
             if (!content) return;

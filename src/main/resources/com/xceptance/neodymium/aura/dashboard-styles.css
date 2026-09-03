@@ -3021,9 +3021,14 @@
 .step-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     opacity: 0;
     transition: opacity 0.15s ease;
+}
+
+.step-row:hover .step-actions,
+.step-row:focus-within .step-actions {
+    opacity: 1;
 }
 
 .icon-btn {
@@ -3043,6 +3048,12 @@
 .icon-btn:hover {
     background: var(--border);
     color: var(--text-primary);
+}
+
+.icon-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+    pointer-events: none;
 }
 
 .icon-btn.danger:hover {

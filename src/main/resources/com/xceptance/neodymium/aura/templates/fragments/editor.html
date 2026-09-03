@@ -82,11 +82,13 @@
                             <div class="step-content" contenteditable="true" spellcheck="false"
                                  th:data-raw="${step}"
                                  th:text="${step}"
-                                 onkeydown="handleKeyDown(event, parseInt(this.closest('.step-row').getAttribute('data-line')))"
-                                 onfocus="handleStepFocus(parseInt(this.closest('.step-row').getAttribute('data-line')))"
-                                 onblur="handleStepBlur(parseInt(this.closest('.step-row').getAttribute('data-line')))"></div>
+                                 onkeydown="handleKeyDown(event, this)"
+                                 onfocus="handleStepFocus(this)"
+                                 onblur="handleStepBlur(this)"></div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(parseInt(this.closest('.step-row').getAttribute('data-line')))"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
                     </th:block>
@@ -113,20 +115,24 @@
                             <div class="step-content" contenteditable="true" spellcheck="false"
                                  th:data-raw="${step}"
                                  th:text="${step}"
-                                 onkeydown="handleKeyDown(event, parseInt(this.closest('.step-row').getAttribute('data-line')))"
-                                 onfocus="handleStepFocus(parseInt(this.closest('.step-row').getAttribute('data-line')))"
-                                 onblur="handleStepBlur(parseInt(this.closest('.step-row').getAttribute('data-line')))"></div>
+                                 onkeydown="handleKeyDown(event, this)"
+                                 onfocus="handleStepFocus(this)"
+                                 onblur="handleStepBlur(this)"></div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(parseInt(this.closest('.step-row').getAttribute('data-line')))"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
                     </th:block>
                     <th:block th:if="${mainSteps == null or #lists.isEmpty(mainSteps)}">
                         <div class="step-row" data-line="1">
                             <span class="step-number">1</span>
-                            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Open ${neodymium.url}" onkeydown="handleKeyDown(event, 1)" onfocus="handleStepFocus(1)" onblur="handleStepBlur(1)">Open ${neodymium.url}</div>
+                            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Open ${neodymium.url}" onkeydown="handleKeyDown(event, this)" onfocus="handleStepFocus(this)" onblur="handleStepBlur(this)">Open ${neodymium.url}</div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(1)"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
                     </th:block>
@@ -157,11 +163,13 @@
                             <div class="step-content" contenteditable="true" spellcheck="false"
                                  th:data-raw="${step}"
                                  th:text="${step}"
-                                 onkeydown="handleKeyDown(event, parseInt(this.closest('.step-row').getAttribute('data-line')))"
-                                 onfocus="handleStepFocus(parseInt(this.closest('.step-row').getAttribute('data-line')))"
-                                 onblur="handleStepBlur(parseInt(this.closest('.step-row').getAttribute('data-line')))"></div>
+                                 onkeydown="handleKeyDown(event, this)"
+                                 onfocus="handleStepFocus(this)"
+                                 onblur="handleStepBlur(this)"></div>
                             <div class="step-actions">
-                                <button class="icon-btn danger" onclick="deleteStep(parseInt(this.closest('.step-row').getAttribute('data-line')))"><span class="material-symbols-outlined">delete</span></button>
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
                     </th:block>
