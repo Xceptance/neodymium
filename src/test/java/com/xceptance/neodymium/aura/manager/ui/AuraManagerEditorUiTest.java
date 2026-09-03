@@ -32,11 +32,13 @@ import org.junit.jupiter.api.Tag;
 
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
 import com.sun.net.httpserver.HttpServer;
 import com.xceptance.neodymium.aura.NeodymiumAuraManager;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.junit5.NeodymiumTest;
 import org.openqa.selenium.Keys;
+import org.openqa.selenium.WebElement;
 
 /**
  * Selenide UI test suite to verify the Neodymium Aura Manager's reworked visual YAML Playbook Editor
@@ -396,5 +398,211 @@ public final class AuraManagerEditorUiTest
         Assertions.assertTrue(fileContent.contains("steps:"), "YAML file should contain steps section.");
         Assertions.assertTrue(fileContent.contains("Assert page contains \"Welcome\""), "YAML file should contain updated step text.");
     }
-}
 
+    @NeodymiumTest
+    public final void testDeleteLastStepClearsContentWithoutRemovingRow()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Ensure only 1 step exists initially
+        final var stepRows = $$("#stepsList .step-row");
+        Assertions.assertEquals(1, stepRows.size(), "Should start with exactly 1 step row.");
+
+        // Hover over the step row and click delete on the single remaining step
+        stepRows.first().hover().$(".btn-delete-step").shouldBe(Condition.visible).click();
+
+        // Verify the step row is NOT removed from DOM, but its content is cleared
+        final var remainingRows = $$("#stepsList .step-row");
+        Assertions.assertEquals(1, remainingRows.size(), "Step row should not be removed when deleting the last remaining step.");
+        remainingRows.first().$(".step-content").shouldHave(Condition.exactText(""));
+
+        // Type new content into the empty step and press Enter to insert a new step
+        final var stepContent = remainingRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("Open https://xceptance.com");
+        stepContent.sendKeys(Keys.ENTER);
+
+        // Verify we now have 2 steps, properly numbered
+        final var updatedRows = $$("#stepsList .step-row");
+        Assertions.assertEquals(2, updatedRows.size(), "Pressing Enter should create a second step row.");
+        updatedRows.get(0).$(".step-number").shouldHave(Condition.exactText("1"));
+        updatedRows.get(1).$(".step-number").shouldHave(Condition.exactText("2"));
+
+        // Type content into the second step and save
+        updatedRows.get(1).$(".step-content").sendKeys("Assert page contains \"Xceptance\"");
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+    }
+
+    @NeodymiumTest
+    public final void testMoveStepUpAndDownReordersStepsAndMaintainsSequentialNumbering()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Set up 3 steps: Step 1, Step 2, Step 3
+        final var step1Content = $$("#stepsList .step-content").get(0);
+        step1Content.click();
+        step1Content.clear();
+        step1Content.sendKeys("Step 1");
+        step1Content.sendKeys(Keys.ENTER);
+
+        final var step2Content = $$("#stepsList .step-content").get(1);
+        step2Content.sendKeys("Step 2");
+        step2Content.sendKeys(Keys.ENTER);
+
+        final var step3Content = $$("#stepsList .step-content").get(2);
+        step3Content.sendKeys("Step 3");
+
+        // Move Step 1 down (hover and click move-down on first row)
+        $$("#stepsList .step-row").get(0).hover().$(".btn-move-down").shouldBe(Condition.visible).click();
+
+        // Verify visual order is now Step 2, Step 1, Step 3
+        final var rowsAfterMoveDown = $$("#stepsList .step-row");
+        rowsAfterMoveDown.get(0).$(".step-content").shouldHave(Condition.text("Step 2"));
+        rowsAfterMoveDown.get(1).$(".step-content").shouldHave(Condition.text("Step 1"));
+        rowsAfterMoveDown.get(2).$(".step-content").shouldHave(Condition.text("Step 3"));
+
+        // Verify step numbers and data-line attributes are sequentially 1, 2, 3
+        rowsAfterMoveDown.get(0).$(".step-number").shouldHave(Condition.exactText("1"));
+        rowsAfterMoveDown.get(1).$(".step-number").shouldHave(Condition.exactText("2"));
+        rowsAfterMoveDown.get(2).$(".step-number").shouldHave(Condition.exactText("3"));
+        Assertions.assertEquals("1", rowsAfterMoveDown.get(0).getAttribute("data-line"));
+        Assertions.assertEquals("2", rowsAfterMoveDown.get(1).getAttribute("data-line"));
+        Assertions.assertEquals("3", rowsAfterMoveDown.get(2).getAttribute("data-line"));
+
+        // Move Step 1 back up (hover and click move-up on second row)
+        rowsAfterMoveDown.get(1).hover().$(".btn-move-up").shouldBe(Condition.visible).click();
+
+        // Verify order is restored: Step 1, Step 2, Step 3
+        final var rowsAfterMoveUp = $$("#stepsList .step-row");
+        rowsAfterMoveUp.get(0).$(".step-content").shouldHave(Condition.text("Step 1"));
+        rowsAfterMoveUp.get(1).$(".step-content").shouldHave(Condition.text("Step 2"));
+        rowsAfterMoveUp.get(2).$(".step-content").shouldHave(Condition.text("Step 3"));
+    }
+
+    @NeodymiumTest
+    public final void testArrowUpReachesStepOneAfterDeletingAndAddingSteps()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Set up 3 steps
+        final var step1Content = $$("#stepsList .step-content").get(0);
+        step1Content.click();
+        step1Content.clear();
+        step1Content.sendKeys("Original Step 1");
+        step1Content.sendKeys(Keys.ENTER);
+
+        final var step2Content = $$("#stepsList .step-content").get(1);
+        step2Content.sendKeys("Original Step 2");
+        step2Content.sendKeys(Keys.ENTER);
+
+        final var step3Content = $$("#stepsList .step-content").get(2);
+        step3Content.sendKeys("Original Step 3");
+
+        // Delete the first step ("Original Step 1") with hover
+        $$("#stepsList .step-row").get(0).hover().$(".btn-delete-step").shouldBe(Condition.visible).click();
+
+        // Add a step below the last row
+        final var lastRowContent = $$("#stepsList .step-content").last();
+        lastRowContent.click();
+        lastRowContent.sendKeys(Keys.ENTER);
+        final var newlyAddedContent = $$("#stepsList .step-content").last();
+        newlyAddedContent.sendKeys("New Step 4");
+
+        // Now we have 3 steps: "Original Step 2" (line 1), "Original Step 3" (line 2), "New Step 4" (line 3)
+        final var rows = $$("#stepsList .step-row");
+        Assertions.assertEquals(3, rows.size());
+        rows.get(0).$(".step-number").shouldHave(Condition.exactText("1"));
+        rows.get(0).$(".step-content").shouldHave(Condition.text("Original Step 2"));
+
+        // Focus the last step (line 3) and press ArrowUp twice
+        newlyAddedContent.click();
+        newlyAddedContent.sendKeys(Keys.ARROW_UP);
+
+        // Change the focus to the new active element
+        WebElement activeElement = Selenide.webdriver().driver().switchTo().activeElement();
+        activeElement.sendKeys(Keys.ARROW_UP);
+
+        // Verify active row reaches line 1 (the first visual step)
+        final var firstRow = $$("#stepsList .step-row").get(0);
+        firstRow.shouldHave(Condition.cssClass("active-line"));
+        Assertions.assertEquals("1", firstRow.getAttribute("data-line"));
+    }
+
+    @NeodymiumTest
+    public final void testKeyboardNavigationFollowsVisualOrderAfterReorderingSteps()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Set up 3 steps: Step A, Step B, Step C
+        final var stepAContent = $$("#stepsList .step-content").get(0);
+        stepAContent.click();
+        stepAContent.clear();
+        stepAContent.sendKeys("Step A");
+        stepAContent.sendKeys(Keys.ENTER);
+
+        final var stepBContent = $$("#stepsList .step-content").get(1);
+        stepBContent.sendKeys("Step B");
+        stepBContent.sendKeys(Keys.ENTER);
+
+        final var stepCContent = $$("#stepsList .step-content").get(2);
+        stepCContent.sendKeys("Step C");
+
+        // Move Step A down twice to become the last step (DOM order: Step B, Step C, Step A)
+        $$("#stepsList .step-row").get(0).hover().$(".btn-move-down").shouldBe(Condition.visible).click();
+        $$("#stepsList .step-row").get(1).hover().$(".btn-move-down").shouldBe(Condition.visible).click();
+
+        final var rows = $$("#stepsList .step-row");
+        rows.get(0).$(".step-content").shouldHave(Condition.text("Step B"));
+        rows.get(1).$(".step-content").shouldHave(Condition.text("Step C"));
+        rows.get(2).$(".step-content").shouldHave(Condition.text("Step A"));
+
+        // Focus Step A (now at index 2, visual line 3)
+        final var rowAContent = rows.get(2).$(".step-content");
+        rowAContent.click();
+        rows.get(2).shouldHave(Condition.cssClass("active-line"));
+
+        // Press ArrowUp: focus must move to Step C (visual line 2, neighbor above)
+        rowAContent.sendKeys(Keys.ARROW_UP);
+        rows.get(1).shouldHave(Condition.cssClass("active-line"));
+        rows.get(1).$(".step-content").shouldHave(Condition.text("Step C"));
+
+        // Press ArrowUp again: focus must move to Step B (visual line 1)
+        rows.get(1).$(".step-content").sendKeys(Keys.ARROW_UP);
+        rows.get(0).shouldHave(Condition.cssClass("active-line"));
+        rows.get(0).$(".step-content").shouldHave(Condition.text("Step B"));
+
+        // Press ArrowDown: focus must move back down to Step C (visual line 2)
+        rows.get(0).$(".step-content").sendKeys(Keys.ARROW_DOWN);
+        rows.get(1).shouldHave(Condition.cssClass("active-line"));
+        rows.get(1).$(".step-content").shouldHave(Condition.text("Step C"));
+    }
+}
