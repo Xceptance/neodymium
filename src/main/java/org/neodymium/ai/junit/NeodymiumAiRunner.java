@@ -438,18 +438,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             browsers.add(null);
         }
 
+        final String effectivePlaybookValue = (methodPlaybook != null && !methodPlaybook.value().isEmpty())
+            ? methodPlaybook.value()
+            : (classPlaybook != null ? classPlaybook.value() : null);
+        final boolean isMethodOrClassProgrammatic = AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(effectivePlaybookValue);
+
         for (final String playbookPath : resolvedPaths)
         {
             Playbook playbook;
             try
             {
-                if (playbookPath.startsWith("playbooks/integration/programmatic/"))
+                final boolean isProgrammatic = isMethodOrClassProgrammatic
+                    || AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(playbookPath)
+                    || (playbookPath != null && playbookPath.startsWith("playbooks/integration/programmatic/"));
+                if (isProgrammatic)
                 {
                     try
                     {
                         playbook = parser.parse(playbookPath, manager);
                     }
-                    catch (final IllegalArgumentException e)
+                    catch (final Exception e)
                     {
                         playbook = new Playbook(new ArrayList<>(), new ArrayList<>());
                     }
@@ -856,6 +864,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             String recDir = null;
             final AiPlaybook methodPb = method.getAnnotation(AiPlaybook.class);
             final AiPlaybook classPb = testClass != null ? testClass.getAnnotation(AiPlaybook.class) : null;
+            final String effectivePb = (methodPb != null && !methodPb.value().isEmpty())
+                ? methodPb.value()
+                : (classPb != null ? classPb.value() : null);
+            final boolean isProgrammatic = AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(effectivePb)
+                || AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(this.playbookPath)
+                || (this.playbookPath != null && this.playbookPath.startsWith("playbooks/integration/programmatic/"));
             if (methodPb != null && !methodPb.recordingMethod().isEmpty())
             {
                 recMethod = methodPb.recordingMethod();
@@ -979,16 +993,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             Playbook playbook;
-            if (resolvedPlaybookPath != null && resolvedPlaybookPath.startsWith("playbooks/integration/programmatic/"))
+            if (isProgrammatic && !this.mode.isReplay())
             {
-                try
-                {
-                    playbook = parser.parse(resolvedPlaybookPath, manager);
-                }
-                catch (final Exception e)
-                {
-                    playbook = Playbook.builder().build();
-                }
+                playbook = Playbook.builder().build();
             }
             else
             {
@@ -997,7 +1004,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             final String companionYamlPath = (playbookPath != null && !playbookPath.isEmpty()) ? playbookPath : resolvedPlaybookPath;
             String yamlHash = null;
-            if (this.mode.isReplay())
+            if (this.mode.isReplay() && !isProgrammatic)
             {
                 yamlHash = computeResourceSha256(manager, companionYamlPath);
                 if (yamlHash == null && companionYamlPath.endsWith(".json"))
@@ -1122,8 +1129,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
             executionContext.getTransientData().put("junit.testInstance", context.getRequiredTestInstance());
 
-            if (resolvedPlaybookPath != null && resolvedPlaybookPath.contains("/programmatic/"))
+            if (isProgrammatic)
             {
+                executionContext.getTransientData().put(AiPlaybook.PROGRAMMATIC, true);
                 executionContext.getTransientData().put("playbook.programmatic", true);
             }
 
@@ -1244,7 +1252,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 syncWebDriverWithSelenide();
                 final ExecutionContext execCtx = this.session.getExecutionContext();
-                if (execCtx != null && Boolean.TRUE.equals(execCtx.getTransientData().get("playbook.programmatic")))
+                if (execCtx != null
+                    && (Boolean.TRUE.equals(execCtx.getTransientData().get(AiPlaybook.PROGRAMMATIC))
+                        || Boolean.TRUE.equals(execCtx.getTransientData().get("playbook.programmatic"))))
                 {
                     return;
                 }
@@ -1283,7 +1293,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
         private void runMainTestPlaybook() throws Exception
         {
-            if (this.session != null && !this.session.getExecutionContext().getTransientData().containsKey("playbook.programmatic"))
+            final boolean isProgrammatic = this.session != null
+                && (this.session.getExecutionContext().getTransientData().containsKey(AiPlaybook.PROGRAMMATIC)
+                    || this.session.getExecutionContext().getTransientData().containsKey("playbook.programmatic"));
+
+            if (this.session != null && !isProgrammatic)
             {
                 syncWebDriverWithSelenide();
                 @SuppressWarnings("unchecked")
