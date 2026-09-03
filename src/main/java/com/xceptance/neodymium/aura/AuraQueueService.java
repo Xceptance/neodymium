@@ -18,6 +18,8 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
@@ -27,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -83,10 +86,17 @@ public final class AuraQueueService
     private final AuraReportingService reportingService;
     private final AuraInteractiveService interactiveService;
 
+    private QueueRunProgressListener queueRunProgressListener;
+
     public AuraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService)
     {
         this.reportingService = reportingService;
         this.interactiveService = interactiveService;
+    }
+
+    public void setQueueRunProgressListener(final QueueRunProgressListener listener)
+    {
+        this.queueRunProgressListener = listener;
     }
 
     public List<String> getCurrentRunLogs()
@@ -321,6 +331,20 @@ public final class AuraQueueService
                 runStartTimeMs.set(System.currentTimeMillis());
                 lastRunRequest.set(req);
 
+                final String queueRunId = "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+
+                if (queueRunProgressListener != null)
+                {
+                    try
+                    {
+                        queueRunProgressListener.onRunStarted(queueRunId, "Queue", "Unknown");
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] QueueRunProgressListener.onRunStarted failed: {}", e.getMessage());
+                    }
+                }
+
                 for (int i = 0; i < batches.size(); i++)
                 {
                     final ExecutionBatch batch = batches.get(i);
@@ -404,7 +428,7 @@ public final class AuraQueueService
                             + "]...");
 
                     final List<String> command = new ArrayList<>();
-                    final String runId = "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+                    final String runId = queueRunId;
                     final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
                     interactiveService.setCurrentConsoleEngine(engine);
 
@@ -660,6 +684,18 @@ public final class AuraQueueService
                             }
                         }
                     }
+
+                    if (queueRunProgressListener != null)
+                    {
+                        try
+                        {
+                            ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs);
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.warn("[Aura Server] QueueRunProgressListener.onTestExecutionCompleted failed for batch {}: {}", file, e.getMessage());
+                        }
+                    }
                 }
 
                 if (!manuallyStopped.get())
@@ -684,6 +720,18 @@ public final class AuraQueueService
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}",
                         globalTestsRun.get(), globalPassed.get(), globalFailed.get());
                 broadcastLog("\n[INFO] Queue execution completed.");
+
+                if (queueRunProgressListener != null)
+                {
+                    try
+                    {
+                        queueRunProgressListener.onRunFinished(queueRunId);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] QueueRunProgressListener.onRunFinished failed: {}", e.getMessage());
+                    }
+                }
             }
             catch (final Exception e)
             {
@@ -724,6 +772,64 @@ public final class AuraQueueService
         });
         thread.setName("NeodymiumAuraQueueExecutor");
         thread.start();
+    }
+
+    private final Set<File> ingestedExecutionFiles = Collections.synchronizedSet(new HashSet<>());
+
+    private void ingestBatchExecutionFiles(
+            final QueueRunProgressListener listener,
+            final String runId,
+            final String className,
+            final List<File> runStorageDirs)
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+        for (final File baseDir : runStorageDirs)
+        {
+            final File classDir = new File(baseDir, className);
+            if (!classDir.isDirectory())
+            {
+                continue;
+            }
+            final File[] files = classDir.listFiles();
+            if (files == null)
+            {
+                continue;
+            }
+            for (final File execFile : files)
+            {
+                if (!execFile.isFile() || !execFile.getName().endsWith(".json"))
+                {
+                    continue;
+                }
+                if ("run.json".equalsIgnoreCase(execFile.getName()) || "batch.json".equalsIgnoreCase(execFile.getName()))
+                {
+                    continue;
+                }
+                if (!execFile.canRead())
+                {
+                    continue;
+                }
+                synchronized (ingestedExecutionFiles)
+                {
+                    if (ingestedExecutionFiles.contains(execFile.getAbsoluteFile()))
+                    {
+                        continue;
+                    }
+                    ingestedExecutionFiles.add(execFile.getAbsoluteFile());
+                }
+                try
+                {
+                    final Map<String, Object> payload = mapper.readValue(execFile, new TypeReference<Map<String, Object>>() {});
+                    payload.put("runId", runId);
+                    payload.put("testClass", className);
+                    listener.onTestExecutionCompleted(runId, payload);
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("[Aura Server] Failed to parse execution JSON {}: {}", execFile.getAbsolutePath(), e.getMessage());
+                }
+            }
+        }
     }
 
     private static final class ExecutionBatch

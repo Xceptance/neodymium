@@ -931,7 +931,11 @@ public class AuraReportDataService
             unknown,
             ignored,
             updatedExecutions,
-            updatedAreas
+            updatedAreas,
+            cachedReport.getTotalLlmCalls(),
+            cachedReport.getTotalLlmTokens(),
+            cachedReport.getTotalLlmCost(),
+            cachedReport.isInProgress()
         );
 
         runReportCache.put(runId, updatedReport);
@@ -1033,6 +1037,35 @@ public class AuraReportDataService
         liveRunBuffer.put(runId, new ArrayList<>());
 
         LOG.info("Started new test run: runId={}, batch={}", runId, batchName);
+        return runId;
+    }
+
+    @Transactional
+    public String startRun(final String runId, final String batchName, final String environment, final String triggerSource)
+    {
+        if (runId == null || runId.isEmpty())
+        {
+            return startRun(batchName, environment, triggerSource);
+        }
+
+        final String timestampLabel = "Just Now";
+
+        final TestRunEntity newRun = new TestRunEntity(
+            runId,
+            batchName != null ? batchName : "Unknown",
+            "IN_PROGRESS",
+            triggerSource != null ? triggerSource : "Unknown",
+            environment != null ? environment : "Unknown",
+            "Unknown",
+            "Chrome",
+            timestampLabel,
+            System.currentTimeMillis()
+        );
+
+        runRepository.save(newRun);
+        liveRunBuffer.put(runId, new ArrayList<>());
+
+        LOG.info("Started new test run with explicit runId={}, batch={}", runId, batchName);
         return runId;
     }
 
@@ -1174,6 +1207,15 @@ public class AuraReportDataService
                     batchNode.put("environment", run.getEnvironment() != null ? run.getEnvironment() : "Unknown");
                     Files.createDirectories(batchJsonPath.getParent());
                     objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonPath.toFile(), batchNode);
+                }
+
+                try
+                {
+                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), runId, true);
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("Failed to rebuild run.json for finished runId {}: {}", runId, e.getMessage());
                 }
             }
             catch (final Exception e)
@@ -1712,6 +1754,8 @@ public class AuraReportDataService
 
         final List<AreaSummaryDto> areas = buildAreaSummaries(executions);
 
+        final boolean inProgress = runEntity.getStatus() != null && "IN_PROGRESS".equalsIgnoreCase(runEntity.getStatus());
+
         return new RunReportDto(
             runEntity.getId(),
             runEntity.getBatchName(),
@@ -1726,7 +1770,8 @@ public class AuraReportDataService
             executions, areas,
             runEntity.getTotalLlmCalls(),
             runEntity.getTotalLlmTokens(),
-            runEntity.getTotalLlmCost()
+            runEntity.getTotalLlmCost(),
+            inProgress
         );
     }
 
