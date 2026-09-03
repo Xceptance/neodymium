@@ -496,5 +496,218 @@ The current `@AiPlaybook` annotation handles basic YAML playbook loading and det
   * **Explicit Shared Recording Registries:** Create a central registry/catalog for shared test workflows (e.g. login, guest checkout setup) where multiple test classes can bind to a single canonical baseline recording without duplicating JSON companion files.
   * **Annotation Syntax Streamlining:** Evaluate combining `@AiPlaybook`, `@AiMode`, and `@AiDataSet` into unified meta-annotations or composable test annotations to reduce boilerplate on test methods.
 
+---
+
+## 🌐 Continuous CDP / WebDriver BiDi Protocol Monitoring (Console & Network Interception)
+
+### Background
+Currently, Neodymium AI monitors page state via DOM snapshots and visual screenshots. However, silent failures—such as unhandled JavaScript runtime exceptions (`console.error`), unhandled Promise rejections, or failed AJAX/Fetch API calls (HTTP 4xx/5xx)—frequently do not render immediate visual error banners. This introduces a risk of false-positive test passes where functional failures in the application go undetected by visual assertions.
+
+---
+
+### Proposed Design: `BrowserProtocolMonitor`
+
+Introduce a continuous protocol monitor attached to `AiSession` and `SelenideTargetExecutor` that listens to Chrome DevTools Protocol (CDP) and WebDriver BiDi event streams throughout the entire test lifecycle:
+
+```mermaid
+graph LR
+    Browser[Browser / SUT Engine] -->|CDP / BiDi Streams| Monitor[BrowserProtocolMonitor]
+    Monitor -->|Buffer Console Messages & Exceptions| ConsoleLog[ProtocolEventLog.Console]
+    Monitor -->|Buffer Network Requests & Status Codes| NetworkLog[ProtocolEventLog.Network]
+    ConsoleLog --> Verify[VerifyOutcomeStep / VerificationPrompt]
+    NetworkLog --> Verify
+    ConsoleLog --> RCA[VisualRcaStep / Failure Diagnostics]
+    NetworkLog --> RCA
+```
+
+#### 1. JavaScript Console & Exception Listener
+* **CDP Events**: Listen to `Console.messageAdded`, `Runtime.exceptionThrown`, and `Log.entryAdded`.
+* **Telemetry Captured**: Timestamp, log level (`WARNING`, `ERROR`), message text, URL, line/column number, and full stack trace.
+* **Rolling Buffer**: Maintained in `AiSession` and reset between playbook steps (or indexed per step).
+
+#### 2. Network Traffic Interception & Status Tracking
+* **CDP Events**: Listen to `Network.requestWillBeSent`, `Network.responseReceived`, and `Network.loadingFailed`.
+* **Telemetry Captured**: Request URL, HTTP method, response status code (e.g. `500 Internal Server Error`, `404 Not Found`), MIME type, timing duration, and failure reason (e.g. `net::ERR_CONNECTION_REFUSED`, CORS error).
+* **Failure Flagging**: Automatically flags any completed request with $\text{HTTP Status} \ge 400$ or failed network state.
+
+---
+
+## 🔍 Tri-Fold Multimodal Outcome Verification & Failure RCA
+
+### Background
+Outcome verification (`VerificationPrompt`) evaluates pre- and post-action visual screenshots and executed actions. When an API endpoint fails silently or a JavaScript runtime error crashes an event handler, the visual screenshot may appear normal, causing the LLM Judge to award an erroneous "PASS".
+
+---
+
+### Proposal: Tri-Fold Telemetry Injection
+
+Inject protocol telemetry directly into `VerificationPrompt` and `VisualRcaPrompt`:
+
+#### 1. Upgraded `absenceOfErrors` Rubric
+Include the step's captured console errors and failed network requests in the LLM payload:
+```json
+{
+  "protocolTelemetry": {
+    "consoleErrors": [
+      "Uncaught TypeError: Cannot read properties of undefined (reading 'items') at checkout.js:142"
+    ],
+    "failedNetworkRequests": [
+      {
+        "url": "https://example.com/api/v2/cart/checkout",
+        "method": "POST",
+        "status": 500,
+        "statusText": "Internal Server Error"
+      }
+    ]
+  }
+}
+```
+If any unhandled exceptions or HTTP $\ge 400$ errors occurred during the step, the LLM Judge scores `absenceOfErrors` as **FAIL** with the exact backend/frontend failure cited in the rubric analysis.
+
+#### 2. Enriched Visual Root Cause Analysis (Visual RCA)
+When a test fails, include the latest network and console error stack traces in the Visual RCA payload. This enables the RCA model to determine whether a missing UI element was caused by a CSS rendering defect, a failed API response, or a crashed JavaScript event listener.
+
+---
+
+## 🏷️ Protocol-Level Assertions & Natural Language Tags
+
+### Background
+Test authors need the ability to enforce strict operational health checks directly within natural language steps without writing custom WebDriver glue code.
+
+---
+
+### Proposal: Built-In Protocol Control Tags and Actions
+
+#### 1. Natural Language Playbook Control Tags
+Allow test authors to append protocol assertion modifiers to any step:
+* `Verify checkout modal opens (no-console-errors)`: Asserts that no JavaScript runtime exceptions occurred during modal rendering.
+* `Click 'Submit Order' (no-network-errors)`: Asserts that all HTTP requests triggered by the action returned HTTP status $< 400$.
+* `Click 'Apply Coupon' (expect-network-call: /api/coupons)`: Asserts that the specified network endpoint was called during the step.
+
+#### 2. Built-In Executable Target Actions in `SelenideTargetExecutor`
+* `ASSERT_NO_CONSOLE_ERRORS`: Queries `BrowserProtocolMonitor` and asserts that the step's console error buffer is empty.
+* `ASSERT_NO_NETWORK_FAILURES`: Asserts that no HTTP requests completed with status $\ge 400$ or network-level errors during the step.
+* `ASSERT_NETWORK_RESPONSE`: Asserts that a specified URL pattern was requested and returned an expected HTTP status (e.g. `target: "/api/cart"`, `value: "200"`).
+
+---
+
+## 👁️ Visual + DOM Hybrid Detection & Resilient Clicking on Bad DOM Trees
+
+### Background
+Real-world web applications frequently contain "bad" DOM trees that defeat pure DOM selectors and pure coordinate clicks alike:
+* **Icon-only buttons with zero text/ARIA metadata** (e.g. `<button><svg><path ...></path></svg></button>`).
+* **Non-semantic div soups** (`<div class="css-1a2b3c" onclick="...">` nested 15 levels deep without ARIA roles).
+* **Obfuscated / dynamic class names** generated by Tailwind CSS, CSS Modules, or styled-components.
+* **Invisible click interceptors & floating wrappers** where outer divs capture clicks intended for child icons.
+* **Canvas / WebGL / SVG charts** with zero inspectable interactive DOM child nodes.
+
+---
+
+### Proposed Hybrid Architecture: Visual + DOM Fusion
+
+To provide robust element interaction on bad DOM trees while maintaining **millisecond replay speeds with zero LLM calls in CI/CD**, we propose a multi-technique hybrid detection pipeline:
+
+```mermaid
+graph TD
+    subgraph Detection["Grounding Pipeline"]
+        Step[Natural Language Instruction] --> Primary{DOM Locators Available?}
+        Primary -->|Yes: Standard/Lean DOM| Cascade[5-Tier LocatorCascadeResolver]
+        Primary -->|Ambiguous Matches| TechD[Technique D: Candidate Visual Crop Disambiguation]
+        Primary -->|Bad DOM / Obfuscated| TechB[Technique B: Reverse DOM Hit-Testing via elementFromPoint]
+        Primary -->|Canvas / Graphical Widget| TechC[Technique C: Anchor-Relative Pinning + SSIM Tile Gating]
+    end
+
+    subgraph Fallback["Last-Resort Recovery"]
+        TechB -->|Failed| TechA[Technique A: Set-of-Marks SoM Tagging]
+    end
+
+    subgraph Resolution["Replay Artifact Generation"]
+        TechD --> Selector[Derive Stable W3C Selector / Data-AI Ref]
+        TechB --> Selector
+        TechC --> AnchorSpec[Generate #anchor@x,y + 64x64 SSIM Tile Baseline]
+        TechA --> Selector
+        Selector --> Playbook[Save to Companion Recording JSON for 0-Token CI Replay]
+        AnchorSpec --> Playbook
+    end
+```
+
+---
+
+### Technique B: Reverse DOM Hit-Testing (`document.elementFromPoint`) & Upward Hierarchy Climbing
+
+When the VLM identifies the target element visually on the screenshot (e.g., clicking a shopping cart icon at screen coordinates $x=842, y=315$):
+
+1. **Hit-Testing**: The browser runtime invokes `document.elementFromPoint(x, y)` at the target coordinates.
+2. **Upward Interactive Climbing**:
+   - The element hit may be an un-clickable inner `<path>` or `<svg>`.
+   - The runtime traverses up the DOM tree using `element.closest('button, a, [role="button"], [onclick], input, select, textarea, [tabindex]')`.
+   - If no standard interactive tag is found, it inspects ancestors with `cursor: pointer` or registered event listeners.
+3. **Bounding Box Validation**: Verifies that the resolved parent element bounds enclose the point $(x, y)$.
+4. **Stable Selector Extraction**: The framework derives a resilient CSS/XPath locator for that live element (or stamps an automation ref ID) and records it into the companion JSON for fast CI replay.
+
+---
+
+### Technique C: Anchor-Relative Spatial Pinning with Local SSIM Luminance Gating
+
+For un-inspectable canvas controls, WebGL surfaces, or custom SVG widgets where no interactive DOM element exists:
+
+1. **Anchor Pinning**: Locate the nearest stable parent or sibling DOM container with an ID or unique class (e.g., `#analytics-canvas-container`).
+2. **Relative Offset Calculation**: Record the target click point as an offset relative to that anchor (e.g., `#analytics-canvas-container@120,45`).
+3. **Luminance Tile Baseline Capture**: Capture a $64 \times 64$ luminance matrix centered on the click coordinates.
+4. **Replay SSIM Gating**:
+   - During replay, calculate the SSIM score between the live $64 \times 64$ region and the baseline tile.
+   - If $\text{SSIM} \ge 0.95$, dispatch the click immediately (native speed, zero LLM calls).
+   - If $\text{SSIM} < 0.95$ (indicating layout shift, dynamic resizing, or altered graphics), abort the blind click safely and trigger self-healing.
+
+---
+
+### Technique D: Candidate Disambiguation via Visual Crop Comparison
+
+When a DOM search produces multiple identical-looking elements (e.g. 5 identical `.btn-icon` elements with no distinguishing text or ARIA attributes):
+
+1. **Candidate Region Extraction**: In a single pass, extract bounding client rectangles for all matching candidate elements.
+2. **Visual Micro-Crops**: Crop screenshot thumbnails for each candidate.
+3. **Multimodal Disambiguation**: Provide the micro-crops to the Vision LLM alongside the user instruction (e.g. *"Select candidate [2] (the pencil edit icon) rather than candidate [1] (the trash icon)"*).
+4. **Index Binding**: Bind the selected candidate index directly to the recorded action.
+
+---
+
+### Technique A (Last-Resort Fallback): Set-of-Marks (SoM) Visual Badge Injection
+
+If Techniques B, C, and D all fail to locate the target on a highly obfuscated or broken DOM tree:
+
+1. **Badge Injection**: Inject temporary, high-contrast numbered badges (`[1]`, `[2]`, `[3]`, etc.) onto all visible clickable bounding boxes directly on the screenshot buffer.
+2. **Visual Identification**: The VLM inspects the annotated image and returns the selected badge number.
+3. **Element Mapping**: The runtime maps the badge number directly back to its live `WebElement` reference.
+
+---
+
+## 🧭 Autonomous Exploratory Mode (`ExecutionMode.AUTONOMOUS_EXPLORATION` / SBTM)
+
+### Background
+Traditional automated testing executes predefined test scripts. Autonomous exploratory testing allows an AI agent to explore an application dynamically under a high-level testing charter (e.g. discovering broken links, exploring checkout across edge cases, or validating form boundary conditions) and auto-generate deterministic test playbooks for CI/CD regression.
+
+---
+
+### Proposal: Dual-Mode Platform Architecture
+
+Introduce `ExecutionMode.AUTONOMOUS_EXPLORATION`:
+
+```mermaid
+graph TD
+    Charter[Natural Language SBTM Charter] --> Agent[Autonomous AI Explorer]
+    Agent -->|UPM + CDP Protocol Monitor + VLM Loop| SUT[Live Web Application]
+    SUT -->|Visual States + Protocol Errors| Agent
+    Agent -->|Find Defect / Bug| DefectReport[SBTM Defect Report & Filmstrip]
+    Agent -->|Find Valid User Flow| Synthesizer[Playbook Auto-Synthesizer]
+    Synthesizer --> Playbook[Standard YAML Playbook + Companion JSON]
+    Playbook --> CI[Deterministic Replay in CI/CD at 0 Token Cost]
+```
+
+1. **Charter-Driven Exploration**: The runner accepts a high-level testing charter (e.g., *"Explore product filtering and sorting options to verify no combinations produce empty or broken pages"*).
+2. **Autonomous Navigation**: Uses UPM, CDP Protocol Monitoring, and the VLM loop to navigate, test edge cases, and discover defects dynamically.
+3. **Playbook Auto-Synthesis**: Once a successful path is explored, automatically synthesizes standard YAML playbooks and companion JSON recordings for instant, zero-cost replay in CI/CD pipelines.
+
+
 
 

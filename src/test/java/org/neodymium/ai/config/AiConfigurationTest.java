@@ -54,6 +54,8 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.consoleLog.directory");
         System.clearProperty("neodymium.ai.report.disk.directory");
         System.clearProperty("neodymium.ai.reportDirectory");
+        System.clearProperty("neodymium.ai.replay.delayScale");
+        System.clearProperty("neodymium.ai.replay.useRecordedDelays");
     }
 
     @Test
@@ -199,6 +201,30 @@ public class AiConfigurationTest
         final AiConfiguration customConfig = AiConfiguration.getInstance();
         assertEquals("target/custom-ai-reports", customConfig.getDiskReportDirectory(),
             "Disk report directory should resolve property override.");
+    }
+
+    @Test
+    public void testReplayDelayScaleAndUseRecordedDelays()
+    {
+        AiConfiguration.resetInstance();
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        assertEquals(0.0, defaultConfig.getReplayDelayScale(), 0.001, "Delay scale should default to 0.0 (disabled).");
+        assertFalse(defaultConfig.isUseRecordedDelays(), "isUseRecordedDelays should default to false.");
+
+        System.setProperty("neodymium.ai.replay.delayScale", "0.5");
+        AiConfiguration.resetInstance();
+        final AiConfiguration scaledConfig = AiConfiguration.getInstance();
+        assertEquals(0.5, scaledConfig.getReplayDelayScale(), 0.001, "Delay scale should resolve 0.5.");
+        assertTrue(scaledConfig.isUseRecordedDelays(), "isUseRecordedDelays should be true when delayScale > 0.0.");
+
+        System.setProperty("neodymium.ai.replay.delayScale", "0.0");
+        System.setProperty("neodymium.ai.replay.useRecordedDelays", "true");
+        AiConfiguration.resetInstance();
+        final AiConfiguration legacyConfig = AiConfiguration.getInstance();
+        assertTrue(legacyConfig.isUseRecordedDelays(), "isUseRecordedDelays should be true when legacy flag is true.");
+
+        System.clearProperty("neodymium.ai.replay.delayScale");
+        System.clearProperty("neodymium.ai.replay.useRecordedDelays");
     }
 }
 

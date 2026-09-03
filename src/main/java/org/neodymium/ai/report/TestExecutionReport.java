@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VerificationResult;
 
 /**
  * Data model encapsulating full execution metadata, steps, actions, LLM calls,
@@ -54,6 +56,7 @@ public final class TestExecutionReport
     private String visualRcaExplanation;
 
     private final List<String> warnings = new ArrayList<>();
+    private final List<PlaybookLinterFinding> linterFindings = new ArrayList<>();
     private final List<ReportStepEntry> steps = new ArrayList<>();
     private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
     private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
@@ -303,6 +306,15 @@ public final class TestExecutionReport
         private long standardInputTokens;
         private long standardOutputTokens;
         private long standardCachedTokens;
+        private int verificationCalls;
+        private long verificationInputTokens;
+        private long verificationOutputTokens;
+        private long verificationCachedTokens;
+        private int rcaCalls;
+        private long rcaInputTokens;
+        private long rcaOutputTokens;
+        private long rcaCachedTokens;
+        private VerificationResult verificationResult;
         private final List<ReportActionEntry> actions = new ArrayList<>();
         private final List<ReportStepEntry> subSteps = new ArrayList<>();
         private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
@@ -319,6 +331,7 @@ public final class TestExecutionReport
         private String baselineMatrixPng;
         private String replayMatrixPng;
         private Integer screenshotHashDim;
+        private String semanticIntent;
 
         public ReportStepEntry()
         {
@@ -698,6 +711,106 @@ public final class TestExecutionReport
         public void setScreenshotHashDim(final Integer screenshotHashDim)
         {
             this.screenshotHashDim = screenshotHashDim;
+        }
+
+        public String getSemanticIntent()
+        {
+            return this.semanticIntent;
+        }
+
+        public void setSemanticIntent(final String semanticIntent)
+        {
+            this.semanticIntent = semanticIntent;
+        }
+
+        public int getVerificationCalls()
+        {
+            return this.verificationCalls;
+        }
+
+        public void setVerificationCalls(final int verificationCalls)
+        {
+            this.verificationCalls = verificationCalls;
+        }
+
+        public long getVerificationInputTokens()
+        {
+            return this.verificationInputTokens;
+        }
+
+        public void setVerificationInputTokens(final long verificationInputTokens)
+        {
+            this.verificationInputTokens = verificationInputTokens;
+        }
+
+        public long getVerificationOutputTokens()
+        {
+            return this.verificationOutputTokens;
+        }
+
+        public void setVerificationOutputTokens(final long verificationOutputTokens)
+        {
+            this.verificationOutputTokens = verificationOutputTokens;
+        }
+
+        public long getVerificationCachedTokens()
+        {
+            return this.verificationCachedTokens;
+        }
+
+        public void setVerificationCachedTokens(final long verificationCachedTokens)
+        {
+            this.verificationCachedTokens = verificationCachedTokens;
+        }
+
+        public int getRcaCalls()
+        {
+            return this.rcaCalls;
+        }
+
+        public void setRcaCalls(final int rcaCalls)
+        {
+            this.rcaCalls = rcaCalls;
+        }
+
+        public long getRcaInputTokens()
+        {
+            return this.rcaInputTokens;
+        }
+
+        public void setRcaInputTokens(final long rcaInputTokens)
+        {
+            this.rcaInputTokens = rcaInputTokens;
+        }
+
+        public long getRcaOutputTokens()
+        {
+            return this.rcaOutputTokens;
+        }
+
+        public void setRcaOutputTokens(final long rcaOutputTokens)
+        {
+            this.rcaOutputTokens = rcaOutputTokens;
+        }
+
+        public long getRcaCachedTokens()
+        {
+            return this.rcaCachedTokens;
+        }
+
+        public void setRcaCachedTokens(final long rcaCachedTokens)
+        {
+            this.rcaCachedTokens = rcaCachedTokens;
+        }
+
+        public VerificationResult getVerificationResult()
+        {
+            return this.verificationResult;
+        }
+
+        public void setVerificationResult(final VerificationResult verificationResult)
+        {
+            this.verificationResult = verificationResult;
         }
     }
 
@@ -1252,6 +1365,7 @@ public final class TestExecutionReport
         private CategoryTokenUsage judge = new CategoryTokenUsage();
         private CategoryTokenUsage verification = new CategoryTokenUsage();
         private CategoryTokenUsage visualRca = new CategoryTokenUsage();
+        private CategoryTokenUsage linter = new CategoryTokenUsage();
 
         public ReportMetrics()
         {
@@ -1461,6 +1575,37 @@ public final class TestExecutionReport
         public void setVisualRca(final CategoryTokenUsage visualRca)
         {
             this.visualRca = visualRca != null ? visualRca : new CategoryTokenUsage();
+        }
+
+        public CategoryTokenUsage getLinter()
+        {
+            return this.linter;
+        }
+
+        public void setLinter(final CategoryTokenUsage linter)
+        {
+            this.linter = linter != null ? linter : new CategoryTokenUsage();
+        }
+    }
+
+    public List<PlaybookLinterFinding> getLinterFindings()
+    {
+        return Collections.unmodifiableList(this.linterFindings);
+    }
+
+    public void addLinterFinding(final PlaybookLinterFinding finding)
+    {
+        if (finding != null)
+        {
+            this.linterFindings.add(finding);
+        }
+    }
+
+    public void addLinterFindings(final List<PlaybookLinterFinding> findings)
+    {
+        if (findings != null)
+        {
+            this.linterFindings.addAll(findings);
         }
     }
 }

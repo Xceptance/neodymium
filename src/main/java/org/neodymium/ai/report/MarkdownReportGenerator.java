@@ -20,9 +20,13 @@ package org.neodymium.ai.report;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VerificationResult;
 
 /**
  * Report generator producing GitHub-flavored Markdown documents from {@link TestExecutionReport}.
@@ -119,8 +123,9 @@ public final class MarkdownReportGenerator
         sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
         appendCategoryRow(sb, "**Total**", m.getTotal());
-        appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
+        appendCategoryRow(sb, "├─ Linter (Pre-Flight)", m.getLinter());
         appendCategoryRow(sb, "├─ PESAP", m.getPesap());
+        appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
         appendCategoryRow(sb, "├─ Judge", m.getJudge());
         appendCategoryRow(sb, "├─ Verification", m.getVerification());
         appendCategoryRow(sb, "└─ Visual RCA", m.getVisualRca());
@@ -167,6 +172,43 @@ public final class MarkdownReportGenerator
             for (final String warning : report.getWarnings())
             {
                 sb.append("- ").append(warning).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        // Playbook Quality & Pre-Flight Findings
+        final List<PlaybookLinterFinding> linterFindings = report.getLinterFindings();
+        if (!linterFindings.isEmpty())
+        {
+            sb.append("## 📋 Playbook Quality & Pre-Flight Findings\n\n");
+            sb.append("| Step / Line | Category | Severity | Finding & Suggested Rewrite |\n");
+            sb.append("| :--- | :--- | :--- | :--- |\n");
+            for (final PlaybookLinterFinding f : linterFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevEmoji = f.severity() == LinterSeverity.ERROR ? "🔴 ERROR"
+                    : f.severity() == LinterSeverity.WARNING ? "🟡 WARNING" : "ℹ️ INFO";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("| `").append(lineLabel).append("` | `").append(cat).append("` | ").append(sevEmoji).append(" | ")
+                    .append("**").append(escapeMarkdown(f.message())).append("**<br>");
+
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("<br><sub>**Template Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                    sb.append("<sub>**Resolved Step:**</sub><br>`").append(escapeMarkdown(f.resolvedInstruction())).append("`<br>");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("<br><sub>**Original Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                }
+
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("<br>💡 *Suggested Rewrite:*<br>`").append(escapeMarkdown(f.suggestedRewrite()).replace("\n", "`<br>`")).append("`");
+                }
+
+                sb.append(" |\n");
             }
             sb.append("\n");
         }
@@ -273,6 +315,10 @@ public final class MarkdownReportGenerator
         {
             sb.append("- **Visual Step:** `📸 true`\n");
         }
+        if (step.getSemanticIntent() != null && !step.getSemanticIntent().isBlank())
+        {
+            sb.append("- **Semantic Intent:** `🎯 ").append(escapeMarkdown(step.getSemanticIntent())).append("`\n");
+        }
         if (step.getSsimScore() != null)
         {
             final double score = step.getSsimScore();
@@ -317,22 +363,55 @@ public final class MarkdownReportGenerator
             }
             sb.append("\n");
         }
-        if (step.getPesapCalls() > 0 || step.getStandardCalls() > 0)
+        if (step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0)
         {
             sb.append("- **LLM Invocations:** ");
+            final List<String> callSummaries = new ArrayList<>();
             if (step.getPesapCalls() > 0)
             {
-                sb.append("PESAP: ").append(step.getPesapCalls()).append(" calls (").append(NUMBER_FORMAT.format(step.getPesapInputTokens() + step.getPesapOutputTokens())).append(" tokens)");
+                callSummaries.add("PESAP: " + step.getPesapCalls() + " calls (" + NUMBER_FORMAT.format(step.getPesapInputTokens() + step.getPesapOutputTokens()) + " tokens)");
             }
             if (step.getStandardCalls() > 0)
             {
-                if (step.getPesapCalls() > 0)
-                {
-                    sb.append(" | ");
-                }
-                sb.append("Action: ").append(step.getStandardCalls()).append(" calls (").append(NUMBER_FORMAT.format(step.getStandardInputTokens() + step.getStandardOutputTokens())).append(" tokens)");
+                callSummaries.add("Action: " + step.getStandardCalls() + " calls (" + NUMBER_FORMAT.format(step.getStandardInputTokens() + step.getStandardOutputTokens()) + " tokens)");
+            }
+            if (step.getVerificationCalls() > 0)
+            {
+                callSummaries.add("Verification: " + step.getVerificationCalls() + " calls (" + NUMBER_FORMAT.format(step.getVerificationInputTokens() + step.getVerificationOutputTokens()) + " tokens)");
+            }
+            if (step.getRcaCalls() > 0)
+            {
+                callSummaries.add("Visual RCA: " + step.getRcaCalls() + " calls (" + NUMBER_FORMAT.format(step.getRcaInputTokens() + step.getRcaOutputTokens()) + " tokens)");
+            }
+            sb.append(String.join(" | ", callSummaries)).append("\n");
+        }
+        if (step.getVerificationResult() != null)
+        {
+            final VerificationResult vr = step.getVerificationResult();
+            final String vStatus = vr.passed() ? "✅ PASSED" : "❌ FAILED";
+            final String vSummary = vr.getOverallVerdict() != null && vr.getOverallVerdict().summary() != null ? vr.getOverallVerdict().summary() : "";
+            sb.append("- **Semantic Verification:** ").append(vStatus);
+            if (!vSummary.isBlank())
+            {
+                sb.append(" — _").append(escapeMarkdown(vSummary)).append("_");
             }
             sb.append("\n");
+            if (vr.getRubrics() != null)
+            {
+                final VerificationResult.Rubrics rubrics = vr.getRubrics();
+                if (rubrics.intentMatch() != null)
+                {
+                    sb.append("  - **Intent Check:** `[").append(rubrics.intentMatch().score()).append("]` ").append(escapeMarkdown(rubrics.intentMatch().analysis())).append("\n");
+                }
+                if (rubrics.visualDelta() != null)
+                {
+                    sb.append("  - **Visual Check:** `[").append(rubrics.visualDelta().score()).append("]` ").append(escapeMarkdown(rubrics.visualDelta().analysis())).append("\n");
+                }
+                if (rubrics.absenceOfErrors() != null)
+                {
+                    sb.append("  - **Error Check:** `[").append(rubrics.absenceOfErrors().score()).append("]` ").append(escapeMarkdown(rubrics.absenceOfErrors().analysis())).append("\n");
+                }
+            }
         }
         if (step.getReasoning() != null && !step.getReasoning().isBlank())
         {

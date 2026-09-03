@@ -598,4 +598,167 @@ public final class VerlaConfiguration
     {
         simulateDelay(getAuthRegisterMinMs(), getAuthRegisterMaxMs());
     }
+
+    // =========================================================================
+    // Headless PWA SUT (/verla-headless/)
+    // =========================================================================
+
+    /**
+     * Returns whether the headless SUT renders client-side. When false the variant falls back to
+     * plain server-side rendering, which is useful to A/B the cost of the client-side pipeline.
+     *
+     * @return true if client-side rendering and request fan-out are active
+     */
+    public boolean isHeadlessEnabled()
+    {
+        return getBoolean("verla.headless.enabled", true);
+    }
+
+    /**
+     * Returns the target size of the inlined hydration state blob in kilobytes.
+     *
+     * @return hydration blob size in KB (default 120)
+     */
+    public int getHeadlessHydrationKb()
+    {
+        return (int) getLong("verla.headless.hydration.kb", 120L);
+    }
+
+    /**
+     * Returns the target size of the inlined SVG icon sprite in kilobytes.
+     *
+     * @return sprite size in KB (default 40)
+     */
+    public int getHeadlessSpriteKb()
+    {
+        return (int) getLong("verla.headless.sprite.kb", 40L);
+    }
+
+    /**
+     * Returns the weight of a single product image rendition in kilobytes, measured at the
+     * published width of 960px. Narrower requests scale down proportionally.
+     *
+     * @return rendition size in KB (default 24)
+     */
+    public int getHeadlessImageKb()
+    {
+        return (int) getLong("verla.headless.image.kb", 24L);
+    }
+
+    /**
+     * Returns how many separate style elements the CSS-in-JS layer emits.
+     *
+     * @return number of injected style tags (default 60)
+     */
+    public int getHeadlessStyleTagCount()
+    {
+        return (int) getLong("verla.headless.styletags", 60L);
+    }
+
+    /**
+     * Returns how many product tiles fetch their own product document. Zero renders tiles
+     * server-side and removes the N+1 fan-out entirely.
+     *
+     * @return number of client-hydrated tiles (default 12)
+     */
+    public int getHeadlessTileFanout()
+    {
+        return (int) getLong("verla.headless.tile.fanout", 12L);
+    }
+
+    public long getHeadlessTileLatencyMinMs()
+    {
+        return getLong("verla.headless.tile.latency.min", 120L);
+    }
+
+    public long getHeadlessTileLatencyMaxMs()
+    {
+        return getLong("verla.headless.tile.latency.max", 480L);
+    }
+
+    public long getHeadlessBootMinMs()
+    {
+        return getLong("verla.headless.boot.min", 600L);
+    }
+
+    public long getHeadlessBootMaxMs()
+    {
+        return getLong("verla.headless.boot.max", 1200L);
+    }
+
+    /**
+     * Returns whether the session bootstrap race is reproduced (double token handshake plus a
+     * basket/wishlist triple that first fails with HTTP 400 against a stale customer id).
+     *
+     * @return true if the race is active
+     */
+    public boolean isHeadlessSessionRaceEnabled()
+    {
+        return getBoolean("verla.headless.session.race.enabled", true);
+    }
+
+    public long getHeadlessSessionRaceMinMs()
+    {
+        return getLong("verla.headless.session.race.min", 400L);
+    }
+
+    public long getHeadlessSessionRaceMaxMs()
+    {
+        return getLong("verla.headless.session.race.max", 1600L);
+    }
+
+    public long getHeadlessSessionTokenMinMs()
+    {
+        return getLong("verla.headless.session.token.min", 80L);
+    }
+
+    public long getHeadlessSessionTokenMaxMs()
+    {
+        return getLong("verla.headless.session.token.max", 260L);
+    }
+
+    public long getHeadlessCmsSlotMinMs()
+    {
+        return getLong("verla.headless.cms.slot.latency.min", 250L);
+    }
+
+    public long getHeadlessCmsSlotMaxMs()
+    {
+        return getLong("verla.headless.cms.slot.latency.max", 900L);
+    }
+
+    /**
+     * Computes the randomized window after which a freshly created headless session is considered
+     * settled. Randomized per session so tests must wait on a readiness signal rather than sleep.
+     *
+     * @return settle duration in milliseconds, scaled by the global latency factor
+     */
+    public long calculateHeadlessSessionSettleMs()
+    {
+        return calculateDelay(getHeadlessSessionRaceMinMs(), getHeadlessSessionRaceMaxMs());
+    }
+
+    /**
+     * Sleeps for the per-tile product document latency.
+     */
+    public void simulateHeadlessTileFetch()
+    {
+        simulateDelay(getHeadlessTileLatencyMinMs(), getHeadlessTileLatencyMaxMs());
+    }
+
+    /**
+     * Sleeps for the OAuth token endpoint latency.
+     */
+    public void simulateHeadlessToken()
+    {
+        simulateDelay(getHeadlessSessionTokenMinMs(), getHeadlessSessionTokenMaxMs());
+    }
+
+    /**
+     * Sleeps for the CMS slot document latency.
+     */
+    public void simulateHeadlessCmsSlot()
+    {
+        simulateDelay(getHeadlessCmsSlotMinMs(), getHeadlessCmsSlotMaxMs());
+    }
 }

@@ -140,4 +140,24 @@ public final class AiAgentPrompts
     {
         return getPrompt("quality-judge-prompt.md");
     }
+
+    /**
+     * Loads the lightweight visual-only system prompt template.
+     *
+     * @return the visual-only system prompt
+     */
+    public static String getVisualOnlyPrompt()
+    {
+        return getPrompt("visual-only-prompt.md");
+    }
+
+    /**
+     * Loads the upfront playbook pre-flight linter system prompt template.
+     *
+     * @return the playbook linter system prompt
+     */
+    public static String getPlaybookLinterPrompt()
+    {
+        return getPrompt("playbook-linter-prompt.md");
+    }
 }

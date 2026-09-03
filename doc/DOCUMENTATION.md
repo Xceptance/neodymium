@@ -13,7 +13,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [1.4 Session-Level Authentication Setup](#14-session-level-authentication-setup)
 2. [Test Authoring & Execution Patterns](#2-test-authoring--execution-patterns)
    - [2.1 The Structured Playbook Model & Replay Cache](#21-the-structured-playbook-model--replay-cache)
-   - [2.2 Execution Patterns & Developer APIs (The 8 Patterns)](#22-execution-patterns--developer-apis-the-8-patterns)
+   - [2.2 Execution Patterns & Developer APIs (The 9 Patterns)](#22-execution-patterns--developer-apis-the-9-patterns)
    - [2.3 `@AiPlaybook` Path Resolution & Scoping Rules](#23-aiplaybook-path-resolution--scoping-rules)
    - [2.4 Explicit Control Tags & Runtime Instruction Preparation](#24-explicit-control-tags--runtime-instruction-preparation)
    - [2.5 Dynamic Variable Parameterization & Outbound Secret Masking](#25-dynamic-variable-parameterization--outbound-secret-masking)
@@ -27,10 +27,12 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [3.5 Centralized Locator Translation (`LocatorResolver`)](#35-centralized-locator-translation-locatorresolver)
    - [3.6 Target Safeguarding & Early Volatile ID Rejection](#36-target-safeguarding--early-volatile-id-rejection)
    - [3.7 Ranked Candidate Locators, Automatic Locator Improver & LLM Quality Judge](#37-ranked-candidate-locators-automatic-locator-improver--llm-quality-judge)
-4. [Context Escalation Ladder & Pre-Step Analysis (PESAP)](#4-context-escalation-ladder--pre-step-analysis-pesap)
-   - [4.1 Pre-Step Split Analysis (PESAP) & Upfront Splitting](#41-pre-step-split-analysis-pesap--upfront-splitting)
-   - [4.2 Tiered Context Escalation Ladder & Payload Modes](#42-tiered-context-escalation-ladder--payload-modes)
-   - [4.3 Dynamic Step Escalation Budget Model](#43-dynamic-step-escalation-budget-model)
+4. [Context Escalation Ladder, Pre-Flight Linting & Pre-Step Analysis (PESAP)](#4-context-escalation-ladder-pre-flight-linting--pre-step-analysis-pesap)
+   - [4.1 Upfront Playbook Pre-Flight Linter (`PlaybookLinter` & `@AiLinter`)](#41-upfront-playbook-pre-flight-linter-playbooklinter--ailinter)
+   - [4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting](#42-pre-step-split-analysis-pesap--upfront-splitting)
+   - [4.3 Tiered Context Escalation Ladder & Payload Modes](#43-tiered-context-escalation-ladder--payload-modes)
+   - [4.4 Dynamic Step Escalation Budget Model](#44-dynamic-step-escalation-budget-model)
+   - [4.5 The 360° LLM Taming & Safety Lifecycle](#45-the-360-llm-taming--safety-lifecycle)
 5. [Prompt Taxonomy, Custom Add-ons & Multilingual Support](#5-prompt-taxonomy-custom-add-ons--multilingual-support)
    - [5.1 AI Prompt Taxonomy](#51-ai-prompt-taxonomy)
    - [5.2 Multi-Dimensional Prompt Resolution Architecture](#52-multi-dimensional-prompt-resolution-architecture)
@@ -233,9 +235,9 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
 
 ---
 
-### 2.2 Execution Patterns & Developer APIs (The 8 Patterns)
+### 2.2 Execution Patterns & Developer APIs (The 9 Patterns)
 
-Neodymium AI provides 8 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
+Neodymium AI provides 9 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
 
 #### A. Annotation-Driven Execution
 
@@ -293,11 +295,34 @@ public void test4_JudgeMatrix(final AiSession session)
 }
 ```
 
+##### Pattern 5: Pre-Flight Static Linting & Variation Matrix (`@AiLinter`, `ExecutionMode.LINTER_ONLY`)
+Runs test cases with pre-flight linting or tests static playbook quality directly without executing browser steps:
+```java
+// Variation matrix: test with and without upfront linting
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+@AiLinter({false, true})
+@AiPlaybook
+public void test5_LinterMatrix(final AiSession session)
+{
+    // Executed 4 times: [FORCE_RECORDING, Linter: OFF], [FORCE_RECORDING, Linter: ON],
+    //                   [REPLAY_STRICT, Linter: OFF],    [REPLAY_STRICT, Linter: ON]
+}
+
+// Static-only execution: audits playbook quality without browser dispatch
+@AiMode(ExecutionMode.LINTER_ONLY)
+@AiLinter(true)
+@AiPlaybook("/playbooks/integration/prelinter-audit.yaml")
+public void test5_StaticLintOnly(final AiSession session)
+{
+    // Performs upfront static quality checks, generates reports, and finishes immediately
+}
+```
+
 ---
 
 #### B. Programmatic & Debugging APIs
 
-##### Pattern 5: Fully Programmatic Java Builder (`Playbook.builder()`)
+##### Pattern 6: Fully Programmatic Java Builder (`Playbook.builder()`)
 Construct steps programmatically using `PlaybookStep` and `Playbook.builder()`:
 ```java
 final Playbook playbook = Playbook.builder()
@@ -312,7 +337,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 6: Multiline Text Block String with Embedded YAML Data
+##### Pattern 7: Multiline Text Block String with Embedded YAML Data
 Execute raw multiline text blocks containing embedded YAML `steps:` and `data:` sections via `session.execute(...)`:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
@@ -330,7 +355,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 7: Multiline Text Block String with `SessionData` Container
+##### Pattern 8: Multiline Text Block String with `SessionData` Container
 Execute text block prompt strings seeded with a programmatic `SessionData` container:
 ```java
 final SessionData sessionData = new SessionData();
@@ -346,7 +371,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 8: Step-by-Step Java Statement Debugging
+##### Pattern 9: Step-by-Step Java Statement Debugging
 Execute single-statement prompts allowing standard IDE breakpoints on individual Java lines:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
@@ -510,8 +535,8 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 
 | Property | Default | Description |
 | :--- | :--- | :--- |
-| `neodymium.ai.replay.useRecordedDelays` | `false` | When `true`, replay pauses proportionally to recorded delays between actions/steps. |
-| `neodymium.ai.replay.delayScale` | `1.0` | Multiplier for recorded delays (e.g. `0.5` for 2x replay speed, `1.0` for real-time pacing). |
+| `neodymium.ai.replay.delayScale` | `0.0` | Multiplier applied to recorded delays (`0.0` = off / instant execution for fast CI/CD builds; `1.0` = real-time pacing; `0.5` = 2x speed). |
+| `neodymium.ai.replay.useRecordedDelays` | `false` | (Legacy) When `true` without `delayScale`, enables replay pacing at scale `1.0`. |
 | `neodymium.ai.visual.postActionSettleMs` | `1000` | Minimum settling pause in milliseconds before capturing visual screenshots for SSIM baseline checks. |
 
 ---
@@ -712,9 +737,44 @@ neodymium.ai.judge.mode=ON_AMBIGUITY
 
 ---
 
-## 4. Context Escalation Ladder & Pre-Step Analysis (PESAP)
+## 4. Context Escalation Ladder, Pre-Flight Linting & Pre-Step Analysis (PESAP)
 
-### 4.1 Pre-Step Split Analysis (PESAP) & Upfront Splitting
+### 4.1 Upfront Playbook Pre-Flight Linter (`PlaybookLinter` & `@AiLinter`)
+
+To detect linguistic defects, atomic step violations, and ambiguous assertions before runtime execution begins, the pipeline incorporates an **Upfront Playbook Pre-Flight Linter** (`PlaybookLinter.java`):
+
+* **Single-Batch Upfront Execution**: During session initialization (`StateMachineRunner`), all playbook scenario steps are compiled and analyzed in a single batch LLM call using `LlmCapability.LINTER` before any browser interaction or JIT step processing begins.
+* **Non-Blocking & Purely Advisory**: The pre-flight linter never fails, aborts, or halts test execution. Findings are recorded into the test execution context (`ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS`) and presented as advisory quality telemetry in test reports.
+* **Automatic Replay Mode Bypass**: In offline deterministic modes (`ExecutionMode.REPLAY_STRICT`, `ExecutionMode.REPLAY_WITH_HEALING`), the linter is automatically bypassed, ensuring zero LLM network requests during recorded playback.
+* **Granular Control (`@AiLinter`)**: Tests can enable, disable, or parameterize prelinting via the `@AiLinter` annotation on classes or test methods:
+  ```java
+  @AiLinter(false) // Disable prelinting for this specific test method
+  public void testQuickReplay() { ... }
+
+  @AiLinter({false, true}) // Run test variations with and without prelinting
+  public void testMatrix() { ... }
+  ```
+* **Property Toggles**: Enabled by default (`neodymium.ai.linter.enabled=true`). Can be globally disabled via `neodymium.ai.linter.enabled=false` (or aliases `neodymium.ai.prelinter.enabled=false`, `neodymium.ai.prelint.enabled=false`).
+* **Static-Only Test Execution (`ExecutionMode.LINTER_ONLY`)**: Tests can be annotated with `@AiMode(ExecutionMode.LINTER_ONLY)` to run upfront playbook linting against live LLMs, record token telemetry, and generate reports, while completely bypassing browser action dispatch for fast, always-succeeding quality auditing.
+* **Optional Scenario Description Grounding**: Reads high-level scenario context from playbook YAML `description:` headers or `@Description("...")` test annotations to ground linguistic evaluation without hardcoding domain assumptions.
+
+#### The 9 Universal Quality Check Categories
+
+| Category | Severity | Description | Example Suggested Rewrite |
+| :--- | :--- | :--- | :--- |
+| **`STEP_SPLITTING_CANDIDATE`** | `WARNING` | Compound actions or mixed action + verification in a single step. | Split into discrete numbered steps (`1. Open selector\n2. Click "Canada"`). |
+| **`MISSING_VISUAL_TAG`** | `INFO` | Visual/layout assertions lacking `(visual)` or `(visual: full)` tags. | Add visual tag (`"The status badge is vibrant emerald green (visual)"`). |
+| **`AMBIGUOUS_AFFORDANCE`** | `WARNING` | Passive capability phrasing ("allows to...") instead of actionable commands. | Convert to imperative action (`"Click Settings"`) or explicit check (`"Verify Settings card is visible"`). |
+| **`VAGUE_TARGET`** | `WARNING` | Underspecified targets lacking container or label scope. | Scope with container context (`"Click the Login button in the header"`). |
+| **`VAGUE_VERIFICATION`** | `WARNING` | Subjective or untestable test oracles ("looks good"). | Use concrete DOM assertion (`"Verify order summary is displayed"`). |
+| **`DANGLING_ANAPHORA`** | `ERROR` | Ambiguous relative pronouns ("it", "that one") without clear referents. | Replace with explicit element name (`"Click the Delete button"`). |
+| **`TEMPORAL_FLOW_ANOMALY`** | `WARNING` | Operating on an entity/modal before opening or creating it. | Reorder steps into prerequisite flow. |
+| **`HARDCODED_VOLATILE_DATA`** | `WARNING` | Hardcoded execution-time timestamps or dynamic generated IDs. | Parameterize with variable (`"Verify order ID matches #${orderId}"`). |
+| **`INCOMPLETE_BRANCH_CLAUSE`** | `WARNING` | Dangling conditional clause ("If...", "When...") lacking consequence. | Complete branch with action (`"If cookie banner appears, click Accept"`). |
+
+---
+
+### 4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting
 
 To handle complex, compound, or ambiguous instructions, the pipeline executes a **Pre-Step Split Analysis (PESAP)** using the `LlmCapability.PESAP` capability:
 * **Contextual Inputs**: The analysis receives the current step, the previously executed step's instruction (for flow context), and up to two subsequent steps' instructions.
@@ -724,7 +784,7 @@ To handle complex, compound, or ambiguous instructions, the pipeline executes a 
 
 ---
 
-### 4.2 Tiered Context Escalation Ladder & Payload Modes
+### 4.3 Tiered Context Escalation Ladder & Payload Modes
 
 Neodymium AI uses an **8-tier context level escalation hierarchy** organized into **Two Strictly Monotonic Escalation Tracks** ($L_i \subset L_{i+1}$) that ensure the model never loses DOM context when escalating:
 
@@ -759,7 +819,7 @@ $$\textbf{Track B (Visual Track): } \mathbf{VISUAL} \longrightarrow \mathbf{VISU
 
 ---
 
-### 4.3 Dynamic Step Escalation Budget Model
+### 4.4 Dynamic Step Escalation Budget Model
 
 To prevent infinite escalation loops while ensuring that steps starting at higher context levels are never blocked from reaching `VISUAL_RICH`, the framework enforces a **Dynamic Step Escalation Budget**:
 
@@ -768,6 +828,49 @@ $$\text{Total Step Budget} = (\text{VISUAL\_RICH.ordinal()} - \text{initialLevel
 * **Unused Level Budget Preservation**: Starting at higher levels preserves unused lower level attempt capacity.
 * **Guaranteed Initial `VISUAL_RICH` Attempt**: Upward escalation into `VISUAL_RICH` for the first time is always permitted to run its initial attempt.
 * **Circuit Breaker Enforcement**: The circuit breaker trips only when `attemptsUsed >= totalStepBudget` AND `currentLevel == VISUAL_RICH`.
+
+---
+
+### 4.5 The 360° LLM Taming & Safety Lifecycle
+
+To prevent LLM hallucination, destructive mutations, locator drift, and erroneous step approvals, Neodymium AI implements an end-to-end **360° Safety & Taming Lifecycle**. This multi-layered architecture acts at every stage of execution:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                             360° LLM SAFETY LIFECYCLE                            │
+├──────────────────────┬───────────────────────────┬───────────────────────────────┤
+│ 1. PRE-EXECUTION     │ 2. IN-FLIGHT INVARIANTS   │ 3. POST-EXECUTION VERIFY      │
+│ (Guardrails & Budget)│ (Deterministic Java Rules)│ (Judges & Quality Audit)      │
+├──────────────────────┼───────────────────────────┼───────────────────────────────┤
+│ • PESAP Intent       │ • Assertion Mutation      │ • Second-Opinion Quality      │
+│   Routing & Clamping │   Defense (Discard Mutating Judge (Locators vs DOM)      │
+│ • Volatile ID Early  │   Actions on Assertions)  │ • Semantic Outcome            │
+│   Stripping          │ • Structural Inconsistency│   Verification (Visual Delta  │
+│ • Dynamic Escalation │   Override (False Success)│   & Intent Rubrics)           │
+│   Budget Breaker     │ • Coordinate Normalization│ • Replay Hash Matrix SSIM     │
+│ • Secret Masking     │ • Fast Native Fallbacks   │   Baseline Divergence Gate    │
+└──────────────────────┴───────────────────────────┴───────────────────────────────┘
+```
+
+#### 1. Pre-Execution Guardrails (Upstream Containment)
+* **Semantic Intent Routing (`SemanticIntent`)**: PESAP analyzes incoming instructions to classify step intent (`ASSERT`, `ASSERT_METADATA`, `CLICK`, `TYPE`, `SELECT`, `HOVER_SCROLL`, `NAVIGATE`, `WAIT`, `STORE`, `BRANCH`). Metadata assertions (`ASSERT_METADATA`) are locked to `MINIMAL` context, eliminating unnecessary DOM serialization and visual token costs.
+* **Early Volatile ID Rejection**: Fast algorithmic filters (`VolatileIdDetector`) strip dynamic framework IDs (GUIDs, UUIDs, timestamp hashes) from DOM feature vectors before they can pollute LLM prompt inputs.
+* **Escalation Budget & Circuit Breaker**: Mathematical attempt budgets prevent runaway retries and infinite loops.
+* **Dynamic Parameter Masking**: In-flight regex masks intercept outbound credentials, API keys, and sensitive environment secrets.
+
+#### 2. In-Flight Invariants (Deterministic Java Defenses)
+* **Assertion Mutation Guard**: When a step's intent is classified as `ASSERT` or `ASSERT_METADATA`, both `ActionExtractionPrompt` and `ExecuteActionsStep` enforce a strict invariant: any mutating interactive actions (`CLICK`, `TYPE`, `CLEAR`, `SELECT`, `NAVIGATE`) generated by the LLM are automatically discarded and blocked from touching the SUT DOM.
+* **Structural Contradiction Interceptor**: If an LLM response emits `status: SUCCESS` but simultaneously marks `assertionSatisfied: false` without executable actions, Java logic overrides the status to `FAILED` and raises a `DivergenceException`.
+* **Coordinate & Viewport Normalization**: Click/tap coordinates outside the normalized bounds (0–1000‰) or target viewport boundaries are intercepted prior to dispatch.
+* **Native Metadata Evaluation**: Page title and URL assertions bypass heavy DOM rendering, verifying browser metadata directly against WebDriver state.
+
+#### 3. Post-Execution Verification & Judging (Downstream Quality Assurance)
+* **Second-Opinion LLM Quality Judge (`QualityJudgePrompt`)**: Evaluates primary locators against alternate candidate locators and the full SUT DOM tree, validating uniqueness, resilience to UI refactoring, and CSS specificity.
+* **Post-Action Semantic Outcome Verification (`VerificationPrompt`)**: Analyzes pre- and post-action DOM states and screenshots across three independent rubrics:
+  1. `intentMatch`: Did the action fulfill the user's semantic instruction?
+  2. `visualDelta`: Did the page change appropriately (e.g., dropdown opened, modal appeared)?
+  3. `absenceOfErrors`: Are there unexpected server errors, toast alerts, or UI regressions?
+* **Deterministic Visual Matrix SSIM Baselines**: dHash baseline matrices and SSIM checks ensure visual stability and detect layout regressions before finalizing recorded replay playbooks.
 
 ---
 
@@ -1125,10 +1228,10 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 6. `config/neodymium.properties`
 
 ### 8.1 Core Execution Settings
-* `neodymium.ai.executionMode` - Defines global fallback execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`). (Default: `REPLAY_WITH_HEALING`)
+* `neodymium.ai.executionMode` - Defines global fallback execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). (Default: `REPLAY_WITH_HEALING`)
 * `neodymium.ai.playbook.recordingDirectory` - Primary directory for saving and loading Playbook JSON execution recordings.
-* `neodymium.ai.replay.useRecordedDelays` - (Boolean) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
-* `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. (Default: `1.0`)
+* `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. When `0.0`, pacing is disabled for maximum CI/CD speed. (Default: `0.0`)
+* `neodymium.ai.replay.useRecordedDelays` - (Boolean, Legacy) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
 
 ### 8.2 Provider and Model Configuration
 * `neodymium.ai.provider` - Global active LLM provider (`gemini`, `openai`, `vertex`, `mistral`, `mock`). (Default: `gemini`)
@@ -1149,6 +1252,7 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 ```
 
 ### 8.3 Sub-System Toggles
+* `neodymium.ai.linter.enabled` - (Boolean) Upfront Playbook Pre-Flight Linter. Aliases: `neodymium.ai.prelinter.enabled`, `neodymium.ai.prelint.enabled`. (Default: `true`)
 * `neodymium.ai.pesap.enabled` - (Boolean) Pre-Execution Structural Analysis & Prediction. (Default: `true`)
 * `neodymium.ai.semanticVerification.enabled` - (Boolean) SSIM and Visual Anchor validation gates. (Default: `true`)
 * `neodymium.ai.visualRca.enabled` - (Boolean) Visual Root Cause Analysis on failure. (Default: `true`)

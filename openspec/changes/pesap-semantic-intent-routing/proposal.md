@@ -22,17 +22,18 @@ An upfront JIT semantic intent classifier in PESAP categorizes each step's prima
 - **Java Guard Enforcer**: In `ActionExtractionPrompt` and `ExecuteActionsStep`, strictly reject and prevent mutating actions (`CLICK`, `TYPE`, `CLEAR`, `SELECT`) when the step intent is classified as `ASSERT` or `ASSERT_METADATA`.
 - **Fast-Path & Context Level Synergy**: Skip redundant DOM dumps and action extraction LLM calls for `ASSERT_METADATA` by routing directly to native Java assertion evaluators.
 - **Diagnostics & Reporting**: Expose `semanticIntent` in `ExecutionContext`, `PlaybookStep`, logging, and test execution reports (Markdown and HTML).
+- **Comprehensive Documentation**: Update `doc/DOCUMENTATION.md` with a dedicated chapter detailing the full **360° LLM Taming & Safety Lifecycle** (Pre-Execution Intent Routing & Volatile ID Stripping, In-Flight Mutating Action Guards, Post-Execution Semantic Outcome Verification & Quality Judge Auditing).
 
 ## Capabilities
 
 ### New Capabilities
-- `pesap-semantic-intent-routing`: Covers JIT semantic intent classification in PESAP, downstream action prompt constraint injection, Java execution guardrails against mutating actions on assertions, and title/URL metadata fast-path routing.
+- `pesap-semantic-intent-routing`: Covers JIT semantic intent classification in PESAP, downstream action prompt constraint injection, Java execution guardrails against mutating actions on assertions, title/URL metadata fast-path routing, and comprehensive LLM safety lifecycle documentation.
 
 ### Modified Capabilities
 <!-- None: purely additive feature with no existing capability spec requirement modifications -->
 
 ## Impact
 
-- **Affected Components**: `org.neodymium.ai.model` (`PlaybookStep`, `SemanticIntent`), `org.neodymium.ai.prompt` (`PesapPrompt`, `ActionExtractionPrompt`), `org.neodymium.ai.pipeline` (`ExecutionContext`, `PesapPreStep`, `ExecuteActionsStep`), `src/main/resources/ai-prompts/` (`pesap-pre-step-prompt.md`, `action-extraction-prompt.md`), `org.neodymium.ai.report` (`TestExecutionReport`, `MarkdownReportGenerator`, `HtmlReportGenerator`).
+- **Affected Components**: `org.neodymium.ai.model` (`PlaybookStep`, `SemanticIntent`), `org.neodymium.ai.prompt` (`PesapPrompt`, `ActionExtractionPrompt`), `org.neodymium.ai.pipeline` (`ExecutionContext`, `PesapPreStep`, `ExecuteActionsStep`), `src/main/resources/ai-prompts/` (`pesap-pre-step-prompt.md`, `action-extraction-prompt.md`), `org.neodymium.ai.report` (`TestExecutionReport`, `MarkdownReportGenerator`, `HtmlReportGenerator`), `doc/DOCUMENTATION.md`.
 - **Dependencies**: Uses existing Flash Lite model via `LlmCapability.PESAP`.
 - **Compatibility**: Fully backward-compatible; non-blocking fallback if intent classification fails.

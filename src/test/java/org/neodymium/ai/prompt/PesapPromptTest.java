@@ -22,7 +22,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
+
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.PesapPrompt.PesapResult;
 
@@ -65,6 +68,7 @@ public final class PesapPromptTest
             {
               "c": "LEAN",
               "jm": false,
+              "i": "CLICK",
               "sp": ["Click Submit", "Verify success"]
             }
             """;
@@ -75,9 +79,43 @@ public final class PesapPromptTest
         assertNotNull(result);
         assertEquals("LEAN", result.contextLevel());
         assertFalse(result.requiresJavaMethods());
+        assertEquals(SemanticIntent.CLICK, result.intent());
         assertEquals(2, result.splitSteps().size());
         assertEquals("Click Submit", result.splitSteps().get(0));
         assertEquals("Verify success", result.splitSteps().get(1));
+    }
+
+    /**
+     * Verifies that the prompt successfully parses assertion and metadata intents.
+     */
+    @Test
+    public void testParseResponseIntents() throws Exception
+    {
+        final PesapPrompt prompt = new PesapPrompt("instruction");
+
+        final String assertJson = """
+            {"c":"MINIMAL","jm":false,"i":"ASSERT"}
+            """;
+        final PesapResult assertResult = prompt.parseResponse(assertJson, new ExecutionContext(null));
+        assertEquals(SemanticIntent.ASSERT, assertResult.intent());
+        assertEquals("STANDARD", assertResult.contextLevel());
+        assertTrue(assertResult.intent().isAssertion());
+
+        final String metaJson = """
+            {"c":"STANDARD","jm":false,"i":"ASSERT_METADATA"}
+            """;
+        final PesapResult metaResult = prompt.parseResponse(metaJson, new ExecutionContext(null));
+        assertEquals(SemanticIntent.ASSERT_METADATA, metaResult.intent());
+        assertEquals("MINIMAL", metaResult.contextLevel());
+        assertTrue(metaResult.intent().isAssertion());
+
+        final String typeJson = """
+            {"c":"LEAN","jm":false,"i":"TYPE"}
+            """;
+        final PesapResult typeResult = prompt.parseResponse(typeJson, new ExecutionContext(null));
+        assertEquals(SemanticIntent.TYPE, typeResult.intent());
+        assertEquals("LEAN", typeResult.contextLevel());
+        assertTrue(typeResult.intent().isMutating());
     }
 
     /**
@@ -89,7 +127,8 @@ public final class PesapPromptTest
         final String rawJson = """
             {
               "c": "VISUAL",
-              "jm": false
+              "jm": false,
+              "i": "ASSERT"
             }
             """;
 
@@ -99,6 +138,7 @@ public final class PesapPromptTest
         assertNotNull(result);
         assertEquals("VISUAL", result.contextLevel());
         assertFalse(result.requiresJavaMethods());
+        assertEquals(SemanticIntent.ASSERT, result.intent());
         assertTrue(result.splitSteps().isEmpty());
     }
 
@@ -114,6 +154,7 @@ public final class PesapPromptTest
         assertNotNull(result);
         assertEquals("LEAN", result.contextLevel());
         assertFalse(result.requiresJavaMethods());
+        assertNull(result.intent());
         assertTrue(result.splitSteps().isEmpty());
     }
 
@@ -144,7 +185,71 @@ public final class PesapPromptTest
 
         assertNotNull(systemMessage);
         assertTrue(systemMessage.contains("Step Splitting ('sp')"));
+        assertTrue(systemMessage.contains("Semantic Intent ('i')"));
         assertTrue(systemMessage.contains("Sequential multi-action interaction chains requiring intermediate UI state changes"));
-        assertTrue(systemMessage.contains("Language & Token Preservation"));
+        assertTrue(systemMessage.contains("Complete Action Invariant"));
+        assertTrue(systemMessage.contains("NEVER split scoped element targeting phrases"));
+        assertTrue(systemMessage.contains("NEVER split prepositional, adverbial, origin, destination, location, or contextual clauses"));
+    }
+
+    /**
+     * Verifies that the prompt successfully parses intent from simulated responses for multilingual instructions.
+     */
+    @Test
+    public void testParseResponseMultilingualIntents() throws Exception
+    {
+        final PesapPrompt prompt = new PesapPrompt("test");
+        final ExecutionContext ctx = new ExecutionContext(null);
+
+        // French: "Vérifier que le total du panier est 99,00 €" -> ASSERT
+        final String frJson = """
+            {"c":"LEAN","jm":false,"i":"ASSERT"}
+            """;
+        final PesapResult frResult = prompt.parseResponse(frJson, ctx);
+        assertEquals(SemanticIntent.ASSERT, frResult.intent());
+        assertEquals("STANDARD", frResult.contextLevel());
+        assertTrue(frResult.intent().isAssertion());
+
+        // German: "Klicken Sie auf den Button 'In den Warenkorb'" -> CLICK
+        final String deJson = """
+            {"c":"LEAN","jm":false,"i":"CLICK"}
+            """;
+        final PesapResult deResult = prompt.parseResponse(deJson, ctx);
+        assertEquals(SemanticIntent.CLICK, deResult.intent());
+        assertTrue(deResult.intent().isMutating());
+
+        // Japanese: "タイトルが 'マイストア' であることを確認する" -> ASSERT_METADATA
+        final String jpJson = """
+            {"c":"MINIMAL","jm":false,"i":"ASSERT_METADATA"}
+            """;
+        final PesapResult jpResult = prompt.parseResponse(jpJson, ctx);
+        assertEquals(SemanticIntent.ASSERT_METADATA, jpResult.intent());
+        assertTrue(jpResult.intent().isAssertion());
+
+        // English: "Select 'Express Shipping' from dropdown" -> SELECT
+        final String enJson = """
+            {"c":"LEAN","jm":false,"i":"SELECT"}
+            """;
+        final PesapResult enResult = prompt.parseResponse(enJson, ctx);
+        assertEquals(SemanticIntent.SELECT, enResult.intent());
+        assertTrue(enResult.intent().isMutating());
+    }
+
+    /**
+     * Verifies that Swedish and multilingual scoped instructions parse as single atomic actions without splits.
+     */
+    @Test
+    public void testParseResponseScopedInstructionsRemainUnsplit() throws Exception
+    {
+        final PesapPrompt prompt = new PesapPrompt("Klicka på knappen 'Add to Cart' på det första produktkortet");
+        final ExecutionContext ctx = new ExecutionContext(null);
+
+        final String json = """
+            {"c":"LEAN","jm":false,"i":"CLICK"}
+            """;
+        final PesapResult result = prompt.parseResponse(json, ctx);
+        assertEquals(SemanticIntent.CLICK, result.intent());
+        assertEquals("LEAN", result.contextLevel());
+        assertTrue(result.splitSteps().isEmpty());
     }
 }

@@ -29,6 +29,8 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
@@ -360,9 +362,17 @@ public final class VerifyOutcomeStep implements PipelineStep
 
             final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.VERIFICATION);
             LOGGER.debug("Calling LLM provider '{}' via capability: VERIFICATION", provider.getClass().getSimpleName());
+            if (session.getEventBus() != null)
+            {
+                session.getEventBus().dispatch(new LlmRequestSentEvent(request, "VERIFICATION"));
+            }
             final long startTime = System.currentTimeMillis();
             final LlmResponse response = provider.chat(request);
             final long durationMs = System.currentTimeMillis() - startTime;
+            if (session.getEventBus() != null)
+            {
+                session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "VERIFICATION"));
+            }
             LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms)", response.content() != null ? response.content().length() : 0, durationMs);
             if (LOGGER.isTraceEnabled())
             {
@@ -370,6 +380,9 @@ public final class VerifyOutcomeStep implements PipelineStep
                 LOGGER.trace("{}", CallLlmStep.formatJsonForLogging(response.content()));
                 LOGGER.trace("└──────────────────────────────────────────────────────────────────────────");
             }
+
+            final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+            context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);
 
             // 8. Track and accumulate token usage metrics specifically for verification calls
             final TokenUsage newUsage = response.tokenUsage();
@@ -384,7 +397,8 @@ public final class VerifyOutcomeStep implements PipelineStep
                 LOGGER.debug("   📊 Verification Tokens: {} in ({} cached) → {} out (total: {})",
                     newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
 
-                context.getTransientData().compute("verificationCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
+                final Integer verifCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 0);
+                context.getTransientData().put(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, verifCalls + 1);
 
                 final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
                 if (existing == null)
@@ -406,6 +420,10 @@ public final class VerifyOutcomeStep implements PipelineStep
             try
             {
                 final VerificationResult result = prompt.parseResponse(response.content(), context);
+                if (step != null)
+                {
+                    step.setVerificationResult(result);
+                }
                 logVerificationResult(result);
                 if (!result.passed())
                 {

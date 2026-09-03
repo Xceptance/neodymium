@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openqa.selenium.By;
@@ -62,6 +63,8 @@ import org.neodymium.ai.model.LocatorCascadeResolver;
 public class PageAnalyzer
 {
     private static final Logger LOG = LoggerFactory.getLogger(PageAnalyzer.class);
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static final String FINGERPRINT_JS_FUNCTIONS = loadResource("ai-scripts/neodymium-dom-helpers.js");
 
@@ -1434,9 +1437,8 @@ public class PageAnalyzer
             final Object response = ((JavascriptExecutor) driver).executeScript(script);
             if (response instanceof String jsonStr && !jsonStr.isBlank())
             {
-                final ObjectMapper mapper = new ObjectMapper();
                 final TypeReference<List<DomFeatureVector>> typeRef = new TypeReference<>() {};
-                return mapper.readValue(jsonStr, typeRef);
+                return MAPPER.readValue(jsonStr, typeRef);
             }
         }
         catch (final Exception e)
@@ -1521,8 +1523,7 @@ public class PageAnalyzer
             final Object response = ((JavascriptExecutor) driver).executeScript(script, element);
             if (response instanceof String jsonStr && !jsonStr.isBlank())
             {
-                final ObjectMapper mapper = new ObjectMapper();
-                return mapper.readValue(jsonStr, DomFeatureVector.class);
+                return MAPPER.readValue(jsonStr, DomFeatureVector.class);
             }
         }
         catch (final Exception e)
@@ -1624,9 +1625,8 @@ public class PageAnalyzer
             final Object response = ((JavascriptExecutor) driver).executeScript(script);
             if (response instanceof String jsonStr && !jsonStr.isBlank())
             {
-                final ObjectMapper mapper = new ObjectMapper();
                 final TypeReference<List<DomFeatureVector>> typeRef = new TypeReference<>() {};
-                final List<DomFeatureVector> candidates = mapper.readValue(jsonStr, typeRef);
+                final List<DomFeatureVector> candidates = MAPPER.readValue(jsonStr, typeRef);
                 if (LOG.isTraceEnabled())
                 {
                     LOG.trace("🧬 Evaluating {} candidate elements against target vector: {}", candidates.size(), recordedVector.toSummaryString());
@@ -1693,24 +1693,69 @@ public class PageAnalyzer
         return null;
     }
 
-    private static boolean isImplicitRole(final String tag, final String role)
+
+    /**
+     * Resolves the enclosing container element at the given viewport coordinates (x, y)
+     * and calculates relative coordinate offsets from the container's top-left corner.
+     *
+     * @param explicitDriver the WebDriver instance
+     * @param viewportX the viewport X coordinate
+     * @param viewportY the viewport Y coordinate
+     * @return the pinned target string (e.g. "coord: #canvas-stage@300,75"), or raw "coord: x,y" fallback
+     */
+    public String resolveAnchorCoordinate(final WebDriver explicitDriver, final int viewportX, final int viewportY)
     {
-        if (tag == null || role == null)
+        final WebDriver driver = resolveDriver(explicitDriver);
+        if (driver == null || !(driver instanceof JavascriptExecutor js))
         {
-            return false;
+            return "coord: " + viewportX + "," + viewportY;
         }
-        final String t = tag.toLowerCase();
-        final String r = role.toLowerCase();
-        return (t.equals("a") && r.equals("link"))
-            || (t.equals("button") && r.equals("button"))
-            || (t.equals("header") && r.equals("banner"))
-            || (t.equals("nav") && r.equals("navigation"))
-            || (t.equals("main") && r.equals("main"))
-            || (t.equals("footer") && r.equals("contentinfo"))
-            || (t.matches("^h[1-6]$") && r.equals("heading"))
-            || (t.equals("textarea") && r.equals("textbox"))
-            || (t.equals("form") && r.equals("form"))
-            || (t.equals("select") && (r.equals("combobox") || r.equals("select")))
-            || (t.equals("option") && r.equals("option"));
+
+        final String script = """
+            return (function(vx, vy) {
+                var el = document.elementFromPoint(vx, vy);
+                if (!el || el === document.body || el === document.documentElement) {
+                    return null;
+                }
+                var id = el.id ? '#' + el.id : null;
+                var dataAi = el.getAttribute('data-ai') ? '[data-ai="' + el.getAttribute('data-ai') + '"]' : null;
+                var selector = id || dataAi;
+                if (!selector && el.className && typeof el.className === 'string' && el.className.trim()) {
+                    var cls = el.className.trim().split(/\\s+/)[0];
+                    if (cls && !cls.includes(':') && !cls.includes('/')) {
+                        selector = '.' + cls;
+                    }
+                }
+                if (!selector) {
+                    selector = el.tagName.toLowerCase();
+                }
+                var rect = el.getBoundingClientRect();
+                var relX = Math.round(vx - rect.left);
+                var relY = Math.round(vy - rect.top);
+                return JSON.stringify({ selector: selector, relX: relX, relY: relY });
+            })(arguments[0], arguments[1]);
+            """;
+
+        try
+        {
+            final Object result = js.executeScript(script, viewportX, viewportY);
+            if (result instanceof String jsonStr && !jsonStr.isBlank())
+            {
+                final JsonNode tree = MAPPER.readTree(jsonStr);
+                final String selector = tree.path("selector").asText("");
+                final int relX = tree.path("relX").asInt(viewportX);
+                final int relY = tree.path("relY").asInt(viewportY);
+                if (!selector.isBlank())
+                {
+                    return "coord: " + selector + "@" + relX + "," + relY;
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.debug("Failed to resolve anchor coordinate at ({}, {}): {}", viewportX, viewportY, e.getMessage());
+        }
+
+        return "coord: " + viewportX + "," + viewportY;
     }
 }

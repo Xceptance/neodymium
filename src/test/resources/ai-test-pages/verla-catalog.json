@@ -947,7 +947,8 @@
     "ja": {
       "home": "ホーム",
       "cart": "カート",
-      "checkout": "レジに進む",
+      "checkout": "ご注文手続き",
+      "proceedToCheckout": "レジに進む",
       "login": "ログイン",
       "register": "会員登録",
       "logout": "ログアウト",

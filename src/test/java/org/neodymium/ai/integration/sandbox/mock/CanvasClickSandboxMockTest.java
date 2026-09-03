@@ -53,6 +53,7 @@ public class CanvasClickSandboxMockTest extends BaseAiTest
     {
         org.neodymium.util.Neodymium.getData().put("neodymium.ai.global.provider", "mock");
         org.neodymium.util.Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
+        org.neodymium.util.Neodymium.getData().put("neodymium.ai.linter.enabled", "false");
     }
 
     /**
@@ -89,15 +90,15 @@ public class CanvasClickSandboxMockTest extends BaseAiTest
             }
             """.formatted(pageUrl), null, "mock"));
 
-        // 2. Click Blue Canvas
+        // 2. Click Confirm button via coordinates inside canvas
         mock.addResponse(new LlmResponse("""
             {
               "actions": [
                 {
                   "action": "CLICK",
-                  "locator": "#blue-canvas",
+                  "locator": "coord: #canvas-stage@300,75",
                   "value": "",
-                  "reasoning": "Click Blue Canvas hotspot"
+                  "reasoning": "Click Confirm button hotspot inside canvas"
                 }
               ]
             }
@@ -110,7 +111,7 @@ public class CanvasClickSandboxMockTest extends BaseAiTest
                 {
                   "action": "ASSERT",
                   "locator": "#canvas-status",
-                  "value": "Blue Canvas Clicked",
+                  "value": "Confirm Clicked",
                   "reasoning": "Verify canvas status message"
                 }
               ]
@@ -132,10 +133,10 @@ public class CanvasClickSandboxMockTest extends BaseAiTest
               - testId: canvasClickData
             steps: |
               Open ${canvas.click.test.url} in the browser
-              Click #blue-canvas
-              Verify that #canvas-status shows "Blue Canvas Clicked"
+              Click the Confirm button inside the canvas
+              Verify that #canvas-status shows "Confirm Clicked"
             """);
 
-        $("#canvas-status").shouldHave(text("Blue Canvas Clicked"));
+        $("#canvas-status").shouldHave(text("Confirm Clicked"));
     }
 }

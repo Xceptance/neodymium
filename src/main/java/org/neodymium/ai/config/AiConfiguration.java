@@ -533,23 +533,40 @@ public final class AiConfiguration
 
     /**
      * Checks if replay execution should respect recorded delays and pacing.
+     * Evaluates whether {@code neodymium.ai.replay.delayScale} is greater than {@code 0.0},
+     * falling back to legacy {@code neodymium.ai.replay.useRecordedDelays} if specified.
      *
-     * @return true if neodymium.ai.replay.useRecordedDelays is set to true (default: false)
+     * @return true if replay delay scaling is enabled (> 0.0), false otherwise (default: false)
      */
     public boolean isUseRecordedDelays()
     {
-        return getBoolean("neodymium.ai.replay.useRecordedDelays", false);
+        final boolean legacyFlag = getBoolean("neodymium.ai.replay.useRecordedDelays", false);
+        return legacyFlag || getReplayDelayScale() > 0.0;
+    }
+
+    /**
+     * Checks if thought traces should be included in LLM output for extensive debugging.
+     * Controlled via {@code neodymium.ai.gemini.includeThoughts} or {@code neodymium.ai.includeThoughts}.
+     * Defaults to {@code false}.
+     *
+     * @return true if thoughts should be included in the response, false otherwise
+     */
+    public boolean isIncludeThoughts()
+    {
+        return getBoolean("neodymium.ai.gemini.includeThoughts",
+            getBoolean("neodymium.ai.includeThoughts", false));
     }
 
     /**
      * Returns the speed scaling multiplier applied to recorded delays during replay.
-     * For example, 1.0 is real-time, 0.5 is 2x speed, 2.0 is half speed.
+     * When <= 0.0, recorded delays are disabled (instant execution for fast CI/CD runs).
+     * For example, 1.0 is real-time recorded pacing, 0.5 is 2x speed.
      *
-     * @return the delay scale factor (default: 1.0)
+     * @return the delay scale factor (default: 0.0)
      */
     public double getReplayDelayScale()
     {
-        return getDouble("neodymium.ai.replay.delayScale", 1.0);
+        return getDouble("neodymium.ai.replay.delayScale", 0.0);
     }
     /**
      * Returns the minimum structural similarity index (SSIM) score required for visual assertion matches.
@@ -633,6 +650,65 @@ public final class AiConfiguration
     public boolean isPesapEnabled()
     {
         return getBoolean("neodymium.ai.pesap.enabled", true);
+    }
+
+    /**
+     * Checks if the upfront playbook pre-flight linter is enabled.
+     *
+     * @return true if pre-flight linter is enabled (default: true), false otherwise
+     */
+    public boolean isLinterEnabled()
+    {
+        final String val = getProperty("neodymium.ai.linter.enabled", null);
+        if (val != null)
+        {
+            return Boolean.parseBoolean(val.trim());
+        }
+        final String prelintVal = getProperty("neodymium.ai.prelinter.enabled", null);
+        if (prelintVal != null)
+        {
+            return Boolean.parseBoolean(prelintVal.trim());
+        }
+        final String prelintShort = getProperty("neodymium.ai.prelint.enabled", null);
+        if (prelintShort != null)
+        {
+            return Boolean.parseBoolean(prelintShort.trim());
+        }
+        return true;
+    }
+
+    /**
+     * Resolves the configured provider identifier for the pre-flight linter,
+     * checking {@code neodymium.ai.llm.linter.provider} then {@code neodymium.ai.linter.provider}
+     * before falling back to the global default provider.
+     *
+     * @return the resolved linter provider name
+     */
+    public String getLinterProvider()
+    {
+        final String explicit = getProperty("neodymium.ai.llm.linter.provider", null);
+        if (explicit != null && !explicit.isBlank())
+        {
+            return explicit.trim();
+        }
+        return getProvider("linter");
+    }
+
+    /**
+     * Resolves the configured model identifier for the pre-flight linter,
+     * checking {@code neodymium.ai.llm.linter.model} then {@code neodymium.ai.linter.model}
+     * before falling back to the global default model.
+     *
+     * @return the resolved linter model name
+     */
+    public String getLinterModel()
+    {
+        final String explicit = getProperty("neodymium.ai.llm.linter.model", null);
+        if (explicit != null && !explicit.isBlank())
+        {
+            return explicit.trim();
+        }
+        return getModel("linter");
     }
 
     /**

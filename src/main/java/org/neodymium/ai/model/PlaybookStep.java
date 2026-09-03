@@ -25,6 +25,7 @@ import java.util.regex.Pattern;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.prompt.VerificationResult;
 import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
@@ -150,6 +151,12 @@ public final class PlaybookStep
     private String replayMatrixPng;
 
     /**
+     * The semantic outcome verification evaluation result, if verification was executed for this step.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private VerificationResult verificationResult;
+
+    /**
      * The line number in the source file where this step is defined.
      */
     private int lineNumber = -1;
@@ -213,6 +220,32 @@ public final class PlaybookStep
      * Custom execution timeout for this step in milliseconds, or null if default timeout applies.
      */
     private Long timeoutMs;
+
+    /**
+     * The classified semantic intent of this step (e.g. ASSERT, CLICK, TYPE, etc.).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private SemanticIntent semanticIntent;
+
+    /**
+     * Returns the classified semantic intent for this step.
+     *
+     * @return the semantic intent, or null if not classified
+     */
+    public SemanticIntent getSemanticIntent()
+    {
+        return this.semanticIntent;
+    }
+
+    /**
+     * Sets the classified semantic intent for this step.
+     *
+     * @param semanticIntent the semantic intent to set
+     */
+    public void setSemanticIntent(final SemanticIntent semanticIntent)
+    {
+        this.semanticIntent = semanticIntent;
+    }
 
     /**
      * Returns the recorded context level for this step.
@@ -1164,5 +1197,25 @@ public final class PlaybookStep
     public void setTimeoutMs(final long timeoutMs)
     {
         this.timeoutMs = timeoutMs;
+    }
+
+    /**
+     * Gets the semantic outcome verification evaluation result.
+     *
+     * @return the verification result, or null if not verified
+     */
+    public VerificationResult getVerificationResult()
+    {
+        return this.verificationResult;
+    }
+
+    /**
+     * Sets the semantic outcome verification evaluation result.
+     *
+     * @param verificationResult the verification result to set
+     */
+    public void setVerificationResult(final VerificationResult verificationResult)
+    {
+        this.verificationResult = verificationResult;
     }
 }

@@ -27,6 +27,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 
 /**
  * Report generator producing standalone, interactive, single-file HTML documents
@@ -152,8 +154,9 @@ public final class HtmlReportGenerator
         sb.append("        <tbody>\n");
 
         appendHtmlCategoryRow(sb, "<strong>Total</strong>", m.getTotal(), "row-total");
-        appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
+        appendHtmlCategoryRow(sb, "Playbook Pre-Flight Linter", m.getLinter(), "");
         appendHtmlCategoryRow(sb, "PESAP (Pre-Execution Semantic Anchor)", m.getPesap(), "");
+        appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
         appendHtmlCategoryRow(sb, "Self-Judging Validation", m.getJudge(), "");
         appendHtmlCategoryRow(sb, "Semantic Outcome Verification", m.getVerification(), "");
         appendHtmlCategoryRow(sb, "Visual Root Cause Analysis (RCA)", m.getVisualRca(), "");
@@ -226,6 +229,69 @@ public final class HtmlReportGenerator
             sb.append("  </section>\n");
         }
 
+        // Pre-Flight Findings Box (if any)
+        final List<PlaybookLinterFinding> linterFindings = report.getLinterFindings();
+        if (!linterFindings.isEmpty())
+        {
+            sb.append("  <details open class=\"diagnostic-box linter-box\" style=\"border-left: 4px solid #6366f1; background: var(--card-bg, #ffffff); margin-bottom: 24px; padding: 18px 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);\">\n");
+            sb.append("    <summary class=\"box-header\" style=\"font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #1e293b); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; justify-content: space-between;\">\n");
+            sb.append("      <div style=\"display: flex; align-items: center; gap: 8px;\"><span>📋 Playbook Quality & Pre-Flight Findings (").append(linterFindings.size()).append(")</span></div>\n");
+            sb.append("      <span class=\"linter-toggle-icon\" style=\"font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s ease;\">▼</span>\n");
+            sb.append("    </summary>\n");
+            sb.append("    <div class=\"linter-content\" style=\"margin-top: 14px;\">\n");
+            sb.append("      <div class=\"table-container\">\n");
+            sb.append("        <table class=\"data-table\">\n");
+            sb.append("          <thead><tr><th>Line / Step</th><th>Category</th><th>Severity</th><th>Message & Suggested Rewrite</th></tr></thead>\n");
+            sb.append("          <tbody>\n");
+            for (final PlaybookLinterFinding f : linterFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevBadge = f.severity() == LinterSeverity.ERROR
+                    ? "<span class=\"badge badge-error\" style=\"background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">ERROR</span>"
+                    : f.severity() == LinterSeverity.WARNING
+                    ? "<span class=\"badge badge-warning\" style=\"background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">WARNING</span>"
+                    : "<span class=\"badge badge-info\" style=\"background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">INFO</span>";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("        <tr>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><code>").append(escapeHtml(lineLabel)).append("</code></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><span style=\"font-weight:600;font-size:0.85rem;\">").append(escapeHtml(cat)).append("</span></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\">").append(sevBadge).append("</td>\n");
+                sb.append("          <td>\n");
+                sb.append("            <div style=\"font-weight:600;margin-bottom:6px;color:var(--text-primary,#1e293b);\">").append(escapeHtml(f.message())).append("</div>\n");
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Template Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;margin-bottom:2px;\">Resolved Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.resolvedInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Original Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("            <div style=\"margin-top:6px;font-size:0.85rem;background:rgba(99,102,241,0.06);padding:6px 10px;border-radius:4px;border-left:3px solid #6366f1;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">💡 Suggested Rewrite:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#312e81;\">").append(escapeHtml(f.suggestedRewrite())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                sb.append("          </td>\n");
+                sb.append("        </tr>\n");
+            }
+            sb.append("          </tbody>\n");
+            sb.append("        </table>\n");
+            sb.append("      </div>\n");
+            sb.append("    </div>\n");
+            sb.append("  </details>\n");
+        }
+
         // 6. Interactive Execution Steps Section with Resizable Split Inspector
         final List<TestExecutionReport.ReportStepEntry> steps = report.getSteps();
         sb.append("  <section class=\"steps-section\">\n");
@@ -268,6 +334,8 @@ public final class HtmlReportGenerator
             sb.append("                <span class=\"context-badge\" id=\"inspContextBadge\" style=\"display:none;\"></span>\n");
             sb.append("                <span class=\"badge-flag visual-badge\" id=\"inspVisualBadge\" style=\"display:none;\">📸 VISUAL</span>\n");
             sb.append("                <span class=\"badge-flag bug-badge\" id=\"inspBugBadge\" style=\"display:none;\">🐛 BUG EXPECTED</span>\n");
+            sb.append("                <span class=\"badge-flag intent-badge\" id=\"inspIntentBadge\" style=\"display:none;\"></span>\n");
+            sb.append("                <span class=\"badge-flag verification-badge-pass\" id=\"inspVerificationBadge\" style=\"display:none;\"></span>\n");
             sb.append("              </div>\n");
             sb.append("              <div class=\"inspector-header-controls\">\n");
             sb.append("                <div class=\"width-presets\">\n");
@@ -289,6 +357,7 @@ public final class HtmlReportGenerator
             sb.append("            <button class=\"tab-btn active\" id=\"tabBtn-llm\" onclick=\"switchInspectorTab('llm')\">🤖 LLM Details (<span id=\"tabLlmCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-actions\" onclick=\"switchInspectorTab('actions')\">🎯 Actions (<span id=\"tabActionsCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-visuals\" onclick=\"switchInspectorTab('visuals')\">📸 Visuals (<span id=\"tabVisualsCount\">0</span>)</button>\n");
+            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-verification\" onclick=\"switchInspectorTab('verification')\">🔍 Verification <span class=\"pill-verif-badge\" id=\"tabVerifBadge\" style=\"display:none;\"></span></button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes <span class=\"pill-error-count\" id=\"tabErrorBadge\" style=\"display:none;\">Error</span></button>\n");
             sb.append("          </div>\n");
 
@@ -297,6 +366,7 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"tab-panel active\" id=\"panel-llm\"></div>\n");
             sb.append("            <div class=\"tab-panel\" id=\"panel-actions\"></div>\n");
             sb.append("            <div class=\"tab-panel\" id=\"panel-visuals\"></div>\n");
+            sb.append("            <div class=\"tab-panel\" id=\"panel-verification\"></div>\n");
             sb.append("            <div class=\"tab-panel\" id=\"panel-reasoning\"></div>\n");
             sb.append("          </div>\n");
 
@@ -443,6 +513,10 @@ public final class HtmlReportGenerator
         {
             sb.append("              <span class=\"badge-flag visual-badge\">📸 VISUAL</span>\n");
         }
+        if (step.getSemanticIntent() != null && !step.getSemanticIntent().isBlank())
+        {
+            sb.append("              <span class=\"badge-flag intent-badge\" title=\"Semantic Intent: ").append(escapeHtml(step.getSemanticIntent())).append("\">🎯 ").append(escapeHtml(step.getSemanticIntent())).append("</span>\n");
+        }
         if (step.isOptional())
         {
             sb.append("              <span class=\"badge-flag optional-badge\">OPTIONAL</span>\n");
@@ -463,6 +537,16 @@ public final class HtmlReportGenerator
         if (step.getEscalations() > 0)
         {
             sb.append("              <span class=\"escalation-badge\">⚡ ").append(step.getEscalations()).append(" esc</span>\n");
+        }
+        if (step.getVerificationResult() != null)
+        {
+            final boolean pass = step.getVerificationResult().passed();
+            final String badgeCls = pass ? "verification-badge-pass" : "verification-badge-fail";
+            final String badgeLabel = pass ? "🔍 VERIFIED" : "⚠️ VERIF FAILED";
+            final String summary = step.getVerificationResult().getOverallVerdict() != null && step.getVerificationResult().getOverallVerdict().summary() != null
+                ? escapeHtml(step.getVerificationResult().getOverallVerdict().summary())
+                : badgeLabel;
+            sb.append("              <span class=\"badge-flag ").append(badgeCls).append("\" title=\"").append(summary).append("\">").append(badgeLabel).append("</span>\n");
         }
     }
 
@@ -497,9 +581,9 @@ public final class HtmlReportGenerator
     {
         final boolean isSub = subIndex >= 0;
         final String footerClass = isSub ? "sub-step-footer" : "step-card-footer";
-        final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls());
+        final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
 
-        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty() || step.getSsimScore() != null)
+        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty() || step.getSsimScore() != null || step.getVerificationResult() != null)
         {
             sb.append("          <div class=\"").append(footerClass).append("\">\n");
             if (step.getSsimScore() != null)
@@ -509,6 +593,12 @@ public final class HtmlReportGenerator
                 final boolean pass = score >= min;
                 sb.append("            <span class=\"footer-tag ").append(pass ? "ssim-pass" : "ssim-fail").append("\">🖼️ SSIM: ")
                     .append(String.format("%.4f", score)).append(" (Min: ").append(String.format("%.2f", min)).append(")</span>\n");
+            }
+            if (step.getVerificationResult() != null)
+            {
+                final boolean pass = step.getVerificationResult().passed();
+                sb.append("            <span class=\"footer-tag ").append(pass ? "verif-pass" : "verif-fail")
+                  .append("\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'verification')\">🔍 Verification: ").append(pass ? "PASSED" : "FAILED").append("</span>\n");
             }
             if (!step.getActions().isEmpty())
             {
@@ -871,6 +961,31 @@ public final class HtmlReportGenerator
                     visBadge.style.display = 'none';
                 }
 
+                var intentBadge = document.getElementById('inspIntentBadge');
+                if (step.semanticIntent) {
+                    intentBadge.style.display = 'inline-block';
+                    intentBadge.textContent = '🎯 ' + step.semanticIntent;
+                    intentBadge.title = 'Semantic Intent: ' + step.semanticIntent;
+                } else {
+                    intentBadge.style.display = 'none';
+                }
+
+                var verifBadge = document.getElementById('inspVerificationBadge');
+                var tabVerifBadge = document.getElementById('tabVerifBadge');
+                if (step.verificationResult) {
+                    var vPass = step.verificationResult.passed !== undefined ? step.verificationResult.passed : (step.verificationResult.overallVerdict ? step.verificationResult.overallVerdict.passed : false);
+                    verifBadge.style.display = 'inline-block';
+                    verifBadge.textContent = vPass ? '🔍 VERIFIED' : '⚠️ VERIF FAILED';
+                    verifBadge.className = 'badge-flag ' + (vPass ? 'verification-badge-pass' : 'verification-badge-fail');
+
+                    tabVerifBadge.style.display = 'inline-block';
+                    tabVerifBadge.textContent = vPass ? 'PASS' : 'FAIL';
+                    tabVerifBadge.className = 'pill-verif-badge ' + (vPass ? 'pill-pass' : 'pill-fail');
+                } else {
+                    verifBadge.style.display = 'none';
+                    tabVerifBadge.style.display = 'none';
+                }
+
                 var srcEl = document.getElementById('inspSourceFile');
                 if (step.sourceFile) {
                     srcEl.textContent = '📄 ' + step.sourceFile + (step.lineNumber ? ':' + step.lineNumber : '');
@@ -912,6 +1027,8 @@ public final class HtmlReportGenerator
                 // Tab Auto-Selection
                 if (preferredTab) {
                     window.switchInspectorTab(preferredTab);
+                } else if (step.verificationResult && !step.verificationResult.passed) {
+                    window.switchInspectorTab('verification');
                 } else if (step.failureReason && llmCalls.length === 0) {
                     window.switchInspectorTab('reasoning');
                 } else if (step.visual || (visuals.length > 0 && llmCalls.length === 0)) {
@@ -1087,7 +1204,68 @@ public final class HtmlReportGenerator
                     visualsPanel.appendChild(grid);
                 }
 
-                // 4. Render Reasoning Panel
+                // 4. Render Verification Panel
+                var verifPanel = document.getElementById('panel-verification');
+                verifPanel.innerHTML = '';
+                if (!step.verificationResult) {
+                    var emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-inspector-state';
+                    emptyDiv.textContent = 'No semantic outcome verification recorded for this step.';
+                    verifPanel.appendChild(emptyDiv);
+                } else {
+                    var vr = step.verificationResult;
+                    var vPass = vr.passed !== undefined ? vr.passed : (vr.overallVerdict ? vr.overallVerdict.passed : false);
+                    var vCard = document.createElement('div');
+                    vCard.className = 'verification-card';
+
+                    var vHeader = document.createElement('div');
+                    vHeader.className = 'verification-header';
+                    vHeader.innerHTML = '<div class=\"verification-title\"><span>🔍 Semantic Outcome Verification</span></div>' +
+                                        '<span class=\"step-status-pill ' + (vPass ? 'pill-pass' : 'pill-fail') + '\">' + (vPass ? 'VERDICT: PASSED' : 'VERDICT: FAILED') + '</span>';
+                    vCard.appendChild(vHeader);
+
+                    var ovSummary = (vr.overallVerdict && vr.overallVerdict.summary) ? vr.overallVerdict.summary : '';
+                    if (ovSummary) {
+                        var sumBox = document.createElement('div');
+                        sumBox.className = 'verification-summary';
+                        sumBox.innerHTML = '<strong>Overall Assessment:</strong> ' + escapeHtml(ovSummary);
+                        vCard.appendChild(sumBox);
+                    }
+
+                    if (vr.rubrics) {
+                        var rGrid = document.createElement('div');
+                        rGrid.className = 'rubrics-grid';
+
+                        var rubricsList = [
+                            { name: '🎯 Intent Match Check', data: vr.rubrics.intentMatch },
+                            { name: '🖼️ Visual Delta Check', data: vr.rubrics.visualDelta },
+                            { name: '🛡️ Absence of Errors Check', data: vr.rubrics.absenceOfErrors }
+                        ];
+
+                        rubricsList.forEach(function(item) {
+                            if (item.data) {
+                                var rItemCard = document.createElement('div');
+                                rItemCard.className = 'rubric-item-card';
+                                var score = (item.data.score || 'UNKNOWN').toUpperCase();
+                                var scoreClass = (score === 'PASS' || score === 'PASSED') ? 'pill-pass' :
+                                                 (score === 'FAIL' || score === 'FAILED') ? 'pill-fail' : 'pill-pending';
+
+                                rItemCard.innerHTML = '<div class=\"rubric-item-header\">' +
+                                                      '<span class=\"rubric-name\">' + item.name + '</span>' +
+                                                      '<span class=\"rubric-score ' + scoreClass + '\">' + escapeHtml(score) + '</span>' +
+                                                      '</div>' +
+                                                      '<div class=\"rubric-analysis\">' + escapeHtml(item.data.analysis || 'No detailed analysis provided.') + '</div>';
+                                rGrid.appendChild(rItemCard);
+                            }
+                        });
+
+                        vCard.appendChild(rGrid);
+                    }
+
+                    verifPanel.appendChild(vCard);
+                }
+
+                // 5. Render Reasoning Panel
                 var reasPanel = document.getElementById('panel-reasoning');
                 reasPanel.innerHTML = '';
                 if (step.reasoning) {
@@ -1385,6 +1563,19 @@ public final class HtmlReportGenerator
                 color: var(--text-muted);
                 font-size: 0.85rem;
             }
+            .linter-box summary::-webkit-details-marker {
+                display: none;
+            }
+            .linter-box summary {
+                list-style: none;
+                outline: none;
+            }
+            .linter-box[open] .linter-toggle-icon {
+                transform: rotate(0deg);
+            }
+            .linter-box:not([open]) .linter-toggle-icon {
+                transform: rotate(-90deg);
+            }
             .code-block {
                 background: #f1f5f9;
                 border: 1px solid var(--border);
@@ -1548,6 +1739,21 @@ public final class HtmlReportGenerator
                 color: var(--accent-purple);
                 border-color: rgba(124, 58, 237, 0.4);
             }
+            .badge-flag.intent-badge {
+                background: #e0f2fe;
+                color: #0369a1;
+                border-color: rgba(3, 105, 161, 0.35);
+            }
+            .badge-flag.verification-badge-pass {
+                background: var(--accent-success-light);
+                color: var(--accent-success);
+                border-color: rgba(22, 163, 74, 0.4);
+            }
+            .badge-flag.verification-badge-fail {
+                background: var(--accent-danger-light);
+                color: var(--accent-danger);
+                border-color: rgba(220, 38, 38, 0.4);
+            }
             .step-header-right {
                 display: flex;
                 align-items: center;
@@ -1609,6 +1815,24 @@ public final class HtmlReportGenerator
                 background: var(--accent-primary-light);
                 color: var(--accent-primary);
                 font-weight: 600;
+            }
+            .footer-tag.verif-pass {
+                background: var(--accent-success-light);
+                color: var(--accent-success);
+                font-weight: 600;
+            }
+            .footer-tag.verif-fail {
+                background: var(--accent-danger-light);
+                color: var(--accent-danger);
+                font-weight: 600;
+            }
+            .pill-verif-badge {
+                font-size: 0.7rem;
+                font-weight: 700;
+                padding: 0.1rem 0.4rem;
+                border-radius: 9999px;
+                margin-left: 0.3rem;
+                text-transform: uppercase;
             }
             .sub-steps-container {
                 background: #f8fafc;
@@ -2004,6 +2228,77 @@ public final class HtmlReportGenerator
                 font-size: 0.88rem;
                 color: #991b1b;
                 font-family: var(--font-mono);
+            }
+            .verification-card {
+                background: #ffffff;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 1rem;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            }
+            .verification-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 0.75rem;
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid var(--border);
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .verification-title {
+                font-weight: 700;
+                font-size: 0.95rem;
+                color: var(--text);
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .verification-summary {
+                font-size: 0.88rem;
+                color: var(--text);
+                line-height: 1.5;
+                margin-bottom: 1rem;
+                background: #f8fafc;
+                padding: 0.75rem;
+                border-radius: 6px;
+                border-left: 4px solid var(--accent-primary);
+            }
+            .rubrics-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+            .rubric-item-card {
+                background: #f8fafc;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.75rem;
+            }
+            .rubric-item-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 0.35rem;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+            }
+            .rubric-name {
+                font-weight: 600;
+                font-size: 0.85rem;
+                color: var(--text);
+            }
+            .rubric-score {
+                font-size: 0.72rem;
+                font-weight: 700;
+                padding: 0.15rem 0.45rem;
+                border-radius: 4px;
+                text-transform: uppercase;
+            }
+            .rubric-analysis {
+                font-size: 0.82rem;
+                color: var(--text-sub);
+                line-height: 1.4;
             }
             .context-badge {
                 background: #f1f5f9;

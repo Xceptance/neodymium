@@ -27,8 +27,10 @@ import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.codeborne.selenide.CheckResult;
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Driver;
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
@@ -69,119 +71,399 @@ public final class AssertAction implements BrowserActionPlugin
             return;
         }
 
+        final String type = action.getType() != null ? action.getType().toUpperCase() : "ASSERT";
         final String expected = action.getValue();
 
-        // Handle URL assertions (matching target names like "url", "currentUrl", or "pageUrl")
-        if ("url".equalsIgnoreCase(action.getTarget()) || "currentUrl".equalsIgnoreCase(action.getTarget()) || "pageUrl".equalsIgnoreCase(action.getTarget()))
+        // Handle URL assertions
+        if ("ASSERT_URL".equals(type) || ("ASSERT".equals(type) && ("url".equalsIgnoreCase(action.getTarget()) || "currentUrl".equalsIgnoreCase(action.getTarget()) || "pageUrl".equalsIgnoreCase(action.getTarget()))))
         {
-            if (expected == null)
-            {
-                throw new RuntimeException("URL assertion requires a 'value' (the expected URL)");
-            }
+            executeUrlAssertion(action, expected);
+            return;
+        }
 
+        // Handle Title assertions
+        if ("ASSERT_TITLE".equals(type) || ("ASSERT".equals(type) && ("title".equalsIgnoreCase(action.getTarget()) || "pageTitle".equalsIgnoreCase(action.getTarget()))))
+        {
+            executeTitleAssertion(action, expected);
+            return;
+        }
+
+        // Handle Element Count assertions
+        if ("ASSERT_COUNT".equals(type))
+        {
             try
             {
-                if (action.isRegex())
-                {
-                    final String cleanExpected = cleanRegexPattern(expected);
-                    Pattern pattern;
-                    try
-                    {
-                        pattern = Pattern.compile(cleanExpected, Pattern.DOTALL | Pattern.MULTILINE);
-                    }
-                    catch (final PatternSyntaxException e)
-                    {
-                        pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
-                    }
-                    final Pattern finalPattern = pattern;
-                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && (finalPattern.matcher(d.getCurrentUrl()).find() || d.getCurrentUrl().contains(cleanExpected)))
-                            || (d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected))));
-                    LOG.debug("   ✅ URL/Title Regex Assertion passed for: '{}'", expected);
-                }
-                else
-                {
-                    // Wait until the current page URL or title updates and matches/contains the expected string
-                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected))
-                            || (d.getTitle() != null && d.getTitle().contains(expected)));
-                    LOG.debug("   ✅ URL/Title Assertion passed for: '{}'", expected);
-                }
+                executeCountAssertion(action, expected);
             }
-            catch (final TimeoutException e)
+            catch (final Throwable e)
             {
-                final String actualUrl = WebDriverRunner.url();
-                SelenideAddons.wrapAssertionError(() ->
+                if (e instanceof AssertionError ae)
                 {
-                    if (action.isRegex())
-                    {
-                        throw new AssertionError(String.format("Assertion failed: Expected URL to match regex '%s' but was '%s'", expected, actualUrl), e);
-                    }
-                    else
-                    {
-                        throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
-                    }
-                });
+                    throw ae;
+                }
+                throw new AssertionError(String.format("Count assertion failed on '%s': %s", action.getTarget(), e.getMessage()), e);
             }
             return;
         }
 
-        // Handle Title assertions (matching target names like "title" or "pageTitle")
-        if ("title".equalsIgnoreCase(action.getTarget()) || "pageTitle".equalsIgnoreCase(action.getTarget()))
-        {
-            if (expected == null)
-            {
-                throw new RuntimeException("Title assertion requires a 'value' (the expected title)");
-            }
+        final SelenideElement element = SelenideElementFinder.findElement(action);
 
-            try
+        try
+        {
+            switch (type)
             {
-                if (action.isRegex())
+                case "ASSERT_EXISTS" ->
                 {
-                    final String cleanExpected = cleanRegexPattern(expected);
-                    Pattern pattern;
-                    try
-                    {
-                        pattern = Pattern.compile(cleanExpected, Pattern.DOTALL | Pattern.MULTILINE);
-                    }
-                    catch (final PatternSyntaxException e)
-                    {
-                        pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
-                    }
-                    final Pattern finalPattern = pattern;
-                    Selenide.Wait().until(d -> d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected)));
-                    LOG.debug("   ✅ Title Regex Assertion passed for: '{}'", expected);
+                    element.should(Condition.exist);
+                    LOG.debug("   ✅ Element exists in DOM: {}", action);
+                    return;
                 }
-                else
+                case "ASSERT_VISIBLE" ->
                 {
-                    Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().contains(expected));
-                    LOG.debug("   ✅ Title Assertion passed for: '{}'", expected);
+                    element.shouldBe(Condition.visible);
+                    LOG.debug("   ✅ Element visible: {}", action);
+                    return;
                 }
-            }
-            catch (final TimeoutException e)
-            {
-                final String actualTitle = Selenide.title();
-                SelenideAddons.wrapAssertionError(() ->
+                case "ASSERT_ABSENT" ->
                 {
-                    if (action.isRegex())
+                    element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                    LOG.debug("   ✅ Element absent: {}", action);
+                    return;
+                }
+                case "ASSERT_HIDDEN" ->
+                {
+                    element.shouldBe(Condition.hidden);
+                    LOG.debug("   ✅ Element hidden: {}", action);
+                    return;
+                }
+                case "ASSERT_CHECKED" ->
+                {
+                    element.shouldBe(Condition.checked);
+                    LOG.debug("   ✅ Element checked: {}", action);
+                    return;
+                }
+                case "ASSERT_UNCHECKED" ->
+                {
+                    element.shouldNotBe(Condition.checked);
+                    LOG.debug("   ✅ Element unchecked: {}", action);
+                    return;
+                }
+                case "ASSERT_DISABLED" ->
+                {
+                    element.shouldBe(Condition.disabled);
+                    LOG.debug("   ✅ Element disabled: {}", action);
+                    return;
+                }
+                case "ASSERT_ENABLED" ->
+                {
+                    element.shouldBe(Condition.enabled);
+                    LOG.debug("   ✅ Element enabled: {}", action);
+                    return;
+                }
+                case "ASSERT_FOCUSED" ->
+                {
+                    final Boolean isFocused = Selenide.executeJavaScript(
+                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                            element);
+                    if (!Boolean.TRUE.equals(isFocused))
                     {
-                        throw new AssertionError(String.format("Assertion failed: Expected Title to match regex '%s' but was '%s'", expected, actualTitle), e);
+                        element.shouldBe(Condition.focused);
+                    }
+                    LOG.debug("   ✅ Element focused: {}", action);
+                    return;
+                }
+                case "ASSERT_SELECTED" ->
+                {
+                    if ("SELECT".equalsIgnoreCase(element.getTagName()))
+                    {
+                        element.getSelectedOption().shouldBe(Condition.exist);
                     }
                     else
                     {
-                        throw new AssertionError(String.format("Assertion failed: Expected Title to contain '%s' but was '%s'", expected, actualTitle), e);
+                        element.shouldBe(Condition.selected);
+                    }
+                    LOG.debug("   ✅ Element selected: {}", action);
+                    return;
+                }
+                case "ASSERT_READONLY" ->
+                {
+                    element.shouldBe(Condition.readonly);
+                    LOG.debug("   ✅ Element readonly: {}", action);
+                    return;
+                }
+                case "ASSERT_EDITABLE" ->
+                {
+                    element.shouldBe(Condition.editable);
+                    LOG.debug("   ✅ Element editable: {}", action);
+                    return;
+                }
+                case "ASSERT_VALUE" ->
+                {
+                    if (action.isRegex() && expected != null)
+                    {
+                        final String cleanPattern = cleanRegexPattern(expected);
+                        final Pattern pat;
+                        try
+                        {
+                            pat = Pattern.compile(cleanPattern, Pattern.DOTALL | Pattern.MULTILINE);
+                        }
+                        catch (final PatternSyntaxException e)
+                        {
+                            throw new RuntimeException("Invalid regex pattern for ASSERT_VALUE: " + expected, e);
+                        }
+                        element.should(new WebElementCondition("Value regex match for '" + cleanPattern + "'")
+                        {
+                            @Override
+                            public CheckResult check(final Driver driver, final WebElement el)
+                            {
+                                final String val = el.getAttribute("value");
+                                final boolean ok = val != null && pat.matcher(val).find();
+                                return new CheckResult(ok, val);
+                            }
+                        });
+                    }
+                    else
+                    {
+                        element.shouldHave(Condition.value(expected != null ? expected : ""));
+                    }
+                    LOG.debug("   ✅ Element value matches '{}': {}", expected, action);
+                    return;
+                }
+                case "ASSERT_ATTRIBUTE" ->
+                {
+                    executeAttributeAssertion(element, action, expected);
+                    return;
+                }
+                case "ASSERT_TEXT" ->
+                {
+                    executeTextAssertion(element, action, expected);
+                    return;
+                }
+                default ->
+                {
+                    // Generic "ASSERT" legacy dispatch for backward compatibility
+                    executeLegacyAssert(element, action, expected);
+                }
+            }
+        }
+        catch (final Throwable e)
+        {
+            wrapAndRethrow(element, expected != null ? expected : type, e);
+        }
+    }
+
+    private void executeAttributeAssertion(final SelenideElement element, final Action action, final String expected)
+    {
+        if (expected == null || expected.isBlank())
+        {
+            throw new RuntimeException("Attribute assertion requires a 'value' (e.g. 'name=value' or 'name')");
+        }
+
+        final int eqIdx = expected.indexOf('=');
+        if (eqIdx > 0)
+        {
+            final String attrName = expected.substring(0, eqIdx).trim();
+            String attrValue = expected.substring(eqIdx + 1).trim();
+            if ((attrValue.startsWith("\"") && attrValue.endsWith("\"")) || (attrValue.startsWith("'") && attrValue.endsWith("'")))
+            {
+                attrValue = attrValue.substring(1, attrValue.length() - 1);
+            }
+
+            if (action.isRegex())
+            {
+                final String cleanPattern = cleanRegexPattern(attrValue);
+                final Pattern pat;
+                try
+                {
+                    pat = Pattern.compile(cleanPattern, Pattern.DOTALL | Pattern.MULTILINE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    throw new RuntimeException("Invalid regex pattern for attribute '" + attrName + "': " + attrValue, e);
+                }
+                element.should(new WebElementCondition("Attribute regex match for '" + attrName + "=" + cleanPattern + "'")
+                {
+                    @Override
+                    public CheckResult check(final Driver driver, final WebElement el)
+                    {
+                        final String val = el.getAttribute(attrName);
+                        final boolean ok = val != null && pat.matcher(val).find();
+                        return new CheckResult(ok, val);
                     }
                 });
             }
-            return;
+            else
+            {
+                element.shouldHave(Condition.attribute(attrName, attrValue));
+            }
+            LOG.debug("   ✅ Attribute Assertion passed for: {}={}", attrName, attrValue);
+        }
+        else
+        {
+            element.shouldHave(Condition.attribute(expected.trim()));
+            LOG.debug("   ✅ Attribute Existence Assertion passed for: {}", expected);
+        }
+    }
+
+    private void executeCountAssertion(final Action action, final String expected)
+    {
+        if (expected == null || expected.isBlank())
+        {
+            throw new RuntimeException("Count assertion requires a 'value' specifying expected element count");
         }
 
-        // Handle Element assertions
+        final String trimmed = expected.trim();
+        final ElementsCollection collection = SelenideElementFinder.findElements(action);
+
+        if (trimmed.startsWith(">="))
+        {
+            collection.shouldHave(CollectionCondition.sizeGreaterThanOrEqual(Integer.parseInt(trimmed.substring(2).trim())));
+        }
+        else if (trimmed.startsWith(">"))
+        {
+            collection.shouldHave(CollectionCondition.sizeGreaterThan(Integer.parseInt(trimmed.substring(1).trim())));
+        }
+        else if (trimmed.startsWith("<="))
+        {
+            collection.shouldHave(CollectionCondition.sizeLessThanOrEqual(Integer.parseInt(trimmed.substring(2).trim())));
+        }
+        else if (trimmed.startsWith("<"))
+        {
+            collection.shouldHave(CollectionCondition.sizeLessThan(Integer.parseInt(trimmed.substring(1).trim())));
+        }
+        else
+        {
+            collection.shouldHave(CollectionCondition.size(Integer.parseInt(trimmed)));
+        }
+        LOG.debug("   ✅ Count Assertion passed for '{}': {}", expected, action);
+    }
+
+    private void executeUrlAssertion(final Action action, final String expected)
+    {
+        if (expected == null)
+        {
+            throw new RuntimeException("URL assertion requires a 'value' (the expected URL)");
+        }
+
+        try
+        {
+            if (action.isRegex())
+            {
+                final String cleanExpected = cleanRegexPattern(expected);
+                Pattern pattern;
+                try
+                {
+                    pattern = Pattern.compile(cleanExpected, Pattern.DOTALL | Pattern.MULTILINE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
+                }
+                final Pattern finalPattern = pattern;
+                Selenide.Wait().until(d -> (d.getCurrentUrl() != null && (finalPattern.matcher(d.getCurrentUrl()).find() || d.getCurrentUrl().contains(cleanExpected)))
+                        || (d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected))));
+                LOG.debug("   ✅ URL/Title Regex Assertion passed for: '{}'", expected);
+            }
+            else
+            {
+                Selenide.Wait().until(d -> (d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected))
+                        || (d.getTitle() != null && d.getTitle().contains(expected)));
+                LOG.debug("   ✅ URL/Title Assertion passed for: '{}'", expected);
+            }
+        }
+        catch (final TimeoutException e)
+        {
+            final String actualUrl = WebDriverRunner.url();
+            SelenideAddons.wrapAssertionError(() ->
+            {
+                if (action.isRegex())
+                {
+                    throw new AssertionError(String.format("Assertion failed: Expected URL to match regex '%s' but was '%s'", expected, actualUrl), e);
+                }
+                else
+                {
+                    throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+                }
+            });
+        }
+    }
+
+    private void executeTitleAssertion(final Action action, final String expected)
+    {
+        if (expected == null)
+        {
+            throw new RuntimeException("Title assertion requires a 'value' (the expected title)");
+        }
+
+        try
+        {
+            if (action.isRegex())
+            {
+                final String cleanExpected = cleanRegexPattern(expected);
+                Pattern pattern;
+                try
+                {
+                    pattern = Pattern.compile(cleanExpected, Pattern.DOTALL | Pattern.MULTILINE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
+                }
+                final Pattern finalPattern = pattern;
+                Selenide.Wait().until(d -> d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected)));
+                LOG.debug("   ✅ Title Regex Assertion passed for: '{}'", expected);
+            }
+            else
+            {
+                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().contains(expected));
+                LOG.debug("   ✅ Title Assertion passed for: '{}'", expected);
+            }
+        }
+        catch (final TimeoutException e)
+        {
+            final String actualTitle = Selenide.title();
+            SelenideAddons.wrapAssertionError(() ->
+            {
+                if (action.isRegex())
+                {
+                    throw new AssertionError(String.format("Assertion failed: Expected Title to match regex '%s' but was '%s'", expected, actualTitle), e);
+                }
+                else
+                {
+                    throw new AssertionError(String.format("Assertion failed: Expected Title to contain '%s' but was '%s'", expected, actualTitle), e);
+                }
+            });
+        }
+    }
+
+    private void executeTextAssertion(final SelenideElement element, final Action action, final String expected)
+    {
+        final String matchText = expected != null ? expected : "";
+        final WebElementCondition cond;
+        if (action.isRegex())
+        {
+            cond = new RegexMatch(matchText);
+        }
+        else
+        {
+            cond = Condition.or("Assertion for text " + matchText,
+                    Condition.exactText(matchText),
+                    Condition.partialText(matchText),
+                    Condition.value(matchText),
+                    new PartialTextContent(matchText),
+                    new AnyAttributeContains(matchText));
+        }
+        element.should(cond);
+        LOG.debug("   ✅ Text Assertion passed for: '{}'", matchText);
+    }
+
+    private void executeLegacyAssert(final SelenideElement element, final Action action, final String expected)
+    {
         final boolean isAbsenceCheck = "hidden".equalsIgnoreCase(expected) || "[hidden]".equalsIgnoreCase(expected)
                 || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected)
                 || "not_exist".equalsIgnoreCase(expected) || "[not_exist]".equalsIgnoreCase(expected)
                 || "not_exists".equalsIgnoreCase(expected) || "[not_exists]".equalsIgnoreCase(expected)
                 || "invisible".equalsIgnoreCase(expected) || "[invisible]".equalsIgnoreCase(expected);
-
-        final SelenideElement element = SelenideElementFinder.findElement(action);
 
         if (isAbsenceCheck)
         {
@@ -189,192 +471,182 @@ public final class AssertAction implements BrowserActionPlugin
             return;
         }
 
-        // If no value is specified, assert that the target element simply exists on the page
-        if (expected == null)
+        if (expected == null || expected.isEmpty())
         {
             element.should(Condition.exist);
             LOG.debug("   ✅ Element exists: {}", action);
             return;
         }
 
-        try
+        // Focus assertion
+        if ("focused".equalsIgnoreCase(expected) || "[focused]".equalsIgnoreCase(expected))
         {
-            // Focus assertion: Verify that the targeted element is currently focused (document.activeElement)
-            if ("focused".equalsIgnoreCase(expected) || "[focused]".equalsIgnoreCase(expected))
+            final Boolean isFocused = Selenide.executeJavaScript(
+                    "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                    element);
+            if (!Boolean.TRUE.equals(isFocused))
             {
-                final Boolean isFocused = Selenide.executeJavaScript(
-                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                        element);
-                if (!Boolean.TRUE.equals(isFocused))
-                {
-                    element.shouldBe(Condition.focused);
-                }
+                element.shouldBe(Condition.focused);
             }
-            // Visibility assertion: Verify that the targeted element is visible/present on the page
-            else if ("visible".equalsIgnoreCase(expected) || "[visible]".equalsIgnoreCase(expected) || "present".equalsIgnoreCase(expected) || "[present]".equalsIgnoreCase(expected))
+        }
+        // Visibility assertion
+        else if ("visible".equalsIgnoreCase(expected) || "[visible]".equalsIgnoreCase(expected) || "present".equalsIgnoreCase(expected) || "[present]".equalsIgnoreCase(expected))
+        {
+            element.shouldBe(Condition.visible);
+        }
+        // Checked assertion
+        else if ("checked".equalsIgnoreCase(expected) || "[checked]".equalsIgnoreCase(expected))
+        {
+            element.shouldBe(Condition.checked);
+        }
+        // Unchecked assertion
+        else if ("unchecked".equalsIgnoreCase(expected) || "[unchecked]".equalsIgnoreCase(expected) || "not_checked".equalsIgnoreCase(expected) || "[not_checked]".equalsIgnoreCase(expected))
+        {
+            element.shouldNotBe(Condition.checked);
+        }
+        // Disabled assertion
+        else if ("disabled".equalsIgnoreCase(expected) || "[disabled]".equalsIgnoreCase(expected))
+        {
+            element.shouldBe(Condition.disabled);
+        }
+        // Enabled assertion
+        else if ("enabled".equalsIgnoreCase(expected) || "[enabled]".equalsIgnoreCase(expected))
+        {
+            element.shouldBe(Condition.enabled);
+        }
+        // Selected assertion
+        else if ("selected".equalsIgnoreCase(expected) || "[selected]".equalsIgnoreCase(expected))
+        {
+            if ("SELECT".equalsIgnoreCase(element.getTagName()))
             {
-                element.shouldBe(Condition.visible);
+                element.getSelectedOption().shouldBe(Condition.exist);
             }
-            // Checked assertion: Verify that checkbox/radio button is checked
-            else if ("checked".equalsIgnoreCase(expected) || "[checked]".equalsIgnoreCase(expected))
+            else
+            {
+                element.shouldBe(Condition.selected);
+            }
+        }
+        // Readonly assertion
+        else if ("readonly".equalsIgnoreCase(expected) || "[readonly]".equalsIgnoreCase(expected) || "read_only".equalsIgnoreCase(expected) || "[read_only]".equalsIgnoreCase(expected))
+        {
+            element.shouldBe(Condition.readonly);
+        }
+        // Editable assertion
+        else if ("editable".equalsIgnoreCase(expected) || "[editable]".equalsIgnoreCase(expected))
+        {
+            element.shouldBe(Condition.editable);
+        }
+        // Checkbox/radio boolean state shortcut
+        else if (("true".equalsIgnoreCase(expected) || "false".equalsIgnoreCase(expected)) && isCheckboxOrRadio(element))
+        {
+            if ("true".equalsIgnoreCase(expected))
             {
                 element.shouldBe(Condition.checked);
             }
-            // Unchecked assertion: Verify that checkbox/radio button is unchecked
-            else if ("unchecked".equalsIgnoreCase(expected) || "[unchecked]".equalsIgnoreCase(expected) || "not_checked".equalsIgnoreCase(expected) || "[not_checked]".equalsIgnoreCase(expected))
+            else
             {
                 element.shouldNotBe(Condition.checked);
             }
-            // Disabled assertion: Verify that input/button/element is disabled
-            else if ("disabled".equalsIgnoreCase(expected) || "[disabled]".equalsIgnoreCase(expected))
+        }
+        // Content assertions
+        else
+        {
+            final WebElementCondition cond;
+            if (action.isRegex())
             {
-                element.shouldBe(Condition.disabled);
+                cond = new RegexMatch(expected);
             }
-            // Enabled assertion: Verify that input/button/element is enabled
-            else if ("enabled".equalsIgnoreCase(expected) || "[enabled]".equalsIgnoreCase(expected))
-            {
-                element.shouldBe(Condition.enabled);
-            }
-            // Selected assertion: Verify that select option / ARIA option is selected
-            else if ("selected".equalsIgnoreCase(expected) || "[selected]".equalsIgnoreCase(expected))
-            {
-                if ("SELECT".equalsIgnoreCase(element.getTagName()))
-                {
-                    element.getSelectedOption().shouldBe(Condition.exist);
-                }
-                else
-                {
-                    element.shouldBe(Condition.selected);
-                }
-            }
-            // Readonly assertion: Verify that input is readonly
-            else if ("readonly".equalsIgnoreCase(expected) || "[readonly]".equalsIgnoreCase(expected) || "read_only".equalsIgnoreCase(expected) || "[read_only]".equalsIgnoreCase(expected))
-            {
-                element.shouldBe(Condition.readonly);
-            }
-            // Editable assertion: Verify that input is editable
-            else if ("editable".equalsIgnoreCase(expected) || "[editable]".equalsIgnoreCase(expected))
-            {
-                element.shouldBe(Condition.editable);
-            }
-            // Checkbox/radio boolean state shortcut: if expected is "true" or "false" on a checkbox or radio button
-            else if (("true".equalsIgnoreCase(expected) || "false".equalsIgnoreCase(expected)) && isCheckboxOrRadio(element))
-            {
-                if ("true".equalsIgnoreCase(expected))
-                {
-                    element.shouldBe(Condition.checked);
-                }
-                else
-                {
-                    element.shouldNotBe(Condition.checked);
-                }
-            }
-            // Content assertions: verify text, regex matching, or attribute contents of the target element
             else
             {
-                final WebElementCondition cond;
-                if (action.isRegex())
+                final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
+                if (attributeMatcher.matches())
                 {
-                    cond = new RegexMatch(expected);
+                    final String rawAttrName = attributeMatcher.group(1);
+                    final String rawAttrValue = attributeMatcher.group(2);
+                    final String attrName = rawAttrName.toLowerCase();
+                    final String attrValue = rawAttrValue.toLowerCase();
+
+                    if ("checked".equals(attrName))
+                    {
+                        if ("false".equals(attrValue))
+                        {
+                            element.shouldNotBe(Condition.checked);
+                        }
+                        else
+                        {
+                            element.shouldBe(Condition.checked);
+                        }
+                        return;
+                    }
+                    if ("disabled".equals(attrName))
+                    {
+                        if ("false".equals(attrValue))
+                        {
+                            element.shouldBe(Condition.enabled);
+                        }
+                        else
+                        {
+                            element.shouldBe(Condition.disabled);
+                        }
+                        return;
+                    }
+                    if ("enabled".equals(attrName))
+                    {
+                        if ("false".equals(attrValue))
+                        {
+                            element.shouldBe(Condition.disabled);
+                        }
+                        else
+                        {
+                            element.shouldBe(Condition.enabled);
+                        }
+                        return;
+                    }
+                    if ("selected".equals(attrName))
+                    {
+                        if ("false".equals(attrValue))
+                        {
+                            element.shouldNotBe(Condition.selected);
+                        }
+                        else
+                        {
+                            element.shouldBe(Condition.selected);
+                        }
+                        return;
+                    }
+                    if ("readonly".equals(attrName) || "read_only".equals(attrName))
+                    {
+                        if ("false".equals(attrValue))
+                        {
+                            element.shouldBe(Condition.editable);
+                        }
+                        else
+                        {
+                            element.shouldBe(Condition.readonly);
+                        }
+                        return;
+                    }
+
+                    cond = Condition.or("Assertion for " + expected,
+                            Condition.attribute(rawAttrName, rawAttrValue),
+                            Condition.exactText(expected),
+                            Condition.partialText(expected),
+                            Condition.value(expected),
+                            new PartialTextContent(expected));
                 }
                 else
                 {
-                    // Check if value is format attrName=attrValue (e.g. class="active" or placeholder="search")
-                    final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
-                    if (attributeMatcher.matches())
-                    {
-                        final String rawAttrName = attributeMatcher.group(1);
-                        final String rawAttrValue = attributeMatcher.group(2);
-                        final String attrName = rawAttrName.toLowerCase();
-                        final String attrValue = rawAttrValue.toLowerCase();
-
-                        if ("checked".equals(attrName))
-                        {
-                            if ("false".equals(attrValue))
-                            {
-                                element.shouldNotBe(Condition.checked);
-                            }
-                            else
-                            {
-                                element.shouldBe(Condition.checked);
-                            }
-                            return;
-                        }
-                        if ("disabled".equals(attrName))
-                        {
-                            if ("false".equals(attrValue))
-                            {
-                                element.shouldBe(Condition.enabled);
-                            }
-                            else
-                            {
-                                element.shouldBe(Condition.disabled);
-                            }
-                            return;
-                        }
-                        if ("enabled".equals(attrName))
-                        {
-                            if ("false".equals(attrValue))
-                            {
-                                element.shouldBe(Condition.disabled);
-                            }
-                            else
-                            {
-                                element.shouldBe(Condition.enabled);
-                            }
-                            return;
-                        }
-                        if ("selected".equals(attrName))
-                        {
-                            if ("false".equals(attrValue))
-                            {
-                                element.shouldNotBe(Condition.selected);
-                            }
-                            else
-                            {
-                                element.shouldBe(Condition.selected);
-                            }
-                            return;
-                        }
-                        if ("readonly".equals(attrName) || "read_only".equals(attrName))
-                        {
-                            if ("false".equals(attrValue))
-                            {
-                                element.shouldBe(Condition.editable);
-                            }
-                            else
-                            {
-                                element.shouldBe(Condition.readonly);
-                            }
-                            return;
-                        }
-
-                        cond = Condition.or("Assertion for " + expected,
-                                Condition.attribute(rawAttrName, rawAttrValue),
-                                Condition.exactText(expected),
-                                Condition.partialText(expected),
-                                Condition.value(expected),
-                                new PartialTextContent(expected));
-                    }
-                    else
-                    {
-                        cond = Condition.or("Assertion for " + expected,
-                                Condition.exactText(expected),
-                                Condition.partialText(expected),
-                                Condition.value(expected),
-                                new PartialTextContent(expected),
-                                new AnyAttributeContains(expected));
-                    }
+                    cond = Condition.or("Assertion for " + expected,
+                            Condition.exactText(expected),
+                            Condition.partialText(expected),
+                            Condition.value(expected),
+                            new PartialTextContent(expected),
+                            new AnyAttributeContains(expected));
                 }
-
-                element.should(cond);
             }
-            LOG.debug("   ✅ Assertion passed for: '{}'", expected);
+            element.should(cond);
         }
-        catch (final Throwable e)
-        {
-            wrapAndRethrow(element, expected, e);
-        }
+        LOG.debug("   ✅ Legacy Assertion passed for: '{}'", expected);
     }
 
     private void wrapAndRethrow(final SelenideElement element, final String expected, final Throwable e)

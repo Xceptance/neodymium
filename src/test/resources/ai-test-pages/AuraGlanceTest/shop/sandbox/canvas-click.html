@@ -19,17 +19,14 @@
             <section class="aura-card">
                 <h1>Canvas Interactive Hotspots</h1>
                 <p class="aura-desc">
-                    These two canvas elements draw "RED" and "BLUE" purely as pixel content.
-                    Since there are no DOM text nodes representing these labels, the agent must inspect the screenshot
-                    visually to select and click the correct canvas.
+                    This canvas element renders "Discard" and "Confirm" buttons purely as 2D pixel bitmap content.
+                    Since there are no individual DOM nodes or text elements representing these controls, the AI agent
+                    must escalate to visual context and use coordinate-based interaction to click the intended button.
                 </p>
 
-                <div style="display: flex; justify-content: center; gap: 2rem; margin: 3rem 0;">
-                    <!-- Red Canvas -->
-                    <canvas id="red-canvas" width="150" height="100" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: #1a1a2e; cursor: pointer;"></canvas>
-
-                    <!-- Blue Canvas -->
-                    <canvas id="blue-canvas" width="150" height="100" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: #1a1a2e; cursor: pointer;"></canvas>
+                <div style="display: flex; justify-content: center; margin: 3rem 0;">
+                    <!-- Single Neutral Canvas Stage -->
+                    <canvas id="canvas-stage" width="400" height="150" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: #1a1a2e; cursor: pointer;"></canvas>
                 </div>
 
                 <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
@@ -40,35 +37,59 @@
     </div>
 
     <script>
-        const redCanvas = document.getElementById('red-canvas');
-        const blueCanvas = document.getElementById('blue-canvas');
+        const stage = document.getElementById('canvas-stage');
         const status = document.getElementById('canvas-status');
+        const ctx = stage.getContext('2d');
 
-        // Draw RED text
-        const redCtx = redCanvas.getContext('2d');
-        redCtx.fillStyle = '#ff3366';
-        redCtx.font = 'bold 20px Arial';
-        redCtx.textAlign = 'center';
-        redCtx.textBaseline = 'middle';
-        redCtx.fillText('RED', 75, 50);
+        function renderButtons() {
+            ctx.clearRect(0, 0, stage.width, stage.height);
 
-        // Draw BLUE text
-        const blueCtx = blueCanvas.getContext('2d');
-        blueCtx.fillStyle = '#33ccff';
-        blueCtx.font = 'bold 20px Arial';
-        blueCtx.textAlign = 'center';
-        blueCtx.textBaseline = 'middle';
-        blueCtx.fillText('BLUE', 75, 50);
+            // 1. Draw Discard button (Left: x=30..170, y=45..105)
+            ctx.fillStyle = 'rgba(255, 51, 102, 0.2)';
+            ctx.strokeStyle = '#ff3366';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(30, 45, 140, 60, 8);
+            ctx.fill();
+            ctx.stroke();
 
-        // Click listeners
-        redCanvas.addEventListener('click', function() {
-            status.innerText = 'Red Canvas Clicked';
-            status.style.color = '#ff3366';
-        });
+            ctx.fillStyle = '#ff3366';
+            ctx.font = 'bold 18px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Discard', 100, 75);
 
-        blueCanvas.addEventListener('click', function() {
-            status.innerText = 'Blue Canvas Clicked';
-            status.style.color = '#33ccff';
+            // 2. Draw Confirm button (Right: x=230..370, y=45..105)
+            ctx.fillStyle = 'rgba(6, 182, 212, 0.2)';
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(230, 45, 140, 60, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#06b6d4';
+            ctx.font = 'bold 18px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Confirm', 300, 75);
+        }
+
+        renderButtons();
+
+        // Coordinate hit-testing on click
+        stage.addEventListener('click', function(e) {
+            const rect = stage.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (x >= 30 && x <= 170 && y >= 45 && y <= 105) {
+                status.innerText = 'Discard Clicked';
+                status.style.color = '#ff3366';
+            } else if (x >= 230 && x <= 370 && y >= 45 && y <= 105) {
+                status.innerText = 'Confirm Clicked';
+                status.style.color = '#06b6d4';
+            }
         });
     </script>
     <script src="../../shared/controls.js"></script>

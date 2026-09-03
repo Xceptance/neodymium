@@ -125,6 +125,39 @@ public final class LocatorCascadeResolver
     }
 
     /**
+     * Resolves the effective ARIA role for an element, combining explicit role attributes
+     * with standard HTML tag implicit roles (e.g. {@code <button>} -> {@code "button"}).
+     *
+     * @param tag the HTML tag name
+     * @param role the explicit ARIA role attribute, if any
+     * @return the normalized effective ARIA role, or empty string if unspecified
+     */
+    public static String getEffectiveRole(final String tag, final String role)
+    {
+        if (role != null && !role.isBlank())
+        {
+            return role.trim().toLowerCase();
+        }
+        if (tag == null)
+        {
+            return "";
+        }
+        final String t = tag.trim().toLowerCase();
+        return switch (t)
+        {
+            case "button" -> "button";
+            case "a" -> "link";
+            case "input", "textarea" -> "textbox";
+            case "select" -> "combobox";
+            case "nav" -> "navigation";
+            case "header" -> "banner";
+            case "footer" -> "contentinfo";
+            case "main" -> "main";
+            default -> "";
+        };
+    }
+
+    /**
      * Calculates tag and ARIA role compatibility with semantic equivalence bucketing.
      */
     public static double calculateTagScore(
@@ -143,16 +176,20 @@ public final class LocatorCascadeResolver
             return 1.0;
         }
 
+        final String effRecordedRole = getEffectiveRole(recordedTag, recordedRole);
+        final String effCandidateRole = getEffectiveRole(candidateTag, candidateRole);
+
+        if (!effRecordedRole.isBlank() && !effCandidateRole.isBlank()
+            && effRecordedRole.equalsIgnoreCase(effCandidateRole))
+        {
+            return 0.95;
+        }
+
         final boolean recordedIsInteractive = isInteractiveElement(recordedTag, recordedRole);
         final boolean candidateIsInteractive = isInteractiveElement(candidateTag, candidateRole);
 
         if (recordedIsInteractive && candidateIsInteractive)
         {
-            if (recordedRole != null && candidateRole != null && !recordedRole.isBlank()
-                && recordedRole.equalsIgnoreCase(candidateRole))
-            {
-                return 0.90;
-            }
             return 0.70;
         }
 

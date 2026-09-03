@@ -221,7 +221,7 @@ public final class VisualBaselineGateStep implements PipelineStep
                             && this.step.getActions().stream().anyMatch(a -> !"NONE".equalsIgnoreCase(a.getType()));
 
                         final boolean isPureVerification = !hasActualActions
-                            || (this.step.isVisualStep() && this.step.getActions().stream().allMatch(a -> "ASSERT".equalsIgnoreCase(a.getType()) || "NONE".equalsIgnoreCase(a.getType())));
+                            || (this.step.isVisualStep() && this.step.getActions().stream().allMatch(a -> a.getType() != null && (a.getType().toUpperCase().startsWith("ASSERT") || "NONE".equalsIgnoreCase(a.getType()))));
 
                         if (isVisualMatch && isPureVerification)
                         {

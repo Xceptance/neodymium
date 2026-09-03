@@ -157,6 +157,7 @@ public final class YamlPlaybookParser implements PlaybookParser
         }
 
         Map<String, String> promptAddons = new HashMap<>();
+        String description = null;
         if (!identifier.endsWith(".json"))
         {
             try (final InputStream in = manager.read(identifier))
@@ -168,6 +169,10 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final Yaml yaml = new Yaml();
                     final Map<String, Object> loadedMap = yaml.load(fileContent);
                     promptAddons = parsePromptAddons(loadedMap);
+                    if (loadedMap != null && loadedMap.get("description") instanceof String descStr && !descStr.isBlank())
+                    {
+                        description = descStr.trim();
+                    }
                 }
             }
             catch (final Exception e)
@@ -196,7 +201,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         {
                             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
                         }
-                        return new Playbook(parsedSteps, dataSets, promptAddons);
+                        return new Playbook(parsedSteps, dataSets, promptAddons, description);
                     }
                 }
                 catch (final IllegalArgumentException e)
@@ -254,7 +259,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         }
                     }
                 }
-                return new Playbook(steps, dataSets, promptAddons);
+                return new Playbook(steps, dataSets, promptAddons, description);
             }
         }
 
@@ -265,7 +270,7 @@ public final class YamlPlaybookParser implements PlaybookParser
             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
         }
 
-        return new Playbook(steps, dataSets, promptAddons);
+        return new Playbook(steps, dataSets, promptAddons, description);
     }
 
     private Map<String, String> parsePromptAddons(final Map<String, Object> loadedMap)

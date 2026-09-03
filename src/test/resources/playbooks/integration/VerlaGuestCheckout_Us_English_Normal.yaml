@@ -14,16 +14,15 @@ steps: |
   There are data input forms on the left and and order summary block on the right (visual).
   Select 'United States' as country.
   Enter 'Mario' as first name, 'Meier' as last, and the email address 'foo@varmail.net'.
-  Enter '123 Main St' as street address, 'Manchester' as city, and '12345' as postcode.
-  Enter state 'MA'.
+  Enter '123 Main St' as street address, 'Manchester' as city, and '12345' as postcode, enter state 'MA'.
   Card number is '4111 1111 1111 1111', expiry data '12/29', and CVV is '111'.
   Click 'Purchase'.
+
   Wait for text "Thank you for your purchase!" to appear.
+  
   Scroll up as much as possible to reveal the full order confirmation.
   An order number is shown in the form 'V-[0-9]+-US'.
-  The total is mentioned and in USD.
-  The zip code says '12345'.
-  The text "Thank you for your purchase!" is shown.
+  The total is mentioned and in dollars ($), the zip code says '12345', and the text "Thank you for your purchase!" is shown.
   There is a green checkmark in the middle of the screen (visual).
 
 data:

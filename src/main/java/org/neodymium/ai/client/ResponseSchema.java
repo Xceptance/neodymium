@@ -32,9 +32,58 @@ public enum ResponseSchema
     /** Verification outcome assertions (pass/fail status with validation explanation). */
     ASSERTION,
 
+    /** Quality judge second-opinion validation outcome. */
+    JUDGE,
+
     /** Instruction splitting results representing composite sub-steps. */
     STEP_SPLITS,
 
     /** Free-form raw text response. */
-    TEXT
+    TEXT,
+
+    /** Upfront playbook pre-flight quality findings. */
+    LINTER;
+
+    /**
+     * Resolves the maximum output token limit ceiling appropriate for the specified response schema.
+     *
+     * @param schema the expected response schema, or null for default text
+     * @return the max output token limit
+     */
+    public static int resolveMaxOutputTokens(final ResponseSchema schema)
+    {
+        if (schema == null)
+        {
+            return 2048;
+        }
+
+        return switch (schema)
+        {
+            case STEP_SPLITS -> 256;
+            case JUDGE -> 1024;
+            case TEXT -> 2048;
+            case ACTIONS, ASSERTION, LINTER -> 4096;
+        };
+    }
+
+    /**
+     * Resolves the default provider-neutral reasoning effort tier for the specified response schema.
+     *
+     * @param schema the expected response schema, or null for default
+     * @return the resolved ReasoningEffort
+     */
+    public static ReasoningEffort resolveReasoningEffort(final ResponseSchema schema)
+    {
+        if (schema == null)
+        {
+            return ReasoningEffort.MEDIUM;
+        }
+
+        return switch (schema)
+        {
+            case STEP_SPLITS -> ReasoningEffort.LOW;
+            case JUDGE, TEXT, LINTER -> ReasoningEffort.MEDIUM;
+            case ACTIONS, ASSERTION -> ReasoningEffort.HIGH;
+        };
+    }
 }

@@ -18,27 +18,27 @@
  */
 package org.neodymium.ai.integration.verla;
 
-import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.TestMethodOrder;
-import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
 /**
  * Unified Multi-Locale Guest Checkout Integration Test.
- * Drives a single English playbook across multiple international storefront locales (DE, US, FR, JP).
+ * Drives a single English playbook across all 9 international storefront locales.
+ *
+ * Runs FORCE_RECORDING and REPLAY_STRICT across both Quality Judge modes (false and true)
+ * for each country individually.
  *
  * Schema: Feature_TargetStore_ScriptLanguage
  *
@@ -49,6 +49,8 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
+@AiJudge({false, true})
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Multi_English.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class VerlaGuestCheckout_Multi_English extends BaseAiTest
@@ -61,93 +63,76 @@ public class VerlaGuestCheckout_Multi_English extends BaseAiTest
     }
 
     /**
-     * Set up dynamic test parameters and judge configuration before each run.
-     *
-     * @param testInfo the JUnit TestInfo context
+     * Set up dynamic test parameters before each run.
      */
     @BeforeEach
-    public void setup(final TestInfo testInfo)
+    public void setup()
     {
-        if (server != null)
-        {
-            server.resetInventory();
-        }
+        server.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
-
-        final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
-        if (methodName.contains("WithJudge"))
-        {
-            Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
-        }
-        else
-        {
-            Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
-        }
-        AiConfiguration.resetInstance();
     }
 
     @Order(1)
-    @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("germany")
     @AiPlaybook
-    public void testCheckoutLiveGermany()
+    public void testCheckoutGermany()
     {
     }
 
     @Order(2)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("germany")
-    @AiPlaybook(recordingMethod = "testCheckoutLiveGermany")
-    public void testCheckoutReplayGermany()
+    @AiDataSet("united-states")
+    @AiPlaybook
+    public void testCheckoutUnitedStates()
     {
     }
 
     @Order(3)
-    @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("united-states")
+    @AiDataSet("united-kingdom")
     @AiPlaybook
-    public void testCheckoutLiveUnitedStates()
+    public void testCheckoutUnitedKingdom()
     {
     }
 
     @Order(4)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("united-states")
-    @AiPlaybook(recordingMethod = "testCheckoutLiveUnitedStates")
-    public void testCheckoutReplayUnitedStates()
+    @AiDataSet("canada-en")
+    @AiPlaybook
+    public void testCheckoutCanadaEn()
     {
     }
 
     @Order(5)
-    @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("france")
+    @AiDataSet("canada-fr")
     @AiPlaybook
-    public void testCheckoutLiveFrance()
+    public void testCheckoutCanadaFr()
     {
     }
 
     @Order(6)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("france")
-    @AiPlaybook(recordingMethod = "testCheckoutLiveFrance")
-    public void testCheckoutReplayFrance()
+    @AiDataSet("poland")
+    @AiPlaybook
+    public void testCheckoutPoland()
     {
     }
 
     @Order(7)
-    @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("japan")
+    @AiDataSet("sweden")
     @AiPlaybook
-    public void testCheckoutLiveJapan()
+    public void testCheckoutSweden()
     {
     }
 
     @Order(8)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("finland")
+    @AiPlaybook
+    public void testCheckoutFinland()
+    {
+    }
+
+    @Order(9)
     @AiDataSet("japan")
-    @AiPlaybook(recordingMethod = "testCheckoutLiveJapan")
-    public void testCheckoutReplayJapan()
+    @AiPlaybook
+    public void testCheckoutJapan()
     {
     }
 }

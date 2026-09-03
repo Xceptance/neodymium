@@ -13,6 +13,14 @@
 > 2. **Phase 2 — Implementation:**
 >    - Do NOT call editing tools (`replace_file_content`, `multi_replace_file_content`, `write_to_file`) or run state-mutating shell commands until the user responds with explicit approval in a subsequent turn.
 
+> [!CRITICAL]
+> ## POST-EDIT CLEAN CODE AUDIT (MANDATORY ON EVERY JAVA EDIT)
+> Before concluding any implementation or reporting completion, you MUST:
+> 1. **Zero Unused Imports**: Inspect all touched files and remove any unreferenced imports (classes, interfaces, static methods).
+> 2. **Zero Unused Variables**: Ensure no unreferenced local variables, fields, or parameters exist.
+> 3. **Strict `final` Enforcement**: Verify all method parameters, local variables, and immutable fields use `final`.
+> 4. **No Inline FQCNs**: Verify all types are imported at the top of the file.
+
 ## General
 - **Java First:** Prefer Java for scripting/agent tasks over Python/Bash, unless standard Unix tooling fits perfectly.
 - **Workflow:** Check `specifications/openspec/changes/` for active changes and delta specs before implementing. Use `/opsx-*` workflows.

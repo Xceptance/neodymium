@@ -175,4 +175,60 @@ public enum ContextLevel
             return fallback;
         }
     }
+
+    /**
+     * Cleans and sanitizes a raw context level string against the step's semantic intent.
+     * Safely normalizes unparseable strings, elevates ASSERT intent to STANDARD if below STANDARD,
+     * clamps ASSERT_METADATA to MINIMAL, and preserves visual screenshot levels.
+     *
+     * @param rawName the raw level name from model response or configuration
+     * @param intent the classified semantic intent
+     * @param fallback the default fallback level if parsing fails or input is null
+     * @return the cleaned, validated ContextLevel
+     */
+    public static ContextLevel clean(final String rawName, final SemanticIntent intent, final ContextLevel fallback)
+    {
+        final ContextLevel baseFallback = fallback != null ? fallback : (intent != null && intent.isAssertion() ? STANDARD : LEAN);
+        final ContextLevel parsed = fromString(rawName, baseFallback);
+        return clean(parsed, intent);
+    }
+
+    /**
+     * Cleans and validates a ContextLevel against the step's semantic intent.
+     * Elevates ASSERT intent to STANDARD if below STANDARD (and non-visual),
+     * clamps ASSERT_METADATA to MINIMAL, and preserves visual screenshot levels.
+     *
+     * @param level the candidate context level
+     * @param intent the classified semantic intent
+     * @return the cleaned, validated ContextLevel
+     */
+    public static ContextLevel clean(final ContextLevel level, final SemanticIntent intent)
+    {
+        final ContextLevel safeLevel = level != null ? level : (intent != null && intent.isAssertion() ? STANDARD : LEAN);
+
+        // Preserve explicit visual screenshot levels unconditionally
+        if (safeLevel.includesScreenshot())
+        {
+            return safeLevel;
+        }
+
+        if (intent == SemanticIntent.ASSERT)
+        {
+            // Text and element content assertions require text nodes in the DOM
+            if (!safeLevel.includesTextContent())
+            {
+                return STANDARD;
+            }
+            return safeLevel;
+        }
+
+        if (intent == SemanticIntent.ASSERT_METADATA)
+        {
+            // URL, title, and HTTP status checks require only minimal page metadata
+            return MINIMAL;
+        }
+
+        return safeLevel;
+    }
 }
+

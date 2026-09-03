@@ -56,6 +56,7 @@ import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.DivergenceException;
@@ -151,7 +152,8 @@ public final class ExecuteActionsStep implements PipelineStep
         final boolean isReplayingStep = execMode != null && execMode.isReplay() && !isNoReplay
             && (currentStep == null || execMode == ExecutionMode.REPLAY_STRICT || (currentStep.getActions() != null && (!currentStep.getActions().isEmpty() || currentStep.getScreenshotHash() != null || (currentStep.getStatus() != null && currentStep.getStatus() != PlaybookStepStatus.PENDING))));
 
-        if (!isReplayingStep && currentStep != null)
+        final boolean isContinuationLoop = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
+        if (!isReplayingStep && currentStep != null && !isContinuationLoop)
         {
             currentStep.getActions().clear();
         }
@@ -249,6 +251,19 @@ public final class ExecuteActionsStep implements PipelineStep
                 return;
             }
 
+            // Execution Guard: Block mutating actions when step has assertion intent
+            final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT);
+            final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : null;
+            if (intent != null && intent.isAssertion())
+            {
+                final String type = action.getType();
+                if ("CLICK".equalsIgnoreCase(type) || "TYPE".equalsIgnoreCase(type) || "CLEAR".equalsIgnoreCase(type) || "SELECT".equalsIgnoreCase(type))
+                {
+                    LOGGER.warn("🛡️ [Execute Guard] Blocked mutating action '{}' during step with assertion intent '{}'.", type, intent);
+                    return;
+                }
+            }
+
             final Action resolvedAction = resolveActionVariables(action, context.getSessionData());
             final Action reportResolvedAction = resolveActionVariablesForReport(action, context.getSessionData());
 
@@ -307,7 +322,15 @@ public final class ExecuteActionsStep implements PipelineStep
                              step.getActions().clear();
                              context.getTransientData().put("KEY_CURRENT_STEP_FIRST_ACTION", false);
                          }
-                         step.getActions().add(sanitized);
+                         final int idx = step.getActions().indexOf(action);
+                         if (idx != -1)
+                         {
+                             step.getActions().set(idx, sanitized);
+                         }
+                         else if (!step.getActions().contains(sanitized))
+                         {
+                             step.getActions().add(sanitized);
+                         }
                      }
                 }
                 
@@ -370,7 +393,11 @@ public final class ExecuteActionsStep implements PipelineStep
                     final Long lastActionEndTime = (Long) context.getTransientData().get("KEY_LAST_ACTION_END_TIME");
                     if (lastActionEndTime != null && sanitized.getDelayMs() == null)
                     {
-                        sanitized.setDelayMs(Math.max(0L, actionStartTime - lastActionEndTime));
+                        final long rawDelay = Math.max(0L, actionStartTime - lastActionEndTime);
+                        // Clamp delay to max 3000ms to eliminate LLM retry turnaround inflation
+                        final long delayMs = Math.min(3000L, rawDelay);
+                        sanitized.setDelayMs(delayMs);
+                        action.setDelayMs(delayMs);
                     }
                 }
 
@@ -393,6 +420,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                     if (!isReplayingStep
                         && executor != null
+                        && isElementAction(resolvedAction.getType())
                         && WebDriverRunner.hasWebDriverStarted()
                         && resolvedAction.getTarget() != null
                         && !resolvedAction.getTarget().isBlank())
@@ -468,9 +496,25 @@ public final class ExecuteActionsStep implements PipelineStep
                         }
                     }
 
-                    final CoordinateTarget coordinateTarget = ClickAction.parseCoordinateTarget(resolvedAction.getTarget());
+                    CoordinateTarget coordinateTarget = ClickAction.parseCoordinateTarget(resolvedAction.getTarget());
                     if (coordinateTarget != null && !isReplayingStep && step != null && executor != null)
                     {
+                        if (coordinateTarget.anchorSelector() == null && WebDriverRunner.hasWebDriverStarted())
+                        {
+                            final WebDriver driver = WebDriverRunner.getWebDriver();
+                            final String pinnedTarget = new PageAnalyzer(driver).resolveAnchorCoordinate(driver, coordinateTarget.x(), coordinateTarget.y());
+                            if (pinnedTarget != null && !pinnedTarget.equals(resolvedAction.getTarget()))
+                            {
+                                sanitized = sanitized.withTarget(pinnedTarget);
+                                actionToExecute = actionToExecute.withTarget(pinnedTarget);
+                                final int idx = stepActions.indexOf(sanitized);
+                                if (idx != -1)
+                                {
+                                    stepActions.set(idx, sanitized);
+                                }
+                            }
+                        }
+
                         try
                         {
                             final SutState preState = executor.captureState(ContextLevel.VISUAL_LEAN, false);
@@ -504,6 +548,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     if (!isReplayingStep)
                     {
                         sanitized.setDurationMs(actionDuration);
+                        action.setDurationMs(actionDuration);
                         context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis());
                     }
                 }
@@ -554,6 +599,7 @@ public final class ExecuteActionsStep implements PipelineStep
                 if (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP")))
                 {
                     context.getTransientData().put("KEY_IS_CONTINUATION_STEP", false);
+                    context.getTransientData().put("KEY_IN_CONTINUATION_LOOP", true);
                     LOGGER.info("   🔄 Prelude action executed for instruction — initiating continuation LLM step with updated DOM context.");
 
                     @SuppressWarnings("unchecked")
@@ -578,7 +624,7 @@ public final class ExecuteActionsStep implements PipelineStep
             }
             catch (final Throwable t)
             {
-                if (t instanceof VirtualMachineError || t instanceof ThreadDeath || t instanceof LinkageError)
+                if (t instanceof VirtualMachineError || t instanceof LinkageError)
                 {
                     throw (Error) t;
                 }
@@ -612,7 +658,8 @@ public final class ExecuteActionsStep implements PipelineStep
                     cause = cause.getCause();
                 }
 
-                if ("ASSERT".equalsIgnoreCase(action.getType()))
+                context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis());
+                if (action.getType() != null && action.getType().toUpperCase().startsWith("ASSERT"))
                 {
                     if (isAssertionFailure)
                     {
@@ -806,6 +853,7 @@ public final class ExecuteActionsStep implements PipelineStep
             contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_STEP_ACTIONS, new CopyOnWriteArrayList<Action>());
+            contextState.getTransientData().remove("KEY_IN_CONTINUATION_LOOP");
 
             final boolean stepNoReplay = step.isNoReplay();
             contextState.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", stepNoReplay);
@@ -1392,6 +1440,10 @@ public final class ExecuteActionsStep implements PipelineStep
                 : raw;
             stats = new StepStats(resolved, startTime);
             stats.setReplayed(replayed);
+            if (step.getSemanticIntent() != null)
+            {
+                stats.setSemanticIntent(step.getSemanticIntent().name());
+            }
             stepStatsMap.put(step, stats);
 
             final PlaybookStep parentStep = step.getParent();
@@ -1404,6 +1456,10 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 allStats.add(stats);
             }
+        }
+        else if (stats.getSemanticIntent() == null && step.getSemanticIntent() != null)
+        {
+            stats.setSemanticIntent(step.getSemanticIntent().name());
         }
         return stats;
     }
@@ -1602,6 +1658,21 @@ public final class ExecuteActionsStep implements PipelineStep
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*layout\\s*\\)\\s*", " ");
+        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*hint(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
         return prepared.replaceAll("\\s+", " ").trim();
+    }
+
+    private static boolean isElementAction(final String actionType)
+    {
+        if (actionType == null)
+        {
+            return false;
+        }
+        return switch (actionType.toUpperCase())
+        {
+            case "NAVIGATE", "OPEN", "GOTO", "BACK", "FORWARD", "REFRESH", "PAUSE", "WAIT", "SLEEP", "SCRIPT", "EXECUTE_SCRIPT", "NONE", "VERIFY", "INCLUDE", "SPLIT", "BRANCH", "ASSERT_URL", "ASSERT_TITLE" -> false;
+            default -> true;
+        };
     }
 }

@@ -1,0 +1,27 @@
+<div style="max-width: 440px; margin: 40px auto; background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 36px;">
+    <h1 style="font-family: var(--apoc-font-serif); font-size: 26px; font-weight: 700; color: #FFFFFF; text-align: center; margin-bottom: 8px;">
+        ${lang_trackOrders}
+    </h1>
+    <p style="color: var(--apoc-text-secondary); font-size: 13px; text-align: center; margin-bottom: 24px;">
+        Inquire regarding private white-glove consignment and transit status.
+    </p>
+
+    <form action="api/order/lookup" method="POST" onsubmit="event.preventDefault(); fetch('api/order/lookup', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(this)) }).then(r => r.text()).then(html => document.getElementById('order-lookup-result').innerHTML = html);">
+        <div style="margin-bottom: 16px;">
+            <label for="orderNumber" style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px; color:var(--apoc-text-secondary);">${lang_orderNumber}</label>
+            <input type="text" id="orderNumber" name="orderNumber" placeholder="V-102931-US" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+        </div>
+
+        <div style="margin-bottom: 24px;">
+            <label for="zipCode" style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px; color:var(--apoc-text-secondary);">${lang_zipCode}</label>
+            <input type="text" id="zipCode" name="zipCode" placeholder="12345" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+        </div>
+
+        <button type="submit" class="apoc-btn-gold" data-interactive="true" style="width: 100%; padding: 12px 24px; margin-bottom: 16px;">
+            <span>${lang_lookup}</span>
+            <span class="hydration-indicator"></span>
+        </button>
+    </form>
+
+    <div id="order-lookup-result" style="margin-top: 20px;"></div>
+</div>

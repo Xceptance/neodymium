@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Pre-Flight Linter Challenge Sandbox</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --emerald: #10b981;
+            --rose: #f43f5e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 2rem;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .brand-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .badge-status {
+            background-color: #d1fae5;
+            color: #065f46;
+            font-weight: 600;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border: 1px solid #a7f3d0;
+        }
+
+        .badge-status::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--emerald);
+            border-radius: 50%;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .card h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        input, select {
+            padding: 0.65rem 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .btn {
+            background-color: var(--primary);
+            color: #ffffff;
+            font-weight: 600;
+            padding: 0.65rem 1.25rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-danger {
+            background-color: var(--rose);
+        }
+
+        .btn-danger:hover {
+            background-color: #e11d48;
+        }
+
+        .sidebar-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .action-card {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+        }
+
+        .action-card:hover {
+            background: #e2e8f0;
+        }
+
+        .action-card h3 {
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .action-card p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .order-summary {
+            background: #faf5ff;
+            border: 1px solid #e9d5ff;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .order-summary p {
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-box {
+            background: #ffffff;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+
+        .modal-actions {
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header with Status Badge -->
+        <header>
+            <div class="brand-title">Aura Prelinter Challenge Hub - Dashboard looks clean and appealing</div>
+            <div id="status-badge" class="badge-status">Active System</div>
+            <button id="btn-header-action" class="btn">Action</button>
+        </header>
+
+        <div class="grid">
+            <!-- Main Content Area -->
+            <main class="card">
+                <h2>Account Authentication & Profile</h2>
+                <form id="auth-form" onsubmit="event.preventDefault(); document.getElementById('login-result').innerText = 'Authenticated Successfully';">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" placeholder="Enter username" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="country">Country</label>
+                        <select id="country" name="country">
+                            <option value="US">United States</option>
+                            <option value="CA">Canada</option>
+                            <option value="DE">Germany</option>
+                            <option value="JP">Japan</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <button type="submit" id="btn-login" class="btn">Login</button>
+                        <button type="button" id="btn-main-action" class="btn">Action</button>
+                        <span id="login-result" style="font-weight: 600; color: var(--emerald);"></span>
+                    </div>
+                </form>
+
+                <!-- Order Confirmation Details -->
+                <div class="order-summary">
+                    <h3>Order Confirmation Summary</h3>
+                    <p>Order Reference: <strong id="order-id-display">#ORD-20260830-9948271</strong></p>
+                    <p>Timestamp: <span id="live-timestamp">2026-08-30T13:45:00Z</span></p>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <button id="btn-open-modal" class="btn btn-danger" onclick="document.getElementById('delete-modal').classList.add('active');">
+                        Open Delete Modal
+                    </button>
+                </div>
+            </main>
+
+            <!-- Sidebar with Clickable Action Cards -->
+            <aside class="sidebar-cards">
+                <div class="action-card" id="card-settings" onclick="alert('Settings Clicked');">
+                    <h3>Account Preferences</h3>
+                    <p>There is a settings card that allows updating account preferences.</p>
+                </div>
+
+                <div class="action-card" id="card-reports" onclick="alert('Reports Clicked');">
+                    <h3>Analytics & Reports</h3>
+                    <p>Access high-level metrics and test quality telemetry.</p>
+                </div>
+
+                <div class="card" style="text-align: center;">
+                    <p style="margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">Sidebar Quick Action</p>
+                    <button id="btn-sidebar-action" class="btn">Action</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Modal Dialog -->
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3>Confirm Removal</h3>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">Are you sure you want to delete this resource?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn" style="background-color: var(--text-muted);" onclick="document.getElementById('delete-modal').classList.remove('active');">
+                    Cancel
+                </button>
+                <button type="button" id="btn-confirm-delete" class="btn btn-danger" onclick="document.getElementById('delete-modal').classList.remove('active'); alert('Confirmed Deletion');">
+                    Confirm Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

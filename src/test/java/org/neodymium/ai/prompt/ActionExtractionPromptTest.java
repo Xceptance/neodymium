@@ -24,13 +24,17 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.SemanticIntent;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.ToLevelEscalationException;
@@ -213,6 +217,53 @@ public final class ActionExtractionPromptTest
         final String systemMsg = prompt.compileSystemMessage(context);
         assertNotNull(systemMsg);
         assertTrue(systemMsg.contains("Analyze current DOM and visual state"), "System prompt must contain core instruction.");
+    }
+
+    /**
+     * Verifies that compileSystemMessage uses the dedicated lightweight visual prompt at ContextLevel.VISUAL
+     * and excludes DOM locator rules and candidate locator rules.
+     */
+    @Test
+    public void testCompileSystemMessageVisualLevelUsesVisualOnlyPrompt()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final Map<String, SessionData.DataEntry> data = new HashMap<>();
+        data.put("neodymium.ai.model", new SessionData.DataEntry("gemini-3.5-flash-lite", false));
+        data.put("neodymium.ai.multilingual", new SessionData.DataEntry("true", false));
+        final ExecutionContext context = new ExecutionContext(new SessionData(data));
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new SelenideTargetExecutor());
+
+        final String systemMsg = prompt.compileSystemMessage(context);
+        assertNotNull(systemMsg);
+        assertTrue(systemMsg.contains("Analyze the visual screenshot to fulfill the active test instruction."), "Visual system prompt must contain visual instruction.");
+        assertTrue(systemMsg.contains("## Execution Guidelines"), "Visual system prompt must contain execution guidelines.");
+        assertFalse(systemMsg.contains("## Selenide/Selenium Engine Locators"), "Visual system prompt must not include Selenide locator rule.");
+        assertFalse(systemMsg.contains("## Candidate Locators & Ambiguity Evaluation"), "Visual system prompt must not include candidate locators rule.");
+        assertFalse(systemMsg.contains("## Action Rules"), "Visual system prompt must not include DOM action rules.");
+        assertFalse(systemMsg.contains("Only use real HTML tags from the DOM"), "Visual system prompt must not include general model DOM locators addon.");
+        assertTrue(systemMsg.contains("evaluating visual appearance"), "Visual system prompt should use visual multilingual addon if multilingual is active.");
+    }
+
+    /**
+     * Verifies that compileSystemMessage uses the standard action extraction prompt at non-VISUAL levels (e.g. VISUAL_LEAN, VISUAL_RICH, STANDARD).
+     */
+    @Test
+    public void testCompileSystemMessageNonVisualLevelsUseStandardPrompt()
+    {
+        AiAgentPrompts.clearCache();
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+
+        for (final ContextLevel level : new ContextLevel[] { ContextLevel.MINIMAL, ContextLevel.LEAN, ContextLevel.STANDARD, ContextLevel.RICH, ContextLevel.VISUAL_LEAN, ContextLevel.VISUAL_RICH })
+        {
+            final ExecutionContext context = new ExecutionContext(null);
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, level);
+
+            final String systemMsg = prompt.compileSystemMessage(context);
+            assertNotNull(systemMsg);
+            assertTrue(systemMsg.contains("Analyze current DOM and visual state"), "Level " + level + " must use standard action extraction prompt.");
+        }
     }
 
     /**
@@ -647,6 +698,296 @@ public final class ActionExtractionPromptTest
         assertEquals(1, actions.size());
         assertEquals("NAVIGATE", actions.get(0).getType());
         assertEquals("https://localhost:8543/verla-perfect/index.html", actions.get(0).getValue());
+    }
+
+    /**
+     * Verifies that compileUserMessage includes the classified semantic intent header.
+     */
+    @Test
+    public void testCompileUserMessageIncludesSemanticIntent()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify checkout total is 99.00");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.LEAN);
+        context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+
+        final String userMessage = prompt.compileUserMessage(context);
+
+        assertNotNull(userMessage);
+        assertTrue(userMessage.contains("[INSTRUCTION]      Verify checkout total is 99.00"));
+        assertTrue(userMessage.contains("[SEMANTIC_INTENT]  ASSERT"));
+        assertTrue(userMessage.contains("[CURRENT_LEVEL]    LEAN"));
+    }
+
+    /**
+     * Verifies that parseResponse discards mutating actions when step has assertion intent.
+     */
+    @Test
+    public void testParseResponseDiscardsMutatingActionsOnAssertionIntent() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "targetContextLevel": "LEAN",
+              "reasoning": "Wait for confirmation message to appear",
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#purchase-btn",
+                  "reasoning": "Speculative click attempt"
+                },
+                {
+                  "action": "ASSERT",
+                  "locator": "#order-confirmation",
+                  "value": "Thank you",
+                  "reasoning": "Verify order confirmation text"
+                }
+              ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertEquals(1, actions.size(), "Mutating action (CLICK) should be discarded on ASSERT intent");
+        assertEquals("ASSERT", actions.get(0).getType());
+        assertEquals("#order-confirmation", actions.get(0).getTarget());
+    }
+
+    /**
+     * Verifies that parseResponse does not set hasElse to true when else is an empty array,
+     * but sets hasElse to true when else contains actions or when hasElse is explicitly true.
+     */
+    @Test
+    public void testParseResponseBranchActionHasElseBehavior() throws Exception
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+
+        // Case 1: 1-way if branch with empty "else": [] should NOT set hasElse to true
+        final String jsonEmptyElse = """
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "condition": [
+                    { "action": "ASSERT", "locator": "#state", "value": "present" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "#state", "value": "CA" }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+            """;
+
+        final List<Action> actionsEmpty = prompt.parseResponse(jsonEmptyElse, context);
+        assertNotNull(actionsEmpty);
+        assertEquals(1, actionsEmpty.size());
+        final Action actionEmpty = actionsEmpty.get(0);
+        assertEquals("BRANCH", actionEmpty.getType());
+        assertFalse(actionEmpty.hasElse(), "Empty 'else' array must not mark hasElse as true");
+
+        // Case 2: Populated "else" array should set hasElse to true
+        final String jsonPopulatedElse = """
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "condition": [
+                    { "action": "ASSERT", "locator": "#state", "value": "present" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "#state", "value": "CA" }
+                  ],
+                  "else": [
+                    { "action": "CLICK", "locator": "#skip-btn" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        final List<Action> actionsPopulated = prompt.parseResponse(jsonPopulatedElse, context);
+        assertNotNull(actionsPopulated);
+        assertEquals(1, actionsPopulated.size());
+        final Action actionPopulated = actionsPopulated.get(0);
+        assertTrue(actionPopulated.hasElse(), "Populated 'else' array must mark hasElse as true");
+
+        // Case 3: Explicit "hasElse": true with empty else array
+        final String jsonExplicitHasElse = """
+            {
+              "status": "SUCCESS",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "hasElse": true,
+                  "condition": [
+                    { "action": "ASSERT", "locator": "#state", "value": "present" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "#state", "value": "CA" }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+            """;
+
+        final List<Action> actionsExplicit = prompt.parseResponse(jsonExplicitHasElse, context);
+        assertNotNull(actionsExplicit);
+        assertEquals(1, actionsExplicit.size());
+        final Action actionExplicit = actionsExplicit.get(0);
+        assertTrue(actionExplicit.hasElse(), "Explicit hasElse=true must be preserved");
+    }
+
+    @Test
+    public void testParseDistinctAssertActions() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "reasoning": "Parsed various assertion actions",
+              "actions": [
+                {
+                  "action": "ASSERT_EXISTS",
+                  "locator": "#prefecture",
+                  "reasoning": "Verify prefecture field is present"
+                },
+                {
+                  "action": "ASSERT_ABSENT",
+                  "locator": "#cookie-modal",
+                  "reasoning": "Verify cookie modal is closed"
+                },
+                {
+                  "action": "ASSERT_TEXT",
+                  "locator": "#headline",
+                  "value": "Checkout",
+                  "reasoning": "Verify headline text"
+                },
+                {
+                  "action": "ASSERT_VALUE",
+                  "locator": "#first-name",
+                  "value": "Alice",
+                  "reasoning": "Verify input value"
+                },
+                {
+                  "action": "ASSERT_CHECKED",
+                  "locator": "#newsletter",
+                  "reasoning": "Verify checkbox is checked"
+                },
+                {
+                  "action": "ASSERT_DISABLED",
+                  "locator": "#submit-btn",
+                  "reasoning": "Verify button is disabled"
+                },
+                {
+                  "action": "ASSERT_URL",
+                  "locator": "url",
+                  "value": "https://example.com/checkout",
+                  "reasoning": "Verify page URL"
+                },
+                {
+                  "action": "ASSERT_ATTRIBUTE",
+                  "locator": "#username",
+                  "value": "placeholder=Enter username",
+                  "reasoning": "Verify placeholder attribute"
+                },
+                {
+                  "action": "ASSERT_COUNT",
+                  "locator": ".cart-item",
+                  "value": "3",
+                  "reasoning": "Verify 3 cart items"
+                }
+              ]
+            }
+            """;
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+        assertNotNull(actions);
+        assertEquals(9, actions.size());
+
+        assertEquals("ASSERT_EXISTS", actions.get(0).getType());
+        assertEquals("#prefecture", actions.get(0).getTarget());
+
+        assertEquals("ASSERT_ABSENT", actions.get(1).getType());
+        assertEquals("#cookie-modal", actions.get(1).getTarget());
+
+        assertEquals("ASSERT_TEXT", actions.get(2).getType());
+        assertEquals("#headline", actions.get(2).getTarget());
+        assertEquals("Checkout", actions.get(2).getValue());
+
+        assertEquals("ASSERT_VALUE", actions.get(3).getType());
+        assertEquals("#first-name", actions.get(3).getTarget());
+        assertEquals("Alice", actions.get(3).getValue());
+
+        assertEquals("ASSERT_CHECKED", actions.get(4).getType());
+        assertEquals("#newsletter", actions.get(4).getTarget());
+
+        assertEquals("ASSERT_DISABLED", actions.get(5).getType());
+        assertEquals("#submit-btn", actions.get(5).getTarget());
+
+        assertEquals("ASSERT_URL", actions.get(6).getType());
+        assertEquals("url", actions.get(6).getTarget());
+        assertEquals("https://example.com/checkout", actions.get(6).getValue());
+
+        assertEquals("ASSERT_ATTRIBUTE", actions.get(7).getType());
+        assertEquals("#username", actions.get(7).getTarget());
+        assertEquals("placeholder=Enter username", actions.get(7).getValue());
+
+        assertEquals("ASSERT_COUNT", actions.get(8).getType());
+        assertEquals(".cart-item", actions.get(8).getTarget());
+        assertEquals("3", actions.get(8).getValue());
+    }
+
+    @Test
+    public void testParseBranchWithAssertExistsCondition() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "SUCCESS",
+              "reasoning": "Conditional branch based on prefecture existence",
+              "actions": [
+                {
+                  "action": "BRANCH",
+                  "condition": [
+                    { "action": "ASSERT_EXISTS", "locator": "input[name='prefecture'], #prefecture" }
+                  ],
+                  "then": [
+                    { "action": "TYPE", "locator": "input[name='prefecture'], #prefecture", "value": "${prefecture}" }
+                  ]
+                }
+              ]
+            }
+            """;
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+
+        final Action branch = actions.get(0);
+        assertEquals("BRANCH", branch.getType());
+        assertNotNull(branch.getCondition());
+        assertEquals(1, branch.getCondition().size());
+        assertEquals("ASSERT_EXISTS", branch.getCondition().get(0).getType());
+        assertEquals("input[name='prefecture'], #prefecture", branch.getCondition().get(0).getTarget());
+
+        assertNotNull(branch.getThen());
+        assertEquals(1, branch.getThen().size());
+        assertEquals("TYPE", branch.getThen().get(0).getType());
+        assertEquals("${prefecture}", branch.getThen().get(0).getValue());
     }
 }
 

@@ -239,8 +239,8 @@ public class ExecuteActionsStepTest
         executor.enqueueState(visualState);
 
         final MockLlmProvider mockProvider = new MockLlmProvider();
-        // 1. PESAP response predicting VISUAL context
-        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
+        // 1. PESAP response predicting VISUAL context with ASSERT intent
+        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
         // 2. Action extraction response returning a NONE action (pure visual verification passing)
         mockProvider.addResponse(new LlmResponse("[{\"action\": \"NONE\", \"target\": \"\", \"value\": \"Visual layout verified\"}]", new TokenUsage(200, 30, 230, 0), "mock-model"));
 
@@ -344,8 +344,8 @@ public class ExecuteActionsStepTest
         }
 
         final MockLlmProvider mockProvider = new MockLlmProvider();
-        // 1. PESAP predicts VISUAL_RICH
-        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL_RICH\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
+        // 1. PESAP predicts VISUAL_RICH with ASSERT intent
+        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL_RICH\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
         // 2-5. Action extraction requests escalation on VISUAL_RICH repeatedly
         for (int i = 0; i < 5; i++)
         {
@@ -388,6 +388,39 @@ public class ExecuteActionsStepTest
         final String raw2 = "Click submit (hint) (optional)";
         final String prepared2 = ExecuteActionsStep.prepareInstruction(raw2);
         assertEquals("Click submit", prepared2);
+    }
+
+    @Test
+    public void testRecordedDelayMsClamping() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.LLM_RECORDING);
+
+        // Simulate a past action ending 60 seconds ago (e.g. during a retry escalation)
+        context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis() - 60_000L);
+
+        final Action action = new Action("CLICK", "#btn", null, "click button", "test", false);
+        final PlaybookStep step = new PlaybookStep("Click button");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, List.of(action));
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final ExecuteActionsStep stepRunner = new ExecuteActionsStep();
+        stepRunner.execute(context);
+
+        assertNotNull(action.getDelayMs(), "Recorded delayMs should be populated");
+        assertTrue(action.getDelayMs() <= 3000L, "Recorded delayMs should be clamped to at most 3000ms, but was: " + action.getDelayMs());
     }
 
     private static String encodeToBase64(final BufferedImage image) throws IOException

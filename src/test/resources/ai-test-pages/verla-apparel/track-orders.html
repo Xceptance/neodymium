@@ -1,0 +1,22 @@
+<div class="mx-auto my-12 max-w-md w-full p-8 bg-sand-50 rounded-2xl border border-sand-200 shadow-xl">
+    <h2 class="font-serif text-3xl font-bold text-espresso text-center mb-6">${lang_trackOrders}</h2>
+    <p class="text-xs text-muted text-center mb-6">Enter your guest order tracking identifier and delivery postal code below.</p>
+
+    <form hx-post="api/order/lookup" hx-target="#order-lookup-result" hx-swap="innerHTML" class="space-y-4">
+        <div>
+            <label for="orderNumber" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_orderNumber}</label>
+            <input type="text" id="orderNumber" name="orderNumber" required placeholder="V-102931-DE" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+        </div>
+
+        <div>
+            <label for="zipCode" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_zipCode}</label>
+            <input type="text" id="zipCode" name="zipCode" required placeholder="10119" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+        </div>
+
+        <button type="submit" class="w-full py-3.5 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-md transition-colors">
+            ${lang_lookup}
+        </button>
+    </form>
+
+    <div id="order-lookup-result" class="mt-6"></div>
+</div>

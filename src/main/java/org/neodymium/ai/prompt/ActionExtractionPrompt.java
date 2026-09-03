@@ -31,6 +31,7 @@ import org.neodymium.ai.executor.selenide.VolatileIdDetector;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.ToLevelEscalationException;
@@ -75,6 +76,16 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
     @Override
     public String compileSystemMessage(final ExecutionContext context)
     {
+        final ContextLevel activeLevel =
+            (context != null && context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl)
+                ? cl
+                : null;
+
+        if (activeLevel == ContextLevel.VISUAL)
+        {
+            return SystemPromptAddonHelper.appendAddon(AiAgentPrompts.getVisualOnlyPrompt(), "visual", context);
+        }
+
         String basePrompt = AiAgentPrompts.getActionExtractionPrompt();
 
         final Object targetExecutor = context != null ? context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
@@ -107,9 +118,16 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 : ContextLevel.MINIMAL;
         final ContextLevel nextLevel = activeLevel.escalate();
 
+        final Object intentObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT) : null;
+        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : null;
+
         final StringBuilder sb = new StringBuilder();
         sb.append("## Execution Context\n");
         sb.append("[INSTRUCTION]      ").append(instruction).append("\n");
+        if (intent != null)
+        {
+            sb.append("[SEMANTIC_INTENT]  ").append(intent.name()).append("\n");
+        }
         sb.append("[CURRENT_LEVEL]    ").append(activeLevel.name()).append("\n");
         if (nextLevel != null && nextLevel != activeLevel)
         {
@@ -206,6 +224,28 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
             }
         }
 
+        // Invariant 2: Semantic Intent Assertion Guard
+        final Object intentObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT) : null;
+        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : (currentStep != null ? currentStep.getSemanticIntent() : null);
+        if (intent != null && intent.isAssertion())
+        {
+            final boolean hasMutatingAction = actions.stream().anyMatch(a -> a != null
+                && ("CLICK".equalsIgnoreCase(a.getType())
+                    || "TYPE".equalsIgnoreCase(a.getType())
+                    || "CLEAR".equalsIgnoreCase(a.getType())
+                    || "SELECT".equalsIgnoreCase(a.getType())));
+
+            if (hasMutatingAction)
+            {
+                LOGGER.warn("🛡️ [Assertion Guard] Step with assertion intent '{}' emitted mutating action(s). Discarded mutating action(s).", intent);
+                actions.removeIf(a -> a != null
+                    && ("CLICK".equalsIgnoreCase(a.getType())
+                        || "TYPE".equalsIgnoreCase(a.getType())
+                        || "CLEAR".equalsIgnoreCase(a.getType())
+                        || "SELECT".equalsIgnoreCase(a.getType())));
+            }
+        }
+
         final boolean hasExecutableActions = actions.stream().anyMatch(a -> a != null
             && !a.getType().isBlank()
             && !"NONE".equalsIgnoreCase(a.getType())
@@ -245,7 +285,11 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                         currentStep.setReasoning(sb.toString());
                     }
                 }
-                currentStep.getActions().clear();
+                final boolean isContinuation = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
+                if (!isContinuation)
+                {
+                    currentStep.getActions().clear();
+                }
                 currentStep.getActions().addAll(actions);
             }
         }
@@ -372,6 +416,40 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         {
             locator = valueStr;
         }
+
+        if (locator.isEmpty())
+        {
+            if (node.hasNonNull("coord"))
+            {
+                final String rawCoord = node.path("coord").asText().trim();
+                locator = rawCoord.toLowerCase().startsWith("coord:") ? rawCoord : "coord: " + rawCoord;
+            }
+            else if (node.hasNonNull("coordinates") && node.path("coordinates").isArray() && node.path("coordinates").size() >= 2)
+            {
+                final int x = node.path("coordinates").get(0).asInt();
+                final int y = node.path("coordinates").get(1).asInt();
+                final String anchor = node.hasNonNull("anchor") ? node.path("anchor").asText().trim() + "@" : "";
+                locator = "coord: " + anchor + x + "," + y;
+            }
+            else if (node.hasNonNull("point") && node.path("point").isArray() && node.path("point").size() >= 2)
+            {
+                final int x = node.path("point").get(0).asInt();
+                final int y = node.path("point").get(1).asInt();
+                final String anchor = node.hasNonNull("anchor") ? node.path("anchor").asText().trim() + "@" : "";
+                locator = "coord: " + anchor + x + "," + y;
+            }
+            else if (node.hasNonNull("box_2d") && node.path("box_2d").isArray() && node.path("box_2d").size() >= 4)
+            {
+                final int ymin = node.path("box_2d").get(0).asInt();
+                final int xmin = node.path("box_2d").get(1).asInt();
+                final int ymax = node.path("box_2d").get(2).asInt();
+                final int xmax = node.path("box_2d").get(3).asInt();
+                final int cx = (xmin + xmax) / 2;
+                final int cy = (ymin + ymax) / 2;
+                final String anchor = node.hasNonNull("anchor") ? node.path("anchor").asText().trim() + "@" : "";
+                locator = "coord: " + anchor + cx + "," + cy;
+            }
+        }
         
         final boolean isRegex = node.path("isRegex").asBoolean(false);
         final Action action = new Action(actionType, locator, valueList, "Extracted " + actionType + " action", reasoning).withIsRegex(isRegex);
@@ -458,7 +536,10 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                 elseActions.add(parseActionNode(subNode));
             }
             action.setElseActions(elseActions);
-            action.setHasElse(true);
+            if (!elseActions.isEmpty())
+            {
+                action.setHasElse(true);
+            }
         }
 
         if (node.hasNonNull("hasElse"))

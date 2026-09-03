@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
 
@@ -56,6 +57,9 @@ public final class SystemPromptAddonHelper
 
     private static final String MULTILINGUAL_VERIFICATION_ADDON =
         "Language Universality: The System Under Test and test step instructions may be localized in any language. Verify outcomes against localized content and labels accordingly.";
+
+    private static final String MULTILINGUAL_VISUAL_ADDON =
+        "Language Universality: The System Under Test and test step instructions may be localized in any language. When evaluating visual appearance, text, labels, and assertions on the screenshot, apply all rules to the localized equivalents.";
 
     /**
      * Resolves and accumulates custom prompt add-ons across all active layers:
@@ -122,7 +126,7 @@ public final class SystemPromptAddonHelper
                 return Boolean.parseBoolean(sessionProp.toString().trim());
             }
         }
-        return org.neodymium.ai.config.AiConfiguration.getInstance().isMultilingual();
+        return AiConfiguration.getInstance().isMultilingual();
     }
 
     private static String getMultilingualAddon(final String type)
@@ -138,6 +142,10 @@ public final class SystemPromptAddonHelper
         if ("verification".equalsIgnoreCase(type))
         {
             return MULTILINGUAL_VERIFICATION_ADDON;
+        }
+        if ("visual".equalsIgnoreCase(type))
+        {
+            return MULTILINGUAL_VISUAL_ADDON;
         }
         return null;
     }
@@ -156,16 +164,21 @@ public final class SystemPromptAddonHelper
 
         final String cleanModel = activeModel.trim().toLowerCase().replaceAll("[^a-z0-9_\\-]", "-");
 
-        // General model add-on
-        final String modelGeneral = loadModelAddon(cleanModel, null);
-        if (modelGeneral != null && !modelGeneral.isBlank())
-        {
-            addSegment(modelGeneral, sessionData, segments);
-        }
+        final boolean isGeneral = type == null || "general".equalsIgnoreCase(type)
+            || "action".equalsIgnoreCase(type) || "default".equalsIgnoreCase(type);
 
-        // Specific model add-on (if type is specified and not general/default)
-        if (type != null && !type.equalsIgnoreCase("general") && !type.equalsIgnoreCase("default"))
+        if (isGeneral)
         {
+            // General model add-on (for action extraction / execution prompts)
+            final String modelGeneral = loadModelAddon(cleanModel, null);
+            if (modelGeneral != null && !modelGeneral.isBlank())
+            {
+                addSegment(modelGeneral, sessionData, segments);
+            }
+        }
+        else
+        {
+            // Specific capability model add-on (e.g. addon-pesap.md, addon-verification.md)
             final String modelSpecific = loadModelAddon(cleanModel, type);
             if (modelSpecific != null && !modelSpecific.isBlank())
             {

@@ -18,14 +18,17 @@
  */
 package org.neodymium.ai.executor.selenide.plugins;
 
+import com.codeborne.selenide.SelenideElement;
+import java.util.List;
 import org.neodymium.ai.action.Action;
-import com.codeborne.selenide.Selenide;
-
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.support.ui.Select;
 
 /**
  * Concrete action plugin executing SELECT dropdown option commands.
- * Supports selection by visible option text or numerical index.
+ * Supports selection by visible option text, numerical index, value attribute,
+ * and resilient fuzzy/prefix matching.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
@@ -51,7 +54,7 @@ public final class SelectAction implements BrowserActionPlugin
         if (action != null && action.getTarget() != null && action.getValue() != null)
         {
             final String value = action.getValue();
-            final com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action);
+            final SelenideElement element = SelenideElementFinder.findElement(action);
             try
             {
                 final int index = Integer.parseInt(value);
@@ -59,15 +62,71 @@ public final class SelectAction implements BrowserActionPlugin
             }
             catch (final NumberFormatException e)
             {
-                try
+                final boolean selected = selectOptionFuzzy(element, value);
+                if (!selected)
                 {
                     element.selectOption(value);
-                }
-                catch (final Exception | AssertionError ex)
-                {
-                    element.selectOptionByValue(value);
                 }
             }
         }
     }
+
+    private static boolean selectOptionFuzzy(final SelenideElement selectElement, final String targetText)
+    {
+        if (targetText == null || targetText.isBlank())
+        {
+            return false;
+        }
+
+        final Select select = new Select(selectElement.getWrappedElement());
+        final List<WebElement> options = select.getOptions();
+        final String normalizedTarget = targetText.trim().toLowerCase();
+
+        // Pass 1: exact trimmed case-insensitive text match
+        for (final WebElement opt : options)
+        {
+            final String optText = opt.getText();
+            if (optText != null && optText.trim().equalsIgnoreCase(targetText.trim()))
+            {
+                select.selectByVisibleText(optText);
+                return true;
+            }
+        }
+
+        // Pass 2: prefix match (e.g. "Canada (EN)" matches "Canada (EN) (CAD $)")
+        for (final WebElement opt : options)
+        {
+            final String optText = opt.getText();
+            if (optText != null && optText.trim().toLowerCase().startsWith(normalizedTarget))
+            {
+                select.selectByVisibleText(optText);
+                return true;
+            }
+        }
+
+        // Pass 3: contains match
+        for (final WebElement opt : options)
+        {
+            final String optText = opt.getText();
+            if (optText != null && optText.toLowerCase().contains(normalizedTarget))
+            {
+                select.selectByVisibleText(optText);
+                return true;
+            }
+        }
+
+        // Pass 4: value attribute case-insensitive / prefix match
+        for (final WebElement opt : options)
+        {
+            final String optVal = opt.getAttribute("value");
+            if (optVal != null && (optVal.trim().equalsIgnoreCase(targetText.trim()) || optVal.toLowerCase().startsWith(normalizedTarget)))
+            {
+                select.selectByValue(optVal);
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
+

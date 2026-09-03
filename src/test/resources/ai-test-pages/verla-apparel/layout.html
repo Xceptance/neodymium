@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base href="/verla-${quality}/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VÉRLA APPAREL — Modern Italian Legwear &amp; Premium Wardrobe</title>
+    <!-- Fonts and Compiled Tailwind CSS -->
+    <link href="/shared/fonts.css" rel="stylesheet">
+    <link href="/shared/verla-apparel.css" rel="stylesheet">
+    <script src="/shared/htmx.js"></script>
+    <style>
+        /* Modern Enterprise PWA / Mobify Layout Shift & Animation styles */
+        #announcement-wrapper {
+            transition: max-height 0.5s ease-in-out, opacity 0.5s ease;
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+        }
+        #announcement-wrapper.is-hydrated {
+            max-height: 48px;
+            opacity: 1;
+        }
+        .mbf-drawer {
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .mbf-drawer.is-open {
+            transform: translateX(0);
+        }
+        .mbf-backdrop {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .mbf-backdrop.is-open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .mbf-hotspot-pin {
+            animation: pulse-pin 2s infinite;
+        }
+        @keyframes pulse-pin {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(200, 122, 83, 0.7); }
+            70% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(200, 122, 83, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(200, 122, 83, 0); }
+        }
+        .quick-add-size-dropdown {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: #ffffff;
+            border: 1px solid #e6e2da;
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            white-space: nowrap;
+        }
+        .quick-add-size-dropdown button {
+            display: flex;
+            width: 32px;
+            height: 32px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e6e2da;
+            background: #ffffff;
+            color: #111111;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .quick-add-size-dropdown button:hover:not(:disabled) {
+            border-color: #c87a53;
+            background-color: #c87a53;
+            color: #ffffff;
+        }
+        .quick-add-size-dropdown button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            text-decoration: line-through;
+        }
+        .mbf-nav-link {
+            white-space: nowrap !important;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body class="bg-white text-ink antialiased min-h-screen flex flex-col selection:bg-terracotta-100 selection:text-terracotta-800" data-app-hydrated="false">
+
+    <!-- Off-screen SVG Sprite Tree (__SVG_SPRITE_NODE__) -->
+    <svg id="__SVG_SPRITE_NODE__" class="hidden" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <symbol id="icon-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </symbol>
+        <symbol id="icon-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+        </symbol>
+        <symbol id="icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+        </symbol>
+        <symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+        </symbol>
+        <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+        </symbol>
+    </svg>
+
+    <!-- Mobify App Root Wrapper -->
+    <div class="mbf-app-root flex flex-col min-h-screen" id="app-root" data-reactroot="" data-mobify-version="4.2.1">
+
+        <!-- 1. Top Expanding Promotional Announcement Bar (Simulates Delayed Cumulative Layout Shift - CLS) -->
+        <div id="announcement-wrapper" class="bg-espresso text-white text-[12px] font-medium tracking-[0.05em] uppercase text-center border-b border-espresso/20">
+            <div class="mbf-announcement-bar py-3 px-4 flex items-center justify-center gap-4">
+                <div class="chakra-stack flex items-center gap-3">
+                    <span class="mbf-tag bg-terracotta-500 text-white text-[10px] px-2 py-0.5 rounded font-bold">SPECIAL</span>
+                    <span>${lang_promoBanner} &bull; 4+1 FREE ON ALL SHAPING BASICS</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Main Header with Calzedonia Mega-Menu Navigation -->
+        <header class="mbf-header__root sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sand-200 transition-shadow duration-200">
+            <div class="mbf-header__container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="css-header-stack flex items-center justify-between h-20 gap-2 lg:gap-4 xl:gap-6">
+
+                    <!-- Mobile Menu Trigger (non-semantic div) -->
+                    <div role="button" tabindex="0" class="lg:hidden flex flex-col gap-1.5 p-2 cursor-pointer" id="mobile-menu-trigger" aria-label="Toggle Mobile Navigation">
+                        <span class="w-6 h-0.5 bg-ink"></span>
+                        <span class="w-6 h-0.5 bg-ink"></span>
+                        <span class="w-6 h-0.5 bg-ink"></span>
+                    </div>
+
+                    <!-- Brand Logo -->
+                    <div class="mbf-logo-wrap shrink-0">
+                        <a href="index.html" class="mbf-brand-logo flex items-baseline gap-1.5 font-serif text-2xl sm:text-3xl font-bold tracking-[0.18em] uppercase text-ink hover:text-terracotta-600 transition-colors">
+                            <span>VÉRLA</span>
+                            <span class="text-[11px] font-sans font-semibold tracking-[0.25em] text-terracotta-500">APPAREL</span>
+                        </a>
+                    </div>
+
+                    <!-- Calzedonia-style Desktop Mega-Menu Navigation -->
+                    <nav class="hidden lg:flex items-center gap-3 lg:gap-4 xl:gap-6 2xl:gap-8 h-full shrink-0" id="main-navigation" aria-label="Main Store Navigation">
+                        <!-- Tops & Knitwear -->
+                        <div class="group relative flex items-center h-full shrink-0">
+                            <a href="c/tops.html" class="mbf-nav-link whitespace-nowrap shrink-0 text-xs xl:text-[13px] font-semibold uppercase tracking-[0.06em] xl:tracking-[0.08em] text-ink hover:text-terracotta-500 transition-colors py-2 flex items-center gap-1">
+                                <span>${lang_tops}</span>
+                            </a>
+                            <!-- Mega-Menu Flyout -->
+                            <div class="absolute left-1/2 -translate-x-1/2 top-full w-[640px] bg-white border border-sand-200 rounded-b-xl shadow-xl p-6 hidden group-hover:block transition-all z-50">
+                                <div class="grid grid-cols-3 gap-6">
+                                    <div>
+                                        <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">Categories</h4>
+                                        <ul class="flex flex-col gap-2 text-sm">
+                                            <li><a href="c/tops.html" class="hover:text-terracotta-500 transition-colors">Shirts &amp; Blouses</a></li>
+                                            <li><a href="c/tops.html" class="hover:text-terracotta-500 transition-colors">T-Shirts &amp; Ribbed Tops</a></li>
+                                            <li><a href="c/tops.html" class="hover:text-terracotta-500 transition-colors">Cashmere Sweaters</a></li>
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">Highlights</h4>
+                                        <ul class="flex flex-col gap-2 text-sm">
+                                            <li><a href="c/tops.html" class="text-terracotta-500 font-medium">New Seamless Edit</a></li>
+                                            <li><a href="c/tops.html" class="hover:text-terracotta-500 transition-colors">4+1 Multi-Buy Offer</a></li>
+                                            <li><a href="c/tops.html" class="hover:text-terracotta-500 transition-colors">Thermal Base Layers</a></li>
+                                        </ul>
+                                    </div>
+                                    <div class="bg-sand-50 rounded-lg p-4 flex flex-col justify-between border border-sand-200">
+                                        <span class="text-[10px] font-bold uppercase tracking-[0.1em] text-terracotta-500">Curated Edit</span>
+                                        <p class="text-xs font-serif font-semibold text-espresso my-2">The Italian Knitwear Collection</p>
+                                        <a href="c/tops.html" class="text-[11px] font-semibold uppercase tracking-[0.05em] text-ink hover:text-terracotta-500 flex items-center gap-1">Discover &rarr;</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bottoms, Leggings & Tights -->
+                        <div class="group relative flex items-center h-full shrink-0">
+                            <a href="c/bottoms.html" class="mbf-nav-link whitespace-nowrap shrink-0 text-xs xl:text-[13px] font-semibold uppercase tracking-[0.06em] xl:tracking-[0.08em] text-ink hover:text-terracotta-500 transition-colors py-2 flex items-center gap-1">
+                                <span>${lang_bottoms}</span>
+                            </a>
+                            <div class="absolute left-1/2 -translate-x-1/2 top-full w-[640px] bg-white border border-sand-200 rounded-b-xl shadow-xl p-6 hidden group-hover:block transition-all z-50">
+                                <div class="grid grid-cols-3 gap-6">
+                                    <div>
+                                        <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">Legwear &amp; Pants</h4>
+                                        <ul class="flex flex-col gap-2 text-sm">
+                                            <li><a href="c/bottoms.html" class="hover:text-terracotta-500 transition-colors">Shaping Leggings</a></li>
+                                            <li><a href="c/bottoms.html" class="hover:text-terracotta-500 transition-colors">Cashmere Tights</a></li>
+                                            <li><a href="c/bottoms.html" class="hover:text-terracotta-500 transition-colors">Tailored Trousers</a></li>
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">Special Collections</h4>
+                                        <ul class="flex flex-col gap-2 text-sm">
+                                            <li><a href="c/bottoms.html" class="text-terracotta-500 font-medium">Total Shaper Series</a></li>
+                                            <li><a href="c/bottoms.html" class="hover:text-terracotta-500 transition-colors">Eco Recycled Polyamide</a></li>
+                                            <li><a href="c/bottoms.html" class="hover:text-terracotta-500 transition-colors">Push-up Effect</a></li>
+                                        </ul>
+                                    </div>
+                                    <div class="bg-sand-50 rounded-lg p-4 flex flex-col justify-between border border-sand-200">
+                                        <span class="text-[10px] font-bold uppercase tracking-[0.1em] text-promo">Bundle Promotion</span>
+                                        <p class="text-xs font-serif font-semibold text-espresso my-2">Buy 4 Get 1 Free on all Tights</p>
+                                        <a href="c/bottoms.html" class="text-[11px] font-semibold uppercase tracking-[0.05em] text-ink hover:text-terracotta-500 flex items-center gap-1">Shop Bundles &rarr;</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Outerwear -->
+                        <a href="c/outerwear.html" class="mbf-nav-link whitespace-nowrap shrink-0 text-xs xl:text-[13px] font-semibold uppercase tracking-[0.06em] xl:tracking-[0.08em] text-ink hover:text-terracotta-500 transition-colors py-2">
+                            <span>${lang_outerwear}</span>
+                        </a>
+
+                        <!-- Footwear & Socks -->
+                        <a href="c/footwear.html" class="mbf-nav-link whitespace-nowrap shrink-0 text-xs xl:text-[13px] font-semibold uppercase tracking-[0.06em] xl:tracking-[0.08em] text-ink hover:text-terracotta-500 transition-colors py-2">
+                            <span>${lang_footwear}</span>
+                        </a>
+
+                        <!-- Accessories -->
+                        <a href="c/accessories.html" class="mbf-nav-link whitespace-nowrap shrink-0 text-xs xl:text-[13px] font-semibold uppercase tracking-[0.06em] xl:tracking-[0.08em] text-ink hover:text-terracotta-500 transition-colors py-2">
+                            <span>${lang_accessories}</span>
+                        </a>
+                    </nav>
+
+                    <!-- Right Header Utilities (Search, Country, User, Wishlist, Cart Drawer Trigger) -->
+                    <div class="mbf-utilities flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 xl:gap-4 shrink-0">
+
+                        <!-- Debounced Live Search Input (HTMX) -->
+                        <div class="relative flex items-center shrink-0">
+                            <input type="text" id="search-input" name="q" placeholder="${lang_searchPlaceholder}"
+                                   class="w-24 sm:w-32 lg:w-36 xl:w-48 focus:w-56 transition-all duration-300 rounded-full bg-sand-50 border border-sand-200 pl-9 pr-3 py-1.5 text-xs font-medium outline-none focus:border-terracotta-500 focus:bg-white"
+                                   hx-get="api/search/suggest" hx-target="#search-suggestions" hx-trigger="keyup changed delay:300ms, search" hx-indicator="#search-spinner">
+                            <svg class="absolute left-3 w-3.5 h-3.5 text-muted pointer-events-none" aria-hidden="true"><use xlink:href="#icon-search"></use></svg>
+                            <span id="search-spinner" class="htmx-indicator absolute right-3 w-3 h-3 border-2 border-terracotta-500 border-t-transparent rounded-full animate-spin"></span>
+                            <!-- Live Suggestions Popup -->
+                            <div id="search-suggestions" class="absolute top-full right-0 mt-2 w-72 bg-white border border-sand-200 rounded-xl shadow-xl z-50 overflow-hidden empty:hidden"></div>
+                        </div>
+
+                        <!-- Country Selector Trigger Button -->
+                        <button type="button" id="country-trigger-btn" class="flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 transition-colors shrink-0" aria-label="Change Country or Language">
+                            <span class="text-base leading-none">${country_flag}</span>
+                            <span class="text-muted text-[10px]">(${country_symbol})</span>
+                        </button>
+
+                        <!-- User Session Status -->
+                        <div class="mbf-user-status text-xs font-medium shrink-0">
+                            ${user_nav_status}
+                        </div>
+
+                        <!-- Wishlist Heart Button -->
+                        <button type="button" id="wishlist-btn" class="relative p-2 rounded-lg hover:bg-sand-50 text-ink transition-colors shrink-0" aria-label="Saved Items / Wishlist">
+                            <svg class="w-5 h-5" aria-hidden="true"><use xlink:href="#icon-heart"></use></svg>
+                            <span class="absolute top-1 right-1 w-4 h-4 bg-terracotta-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center" id="wishlist-counter">0</span>
+                        </button>
+
+                        <!-- Cart Badge & Drawer Trigger -->
+                        ${cart_badge_html}
+
+                    </div>
+
+                </div>
+            </div>
+        </header>
+
+        <!-- 3. Main Content Injection Node -->
+        <main class="mbf-main-content flex-grow" id="main-content">
+            ${body}
+        </main>
+
+        <!-- 4. Modern Horrible Web: Multi-Column Footer -->
+        <footer class="mbf-footer__root bg-espresso text-sand-100 border-t border-espresso/40 mt-16 pt-16 pb-12">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-sand-200/20">
+
+                    <!-- Brand Column -->
+                    <div class="lg:col-span-2">
+                        <div class="font-serif text-2xl font-bold tracking-[0.18em] uppercase text-white mb-4">
+                            VÉRLA <span class="text-terracotta-400 font-sans text-xs tracking-[0.25em]">APPAREL</span>
+                        </div>
+                        <p class="text-sm text-sand-300 leading-relaxed max-w-sm mb-6">
+                            Italian craftsmanship meets modern wardrobe essentials. Engineered for adaptive shape, sheer elegance, and everyday luxury.
+                        </p>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs uppercase tracking-[0.08em] font-semibold text-sand-300">Join VÉRLA Privé Club:</span>
+                        </div>
+                    </div>
+
+                    <!-- Customer Care -->
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-[0.12em] text-terracotta-300 mb-4">${lang_customerCare}</h4>
+                        <ul class="flex flex-col gap-2.5 text-xs text-sand-300">
+                            <li><a href="track-orders.html" class="hover:text-white transition-colors">${lang_trackOrders}</a></li>
+                            <li><a href="shipping.html" class="hover:text-white transition-colors">${lang_shippingReturns}</a></li>
+                            <li><a href="faq.html" class="hover:text-white transition-colors">${lang_faq}</a></li>
+                            <li><button type="button" id="footer-size-guide-trigger" class="hover:text-white text-left transition-colors cursor-pointer">Size Guide &amp; Fit Matrix</button></li>
+                            <li><a href="contact.html" class="hover:text-white transition-colors">Contact Us</a></li>
+                        </ul>
+                    </div>
+
+                    <!-- About VÉRLA -->
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-[0.12em] text-terracotta-300 mb-4">${lang_aboutUs}</h4>
+                        <ul class="flex flex-col gap-2.5 text-xs text-sand-300">
+                            <li><a href="about.html" class="hover:text-white transition-colors">Our Italian Heritage</a></li>
+                            <li><a href="about.html" class="hover:text-white transition-colors">Sustainability &amp; Yarns</a></li>
+                            <li><a href="stores.html" class="hover:text-white transition-colors">${lang_storeLocator}</a></li>
+                            <li><a href="careers.html" class="hover:text-white transition-colors">Careers &amp; Atelier</a></li>
+                        </ul>
+                    </div>
+
+                    <!-- Secure Payments & Guarantee -->
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-[0.12em] text-terracotta-300 mb-4">Guaranteed Quality</h4>
+                        <p class="text-xs text-sand-300 leading-relaxed mb-4">
+                            100% Certified European Yarns &bull; 30-Day Free In-Store Returns.
+                        </p>
+                        <div class="flex flex-wrap gap-2 text-[10px] font-semibold uppercase text-sand-200">
+                            <span class="px-2 py-1 bg-white/10 rounded">Apple Pay</span>
+                            <span class="px-2 py-1 bg-white/10 rounded">PayPal</span>
+                            <span class="px-2 py-1 bg-white/10 rounded">Klarna</span>
+                            <span class="px-2 py-1 bg-white/10 rounded">Visa / MC</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-sand-400">
+                    <div>&copy; 2026 VÉRLA APPAREL. All rights reserved. Precision Testbed Architecture.</div>
+                    <div class="flex items-center gap-6">
+                        <a href="about.html" class="hover:text-white">Privacy Policy</a>
+                        <a href="about.html" class="hover:text-white">Terms of Sale</a>
+                        <a href="about.html" class="hover:text-white">Cookie Settings</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- 5. Interactive Slide-Out Mini-Cart Drawer -->
+    <div id="cart-drawer-backdrop" class="mbf-backdrop fixed inset-0 bg-ink/60 z-50 backdrop-blur-xs" onclick="closeCartDrawer()"></div>
+    <aside id="cart-drawer-panel" class="mbf-drawer fixed top-0 right-0 bottom-0 w-full max-w-md bg-white z-50 shadow-2xl flex flex-col border-l border-sand-200" aria-label="Shopping Cart Drawer">
+        <!-- Drawer Header -->
+        <div class="p-5 border-b border-sand-200 flex items-center justify-between bg-sand-50">
+            <div class="flex items-center gap-2">
+                <h3 class="font-serif text-lg font-bold text-ink">Shopping Bag</h3>
+                <span id="drawer-cart-count" class="text-xs font-bold px-2 py-0.5 rounded-full bg-terracotta-500 text-white">${drawer_cart_count}</span>
+            </div>
+            <button type="button" onclick="closeCartDrawer()" class="p-2 text-ink hover:text-terracotta-500 rounded-lg hover:bg-sand-200/60 transition-colors" aria-label="Close cart drawer">
+                <svg class="w-5 h-5"><use xlink:href="#icon-close"></use></svg>
+            </button>
+        </div>
+
+        <!-- Free Shipping Threshold Progress Meter -->
+        <div class="p-4 bg-terracotta-50 border-b border-terracotta-100">
+            <div class="flex items-center justify-between text-xs font-semibold mb-1.5 text-espresso">
+                <span>Free Shipping Goal</span>
+                <span id="drawer-shipping-status">${drawer_shipping_status}</span>
+            </div>
+            <div class="w-full h-2 bg-sand-200 rounded-full overflow-hidden">
+                <div id="drawer-shipping-progress" class="h-full bg-terracotta-500 rounded-full transition-all duration-500" style="width: ${drawer_shipping_progress}%;"></div>
+            </div>
+        </div>
+
+        <!-- Dynamic Items Container -->
+        <div id="drawer-cart-items" class="flex-grow overflow-y-auto p-5 divide-y divide-sand-200">
+            ${drawer_cart_items_html}
+        </div>
+
+        <!-- Drawer Footer with Promo Code and Checkout CTA -->
+        <div class="p-5 border-t border-sand-200 bg-sand-50 space-y-4">
+            <!-- Coupon Code input -->
+            <form id="drawer-coupon-form" hx-post="api/cart/coupon" hx-target="#drawer-coupon-feedback" class="flex gap-2">
+                <input type="text" name="coupon" placeholder="Promo Code (e.g. SAVE10)" class="flex-grow px-3 py-2 text-xs rounded-lg border border-sand-200 bg-white outline-none focus:border-terracotta-500 uppercase">
+                <button type="submit" class="px-4 py-2 bg-espresso text-white text-xs font-semibold rounded-lg hover:bg-ink transition-colors uppercase">Apply</button>
+            </form>
+            <div id="drawer-coupon-feedback" class="text-xs"></div>
+
+            <div class="flex items-center justify-between text-base font-bold text-ink pt-2">
+                <span>Estimated Total:</span>
+                <span id="drawer-subtotal">${drawer_subtotal}</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <a href="cart.html" class="w-full py-3 text-center rounded-lg border border-sand-300 font-semibold text-xs uppercase tracking-[0.05em] hover:bg-sand-100 transition-colors">View Bag</a>
+                <a href="checkout.html" class="w-full py-3 text-center rounded-lg bg-terracotta-500 text-white font-semibold text-xs uppercase tracking-[0.05em] hover:bg-terracotta-600 transition-colors shadow-md">Checkout</a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 6. Country Selector Modal Overlay -->
+    <div id="country-modal-overlay" class="hidden fixed inset-0 bg-ink/60 z-50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-sand-200 animate-slide-up">
+            <div class="flex items-center justify-between pb-4 border-b border-sand-200">
+                <h3 class="font-serif text-xl font-bold">${lang_selectCountry}</h3>
+                <button type="button" id="country-modal-close-btn" class="p-2 text-muted hover:text-ink">
+                    <svg class="w-5 h-5"><use xlink:href="#icon-close"></use></svg>
+                </button>
+            </div>
+            <div class="mt-4 max-h-80 overflow-y-auto divide-y divide-sand-200" id="country-list-container">
+                ${country_items_list}
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. Calzedonia-style Legwear Size Guide Modal (Height / Weight Matrix) -->
+    <div id="size-guide-modal-overlay" class="hidden fixed inset-0 bg-ink/60 z-50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-sand-200 animate-slide-up max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-4 border-b border-sand-200">
+                <div>
+                    <h3 class="font-serif text-xl font-bold text-ink">VÉRLA Legwear &amp; Tights Fit Matrix</h3>
+                    <p class="text-xs text-muted">Find your exact size based on your height and weight measurements.</p>
+                </div>
+                <button type="button" onclick="closeSizeGuideModal()" class="p-2 text-muted hover:text-ink">
+                    <svg class="w-5 h-5"><use xlink:href="#icon-close"></use></svg>
+                </button>
+            </div>
+            <div class="mt-6 overflow-x-auto">
+                <table class="w-full text-xs text-center border-collapse">
+                    <thead>
+                        <tr class="bg-sand-100 text-espresso uppercase font-bold">
+                            <th class="p-2.5 border border-sand-200">Height / Weight</th>
+                            <th class="p-2.5 border border-sand-200">45-55 kg (100-120 lbs)</th>
+                            <th class="p-2.5 border border-sand-200">55-65 kg (120-145 lbs)</th>
+                            <th class="p-2.5 border border-sand-200">65-75 kg (145-165 lbs)</th>
+                            <th class="p-2.5 border border-sand-200">75-90 kg (165-200 lbs)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-sand-200 font-medium">
+                        <tr>
+                            <td class="p-2.5 font-bold bg-sand-50 border border-sand-200">150 - 160 cm (4'11" - 5'3")</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 1 / S</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 2 / M</td>
+                            <td class="p-2.5 border border-sand-200">Size 3 / L</td>
+                            <td class="p-2.5 border border-sand-200">Size 4 / XL</td>
+                        </tr>
+                        <tr>
+                            <td class="p-2.5 font-bold bg-sand-50 border border-sand-200">160 - 170 cm (5'3" - 5'7")</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 1 / S</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 2 / M</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 3 / L</td>
+                            <td class="p-2.5 border border-sand-200">Size 4 / XL</td>
+                        </tr>
+                        <tr>
+                            <td class="p-2.5 font-bold bg-sand-50 border border-sand-200">170 - 180 cm (5'7" - 5'11")</td>
+                            <td class="p-2.5 border border-sand-200">Size 2 / M</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 2 / M</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 3 / L</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 4 / XL</td>
+                        </tr>
+                        <tr>
+                            <td class="p-2.5 font-bold bg-sand-50 border border-sand-200">180 - 190 cm (5'11" - 6'3")</td>
+                            <td class="p-2.5 border border-sand-200">Size 3 / L</td>
+                            <td class="p-2.5 border border-sand-200">Size 3 / L</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 4 / XL</td>
+                            <td class="p-2.5 bg-terracotta-50 text-terracotta-800 font-bold border border-sand-200">Size 4 / XL</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button type="button" onclick="closeSizeGuideModal()" class="px-5 py-2.5 bg-ink text-white font-semibold text-xs uppercase tracking-[0.05em] rounded-lg">Got It</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. OneTrust Cookie Consent Banner (Click Interception Trap) -->
+    <div id="onetrust-consent-sdk" class="fixed bottom-0 inset-x-0 bg-espresso/95 text-sand-100 p-4 sm:p-6 shadow-2xl z-50 border-t border-espresso backdrop-blur-md">
+        <div class="mx-auto max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="text-xs text-sand-200 leading-relaxed max-w-3xl">
+                <strong class="text-white font-semibold block mb-1">We value your privacy &amp; Italian luxury experience</strong>
+                We use cookies to analyze site traffic, personalize content and provide targeted offers in accordance with our Cookie Policy.
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <button type="button" id="onetrust-reject-all-handler" onclick="dismissCookieBanner()" class="px-4 py-2 text-xs font-semibold text-sand-300 hover:text-white rounded-lg border border-sand-200/30">Reject Non-Essential</button>
+                <button type="button" id="accept-recommended-btn-handler" onclick="dismissCookieBanner()" class="px-6 py-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-xs rounded-lg transition-colors uppercase tracking-[0.05em] shadow-md">Accept All Cookies</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. Delayed Marketing Modal (Appears 1.2s after load) -->
+    <div id="marketing-modal-overlay" class="hidden fixed inset-0 bg-ink/70 z-50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl border border-sand-200 relative animate-slide-up">
+            <button type="button" onclick="closeMarketingModal()" class="absolute top-4 right-4 p-2 text-muted hover:text-ink" aria-label="Close marketing modal">
+                <svg class="w-5 h-5"><use xlink:href="#icon-close"></use></svg>
+            </button>
+            <span class="inline-block px-3 py-1 bg-terracotta-100 text-terracotta-800 text-[10px] font-bold uppercase tracking-[0.1em] rounded-full mb-3">VÉRLA Privé Club</span>
+            <h3 class="font-serif text-2xl font-bold text-ink mb-2">Unlock 15% Off</h3>
+            <p class="text-xs text-muted mb-6 leading-relaxed">Subscribe to receive secret preview drops, invitations to private sales, and complimentary shaping guides.</p>
+            <form onsubmit="event.preventDefault(); closeMarketingModal();" class="flex flex-col gap-3">
+                <input type="email" placeholder="Enter your email address" required class="px-4 py-3 rounded-lg border border-sand-200 bg-sand-50 text-xs outline-none focus:border-terracotta-500 focus:bg-white">
+                <button type="submit" class="w-full py-3 bg-terracotta-500 text-white font-bold text-xs uppercase tracking-[0.08em] rounded-lg hover:bg-terracotta-600 transition-colors shadow-md">Get 15% Voucher</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Client-Side Runtime JavaScript -->
+    <script>
+        // Headless / SPA Micro-Router for VÉRLA Apparel
+        window.apparelRouter = {
+            navigate: async function(url, isPopState) {
+                var mainEl = document.getElementById('main-content');
+                if (!mainEl) {
+                    window.location.href = url;
+                    return;
+                }
+
+                try {
+                    // Close drawers and modals on navigation
+                    closeCartDrawer();
+                    closeMarketingModal();
+                    closeSizeGuideModal();
+                    var searchDropdown = document.getElementById('search-suggestions');
+                    if (searchDropdown) searchDropdown.innerHTML = '';
+
+                    var resp = await fetch(url, {
+                        headers: {
+                            'X-PWA-Router': 'true',
+                            'HX-Request': 'true'
+                        }
+                    });
+
+                    if (resp.ok) {
+                        var html = await resp.text();
+                        mainEl.innerHTML = html;
+                        if (!isPopState) {
+                            window.history.pushState({ apparelSpa: true }, '', url);
+                        }
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        window.apparelRouter.initPageWidgets(mainEl);
+                        window.apparelRouter.updateActiveNav(url);
+                    } else {
+                        window.location.href = url;
+                    }
+                } catch (e) {
+                    console.error('Headless navigation error:', e);
+                    window.location.href = url;
+                }
+            },
+            initPageWidgets: function(container) {
+                var target = container || document.getElementById('main-content');
+                if (!target) return;
+
+                // Process new nodes with HTMX
+                if (window.htmx) {
+                    window.htmx.process(target);
+                }
+
+                // Execute embedded scripts in swapped fragment
+                var scripts = target.querySelectorAll('script');
+                scripts.forEach(function(oldScript) {
+                    var newScript = document.createElement('script');
+                    Array.from(oldScript.attributes).forEach(function(attr) {
+                        newScript.setAttribute(attr.name, attr.value);
+                    });
+                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                });
+            },
+            updateActiveNav: function(url) {
+                var normUrl = url.replace(/^[a-z]+:\/\/[^/]+/i, '');
+                document.querySelectorAll('.mbf-nav-link').forEach(function(link) {
+                    var href = link.getAttribute('href');
+                    if (href && normUrl.includes(href)) {
+                        link.classList.add('text-terracotta-500');
+                        link.classList.remove('text-ink');
+                    } else {
+                        link.classList.remove('text-terracotta-500');
+                        link.classList.add('text-ink');
+                    }
+                });
+            }
+        };
+
+        // Popstate listener for browser Back / Forward history navigation
+        window.addEventListener('popstate', function() {
+            window.apparelRouter.navigate(window.location.href, true);
+        });
+
+        // Global delegated click listener to intercept internal link navigations
+        document.addEventListener('click', function(e) {
+            var anchor = e.target.closest('a');
+            if (!anchor || !anchor.href) return;
+
+            // Allow default behavior for special clicks
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            if (anchor.target && anchor.target !== '_self') return;
+            if (anchor.hasAttribute('download')) return;
+
+            var rawHref = anchor.getAttribute('href');
+            if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('javascript:') || rawHref.startsWith('mailto:') || rawHref.startsWith('tel:')) {
+                return;
+            }
+
+            try {
+                var targetUrl = new URL(anchor.href, window.location.href);
+                if (targetUrl.origin === window.location.origin) {
+                    var path = targetUrl.pathname;
+                    if (path.includes('/verla-apparel') || path.includes('/verla-apperal') || path.endsWith('.html') || path.includes('/c/') || path.includes('/p/')) {
+                        e.preventDefault();
+                        window.apparelRouter.navigate(anchor.href);
+                    }
+                }
+            } catch (err) {
+                // Ignore parse errors, let default handle
+            }
+        });
+
+        // Search input Enter key handler for headless routing
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target && e.target.id === 'search-input') {
+                e.preventDefault();
+                var q = e.target.value.trim();
+                if (q) {
+                    window.apparelRouter.navigate('plp.html?q=' + encodeURIComponent(q));
+                }
+            }
+        });
+
+        // 1. Simulated Delayed Hydration & Cumulative Layout Shift (CLS)
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                // Expand the announcement bar causing layout shift
+                var ann = document.getElementById('announcement-wrapper');
+                if (ann) ann.classList.add('is-hydrated');
+                document.body.setAttribute('data-app-hydrated', 'true');
+            }, 450);
+
+            // Trigger marketing popup if not previously dismissed
+            setTimeout(function() {
+                if (!sessionStorage.getItem('verla_promo_dismissed')) {
+                    var mModal = document.getElementById('marketing-modal-overlay');
+                    if (mModal) mModal.classList.remove('hidden');
+                }
+            }, 1200);
+
+            // Country modal handlers
+            var countryBtn = document.getElementById('country-trigger-btn');
+            var countryModal = document.getElementById('country-modal-overlay');
+            var countryClose = document.getElementById('country-modal-close-btn');
+
+            if (countryBtn && countryModal) {
+                countryBtn.addEventListener('click', function() {
+                    countryModal.classList.remove('hidden');
+                });
+            }
+            if (countryClose && countryModal) {
+                countryClose.addEventListener('click', function() {
+                    countryModal.classList.add('hidden');
+                });
+            }
+
+            // Size guide triggers
+            var footerSizeTrigger = document.getElementById('footer-size-guide-trigger');
+            if (footerSizeTrigger) {
+                footerSizeTrigger.addEventListener('click', function() {
+                    openSizeGuideModal();
+                });
+            }
+        });
+
+        // Delegated PDP Add to Cart Form listener
+        document.addEventListener('submit', function(e) {
+            var pdpForm = e.target.closest('[data-pdp-form]');
+            if (!pdpForm) return;
+
+            var submitBtn = pdpForm.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                if (submitBtn.dataset.state === 'adding') {
+                    e.preventDefault();
+                    return;
+                }
+                submitBtn.dataset.state = 'adding';
+                var originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<span>Adding...</span>';
+
+                setTimeout(function() {
+                    submitBtn.dataset.state = 'added';
+                    submitBtn.innerHTML = '<span>Added!</span>';
+                    refreshCartDrawer().then(function() {
+                        openCartDrawer();
+                    });
+                    setTimeout(function() {
+                        submitBtn.dataset.state = 'idle';
+                        submitBtn.innerHTML = originalText;
+                    }, 1500);
+                }, 500);
+            }
+        });
+
+        function dismissCookieBanner() {
+            var banner = document.getElementById('onetrust-consent-sdk');
+            if (banner) banner.style.display = 'none';
+            sessionStorage.setItem('verla_cookie_consent', 'true');
+            localStorage.setItem('verla_cookie_consent', 'true');
+            document.cookie = "verla_cookie_consent=true; path=/; max-age=86400";
+        }
+
+        // Apply cookie consent state immediately on load
+        (function() {
+            if (sessionStorage.getItem('verla_cookie_consent') === 'true' ||
+                localStorage.getItem('verla_cookie_consent') === 'true' ||
+                document.cookie.indexOf('verla_cookie_consent=true') !== -1) {
+                var banner = document.getElementById('onetrust-consent-sdk');
+                if (banner) banner.style.display = 'none';
+            }
+        })();
+
+        function closeMarketingModal() {
+            var modal = document.getElementById('marketing-modal-overlay');
+            if (modal) modal.classList.add('hidden');
+            sessionStorage.setItem('verla_promo_dismissed', 'true');
+        }
+
+        function openSizeGuideModal() {
+            var modal = document.getElementById('size-guide-modal-overlay');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeSizeGuideModal() {
+            var modal = document.getElementById('size-guide-modal-overlay');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function openCartDrawer() {
+            var drawer = document.getElementById('cart-drawer-panel');
+            var backdrop = document.getElementById('cart-drawer-backdrop');
+            if (drawer && backdrop) {
+                drawer.classList.add('is-open');
+                backdrop.classList.add('is-open');
+            }
+        }
+
+        function closeCartDrawer() {
+            var drawer = document.getElementById('cart-drawer-panel');
+            var backdrop = document.getElementById('cart-drawer-backdrop');
+            if (drawer && backdrop) {
+                drawer.classList.remove('is-open');
+                backdrop.classList.remove('is-open');
+            }
+        }
+
+        function refreshCartDrawer() {
+            return fetch('api/cart/drawer')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var itemsEl = document.getElementById('drawer-cart-items');
+                    var countEl = document.getElementById('drawer-cart-count');
+                    var subtotalEl = document.getElementById('drawer-subtotal');
+                    var statusEl = document.getElementById('drawer-shipping-status');
+                    var progressEl = document.getElementById('drawer-shipping-progress');
+                    var badgeEl = document.getElementById('cart-badge-count');
+
+                    if (itemsEl && data.itemsHtml !== undefined) itemsEl.innerHTML = data.itemsHtml;
+                    if (countEl && data.count !== undefined) countEl.textContent = data.count;
+                    if (badgeEl && data.count !== undefined) badgeEl.textContent = data.count;
+                    if (subtotalEl && data.subtotal !== undefined) subtotalEl.textContent = data.subtotal;
+                    if (statusEl && data.shippingStatus !== undefined) statusEl.textContent = data.shippingStatus;
+                    if (progressEl && data.shippingProgress !== undefined) progressEl.style.width = data.shippingProgress + '%';
+                })
+                .catch(function(err) {
+                    console.error('Error refreshing cart drawer:', err);
+                });
+        }
+
+        function removeFromDrawer(cartKey) {
+            fetch('api/cart/remove?productId=' + encodeURIComponent(cartKey), { method: 'POST' })
+                .then(function() {
+                    refreshCartDrawer();
+                    if (typeof htmx !== 'undefined') {
+                        htmx.ajax('GET', 'api/cart/badge', { target: '#cart-btn-wrapper', swap: 'outerHTML' });
+                    }
+                });
+        }
+
+        window.showQuickAddSizes = function(btn) {
+            var category = (btn.getAttribute('data-category') || 'tops').toLowerCase().trim();
+            var dropdown = btn.nextElementSibling;
+            if (!dropdown || !dropdown.hasAttribute('data-size-picker')) {
+                dropdown = document.createElement('div');
+                dropdown.setAttribute('data-size-picker', '');
+                dropdown.dataset.open = 'false';
+                dropdown.className = 'quick-add-size-dropdown';
+                dropdown.style.cssText = 'position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 50; display: none; align-items: center; justify-content: center; gap: 6px; background: #ffffff; border: 1px solid #e6e2da; border-radius: 8px; padding: 8px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); white-space: nowrap;';
+
+                var sizes = ['XS', 'S', 'M', 'L', 'XL'];
+                if (category === 'bottoms') {
+                    sizes = ['28', '30', '32', '34', '36', '38'];
+                } else if (category === 'footwear' || category === 'shoes') {
+                    sizes = ['39', '40', '41', '42', '43', '44'];
+                }
+
+                var stockData = {};
+                try {
+                    stockData = JSON.parse(btn.getAttribute('data-stock') || '{}');
+                } catch (e) {
+                    stockData = {};
+                }
+
+                dropdown.innerHTML = sizes.map(function(size) {
+                    var stock = stockData[size] !== undefined ? stockData[size] : 10;
+                    var btnStyle = 'display:flex;width:32px;height:32px;align-items:center;justify-content:center;border:1px solid #e6e2da;background:#ffffff;color:#111111;font-size:11px;font-weight:600;border-radius:4px;cursor:pointer;transition:all 0.2s ease;';
+                    if (stock <= 0) {
+                        return '<button style="' + btnStyle + 'opacity:0.4;cursor:not-allowed;text-decoration:line-through;" type="button" data-size-btn data-size="' + size + '" disabled>' + size + '</button>';
+                    } else {
+                        return '<button style="' + btnStyle + '" type="button" data-size-btn data-size="' + size + '">' + size + '</button>';
+                    }
+                }).join('');
+                btn.after(dropdown);
+            }
+
+            document.querySelectorAll('[data-size-picker]').forEach(function(d) {
+                if (d !== dropdown) {
+                    d.style.display = 'none';
+                    d.dataset.open = 'false';
+                }
+            });
+
+            var isCurrentlyOpen = dropdown.style.display === 'flex' || dropdown.dataset.open === 'true';
+            if (isCurrentlyOpen) {
+                dropdown.style.display = 'none';
+                dropdown.dataset.open = 'false';
+            } else {
+                dropdown.style.display = 'flex';
+                dropdown.dataset.open = 'true';
+            }
+        };
+
+        // Event listener for Quick Add and global clicks
+        document.addEventListener('click', function(e) {
+            // Cart badge / bag click opens drawer
+            var cartTrigger = e.target.closest('#cart-btn-anchor') || e.target.closest('[data-cart-drawer-trigger]');
+            if (cartTrigger) {
+                e.preventDefault();
+                refreshCartDrawer().then(function() {
+                    openCartDrawer();
+                });
+                return;
+            }
+
+            // Quick add button
+            var quickAddBtn = e.target.closest('[data-quick-add]') || e.target.closest('.product-quick-add');
+            if (quickAddBtn) {
+                if (quickAddBtn.disabled || quickAddBtn.dataset.state === 'adding') return;
+                e.stopPropagation();
+
+                var category = quickAddBtn.getAttribute('data-category');
+                if (category === 'accessories') {
+                    var productId = quickAddBtn.getAttribute('data-product-id');
+                    var originalText = quickAddBtn.textContent;
+                    quickAddBtn.dataset.state = 'adding';
+                    quickAddBtn.textContent = 'Adding...';
+
+                    fetch('api/cart/add?productId=' + encodeURIComponent(productId) + '&quantity=1', { method: 'POST' })
+                        .then(function() {
+                            quickAddBtn.dataset.state = 'added';
+                            quickAddBtn.textContent = 'Added!';
+                            refreshCartDrawer().then(function() {
+                                openCartDrawer();
+                            });
+                            if (typeof htmx !== 'undefined') {
+                                htmx.ajax('GET', 'api/cart/badge', { target: '#cart-btn-wrapper', swap: 'outerHTML' });
+                            }
+                            setTimeout(function() {
+                                quickAddBtn.dataset.state = 'idle';
+                                quickAddBtn.textContent = originalText;
+                            }, 1500);
+                        });
+                    return;
+                }
+
+                window.showQuickAddSizes(quickAddBtn);
+                return;
+            }
+
+            // Size button inside quick add popup
+            var sizeBtn = e.target.closest('[data-size-btn]');
+            if (sizeBtn) {
+                e.stopPropagation();
+                var dropdown = sizeBtn.parentElement;
+                var quickBtn = dropdown.previousElementSibling;
+                if (!quickBtn || quickBtn.disabled || quickBtn.dataset.state === 'adding') return;
+
+                var prodId = quickBtn.getAttribute('data-product-id');
+                var sizeVal = sizeBtn.getAttribute('data-size');
+                var origText = quickBtn.textContent;
+
+                quickBtn.textContent = 'Adding...';
+                quickBtn.dataset.state = 'adding';
+                dropdown.style.display = 'none';
+                dropdown.dataset.open = 'false';
+
+                fetch('api/cart/add?productId=' + encodeURIComponent(prodId + ':' + sizeVal) + '&quantity=1', { method: 'POST' })
+                    .then(function() {
+                        quickBtn.dataset.state = 'added';
+                        quickBtn.textContent = 'Added!';
+                        refreshCartDrawer().then(function() {
+                            openCartDrawer();
+                        });
+                        if (typeof htmx !== 'undefined') {
+                            htmx.ajax('GET', 'api/cart/badge', { target: '#cart-btn-wrapper', swap: 'outerHTML' });
+                        }
+                        setTimeout(function() {
+                            quickBtn.dataset.state = 'idle';
+                            quickBtn.textContent = origText;
+                        }, 1500);
+                    });
+                return;
+            }
+
+            // Close size pickers when clicking outside
+            if (!e.target.closest('[data-size-picker]')) {
+                document.querySelectorAll('[data-size-picker]').forEach(function(d) {
+                    d.style.display = 'none';
+                    d.dataset.open = 'false';
+                });
+            }
+
+            // Close search dropdown on click outside
+            var searchDropdown = document.getElementById('search-suggestions');
+            var searchInput = document.getElementById('search-input');
+            if (searchDropdown && searchInput && !searchDropdown.contains(e.target) && e.target !== searchInput) {
+                searchDropdown.innerHTML = '';
+            }
+        });
+    </script>
+</body>
+</html>

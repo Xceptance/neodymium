@@ -15,7 +15,7 @@ steps: |
   Kliknij przycisk 'Kasa' lub 'Przejdź do kasy'
 
   Nagłówek strony brzmi 'Kasa' lub 'Checkout'
-  Wypełnij formularz dostawy po lewej stronie.
+  Po lewej stronie znajdują się formularze wprowadzania danych, a po prawej blok podsumowania zamówienia (visual).
   Wybierz 'Poland' jako kraj dostawy.
   Wpisz 'Jan' jako imię, 'Kowalski' jako nazwisko oraz adres e-mail 'foo@varmail.net'.
   Wpisz 'ul. Marszałkowska 10' jako ulicę, 'Warszawa' jako miasto i '00-001' jako kod pocztowy.

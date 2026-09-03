@@ -20,6 +20,8 @@ graph TD
     A --> F["Modern Bad - WCAG (/verla-modern-bad/)"]
     A --> G["Modern Bad - No WCAG (/verla-modern-bad-nowcag/)"]
     A --> H["PWA Chaos (/verla-pwa-chaos/)"]
+    A --> I["Apocalypse (/verla-apocalypse/)"]
+    A --> J["Headless (/verla-headless/)"]
 ```
 
 ### 1.1. Perfect Quality (`/verla-perfect/`)
@@ -65,6 +67,59 @@ This makes it a useful contrast case for the locator pipeline: identical busines
 ### 1.6. PWA Chaos (`/verla-pwa-chaos/`)
 - **Bath & Body Works Architecture**: Replicates complex real-world headless PWA anti-patterns.
 - **DOM & Styling**: Chakra UI / Emotion CSS-in-JS class hashes (`emotion-jvwy60`, `emotion-1ss52ls`), Wick Design System components (`wick-linkbox`, `wick-stack`, `wick-marquee__root`), Zag.js state machines (`data-scope="marquee"`), rotating reveal search prompt, VideoJS `MEDIA_ERR_DECODE` error modal dialog, OneTrust cookie banner, delayed 20% discount marketing popup, and slide-over mini-cart drawer.
+
+### 1.7. Apocalypse (`/verla-apocalypse/`)
+- **Extreme Web Anti-Patterns**: Pushes AI multimodal reasoning, waiting mechanisms, and locator pipelines to the limit.
+- **Progressive Hydration Ghost Clicks**: SSR HTML renders instantly, but JavaScript event listeners intentionally delay attachment for 1500ms, dropping unhydrated clicks without errors.
+- **Cumulative Layout Shift (CLS)**: Delayed announcement bar pops in at $t=350\text{ms}$, pushing all viewport coordinates down by 44px.
+- **Pure CSS Pseudo-Element Text**: Buttons, badges, and headings have empty DOM text nodes (`<span class="ps-txt ps-txt-add-to-bag"></span>`), rendering visual text purely via CSS `::before { content: '...' }` so standard `.getText()` returns empty strings.
+- **Floating Overlay Storm**: Concurrently active GDPR banner, bouncing Intercom-style live chat bubble at `bottom: 24px; right: 24px; z-index: 2500` occluding checkout action zones, dynamic social proof toasts every 6s, and a delayed spin-to-win discount modal at $t=4500\text{ms}$.
+- **Torture Form Controls**: 4-box split credit card inputs (`card-part-1` through `card-part-4`) with auto-advancing focus.
+
+### 1.8. Headless (`/verla-headless/`)
+
+A composable-commerce SPA profile. Where `verla-pwa-chaos` models a chaotic *rendered* page, this variant models a page that is **not rendered yet**: the server ships a shell and the browser assembles the content from per-entity API calls. It is the only variant in the suite whose product markup contains no product data.
+
+The profile was measured against a production SFCC PWA Kit storefront (1.77 MB initial HTML, 3.27 MB total across 210 requests, 87 of them XHR, `load` at 10.7 s against `DOMContentLoaded` at 0.72 s).
+
+- **Client-Side Routing (single document)**: The variant is a true SPA. Category, product, cart, checkout and content pages are **routes, not documents**. Internal link clicks and product-tile clicks are intercepted, the route body is fetched as a fragment (`X-PWA-Router: true`), and only `#main-body` is swapped; `history.pushState` updates the URL and `popstate` handles Back/Forward. The shell - header, search, cart badge, footer, icon sprite and preloaded state - is created once on first load and is *literally the same DOM node* for the rest of the session. A full home → category → PDP → cart → checkout → Back journey produces exactly **one** navigation entry.
+  - Each navigation first resolves the route through `api/scapi/route?path=…`, so a route transition costs an API call before its body is even requested.
+  - Route transitions are announced through `data-route-state` (`loading` / `ready`) on `<html>` and on `#main-body`. This, not a page load, is the signal to wait on when navigating.
+  - Deep links still work: requesting any route as a document returns the full shell, while the same route requested with the router header returns a bare fragment that repeats neither the hydration blob nor the sprite.
+  - Because the shell survives, the cart badge is reconciled from `api/bff/basket` rather than re-rendered with the page - so it can lag behind an add that appeared to succeed.
+- **Client-Side Tile Rendering (N+1 fan-out)**: Product tiles are delivered as skeletons carrying only `data-pid`. Each tile then fetches its own product document (`api/scapi/product?id=…`) plus its own image rendition (`api/scapi/image?id=…&sw=960`) - two requests per tile. Tiles flip `data-state` from `pending` to `loading` to `ready` individually, so **there is no moment at which "the grid" is complete**, only tiles that have each arrived.
+- **API-Built Quick Add**: The grid supports quick add exactly as the server-rendered variants do - press Add, choose a size, item lands in the cart - but the control is **assembled client-side from the product document**. Sizes and per-size stock travel in the document's `variants` array, never in the tile markup, so:
+  - The quick add button does not exist until that tile's own request returns. A test that reaches for it as soon as the grid appears finds nothing to click.
+  - Pressing Add opens the size selector and performs **no** basket call; only choosing a size adds. Exhausted sizes render disabled and suffixed `(0)`, matching the baseline contract.
+  - Accessories publish no variants (`requiresSize: false`) and add directly, skipping size selection.
+  - The selector contract is deliberately shared with the other variants (`.product-quick-add`, `data-product-id`, `data-category`, `.quick-add-dropdown`, `.size-btn`, `data-size`) so cross-variant tests can reuse locators; only the *timing* and the *source of the data* differ.
+  - Availability is published as `data-orderable` but not enforced client-side - the basket endpoint stays the authority, as in the server-rendered variants.
+- **Hydration Blob Trap**: A `<script id="__PRELOADED_STATE__" type="application/json">` element carries the full product documents for every tile on the page. The data is therefore present in the delivered source *before* it is rendered anywhere - a page scrape reads prices the user cannot yet see, while a DOM assertion on the same tile returns an empty string.
+- **Session Bootstrap Race**: Two OAuth token requests (`api/scapi/token`) are issued concurrently. The customer id the page holds during its first moments is a bootstrap id, and `api/bff/basket`, `api/bff/wishlist` and `api/bff/getWishlist` **reject it with HTTP 400**. The failures are swallowed, so nothing on screen indicates the basket is unusable. Add-to-cart issued before the session settles is rejected the same way. The settle window is **randomized per session**, which defeats fixed sleeps by design.
+  - The correct readiness signal is `api/scapi/session`, which reports `{"ready":true,…}` and flips `data-session-state` on `<html>` from `BOOTSTRAPPING` to `SETTLED`.
+- **Deferred Content Slots**: The announcement bar, footer link list and footer legal line are empty `data-cms-slot` containers in the delivered document, each filled by its own `api/cms/slot?id=…` request after first paint. The footer therefore grows underneath anything the user has already reached.
+- **Deferred Hydration**: Routing and tile listeners attach only after a configured boot delay. `data-hydrated` on `<html>` and `<body>` flips to `true` when listeners are live. Before that the page behaves like plain SSR markup: a tile click is dropped silently, and a link click performs a **full document load** instead of a client-side route change - so the same click yields a different execution model depending on when it lands.
+- **CSS-in-JS Emission**: Styling is emitted as dozens of separate `<style>` elements carrying `css-1tpd03i`-style hashes, rather than one stylesheet.
+- **Icon Sprite via `<use>`**: An inlined `__SVG_SPRITE_NODE__` sprite backs icon-only controls, which consequently carry no text node.
+- **Oversized Renditions**: Only the 960px rendition is published, so every tile pulls it regardless of display size.
+
+#### 1.8.1. Configuration
+
+Every anti-pattern above is always structurally present; `config/verla.properties` controls only their *magnitude*, so CI runs stay affordable while demos can be brutal. See the `verla.headless.*` block for the full set.
+
+| Property | Default | Real-world reference |
+| --- | --- | --- |
+| `verla.headless.hydration.kb` | 120 | 907 |
+| `verla.headless.sprite.kb` | 40 | 621 |
+| `verla.headless.image.kb` | 24 | ~27 per image |
+| `verla.headless.styletags` | 60 | 176 |
+| `verla.headless.tile.fanout` | 12 | ~28 |
+| `verla.headless.session.race.min/max` | 400 / 1600 ms | randomized |
+| `verla.headless.boot.min/max` | 600 / 1200 ms | ~1500 ms |
+
+Setting `verla.headless.enabled = false` renders the variant server-side, which makes it a direct A/B control for the cost of the client-side pipeline. Setting `verla.headless.tile.fanout = 0` removes the fan-out while keeping the rest of the profile.
+
+> **Note on overlap**: the CSS-in-JS hash dimension is shared with `verla-pwa-chaos`. The axis unique to this variant is client-side assembly - request fan-out, the session race, and deferred content - not class-name obfuscation. Static content pages (`about`, `faq`, `contact`, `shipping`, `stores`, `careers`, `track-orders`) reuse the `verla-normal` bodies unchanged, since their markup quality does not carry the profile.
 
 ---
 

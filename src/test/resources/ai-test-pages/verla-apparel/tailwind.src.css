@@ -1,0 +1,72 @@
+/*
+ * VÉRLA — Tailwind CSS source for the /verla-apparel/ storefront.
+ *
+ * Implements modern enterprise Mobify/SFCC styling with Italian fashion palette,
+ * deep nested React/Emotion utility classes, and custom keyframes.
+ */
+@import "tailwindcss";
+
+@source "./*.html";
+@source "../../../java/org/neodymium/ai/util/EmbeddedHtmlServer.java";
+
+@theme {
+    /* Terracotta & Espresso — Luxury Italian apparel brand accent */
+    --color-terracotta-50: #FAF6F3;
+    --color-terracotta-100: #F4ECE7;
+    --color-terracotta-200: #E8D5CA;
+    --color-terracotta-300: #D9B9A6;
+    --color-terracotta-400: #D09776;
+    --color-terracotta-500: #C87A53;
+    --color-terracotta-600: #B66A45;
+    --color-terracotta-700: #A65A35;
+    --color-terracotta-800: #8A4829;
+    --color-terracotta-900: #6F371E;
+
+    --color-espresso: #2B1810;
+    --color-nude: #F9F5F0;
+    --color-gold: #C5A880;
+
+    /* Sand — neutral surfaces and borders */
+    --color-sand-50: #FAF9F6;
+    --color-sand-100: #F5F3ED;
+    --color-sand-200: #E6E2DA;
+    --color-sand-300: #D4CFC4;
+
+    /* Semantic text/state colors */
+    --color-ink: #111111;
+    --color-muted: #6B7280;
+    --color-success: #2E7D32;
+    --color-danger: #C62828;
+    --color-promo: #D81B60;
+
+    --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, Cambria, serif;
+
+    --animate-fade-in: fade-in 0.4s ease-out;
+    --animate-slide-up: slide-up 0.4s ease-out;
+    --animate-pulse-slow: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slide-up {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+}
+
+@layer base {
+    *,
+    ::after,
+    ::before {
+        border-color: var(--color-sand-200);
+    }
+
+    body {
+        font-family: var(--font-sans);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+    }
+}

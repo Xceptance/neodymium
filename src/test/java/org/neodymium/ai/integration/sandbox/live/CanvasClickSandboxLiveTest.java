@@ -70,10 +70,10 @@ public class CanvasClickSandboxLiveTest extends BaseAiTest
         session.execute( """
             steps: |
               Open ${canvas.click.test.url} in the browser
-              Click the blue canvas element
-              Verify that #canvas-status shows "Blue Canvas Clicked"
+              Click the Confirm button inside the canvas
+              Verify that #canvas-status shows "Confirm Clicked"
             """);
 
-        $("#canvas-status").shouldHave(text("Blue Canvas Clicked"));
+        $("#canvas-status").shouldHave(text("Confirm Clicked"));
     }
 }

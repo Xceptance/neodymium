@@ -315,6 +315,32 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             judgeVariants.add(null);
         }
 
+        // 2c. Resolve Linter variations
+        final List<Boolean> linterVariants = new ArrayList<>();
+        final AiLinter methodLinter = method.getAnnotation(AiLinter.class);
+        if (methodLinter != null)
+        {
+            for (final boolean l : methodLinter.value())
+            {
+                linterVariants.add(l);
+            }
+        }
+        else
+        {
+            final AiLinter classLinter = testClass.getAnnotation(AiLinter.class);
+            if (classLinter != null)
+            {
+                for (final boolean l : classLinter.value())
+                {
+                    linterVariants.add(l);
+                }
+            }
+        }
+        if (linterVariants.isEmpty())
+        {
+            linterVariants.add(null);
+        }
+
         // 3. Resolve dataset filters
         final List<AiDataSet> datasetFilters = new ArrayList<>();
         final AiDataSet methodDataSet = method.getAnnotation(AiDataSet.class);
@@ -473,40 +499,44 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            // Create template invocation context for Cartesian product of browsers, playbooks, datasets, execution modes, and judge variations
+            // Create template invocation context for Cartesian product of browsers, playbooks, datasets, execution modes, judge variations, and linter variations
             for (final BrowserMethodData browser : browsers)
             {
                 for (final ExecutionMode mode : modes)
                 {
                     for (final Boolean judgeEnabled : judgeVariants)
                     {
-                        for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
+                        for (final Boolean linterEnabled : linterVariants)
                         {
-                            final String dsId = getDataSetId(dataset);
-                            invocationContexts.add(new TestTemplateInvocationContext()
+                            for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
                             {
-                                @Override
-                                public String getDisplayName(final int invocationIndex)
+                                final String dsId = getDataSetId(dataset);
+                                invocationContexts.add(new TestTemplateInvocationContext()
                                 {
-                                    final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
-                                    final String datasetLabel = dsId != null ? dsId : "default";
-                                    final String browserLabel = browser != null ? " :: Browser " + browser.getBrowserTag() : "";
-                                    final String judgeLabel = judgeEnabled != null ? (judgeEnabled ? " [Judge: ON]" : " [Judge: OFF]") : "";
-                                    return String.format("[%d] playbook=%s, dataset=%s, mode=%s%s%s", invocationIndex, name, datasetLabel, mode, judgeLabel, browserLabel);
-                                }
-
-                                @Override
-                                public List<Extension> getAdditionalExtensions()
-                                {
-                                    final List<Extension> extensions = new ArrayList<>();
-                                    if (browser != null)
+                                    @Override
+                                    public String getDisplayName(final int invocationIndex)
                                     {
-                                        extensions.add(new BrowserExecutionCallback(browser, method.getName()));
+                                        final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
+                                        final String datasetLabel = dsId != null ? dsId : "default";
+                                        final String browserLabel = browser != null ? " :: Browser " + browser.getBrowserTag() : "";
+                                        final String judgeLabel = judgeEnabled != null ? (judgeEnabled ? " [Judge: ON]" : " [Judge: OFF]") : "";
+                                        final String linterLabel = linterEnabled != null ? (linterEnabled ? " [Linter: ON]" : " [Linter: OFF]") : "";
+                                        return String.format("[%d] playbook=%s, dataset=%s, mode=%s%s%s%s", invocationIndex, name, datasetLabel, mode, judgeLabel, linterLabel, browserLabel);
                                     }
-                                    extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled));
-                                    return extensions;
-                                }
-                            });
+
+                                    @Override
+                                    public List<Extension> getAdditionalExtensions()
+                                    {
+                                        final List<Extension> extensions = new ArrayList<>();
+                                        if (browser != null)
+                                        {
+                                            extensions.add(new BrowserExecutionCallback(browser, method.getName()));
+                                        }
+                                        extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled));
+                                        return extensions;
+                                    }
+                                });
+                            }
                         }
                     }
                 }
@@ -601,6 +631,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final String datasetId;
         private final BrowserMethodData browser;
         private final Boolean judgeEnabled;
+        private final Boolean linterEnabled;
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
@@ -612,7 +643,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExecutionMode mode,
             final String datasetId,
             final BrowserMethodData browser,
-            final Boolean judgeEnabled
+            final Boolean judgeEnabled,
+            final Boolean linterEnabled
         )
         {
             this.playbookPath = playbookPath;
@@ -621,6 +653,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.datasetId = datasetId;
             this.browser = browser;
             this.judgeEnabled = judgeEnabled;
+            this.linterEnabled = linterEnabled;
         }
 
         @Override
@@ -693,6 +726,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.judge.enabled", String.valueOf(this.judgeEnabled));
             }
 
+            if (this.linterEnabled != null)
+            {
+                Neodymium.getData().put("neodymium.ai.linter.enabled", String.valueOf(this.linterEnabled));
+                com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.linter.enabled", String.valueOf(this.linterEnabled));
+            }
+
             final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
             
             final LlmRegistry registry = new LlmRegistry();
@@ -707,6 +746,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.judgeEnabled != null)
             {
                 this.session.data().putDynamic("neodymium.ai.judge.enabled", String.valueOf(this.judgeEnabled), false);
+            }
+            if (this.linterEnabled != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.linter.enabled", String.valueOf(this.linterEnabled), false);
             }
             final ExecutionContext executionContext = this.session.getExecutionContext();
             executor.setExecutionContext(executionContext);

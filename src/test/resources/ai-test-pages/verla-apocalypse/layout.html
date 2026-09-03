@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base href="/verla-${quality}/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VÉRLA Apocalypse &mdash; Luxury Haute Parfumerie</title>
+    <!-- Local Fonts -->
+    <link href="/shared/fonts.css" rel="stylesheet">
+    <style>
+        /* === VÉRLA APOCALYPSE DESIGN SYSTEM & THEME TOKENS === */
+        :root {
+            --apoc-bg: #0C0E12;
+            --apoc-bg-surface: #14181F;
+            --apoc-bg-elevated: #1B212B;
+            --apoc-border: #2A3342;
+            --apoc-border-focus: #D4AF37;
+            --apoc-gold: #D4AF37;
+            --apoc-gold-hover: #F3E5AB;
+            --apoc-gold-glow: rgba(212, 175, 55, 0.25);
+            --apoc-text-primary: #F7F9FC;
+            --apoc-text-secondary: #9AA5B8;
+            --apoc-text-muted: #627084;
+            --apoc-accent-crimson: #E63946;
+            --apoc-success: #2A9D8F;
+            --apoc-font-serif: 'Playfair Display', Georgia, serif;
+            --apoc-font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --apoc-max-w: 1280px;
+            --apoc-radius: 6px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--apoc-bg);
+            color: var(--apoc-text-primary);
+            font-family: var(--apoc-font-sans);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        a { color: inherit; text-decoration: none; }
+        button, input, select, textarea { font-family: inherit; font-size: inherit; }
+        button { background: none; border: none; cursor: pointer; }
+
+        .container { max-width: var(--apoc-max-w); margin: 0 auto; padding: 0 24px; width: 100%; }
+
+        /* === HORROR 1: PURE CSS PSEUDO-ELEMENT TEXT === */
+        /* Empty DOM spans displaying visual text via ::before */
+        .ps-txt-add-to-bag::before { content: "Add to Bag"; }
+        .ps-txt-add-to-cart::before { content: "Add to Bag"; }
+        .ps-txt-checkout::before { content: "Proceed to Checkout"; }
+        .ps-txt-purchase::before { content: "Place Order"; }
+        .ps-txt-login::before { content: "Sign In"; }
+        .ps-txt-register::before { content: "Create Account"; }
+        .ps-txt-apply::before { content: "Apply"; }
+        .ps-txt-shop-now::before { content: "Explore Haute Parfumerie"; }
+        .ps-txt-continue-shopping::before { content: "Continue Shopping"; }
+        .ps-txt-quick-view::before { content: "Quick View"; }
+        .ps-txt-in-stock::before { content: "In Stock - Ships Fast"; }
+        .ps-txt-free-shipping::before { content: "Complimentary Global Express"; }
+        .ps-txt-trending::before { content: "Exquisite Selection"; }
+
+        /* === HORROR 2: CUMULATIVE LAYOUT SHIFT (CLS) BANNER === */
+        #apoc-cls-announcement {
+            height: 0px;
+            opacity: 0;
+            overflow: hidden;
+            background: linear-gradient(90deg, #1B212B 0%, #2A3342 50%, #1B212B 100%);
+            border-bottom: 1px solid var(--apoc-gold);
+            color: var(--apoc-gold);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+        }
+        #apoc-cls-announcement.shifted {
+            height: 44px;
+            opacity: 1;
+        }
+
+        /* === HEADER & NAVIGATION === */
+        .apoc-header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(20, 24, 31, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--apoc-border);
+        }
+        .apoc-header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            max-width: var(--apoc-max-w);
+            margin: 0 auto;
+        }
+        .apoc-brand {
+            font-family: var(--apoc-font-serif);
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .apoc-brand span { color: var(--apoc-gold); }
+        .apoc-nav-links {
+            display: flex;
+            gap: 28px;
+            list-style: none;
+            align-items: center;
+        }
+        .apoc-nav-link {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--apoc-text-secondary);
+            transition: color 0.2s ease;
+            position: relative;
+            padding: 6px 0;
+        }
+        .apoc-nav-link:hover, .apoc-nav-link.active {
+            color: var(--apoc-gold);
+        }
+
+        .apoc-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .apoc-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            border-radius: var(--apoc-radius);
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            color: var(--apoc-text-primary);
+            font-size: 13px;
+            font-weight: 600;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+        .apoc-icon-btn:hover {
+            border-color: var(--apoc-gold);
+            box-shadow: 0 0 12px var(--apoc-gold-glow);
+            color: var(--apoc-gold);
+        }
+
+        /* Search input */
+        .apoc-search-container {
+            position: relative;
+            width: 220px;
+        }
+        .apoc-search-input {
+            width: 100%;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 20px;
+            padding: 7px 14px 7px 34px;
+            color: #fff;
+            font-size: 12px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .apoc-search-input:focus {
+            border-color: var(--apoc-gold);
+            width: 280px;
+            box-shadow: 0 0 12px var(--apoc-gold-glow);
+        }
+        .apoc-search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--apoc-text-muted);
+            pointer-events: none;
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Autocomplete dropdown */
+        .apoc-search-results {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 320px;
+            background: var(--apoc-bg-surface);
+            border: 1px solid var(--apoc-border);
+            border-radius: var(--apoc-radius);
+            box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+            z-index: 1500;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .apoc-search-results.active { display: block; }
+        .apoc-suggest-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--apoc-border);
+            color: var(--apoc-text-primary);
+            transition: background 0.2s;
+        }
+        .apoc-suggest-item:hover { background: var(--apoc-bg-elevated); }
+
+        /* Cart Badge */
+        .apoc-cart-badge {
+            background: var(--apoc-gold);
+            color: #000;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 10px;
+            padding: 2px 6px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* === BUTTONS & UI CONTROLS === */
+        .apoc-btn-gold {
+            background: linear-gradient(135deg, #D4AF37 0%, #AA820A 100%);
+            color: #000;
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 12px 24px;
+            border-radius: var(--apoc-radius);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 1px solid var(--apoc-gold);
+            box-shadow: 0 4px 16px var(--apoc-gold-glow);
+            transition: all 0.25s ease;
+            cursor: pointer;
+        }
+        .apoc-btn-gold:hover {
+            background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 100%);
+            box-shadow: 0 6px 24px rgba(212, 175, 55, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .apoc-btn-secondary {
+            background: var(--apoc-bg-elevated);
+            color: var(--apoc-text-primary);
+            border: 1px solid var(--apoc-border);
+            font-weight: 600;
+            font-size: 13px;
+            padding: 10px 20px;
+            border-radius: var(--apoc-radius);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .apoc-btn-secondary:hover {
+            border-color: var(--apoc-gold);
+            color: var(--apoc-gold);
+        }
+
+        /* === HORROR 3: PROGRESSIVE HYDRATION GHOST BUTTONS === */
+        [data-interactive="true"]:not([data-hydrated="true"]) {
+            opacity: 0.92;
+            cursor: wait;
+        }
+        .hydration-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #E63946;
+            margin-left: 6px;
+        }
+        [data-hydrated="true"] .hydration-indicator {
+            background: #2A9D8F;
+            display: none;
+        }
+
+        /* === HORROR 4: FLOATING OVERLAY STORM === */
+
+        /* 1. GDPR Cookie Shield */
+        #apoc-gdpr-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #11141A;
+            border-top: 1px solid var(--apoc-border);
+            padding: 16px 24px;
+            z-index: 2100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            font-size: 12px;
+            box-shadow: 0 -8px 24px rgba(0,0,0,0.5);
+        }
+        #apoc-gdpr-banner.accepted { display: none !important; }
+
+        /* 2. Bouncing Intercom-Style Live Chat Widget (Occluding Bottom-Right Action Zone) */
+        #apoc-chat-widget {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 2500;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        .apoc-chat-bubble {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #D4AF37 0%, #9B7808 100%);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px var(--apoc-gold-glow);
+            cursor: pointer;
+            animation: apoc-float 3s ease-in-out infinite;
+        }
+        @keyframes apoc-float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+        .apoc-chat-card {
+            display: none;
+            width: 320px;
+            background: var(--apoc-bg-surface);
+            border: 1px solid var(--apoc-border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+        }
+        .apoc-chat-card.open { display: block; }
+
+        /* 3. Social Proof Toasts */
+        #apoc-social-toast {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            z-index: 2200;
+            background: var(--apoc-bg-surface);
+            border: 1px solid var(--apoc-border);
+            border-left: 3px solid var(--apoc-gold);
+            border-radius: 8px;
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            transform: translateY(120px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #apoc-social-toast.visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* 4. Gamified Spin-to-Win Discount Modal */
+        #apoc-spin-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(8px);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+        #apoc-spin-modal-overlay.active { display: flex; }
+        .apoc-spin-modal {
+            background: var(--apoc-bg-surface);
+            border: 1px solid var(--apoc-gold);
+            border-radius: 12px;
+            max-width: 460px;
+            width: 92%;
+            padding: 32px 28px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+        }
+        .apoc-spin-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            font-size: 20px;
+            color: var(--apoc-text-muted);
+            cursor: pointer;
+        }
+        .apoc-spin-close:hover { color: #fff; }
+
+        /* Country Selector Modal */
+        #country-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 2600;
+            align-items: center;
+            justify-content: center;
+        }
+        #country-modal-overlay.active { display: flex; }
+        .country-modal-box {
+            background: var(--apoc-bg-surface);
+            border: 1px solid var(--apoc-border);
+            border-radius: 12px;
+            padding: 28px;
+            max-width: 440px;
+            width: 90%;
+        }
+        .country-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+        .country-item {
+            padding: 10px 14px;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--apoc-text-primary);
+            transition: all 0.2s;
+        }
+        .country-item:hover, .country-item.selected {
+            border-color: var(--apoc-gold);
+            color: var(--apoc-gold);
+        }
+
+        /* Form Controls & Grids */
+        .apoc-form-group {
+            margin-bottom: 16px;
+        }
+        .apoc-form-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--apoc-text-secondary);
+            margin-bottom: 6px;
+        }
+        .apoc-form-control {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 4px;
+            color: #fff;
+            padding: 10px 12px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .apoc-form-control:focus {
+            border-color: var(--apoc-gold);
+        }
+        .apoc-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .apoc-grid-1-2 {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .apoc-card-part {
+            min-width: 0 !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            text-align: center;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 4px;
+            color: #fff;
+            padding: 10px 4px;
+            font-size: 13px;
+            font-family: monospace;
+            outline: none;
+        }
+        .apoc-card-part:focus {
+            border-color: var(--apoc-gold);
+        }
+
+        /* Quick Size Modal */
+        .apoc-quick-size-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 2500;
+            align-items: center;
+            justify-content: center;
+        }
+        .apoc-quick-size-modal-overlay.active {
+            display: flex !important;
+        }
+        .apoc-quick-size-modal {
+            background: var(--apoc-bg-surface);
+            border: 1px solid var(--apoc-gold);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(200, 170, 110, 0.15);
+            border-radius: 12px;
+            padding: 28px;
+            max-width: 480px;
+            width: 90%;
+            position: relative;
+        }
+        .apoc-quick-size-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            background: none;
+            border: none;
+            color: var(--apoc-text-muted);
+            font-size: 18px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .apoc-quick-size-close:hover {
+            color: #fff;
+        }
+        .apoc-quick-size-content {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .apoc-quick-size-thumb {
+            width: 90px;
+            height: 90px;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .apoc-quick-size-thumb svg {
+            width: 70%;
+            height: 70%;
+            color: var(--apoc-gold);
+        }
+        .apoc-quick-size-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .apoc-size-pill {
+            padding: 8px 14px;
+            background: var(--apoc-bg-elevated);
+            border: 1px solid var(--apoc-border);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .apoc-size-pill:hover:not(:disabled) {
+            border-color: var(--apoc-gold);
+            color: var(--apoc-gold);
+        }
+        .apoc-size-pill.selected {
+            border-color: var(--apoc-gold);
+            background: var(--apoc-gold);
+            color: #000;
+        }
+        .apoc-size-pill:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            text-decoration: line-through;
+        }
+
+        /* Mini-Cart Slide-Over Drawer */
+        #apoc-mini-cart-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 2400;
+        }
+        #apoc-mini-cart-backdrop.active { display: block; }
+        #apoc-mini-cart-drawer {
+            position: fixed;
+            top: 0;
+            right: -420px;
+            width: 400px;
+            max-width: 90%;
+            height: 100vh;
+            background: var(--apoc-bg-surface);
+            border-left: 1px solid var(--apoc-border);
+            z-index: 2450;
+            box-shadow: -12px 0 40px rgba(0,0,0,0.5);
+            transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+        }
+        #apoc-mini-cart-drawer.active { right: 0; }
+        .drawer-header { padding: 20px; border-bottom: 1px solid var(--apoc-border); display: flex; justify-content: space-between; align-items: center; }
+        .drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
+        .drawer-footer { padding: 20px; border-top: 1px solid var(--apoc-border); background: var(--apoc-bg-elevated); }
+
+        /* Footer */
+        .apoc-footer {
+            margin-top: auto;
+            background: #08090C;
+            border-top: 1px solid var(--apoc-border);
+            padding: 48px 0 24px;
+            font-size: 13px;
+            color: var(--apoc-text-muted);
+        }
+        .apoc-footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+            margin-bottom: 36px;
+        }
+        .apoc-footer-col h4 {
+            color: #FFFFFF;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+        .apoc-footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+        .apoc-footer-col a:hover { color: var(--apoc-gold); }
+    </style>
+</head>
+<body class="apocalypse-shell">
+
+    <!-- CLS Layout Shift Announcement Bar -->
+    <div id="apoc-cls-announcement" role="region" aria-label="Flash Announcement">
+        <span>✨ Private Vault Access: Code <b style="color:#FFF;margin:0 4px;">APOCALYPSE15</b> for 15% VIP Privilege</span>
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="apoc-header">
+        <div class="apoc-header-inner">
+            <a href="index.html" class="apoc-brand">
+                VÉRLA <span>HAUTE</span>
+            </a>
+
+            <nav>
+                <ul class="apoc-nav-links">
+                    <li><a href="c/tops.html" class="apoc-nav-link">${lang_tops}</a></li>
+                    <li><a href="c/bottoms.html" class="apoc-nav-link">${lang_bottoms}</a></li>
+                    <li><a href="c/outerwear.html" class="apoc-nav-link">${lang_outerwear}</a></li>
+                    <li><a href="c/footwear.html" class="apoc-nav-link">${lang_footwear}</a></li>
+                    <li><a href="c/accessories.html" class="apoc-nav-link">${lang_accessories}</a></li>
+                </ul>
+            </nav>
+
+            <div class="apoc-header-actions">
+                <!-- Search Form -->
+                <div class="apoc-search-container">
+                    <form action="plp.html" method="GET">
+                        <svg class="apoc-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                        <input type="text" name="q" id="apoc-global-search-input" class="apoc-search-input" placeholder="Search..." autocomplete="off" value="${search_query}">
+                    </form>
+                    <div id="apoc-search-dropdown" class="apoc-search-results"></div>
+                </div>
+
+                <!-- Country Selector -->
+                <button type="button" class="apoc-icon-btn" id="country-trigger-btn" onclick="document.getElementById('country-modal-overlay').classList.add('active')" aria-label="Select Country" title="Select Country">
+                    <span style="font-size: 16px; margin-right: 6px;">${country_flag}</span>
+                    <span>${country_name} (${country_symbol})</span>
+                </button>
+
+                <!-- User Account Status -->
+                ${user_nav_status}
+
+                <!-- Cart Action Button -->
+                ${cart_badge_wrapper}
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dynamic Content Slot -->
+    <main id="main-content" class="container" style="padding-top: 36px; padding-bottom: 60px; flex: 1;">
+        ${body}
+    </main>
+
+    <!-- Floating Live Chat Bubble Widget -->
+    <div id="apoc-chat-widget">
+        <div class="apoc-chat-card" id="apoc-chat-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--apoc-border); padding-bottom:8px;">
+                <b style="color:var(--apoc-gold); font-size:14px;">VÉRLA Concierge</b>
+                <button type="button" style="color:var(--apoc-text-muted);" onclick="document.getElementById('apoc-chat-box').classList.remove('open')">✕</button>
+            </div>
+            <p style="font-size:12px; color:var(--apoc-text-secondary); margin-bottom:12px;">Welcome to the VIP lounge. An advisor is available to assist with fragrance pairings.</p>
+            <input type="text" placeholder="Inquire here..." style="width:100%; padding:8px 12px; background:var(--apoc-bg-elevated); border:1px solid var(--apoc-border); border-radius:4px; color:#fff; font-size:12px;">
+        </div>
+        <button type="button" class="apoc-chat-bubble" id="apoc-chat-trigger-btn" aria-label="Open Concierge Chat" onclick="document.getElementById('apoc-chat-box').classList.toggle('open')">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+        </button>
+    </div>
+
+    <!-- Social Proof Toast -->
+    <div id="apoc-social-toast">
+        <div style="width:36px; height:36px; border-radius:50%; background:var(--apoc-bg-elevated); border:1px solid var(--apoc-gold); display:flex; align-items:center; justify-content:center; color:var(--apoc-gold);">💎</div>
+        <div>
+            <div style="font-size:12px; font-weight:700; color:#fff;" id="apoc-toast-name">Victoria from Paris</div>
+            <div style="font-size:11px; color:var(--apoc-text-secondary);" id="apoc-toast-action">Just reserved Haute Fragrance Mist</div>
+        </div>
+    </div>
+
+    <!-- Spin to Win Gamified Modal -->
+    <div id="apoc-spin-modal-overlay">
+        <div class="apoc-spin-modal">
+            <button type="button" class="apoc-spin-close" onclick="document.getElementById('apoc-spin-modal-overlay').classList.remove('active')">✕</button>
+            <div style="font-size:36px; margin-bottom:12px;">🎡</div>
+            <h3 style="font-family:var(--apoc-font-serif); font-size:24px; color:var(--apoc-gold); margin-bottom:8px;">VIP Privilege Wheel</h3>
+            <p style="font-size:13px; color:var(--apoc-text-secondary); margin-bottom:20px;">Spin to unlock complimentary signature gift items and bespoke travel decanters.</p>
+            <button type="button" class="apoc-btn-gold" style="width:100%;" onclick="document.getElementById('apoc-spin-modal-overlay').classList.remove('active')">
+                <span class="ps-txt ps-txt-apply"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="apoc-gdpr-banner">
+        <p style="color:var(--apoc-text-secondary); max-width:800px;">
+            VÉRLA uses encrypted session tokens and neural profiling cookies to tailor private collection access in compliance with international privacy protocols.
+        </p>
+        <div style="display:flex; gap:10px;">
+            <button type="button" class="apoc-btn-gold" style="padding:8px 18px; font-size:11px;" onclick="acceptGdpr()">Accept All Tokens</button>
+            <button type="button" class="apoc-btn-secondary" style="padding:8px 14px; font-size:11px;" onclick="acceptGdpr()">Essential Only</button>
+        </div>
+    </div>
+
+    <!-- Country Selector Modal -->
+    <div id="country-modal-overlay" onclick="if(event.target===this)document.getElementById('country-modal-overlay').classList.remove('active')">
+        <div class="country-modal-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="font-family:var(--apoc-font-serif); color:var(--apoc-gold);">Select Region &amp; Currency</h3>
+                <button type="button" id="country-modal-close" style="color:var(--apoc-text-muted); background:none; border:none; font-size:18px; cursor:pointer;" onclick="document.getElementById('country-modal-overlay').classList.remove('active')">✕</button>
+            </div>
+            <ul class="country-list" id="apoc-country-list">
+                ${country_items_list}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Quick Size Selection Modal -->
+    <div id="apoc-quick-size-overlay" class="apoc-quick-size-modal-overlay" role="dialog" aria-modal="true" onclick="if(event.target===this)closeApocalypseQuickSize()">
+        <div class="apoc-quick-size-modal">
+            <button type="button" class="apoc-quick-size-close" onclick="closeApocalypseQuickSize()">✕</button>
+            <div class="apoc-quick-size-content">
+                <div class="apoc-quick-size-thumb" id="apoc-quick-size-thumb"></div>
+                <div class="apoc-quick-size-info">
+                    <h3 id="apoc-quick-size-title" style="font-family: var(--apoc-font-serif); font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;"></h3>
+                    <div id="apoc-quick-size-price" style="font-size: 15px; font-weight: 700; color: var(--apoc-gold); margin-bottom: 12px;"></div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 8px;">Select Size</label>
+                        <div id="apoc-quick-size-options" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
+                    <button type="button" id="apoc-quick-size-submit" class="apoc-btn-gold" data-interactive="true" style="width: 100%; padding: 12px 20px;" disabled onclick="submitApocalypseQuickSize()">
+                        <span class="ps-txt ps-txt-add-to-bag"></span>
+                        <span class="hydration-indicator"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mini-Cart Drawer & Backdrop -->
+    <div id="apoc-mini-cart-backdrop" onclick="closeMiniCartDrawer()"></div>
+    <div id="apoc-mini-cart-drawer">
+        <div class="drawer-header">
+            <h3 style="font-family:var(--apoc-font-serif); color:var(--apoc-gold);">Your Selection</h3>
+            <button type="button" style="color:var(--apoc-text-muted); font-size:18px;" onclick="closeMiniCartDrawer()">✕</button>
+        </div>
+        <div class="drawer-body" id="apoc-drawer-body">
+            <!-- Dynamic Cart Items -->
+        </div>
+        <div class="drawer-footer">
+            <a href="checkout.html" class="apoc-btn-gold" style="width:100%;">
+                <span class="ps-txt ps-txt-checkout"></span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="apoc-footer">
+        <div class="container">
+            <div class="apoc-footer-grid">
+                <div class="apoc-footer-col">
+                    <h4>VÉRLA Haute</h4>
+                    <p style="font-size:12px; line-height:1.7;">Maison de haute parfumerie and artisanal body care crafted under extreme aesthetic refinement.</p>
+                </div>
+                <div class="apoc-footer-col">
+                    <h4>Collections</h4>
+                    <ul>
+                        <li><a href="c/tops.html">${lang_tops}</a></li>
+                        <li><a href="c/bottoms.html">${lang_bottoms}</a></li>
+                        <li><a href="c/outerwear.html">${lang_outerwear}</a></li>
+                        <li><a href="c/footwear.html">${lang_footwear}</a></li>
+                    </ul>
+                </div>
+                <div class="apoc-footer-col">
+                    <h4>Client Care</h4>
+                    <ul>
+                        <li><a href="track-orders.html">Track Private Order</a></li>
+                        <li><a href="shipping.html">Bespoke Shipping</a></li>
+                        <li><a href="faq.html">VIP FAQ</a></li>
+                        <li><a href="contact.html">Concierge Contact</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div style="border-top:1px solid var(--apoc-border); padding-top:24px; text-align:center; font-size:11px;">
+                &copy; 2026 VÉRLA Haute Parfumerie GmbH. All rights reserved. (Apocalypse Edition)
+            </div>
+        </div>
+    </footer>
+
+    <!-- === CLIENT JAVASCRIPT: HORROR MECHANICS INITIALIZATION === -->
+    <script>
+        // 1. CLS Layout Shift trigger (350ms delay)
+        setTimeout(() => {
+            const clsBanner = document.getElementById('apoc-cls-announcement');
+            if (clsBanner) clsBanner.classList.add('shifted');
+        }, 350);
+
+        // 2. Progressive Hydration Engine (1500ms ghost delay)
+        window.__HYDRATED__ = false;
+        setTimeout(() => {
+            window.__HYDRATED__ = true;
+            document.querySelectorAll('[data-interactive="true"]').forEach(el => {
+                el.setAttribute('data-hydrated', 'true');
+            });
+            console.log('[Apocalypse Engine] Progressive Hydration Complete — Interactive listeners active.');
+        }, 1500);
+
+        // Global Event Interceptor for Ghost Clicks before hydration
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('[data-interactive="true"]');
+            if (btn && btn.getAttribute('data-hydrated') !== 'true') {
+                console.warn('[Ghost Click Intercepted] Action ignored because component is still hydrating.');
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return false;
+            }
+        }, true);
+
+        // 3. GDPR Cookie Consent
+        function acceptGdpr() {
+            localStorage.setItem('apoc_gdpr_accepted', 'true');
+            document.getElementById('apoc-gdpr-banner').classList.add('accepted');
+        }
+        if (localStorage.getItem('apoc_gdpr_accepted') === 'true') {
+            const b = document.getElementById('apoc-gdpr-banner');
+            if (b) b.classList.add('accepted');
+        }
+
+        // 4. Social Proof Toasts Cycling
+        const toastNames = ['Alexandra from Milan', 'Sebastian from Zurich', 'Elena from Tokyo', 'Marcus from London'];
+        const toastActions = ['Just acquired Signature Eau de Parfum', 'Reserved Limited Edition Bath Elixir', 'Added 3 items to bespoke bag'];
+        setInterval(() => {
+            const toast = document.getElementById('apoc-social-toast');
+            if (!toast) return;
+            const name = toastNames[Math.floor(Math.random() * toastNames.length)];
+            const action = toastActions[Math.floor(Math.random() * toastActions.length)];
+            document.getElementById('apoc-toast-name').innerText = name;
+            document.getElementById('apoc-toast-action').innerText = action;
+            toast.classList.add('visible');
+            setTimeout(() => toast.classList.remove('visible'), 3200);
+        }, 6000);
+
+        // 5. Delayed Spin Modal Trigger (4500ms)
+        setTimeout(() => {
+            if (!sessionStorage.getItem('apoc_spin_seen')) {
+                sessionStorage.setItem('apoc_spin_seen', 'true');
+                const modal = document.getElementById('apoc-spin-modal-overlay');
+                if (modal) modal.classList.add('active');
+            }
+        }, 4500);
+
+        // 6. Mini-Cart Drawer Open/Close
+        function openMiniCartDrawer() {
+            fetch('api/cart/drawer')
+                .then(r => r.text())
+                .then(html => {
+                    document.getElementById('apoc-drawer-body').innerHTML = html;
+                    document.getElementById('apoc-mini-cart-backdrop').classList.add('active');
+                    document.getElementById('apoc-mini-cart-drawer').classList.add('active');
+                });
+        }
+        function closeMiniCartDrawer() {
+            document.getElementById('apoc-mini-cart-backdrop').classList.remove('active');
+            document.getElementById('apoc-mini-cart-drawer').classList.remove('active');
+        }
+
+        function refreshApocalypseCartBadge() {
+            fetch('api/cart/badge')
+                .then(r => r.text())
+                .then(html => {
+                    const cartBtn = document.getElementById('cart-btn-anchor');
+                    if (cartBtn && html) {
+                        cartBtn.outerHTML = html;
+                    }
+                });
+        }
+
+        // 7. Search autocomplete
+        const searchInput = document.getElementById('apoc-global-search-input');
+        const searchDropdown = document.getElementById('apoc-search-dropdown');
+        if (searchInput && searchDropdown) {
+            let debounceTimer;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                const q = e.target.value.trim();
+                if (q.length < 2) {
+                    searchDropdown.classList.remove('active');
+                    return;
+                }
+                debounceTimer = setTimeout(() => {
+                    fetch(`api/search/suggest?q=${encodeURIComponent(q)}`)
+                        .then(r => r.text())
+                        .then(html => {
+                            searchDropdown.innerHTML = html;
+                            searchDropdown.classList.add('active');
+                        });
+                }, 250);
+            });
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+                    searchDropdown.classList.remove('active');
+                }
+            });
+        }
+
+        // 8. Country Selection Handler
+        function selectApocalypseCountry(code) {
+            document.cookie = "verla_country=" + encodeURIComponent(code) + "; path=/; max-age=31536000";
+            fetch("api/country/select?code=" + encodeURIComponent(code), { method: "GET" })
+                .catch(() => {})
+                .finally(() => {
+                    window.location.reload();
+                });
+        }
+
+        // 9. Quick Size Modal & PDP Add Handlers
+        let activeQuickSizeProduct = null;
+        let activeQuickSizeSelectedSize = null;
+
+        function triggerApocalypseQuickSize(btn) {
+            const card = btn.closest('.product-card') || btn.closest('article') || btn.parentElement;
+            const productId = btn.getAttribute('data-product-id');
+            const category = btn.getAttribute('data-category') || '';
+            const titleEl = card ? card.querySelector('.product-title a') : null;
+            const title = titleEl ? titleEl.innerText.trim() : 'Haute Creation';
+            const priceEl = card ? card.querySelector('.product-price') : null;
+            const price = priceEl ? priceEl.innerText.trim() : '';
+            const svgEl = card ? card.querySelector('svg') : null;
+            const svg = svgEl ? svgEl.outerHTML : '<svg viewBox="0 0 100 100"></svg>';
+            let stockMap = {};
+            try {
+                stockMap = JSON.parse(btn.getAttribute('data-stock') || '{}');
+            } catch(e) {}
+
+            openApocalypseQuickSize(productId, category, title, price, svg, stockMap);
+        }
+
+        function openApocalypseQuickSize(productId, category, name, price, svg, stockMap) {
+            activeQuickSizeProduct = { id: productId, category: category };
+            activeQuickSizeSelectedSize = null;
+            document.getElementById('apoc-quick-size-title').textContent = name;
+            document.getElementById('apoc-quick-size-price').textContent = price;
+            document.getElementById('apoc-quick-size-thumb').innerHTML = svg;
+
+            const optionsContainer = document.getElementById('apoc-quick-size-options');
+            optionsContainer.innerHTML = '';
+            const submitBtn = document.getElementById('apoc-quick-size-submit');
+            submitBtn.disabled = true;
+
+            let sizes = ['S', 'M', 'L', 'XL'];
+            if (category === 'bottoms') sizes = ['28', '30', '32', '34', '36'];
+            else if (category === 'footwear' || category === 'shoes') sizes = ['39', '40', '41', '42', '43', '44'];
+            else if (category === 'accessories') sizes = ['One Size'];
+
+            sizes.forEach(size => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'apoc-size-pill';
+                btn.textContent = size;
+                btn.setAttribute('data-size', size);
+                const stock = stockMap ? (stockMap[size] !== undefined ? stockMap[size] : 10) : 10;
+                if (stock <= 0) {
+                    btn.disabled = true;
+                    btn.title = 'Sold Out';
+                } else {
+                    btn.onclick = () => {
+                        optionsContainer.querySelectorAll('.apoc-size-pill').forEach(b => b.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        activeQuickSizeSelectedSize = size;
+                        submitBtn.disabled = false;
+                    };
+                }
+                optionsContainer.appendChild(btn);
+            });
+
+            document.getElementById('apoc-quick-size-overlay').classList.add('active');
+        }
+
+        function closeApocalypseQuickSize() {
+            document.getElementById('apoc-quick-size-overlay').classList.remove('active');
+            activeQuickSizeProduct = null;
+            activeQuickSizeSelectedSize = null;
+        }
+
+        function submitApocalypseQuickSize() {
+            if (!activeQuickSizeProduct || !activeQuickSizeSelectedSize) return;
+            const submitBtn = document.getElementById('apoc-quick-size-submit');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span style="display:inline-block; animation:spin 1s infinite linear;">↻</span> Adding...';
+            }
+            fetch('api/cart/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'productId=' + encodeURIComponent(activeQuickSizeProduct.id) + '&size=' + encodeURIComponent(activeQuickSizeSelectedSize)
+            })
+            .then(r => r.text())
+            .then(html => {
+                const cartBtn = document.getElementById('cart-btn-anchor');
+                if (cartBtn && html) {
+                    cartBtn.outerHTML = html;
+                }
+                closeApocalypseQuickSize();
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span class="ps-txt ps-txt-add-to-bag"></span><span class="hydration-indicator"></span>';
+                }
+                openMiniCartDrawer();
+            })
+            .catch(err => {
+                console.error(err);
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span class="ps-txt ps-txt-add-to-bag"></span><span class="hydration-indicator"></span>';
+                }
+            });
+        }
+
+        function quickAddApocalypseProduct(productId, category) {
+            let size = 'M';
+            if (category === 'bottoms') size = '32';
+            else if (category === 'footwear' || category === 'shoes') size = '41';
+
+            fetch('api/cart/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'productId=' + encodeURIComponent(productId) + '&size=' + encodeURIComponent(size)
+            })
+            .then(r => r.text())
+            .then(html => {
+                const cartBtn = document.getElementById('cart-btn-anchor');
+                if (cartBtn && html) {
+                    cartBtn.outerHTML = html;
+                }
+                openMiniCartDrawer();
+            });
+        }
+
+        function submitApocalypsePdpAdd(form) {
+            const formData = new FormData(form);
+            const body = new URLSearchParams(formData).toString();
+            fetch('api/cart/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
+            })
+            .then(r => r.text())
+            .then(html => {
+                const cartBtn = document.getElementById('cart-btn-anchor');
+                if (cartBtn && html) {
+                    cartBtn.outerHTML = html;
+                }
+                openMiniCartDrawer();
+            });
+        }
+    </script>
+</body>
+</html>

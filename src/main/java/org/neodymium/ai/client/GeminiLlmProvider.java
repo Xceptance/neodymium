@@ -26,6 +26,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.googleai.GeminiThinkingConfig;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import java.io.IOException;
@@ -40,7 +41,7 @@ import org.neodymium.ai.config.AiConfiguration;
  * Translates Neodymium requests into standard LangChain4j Gemini interactions,
  * supporting multimodal image attachments natively.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
 public final class GeminiLlmProvider implements LlmProvider
@@ -48,11 +49,12 @@ public final class GeminiLlmProvider implements LlmProvider
     private final AiConfiguration config;
     private final String apiKey;
     private final String modelName;
+    private final boolean includeThoughts;
     private final ChatModel defaultModel;
     private final java.util.concurrent.ConcurrentHashMap<String, ChatModel> modelCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
-     * Constructs a GeminiLlmProvider and dynamically resolves its configuration.
+     * Constructs a GeminiLlmProvider with global configuration settings.
      */
     public GeminiLlmProvider()
     {
@@ -68,37 +70,71 @@ public final class GeminiLlmProvider implements LlmProvider
         }
 
         this.modelName = this.config.getProperty("neodymium.ai.gemini.model", this.config.getModel("gemini"));
+        this.includeThoughts = this.config.isIncludeThoughts();
 
-        this.defaultModel = buildChatModel(0.0, 180);
+        this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
 
     /**
-     * Builds a GoogleAiGeminiChatModel with specified temperature and timeout.
+     * Builds a GeminiThinkingConfig instance mapped from the specified ReasoningEffort tier.
      */
-    private ChatModel buildChatModel(final double temperature, final int timeoutSeconds)
+    private static GeminiThinkingConfig buildThinkingConfig(final ReasoningEffort effort, final boolean includeThoughts)
     {
+        final ReasoningEffort effectiveEffort = effort != null ? effort : ReasoningEffort.MEDIUM;
+        return switch (effectiveEffort)
+        {
+            case OFF -> GeminiThinkingConfig.builder().thinkingBudget(0).includeThoughts(false).build();
+            case LOW -> GeminiThinkingConfig.builder().thinkingLevel("LOW").includeThoughts(includeThoughts).build();
+            case MEDIUM -> GeminiThinkingConfig.builder().thinkingLevel("MEDIUM").includeThoughts(includeThoughts).build();
+            case HIGH -> GeminiThinkingConfig.builder().thinkingLevel("HIGH").includeThoughts(includeThoughts).build();
+        };
+    }
+
+    /**
+     * Builds a GoogleAiGeminiChatModel with specified temperature, timeout, response schema, and reasoning effort.
+     */
+    private ChatModel buildChatModel(
+        final double temperature,
+        final int timeoutSeconds,
+        final ResponseSchema responseSchema,
+        final ReasoningEffort reasoningEffort
+    )
+    {
+        final int maxTokens = ResponseSchema.resolveMaxOutputTokens(responseSchema);
+        final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(responseSchema);
+
         return GoogleAiGeminiChatModel.builder()
             .apiKey(this.apiKey)
             .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash-lite")
             .temperature(temperature)
+            .maxOutputTokens(maxTokens)
+            .thinkingConfig(buildThinkingConfig(effort, this.includeThoughts))
             .timeout(java.time.Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180))
             .build();
     }
 
     /**
-     * Resolves appropriate ChatModel for the given temperature and timeout settings.
+     * Resolves appropriate ChatModel for the given temperature, timeout, response schema, and reasoning effort settings.
      */
-    private ChatModel getChatModel(final double temperature, final int timeoutSeconds)
+    private ChatModel getChatModel(
+        final double temperature,
+        final int timeoutSeconds,
+        final ResponseSchema responseSchema,
+        final ReasoningEffort reasoningEffort
+    )
     {
         final double temp = temperature >= 0.0 ? temperature : 0.0;
         final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
-        if (temp == 0.0 && timeout == 180)
+        final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
+        final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
+
+        if (temp == 0.0 && timeout == 180 && schema == ResponseSchema.TEXT && effort == ReasoningEffort.MEDIUM)
         {
             return this.defaultModel;
         }
 
-        final String cacheKey = String.format("%s:%.2f:%d", this.modelName, temp, timeout);
-        return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout));
+        final String cacheKey = String.format("%s:%.2f:%d:%s:%s", this.modelName, temp, timeout, schema.name(), effort.name());
+        return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout, schema, effort));
     }
 
     @Override
@@ -155,7 +191,12 @@ public final class GeminiLlmProvider implements LlmProvider
         return LlmRetryHelper.executeWithRetry(() -> {
             try
             {
-                final ChatModel activeModel = getChatModel(request.temperature(), request.timeoutSeconds());
+                final ChatModel activeModel = getChatModel(
+                    request.temperature(),
+                    request.timeoutSeconds(),
+                    request.responseSchema(),
+                    request.reasoningEffort()
+                );
                 final ChatResponse response = activeModel.chat(messages);
 
                 final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
@@ -206,13 +247,13 @@ public final class GeminiLlmProvider implements LlmProvider
     @Override
     public Set<LlmCapability> getCapabilities()
     {
-        // Includes LlmCapability.VISION
         return EnumSet.of(
             LlmCapability.TEXT_ONLY,
             LlmCapability.VISION,
             LlmCapability.EXECUTION,
             LlmCapability.PESAP,
-            LlmCapability.VERIFICATION
+            LlmCapability.VERIFICATION,
+            LlmCapability.LINTER
         );
     }
 }

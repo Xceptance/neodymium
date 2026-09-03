@@ -108,7 +108,13 @@ public final class QualityJudgeStep implements PipelineStep
                 return;
             }
             final double score1 = candidates.get(0).getScore();
-            if (score1 < 0.85)
+            if (score1 >= 0.95)
+            {
+                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Top candidate is decisive high-confidence standard ID/attribute (score: {}). Skipping.",
+                    String.format("%.2f", score1));
+                return;
+            }
+            else if (score1 < 0.85)
             {
                 LOGGER.info("⚖️ Quality Judge triggered due to low top candidate score ({} < 0.85).", String.format("%.2f", score1));
             }
@@ -117,15 +123,15 @@ public final class QualityJudgeStep implements PipelineStep
                 final double score2 = candidates.get(1).getScore();
                 if ((score1 - score2) >= 0.15)
                 {
-                    LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Clear high-confidence candidate winner found (score: {}, diff: {}). Skipping.",
+                    LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Clear candidate winner found (score: {}, diff: {}). Skipping.",
                         String.format("%.2f", score1), String.format("%.2f", score1 - score2));
                     return;
                 }
-                LOGGER.info("⚖️ Quality Judge triggered due to ambiguous top candidate scores (diff: {}).", String.format("%.2f", score1 - score2));
+                LOGGER.info("⚖️ Quality Judge triggered due to ambiguous candidate scores (diff: {}).", String.format("%.2f", score1 - score2));
             }
             else
             {
-                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. High confidence single candidate found (score: {}). Skipping.", String.format("%.2f", score1));
+                LOGGER.debug("Quality Judge mode is ON_AMBIGUITY. Single candidate found (score: {}). Skipping.", String.format("%.2f", score1));
                 return;
             }
         }

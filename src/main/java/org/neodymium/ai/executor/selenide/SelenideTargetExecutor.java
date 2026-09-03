@@ -103,8 +103,26 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("SELECT", new SelectAction());
         this.plugins.put("WAIT", new WaitAction());
         this.plugins.put("KEY_PRESS", new KeyPressAction());
-        this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
-        this.plugins.put("ASSERT", new AssertAction());
+        final AssertAction assertPlugin = new AssertAction();
+        this.plugins.put("ASSERT", assertPlugin);
+        this.plugins.put("ASSERT_EXISTS", assertPlugin);
+        this.plugins.put("ASSERT_VISIBLE", assertPlugin);
+        this.plugins.put("ASSERT_ABSENT", assertPlugin);
+        this.plugins.put("ASSERT_HIDDEN", assertPlugin);
+        this.plugins.put("ASSERT_TEXT", assertPlugin);
+        this.plugins.put("ASSERT_VALUE", assertPlugin);
+        this.plugins.put("ASSERT_CHECKED", assertPlugin);
+        this.plugins.put("ASSERT_UNCHECKED", assertPlugin);
+        this.plugins.put("ASSERT_DISABLED", assertPlugin);
+        this.plugins.put("ASSERT_ENABLED", assertPlugin);
+        this.plugins.put("ASSERT_FOCUSED", assertPlugin);
+        this.plugins.put("ASSERT_SELECTED", assertPlugin);
+        this.plugins.put("ASSERT_READONLY", assertPlugin);
+        this.plugins.put("ASSERT_EDITABLE", assertPlugin);
+        this.plugins.put("ASSERT_ATTRIBUTE", assertPlugin);
+        this.plugins.put("ASSERT_COUNT", assertPlugin);
+        this.plugins.put("ASSERT_URL", assertPlugin);
+        this.plugins.put("ASSERT_TITLE", assertPlugin);
         this.plugins.put("CHECK", new CheckAction());
         this.plugins.put("SPLIT", action -> {});
         this.plugins.put("NONE", action -> {});
@@ -329,7 +347,25 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("WAIT", "Wait for element state or pause", Collections.emptyMap()),
             new ActionDefinition("KEY_PRESS", "Send key press events", Collections.emptyMap()),
             new ActionDefinition("SWITCH_WINDOW", "Switch WebDriver focus to another window or tab", Collections.emptyMap()),
-            new ActionDefinition("ASSERT", "Assert state or value", Collections.emptyMap()),
+            new ActionDefinition("ASSERT", "Assert state or value (legacy)", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_EXISTS", "Assert element presence and visibility", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_VISIBLE", "Assert element visibility", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_ABSENT", "Assert element absence or hidden state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_HIDDEN", "Assert element hidden state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_TEXT", "Assert element text or regex content", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_VALUE", "Assert input element value", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_CHECKED", "Assert checkbox or radio button checked state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_UNCHECKED", "Assert checkbox or radio button unchecked state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_DISABLED", "Assert element disabled state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_ENABLED", "Assert element enabled state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_FOCUSED", "Assert element has active focus", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_SELECTED", "Assert element selected state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_READONLY", "Assert input element readonly state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_EDITABLE", "Assert input element editable state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_ATTRIBUTE", "Assert element HTML attribute value or existence", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_COUNT", "Assert matching element collection count", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_URL", "Assert browser URL matches value or regex", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_TITLE", "Assert page title matches value or regex", Collections.emptyMap()),
             new ActionDefinition("CHECK", "Check or select elements", Collections.emptyMap()),
             new ActionDefinition("STORE", "Store variable values", Collections.emptyMap()),
             new ActionDefinition("BRANCH", "Conditional branch logic", Collections.emptyMap()),

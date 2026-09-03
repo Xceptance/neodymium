@@ -10,9 +10,9 @@
   "actions" : [ {
     "type" : "NAVIGATE",
     "target" : "${verla.url}/verla-bad/index.html",
-    "value" : "${verla.url}/verla-bad/index.html",
+    "value" : null,
     "description" : "Extracted NAVIGATE action",
-    "reasoning" : "Open the requested URL",
+    "reasoning" : "Navigate to ${verla.url}/verla-bad/index.html",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -21,7 +21,7 @@
     "stepLine" : 6,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 4117,
+    "durationMs" : 1053,
     "delayMs" : null,
     "parameters" : { },
     "bestCandidateLocator" : "${verla.url}/verla-bad/index.html",
@@ -31,12 +31,12 @@
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "${verla.url}/verla-bad/index.html",
-      "strategy" : "UNKNOWN",
+      "strategy" : "ATTRIBUTE",
       "score" : 1.0,
-      "reasoning" : ""
+      "reasoning" : "Target URL for navigation"
     } ],
     "domFeatureVector" : null,
-    "values" : [ "${verla.url}/verla-bad/index.html" ]
+    "values" : [ ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -50,10 +50,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "3.0",
-  "contextLevel" : "LEAN",
-  "reasoning" : "Navigate to the requested URL as specified in the instruction.",
-  "durationMs" : 2096,
+  "contextLevel" : "MINIMAL",
+  "reasoning" : "Navigating to the requested URL as specified in the instruction.",
+  "durationMs" : 1877,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify that the site logo or title containing 'VÉRLA' is visible.",
@@ -65,11 +66,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
-    "target" : ".footer-logo",
+    "type" : "ASSERT_TITLE",
+    "target" : "title",
     "value" : "VÉRLA",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the site logo or title containing 'VÉRLA' is visible.",
+    "description" : "Extracted ASSERT_TITLE action",
+    "reasoning" : "Verify that the site title contains 'VÉRLA'.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -78,34 +79,21 @@
     "stepLine" : 7,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 186,
-    "delayMs" : 3052,
+    "durationMs" : 13,
+    "delayMs" : 3000,
     "parameters" : { },
-    "bestCandidateLocator" : ".footer-logo",
-    "allCandidateLocators" : [ ".footer-logo" ],
+    "bestCandidateLocator" : "title",
+    "allCandidateLocators" : [ "title" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
-      "locator" : ".footer-logo",
-      "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Footer logo container with exact class"
+      "locator" : "title",
+      "strategy" : "TAG",
+      "score" : 0.9,
+      "reasoning" : "Document title tag"
     } ],
-    "domFeatureVector" : {
-      "tag" : "div",
-      "text" : "VÉRLA",
-      "classes" : [ "footer-logo" ],
-      "attributes" : { },
-      "role" : "",
-      "accessibleName" : "VÉRLA",
-      "parentTag" : "div",
-      "siblingIndex" : 0,
-      "x" : 127,
-      "y" : 1892,
-      "width" : 445,
-      "height" : 35
-    },
+    "domFeatureVector" : null,
     "values" : [ "VÉRLA" ]
   } ],
   "status" : "SUCCESS",
@@ -118,25 +106,13 @@
   "sourceYamlHash" : "8a9eafcaaa97bfdf3c47d6e06b40f9e0d1cc0441553330cf1be83964a5142ac6",
   "targetFramework" : "SELENIUM_SELENIDE",
   "semanticContext" : null,
-  "domFeatureVector" : {
-    "tag" : "div",
-    "text" : "VÉRLA",
-    "classes" : [ "footer-logo" ],
-    "attributes" : { },
-    "role" : "",
-    "accessibleName" : "VÉRLA",
-    "parentTag" : "div",
-    "siblingIndex" : 0,
-    "x" : 127,
-    "y" : 1892,
-    "width" : 445,
-    "height" : 35
-  },
+  "domFeatureVector" : null,
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "The site title containing 'VÉRLA' is present in the page title and footer.",
-  "durationMs" : 1116,
+  "reasoning" : "Verified that the page title contains 'VÉRLA' (Page Title: VÉRLA - Modern Premium Apparel).",
+  "durationMs" : 1072,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Locate the search input field and type 'Minimalist' into it.",
@@ -152,7 +128,7 @@
     "target" : "#search-input",
     "value" : "Minimalist",
     "description" : "Extracted TYPE action",
-    "reasoning" : "Type 'Minimalist' into the search input field.",
+    "reasoning" : "Type 'Minimalist' into the search input field",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -161,29 +137,29 @@
     "stepLine" : 8,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 174,
-    "delayMs" : 3779,
+    "durationMs" : 414,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
-    "allCandidateLocators" : [ "#search-input", "input[name='q']", ".search-bar-input" ],
+    "allCandidateLocators" : [ "#search-input", "input[name=\"q\"]", ".search-bar-input" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "#search-input",
       "strategy" : "ID",
-      "score" : 1.0,
-      "reasoning" : "Unique standard ID for the search input"
-    }, {
-      "locator" : "input[name='q']",
-      "strategy" : "ATTRIBUTE",
       "score" : 0.95,
-      "reasoning" : "Input element with name='q'"
+      "reasoning" : "Unique ID for the search input"
+    }, {
+      "locator" : "input[name=\"q\"]",
+      "strategy" : "ATTRIBUTE",
+      "score" : 0.9,
+      "reasoning" : "Name attribute of the search input"
     }, {
       "locator" : ".search-bar-input",
       "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Clean semantic CSS class for search input"
+      "score" : 0.8,
+      "reasoning" : "Class name for the search bar input"
     } ],
     "domFeatureVector" : {
       "tag" : "input",
@@ -247,9 +223,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Located the search input field (#search-input) and typed 'Minimalist' into it.",
-  "durationMs" : 1206,
-  "delayMs" : 0,
+  "reasoning" : "Located the search input field with id #search-input and typing 'Minimalist' into it as requested.",
+  "durationMs" : 1177,
+  "delayMs" : 1,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Press enter or click the search button to submit.",
@@ -265,7 +242,7 @@
     "target" : "#search-input",
     "value" : "Enter",
     "description" : "Extracted KEY_PRESS action",
-    "reasoning" : "Press enter on the search input to submit the search query",
+    "reasoning" : "Press enter on the search input to submit the search.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -274,11 +251,11 @@
     "stepLine" : 9,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 1172,
-    "delayMs" : 3701,
+    "durationMs" : 1248,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#search-input",
-    "allCandidateLocators" : [ "#search-input", "input[name='q']", ".search-bar-input" ],
+    "allCandidateLocators" : [ "#search-input", "input[name='q']" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
@@ -286,17 +263,12 @@
       "locator" : "#search-input",
       "strategy" : "ID",
       "score" : 1.0,
-      "reasoning" : "Unique standard ID for search input"
+      "reasoning" : "Unique ID for the search input"
     }, {
       "locator" : "input[name='q']",
       "strategy" : "ATTRIBUTE",
-      "score" : 0.95,
-      "reasoning" : "Standard name attribute for search input"
-    }, {
-      "locator" : ".search-bar-input",
-      "strategy" : "CLASS",
-      "score" : 0.8,
-      "reasoning" : "Clean semantic class name"
+      "score" : 0.85,
+      "reasoning" : "Input element with name 'q'"
     } ],
     "domFeatureVector" : {
       "tag" : "input",
@@ -360,9 +332,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Pressing enter on the search input submits the search form.",
-  "durationMs" : 1965,
+  "reasoning" : "The user wants to press enter or click the search button to submit. Since the search input is focused with text entered and no separate search button exists, sending an 'Enter' key press on the search input will submit the search form.",
+  "durationMs" : 2174,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify that the search results page is loaded showing products matching the query 'Minimalist'.",
@@ -374,11 +347,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_TEXT",
     "target" : ".plp-main h2",
     "value" : "Search: \"minimalist\"",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the search heading matches the query 'Minimalist'",
+    "description" : "Extracted ASSERT_TEXT action",
+    "reasoning" : "Verify that the search heading displays the correct query text",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -387,11 +360,11 @@
     "stepLine" : 10,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 145,
-    "delayMs" : 3082,
+    "durationMs" : 80,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : ".plp-main h2",
-    "allCandidateLocators" : [ ".plp-main h2" ],
+    "allCandidateLocators" : [ ".plp-main h2", "h2" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
@@ -399,7 +372,12 @@
       "locator" : ".plp-main h2",
       "strategy" : "CLASS",
       "score" : 0.85,
-      "reasoning" : "Scoped header element inside plp-main"
+      "reasoning" : "Scoped CSS selector for search results heading"
+    }, {
+      "locator" : "h2",
+      "strategy" : "CLASS",
+      "score" : 0.6,
+      "reasoning" : "Tag selector for heading"
     } ],
     "domFeatureVector" : {
       "tag" : "h2",
@@ -417,11 +395,11 @@
     },
     "values" : [ "Search: \"minimalist\"" ]
   }, {
-    "type" : "ASSERT",
+    "type" : "ASSERT_EXISTS",
     "target" : "#plp-product-grid",
-    "value" : "visible",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the product grid is visible",
+    "value" : null,
+    "description" : "Extracted ASSERT_EXISTS action",
+    "reasoning" : "Verify that the product grid containing search results is present",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -430,11 +408,11 @@
     "stepLine" : 10,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 165,
-    "delayMs" : 1301,
+    "durationMs" : 74,
+    "delayMs" : 1134,
     "parameters" : { },
     "bestCandidateLocator" : "#plp-product-grid",
-    "allCandidateLocators" : [ "#plp-product-grid" ],
+    "allCandidateLocators" : [ "#plp-product-grid", ".products-grid" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
@@ -442,7 +420,12 @@
       "locator" : "#plp-product-grid",
       "strategy" : "ID",
       "score" : 0.95,
-      "reasoning" : "Unique ID for the product grid"
+      "reasoning" : "Unique ID for product grid container"
+    }, {
+      "locator" : ".products-grid",
+      "strategy" : "CLASS",
+      "score" : 0.8,
+      "reasoning" : "Class selector for products grid"
     } ],
     "domFeatureVector" : {
       "tag" : "div",
@@ -460,7 +443,7 @@
       "width" : 857,
       "height" : 1341
     },
-    "values" : [ "visible" ]
+    "values" : [ ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -488,9 +471,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "Verified that the search results page is loaded with query 'Minimalist', showing products and the heading Search: \"minimalist\".",
-  "durationMs" : 2158,
-  "delayMs" : 1,
+  "reasoning" : "The search results page is successfully loaded displaying products matching 'Minimalist', verified by the presence of the search query heading and the product grid.",
+  "durationMs" : 2302,
+  "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Scroll to the bottom of the page to trigger infinite scroll.",
@@ -503,10 +487,10 @@
   "subSteps" : [ ],
   "actions" : [ {
     "type" : "SCROLL",
-    "target" : "footer.footer",
+    "target" : "footer",
     "value" : "bottom",
     "description" : "Extracted SCROLL action",
-    "reasoning" : "Scroll down to the footer to trigger infinite scroll.",
+    "reasoning" : "Scroll to the bottom of the page using the footer element as the target.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -515,19 +499,19 @@
     "stepLine" : 11,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 99,
-    "delayMs" : 2863,
+    "durationMs" : 102,
+    "delayMs" : 3000,
     "parameters" : { },
-    "bestCandidateLocator" : "footer.footer",
-    "allCandidateLocators" : [ "footer.footer" ],
+    "bestCandidateLocator" : "footer",
+    "allCandidateLocators" : [ "footer" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
-      "locator" : "footer.footer",
+      "locator" : "footer",
       "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Footer element representing the bottom of the page."
+      "score" : 0.9,
+      "reasoning" : "Target footer element at the bottom of the page"
     } ],
     "domFeatureVector" : {
       "tag" : "footer",
@@ -571,9 +555,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Scroll to the bottom of the page to trigger infinite scroll as requested.",
-  "durationMs" : 1059,
+  "reasoning" : "Scroll down to the bottom of the page (targeting the footer element) to trigger infinite scroll as requested by the instruction.",
+  "durationMs" : 1115,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify that more product cards are loaded and appended to the grid.",
@@ -585,11 +570,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_COUNT",
     "target" : "#plp-product-grid .product-card-bad",
-    "value" : "visible",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that product cards are loaded and appended to the grid",
+    "value" : ">10",
+    "description" : "Extracted ASSERT_COUNT action",
+    "reasoning" : "Verify that multiple product cards are loaded and displayed in the grid.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -598,8 +583,8 @@
     "stepLine" : 12,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 3377,
-    "delayMs" : 3779,
+    "durationMs" : 4251,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#plp-product-grid .product-card-bad",
     "allCandidateLocators" : [ "#plp-product-grid .product-card-bad", ".products-grid .product-card-bad" ],
@@ -608,14 +593,14 @@
     "selfCritique" : "",
     "candidateLocators" : [ {
       "locator" : "#plp-product-grid .product-card-bad",
-      "strategy" : "CLASS",
+      "strategy" : "ID",
       "score" : 0.95,
-      "reasoning" : "Target product cards inside the product grid container"
+      "reasoning" : "Standard ID scoped selector for product cards."
     }, {
       "locator" : ".products-grid .product-card-bad",
       "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Fallback class-based selector for product cards"
+      "score" : 0.8,
+      "reasoning" : "Class-based scoped selector for product cards."
     } ],
     "domFeatureVector" : {
       "tag" : "div",
@@ -633,7 +618,7 @@
       "width" : 266,
       "height" : 313
     },
-    "values" : [ "visible" ]
+    "values" : [ ">10" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -663,9 +648,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "Verifying that product cards are loaded and appended to the grid by asserting the presence of product cards within the products grid.",
-  "durationMs" : 4955,
-  "delayMs" : 1,
+  "reasoning" : "Verify that multiple product cards are loaded and present in the product grid.",
+  "durationMs" : 1172,
+  "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Click on the 'Tops' category filter in the sidebar.",
@@ -678,10 +664,10 @@
   "subSteps" : [ ],
   "actions" : [ {
     "type" : "CLICK",
-    "target" : ".plp-sidebar a[href='c/tops.html']",
+    "target" : "aside.plp-sidebar a[href=\"c/tops.html\"]",
     "value" : null,
     "description" : "Extracted CLICK action",
-    "reasoning" : "Click the Tops category filter link in the sidebar",
+    "reasoning" : "Click on the 'Tops' category filter in the sidebar.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -690,24 +676,24 @@
     "stepLine" : 13,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 4382,
-    "delayMs" : 3622,
+    "durationMs" : 4139,
+    "delayMs" : 3000,
     "parameters" : { },
-    "bestCandidateLocator" : "a[href='c/tops.html']",
-    "allCandidateLocators" : [ ".plp-sidebar a[href='c/tops.html']", "a[href='c/tops.html']" ],
+    "bestCandidateLocator" : "aside.plp-sidebar a[href=\"c/tops.html\"]",
+    "allCandidateLocators" : [ "aside.plp-sidebar a[href=\"c/tops.html\"]", "[data-ai=\"xct8npu3_1\"]" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ {
-      "locator" : "a[href='c/tops.html']",
+      "locator" : "aside.plp-sidebar a[href=\"c/tops.html\"]",
       "strategy" : "ATTRIBUTE",
-      "score" : 0.95,
-      "reasoning" : "Unique href for the Tops category filter"
+      "score" : 0.9,
+      "reasoning" : "Scoped CSS selector targeting the Tops category link within the sidebar."
     }, {
-      "locator" : ".plp-sidebar a[href='c/tops.html']",
-      "strategy" : "CLASS",
-      "score" : 0.85,
-      "reasoning" : "Scoped selector within the sidebar"
+      "locator" : "[data-ai=\"xct8npu3_1\"]",
+      "strategy" : "DATA_AI",
+      "score" : 0.55,
+      "reasoning" : "Automation ID fallback for the Tops sidebar link."
     } ],
     "domFeatureVector" : {
       "tag" : "a",
@@ -757,9 +743,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Clicking on the 'Tops' category filter link in the sidebar.",
-  "durationMs" : 5144,
+  "reasoning" : "Located the 'Tops' category filter link inside the sidebar ('aside.plp-sidebar a[href=\"c/tops.html\"]') and generated a CLICK action.",
+  "durationMs" : 2494,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify that the products displayed are refined to show only Tops.",
@@ -771,11 +758,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_TEXT",
     "target" : ".plp-main h2",
     "value" : "Tops",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Assert that the PLP main heading is Tops",
+    "description" : "Extracted ASSERT_TEXT action",
+    "reasoning" : "Verify that the PLP heading displays 'Tops' confirming the product list is filtered to Tops.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -784,11 +771,11 @@
     "stepLine" : 14,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 66,
-    "delayMs" : 2627,
+    "durationMs" : 77,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : ".plp-main h2",
-    "allCandidateLocators" : [ ".plp-main h2" ],
+    "allCandidateLocators" : [ ".plp-main h2", "[data-ai='xct10y1o']" ],
     "else" : null,
     "hasElse" : null,
     "selfCritique" : "",
@@ -796,7 +783,12 @@
       "locator" : ".plp-main h2",
       "strategy" : "CLASS",
       "score" : 0.85,
-      "reasoning" : "Scoped heading selector"
+      "reasoning" : "Scoped CSS selector for the category title heading"
+    }, {
+      "locator" : "[data-ai='xct10y1o']",
+      "strategy" : "DATA_AI",
+      "score" : 0.5,
+      "reasoning" : "Automation ID fallback for the heading"
     } ],
     "domFeatureVector" : {
       "tag" : "h2",
@@ -840,9 +832,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "STANDARD",
-  "reasoning" : "Verified that the page heading and product list show Tops only.",
+  "reasoning" : "Verify that the products displayed are refined to show only Tops by checking the main product category heading on the page.",
   "durationMs" : 1185,
-  "delayMs" : 0,
+  "delayMs" : 1,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Select 'Price: Low to High' from the sort dropdown list.",
@@ -856,9 +849,9 @@
   "actions" : [ {
     "type" : "SELECT",
     "target" : "#sort-select",
-    "value" : "price-asc",
+    "value" : "Price: Low to High",
     "description" : "Extracted SELECT action",
-    "reasoning" : "Select 'Price: Low to High' option corresponding to value 'price-asc'",
+    "reasoning" : "Select 'Price: Low to High' from the sort dropdown list.",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -867,8 +860,8 @@
     "stepLine" : 15,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 3676,
-    "delayMs" : 3548,
+    "durationMs" : 470,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#sort-select",
     "allCandidateLocators" : [ "#sort-select", "select[name='sort']" ],
@@ -878,13 +871,13 @@
     "candidateLocators" : [ {
       "locator" : "#sort-select",
       "strategy" : "ID",
-      "score" : 0.99,
-      "reasoning" : "Unique standard ID"
+      "score" : 0.95,
+      "reasoning" : "Unique ID for the sort select element"
     }, {
       "locator" : "select[name='sort']",
       "strategy" : "ATTRIBUTE",
-      "score" : 0.85,
-      "reasoning" : "Clean attribute selector"
+      "score" : 0.9,
+      "reasoning" : "Name attribute for the sort dropdown"
     } ],
     "domFeatureVector" : {
       "tag" : "select",
@@ -906,7 +899,7 @@
       "width" : 158,
       "height" : 36
     },
-    "values" : [ "price-asc" ]
+    "values" : [ "Price: Low to High" ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -940,9 +933,10 @@
   },
   "schemaVersion" : "3.0",
   "contextLevel" : "LEAN",
-  "reasoning" : "Select 'Price: Low to High' from the sort dropdown list using its option value.",
-  "durationMs" : 4663,
-  "delayMs" : 0,
+  "reasoning" : "Found the sort dropdown element with ID '#sort-select' containing the option 'Price: Low to High'. Executing the SELECT action.",
+  "durationMs" : 1457,
+  "delayMs" : 1,
+  "timeoutMs" : 0,
   "composite" : false
 }, {
   "instruction" : "Verify that the product grid refreshes to show refined products sorted by price.",
@@ -954,11 +948,11 @@
   "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
-    "type" : "ASSERT",
+    "type" : "ASSERT_VISIBLE",
     "target" : "#plp-product-grid",
-    "value" : "visible",
-    "description" : "Extracted ASSERT action",
-    "reasoning" : "Verify that the product grid is present and refreshed",
+    "value" : null,
+    "description" : "Extracted ASSERT_VISIBLE action",
+    "reasoning" : "Verify that the product grid containing sorted products is visible",
     "isRegex" : false,
     "condition" : null,
     "then" : null,
@@ -967,8 +961,8 @@
     "stepLine" : 16,
     "stepFile" : "SearchTest.yaml",
     "stepScreenshotHash" : null,
-    "durationMs" : 160,
-    "delayMs" : 2953,
+    "durationMs" : 153,
+    "delayMs" : 3000,
     "parameters" : { },
     "bestCandidateLocator" : "#plp-product-grid",
     "allCandidateLocators" : [ "#plp-product-grid", ".products-grid" ],
@@ -978,13 +972,13 @@
     "candidateLocators" : [ {
       "locator" : "#plp-product-grid",
       "strategy" : "ID",
-      "score" : 0.99,
+      "score" : 0.95,
       "reasoning" : "Unique ID for the product grid container"
     }, {
       "locator" : ".products-grid",
       "strategy" : "CLASS",
       "score" : 0.8,
-      "reasoning" : "Class selector for products grid"
+      "reasoning" : "Clean semantic class for the product grid"
     } ],
     "domFeatureVector" : {
       "tag" : "div",
@@ -1002,7 +996,7 @@
       "width" : 857,
       "height" : 1341
     },
-    "values" : [ "visible" ]
+    "values" : [ ]
   } ],
   "status" : "SUCCESS",
   "failed" : false,
@@ -1031,9 +1025,10 @@
     "height" : 1341
   },
   "schemaVersion" : "3.0",
-  "contextLevel" : "RICH",
-  "reasoning" : "The product grid is visible and verified to display products sorted by price low to high as per the selected option.",
-  "durationMs" : 1188,
+  "contextLevel" : "STANDARD",
+  "reasoning" : "The instruction asks to verify that the product grid refreshes to show refined products sorted by price. The DOM shows #plp-product-grid is present and visible, and #sort-select has price-asc selected with products sorted accordingly.",
+  "durationMs" : 1104,
   "delayMs" : 0,
+  "timeoutMs" : 0,
   "composite" : false
 } ]
