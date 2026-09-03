@@ -1597,6 +1597,8 @@ function renderStepsForExecution(activeRow) {
                         if (execDto.startTime) activeRow.setAttribute('data-start-time', execDto.startTime);
                         if (execDto.dateFormatted) activeRow.setAttribute('data-date-formatted', execDto.dateFormatted);
                         if (execDto.timeFormatted) activeRow.setAttribute('data-time-formatted', execDto.timeFormatted);
+                        if (execDto.llmResponsibilityJson) activeRow.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
+                        if (execDto.contextLevelCountsJson) activeRow.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
 
                         const startTimeEl = document.getElementById('sidePageTestStartTimeVal');
                         if (startTimeEl) {
@@ -1721,46 +1723,31 @@ function renderStepsForExecution(activeRow) {
     // Populate AI LLM Responsibility & Token Accounting Table
     const llmTbody = document.getElementById('sidePageLlmAccountingTbody');
     if (llmTbody) {
-        const costNum = aiMetrics ? aiMetrics.totalCost : Number(String(estCost).replace('$', '')) || 0;
-        llmTbody.innerHTML = `
-            <tr style="font-weight: 700; background: #ffffff;">
-                <td style="padding: 0.35rem 0.6rem;">Total</td>
-                <td style="text-align: center; padding: 0.35rem 0.6rem;">${llmCalls}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(totalTokens).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(inputTokens).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(outputTokens).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(cachedTokens).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">${sideCostEl ? sideCostEl.innerText : '$0.0000'}</td>
-            </tr>
-            <tr>
-                <td style="padding: 0.35rem 0.6rem;">Action (Standard Generation)</td>
-                <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.ceil(Number(llmCalls) * 0.5)}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(totalTokens) * 0.92)).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(inputTokens) * 0.92)).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(outputTokens) * 0.92)).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(cachedTokens).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(costNum * 0.92).toFixed(4)}</td>
-            </tr>
-            <tr>
-                <td style="padding: 0.35rem 0.6rem;">PESAP (Pre-Execution Semantic Anchor)</td>
-                <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.floor(Number(llmCalls) * 0.5)}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(totalTokens) * 0.08)).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(inputTokens) * 0.08)).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">${Number(Math.floor(Number(outputTokens) * 0.08)).toLocaleString()}</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;">0</td>
-                <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(costNum * 0.08).toFixed(4)}</td>
-            </tr>
-        `;
+        const responsibilityAttr = activeRow.getAttribute('data-llm-responsibility');
+        renderLlmResponsibilityRows(llmTbody, responsibilityAttr, {
+            totalCalls: Number(llmCalls) || 0,
+            totalTokens: Number(totalTokens) || 0,
+            inputTokens: Number(inputTokens) || 0,
+            outputTokens: Number(outputTokens) || 0,
+            cachedTokens: Number(cachedTokens) || 0,
+            cost: Number(String(estCost).replace('$', '')) || 0
+        });
+
+        // Open the table by default so the user sees the breakdown without an extra click.
+        const llmBox = document.getElementById('sidePageLlmAccountingBox');
+        if (llmBox) llmBox.classList.add('active');
+        const llmContainer = document.getElementById('sidePageLlmTableContainer');
+        const llmChevron = document.getElementById('sidePageLlmTableChevron');
+        if (llmContainer && llmContainer.style.display === 'none') {
+            llmContainer.style.display = 'block';
+            if (llmChevron) llmChevron.innerText = 'expand_less';
+        }
     }
 
     const ctxBadgesEl = document.getElementById('sidePageContextLevelBadges');
     if (ctxBadgesEl) {
-        ctxBadgesEl.innerHTML = `
-            <span class="context-badge level-minimal">MINIMAL: <strong>${Math.max(1, Math.floor(Number(stepsTotal) * 0.6))}</strong></span>
-            <span class="context-badge level-lean">LEAN: <strong>${Math.max(0, Math.floor(Number(stepsTotal) * 0.2))}</strong></span>
-            <span class="context-badge level-standard">STANDARD: <strong>${Math.max(0, Math.floor(Number(stepsTotal) * 0.1))}</strong></span>
-            <span class="context-badge level-visual">VISUAL: <strong>${Math.max(0, Math.floor(Number(stepsTotal) * 0.1))}</strong></span>
-        `;
+        const countsAttr = activeRow.getAttribute('data-context-level-counts');
+        renderContextLevelBadges(ctxBadgesEl, countsAttr, Number(stepsTotal) || 0);
     }
 
     // Extract Blocks
@@ -2326,6 +2313,153 @@ function renderStepsForExecution(activeRow) {
 
     stepListEl.innerHTML = html;
 }
+
+function renderContextLevelBadges(ctxBadgesEl, countsJson, stepsTotal) {
+    const counts = parseContextLevelCounts(countsJson);
+    if (counts) {
+        ctxBadgesEl.innerHTML = Object.keys(counts).map(key => {
+            const cls = contextLevelClass(key);
+            const count = Number(counts[key]) || 0;
+            return `<span class="context-badge ${cls}">${key}: <strong>${count}</strong></span>`;
+        }).join('');
+    } else {
+        ctxBadgesEl.innerHTML = `
+            <span class="context-badge level-minimal">MINIMAL: <strong>${Math.max(1, Math.floor(stepsTotal * 0.6))}</strong></span>
+            <span class="context-badge level-lean">LEAN: <strong>${Math.max(0, Math.floor(stepsTotal * 0.2))}</strong></span>
+            <span class="context-badge level-standard">STANDARD: <strong>${Math.max(0, Math.floor(stepsTotal * 0.1))}</strong></span>
+            <span class="context-badge level-visual">VISUAL: <strong>${Math.max(0, Math.floor(stepsTotal * 0.1))}</strong></span>
+        `;
+    }
+}
+
+function parseContextLevelCounts(json) {
+    if (!json) return null;
+    try {
+        const obj = JSON.parse(json);
+        if (!obj || typeof obj !== 'object' || Object.keys(obj).length === 0) return null;
+        return obj;
+    } catch (e) {
+        return null;
+    }
+}
+
+function contextLevelClass(key) {
+    const k = String(key || '').toUpperCase();
+    if (k === 'MINIMAL') return 'level-minimal';
+    if (k === 'LEAN') return 'level-lean';
+    if (k === 'STANDARD') return 'level-standard';
+    if (k.indexOf('VISUAL') === 0) return 'level-visual';
+    return 'level-standard';
+}
+
+window.renderContextLevelBadges = renderContextLevelBadges;
+window.parseContextLevelCounts = parseContextLevelCounts;
+window.contextLevelClass = contextLevelClass;
+
+function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
+    const labels = [
+        { key: 'total',        label: 'Total',                                                       total: true  },
+        { key: 'action',       label: 'Action (Standard Generation)',                                total: false },
+        { key: 'pesap',        label: 'PESAP (Pre-Execution Semantic Anchor)',                        total: false },
+        { key: 'judge',        label: 'Self-Judging Validation',                                      total: false },
+        { key: 'verification', label: 'Semantic Outcome Verification',                                total: false },
+        { key: 'visualRca',    label: 'Visual Root Cause Analysis (RCA)',                             total: false }
+    ];
+    const buckets = parseResponsibilityBuckets(responsibilityJson);
+    if (buckets) {
+        llmTbody.innerHTML = labels.map(({ key, label, total }) => {
+            const b = buckets[key] || { calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
+            return renderResponsibilityRow(label, b, total);
+        }).join('');
+    } else {
+        llmTbody.innerHTML = renderHeuristicLlmRows(fallback);
+    }
+}
+
+function parseResponsibilityBuckets(json) {
+    if (!json) return null;
+    try {
+        const obj = JSON.parse(json);
+        if (!obj || typeof obj !== 'object') return null;
+        const required = ['total', 'action', 'pesap', 'judge', 'verification', 'visualRca'];
+        for (let i = 0; i < required.length; i++) {
+            if (!obj[required[i]] || typeof obj[required[i]] !== 'object') return null;
+        }
+        const normalized = {};
+        for (let i = 0; i < required.length; i++) {
+            const k = required[i];
+            const src = obj[k];
+            normalized[k] = {
+                calls:           Number(src.calls)           || 0,
+                inputTokens:     Number(src.inputTokens)     || 0,
+                outputTokens:    Number(src.outputTokens)    || 0,
+                cachedTokens:    Number(src.cachedTokens)    || 0,
+                totalTokens:     Number(src.totalTokens)     || 0,
+                estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+            };
+        }
+        return normalized;
+    } catch (e) {
+        return null;
+    }
+}
+
+function renderResponsibilityRow(label, bucket, isTotal) {
+    const rowStyle = isTotal
+        ? 'font-weight: 700; background: #ffffff;'
+        : '';
+    const costText = '$' + (Number(bucket.estimatedCostUsd) || 0).toFixed(4);
+    return `
+        <tr style="${rowStyle}">
+            <td style="padding: 0.35rem 0.6rem;">${label}</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${(bucket.calls || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(bucket.totalTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(bucket.inputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(bucket.outputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(bucket.cachedTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">${costText}</td>
+        </tr>
+    `;
+}
+
+function renderHeuristicLlmRows(fallback) {
+    const f = fallback || { totalCalls: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cost: 0 };
+    const cost = Number(f.cost) || 0;
+    return `
+        <tr style="font-weight: 700; background: #ffffff;">
+            <td style="padding: 0.35rem 0.6rem;">Total</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${(f.totalCalls || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.totalTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.inputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.outputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.cachedTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${cost.toFixed(4)}</td>
+        </tr>
+        <tr>
+            <td style="padding: 0.35rem 0.6rem;">Action (Standard Generation)</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.ceil((f.totalCalls || 0) * 0.5)}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.92).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.92).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.92).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.cachedTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.92).toFixed(4)}</td>
+        </tr>
+        <tr>
+            <td style="padding: 0.35rem 0.6rem;">PESAP (Pre-Execution Semantic Anchor)</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.floor((f.totalCalls || 0) * 0.5)}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.08).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.08).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.08).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">0</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.08).toFixed(4)}</td>
+        </tr>
+    `;
+}
+
+window.renderLlmResponsibilityRows = renderLlmResponsibilityRows;
+window.parseResponsibilityBuckets = parseResponsibilityBuckets;
+window.renderResponsibilityRow = renderResponsibilityRow;
+window.renderHeuristicLlmRows = renderHeuristicLlmRows;
 
 function toggleSidePanelLlmTable() {
     const container = document.getElementById('sidePageLlmTableContainer');
