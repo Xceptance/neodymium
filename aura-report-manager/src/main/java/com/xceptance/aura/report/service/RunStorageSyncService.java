@@ -122,6 +122,11 @@ public class RunStorageSyncService
                 if (Files.isDirectory(entry))
                 {
                     final String runId = entry.getFileName().toString();
+                    if (localRunJsonStorageService.hasRunJsonFile(runId) && runRepository.existsById(runId))
+                    {
+                        LOG.debug("Skipping already initialized run report: runId={}", runId);
+                        continue;
+                    }
                     final boolean success = importOrUpdateRunReport(runId);
                     if (success)
                     {

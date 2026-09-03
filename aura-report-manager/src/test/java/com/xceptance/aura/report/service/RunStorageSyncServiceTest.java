@@ -82,15 +82,127 @@ public class RunStorageSyncServiceTest
     }
 
     @Test
-    public void testSyncLocalRunStorageWithSampleRuns()
+    public void testSyncLocalRunStorageWithFreshRun() throws IOException
     {
-        final int syncedCount = syncService.syncLocalRunStorage();
-        Assertions.assertTrue(syncedCount > 0, "Expected at least 1 run report synced into DB");
+        final String freshRunId = "run-sync-fresh-test";
+        final Path runDir = Paths.get("storage", "runs", freshRunId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
 
-        final var allRuns = runRepository.findAll();
-        Assertions.assertFalse(allRuns.isEmpty(), "Expected runs to be synced in repository");
-        final TestRunEntity firstRun = allRuns.get(0);
-        Assertions.assertTrue(firstRun.getTotalTests() > 0, "Expected total tests to be greater than 0");
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String execJson = """
+                {
+                    "id": "exec-fresh-1",
+                    "title": "CheckoutProcessTest [US Chrome]",
+                    "testClass": "CheckoutProcessTest",
+                    "status": "passed-clean",
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+            final int syncedCount = syncService.syncLocalRunStorage();
+            Assertions.assertTrue(syncedCount > 0, "Expected at least 1 new run report synced into DB");
+
+            final Optional<TestRunEntity> freshRunOpt = runRepository.findById(freshRunId);
+            Assertions.assertTrue(freshRunOpt.isPresent(), "Fresh run should be synced into database");
+            Assertions.assertTrue(Files.exists(runDir.resolve("run.json")), "run.json should be generated for fresh run");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(freshRunId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testSyncLocalRunStorageSkipsRunWithRunJsonAndDbEntry() throws IOException
+    {
+        final String runId = "run-sync-skip-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String execJson = """
+                {
+                    "id": "exec-skip-1",
+                    "title": "CheckoutProcessTest [US Chrome]",
+                    "testClass": "CheckoutProcessTest",
+                    "status": "passed-clean",
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+            Assertions.assertTrue(syncService.importOrUpdateRunReport(runId), "import should populate DB and run.json");
+
+            final Path runJsonPath = runDir.resolve("run.json");
+            Assertions.assertTrue(Files.exists(runJsonPath), "run.json should exist after import");
+
+            Files.writeString(runJsonPath, "{\"marker\":\"preserve-me\"}");
+
+            syncService.syncLocalRunStorage();
+
+            final String diskContent = Files.readString(runJsonPath);
+            Assertions.assertTrue(diskContent.contains("preserve-me"),
+                "run.json must not be regenerated for an already initialized run");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testSyncLocalRunStorageInitializesRunMissingRunJsonButInDb() throws IOException
+    {
+        final String runId = "run-sync-missing-json-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String execJson = """
+                {
+                    "id": "exec-missing-json-1",
+                    "title": "CheckoutProcessTest [US Chrome]",
+                    "testClass": "CheckoutProcessTest",
+                    "status": "passed-clean",
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+            Assertions.assertTrue(syncService.importOrUpdateRunReport(runId), "import should populate DB and run.json");
+
+            final Path runJsonPath = runDir.resolve("run.json");
+            Assertions.assertTrue(Files.exists(runJsonPath), "run.json should exist after import");
+            Files.delete(runJsonPath);
+            Assertions.assertFalse(Files.exists(runJsonPath), "run.json should be deleted for this test");
+
+            syncService.syncLocalRunStorage();
+
+            Assertions.assertTrue(Files.exists(runJsonPath), "run.json should be regenerated for run missing it on disk");
+
+            final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
+            Assertions.assertTrue(runOpt.isPresent(), "Run should remain in database");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
     }
 
     @Test

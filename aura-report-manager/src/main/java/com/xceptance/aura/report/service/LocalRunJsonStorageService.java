@@ -62,6 +62,18 @@ public class LocalRunJsonStorageService
         return Paths.get(baseDir, runId);
     }
 
+    /**
+     * Checks whether a run.json report file already exists on disk for the given run, either nested inside the run
+     * directory ({@code storage/runs/{runId}/run.json}) or as a flat file ({@code storage/runs/run-{runId}.json}).
+     *
+     * @param runId the unique run identifier
+     * @return {@code true} if a run.json report file exists on disk, {@code false} otherwise
+     */
+    public boolean hasRunJsonFile(final String runId)
+    {
+        return Files.exists(Paths.get(baseDir, runId, "run.json")) || Files.exists(Paths.get(baseDir, "run-" + runId + ".json"));
+    }
+
     public Path getRunJsonPath(final String runId)
     {
         final Path dirPath = Paths.get(baseDir, runId, "run.json");
