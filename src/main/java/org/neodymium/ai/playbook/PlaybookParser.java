@@ -40,4 +40,19 @@ public interface PlaybookParser
      * @throws IOException if loading or parsing the playbook fails
      */
     Playbook parse(final String identifier, final PlaybookResourceManager manager) throws IOException;
+
+    /**
+     * Parses a playbook or test data file from a resource identifier using the provided manager,
+     * optionally permitting 0 executable steps (e.g. for pure test data files).
+     *
+     * @param identifier the resource path, database key, or URI of the playbook or data file
+     * @param manager the resource manager to read file streams and resolve nested includes
+     * @param allowEmptySteps true to permit files with 0 executable steps (such as companion test data files)
+     * @return the parsed immutable Playbook instance
+     * @throws IOException if loading or parsing fails
+     */
+    default Playbook parse(final String identifier, final PlaybookResourceManager manager, final boolean allowEmptySteps) throws IOException
+    {
+        return parse(identifier, manager);
+    }
 }

@@ -122,7 +122,55 @@ public final class SessionData
             return dynamicNested;
         }
 
-        // 2. Fallback to static data
+        // 2. Check Neodymium test data properties (runtime code overrides via Neodymium.getData().put)
+        try
+        {
+            if (org.neodymium.util.Neodymium.getData() != null && org.neodymium.util.Neodymium.getData().exists(key))
+            {
+                final String neoProp = org.neodymium.util.Neodymium.getData().asString(key);
+                if (neoProp != null)
+                {
+                    final DataEntry staticEntry = this.staticData.get(key);
+                    if (staticEntry != null && !(staticEntry.value() instanceof String)
+                        && neoProp.equals(String.valueOf(staticEntry.value())))
+                    {
+                        // Fall through to rich object in staticData below
+                    }
+                    else
+                    {
+                        return new DataEntry(neoProp, false);
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+        try
+        {
+            if (com.xceptance.neodymium.util.Neodymium.getData() != null && com.xceptance.neodymium.util.Neodymium.getData().exists(key))
+            {
+                final String neoProp = com.xceptance.neodymium.util.Neodymium.getData().asString(key);
+                if (neoProp != null)
+                {
+                    final DataEntry staticEntry = this.staticData.get(key);
+                    if (staticEntry != null && !(staticEntry.value() instanceof String)
+                        && neoProp.equals(String.valueOf(staticEntry.value())))
+                    {
+                        // Fall through to rich object in staticData below
+                    }
+                    else
+                    {
+                        return new DataEntry(neoProp, false);
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 3. Fallback to static data (from external data file)
         if (this.staticData.containsKey(key))
         {
             return this.staticData.get(key);
@@ -133,42 +181,11 @@ public final class SessionData
             return staticNested;
         }
 
-        // 3. Fallback to System properties
+        // 4. Fallback to System properties
         final String sysProp = System.getProperty(key);
         if (sysProp != null)
         {
             return new DataEntry(sysProp, false);
-        }
-        // 4. Fallback to Neodymium test data properties
-        try
-        {
-            if (org.neodymium.util.Neodymium.getData().exists(key))
-            {
-                final String neoProp = org.neodymium.util.Neodymium.getData().asString(key);
-                if (neoProp != null)
-                {
-                    return new DataEntry(neoProp, false);
-                }
-            }
-        }
-        catch (final Throwable t)
-        {
-            // ignore on configuration lookup failure
-        }
-        try
-        {
-            if (com.xceptance.neodymium.util.Neodymium.getData().exists(key))
-            {
-                final String neoProp = com.xceptance.neodymium.util.Neodymium.getData().asString(key);
-                if (neoProp != null)
-                {
-                    return new DataEntry(neoProp, false);
-                }
-            }
-        }
-        catch (final Throwable t)
-        {
-            // ignore on configuration lookup failure
         }
         // 5. Fallback to Neodymium configuration properties
         try

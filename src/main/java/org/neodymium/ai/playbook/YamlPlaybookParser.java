@@ -80,7 +80,13 @@ public final class YamlPlaybookParser implements PlaybookParser
     @Override
     public Playbook parse(final String identifier, final PlaybookResourceManager manager) throws IOException
     {
-        final Playbook playbook = parseInternal(identifier, manager);
+        return parse(identifier, manager, false);
+    }
+
+    @Override
+    public Playbook parse(final String identifier, final PlaybookResourceManager manager, final boolean allowEmptySteps) throws IOException
+    {
+        final Playbook playbook = parseInternal(identifier, manager, allowEmptySteps);
         if (playbook != null)
         {
             setParentReferences(playbook.getSteps(), null);
@@ -100,7 +106,7 @@ public final class YamlPlaybookParser implements PlaybookParser
         }
     }
 
-    private Playbook parseInternal(final String identifier, final PlaybookResourceManager manager) throws IOException
+    private Playbook parseInternal(final String identifier, final PlaybookResourceManager manager, final boolean allowEmptySteps) throws IOException
     {
         final LinkedHashSet<String> activeStack = new LinkedHashSet<>();
         final List<PlaybookStep> steps = new ArrayList<>();
@@ -197,7 +203,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final List<PlaybookStep> parsedSteps = MAPPER.readValue(content, new TypeReference<List<PlaybookStep>>(){});
                     if (parsedSteps != null)
                     {
-                        if (parsedSteps.isEmpty())
+                        if (!allowEmptySteps && parsedSteps.isEmpty())
                         {
                             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
                         }
@@ -265,7 +271,7 @@ public final class YamlPlaybookParser implements PlaybookParser
 
         parseRecursive(identifier, manager, activeStack, steps, dataSets);
 
-        if (steps.isEmpty())
+        if (!allowEmptySteps && steps.isEmpty())
         {
             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
         }

@@ -382,11 +382,54 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
+##### Pattern 10: Programmatic Playbook with External Test Data (`@AiDataFile` & Convention)
+Execute programmatic Java tests using external companion YAML/JSON test data files without writing dummy playbooks:
+
+```java
+@Browser("Chrome_1500x1000_headless")
+@NeodymiumAiTest
+public class ProgrammaticTestDataYamlTest
+{
+    @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void test(final AiSession session) throws Exception
+    {
+        session.execute("""
+            steps: |
+                Open https://www.wikipedia.org
+                Select the '${language}' language
+                Type '${searchPhrase}' in the Search input field
+                Click the search button
+                Verify the main heading contains '${searchPhrase}' (bug)
+            """);
+    }
+}
+```
+
+With `ProgrammaticTestDataYamlTest.yaml` placed in the matching classpath resource package:
+```yaml
+promptAddon:
+  general: "Be concise."
+
+data:
+  - testId: test
+    language: "Deutsch"
+    phrase:
+      Part1: "Neo"
+      Part2: "dymium"
+    searchPhrase: "${phrase.Part1}${phrase.Part2}"
+```
+
+When running programmatic tests with an external data file:
+- **Step Independence**: Any `steps:` defined in the data file are ignored; Java code is the sole workflow driver.
+- **Context & Data Extraction**: All datasets (`data:`), modular inclusions (`_include:`), and system prompt add-ons (`promptAddon:`) are loaded and bound to the session.
+- **Data-Driven Iterations**: If the data file defines multiple dataset entries, the runner executes the test method once per dataset.
+
 ---
 
-### 2.3 `@AiPlaybook` Path Resolution & Scoping Rules
+### 2.3 `@AiPlaybook` & `@AiDataFile` Path Resolution & Scoping Rules
 
-The `@AiPlaybook` annotation configures the target playbook file for AI test execution and companion replay cache storage. Path resolution follows standard, deterministic Java resource rules:
+The `@AiPlaybook` and `@AiDataFile` annotations configure target playbook workflows and companion test data files for AI test execution. Path resolution follows standard, deterministic Java resource rules:
 
 #### Path Resolution Rules
 
@@ -396,12 +439,30 @@ The `@AiPlaybook` annotation configures the target playbook file for AI test exe
 | **`@AiPlaybook("custom.yaml")`** | **Package-Relative Custom Name** | `org/neodymium/ai/live/custom.yaml` |
 | **`@AiPlaybook("sub/custom.yaml")`** | **Package-Relative Subdirectory** | `org/neodymium/ai/live/sub/custom.yaml` |
 | **`@AiPlaybook("/playbooks/foo.yaml")`** | **Absolute Classpath Root** (leading `/`) | `playbooks/foo.yaml` |
+| **`@AiPlaybook(AiPlaybook.PROGRAMMATIC)`** | **Programmatic Test** (No external playbook steps) | Workflow steps defined directly in Java code |
+| **No `@AiDataFile`** (Auto-Discovery) | **Convention Data Resolution** | Checks `<package>/<Class>_<Method>.yaml`, then `<package>/<Class>.yaml` (also `.yml`, `.json`) |
+| **`@AiDataFile("data.yaml")`** | **Explicit Data File Binding** | Resolves relative to class package or root if starting with `/` |
+
+#### The 3-Tier Data Precedence Hierarchy
+
+Variables in Neodymium AI resolve according to a strict 3-tier precedence hierarchy:
+
+$$\begin{array}{cll}
+\textbf{Precedence} & \textbf{Data Source} & \textbf{Behavior} \\
+\hline
+\text{1. Base (Lowest)} & \textbf{External Data File} & \text{Loaded via } \texttt{@AiDataFile} \text{ or convention } \texttt{<TestClassName>.yaml}\text{.} \\
+& & \text{Supplies baseline datasets, intra-dataset interpolation, and prompt add-ons.} \\[6pt]
+\text{2. Middle} & \textbf{Steps in Java Code} & \text{Inline } \texttt{data:} \text{ in text blocks or } \texttt{SessionData} \text{ passed to } \texttt{session.execute(...)}\text{.} \\
+& & \text{Overrides specific keys from the Data File for that execution chunk.} \\[6pt]
+\text{3. Top (Highest)} & \textbf{Data via Code} & \text{Direct runtime assignment via } \texttt{session.data().set(...)} \text{ or } \texttt{Neodymium.getData().put(...)}\text{.} \\
+& & \text{Dynamic value that always takes final precedence.}
+\end{array}$$
 
 #### Scoping Rules
 
-* **Class Level**: Declaring `@AiPlaybook` at the class level sets the default playbook for all test methods in that test class.
-* **Method Level**: Declaring `@AiPlaybook` on a test method overrides any class-level annotation.
-* **Programmatic Java Tests**: Test classes marked with `@NeodymiumAiTest` that execute steps programmatically via `runPlaybook(session, "...")` do not require `@AiPlaybook`. Replay recordings automatically use standard package-relative path resolution or absolute paths if specified.
+* **Class Level**: Declaring `@AiPlaybook` or `@AiDataFile` at the class level sets the default for all test methods in that test class.
+* **Method Level**: Declaring on a test method overrides any class-level annotation.
+* **Programmatic Java Tests**: Test methods marked with `@AiPlaybook(AiPlaybook.PROGRAMMATIC)` execute steps directly via Java code, while seamlessly inheriting companion test datasets from convention or `@AiDataFile`.
 
 #### Multi-Dimensional Companion Recording Filenames
 

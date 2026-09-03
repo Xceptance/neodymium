@@ -67,6 +67,7 @@ import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.BrowserData;
 import org.neodymium.common.browser.BrowserMethodData;
+import org.neodymium.common.testdata.DataFile;
 import org.neodymium.junit5.browser.BrowserExecutionCallback;
 import org.neodymium.util.Neodymium;
 
@@ -195,7 +196,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     }
                     else
                     {
-                        org.neodymium.common.testdata.DataFile dataFileClass = testClass.getAnnotation(org.neodymium.common.testdata.DataFile.class);
+                        final DataFile dataFileClass = testClass.getAnnotation(DataFile.class);
                         if (dataFileClass == null)
                         {
                             final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileClass = testClass.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
@@ -211,7 +212,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
                         if (playbookPaths.isEmpty())
                         {
-                            org.neodymium.common.testdata.DataFile dataFileMethod = method.getAnnotation(org.neodymium.common.testdata.DataFile.class);
+                            final DataFile dataFileMethod = method.getAnnotation(DataFile.class);
                             if (dataFileMethod == null)
                             {
                                 final com.xceptance.neodymium.common.testdata.DataFile legacyDataFileMethod = method.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
@@ -382,11 +383,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 else if (AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(path))
                 {
-                    final String name = (methodPlaybook != null && !methodPlaybook.name().isEmpty()) ? methodPlaybook.name()
-                                      : (classPlaybook != null && !classPlaybook.name().isEmpty()) ? classPlaybook.name()
-                                      : testClass.getSimpleName() + "_" + method.getName();
-                    final String virtualPath = "playbooks/integration/programmatic/" + name + ".yaml";
-                    resolvedPaths.add(virtualPath);
+                    resolvedPaths.add(AiPlaybook.PROGRAMMATIC);
                 }
                 else if (path.startsWith("/"))
                 {
@@ -443,6 +440,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             : (classPlaybook != null ? classPlaybook.value() : null);
         final boolean isMethodOrClassProgrammatic = AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(effectivePlaybookValue);
 
+        final String dataFilePath = resolveDataFilePath(testClass, method, manager);
+
         for (final String playbookPath : resolvedPaths)
         {
             Playbook playbook;
@@ -453,18 +452,30 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     || (playbookPath != null && playbookPath.startsWith("playbooks/integration/programmatic/"));
                 if (isProgrammatic)
                 {
-                    try
+                    if (dataFilePath != null)
                     {
-                        playbook = parser.parse(playbookPath, manager);
+                        final Playbook dataPlaybook = parser.parse(dataFilePath, manager, true);
+                        playbook = new Playbook(Collections.emptyList(), dataPlaybook.getDataSets(), dataPlaybook.getPromptAddons(), dataPlaybook.getDescription());
                     }
-                    catch (final Exception e)
+                    else
                     {
-                        playbook = new Playbook(new ArrayList<>(), new ArrayList<>());
+                        playbook = new Playbook(Collections.emptyList(), Collections.emptyList());
                     }
                 }
                 else
                 {
-                    playbook = parser.parse(playbookPath, manager);
+                    final Playbook stepsPlaybook = parser.parse(playbookPath, manager);
+                    if (dataFilePath != null && !dataFilePath.equalsIgnoreCase(playbookPath))
+                    {
+                        final Playbook dataPlaybook = parser.parse(dataFilePath, manager, true);
+                        final Map<String, String> mergedPromptAddons = new HashMap<>(stepsPlaybook.getPromptAddons());
+                        mergedPromptAddons.putAll(dataPlaybook.getPromptAddons());
+                        playbook = new Playbook(stepsPlaybook.getSteps(), dataPlaybook.getDataSets(), mergedPromptAddons, stepsPlaybook.getDescription());
+                    }
+                    else
+                    {
+                        playbook = stepsPlaybook;
+                    }
                 }
             }
             catch (final Exception e)
@@ -995,7 +1006,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             Playbook playbook;
             if (isProgrammatic && !this.mode.isReplay())
             {
-                playbook = Playbook.builder().build();
+                final String dataFilePath = resolveDataFilePath(testClass, method, manager);
+                if (dataFilePath != null)
+                {
+                    final Playbook dataPlaybook = parser.parse(dataFilePath, manager, true);
+                    playbook = new Playbook(Collections.emptyList(), dataPlaybook.getDataSets(), dataPlaybook.getPromptAddons(), dataPlaybook.getDescription());
+                }
+                else
+                {
+                    playbook = Playbook.builder().build();
+                }
             }
             else
             {
@@ -1657,6 +1677,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             final StringBuilder sb = new StringBuilder();
+            final String defaultProgrammaticDir = "playbooks/integration/programmatic/";
+            final String resolvedDefaultDir = (AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(playbookPath)
+                || (playbookPath != null && playbookPath.startsWith(defaultProgrammaticDir)))
+                ? defaultProgrammaticDir
+                : extractParentDir(playbookPath);
+
             if (name.startsWith("/"))
             {
                 sb.append(name);
@@ -1665,7 +1691,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 final String parentDir = recDir != null
                     ? (recDir.endsWith("/") ? recDir : recDir + "/")
-                    : extractParentDir(playbookPath);
+                    : resolvedDefaultDir;
                 sb.append(parentDir).append(name);
             }
 
@@ -1683,9 +1709,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             return sb.toString();
         }
 
+        final String defaultProgrammaticDir = "playbooks/integration/programmatic/";
+        final String resolvedDefaultDir = (AiPlaybook.PROGRAMMATIC.equalsIgnoreCase(playbookPath)
+            || (playbookPath != null && playbookPath.startsWith(defaultProgrammaticDir)))
+            ? defaultProgrammaticDir
+            : extractParentDir(playbookPath);
+
         final String parentDir = recDir != null
             ? (recDir.endsWith("/") ? recDir : recDir + "/")
-            : extractParentDir(playbookPath);
+            : resolvedDefaultDir;
         final StringBuilder sb = new StringBuilder();
         sb.append(parentDir);
 
@@ -1758,5 +1790,125 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             return path.substring(0, path.length() - 4) + ".json";
         }
         return path + ".json";
+    }
+
+    /**
+     * Resolves the companion test data file for a test method, checking annotations
+     * ({@link AiDataFile}, {@link DataFile}) and falling back to naming conventions.
+     *
+     * @param testClass the test class
+     * @param method the test method
+     * @param manager the resource manager
+     * @return the resolved data file path, or null if no data file exists
+     */
+    private static String resolveDataFilePath(
+        final Class<?> testClass,
+        final Method method,
+        final PlaybookResourceManager manager)
+    {
+        // 1. Check method-level @AiDataFile
+        final AiDataFile methodAiDataFile = method != null ? method.getAnnotation(AiDataFile.class) : null;
+        if (methodAiDataFile != null && !methodAiDataFile.value().trim().isEmpty())
+        {
+            return resolveRelativePath(testClass, methodAiDataFile.value().trim());
+        }
+
+        // 2. Check class-level @AiDataFile
+        final AiDataFile classAiDataFile = testClass != null ? testClass.getAnnotation(AiDataFile.class) : null;
+        if (classAiDataFile != null && !classAiDataFile.value().trim().isEmpty())
+        {
+            return resolveRelativePath(testClass, classAiDataFile.value().trim());
+        }
+
+        // 3. Check legacy / standard @DataFile annotations
+        if (method != null)
+        {
+            final DataFile dfMethod = method.getAnnotation(DataFile.class);
+            if (dfMethod != null && !dfMethod.value().trim().isEmpty())
+            {
+                return resolveRelativePath(testClass, dfMethod.value().trim());
+            }
+            final com.xceptance.neodymium.common.testdata.DataFile legacyDfMethod = method.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
+            if (legacyDfMethod != null && !legacyDfMethod.value().trim().isEmpty())
+            {
+                return resolveRelativePath(testClass, legacyDfMethod.value().trim());
+            }
+        }
+        if (testClass != null)
+        {
+            final DataFile dfClass = testClass.getAnnotation(DataFile.class);
+            if (dfClass != null && !dfClass.value().trim().isEmpty())
+            {
+                return resolveRelativePath(testClass, dfClass.value().trim());
+            }
+            final com.xceptance.neodymium.common.testdata.DataFile legacyDfClass = testClass.getAnnotation(com.xceptance.neodymium.common.testdata.DataFile.class);
+            if (legacyDfClass != null && !legacyDfClass.value().trim().isEmpty())
+            {
+                return resolveRelativePath(testClass, legacyDfClass.value().trim());
+            }
+        }
+
+        // 4. Convention lookup
+        if (testClass != null)
+        {
+            final String packagePath = testClass.getPackageName().replace('.', '/');
+            final String className = testClass.getSimpleName();
+            final String[] extensions = {".yaml", ".yml", ".json"};
+
+            // 4a. Method convention: <package>/<ClassName>_<methodName>.<ext>
+            if (method != null)
+            {
+                for (final String ext : extensions)
+                {
+                    final String methodCandidate = packagePath + "/" + className + "_" + method.getName() + ext;
+                    if (resourceExists(methodCandidate, manager))
+                    {
+                        return methodCandidate;
+                    }
+                }
+            }
+
+            // 4b. Class convention: <package>/<ClassName>.<ext>
+            for (final String ext : extensions)
+            {
+                final String classCandidate = packagePath + "/" + className + ext;
+                if (resourceExists(classCandidate, manager))
+                {
+                    return classCandidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static boolean resourceExists(final String path, final PlaybookResourceManager manager)
+    {
+        if (path == null || path.isEmpty() || manager == null)
+        {
+            return false;
+        }
+        try (final InputStream in = manager.read(path))
+        {
+            return in != null;
+        }
+        catch (final Exception ignored)
+        {
+            return false;
+        }
+    }
+
+    private static String resolveRelativePath(final Class<?> testClass, final String rawPath)
+    {
+        if (rawPath.startsWith("/"))
+        {
+            return rawPath.substring(1);
+        }
+        final String packagePath = testClass != null ? testClass.getPackageName().replace('.', '/') : "";
+        if (!packagePath.isEmpty() && !rawPath.contains("/"))
+        {
+            return packagePath + "/" + rawPath;
+        }
+        return rawPath;
     }
 }

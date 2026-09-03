@@ -24,6 +24,7 @@ This document defines the annotation design for integrating Neo Aura AI v2 playb
 |---|---|---|
 | `@NeodymiumAiTest` | Class | Marks this as an AI test class, wires the JUnit extension |
 | `@AiPlaybook` | Method | Marks a method as a playbook-driven test |
+| `@AiDataFile` | Class / Method | Binds an external YAML/JSON test data file |
 | `@AiDataSet` | Class / Method | Filters which data sets to include or exclude |
 | `@AiMode` | Class / Method | Overrides the default execution mode(s) |
 | `@AiSelenide` / `@AiRest` / ... | Class / Method | Domain selection (future, defaults to Selenide) |
@@ -137,7 +138,33 @@ class GuestCheckoutTest
 
 ---
 
-## 3. `@AiMode` (Class / Method)
+## 3. `@AiDataFile` (Class / Method)
+
+Declares an external test data file (YAML or JSON) to bind to an AI test.
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface AiDataFile
+{
+    /**
+     * Optional test data file path override. If empty, uses convention auto-discovery.
+     */
+    String value() default "";
+}
+```
+
+### Purpose & Behavior:
+- **Programmatic Tests**: When applied to a programmatic test (`@AiPlaybook(AiPlaybook.PROGRAMMATIC)`), the data file supplies datasets, intra-dataset variable interpolations, inclusions (`_include:`), and prompt add-ons (`promptAddon:`). Any `steps:` block defined inside the file is deliberately ignored, ensuring the Java code remains the sole workflow driver.
+- **Convention Auto-Discovery**: If `@AiDataFile` is omitted, `NeodymiumAiRunner` automatically checks for companion data files matching `<package>/<TestClassName>_<methodName>.yaml` or `<package>/<TestClassName>.yaml` (along with `.yml` and `.json`).
+- **3-Tier Data Precedence Hierarchy**:
+  1. **Tier 1 (Base / Lowest)**: External Data File (`@AiDataFile` or convention `<TestClassName>.yaml`).
+  2. **Tier 2 (Middle)**: Inline `data:` or `SessionData` passed to `session.execute(...)`.
+  3. **Tier 3 (Top / Highest)**: Direct runtime programmatic assignment via `session.data().set(...)` or `Neodymium.getData().put(...)`.
+
+---
+
+## 4. `@AiMode` (Class / Method)
 
 Overrides the default execution mode. By default, the extension checks for an existing `PlaybookRecording` — if found, uses `REPLAY_AND_FIX`; if not, uses `RECORD`.
 
