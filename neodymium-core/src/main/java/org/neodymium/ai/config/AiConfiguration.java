@@ -173,7 +173,15 @@ public final class AiConfiguration
      */
     private void loadFromFile(final String filePath)
     {
-        final File file = new File(filePath);
+        File file = new File(filePath);
+        if (!file.exists())
+        {
+            final File parentFile = new File(".." + File.separator + filePath);
+            if (parentFile.exists())
+            {
+                file = parentFile;
+            }
+        }
         if (file.exists() && file.isFile())
         {
             try (final InputStream in = new FileInputStream(file))

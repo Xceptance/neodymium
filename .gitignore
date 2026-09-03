@@ -20,7 +20,7 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
-/target/
+target/
 /.classpath
 /.project
 /.settings/
@@ -28,45 +28,43 @@ build
 dev-*.properties 
 temp-*.properties
 embeddedLocalProxySelfSignedRootCertificate.p12
-/bin/
-/allure-results/
-/.allure/
-/allure-report/
-/aura-allure-results-temp/
-
-
+bin/
+allure-results/
+.allure/
+allure-report/
+aura-allure-results-temp/
 
 # IDE/AI helper folders
 .idea
-/.agents/
-/.gemini/
-/.specify/
-/.vscode/
-/specs/
+.agents/
+.gemini/
+.specify/
+.vscode/
+specs/
 
 newTickets.txt
 neodymium.code-workspace
 
 # Neodymium AI temporary scratch folder
 tmp/
-/ai-reports/
-/ai-reports-lean/
+ai-reports/
+ai-reports-lean/
 
 # Neodymium Aura Reports History
-/allure-reports-history/
+allure-reports-history/
 
 # Antigravity CLI
 .antigravitycli/
 
 # Neodymium AI playbooks
-/src/test/resources/ai-playbooks/
-/src/test/resources/playbooks/integration/programmatic/
+**/ai-playbooks/
+**/playbooks/integration/programmatic/
 
-/chat-history/
+chat-history/
 
 # Added by code-review-graph
 .code-review-graph/
 
 # Neodymium Aura Manager sandbox folders
-/src/test/java/com/xceptance/neodymium/aura/sandbox/
-/target/aura-sandbox/
+**/src/test/java/com/xceptance/neodymium/aura/sandbox/
+target/aura-sandbox/

@@ -162,6 +162,66 @@ public class ClassicTest
 
 ---
 
+## 🏗️ Building Neodymium
+
+Neodymium is organized as a standard Maven multi-module monorepo:
+* **`neodymium-library`**: The core automation framework (Classic + Aura AI).
+* **`aura-report-manager`**: The Spring Boot reporting dashboard & test management web application.
+* **`aura-test-manager`**: Standalone playbook & queue manager hub.
+
+### Prerequisites
+* **Java**: JDK 21 or higher
+* **Build Tool**: Apache Maven 3.8+
+
+### Common Build Commands
+
+#### 1. Build the Entire Monorepo
+Compile all modules in one pass using Maven's reactor:
+```bash
+mvn clean compile
+```
+
+#### 2. Run All Tests
+```bash
+mvn clean test
+```
+
+#### 3. Fast Local Install (Skip Tests & Javadocs)
+To quickly compile and update all local JARs in `~/.m2/repository`:
+```bash
+mvn clean install -DskipTests -Dmaven.javadoc.skip=true
+```
+
+#### 4. Working with Specific Modules
+Thanks to Maven's reactor, you can target individual modules using `-pl` (project list) and `-am` (also-make) without having to install dependencies first:
+
+* **Run core library tests:**
+  ```bash
+  mvn test -pl neodymium-library
+  ```
+* **Run a single test in core library:**
+  ```bash
+  mvn test -pl neodymium-library -Dtest=TestDataTest
+  ```
+* **Compile Aura Report Manager (resolves core in-memory):**
+  ```bash
+  mvn compile -pl aura-report-manager -am
+  ```
+* **Launch Aura Report Manager locally (`http://localhost:8080`):**
+  ```bash
+  mvn spring-boot:run -pl aura-report-manager -am
+  ```
+* **Launch Aura Test Manager locally:**
+  ```bash
+  mvn spring-boot:run -pl aura-test-manager -am
+  ```
+
+#### 5. Convenience Scripts
+* Run Aura Test Manager: `./run-aura.sh` (or `run-aura.bat` on Windows)
+* Run a single test with a data file: `./run-neo-test.sh <path_to_yaml>`
+
+---
+
 ## 🔗 Quicklinks & Demos
 
 * [Neodymium Template](https://github.com/Xceptance/neodymium-template): Quickstart project template for Java or Cucumber.

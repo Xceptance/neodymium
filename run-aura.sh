@@ -6,4 +6,4 @@ echo "========================================================================"
 echo "  Starting Neodymium Aura Manager compilation & startup..."
 echo "========================================================================"
 
-mvn test-compile exec:java -Dexec.mainClass="com.xceptance.neodymium.aura.NeodymiumAuraManager" -Dexec.classpathScope="test"
+mvn test-compile exec:java -pl neodymium-core -Dexec.mainClass="com.xceptance.neodymium.aura.NeodymiumAuraManager" -Dexec.classpathScope="test"

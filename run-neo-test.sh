@@ -31,7 +31,7 @@ if [ -f "$INPUT" ]; then
   cd "$PROJECT_DIR" || exit 1
   echo "Project directory resolved to: $PROJECT_DIR"
   
-  mvn test -Dneodymium.testFileFilter="$ABS_PATH" "${@:2}"
+  mvn test -pl neodymium-core -Dneodymium.testFileFilter="$ABS_PATH" "${@:2}"
 else
   # Assume it's a test ID
   echo "Running Neodymium tests with testId: $INPUT"
@@ -41,5 +41,5 @@ else
   cd "$PROJECT_DIR" || exit 1
   echo "Project directory resolved to: $PROJECT_DIR"
   
-  mvn test -Dneodymium.testIdFilter="$INPUT" "${@:2}"
+  mvn test -pl neodymium-core -Dneodymium.testIdFilter="$INPUT" "${@:2}"
 fi

@@ -242,42 +242,40 @@ public class MultibrowserConfiguration
         return browserProfileProperties;
     }
 
-    private static void loadPropertiesFromFile(String path, Properties properties)
+    private static void loadPropertiesFromFile(final String path, final Properties properties)
     {
         try
         {
             File source = new File(path);
+            if (!source.exists())
+            {
+                final File parentSource = new File(".." + File.separator + path);
+                if (parentSource.exists())
+                {
+                    source = parentSource;
+                }
+            }
+
             if (source.exists())
             {
-                try (FileInputStream fileInputStream = new FileInputStream(source))
+                try (final FileInputStream fileInputStream = new FileInputStream(source))
                 {
                     properties.load(fileInputStream);
                 }
             }
             else
             {
-                File parentSource = new File(".." + File.separator + path);
-                if (parentSource.exists())
+                final String resourcePath = path.startsWith("./") ? path.substring(2) : path;
+                try (final InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath))
                 {
-                    try (FileInputStream parentInputStream = new FileInputStream(parentSource))
+                    if (is != null)
                     {
-                        properties.load(parentInputStream);
-                    }
-                }
-                else
-                {
-                    String resourcePath = path.startsWith("./") ? path.substring(2) : path;
-                    try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath))
-                    {
-                        if (is != null)
-                        {
-                            properties.load(is);
-                        }
+                        properties.load(is);
                     }
                 }
             }
         }
-        catch (Exception e)
+        catch (final Exception e)
         {
             throw new RuntimeException(e);
         }

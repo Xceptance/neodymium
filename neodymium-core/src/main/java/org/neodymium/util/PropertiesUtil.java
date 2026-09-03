@@ -62,21 +62,30 @@ public class PropertiesUtil
      *     the path to the properties file
      * @return a Properties object containing the loaded properties
      */
-    public static Properties loadPropertiesFromFile(String path)
+    public static Properties loadPropertiesFromFile(final String path)
     {
-        Properties properties = new Properties();
+        final Properties properties = new Properties();
 
         try
         {
             File source = new File(path);
+            if (!source.exists())
+            {
+                final File parentSource = new File(".." + File.separator + path);
+                if (parentSource.exists())
+                {
+                    source = parentSource;
+                }
+            }
             if (source.exists())
             {
-                FileInputStream fileInputStream = new FileInputStream(source);
-                properties.load(fileInputStream);
-                fileInputStream.close();
+                try (final FileInputStream fileInputStream = new FileInputStream(source))
+                {
+                    properties.load(fileInputStream);
+                }
             }
         }
-        catch (Exception e)
+        catch (final Exception e)
         {
             throw new RuntimeException(e);
         }
