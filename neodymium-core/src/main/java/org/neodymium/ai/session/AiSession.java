@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.session;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,6 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
-import java.io.IOException;
 import org.neodymium.ai.model.ExecutionMetrics;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookRecording;
@@ -46,7 +46,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
-import org.neodymium.ai.playbook.InlinePlaybookParser;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.runner.StateMachineRunner;
@@ -625,7 +625,7 @@ public abstract class AiSession implements AutoCloseable
 
         try
         {
-            final Playbook playbook = new InlinePlaybookParser(stepsContent).parse("inline", null);
+            final Playbook playbook = new YamlPlaybookParser().parseString(stepsContent);
             return execute(playbook, sessionData);
         }
         catch (final IOException e)

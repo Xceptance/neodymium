@@ -29,11 +29,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.resources.ClasspathResourceManager;
+import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +62,14 @@ public final class YamlPlaybookParser implements PlaybookParser
 {
     private static final Logger LOG = LoggerFactory.getLogger(YamlPlaybookParser.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * Pattern matching standard top-level YAML section keys at the start of lines.
+     */
+    private static final Pattern YAML_BLOCK_PATTERN = Pattern.compile(
+        "(?m)^(steps|_steps|data|_data|before|beforeEach|_beforeEach|_beforeAll|after|afterEach|_afterEach|_afterAll|inline|_include|include|playbook|actions|promptAddon|description|teardown|_meta|meta):",
+        Pattern.CASE_INSENSITIVE
+    );
 
     /**
      * Constructs a default YamlPlaybookParser.
@@ -92,6 +102,63 @@ public final class YamlPlaybookParser implements PlaybookParser
             setParentReferences(playbook.getSteps(), null);
         }
         return playbook;
+    }
+
+    /**
+     * Parses a playbook from raw string content using a default classpath resource manager.
+     * Supports both plain line-by-line step instructions and structured YAML string content.
+     *
+     * @param content the raw playbook string content
+     * @return the parsed Playbook instance
+     * @throws IOException if parsing content fails
+     */
+    @Override
+    public Playbook parseString(final String content) throws IOException
+    {
+        return parseString(content, new ClasspathResourceManager());
+    }
+
+    /**
+     * Parses a playbook from raw string content using the provided resource manager.
+     * Delegates to YAML parsing if structured YAML content is detected,
+     * otherwise splits the content line-by-line into discrete steps.
+     *
+     * @param content the raw playbook string content
+     * @param manager the resource manager to resolve nested includes
+     * @return the parsed Playbook instance
+     * @throws IOException if parsing content fails
+     */
+    @Override
+    public Playbook parseString(final String content, final PlaybookResourceManager manager) throws IOException
+    {
+        if (content == null || content.trim().isEmpty())
+        {
+            return new Playbook(Collections.emptyList(), Collections.emptyList());
+        }
+
+        final String trimmed = content.trim();
+        if (trimmed.startsWith("---") || YAML_BLOCK_PATTERN.matcher(trimmed).find())
+        {
+            final InMemoryResourceManager stringManager = (manager != null)
+                ? new InMemoryResourceManager(manager)
+                : new InMemoryResourceManager(new ClasspathResourceManager());
+            stringManager.write("inline.yaml", content);
+            return parse("inline.yaml", stringManager);
+        }
+
+        final List<PlaybookStep> steps = new ArrayList<>();
+        final String[] lines = content.split("\\r?\\n");
+        for (final String line : lines)
+        {
+            final String lineTrimmed = line.trim();
+            if (!lineTrimmed.isEmpty() && !lineTrimmed.startsWith("#"))
+            {
+                steps.add(new PlaybookStep(lineTrimmed));
+            }
+        }
+
+        setParentReferences(steps, null);
+        return new Playbook(steps, Collections.emptyList());
     }
 
     private void setParentReferences(final List<PlaybookStep> steps, final PlaybookStep parent)

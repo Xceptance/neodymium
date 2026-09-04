@@ -850,8 +850,7 @@ public interface PlaybookParser
 }
 ```
 
-* **`YamlPlaybookParser`**: Standard parser for human-written YAML files.
-* **`InlinePlaybookParser`**: Compiles playbooks from raw strings passed directly inside code or test annotations.
+* **`YamlPlaybookParser`**: Standard parser for human-written YAML files and inline string playbooks (`parseString`).
 
 ---
 
