@@ -28,6 +28,7 @@ Analyze current DOM and visual state to fulfill the active instruction.
   * *Complete 'then' Branch*: ALWAYS populate the `then` array with the actions to perform when the condition is met (e.g. `TYPE`), even if the target element is absent on the current page during recording. The runtime runner evaluates the condition dynamically and skips the `then` branch when false. FORBIDDEN: NEVER emit an empty `then: []` for an 'If X then Y' instruction.
 - **BACK, FORWARD, REFRESH, WAIT, CLEAR, KEY_PRESS**: Standard execution actions.
 - **ESCALATE**: Set 'status' to 'ESCALATE' when required elements/texts are missing or not visible. Set 'targetContextLevel' to '[NEXT_ESCALATION]'. FORBIDDEN: NEVER return 'FAILED' or 'ERROR' at `MINIMAL` or `LEAN` (where non-interactive text/badges are pruned); ALWAYS escalate instead.
+- **CONTINUE**: Set 'status' to 'CONTINUE' when a prelude or trigger action (such as clicking a search toggle button, promo link, menu trigger, or accordion) must be executed first before hidden target input elements or controls required by the active instruction become visible in the SUT DOM. Sequence only the reveal action(s) for this prelude round.
 
 ## Locator Priority & Stability
 1. **Preferred Priority**: (1) Standard ID (`#id`), `name`, `data-test`, `data-testid`, `aria-label`, (2) clean semantic CSS class / scoped selector (e.g. `.btn-primary`, `#main-content .cart-btn`), (3) automation ID fallback (`[data-ai="..."]`).
@@ -44,7 +45,7 @@ Return ONLY a raw JSON object:
 {
   "reasoning": "Concise step-by-step analysis of current DOM and visual state",
   "assertionSatisfied": true,
-  "status": "SUCCESS|FAILED|ESCALATE",
+  "status": "SUCCESS|FAILED|ESCALATE|CONTINUE",
   "targetContextLevel": "level from [NEXT_ESCALATION] when status is ESCALATE, or highest level reached",
   "actions": [
     {

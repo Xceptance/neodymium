@@ -989,6 +989,50 @@ public final class ActionExtractionPromptTest
         assertEquals("TYPE", branch.getThen().get(0).getType());
         assertEquals("${prefecture}", branch.getThen().get(0).getValue());
     }
+
+    /**
+     * Verifies that the system prompt defines the CONTINUE status protocol.
+     */
+    @Test
+    public void testSystemPromptContainsContinueStatus()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        final String systemPrompt = prompt.compileSystemMessage(context);
+
+        assertNotNull(systemPrompt);
+        assertTrue(systemPrompt.contains("- **CONTINUE**: Set 'status' to 'CONTINUE'"));
+        assertTrue(systemPrompt.contains("\"status\": \"SUCCESS|FAILED|ESCALATE|CONTINUE\""));
+    }
+
+    /**
+     * Verifies that parseResponse recognizes status CONTINUE and sets KEY_IS_CONTINUATION_STEP.
+     */
+    @Test
+    public void testParseResponseContinueStatus() throws Exception
+    {
+        final String rawJson = """
+            {
+              "status": "CONTINUE",
+              "reasoning": "Click search toggle to reveal hidden input field.",
+              "actions": [ {
+                "action": "CLICK",
+                "locator": ".search-toggle",
+                "reasoning": "Click the toggle"
+              } ]
+            }
+            """;
+
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        final List<Action> actions = prompt.parseResponse(rawJson, context);
+
+        assertNotNull(actions);
+        assertEquals(1, actions.size());
+        assertEquals("CLICK", actions.get(0).getType());
+        assertEquals(".search-toggle", actions.get(0).getTarget());
+        assertTrue(Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP")));
+    }
 }
 
 
