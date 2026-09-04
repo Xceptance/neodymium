@@ -36,7 +36,7 @@ import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 
 /**
- * TDD validation tests for {@link YamlPlaybookParser} and {@link InlinePlaybookParser}.
+ * TDD validation tests for {@link YamlPlaybookParser}.
  * Covers simple step lists, data parameter parsing, nested includes, and cycle detection.
  *
  * @author AI-generated: Gemini 3.5 Flash
@@ -182,13 +182,13 @@ public final class PlaybookParserTest
     }
 
     /**
-     * Verifies that the InlinePlaybookParser parses a raw multi-line string
-     * with plain instructions correctly.
+     * Verifies that the YamlPlaybookParser parses a raw multi-line string
+     * with plain instructions correctly via parseString.
      *
      * @throws IOException if parsing fails
      */
     @Test
-    public void testInlinePlaybookParser() throws IOException
+    public void testParseStringWithPlainInstructions() throws IOException
     {
         final String content = """
             Open homepage
@@ -196,10 +196,8 @@ public final class PlaybookParserTest
             Add to cart
             """;
 
-        final PlaybookParser parser = new InlinePlaybookParser(content);
-        
-        // Inline parser does not need an active filesystem manager to parse direct strings
-        final Playbook playbook = parser.parse("inline", null);
+        final PlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parseString(content);
 
         assertNotNull(playbook);
         final List<PlaybookStep> steps = playbook.getSteps();
@@ -211,13 +209,13 @@ public final class PlaybookParserTest
     }
 
     /**
-     * Verifies that the InlinePlaybookParser correctly detects and parses structured YAML
+     * Verifies that YamlPlaybookParser correctly detects and parses structured YAML
      * multiline string content with steps and data sections.
      *
      * @throws IOException if parsing fails
      */
     @Test
-    public void testInlinePlaybookParserWithStructuredYaml() throws IOException
+    public void testParseStringWithStructuredYaml() throws IOException
     {
         final String content = """
             steps: |
@@ -227,8 +225,8 @@ public final class PlaybookParserTest
               - searchTerm: "Minimalist"
             """;
 
-        final PlaybookParser parser = new InlinePlaybookParser(content);
-        final Playbook playbook = parser.parse("inline", null);
+        final PlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parseString(content);
 
         assertNotNull(playbook);
         final List<PlaybookStep> steps = playbook.getSteps();
@@ -276,10 +274,10 @@ public final class PlaybookParserTest
     }
 
     /**
-     * Verifies that InlinePlaybookParser detects YAML when starting with data: or before: blocks.
+     * Verifies that YamlPlaybookParser detects YAML when starting with data: or before: blocks.
      */
     @Test
-    public void testInlinePlaybookParserStartingWithDataOrBefore() throws IOException
+    public void testParseStringStartingWithDataOrBefore() throws IOException
     {
         final String dataFirstYaml = """
             data:
@@ -288,8 +286,8 @@ public final class PlaybookParserTest
               - "Search for ${searchTerm}"
             """;
 
-        final PlaybookParser parser = new InlinePlaybookParser(dataFirstYaml);
-        final Playbook playbook = parser.parse("inline.yaml", null);
+        final PlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parseString(dataFirstYaml);
 
         assertNotNull(playbook);
         assertEquals(1, playbook.getSteps().size());
@@ -302,12 +300,47 @@ public final class PlaybookParserTest
             steps:
               - "Submit form"
             """;
-        final PlaybookParser beforeParser = new InlinePlaybookParser(beforeYaml);
-        final Playbook beforePlaybook = beforeParser.parse("inline.yaml", null);
+        final Playbook beforePlaybook = parser.parseString(beforeYaml);
 
         assertNotNull(beforePlaybook);
         assertEquals(2, beforePlaybook.getSteps().size());
         assertEquals("Open login page", beforePlaybook.getSteps().get(0).getInstruction());
         assertEquals("Submit form", beforePlaybook.getSteps().get(1).getInstruction());
+    }
+
+    /**
+     * Verifies that parseString recognizes promptAddon blocks and parses prompt add-ons,
+     * while plain instruction lines starting with 'addon:' are not treated as YAML blocks.
+     */
+    @Test
+    public void testParseStringWithPromptAddon() throws IOException
+    {
+        final String promptAddonYaml = """
+            promptAddon:
+              general: "Always be concise."
+            steps:
+              - "Search for item"
+            """;
+
+        final PlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parseString(promptAddonYaml);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals("Search for item", playbook.getSteps().get(0).getInstruction());
+        assertEquals(1, playbook.getPromptAddons().size());
+        assertEquals("Always be concise.", playbook.getPromptAddons().get("general"));
+
+        // Verify that 'addon:' is not recognized as a YAML block and treated as a plain step
+        final String plainInstruction = """
+            addon: check if something exists
+            click button
+            """;
+        final Playbook plainPlaybook = parser.parseString(plainInstruction);
+        assertNotNull(plainPlaybook);
+        assertEquals(2, plainPlaybook.getSteps().size());
+        assertEquals("addon: check if something exists", plainPlaybook.getSteps().get(0).getInstruction());
+        assertEquals("click button", plainPlaybook.getSteps().get(1).getInstruction());
+        assertTrue(plainPlaybook.getPromptAddons().isEmpty());
     }
 }

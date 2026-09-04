@@ -997,13 +997,6 @@ promptAddon:
 
 ### 5.4 Disk-Based Model-Specific System Prompt Add-ons
 
-Model-specific system prompt add-ons are placed in `ai-prompts/models/<cleanModel>/` on the classpath or filesystem `config/ai-prompts/models/<cleanModel>/`:
-* `ai-prompts/models/<cleanModel>/addon-general.md`
-* `ai-prompts/models/<cleanModel>/addon.md`
-
-<<<<<<< HEAD:doc/DOCUMENTATION.md
-Where `<cleanModel>` is the active model name sanitized to lowercase alphanumeric kebab-case (e.g., `gemini-3.5-flash-lite` $\rightarrow$ `gemini-3-5-flash-lite`).
-=======
 1. **Resolution Directory Layout**:
    Model-specific system prompt add-ons are placed in `ai-prompts/models/<cleanModel>/` on the classpath (or filesystem `config/ai-prompts/models/<cleanModel>/`):
    - `config/ai-prompts/models/<cleanModel>/addon-<type>.md` (filesystem override for capability type, e.g. `addon-general.md`)
@@ -1019,7 +1012,6 @@ Where `<cleanModel>` is the active model name sanitized to lowercase alphanumeri
    - **Locators**: Only use real HTML tags from the DOM (`button`, `a`, `input`, `div`, `span`). Never invent non-existent tags (e.g. `text`, `text:nth-of-type(N)`). If an element lacks a unique class or ID, target its parent container (e.g. `header > div`) or escalate.
    - **Values**: Copy the exact literal text from the instruction into 'value'. Do not substitute generic sample data (such as default passwords) or synthetic placeholders.
    ```
->>>>>>> 5bd137c75 (feat(aura): integrate aura test manager into aura report manager):AI-README.md
 
 ---
 
@@ -1215,8 +1207,6 @@ session.execute(playbook)
     });
 ```
 
-<<<<<<< HEAD:doc/DOCUMENTATION.md
-=======
 ##### Overloaded Range & Breakdown Assertions
 
 `MetricsAsserter` supports exact counts (`hasLlmCalls(12)`) and inclusive ranges (`hasLlmCalls(12, 24)`):
@@ -1274,8 +1264,6 @@ session.execute(playbook)
 * **In `REPLAY_STRICT`**: Asserts `llmCalls == 0`, `healedSteps == 0`, `replayedSteps == stepCount`, and `softFailedSteps == 0`.
 * **In `FORCE_RECORDING` / `LLM_ONLY`**: Asserts `llmCalls > 0`, `replayedSteps == 0`, and `softFailedSteps == 0`.
 * **In `REPLAY_WITH_HEALING`**: Asserts that if any step was healed, `healedStepCount > 0` and `llmCalls > 0` (for healed steps only), otherwise `llmCalls == 0`.
-
->>>>>>> 5bd137c75 (feat(aura): integrate aura test manager into aura report manager):AI-README.md
 ---
 
 ## 8. Configuration Reference

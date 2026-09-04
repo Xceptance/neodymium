@@ -18,18 +18,14 @@
  */
 package org.neodymium.ai.integration.external;
 
-import java.lang.reflect.Method;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
-import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiInlinePlaybook;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.Browser;
-import org.neodymium.util.Neodymium;
 
 /**
  * External integration test executing search workflows against blog.xceptance.com
@@ -44,33 +40,16 @@ import org.neodymium.util.Neodymium;
 @Browser("Chrome_1500x1000_headless")
 public class BlogTest
 {
-    /**
-     * Set up dynamic test parameters and judge configuration before each run.
-     *
-     * @param testInfo the JUnit TestInfo context
-     */
-    @BeforeEach
-    public void setup(final TestInfo testInfo)
-    {
-        final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("");
-        if (methodName.contains("ExtraJudge"))
-        {
-            Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
-        }
-        else
-        {
-            Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
-        }
-        AiConfiguration.resetInstance();
-    }
-
     // =========================================================================
     // 1. Standard (No Quality Judge)
     // =========================================================================
 
+    @AiJudge(false)
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiInlinePlaybook(
         """
+            promptAddon: Some elements might require a click first to be revealed.
+
             steps: |
                 Open 'https://blog.xceptance.com/'.
                 Search for 'Neodymium'.
@@ -81,6 +60,7 @@ public class BlogTest
     {
     }
 
+    @AiJudge(false)
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiInlinePlaybook(
         """
@@ -101,6 +81,7 @@ public class BlogTest
     // 3. Extra Judge (Separate LLM Step)
     // =========================================================================
 
+    @AiJudge(true)
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiInlinePlaybook(
         """
@@ -114,6 +95,7 @@ public class BlogTest
     {
     }
 
+    @AiJudge(true)
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiInlinePlaybook(
         """

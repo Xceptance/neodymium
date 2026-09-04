@@ -20,6 +20,7 @@ package org.neodymium.ai.playbook;
 
 import java.io.IOException;
 import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 
 /**
@@ -54,5 +55,30 @@ public interface PlaybookParser
     default Playbook parse(final String identifier, final PlaybookResourceManager manager, final boolean allowEmptySteps) throws IOException
     {
         return parse(identifier, manager);
+    }
+
+    /**
+     * Parses a playbook from raw string content using a default classpath resource manager.
+     *
+     * @param content the raw playbook string content
+     * @return the parsed immutable Playbook instance
+     * @throws IOException if loading or parsing fails
+     */
+    default Playbook parseString(final String content) throws IOException
+    {
+        return parseString(content, new ClasspathResourceManager());
+    }
+
+    /**
+     * Parses a playbook from raw string content using the provided resource manager.
+     *
+     * @param content the raw playbook string content
+     * @param manager the resource manager to resolve nested includes
+     * @return the parsed immutable Playbook instance
+     * @throws IOException if loading or parsing fails
+     */
+    default Playbook parseString(final String content, final PlaybookResourceManager manager) throws IOException
+    {
+        throw new UnsupportedOperationException("Parsing raw string content is not supported by " + getClass().getSimpleName());
     }
 }
