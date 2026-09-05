@@ -358,7 +358,7 @@ public final class HtmlReportGenerator
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-actions\" onclick=\"switchInspectorTab('actions')\">🎯 Actions (<span id=\"tabActionsCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-visuals\" onclick=\"switchInspectorTab('visuals')\">📸 Visuals (<span id=\"tabVisualsCount\">0</span>)</button>\n");
             sb.append("            <button class=\"tab-btn\" id=\"tabBtn-verification\" onclick=\"switchInspectorTab('verification')\">🔍 Verification <span class=\"pill-verif-badge\" id=\"tabVerifBadge\" style=\"display:none;\"></span></button>\n");
-            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes <span class=\"pill-error-count\" id=\"tabErrorBadge\" style=\"display:none;\">Error</span></button>\n");
+            sb.append("            <button class=\"tab-btn\" id=\"tabBtn-reasoning\" onclick=\"switchInspectorTab('reasoning')\">🧠 AI Notes (<span id=\"tabNotesCount\">0</span>) <span class=\"pill-error-count\" id=\"tabErrorBadge\" style=\"display:none;\">Error</span></button>\n");
             sb.append("          </div>\n");
 
             // Tab Content Panels
@@ -528,6 +528,10 @@ public final class HtmlReportGenerator
         if (step.isContinueOnError())
         {
             sb.append("              <span class=\"badge-flag\">CONTINUE-ON-ERROR</span>\n");
+        }
+        if (step.isMultiStage())
+        {
+            sb.append("              <span class=\"badge-flag continuation-badge\" title=\"Step required dynamic multi-stage continuation (CONTINUE)\">🔄 MULTI-STAGE</span>\n");
         }
 
         if (step.getContextLevels() != null && !step.getContextLevels().isBlank())
@@ -766,6 +770,36 @@ public final class HtmlReportGenerator
                     .replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;')
                     .replace(/'/g, '&#39;');
+            }
+
+            function escapeAttr(str) {
+                return escapeHtml(str);
+            }
+
+            function parseJsonResponse(raw) {
+                if (!raw) return null;
+                var str = String(raw).trim();
+                var fenceStart = str.indexOf('```json');
+                if (fenceStart !== -1) {
+                    var fenceEnd = str.indexOf('```', fenceStart + 7);
+                    str = fenceEnd !== -1 ? str.substring(fenceStart + 7, fenceEnd).trim() : str.substring(fenceStart + 7).trim();
+                } else {
+                    var generalFence = str.indexOf('```');
+                    if (generalFence !== -1) {
+                        var fenceEnd = str.indexOf('```', generalFence + 3);
+                        str = fenceEnd !== -1 ? str.substring(generalFence + 3, fenceEnd).trim() : str.substring(generalFence + 3).trim();
+                    }
+                }
+                var firstBrace = str.indexOf('{');
+                var lastBrace = str.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace > firstBrace) {
+                    str = str.substring(firstBrace, lastBrace + 1);
+                }
+                try {
+                    return JSON.parse(str);
+                } catch(e) {
+                    return null;
+                }
             }
 
             window.setInspectorWidth = function(widthPx) {
@@ -1023,6 +1057,8 @@ public final class HtmlReportGenerator
                 document.getElementById('tabLlmCount').textContent = llmCalls.length;
                 document.getElementById('tabActionsCount').textContent = actions.length;
                 document.getElementById('tabVisualsCount').textContent = visuals.length;
+                var initialNotesEl = document.getElementById('tabNotesCount');
+                if (initialNotesEl) initialNotesEl.textContent = '0';
 
                 // Tab Auto-Selection
                 if (preferredTab) {
@@ -1110,8 +1146,17 @@ public final class HtmlReportGenerator
                             valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
                         }
 
+                        var phaseHtml = '';
+                        if (a.phase) {
+                            var pCls = a.phase.toLowerCase();
+                            var pTitle = a.phase === 'PRELUDE'
+                                ? 'Executed as prelude action to reveal UI elements (status: CONTINUE)'
+                                : 'Executed after DOM state refresh to complete step';
+                            phaseHtml = ' <span class="badge-phase ' + pCls + '" title="' + escapeHtml(pTitle) + '">' + escapeHtml(a.phase) + '</span>';
+                        }
+
                         tr.innerHTML = '<td>' + (ai + 1) + '</td>' +
-                                       '<td><span class="badge-action">' + escapeHtml(a.type || '-') + '</span></td>' +
+                                       '<td><span class="badge-action">' + escapeHtml(a.type || '-') + '</span>' + phaseHtml + '</td>' +
                                        '<td>' + targetHtml + '</td>' +
                                        '<td>' + valueHtml + '</td>' +
                                        '<td class="text-muted">' + escapeHtml(a.reasoning || a.description || '-') + '</td>' +
@@ -1265,19 +1310,135 @@ public final class HtmlReportGenerator
                     verifPanel.appendChild(vCard);
                 }
 
-                // 5. Render Reasoning Panel
+                // 5. Render Reasoning & AI Notes Panel
                 var reasPanel = document.getElementById('panel-reasoning');
                 reasPanel.innerHTML = '';
-                if (step.reasoning) {
-                    var rCard = document.createElement('div');
-                    rCard.className = 'reasoning-card';
-                    rCard.innerHTML = '<div class="reasoning-title">🧠 Step Intent & AI Reasoning:</div>';
-                    var rBody = document.createElement('div');
-                    rBody.className = 'reasoning-body';
-                    rBody.textContent = step.reasoning;
-                    rCard.appendChild(rBody);
-                    reasPanel.appendChild(rCard);
+                var notesCount = 0;
+
+                // Extract structured notes from llmCalls if present
+                if (llmCalls.length > 0) {
+                    var actionCallIdx = 0;
+                    llmCalls.forEach(function(call, ci) {
+                        var callNum = ci + 1;
+                        if (call.capability === 'PESAP') {
+                            var pesapIntent = step.semanticIntent || '-';
+                            var pesapContext = 'LEAN';
+                            var pesapFast = true;
+                            if (call.responseContent) {
+                                var pData = parseJsonResponse(call.responseContent);
+                                if (pData) {
+                                    if (pData.i) pesapIntent = pData.i;
+                                    if (pData.c) pesapContext = pData.c;
+                                    if (pData.jm !== undefined) pesapFast = !pData.jm;
+                                }
+                            }
+                            var pCard = document.createElement('div');
+                            pCard.className = 'reasoning-card';
+                            pCard.innerHTML = '<div class="reasoning-title">⚡ Call #' + callNum + ' &bull; PESAP Planning Intent <span class="badge-phase pesap">PESAP</span></div>';
+                            var pBody = document.createElement('div');
+                            pBody.className = 'reasoning-body';
+                            pBody.textContent = 'Intent: ' + pesapIntent + ' | Selected Context: ' + pesapContext + ' | Routing: ' + (pesapFast ? 'Direct Action Generation' : 'Quality Judge Required');
+                            pCard.appendChild(pBody);
+                            reasPanel.appendChild(pCard);
+                            notesCount++;
+                        } else if (call.capability === 'JUDGE') {
+                            var jTitle = '⚖️ Call #' + callNum + ' &bull; Quality Judge Evaluation <span class="badge-phase judge">JUDGE</span>';
+                            var jResp = parseJsonResponse(call.responseContent);
+                            var jText = (jResp && jResp.reasoning) ? jResp.reasoning : (call.responseContent || '');
+                            var jCard = document.createElement('div');
+                            jCard.className = 'reasoning-card';
+                            jCard.innerHTML = '<div class="reasoning-title">' + jTitle + '</div>';
+                            var jBody = document.createElement('div');
+                            jBody.className = 'reasoning-body';
+                            jBody.textContent = jText;
+                            jCard.appendChild(jBody);
+                            reasPanel.appendChild(jCard);
+                            notesCount++;
+                        } else {
+                            var rText = null;
+                            var rTitle = '🧠 Call #' + callNum + ' &bull; Step Intent & AI Reasoning';
+                            var rBadge = '';
+                            var resp = parseJsonResponse(call.responseContent);
+                            if (resp) {
+                                if (resp.status === 'CONTINUE') {
+                                    rTitle = '🔄 Call #' + callNum + ' &bull; Multi-Stage Prelude';
+                                    rBadge = ' <span class="badge-phase prelude" title="Status: CONTINUE">PRELUDE</span>';
+                                } else if (step.multiStage && ci > 0) {
+                                    rTitle = '🎯 Call #' + callNum + ' &bull; Continuation Execution';
+                                    rBadge = ' <span class="badge-phase continuation" title="Status: SUCCESS">CONTINUATION</span>';
+                                }
+                                if (resp.reasoning) {
+                                    rText = resp.reasoning;
+                                } else if (resp.r) {
+                                    rText = resp.r;
+                                }
+                            } else if (step.multiStage && ci > 0) {
+                                rTitle = (actionCallIdx === 0)
+                                    ? ('🔄 Call #' + callNum + ' &bull; Multi-Stage Prelude')
+                                    : ('🎯 Call #' + callNum + ' &bull; Continuation Execution');
+                                rBadge = (actionCallIdx === 0)
+                                    ? ' <span class="badge-phase prelude" title="Status: CONTINUE">PRELUDE</span>'
+                                    : ' <span class="badge-phase continuation" title="Status: SUCCESS">CONTINUATION</span>';
+                            }
+                            if (!rText && step.reasonings && step.reasonings[actionCallIdx]) {
+                                rText = step.reasonings[actionCallIdx];
+                            }
+                            if (rText) {
+                                var rCard = document.createElement('div');
+                                rCard.className = 'reasoning-card';
+                                rCard.innerHTML = '<div class="reasoning-title">' + rTitle + rBadge + '</div>';
+                                var rBody = document.createElement('div');
+                                rBody.className = 'reasoning-body';
+                                rBody.textContent = rText;
+                                rCard.appendChild(rBody);
+                                reasPanel.appendChild(rCard);
+                                notesCount++;
+                            }
+                            actionCallIdx++;
+                        }
+                    });
                 }
+
+                // If no notes were derived from llmCalls, check step.reasonings or step.reasoning
+                if (notesCount === 0) {
+                    if (step.reasonings && step.reasonings.length > 0) {
+                        step.reasonings.forEach(function(rText, ri) {
+                            var rCard = document.createElement('div');
+                            rCard.className = 'reasoning-card';
+                            var rBadge = '';
+                            var rLabel = '🧠 Step Intent & AI Reasoning';
+                            if (step.reasonings.length > 1) {
+                                if (ri === 0 && step.multiStage) {
+                                    rLabel = '🔄 Stage 1 &bull; Multi-Stage Prelude';
+                                    rBadge = ' <span class="badge-phase prelude">PRELUDE</span>';
+                                } else if (ri === step.reasonings.length - 1 && step.multiStage) {
+                                    rLabel = '🎯 Stage ' + (ri + 1) + ' &bull; Continuation Execution';
+                                    rBadge = ' <span class="badge-phase continuation">CONTINUATION</span>';
+                                } else {
+                                    rLabel = '🧠 Stage ' + (ri + 1) + ' Reasoning';
+                                }
+                            }
+                            rCard.innerHTML = '<div class="reasoning-title">' + rLabel + rBadge + '</div>';
+                            var rBody = document.createElement('div');
+                            rBody.className = 'reasoning-body';
+                            rBody.textContent = rText;
+                            rCard.appendChild(rBody);
+                            reasPanel.appendChild(rCard);
+                            notesCount++;
+                        });
+                    } else if (step.reasoning) {
+                        var rCard = document.createElement('div');
+                        rCard.className = 'reasoning-card';
+                        rCard.innerHTML = '<div class="reasoning-title">🧠 Step Intent & AI Reasoning:</div>';
+                        var rBody = document.createElement('div');
+                        rBody.className = 'reasoning-body';
+                        rBody.textContent = step.reasoning;
+                        rCard.appendChild(rBody);
+                        reasPanel.appendChild(rCard);
+                        notesCount++;
+                    }
+                }
+
                 if (step.failureReason) {
                     var fCard = document.createElement('div');
                     fCard.className = step.bug ? 'reasoning-card' : 'failure-card';
@@ -1288,12 +1449,19 @@ public final class HtmlReportGenerator
                     fBody.textContent = step.failureReason;
                     fCard.appendChild(fBody);
                     reasPanel.appendChild(fCard);
+                    notesCount++;
                 }
-                if (!step.reasoning && !step.failureReason) {
+
+                if (notesCount === 0) {
                     var emptyDiv = document.createElement('div');
                     emptyDiv.className = 'empty-inspector-state';
                     emptyDiv.textContent = 'No specific AI reasoning or error trace recorded for this step.';
                     reasPanel.appendChild(emptyDiv);
+                }
+
+                var tabNotesCountEl = document.getElementById('tabNotesCount');
+                if (tabNotesCountEl) {
+                    tabNotesCountEl.textContent = notesCount;
                 }
             };
 
@@ -1753,6 +1921,11 @@ public final class HtmlReportGenerator
                 background: var(--accent-danger-light);
                 color: var(--accent-danger);
                 border-color: rgba(220, 38, 38, 0.4);
+            }
+            .badge-flag.continuation-badge {
+                background: #e0e7ff;
+                color: #4338ca;
+                border-color: rgba(67, 56, 202, 0.35);
             }
             .step-header-right {
                 display: flex;
@@ -2349,6 +2522,37 @@ public final class HtmlReportGenerator
                 font-size: 0.75rem;
                 font-weight: 600;
                 font-family: var(--font-mono);
+            }
+            .badge-phase {
+                display: inline-block;
+                font-size: 0.68rem;
+                font-weight: 700;
+                padding: 0.1rem 0.4rem;
+                border-radius: 4px;
+                text-transform: uppercase;
+                font-family: var(--font-mono);
+                margin-left: 0.4rem;
+                vertical-align: middle;
+            }
+            .badge-phase.prelude {
+                background: #fef3c7;
+                color: #92400e;
+                border: 1px solid rgba(146, 64, 14, 0.3);
+            }
+            .badge-phase.continuation {
+                background: #ecfdf5;
+                color: #065f46;
+                border: 1px solid rgba(6, 95, 70, 0.3);
+            }
+            .badge-phase.pesap {
+                background: #e0e7ff;
+                color: #4338ca;
+                border: 1px solid rgba(67, 56, 202, 0.3);
+            }
+            .badge-phase.judge {
+                background: #fdf2f8;
+                color: #9d174d;
+                border: 1px solid rgba(157, 23, 77, 0.3);
             }
             .badge-role {
                 background: var(--accent-purple-light);

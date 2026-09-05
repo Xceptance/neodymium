@@ -48,11 +48,11 @@ public class BlogTest
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     @AiInlinePlaybook(
         """
-            promptAddon: Some elements might require a click first to be revealed.
+            promptAddon: Some elements might require a click first to be revealed. 
 
             steps: |
                 Open 'https://blog.xceptance.com/'.
-                Search for 'Neodymium'.
+                Search for 'Neodymium' by typing the searchphrase and the enter key.
                 'Search Results for: neodymium' is displayed.
         """
      )

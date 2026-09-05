@@ -1460,5 +1460,141 @@ public class PreliminaryReportListenerTest
             ExecutionContext.setActiveContext(null);
         }
     }
+
+    @Test
+    @DisplayName("Verify that multi-stage continuation actions and step badges are reported in HTML, Markdown, and JSON")
+    public void testMultiStageContinuationReporting() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("continuation-reports");
+        Files.createDirectories(reportDir);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final PreliminaryReportListener listener = new PreliminaryReportListener(
+                reportDir,
+                EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON)
+            );
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            final PlaybookStep step = new PlaybookStep("Search for 'Neodymium'");
+            bus.dispatch(new StepStartedEvent(step, 0));
+
+            // Dispatch LLM calls (PESAP, Prelude, Continuation with markdown fence)
+            final LlmRequest pesapReq = new LlmRequest("PESAP System", "Classify", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse pesapResp = new LlmResponse("{\"c\":\"LEAN\",\"jm\":false,\"i\":\"TYPE\"}", new TokenUsage(100, 10, 110, 0), "mock-model");
+            bus.dispatch(new LlmRequestSentEvent(pesapReq, "PESAP"));
+            bus.dispatch(new LlmResponseReceivedEvent(pesapReq, pesapResp, 120, "PESAP"));
+
+            final LlmRequest preludeReq = new LlmRequest("Action System", "Prelude round", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse preludeResp = new LlmResponse("{\"reasoning\":\"The search input field is hidden initially. We must click the search toggle button first to reveal the search container and input field before typing 'Neodymium'.\",\"status\":\"CONTINUE\",\"actions\":[]}", new TokenUsage(200, 20, 220, 0), "mock-model");
+            bus.dispatch(new LlmRequestSentEvent(preludeReq, "ACTION"));
+            bus.dispatch(new LlmResponseReceivedEvent(preludeReq, preludeResp, 200, "ACTION"));
+
+            // 1. Prelude action executed (triggering continuation)
+            final Action preludeAction = new Action("CLICK", ".search-toggle", Collections.emptyList(), "Open search toggle", "Search bar is hidden");
+            bus.dispatch(new ActionExecutedEvent(preludeAction, null, true, "PRELUDE"));
+
+            final LlmRequest contReq = new LlmRequest("Action System", "Continuation round", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse contResp = new LlmResponse("```json\n{\"reasoning\":\"The search input field is visible on the page. We need to type 'Neodymium' into the search field and submit the search by pressing Enter.\",\"status\":\"SUCCESS\",\"actions\":[]}\n```", new TokenUsage(250, 25, 275, 0), "mock-model");
+            bus.dispatch(new LlmRequestSentEvent(contReq, "ACTION"));
+            bus.dispatch(new LlmResponseReceivedEvent(contReq, contResp, 220, "ACTION"));
+
+            // 2. Continuation actions executed
+            final Action typeAction = new Action("TYPE", "input.search-field", List.of("Neodymium"), "Type search query", "Input search keyword");
+            bus.dispatch(new ActionExecutedEvent(typeAction, null, true, "CONTINUATION"));
+
+            final Action keyAction = new Action("KEY_PRESS", "input.search-field", List.of("Enter"), "Submit search", "Press enter to search");
+            bus.dispatch(new ActionExecutedEvent(keyAction, null, true, "CONTINUATION"));
+
+            step.addReasoning("The search input field is hidden initially. We must click the search toggle button first to reveal the search container and input field before typing 'Neodymium'.");
+            step.addReasoning("The search input field is visible on the page. We need to type 'Neodymium' into the search field and submit the search by pressing Enter.");
+
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(2500, true));
+
+            // Verify in-memory report model
+            final TestExecutionReport report = listener.getReport();
+            assertNotNull(report);
+            assertFalse(report.getSteps().isEmpty());
+            final TestExecutionReport.ReportStepEntry stepEntry = report.getSteps().get(0);
+            assertTrue(stepEntry.isMultiStage(), "Step must be marked as multiStage");
+            assertEquals(3, stepEntry.getActions().size(), "Step must have 3 actions");
+            assertEquals("PRELUDE", stepEntry.getActions().get(0).getPhase(), "First action must be PRELUDE");
+            assertEquals("CONTINUATION", stepEntry.getActions().get(1).getPhase(), "Second action must be CONTINUATION");
+            assertEquals("CONTINUATION", stepEntry.getActions().get(2).getPhase(), "Third action must be CONTINUATION");
+            assertEquals(2, stepEntry.getReasonings().size(), "Step must have 2 reasonings");
+            assertTrue(stepEntry.getReasoning().contains("The search input field is hidden initially"), "Reasoning must contain prelude text");
+            assertTrue(stepEntry.getReasoning().contains("The search input field is visible on the page"), "Reasoning must contain continuation text");
+
+            // Verify HTML Report file
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+            assertTrue(Files.exists(htmlPath), "HTML report file must exist");
+            final String html = Files.readString(htmlPath);
+            assertTrue(html.contains("continuation-badge"), "HTML must contain continuation-badge CSS class");
+            assertTrue(html.contains("🔄 MULTI-STAGE"), "HTML must display 🔄 MULTI-STAGE badge");
+            assertTrue(html.contains("badge-phase"), "HTML must contain badge-phase CSS class");
+            assertTrue(html.contains(".badge-phase.prelude"), "HTML must style prelude phase badge in CSS");
+            assertTrue(html.contains(".badge-phase.continuation"), "HTML must style continuation phase badge in CSS");
+            assertTrue(html.contains(".badge-phase.judge"), "HTML must style judge phase badge in CSS");
+            assertTrue(html.contains("PRELUDE"), "HTML must contain PRELUDE action in embedded dataset");
+            assertTrue(html.contains("CONTINUATION"), "HTML must contain CONTINUATION action in embedded dataset");
+            assertTrue(html.contains("tabNotesCount"), "HTML must contain tabNotesCount badge");
+            assertTrue(html.contains("The search input field is hidden initially"), "HTML dataset must contain prelude reasoning");
+            assertTrue(html.contains("The search input field is visible on the page"), "HTML dataset must contain continuation reasoning");
+            assertTrue(html.contains("function parseJsonResponse(raw)"), "HTML script must define parseJsonResponse function");
+            assertTrue(html.contains("function escapeAttr(str)"), "HTML script must define escapeAttr function");
+            assertFalse(html.contains("escapeAttr(pTitle)"), "HTML script must not call escapeAttr(pTitle)");
+
+            // Verify Markdown Report file
+            final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+            assertTrue(Files.exists(mdPath), "Markdown report file must exist");
+            final String md = Files.readString(mdPath);
+            assertTrue(md.contains("- **Multi-Stage Continuation:** `🔄 true (CONTINUE)`"), "Markdown must include Multi-Stage Continuation step property");
+            assertTrue(md.contains("| Phase |"), "Markdown actions table must include dynamic Phase column");
+            assertTrue(md.contains("| `CLICK` | `PRELUDE` |"), "Markdown must show PRELUDE action in table");
+            assertTrue(md.contains("| `TYPE` | `CONTINUATION` |"), "Markdown must show CONTINUATION action in table");
+            assertTrue(md.contains("- **Prelude:**"), "Markdown must contain Prelude reasoning label");
+            assertTrue(md.contains("- **Continuation:**"), "Markdown must contain Continuation reasoning label");
+
+            // Verify JSON Report file
+            final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(jsonPath), "JSON report file must exist");
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode root = mapper.readTree(Files.readString(jsonPath));
+            final JsonNode stepsNode = root.get("steps");
+            assertNotNull(stepsNode);
+            assertTrue(stepsNode.get(0).get("multiStage").asBoolean(), "JSON step entry must have multiStage = true");
+            final JsonNode actionsNode = stepsNode.get(0).get("actions");
+            assertEquals("PRELUDE", actionsNode.get(0).get("phase").asText(), "JSON action 0 must have phase = PRELUDE");
+            assertEquals("CONTINUATION", actionsNode.get(1).get("phase").asText(), "JSON action 1 must have phase = CONTINUATION");
+            assertEquals("CONTINUATION", actionsNode.get(2).get("phase").asText(), "JSON action 2 must have phase = CONTINUATION");
+            final JsonNode reasoningsNode = stepsNode.get(0).get("reasonings");
+            assertNotNull(reasoningsNode, "JSON must contain reasonings list");
+            assertEquals(2, reasoningsNode.size(), "JSON must contain 2 reasonings");
+
+            final File realJsonFile = new File("target/ai-results/BlogTest_bruteforceSearch_20260905-002554.json");
+            if (realJsonFile.exists())
+            {
+                final TestExecutionReport realReport = mapper.readValue(realJsonFile, TestExecutionReport.class);
+                final String realHtml = new HtmlReportGenerator().generate(realReport);
+                Files.writeString(Path.of("target/ai-results/BlogTest_bruteforceSearch_20260905-002554.html"), realHtml);
+            }
+            final File realJsonFile0107 = new File("target/ai-results/BlogTest_bruteforceSearch_20260905-010740.json");
+            if (realJsonFile0107.exists())
+            {
+                final TestExecutionReport realReport0107 = mapper.readValue(realJsonFile0107, TestExecutionReport.class);
+                final String realHtml0107 = new HtmlReportGenerator().generate(realReport0107);
+                Files.writeString(Path.of("target/ai-results/BlogTest_bruteforceSearch_20260905-010740.html"), realHtml0107);
+            }
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
 }
 

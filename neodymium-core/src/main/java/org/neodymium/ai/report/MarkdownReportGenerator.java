@@ -315,6 +315,10 @@ public final class MarkdownReportGenerator
         {
             sb.append("- **Visual Step:** `📸 true`\n");
         }
+        if (step.isMultiStage())
+        {
+            sb.append("- **Multi-Stage Continuation:** `🔄 true (CONTINUE)`\n");
+        }
         if (step.getSemanticIntent() != null && !step.getSemanticIntent().isBlank())
         {
             sb.append("- **Semantic Intent:** `🎯 ").append(escapeMarkdown(step.getSemanticIntent())).append("`\n");
@@ -413,7 +417,24 @@ public final class MarkdownReportGenerator
                 }
             }
         }
-        if (step.getReasoning() != null && !step.getReasoning().isBlank())
+        if (step.getReasonings() != null && !step.getReasonings().isEmpty())
+        {
+            if (step.getReasonings().size() == 1)
+            {
+                sb.append("- **AI Reasoning:** _").append(escapeMarkdown(step.getReasonings().get(0))).append("_\n");
+            }
+            else
+            {
+                sb.append("- **AI Reasoning:**\n");
+                for (int r = 0; r < step.getReasonings().size(); r++)
+                {
+                    final String rText = step.getReasonings().get(r);
+                    final String stageLabel = (r == 0 && step.isMultiStage()) ? "Prelude" : (r == step.getReasonings().size() - 1 && step.isMultiStage() ? "Continuation" : ("Stage " + (r + 1)));
+                    sb.append("  - **").append(stageLabel).append(":** _").append(escapeMarkdown(rText)).append("_\n");
+                }
+            }
+        }
+        else if (step.getReasoning() != null && !step.getReasoning().isBlank())
         {
             sb.append("- **AI Reasoning:** _").append(escapeMarkdown(step.getReasoning())).append("_\n");
         }
@@ -425,9 +446,18 @@ public final class MarkdownReportGenerator
         // Actions Table
         if (!step.getActions().isEmpty())
         {
+            final boolean hasPhases = step.getActions().stream().anyMatch(a -> a.getPhase() != null);
             sb.append("\n**Executed Actions:**\n\n");
-            sb.append("| # | Type | Target Selector | Value | Result |\n");
-            sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
+            if (hasPhases)
+            {
+                sb.append("| # | Type | Phase | Target Selector | Value | Result |\n");
+                sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+            }
+            else
+            {
+                sb.append("| # | Type | Target Selector | Value | Result |\n");
+                sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
+            }
             for (int a = 0; a < step.getActions().size(); a++)
             {
                 final TestExecutionReport.ReportActionEntry act = step.getActions().get(a);
@@ -453,10 +483,22 @@ public final class MarkdownReportGenerator
                     valueStr = act.getResolvedValue() != null ? act.getResolvedValue() : (act.getValue() != null ? act.getValue() : "-");
                 }
 
-                sb.append("| ").append(a + 1).append(" | `").append(act.getType() != null ? act.getType() : "").append("` | `")
-                    .append(escapeMarkdown(targetStr)).append("` | `")
-                    .append(escapeMarkdown(valueStr)).append("` | ")
-                    .append(actResult).append(" |\n");
+                if (hasPhases)
+                {
+                    final String phaseStr = act.getPhase() != null ? "`" + act.getPhase() + "`" : "-";
+                    sb.append("| ").append(a + 1).append(" | `").append(act.getType() != null ? act.getType() : "").append("` | ")
+                        .append(phaseStr).append(" | `")
+                        .append(escapeMarkdown(targetStr)).append("` | `")
+                        .append(escapeMarkdown(valueStr)).append("` | ")
+                        .append(actResult).append(" |\n");
+                }
+                else
+                {
+                    sb.append("| ").append(a + 1).append(" | `").append(act.getType() != null ? act.getType() : "").append("` | `")
+                        .append(escapeMarkdown(targetStr)).append("` | `")
+                        .append(escapeMarkdown(valueStr)).append("` | ")
+                        .append(actResult).append(" |\n");
+                }
             }
         }
 

@@ -593,11 +593,20 @@ public final class ExecuteActionsStep implements PipelineStep
                     }
                 }
 
-                session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, reportResolvedAction, true));
+                final boolean isPrelude = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP"));
+                final boolean isInContinuationLoop = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
+                final String actionPhase = isPrelude ? "PRELUDE" : (isInContinuationLoop ? "CONTINUATION" : null);
+
+                session.getEventBus().dispatch(new ActionExecutedEvent(sanitized, reportResolvedAction, true, actionPhase));
                 context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
-                if (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP")))
+                if (isPrelude)
                 {
+                    final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                    if (statsObj instanceof final StepStats stats)
+                    {
+                        stats.setMultiStage(true);
+                    }
                     context.getTransientData().put("KEY_IS_CONTINUATION_STEP", false);
                     context.getTransientData().put("KEY_IN_CONTINUATION_LOOP", true);
                     LOGGER.info("   🔄 Prelude action executed for instruction — initiating continuation LLM step with updated DOM context.");
@@ -632,7 +641,10 @@ public final class ExecuteActionsStep implements PipelineStep
                 // Dispatch failed event status and log error immediately
                 final String failureMsg = t.getMessage() != null ? t.getMessage() : t.toString();
                 LOGGER.error("   ❌ Action execution failed on SUT: {}", failureMsg);
-                session.getEventBus().dispatch(new ActionExecutedEvent(action, reportResolvedAction, false));
+                final boolean isPrelude = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP"));
+                final boolean isInContinuationLoop = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
+                final String actionPhase = isPrelude ? "PRELUDE" : (isInContinuationLoop ? "CONTINUATION" : null);
+                session.getEventBus().dispatch(new ActionExecutedEvent(action, reportResolvedAction, false, actionPhase));
                 context.getTransientData().put(
                     ExecutionContext.KEY_LAST_EXECUTION_ERROR,
                     "Action " + action.getType() + " on locator '" + action.getTarget() + "' failed: " + failureMsg
