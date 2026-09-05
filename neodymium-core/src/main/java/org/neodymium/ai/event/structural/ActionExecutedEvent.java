@@ -19,6 +19,7 @@
 package org.neodymium.ai.event.structural;
 
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.event.EventCategory;
 import org.neodymium.ai.event.ExecutionEvent;
 
 /**
@@ -45,6 +46,11 @@ public final class ActionExecutedEvent extends ExecutionEvent
     private final boolean success;
 
     /**
+     * The execution phase of the action (e.g. "PRELUDE", "CONTINUATION", or null).
+     */
+    private final String phase;
+
+    /**
      * Constructs an ActionExecutedEvent without explicit resolved action.
      *
      * @param action the executed action
@@ -52,7 +58,7 @@ public final class ActionExecutedEvent extends ExecutionEvent
      */
     public ActionExecutedEvent(final Action action, final boolean success)
     {
-        this(action, null, success);
+        this(action, null, success, null);
     }
 
     /**
@@ -64,10 +70,24 @@ public final class ActionExecutedEvent extends ExecutionEvent
      */
     public ActionExecutedEvent(final Action action, final Action resolvedAction, final boolean success)
     {
+        this(action, resolvedAction, success, null);
+    }
+
+    /**
+     * Constructs an ActionExecutedEvent with canonical action, resolved action, outcome, and phase.
+     *
+     * @param action the canonical executed action
+     * @param resolvedAction the runtime resolved action
+     * @param success the execution outcome status
+     * @param phase the execution phase (e.g. "PRELUDE", "CONTINUATION")
+     */
+    public ActionExecutedEvent(final Action action, final Action resolvedAction, final boolean success, final String phase)
+    {
         super();
         this.action = action;
         this.resolvedAction = resolvedAction;
         this.success = success;
+        this.phase = phase;
     }
 
     /**
@@ -100,6 +120,36 @@ public final class ActionExecutedEvent extends ExecutionEvent
         return this.success;
     }
 
+    /**
+     * Gets the execution phase of the action.
+     *
+     * @return the phase name (e.g. "PRELUDE", "CONTINUATION"), or null if standard
+     */
+    public String getPhase()
+    {
+        return this.phase;
+    }
+
+    /**
+     * Indicates whether this action was executed as a prelude to reveal UI elements.
+     *
+     * @return true if executed in the prelude phase, false otherwise
+     */
+    public boolean isPrelude()
+    {
+        return "PRELUDE".equalsIgnoreCase(this.phase);
+    }
+
+    /**
+     * Indicates whether this action was executed in a continuation round.
+     *
+     * @return true if executed in continuation, false otherwise
+     */
+    public boolean isContinuation()
+    {
+        return "CONTINUATION".equalsIgnoreCase(this.phase);
+    }
+
     @Override
     public String getEventType()
     {
@@ -107,8 +157,8 @@ public final class ActionExecutedEvent extends ExecutionEvent
     }
 
     @Override
-    public org.neodymium.ai.event.EventCategory getCategory()
+    public EventCategory getCategory()
     {
-        return org.neodymium.ai.event.EventCategory.STRUCTURAL;
+        return EventCategory.STRUCTURAL;
     }
 }

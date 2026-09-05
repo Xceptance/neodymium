@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
@@ -218,6 +219,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     stepEntry.setReasoning(pbStep.getReasoning());
                 }
+                if (pbStep.getReasonings() != null && !pbStep.getReasonings().isEmpty())
+                {
+                    stepEntry.setReasonings(pbStep.getReasonings());
+                }
             }
             else if (rawInstruction != null)
             {
@@ -354,6 +359,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setReasoning(pbStep.getReasoning());
                     }
+                    if (pbStep.getReasonings() != null && !pbStep.getReasonings().isEmpty())
+                    {
+                        targetStep.setReasonings(pbStep.getReasonings());
+                    }
                     if (pbStep.getFailureReason() != null)
                     {
                         targetStep.setFailureReason(pbStep.getFailureReason());
@@ -393,20 +402,25 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             if (this.currentStep != null && actionExecuted.getAction() != null)
             {
-                final org.neodymium.ai.action.Action action = actionExecuted.getAction();
-                final org.neodymium.ai.action.Action resolvedAction = actionExecuted.getResolvedAction();
+                final Action action = actionExecuted.getAction();
+                final Action resolvedAction = actionExecuted.getResolvedAction();
                 final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
                     action.getType(),
                     action.getTarget(),
                     action.getValue(),
                     action.getDescription(),
                     action.getReasoning(),
-                    actionExecuted.isSuccess()
+                    actionExecuted.isSuccess(),
+                    actionExecuted.getPhase()
                 );
                 if (resolvedAction != null)
                 {
                     actionEntry.setResolvedTarget(resolvedAction.getTarget());
                     actionEntry.setResolvedValue(resolvedAction.getValue());
+                }
+                if (actionExecuted.getPhase() != null)
+                {
+                    this.currentStep.setMultiStage(true);
                 }
                 this.currentStep.addAction(actionEntry);
             }
@@ -438,6 +452,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                     callEntry.setCachedTokens(usage.cachedTokenCount());
                     callEntry.setTotalTokens(usage.totalTokenCount());
                     callEntry.setEstimatedCostUsd(MetricsCollector.calculateCost(usage, llmReceived.getResponse().modelName()));
+                }
+
+                if (callEntry.getResponseContent() != null && callEntry.getResponseContent().contains("\"status\": \"CONTINUE\""))
+                {
+                    if (this.currentStep != null)
+                    {
+                        this.currentStep.setMultiStage(true);
+                    }
                 }
             }
 
@@ -963,6 +985,11 @@ public final class PreliminaryReportListener implements ExecutionListener
         entry.setRcaInputTokens(stats.getRcaInputTokens());
         entry.setRcaOutputTokens(stats.getRcaOutputTokens());
         entry.setRcaCachedTokens(stats.getRcaCachedTokens());
+
+        if (stats.isMultiStage())
+        {
+            entry.setMultiStage(true);
+        }
 
         if (stats.getSubStats() != null && !stats.getSubStats().isEmpty())
         {

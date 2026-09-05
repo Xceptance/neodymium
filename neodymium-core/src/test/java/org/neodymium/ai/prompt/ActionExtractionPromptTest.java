@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.DivergenceException;
@@ -1032,6 +1034,31 @@ public final class ActionExtractionPromptTest
         assertEquals("CLICK", actions.get(0).getType());
         assertEquals(".search-toggle", actions.get(0).getTarget());
         assertTrue(Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_CONTINUATION_STEP")));
+    }
+
+    /**
+     * Verifies that compileUserMessage includes the continuation stage context banner
+     * when KEY_IN_CONTINUATION_LOOP is active.
+     */
+    @Test
+    public void testCompileUserMessageContinuationStage()
+    {
+        final ActionExtractionPrompt prompt = new ActionExtractionPrompt();
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Search for 'Neodymium'");
+        context.getTransientData().put("KEY_IN_CONTINUATION_LOOP", true);
+
+        final PlaybookStep step = new PlaybookStep("Search for 'Neodymium'");
+        step.getActions().add(new Action("CLICK", ".search-toggle", Collections.emptyList(), "Reveal search input", "Click toggle"));
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final String userMessage = prompt.compileUserMessage(context);
+
+        assertNotNull(userMessage);
+        assertTrue(userMessage.contains("🔄 CONTINUATION STAGE:"));
+        assertTrue(userMessage.contains("A prelude action was previously executed to reveal or prepare the UI for instruction 'Search for 'Neodymium''."));
+        assertTrue(userMessage.contains("Executed prelude action(s): CLICK on '.search-toggle'"));
+        assertTrue(userMessage.contains("Now inspect the refreshed DOM state below and generate ALL remaining actions required to completely fulfill the instruction."));
     }
 }
 

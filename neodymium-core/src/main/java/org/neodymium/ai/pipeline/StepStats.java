@@ -80,6 +80,8 @@ public final class StepStats
 
     private String semanticIntent;
 
+    private boolean multiStage;
+
     /**
      * Constructs a new StepStats object for an instruction.
      *
@@ -479,5 +481,25 @@ public final class StepStats
     public void setSemanticIntent(final String semanticIntent)
     {
         this.semanticIntent = semanticIntent;
+    }
+
+    /**
+     * Gets whether this step executed in multiple stages via continuation.
+     *
+     * @return true if multi-stage, false otherwise
+     */
+    public boolean isMultiStage()
+    {
+        return this.multiStage;
+    }
+
+    /**
+     * Sets whether this step executed in multiple stages via continuation.
+     *
+     * @param multiStage whether the step is multi-stage
+     */
+    public void setMultiStage(final boolean multiStage)
+    {
+        this.multiStage = multiStage;
     }
 }

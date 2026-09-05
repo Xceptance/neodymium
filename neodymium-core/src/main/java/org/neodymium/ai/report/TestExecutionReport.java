@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
 
@@ -38,6 +39,7 @@ import org.neodymium.ai.prompt.VerificationResult;
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public final class TestExecutionReport
 {
     private String testName;
@@ -285,6 +287,7 @@ public final class TestExecutionReport
     /**
      * Record of a single executed or planned playbook step.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class ReportStepEntry
     {
         private int stepIndex;
@@ -295,6 +298,7 @@ public final class TestExecutionReport
         private String sourceFile;
         private int lineNumber;
         private String reasoning;
+        private final List<String> reasonings = new ArrayList<>();
         private String failureReason;
         private int escalations;
         private String contextLevels;
@@ -326,6 +330,7 @@ public final class TestExecutionReport
         private boolean continueOnError;
         private boolean noHealing;
         private boolean visual;
+        private boolean multiStage;
         private Double ssimScore;
         private Double ssimMinScore;
         private String baselineMatrixPng;
@@ -421,6 +426,28 @@ public final class TestExecutionReport
         public void setReasoning(final String reasoning)
         {
             this.reasoning = reasoning;
+        }
+
+        public List<String> getReasonings()
+        {
+            return this.reasonings;
+        }
+
+        public void setReasonings(final List<String> reasonings)
+        {
+            this.reasonings.clear();
+            if (reasonings != null)
+            {
+                this.reasonings.addAll(reasonings);
+            }
+        }
+
+        public void addReasoning(final String reasoning)
+        {
+            if (reasoning != null && !reasoning.isBlank())
+            {
+                this.reasonings.add(reasoning);
+            }
         }
 
         public String getFailureReason()
@@ -663,6 +690,16 @@ public final class TestExecutionReport
             this.visual = visual;
         }
 
+        public boolean isMultiStage()
+        {
+            return this.multiStage;
+        }
+
+        public void setMultiStage(final boolean multiStage)
+        {
+            this.multiStage = multiStage;
+        }
+
         public Double getSsimScore()
         {
             return this.ssimScore;
@@ -817,6 +854,7 @@ public final class TestExecutionReport
     /**
      * Record of a single target action executed during a step.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class ReportActionEntry
     {
         private String type;
@@ -827,6 +865,7 @@ public final class TestExecutionReport
         private String description;
         private String reasoning;
         private boolean success;
+        private String phase;
 
         public ReportActionEntry()
         {
@@ -847,6 +886,20 @@ public final class TestExecutionReport
             this.description = description;
             this.reasoning = reasoning;
             this.success = success;
+        }
+
+        public ReportActionEntry(
+            final String type,
+            final String target,
+            final String value,
+            final String description,
+            final String reasoning,
+            final boolean success,
+            final String phase
+        )
+        {
+            this(type, target, value, description, reasoning, success);
+            this.phase = phase;
         }
 
         public String getType()
@@ -928,11 +981,22 @@ public final class TestExecutionReport
         {
             this.success = success;
         }
+
+        public String getPhase()
+        {
+            return this.phase;
+        }
+
+        public void setPhase(final String phase)
+        {
+            this.phase = phase;
+        }
     }
 
     /**
      * Record of an LLM provider request/response completion call.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class ReportLlmCallEntry
     {
         private int stepIndex;
@@ -1076,6 +1140,7 @@ public final class TestExecutionReport
     /**
      * Record of a captured screenshot or state attachment.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class ReportScreenshotEntry
     {
         private String name;
@@ -1085,6 +1150,7 @@ public final class TestExecutionReport
         private long timestamp;
         private Integer width;
         private Integer height;
+        private String dimensions;
 
         public ReportScreenshotEntry()
         {
@@ -1208,6 +1274,10 @@ public final class TestExecutionReport
 
         public String getDimensions()
         {
+            if (this.dimensions != null)
+            {
+                return this.dimensions;
+            }
             final Integer w = getWidth();
             final Integer h = getHeight();
             if (w != null && h != null)
@@ -1215,6 +1285,11 @@ public final class TestExecutionReport
                 return w + "x" + h + " px";
             }
             return null;
+        }
+
+        public void setDimensions(final String dimensions)
+        {
+            this.dimensions = dimensions;
         }
 
         public void resolveDimensionsFromBase64()

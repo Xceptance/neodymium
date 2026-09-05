@@ -135,6 +135,31 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         }
         sb.append("\n");
 
+        final boolean isContinuation = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
+        if (isContinuation)
+        {
+            final PlaybookStep currentStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            sb.append("🔄 CONTINUATION STAGE:\n")
+              .append("A prelude action was previously executed to reveal or prepare the UI for instruction '")
+              .append(instruction)
+              .append("'.\n");
+            if (currentStep != null && currentStep.getActions() != null && !currentStep.getActions().isEmpty())
+            {
+                sb.append("Executed prelude action(s): ");
+                for (int i = 0; i < currentStep.getActions().size(); i++)
+                {
+                    final Action act = currentStep.getActions().get(i);
+                    if (i > 0)
+                    {
+                        sb.append(", ");
+                    }
+                    sb.append(act.getType()).append(" on '").append(act.getTarget()).append("'");
+                }
+                sb.append("\n");
+            }
+            sb.append("Now inspect the refreshed DOM state below and generate ALL remaining actions required to completely fulfill the instruction.\n\n");
+        }
+
         if (lastError != null && !(lastError instanceof ToLevelEscalationException))
         {
             final String errorMsg = lastError instanceof Throwable t ? t.getMessage() : lastError.toString();
@@ -262,9 +287,19 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
         {
             if (currentStep != null)
             {
+                final boolean isContinuation = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
                 if (statusReasoning != null && !statusReasoning.isBlank())
                 {
-                    currentStep.setReasoning(statusReasoning.trim());
+                    final String trimmedReasoning = statusReasoning.trim();
+                    currentStep.addReasoning(trimmedReasoning);
+                    if (isContinuation && currentStep.getReasoning() != null && !currentStep.getReasoning().isBlank())
+                    {
+                        currentStep.setReasoning(currentStep.getReasoning() + "\n\n[Continuation]: " + trimmedReasoning);
+                    }
+                    else
+                    {
+                        currentStep.setReasoning(trimmedReasoning);
+                    }
                 }
                 else if (!actions.isEmpty())
                 {
@@ -282,10 +317,18 @@ public final class ActionExtractionPrompt implements AiPrompt<List<Action>>
                     }
                     if (!sb.isEmpty())
                     {
-                        currentStep.setReasoning(sb.toString());
+                        final String actionReasoning = sb.toString();
+                        currentStep.addReasoning(actionReasoning);
+                        if (isContinuation && currentStep.getReasoning() != null && !currentStep.getReasoning().isBlank())
+                        {
+                            currentStep.setReasoning(currentStep.getReasoning() + "\n\n[Continuation]: " + actionReasoning);
+                        }
+                        else
+                        {
+                            currentStep.setReasoning(actionReasoning);
+                        }
                     }
                 }
-                final boolean isContinuation = Boolean.TRUE.equals(context.getTransientData().get("KEY_IN_CONTINUATION_LOOP"));
                 if (!isContinuation)
                 {
                     currentStep.getActions().clear();

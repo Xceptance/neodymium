@@ -19,6 +19,7 @@
 package org.neodymium.ai.model;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -200,6 +201,11 @@ public final class PlaybookStep
      * AI reasoning explanation generated for this step.
      */
     private String reasoning;
+
+    /**
+     * AI reasoning explanations generated across all execution stages for this step.
+     */
+    private final List<String> reasonings = new ArrayList<>();
 
     /**
      * The recorded execution duration in milliseconds.
@@ -1066,7 +1072,15 @@ public final class PlaybookStep
      */
     public String getReasoning()
     {
-        return this.reasoning;
+        if (this.reasoning != null)
+        {
+            return this.reasoning;
+        }
+        if (!this.reasonings.isEmpty())
+        {
+            return String.join("\n\n", this.reasonings);
+        }
+        return null;
     }
 
     /**
@@ -1077,6 +1091,29 @@ public final class PlaybookStep
     public void setReasoning(final String reasoning)
     {
         this.reasoning = reasoning;
+    }
+
+    /**
+     * Returns all AI reasonings generated across execution stages for this step.
+     *
+     * @return an unmodifiable list of stage reasonings
+     */
+    public List<String> getReasonings()
+    {
+        return Collections.unmodifiableList(this.reasonings);
+    }
+
+    /**
+     * Adds an AI reasoning explanation for an execution stage.
+     *
+     * @param reasoning the reasoning string to add
+     */
+    public void addReasoning(final String reasoning)
+    {
+        if (reasoning != null && !reasoning.isBlank())
+        {
+            this.reasonings.add(reasoning);
+        }
     }
 
     /**
