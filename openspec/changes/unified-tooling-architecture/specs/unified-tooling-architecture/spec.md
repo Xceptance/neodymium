@@ -78,3 +78,26 @@ The system SHALL intercept proposed `browser_*` tool calls before browser dispat
 - **WHEN** a proposed browser click specifies a candidate locator with confidence $\ge 0.95$
 - **THEN** the interceptor approves the tool call immediately without triggering multi-turn deliberation.
 
+### Requirement: Backward compatibility with legacy recorded playbooks
+The system SHALL transparently deserialize recorded JSON playbooks containing legacy `actions` arrays into equivalent `toolCalls` during playback, preserving existing recorded test suites without manual migration.
+
+#### Scenario: Load legacy JSON playbook containing actions
+- **WHEN** a recorded playbook JSON file containing an `actions` array is loaded
+- **THEN** the system maps each action to an equivalent `browser_*` tool call with preserved DOM feature vectors and candidate locators.
+
+### Requirement: Tool error feedback and agent self-correction
+The system SHALL capture non-fatal tool execution failures (such as element obscured, element not found in viewport, or invalid selection value) and return them as diagnostic error `ToolResult`s to the agent context, allowing the agent to self-correct in subsequent turns within the turn budget.
+
+#### Scenario: Agent self-corrects after obscured element error
+- **WHEN** a browser click fails because the element is outside the viewport or obscured
+- **THEN** the tool returns an error status with diagnostic guidance in `ToolResult`
+- **AND** the agent issues a `browser_scroll` tool call to bring the element into view on the next turn.
+
+### Requirement: Tool execution telemetry and event dispatch
+The system SHALL dispatch execution events to the active `ExecutionEventBus` upon tool start, success, and failure, allowing real-time consoles, preliminary reporting, and Allure listeners to record tool activity.
+
+#### Scenario: Tool execution dispatches event to session bus
+- **WHEN** any `AiTool` completes execution
+- **THEN** a tool executed event is dispatched to the session event bus containing tool name, parameters, execution duration, and success status.
+
+
