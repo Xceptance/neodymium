@@ -7,8 +7,7 @@ By establishing a unified in-process Tooling Architecture inspired by modern too
 ## What Changes
 
 - **Unified `AiTool` Abstraction**: Introduce a standard `AiTool` interface with `ToolDefinition` (JSON Schema contract), `ToolCall`, and `ToolResult` (multimodal content, variables export, and Allure attachments).
-- **Java Tool Provider (`@AiTool`, `@ToolParam`)**: Replace `JavaMethodAction` and `@AiMethod` with a reflective, Jackson-backed schema generator supporting multi-typed parameters, typed deserialization, and return value variable binding (`store: varName`).
-- **Backward-Compatible Java Adapter**: Provide an automatic bridge for existing `@AiMethod` utility classes (including `AiAssertions`) so existing tests continue functioning without modifications.
+- **Java Tool Provider (`@AiTool`, `@ToolParam`)**: Replace `JavaMethodAction` and `@AiMethod` with a reflective, Jackson-backed schema generator supporting multi-typed parameters, typed deserialization, and return value variable binding (`store: varName`). Migrate `AiAssertions` directly to `@AiTool`.
 - **Browser Tools (`BrowserToolProvider`)**: Wrap Selenide browser operations (`browser_click`, `browser_type`, `browser_navigate`, `browser_select`, `browser_assert_text`, `browser_execute_script`, etc.) as standard `AiTool` implementations, exposing structured JSON schemas to LLM agents.
 - **Element Healing & Replay Fidelity**: Preserve all `DomFeatureVector`, candidate locators, and screenshot visual hash metadata within recorded JSON playbooks so that offline, sub-millisecond similarity healing and fast playback remain 100% deterministic and free of LLM calls during regression runs.
 - **ToolContext & Composite Plugins**: Introduce a `ToolContext` enabling tools to invoke other tools (e.g., WCAG auditing calling `browser_execute_script`), mutate session variables, attach report artifacts, and optionally run scoped diagnostic subloops without leaking raw `WebDriver` handles.
@@ -27,5 +26,5 @@ By establishing a unified in-process Tooling Architecture inspired by modern too
 - **New Packages & Interfaces**: `org.neodymium.ai.tool` (`AiTool`, `ToolDefinition`, `ToolCall`, `ToolResult`, `ToolContext`, `ToolRegistry`, `JavaToolFactory`, `@AiTool`, `@ToolParam`).
 - **Browser Execution**: `SelenideTargetExecutor` transitions to register and dispatch via `BrowserToolProvider`.
 - **Playbook Model**: `PlaybookStep` and recorded JSON playbooks serialize structured `toolCalls` alongside existing `DomFeatureVector` and locator candidate metadata.
-- **Legacy Compatibility**: `JAVA_METHOD` action maps transparently to `ToolRegistry.execute(...)`.
+- **Legacy Removal**: Retires `JAVA_METHOD` action and `@AiMethod` annotation in favor of direct `@AiTool` registration.
 - **Dependencies**: No new external dependencies required; leverages existing Jackson and Selenide libraries.

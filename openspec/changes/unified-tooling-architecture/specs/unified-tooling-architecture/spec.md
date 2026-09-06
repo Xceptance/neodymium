@@ -25,12 +25,6 @@ The system SHALL capture the return value of an executed tool and, when a target
 - **WHEN** a tool call specifies a target variable name and executes successfully
 - **THEN** the return value is saved into the session data context under the specified variable key for subsequent step resolution.
 
-### Requirement: Backward compatibility for legacy method assertions
-The system SHALL discover legacy assertions annotated with `@AiMethod` and automatically expose them as callable tools in the registry, preserving compatibility for existing tests without modifying assertion source code.
-
-#### Scenario: Invoke legacy assertion via tool registry
-- **WHEN** a tool call targets an existing `@AiMethod` assertion method
-- **THEN** the system adapts and executes the assertion through the tool registry, propagating assertion failures if validation fails.
 
 ### Requirement: Browser tools encapsulation
 The system SHALL expose standard browser automation operations (including click, type, navigate, select, hover, assert text, and execute script) as standard tools, isolating browser driver interactions behind the tool contract.

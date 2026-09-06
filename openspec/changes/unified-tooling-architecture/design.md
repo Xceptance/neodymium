@@ -14,7 +14,7 @@ This design unifies both into an in-process, schema-driven Tooling Architecture 
 - Provide a clean, extensible `AiTool` interface in `org.neodymium.ai.tool`.
 - Automatically generate JSON Schema for Java methods annotated with `@AiTool` and `@ToolParam` using Jackson.
 - Automatically deserialize incoming JSON arguments into typed Java parameters (`BigDecimal`, `int`, `String`, POJOs) and capture return values.
-- Adapt legacy `@AiMethod` utility classes (e.g. `AiAssertions`) into the tool registry transparently.
+- Migrate existing assertions in `AiAssertions` directly to `@AiTool` and retire `@AiMethod` and `JavaMethodAction`.
 - Wrap Selenide browser operations as standard `AiTool` implementations without altering underlying driver behavior.
 - Preserve all recorded metadata (`DomFeatureVector`, candidate locators, visual dHash baselines) in JSON playbooks to maintain sub-millisecond offline healing and deterministic replay.
 - Provide `ToolContext` for composite plugin tools (like WCAG accessibility audits) to invoke browser tools and attach Allure artifacts without leaking raw `WebDriver` handles.
