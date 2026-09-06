@@ -40,7 +40,7 @@ aura-allure-results-temp/
 .gemini/
 .specify/
 .vscode/
-specs/
+/specs/
 
 newTickets.txt
 neodymium.code-workspace
