@@ -32,9 +32,9 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
-import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.util.SelectorSyntaxChecker;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
  *   <li><b>XPath Expression:</b> Direct evaluation for explicitly forced or path-structured locators.</li>
  *   <li><b>Link Text Matching:</b> Exact match via {@link By#linkText(String)}.</li>
  *   <li><b>Text Content &amp; ARIA Searching:</b> XPath text normalization and ARIA attribute substring matching for plain text queries.</li>
+ *   <li><b>Shadow DOM Fallback:</b> Automatic deep shadow-root traversal and compound selector piercing across open shadow boundaries when light DOM yields no match.</li>
  * </ol>
  *
  * @author AI-generated: Gemini 3.7 Flash
@@ -61,6 +62,273 @@ public final class SelenideElementFinder
 {
     private static final Logger LOG = LoggerFactory.getLogger(SelenideElementFinder.class);
     private static final long RETRY_INTERVAL_MS = 100L;
+
+    private static final String SHADOW_DOM_HELPER_JS = """
+                var allRoots = [document];
+                function collectAllRoots(root) {
+                    try {
+                        var els = root.querySelectorAll('*');
+                        for (var i = 0; i < els.length; i++) {
+                            if (els[i].shadowRoot) {
+                                allRoots.push(els[i].shadowRoot);
+                                collectAllRoots(els[i].shadowRoot);
+                            }
+                        }
+                    } catch(e) {}
+                }
+                collectAllRoots(document);
+
+                function isVisible(el) {
+                    if (!el || !el.isConnected) return false;
+                    try {
+                        var style = window.getComputedStyle(el);
+                        if (style.display === 'none' || style.visibility === 'hidden') return false;
+                        var rect = el.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) return true;
+                        var tag = el.tagName ? el.tagName.toLowerCase() : '';
+                        if (['input', 'button', 'a', 'select', 'textarea'].indexOf(tag) !== -1) return true;
+                    } catch(e) {}
+                    return false;
+                }
+
+                function collectDescendantRoots(node) {
+                    var roots = [];
+                    if (node.shadowRoot) {
+                        roots.push(node.shadowRoot);
+                        collectInner(node.shadowRoot);
+                    }
+                    collectInner(node);
+                    function collectInner(parent) {
+                        try {
+                            var els = parent.querySelectorAll('*');
+                            for (var i = 0; i < els.length; i++) {
+                                if (els[i].shadowRoot) {
+                                    roots.push(els[i].shadowRoot);
+                                    collectInner(els[i].shadowRoot);
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                    return roots;
+                }
+
+                function splitSelector(sel) {
+                    var parts = [];
+                    var current = '';
+                    var inQuotes = false;
+                    var quoteChar = '';
+                    var inBrackets = 0;
+                    var inParens = 0;
+                    for (var i = 0; i < sel.length; i++) {
+                        var c = sel[i];
+                        if (inQuotes) {
+                            current += c;
+                            if (c === quoteChar && sel[i - 1] !== '\\\\') {
+                                inQuotes = false;
+                            }
+                        } else if (c === '"' || c === "'") {
+                            inQuotes = true;
+                            quoteChar = c;
+                            current += c;
+                        } else if (c === '[') {
+                            inBrackets++;
+                            current += c;
+                        } else if (c === ']') {
+                            if (inBrackets > 0) inBrackets--;
+                            current += c;
+                        } else if (c === '(') {
+                            inParens++;
+                            current += c;
+                        } else if (c === ')') {
+                            if (inParens > 0) inParens--;
+                            current += c;
+                        } else if (/\\s/.test(c)) {
+                            if (inBrackets === 0 && inParens === 0) {
+                                if (current.length > 0) {
+                                    parts.push(current);
+                                    current = '';
+                                }
+                            } else {
+                                current += c;
+                            }
+                        } else {
+                            current += c;
+                        }
+                    }
+                    if (current.length > 0) {
+                        parts.push(current);
+                    }
+                    return parts;
+                }
+            """;
+
+    private static final String SHADOW_FIND_SCRIPT = """
+            return (function(selector) {
+            """
+        + SHADOW_DOM_HELPER_JS
+        + """
+                if (!selector) return null;
+                var clean = selector.trim();
+                if (clean.toLowerCase().indexOf('css=') === 0) {
+                    clean = clean.substring(4).trim();
+                }
+
+                // A. Automation ID resolution (data-ai / xc_...)
+                var aiMatch = clean.match(/(xc[a-zA-Z0-9_\\-]+)/);
+                if (aiMatch) {
+                    var neoId = aiMatch[1];
+                    for (var i = 0; i < allRoots.length; i++) {
+                        try {
+                            var el = allRoots[i].querySelector('[data-ai="' + neoId + '"]');
+                            if (el && isVisible(el)) return el;
+                        } catch (e) {}
+                    }
+                }
+
+                // B. Handle Playwright text pseudo-selectors e.g. text="...", has-text="..."
+                var textMatch = clean.match(/^(?:text|has-text)=(?:"(.*)"|'(.*)'|(.*))$/i);
+                if (textMatch) {
+                    var rawText = (textMatch[1] || textMatch[2] || textMatch[3] || '').trim().toLowerCase();
+                    if (rawText) {
+                        for (var i = 0; i < allRoots.length; i++) {
+                            try {
+                                var candidates = allRoots[i].querySelectorAll('a, button, input, [role="button"], span, div, p, label');
+                                for (var j = 0; j < candidates.length; j++) {
+                                    var c = candidates[j];
+                                    var txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim().toLowerCase();
+                                    if (txt === rawText || txt.indexOf(rawText) !== -1) {
+                                        if (isVisible(c)) return c;
+                                    }
+                                }
+                            } catch(e) {}
+                        }
+                    }
+                }
+
+                // C. Direct query across all roots first
+                for (var i = 0; i < allRoots.length; i++) {
+                    try {
+                        var els = allRoots[i].querySelectorAll(clean);
+                        for (var j = 0; j < els.length; j++) {
+                            if (isVisible(els[j])) return els[j];
+                        }
+                    } catch (e) {}
+                }
+
+                // D. Multi-segment shadow-piercing traversal (e.g. "c-community-input-email input")
+                var parts = splitSelector(clean);
+                if (parts.length > 1) {
+                    var currentNodes = [document];
+                    for (var p = 0; p < parts.length; p++) {
+                        var part = parts[p];
+                        if (part === '>') continue;
+                        var nextNodes = [];
+                        var seen = [];
+                        for (var n = 0; n < currentNodes.length; n++) {
+                            var node = currentNodes[n];
+                            var subRoots = (node === document) ? allRoots : collectDescendantRoots(node);
+                            for (var r = 0; r < subRoots.length; r++) {
+                                try {
+                                    var matches = subRoots[r].querySelectorAll(part);
+                                    for (var m = 0; m < matches.length; m++) {
+                                        var el = matches[m];
+                                        if (seen.indexOf(el) === -1) {
+                                            seen.push(el);
+                                            nextNodes.push(el);
+                                        }
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                        currentNodes = nextNodes;
+                        if (currentNodes.length === 0) break;
+                    }
+
+                    for (var i = 0; i < currentNodes.length; i++) {
+                        if (isVisible(currentNodes[i])) return currentNodes[i];
+                    }
+                    if (currentNodes.length > 0) return currentNodes[0];
+                }
+
+                // E. Plain text fallback in shadow roots
+                if (clean.indexOf('<') === -1 && clean.indexOf('>') === -1 && clean.length > 1 && clean.length < 100) {
+                    var lowerSearch = clean.toLowerCase();
+                    for (var i = 0; i < allRoots.length; i++) {
+                        try {
+                            var candidates = allRoots[i].querySelectorAll('a, button, input, [role="button"], span, div, p, label');
+                            for (var j = 0; j < candidates.length; j++) {
+                                var c = candidates[j];
+                                var txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim().toLowerCase();
+                                if (txt === lowerSearch) {
+                                    if (isVisible(c)) return c;
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                }
+
+                return null;
+            })(arguments[0]);
+            """;
+
+    private static final String SHADOW_FIND_ALL_SCRIPT = """
+            return (function(selector) {
+            """
+        + SHADOW_DOM_HELPER_JS
+        + """
+                if (!selector) return [];
+                var clean = selector.trim();
+                if (clean.toLowerCase().indexOf('css=') === 0) {
+                    clean = clean.substring(4).trim();
+                }
+
+                var parts = splitSelector(clean);
+                if (parts.length > 1) {
+                    var currentNodes = [document];
+                    for (var p = 0; p < parts.length; p++) {
+                        var part = parts[p];
+                        if (part === '>') continue;
+                        var nextNodes = [];
+                        var seen = [];
+                        for (var n = 0; n < currentNodes.length; n++) {
+                            var node = currentNodes[n];
+                            var subRoots = (node === document) ? allRoots : collectDescendantRoots(node);
+                            for (var r = 0; r < subRoots.length; r++) {
+                                try {
+                                    var matches = subRoots[r].querySelectorAll(part);
+                                    for (var m = 0; m < matches.length; m++) {
+                                        var el = matches[m];
+                                        if (seen.indexOf(el) === -1) {
+                                            seen.push(el);
+                                            nextNodes.push(el);
+                                        }
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                        currentNodes = nextNodes;
+                        if (currentNodes.length === 0) break;
+                    }
+                    return currentNodes.filter(isVisible);
+                }
+
+                var results = [];
+                var seen = [];
+                for (var i = 0; i < allRoots.length; i++) {
+                    try {
+                        var els = allRoots[i].querySelectorAll(clean);
+                        for (var j = 0; j < els.length; j++) {
+                            var el = els[j];
+                            if (seen.indexOf(el) === -1 && isVisible(el)) {
+                                seen.push(el);
+                                results.push(el);
+                            }
+                        }
+                    } catch (e) {}
+                }
+                return results;
+            })(arguments[0]);
+            """;
 
     /**
      * Private constructor to prevent instantiation of this static utility class.
@@ -153,7 +421,16 @@ public final class SelenideElementFinder
         {
             throw new IllegalArgumentException("Action and target cannot be null or blank");
         }
-        return Selenide.$$(LocatorResolver.resolveLocator(action.getTarget()));
+        final ElementsCollection collection = Selenide.$$(LocatorResolver.resolveLocator(action.getTarget()));
+        if (collection.isEmpty())
+        {
+            final ElementsCollection shadowCollection = findAllInShadowRoots(action.getTarget());
+            if (!shadowCollection.isEmpty())
+            {
+                return shadowCollection;
+            }
+        }
+        return collection;
     }
 
     /**
@@ -231,6 +508,16 @@ public final class SelenideElementFinder
                 }
                 catch (final Exception ignored)
                 {
+                }
+            }
+
+            // Shadow DOM fallback: When light DOM lookups fail for all candidates, search across all open shadow roots
+            for (final String candidate : allCandidates)
+            {
+                final SelenideElement foundInShadow = findInShadowRoots(candidate);
+                if (foundInShadow != null)
+                {
+                    return foundInShadow;
                 }
             }
 
@@ -587,6 +874,60 @@ public final class SelenideElementFinder
         }
 
         return visibleEls.get(0);
+    }
+
+    private static SelenideElement findInShadowRoots(final String rawCandidate)
+    {
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (driver == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            final Object result = ((JavascriptExecutor) driver).executeScript(SHADOW_FIND_SCRIPT, rawCandidate);
+            if (result instanceof WebElement webElement)
+            {
+                return Selenide.$(webElement);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.trace("Shadow DOM element lookup failed for '{}': {}", rawCandidate, e.getMessage());
+        }
+        return null;
+    }
+
+    public static ElementsCollection findAllInShadowRoots(final String rawCandidate)
+    {
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (driver == null)
+        {
+            return Selenide.$$(List.of());
+        }
+
+        try
+        {
+            final Object result = ((JavascriptExecutor) driver).executeScript(SHADOW_FIND_ALL_SCRIPT, rawCandidate);
+            if (result instanceof List<?> list)
+            {
+                final List<WebElement> elements = new ArrayList<>();
+                for (final Object item : list)
+                {
+                    if (item instanceof WebElement webElement)
+                    {
+                        elements.add(webElement);
+                    }
+                }
+                return Selenide.$$(elements);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.trace("Shadow DOM elements lookup failed for '{}': {}", rawCandidate, e.getMessage());
+        }
+        return Selenide.$$(List.of());
     }
 
     public static By resolveLocator(final String target)

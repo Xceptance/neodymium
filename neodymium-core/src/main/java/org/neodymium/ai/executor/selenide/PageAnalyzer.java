@@ -217,7 +217,8 @@ public class PageAnalyzer
                     // Fallback for interactive elements or elements with text content that are not explicitly hidden by CSS
                     var isInteractiveTag = ['a', 'button', 'input', 'select', 'textarea'].indexOf(tagName) !== -1 || el.hasAttribute('href');
                     var hasText = (el.innerText || '').trim().length > 0;
-                    if ((isInteractiveTag || hasText) && style.display !== 'none' && style.visibility !== 'hidden') {
+                    var isCustomElement = tagName.indexOf('-') !== -1 || !!el.shadowRoot;
+                    if ((isInteractiveTag || hasText || isCustomElement) && style.display !== 'none' && style.visibility !== 'hidden') {
                         return true;
                     }
 
@@ -510,7 +511,17 @@ public class PageAnalyzer
                     var isInter = isInteractive(el);
                     var isHead = ['h1','h2','h3','h4','h5','h6'].indexOf(tag) !== -1;
                     var isStandardLeaf = ['a', 'button', 'input', 'textarea', 'option', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].indexOf(tag) !== -1;
-                    var isCustomLeaf = (isInter || isHead) && el.children.length === 0;
+
+                    var childElements = [];
+                    if (el.shadowRoot) {
+                        childElements = childElements.concat(Array.from(el.shadowRoot.children));
+                    }
+                    childElements = childElements.concat(Array.from(el.children));
+                    if (tag === 'select' || tag === 'optgroup') {
+                        childElements = childElements.slice(0, 50);
+                    }
+
+                    var isCustomLeaf = (isInter || isHead) && childElements.length === 0;
 
                     // 1. Leaf interactive or heading element (Atomic)
                     if (isStandardLeaf || isCustomLeaf) {
@@ -527,6 +538,7 @@ public class PageAnalyzer
                             options = Array.from(el.options).slice(0, 50).map(o => (o.id ? '#' + o.id + '=' : '') + o.text.trim()).filter(t => t.length > 0).join(', ');
                             if (el.options.length > 50) options += '... (total ' + el.options.length + ')';
                         }
+                        var isFocused = (document.activeElement === el) || (el.getRootNode && el.getRootNode().activeElement === el);
                         return {
                             nodeType: 'leaf',
                             tagName: tag,
@@ -541,7 +553,7 @@ public class PageAnalyzer
                             selected: (tag === 'option' ? (el.selected || el.hasAttribute('selected') ? 'true' : null) : null),
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
                             hidden: (!vis ? 'true' : null),
-                            focused: (document.activeElement === el) ? 'true' : null,
+                            focused: isFocused ? 'true' : null,
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
                             dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
@@ -552,14 +564,14 @@ public class PageAnalyzer
                         };
                     }
 
-                    var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol','select','optgroup','p','table','tbody','thead','tfoot','tr','td','th','dl','dt','dd','figure','figcaption'].indexOf(tag) !== -1;
+                    var isCustomElement = tag.indexOf('-') !== -1 || !!el.shadowRoot;
+                    var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol','select','optgroup','p','table','tbody','thead','tfoot','tr','td','th','dl','dt','dd','figure','figcaption'].indexOf(tag) !== -1 || isCustomElement;
                     var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0) || el.getAttribute('role') || el.getAttribute('aria-label') || el.getAttribute('data-testid') || el.getAttribute('data-test'));
                     var isDivContainer = (tag === 'div' || tag === 'li') && hasClassOrId;
 
                     var children = [];
-                    var childNodes = (tag === 'select' || tag === 'optgroup') ? Array.from(el.children).slice(0, 50) : Array.from(el.children);
-                    for (var i = 0; i < childNodes.length; i++) {
-                        var childRes = buildNodeTree(childNodes[i]);
+                    for (var i = 0; i < childElements.length; i++) {
+                        var childRes = buildNodeTree(childElements[i]);
                         if (childRes) {
                             if (Array.isArray(childRes)) {
                                 children = children.concat(childRes);
@@ -570,12 +582,12 @@ public class PageAnalyzer
                     }
 
                     // 2. Container node with extracted children
-                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup';
+                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup' || isCustomElement;
                     var allowContainer = !isMinimal || isFormContainer;
                     if (allowContainer && (isContainerTag || isDivContainer) && children.length > 0) {
-                        // Flatten single-child anonymous layout wrappers
+                        // Flatten single-child anonymous layout wrappers (but never custom elements)
                         var isAnonymousWrapper = !el.id && !el.getAttribute('role') && !el.getAttribute('aria-label') && (!el.className || typeof el.className !== 'string' || el.className.trim().length === 0);
-                        if (isAnonymousWrapper && children.length === 1 && !Array.isArray(children[0])) {
+                        if (!isCustomElement && isAnonymousWrapper && children.length === 1 && !Array.isArray(children[0])) {
                             return children[0];
                         }
                         var autoIdContainer = assignId(el);
