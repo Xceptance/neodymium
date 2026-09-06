@@ -46,3 +46,35 @@ The system SHALL provide an execution context to tools allowing them to invoke o
 #### Scenario: Composite WCAG tool executes script and attaches report
 - **WHEN** a composite accessibility tool is executed
 - **THEN** it invokes the browser script execution tool via its tool context, evaluates compliance, and attaches the resulting report artifact to the test outcome.
+
+### Requirement: Active discovery tools
+The system SHALL provide interactive discovery tools (including `browser_query_dom`, `browser_inspect`, `browser_scroll`, and `browser_take_screenshot`) allowing the agent to actively inspect DOM elements, visibility, and layout on demand, eliminating passive context escalation ladders.
+
+#### Scenario: Agent queries DOM for element details
+- **WHEN** an agent issues a `browser_query_dom` call with search text and tag name
+- **THEN** the system returns matching element candidates, attributes, and viewport visibility states without restarting the pipeline step.
+
+### Requirement: Agent tool execution loop and stop criteria
+The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `Observe` → `Finish`) for atomic playbook steps, evaluating six explicit stop criteria:
+1. **Goal Completion**: Agent calls `complete_step` or requests no further tools (`SUCCESS`).
+2. **Assertion Failure**: An assertion tool fails with `AssertionError` (`FAILED`).
+3. **Turn Budget Ceiling**: Tool turn limit reached (`FAILED`).
+4. **Thrashing / Stagnation**: Identical consecutive tool calls detected with no progress (`FAILED`).
+5. **Wall-Clock Timeout**: Execution duration exceeds step timeout (`FAILED`).
+6. **Fatal Environment Failure**: Unrecoverable target crash or user abort (`FAILED`).
+
+#### Scenario: Agent completes step within turn budget
+- **WHEN** the agent performs browser interactions and calls `complete_step` within the turn budget
+- **THEN** the loop terminates immediately and marks the step as `SUCCESS`.
+
+#### Scenario: Agent fails immediately on assertion defect
+- **WHEN** an assertion tool is executed and detects a factual mismatch
+- **THEN** the loop terminates immediately with `FAILED` without retrying or context escalation.
+
+### Requirement: Quality judge locator guard
+The system SHALL intercept proposed `browser_*` tool calls before browser dispatch to evaluate candidate locator stability, passing high-confidence locators through without latency and triggering deliberation when ambiguity is detected.
+
+#### Scenario: High-confidence locator bypasses judge deliberation
+- **WHEN** a proposed browser click specifies a candidate locator with confidence $\ge 0.95$
+- **THEN** the interceptor approves the tool call immediately without triggering multi-turn deliberation.
+

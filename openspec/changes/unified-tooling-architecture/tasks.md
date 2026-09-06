@@ -11,24 +11,35 @@
 - [ ] 2.3 Implement argument deserialization and return value variable binding in `JavaTool` and verify multi-parameter typed invocations (`BigDecimal`, `int`, `String`, POJOs) pass.
 - [ ] 2.4 Migrate utility methods in `AiAssertions` directly to `@AiTool` and retire `@AiMethod` and `JavaMethodAction`, verifying assertion execution tests pass.
 
-## 3. Browser Tools Implementation
+## 3. Browser & Active Discovery Tools
 
 - [ ] 3.1 Implement core `BrowserToolProvider` wrapping Selenide actions (`click`, `type`, `navigate`, `select`, `hover`, `assert_text`) as `AiTool`s with strict JSON Schemas.
-- [ ] 3.2 Ensure browser action tools capture and preserve `DomFeatureVector`, candidate locators, and screenshot visual hashes, and verify vector capture tests pass.
-- [ ] 3.3 Implement `browser_execute_script` and `browser_get_dom` tools to provide script execution and inspection for composite plugins.
+- [ ] 3.2 Implement active discovery tools (`browser_query_dom`, `browser_inspect`, `browser_scroll`, `browser_take_screenshot`, `browser_execute_script`) so the agent actively inspects page state on demand.
+- [ ] 3.3 Ensure browser action tools capture and preserve `DomFeatureVector`, candidate locators, and screenshot visual hashes, and verify vector capture tests pass.
 
-## 4. Composite Plugin Tools
+## 4. Quality Judge Tool Guard
 
-- [ ] 4.1 Implement `WcagAccessibilityTool` implementing `AiTool`, utilizing `context.invokeTool("browser_execute_script")` to execute Axe-core without direct `WebDriverRunner` dependencies.
-- [ ] 4.2 Verify `WcagAccessibilityTool` unit tests validate violation detection, formatting, and Allure report attachment.
+- [ ] 4.1 Implement `QualityJudgeToolInterceptor` intercepting proposed `browser_*` tool calls before browser dispatch.
+- [ ] 4.2 Verify candidate locator scoring passes high-confidence ($\ge 0.95$) locators immediately and triggers deliberation for ambiguous candidates.
 
-## 5. Playbook Recording & Replay Engine
+## 5. Agent Tool Loop Step & Stop Criteria
 
-- [ ] 5.1 Update `PlaybookStep` and `Action` JSON serialization to support `toolCalls` while transparently reading legacy recorded `actions` arrays.
-- [ ] 5.2 Update the playback execution loop to replay `toolCalls` directly via `toolRegistry.getTool(name).execute(...)` without LLM calls.
-- [ ] 5.3 Verify offline replay preserves sub-millisecond similarity healing using recorded `DomFeatureVector` data when selectors change.
+- [ ] 5.1 Implement `AgentToolLoopStep` driving iterative tool execution (`Think` → `ToolCall` → `Observe` → `Finish`) in place of monolithic `CallLlmStep` + `ExecuteActionsStep`.
+- [ ] 5.2 Implement and unit test the six stop criteria: Goal Completion (`complete_step`), Assertion Failure (`AssertionError`), Turn Budget ceiling, Thrashing / Stagnation detection, Step Timeout, and Fatal Environment Failure.
+- [ ] 5.3 Retire legacy `ToLevelEscalationException`, `HealingRequiredException`, and brute-force context escalation ladders from step execution.
 
-## 6. Full Verification
+## 6. Composite Plugin Tools
 
-- [ ] 6.1 Execute the test suite (`mvn clean test -Dtest=org.neodymium.ai.tool.**`) and verify all new tooling tests pass.
-- [ ] 6.2 Execute existing regression tests (`SearchTest`, `AiAssertionsTest`) and verify zero regressions.
+- [ ] 6.1 Implement `WcagAccessibilityTool` implementing `AiTool`, utilizing `context.invokeTool("browser_execute_script")` to execute Axe-core without direct `WebDriverRunner` dependencies.
+- [ ] 6.2 Verify `WcagAccessibilityTool` unit tests validate violation detection, formatting, and Allure report attachment.
+
+## 7. Playbook Recording & Replay Engine
+
+- [ ] 7.1 Update `PlaybookStep` and `Action` JSON serialization to support `toolCalls` while transparently reading legacy recorded `actions` arrays.
+- [ ] 7.2 Update the playback execution loop to replay `toolCalls` directly via `toolRegistry.getTool(name).execute(...)` without LLM calls.
+- [ ] 7.3 Verify offline replay preserves sub-millisecond similarity healing using recorded `DomFeatureVector` data when selectors change.
+
+## 8. Full Verification
+
+- [ ] 8.1 Execute the test suite (`mvn clean test -Dtest=org.neodymium.ai.tool.**,org.neodymium.ai.pipeline.**`) and verify all new tooling and loop tests pass.
+- [ ] 8.2 Execute existing regression tests (`SearchTest`, `AiAssertionsTest`) and verify zero regressions.
