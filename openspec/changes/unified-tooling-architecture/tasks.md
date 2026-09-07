@@ -13,11 +13,11 @@
 
 ## 3. Browser & Active Discovery Tools
 
-- [ ] 3.1 Implement core `BrowserToolProvider` wrapping Selenide actions (`click`, `type`, `navigate`, `select`, `hover`, `assert_text`) as `AiTool`s with strict JSON Schemas.
-- [ ] 3.2 Implement active discovery tools (`browser_query_dom`, `browser_inspect`, `browser_scroll`, `browser_take_screenshot`, `browser_execute_script`) so the agent actively inspects page state on demand.
-- [ ] 3.3 Implement `browser_inspect_visual` (targeted bounding-box crop) and Set-of-Marks visual numeric badge overlay in `browser_take_screenshot(mark_interactive=true)`.
-- [ ] 3.4 Implement visual coordinate re-anchoring bridge via `document.elementFromPoint(x, y)` to resolve underlying DOM elements and generate resilient locators and `DomFeatureVector`s.
-- [ ] 3.5 Ensure browser action tools capture and preserve `DomFeatureVector`, candidate locators, and screenshot visual hashes, and verify vector capture tests pass.
+- [x] 3.1 Implement core `BrowserToolProvider` wrapping Selenide actions (`click`, `type`, `navigate`, `select`, `hover`, `assert_text`) as `AiTool`s with strict JSON Schemas.
+- [x] 3.2 Implement active discovery tools (`browser_query_dom`, `browser_inspect`, `browser_scroll`, `browser_take_screenshot`, `browser_execute_script`) so the agent actively inspects page state on demand.
+- [x] 3.3 Implement `browser_inspect_visual` (targeted bounding-box crop) and Set-of-Marks visual numeric badge overlay in `browser_take_screenshot(mark_interactive=true)`.
+- [x] 3.4 Implement visual coordinate re-anchoring bridge via `document.elementFromPoint(x, y)` to resolve underlying DOM elements and generate resilient locators and `DomFeatureVector`s.
+- [x] 3.5 Ensure browser action tools capture and preserve `DomFeatureVector`, candidate locators, and screenshot visual hashes, and verify vector capture tests pass.
 
 ## 4. Quality Judge Tool Guard
 
