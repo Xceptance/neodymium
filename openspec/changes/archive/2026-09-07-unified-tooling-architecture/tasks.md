@@ -46,5 +46,5 @@
 
 ## 8. Full Verification
 
-- [ ] 8.1 Execute the test suite (`mvn clean test -Dtest=org.neodymium.ai.tool.**,org.neodymium.ai.pipeline.**`) and verify all new tooling and loop tests pass.
-- [ ] 8.2 Execute existing regression tests (`SearchTest`, `AiAssertionsTest`) and verify zero regressions.
+- [x] 8.1 Execute the test suite (`mvn clean test -Dtest=org.neodymium.ai.tool.**,org.neodymium.ai.pipeline.**`) and verify all new tooling and loop tests pass.
+- [x] 8.2 Execute existing regression tests (`SearchTest`, `AiAssertionsTest`) and verify zero regressions.
