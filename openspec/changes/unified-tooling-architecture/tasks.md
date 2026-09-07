@@ -34,8 +34,8 @@
 
 ## 6. Composite Plugin Tools
 
-- [ ] 6.1 Implement `WcagAccessibilityTool` implementing `AiTool`, utilizing `context.invokeTool("browser_execute_script")` to execute Axe-core without direct `WebDriverRunner` dependencies.
-- [ ] 6.2 Verify `WcagAccessibilityTool` unit tests validate violation detection, formatting, and Allure report attachment.
+- [x] 6.1 Implement `WcagAccessibilityTool` implementing `AiTool`, utilizing `context.invokeTool("browser_execute_script")` to execute Axe-core without direct `WebDriverRunner` dependencies.
+- [x] 6.2 Verify `WcagAccessibilityTool` unit tests validate violation detection, formatting, and Allure report attachment.
 
 ## 7. Playbook Recording & Replay Engine
 
