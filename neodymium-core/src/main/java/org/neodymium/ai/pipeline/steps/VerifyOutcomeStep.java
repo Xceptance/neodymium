@@ -259,7 +259,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         }
 
         // 3. Skip outcome verification during deterministic replay unless healing is actively engaged
-        if (mode != null && mode.isReplay() && !mode.supportsHealing())
+        if (mode != null && mode.isReplay() && !Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)))
         {
             if (step != null)
             {

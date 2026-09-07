@@ -76,8 +76,11 @@ import org.neodymium.ai.prompt.ActionSanitizer;
 import org.neodymium.ai.prompt.AiPrompt;
 import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.PesapPrompt;
+import org.neodymium.ai.replay.PlaybookToolReplayer;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.tool.ToolRegistry;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.ai.util.LocatorImprover;
 import org.neodymium.ai.util.ScreenshotHasher;
 import org.neodymium.ai.util.VisualStabilityDetector;
@@ -1082,106 +1085,189 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || (step.getActions() != null && (!step.getActions().isEmpty() || step.getScreenshotHash() != null || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING))));
+            final boolean hasRecordedContent = (step.getActions() != null && !step.getActions().isEmpty())
+                || (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
+                || (step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
+                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING);
+            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
 
-            if (isReplay)
+            final boolean hasToolCalls = step.getToolCalls() != null && !step.getToolCalls().isEmpty();
+            final boolean unifiedTooling = AiConfiguration.getInstance().isUnifiedToolingEnabled() || (isReplay && hasToolCalls);
+            if (unifiedTooling)
             {
-                // Replay mode: Stamp live DOM with data-ai attributes before executing step actions
-                standardFlow.add(c -> {
-                    final boolean isRecorded = step.getActions() != null && !step.getActions().isEmpty();
-                    final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
-                    final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
-                    final boolean isRecordedCompletedStep = initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING;
-                    if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite && !isRecordedCompletedStep)
-                    {
-                        final String resolvedStrictStep = c.getSessionData() != null
-                            ? c.getSessionData().resolveVariables(step.getInstruction())
-                            : step.getInstruction();
-                        throw new ConclusiveFailureException(
-                            "No recorded actions found for step '" + resolvedStrictStep + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
-                    }
+                if (isReplay)
+                {
+                    standardFlow.add(c -> {
+                        final boolean isRecorded = (step.getActions() != null && !step.getActions().isEmpty())
+                            || (step.getToolCalls() != null && !step.getToolCalls().isEmpty());
+                        final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
+                        final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
+                        final boolean isRecordedCompletedStep = initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING;
+                        if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite && !isRecordedCompletedStep)
+                        {
+                            final String resolvedStrictStep = c.getSessionData() != null
+                                ? c.getSessionData().resolveVariables(step.getInstruction())
+                                : step.getInstruction();
+                            throw new ConclusiveFailureException(
+                                "No recorded actions found for step '" + resolvedStrictStep + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
+                        }
 
-                    if (step.getStatus() == PlaybookStepStatus.FAILED || step.isFailed())
-                    {
-                        final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
-                            ? step.getFailureReason()
-                            : "Recorded step execution failed.";
-                        throw new ConclusiveFailureException(reason);
-                    }
+                        if (step.getStatus() == PlaybookStepStatus.FAILED || step.isFailed())
+                        {
+                            final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
+                                ? step.getFailureReason()
+                                : "Recorded step execution failed.";
+                            throw new ConclusiveFailureException(reason);
+                        }
 
-                    final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-                    if (executor != null)
-                    {
+                        ToolRegistry reg = (ToolRegistry) c.getTransientData().get("KEY_TOOL_REGISTRY");
+                        if (reg == null)
+                        {
+                            reg = new ToolRegistry();
+                            BrowserToolProvider.registerBrowserTools(reg);
+                            c.getTransientData().put("KEY_TOOL_REGISTRY", reg);
+                        }
+
                         try
                         {
-                            final SutState state = executor.captureState(ContextLevel.STANDARD);
-                            c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+                            PlaybookToolReplayer.replayStep(step, reg, c);
                         }
-                        catch (final Exception ignored)
+                        catch (final Throwable t)
                         {
+                            if (mode.supportsHealing() && !step.isNoHealing())
+                            {
+                                throw new HealingRequiredException("Replay step execution failed against SUT: " + t.getMessage(), t);
+                            }
+                            if (t instanceof RuntimeException re)
+                            {
+                                throw re;
+                            }
+                            if (t instanceof Error err)
+                            {
+                                throw err;
+                            }
+                            throw new RuntimeException(t);
                         }
-                    }
-                    c.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, step.getActions() != null ? step.getActions() : List.of());
-                    final Integer replays = (Integer) c.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
-                    c.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
-                });
+                    });
+                }
+                else
+                {
+                    // Live mode: AgentToolLoopStep performs Think -> ToolCall -> Observe -> Finish
+                    standardFlow.add(new AgentToolLoopStep());
+                }
             }
             else
             {
-                // Live mode: Query LLM for actions
-                standardFlow.add(c -> {
-                    final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-                    try
-                    {
-                        final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
-                        final Object currentLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                        final ContextLevel currentLevel = currentLevelObj instanceof ContextLevel cl ? cl : baseLevel;
-                        final ContextLevel captureLevel = currentLevel != null ? currentLevel : ContextLevel.MINIMAL;
-
-                        final SutState state = executor.captureState(captureLevel, isFullPageReq);
-                        c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
-                        if (session != null && session.getEventBus() != null && state != null)
-                        {
-                            session.getEventBus().dispatch(new StateCapturedEvent(state));
-                        }
-                        final PlaybookStep currentStep = (PlaybookStep) c.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                        if (currentStep != null)
-                        {
-                            if (isFullPageReq || (captureLevel != null && captureLevel.isFullPageScreenshot()))
-                            {
-                                currentStep.setFullPage(true);
-                            }
-                            if (state != null && state.getTextContent() != null)
-                            {
-                                currentStep.setBaselineState(new DefaultActionSanitizer().sanitizeText(state.getTextContent(), c.getSessionData()));
-                            }
-                        }
-                    }
-                    catch (final IOException e)
-                    {
-                        throw new ConclusiveFailureException("Failed to capture SUT state before execution", e);
-                    }
-                });
-
-                final ContextLevel targetCapLevel = effectiveLevel != null ? effectiveLevel : baseLevel;
-                final LlmCapability capability = (targetCapLevel != null && targetCapLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
-                final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
-                standardFlow.add(llmStep);
-                if (AiConfiguration.getInstance().isJudgeEnabled())
+                if (isReplay)
                 {
-                    standardFlow.add(new QualityJudgeStep());
-                }
-            }
+                    // Replay mode: Stamp live DOM with data-ai attributes before executing step actions
+                    standardFlow.add(c -> {
+                        final boolean isRecorded = step.getActions() != null && !step.getActions().isEmpty();
+                        final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
+                        final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
+                        final boolean isRecordedCompletedStep = initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING;
+                        if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite && !isRecordedCompletedStep)
+                        {
+                            final String resolvedStrictStep = c.getSessionData() != null
+                                ? c.getSessionData().resolveVariables(step.getInstruction())
+                                : step.getInstruction();
+                            throw new ConclusiveFailureException(
+                                "No recorded actions found for step '" + resolvedStrictStep + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
+                        }
 
-            standardFlow.add(executeStep);
-            standardFlow.add(verifyStep);
+                        if (step.getStatus() == PlaybookStepStatus.FAILED || step.isFailed())
+                        {
+                            final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
+                                ? step.getFailureReason()
+                                : "Recorded step execution failed.";
+                            throw new ConclusiveFailureException(reason);
+                        }
+
+                        final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                        if (executor != null)
+                        {
+                            try
+                            {
+                                final SutState state = executor.captureState(ContextLevel.STANDARD);
+                                c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                        c.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, step.getActions() != null ? step.getActions() : List.of());
+                        final Integer replays = (Integer) c.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
+                        c.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
+                    });
+                }
+                else
+                {
+                    // Live mode: Query LLM for actions
+                    standardFlow.add(c -> {
+                        final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                        try
+                        {
+                            final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+                            final Object currentLevelObj = c.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                            final ContextLevel currentLevel = currentLevelObj instanceof ContextLevel cl ? cl : baseLevel;
+                            final ContextLevel captureLevel = currentLevel != null ? currentLevel : ContextLevel.MINIMAL;
+
+                            final SutState state = executor.captureState(captureLevel, isFullPageReq);
+                            c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+                            if (session != null && session.getEventBus() != null && state != null)
+                            {
+                                session.getEventBus().dispatch(new StateCapturedEvent(state));
+                            }
+                            final PlaybookStep currentStep = (PlaybookStep) c.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                            if (currentStep != null)
+                            {
+                                if (isFullPageReq || (captureLevel != null && captureLevel.isFullPageScreenshot()))
+                                {
+                                    currentStep.setFullPage(true);
+                                }
+                                if (state != null && state.getTextContent() != null)
+                                {
+                                    currentStep.setBaselineState(new DefaultActionSanitizer().sanitizeText(state.getTextContent(), c.getSessionData()));
+                                }
+                            }
+                        }
+                        catch (final IOException e)
+                        {
+                            throw new ConclusiveFailureException("Failed to capture SUT state before execution", e);
+                        }
+                    });
+
+                    final ContextLevel targetCapLevel = effectiveLevel != null ? effectiveLevel : baseLevel;
+                    final LlmCapability capability = (targetCapLevel != null && targetCapLevel.includesScreenshot()) ? LlmCapability.VISION : LlmCapability.TEXT_ONLY;
+                    final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(activePrompt, capability);
+                    standardFlow.add(llmStep);
+                    if (AiConfiguration.getInstance().isJudgeEnabled())
+                    {
+                        standardFlow.add(new QualityJudgeStep());
+                    }
+                }
+
+                standardFlow.add(executeStep);
+                standardFlow.add(verifyStep);
+            }
 
             final SequenceStep tryBlock = new SequenceStep(standardFlow);
 
             // Register exception handlers based on execution mode
             final Map<Class<? extends PipelineException>, PipelineStep> handlers = new HashMap<>();
 
-            if (!step.isNoHealing() && (mode.isLive() || mode.supportsHealing()))
+            if (unifiedTooling)
+            {
+                if (!step.isNoHealing() && (mode.isLive() || mode.supportsHealing()))
+                {
+                    handlers.put(HealingRequiredException.class, c -> {
+                        c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                        LOGGER.warn("⚠️ Replay step requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
+                        c.pushStep(new AgentToolLoopStep());
+                    });
+                }
+            }
+            else if (!step.isNoHealing() && (mode.isLive() || mode.supportsHealing()))
             {
                 // Healing Escalation: PrepareRetryStep -> CallLlmStep -> ExecuteActionsStep -> VerifyOutcomeStep
                 handlers.put(HealingRequiredException.class, c -> {

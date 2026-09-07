@@ -20,9 +20,12 @@ package org.neodymium.ai.pipeline.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -38,6 +41,8 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
@@ -45,15 +50,24 @@ import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.tool.AiTool;
+import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolContext;
+import org.neodymium.ai.tool.ToolDefinition;
+import org.neodymium.ai.tool.ToolRegistry;
+import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
@@ -145,13 +159,13 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
-        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new org.neodymium.ai.prompt.ActionExtractionPrompt());
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
 
-        final org.neodymium.ai.model.PlaybookStep emptyStep = new org.neodymium.ai.model.PlaybookStep();
+        final PlaybookStep emptyStep = new PlaybookStep();
         emptyStep.setInstruction("Click the checkout button");
 
-        final org.neodymium.ai.pipeline.PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(emptyStep, session, context);
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(emptyStep, session, context);
 
         final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () -> {
             pipelineStep.execute(context);
@@ -179,14 +193,14 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
-        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new org.neodymium.ai.prompt.ActionExtractionPrompt());
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
 
-        final org.neodymium.ai.model.PlaybookStep recordedStep = new org.neodymium.ai.model.PlaybookStep();
+        final PlaybookStep recordedStep = new PlaybookStep();
         recordedStep.setInstruction("When this string '' is not empty, enter '' as state.");
-        recordedStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+        recordedStep.setStatus(PlaybookStepStatus.SUCCESS);
 
-        final org.neodymium.ai.pipeline.PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, context);
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, context);
 
         // Must succeed without throwing ConclusiveFailureException
         pipelineStep.execute(context);
@@ -195,7 +209,7 @@ public class ExecuteActionsStepTest
             context.popStep().execute(context);
         }
 
-        assertEquals(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS, recordedStep.getStatus());
+        assertEquals(PlaybookStepStatus.SUCCESS, recordedStep.getStatus());
     }
 
     @Test
@@ -212,9 +226,9 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.FORCE_RECORDING);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.FORCE_RECORDING);
 
-        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep();
+        final PlaybookStep step = new PlaybookStep();
         step.setInstruction("Click submit");
         context.getTransientData().put("KEY_CURRENT_PLAYBOOK_STEP", step);
 
@@ -265,7 +279,7 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.LLM_RECORDING);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
 
         final PlaybookStep visualStep = new PlaybookStep();
         visualStep.setInstruction("There are data input forms on the left and order summary on the right (visual).");
@@ -297,7 +311,7 @@ public class ExecuteActionsStepTest
         final MockSutState visualState = new MockSutState("<html><body>Confirmed</body></html>", List.of(screenshot), "hash-vis-replay");
         executor.enqueueState(visualState);
 
-        final SessionData sessionData = new org.neodymium.ai.model.SessionData();
+        final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final AtomicReference<StepFinishedEvent> finishedEventRef = new AtomicReference<>();
         eventBus.registerListener(event -> {
@@ -312,7 +326,7 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
 
         final PlaybookStep visualStep = new PlaybookStep("Green checkmark is displayed (visual: full)");
         visualStep.setScreenshotHash(recordedMatrix);
@@ -363,7 +377,7 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.LLM_RECORDING);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
 
         final PlaybookStep step = new PlaybookStep();
         step.setInstruction("Look at complex interactive chart (visual)");
@@ -372,10 +386,10 @@ public class ExecuteActionsStepTest
         context.pushStep(pipelineStep);
 
         final StateMachineRunner runner = new StateMachineRunner(session);
-        final org.neodymium.ai.pipeline.DivergenceException ex = assertThrows(org.neodymium.ai.pipeline.DivergenceException.class, runner::run);
+        final DivergenceException ex = assertThrows(DivergenceException.class, runner::run);
 
         assertTrue(ex.getMessage().contains("Cannot resolve visually"));
-        assertEquals(org.neodymium.ai.model.ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+        assertEquals(ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
 
     @Test
@@ -406,7 +420,7 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.LLM_RECORDING);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
 
         // Simulate a past action ending 60 seconds ago (e.g. during a retry escalation)
         context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis() - 60_000L);
@@ -423,6 +437,73 @@ public class ExecuteActionsStepTest
         assertTrue(action.getDelayMs() <= 3000L, "Recorded delayMs should be clamped to at most 3000ms, but was: " + action.getDelayMs());
     }
 
+    @Test
+    public void testMapPlaybookStepToPipelineStepUnifiedToolingReplay() throws Exception
+    {
+        System.setProperty("neodymium.ai.tooling.enabled", "true");
+        AiConfiguration.resetInstance();
+        try
+        {
+            final MockTargetExecutor executor = new MockTargetExecutor();
+            final MockLlmProvider mockProvider = new MockLlmProvider();
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockProvider);
+
+            final SessionData sessionData = new SessionData();
+            sessionData.set("testVar", "World");
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+            final ExecutionContext context = session.getExecutionContext();
+
+            context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+            final ToolRegistry toolRegistry = new ToolRegistry();
+            final AtomicBoolean toolExecuted = new AtomicBoolean(false);
+            final AtomicReference<String> resolvedArg = new AtomicReference<>();
+            toolRegistry.register(new AiTool()
+            {
+                @Override
+                public ToolDefinition getDefinition()
+                {
+                    return new ToolDefinition("test_tool", "Test Tool", JsonNodeFactory.instance.objectNode());
+                }
+
+                @Override
+                public ToolResult execute(final ToolCall call, final ToolContext toolContext)
+                {
+                    toolExecuted.set(true);
+                    resolvedArg.set(call.arguments().path("text").asText());
+                    return ToolResult.success(call.callId(), "Executed");
+                }
+            });
+            context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+            final PlaybookStep step = new PlaybookStep("Greet user");
+            final ObjectNode args = JsonNodeFactory.instance.objectNode();
+            args.put("text", "Hello ${testVar}!");
+            step.setToolCalls(List.of(new ToolCall("call-1", "test_tool", args)));
+
+            final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+            context.pushStep(pipelineStep);
+
+            final StateMachineRunner runner = new StateMachineRunner(session);
+            runner.run();
+
+            assertTrue(toolExecuted.get(), "Recorded tool call should have executed via PlaybookToolReplayer");
+            assertEquals("Hello World!", resolvedArg.get(), "Variables should have been resolved during replay");
+            assertNull(mockProvider.getLastRequest(), "Zero LLM calls should occur during replay");
+            assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(), "Step status should be SUCCESS");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.tooling.enabled");
+            AiConfiguration.resetInstance();
+        }
+    }
+
     private static String encodeToBase64(final BufferedImage image) throws IOException
     {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
@@ -432,3 +513,4 @@ public class ExecuteActionsStepTest
         }
     }
 }
+

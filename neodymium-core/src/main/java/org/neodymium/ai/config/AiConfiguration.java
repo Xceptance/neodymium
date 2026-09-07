@@ -945,4 +945,15 @@ public final class AiConfiguration
     {
         return Math.max(10L, getLong("neodymium.ai.llm.initialRetryDelayMs", 100L));
     }
+
+    /**
+     * Checks whether the unified tooling architecture (AgentToolLoopStep and PlaybookToolReplayer)
+     * is enabled. Default is false.
+     *
+     * @return true if unified tooling is enabled, false for legacy execution flow
+     */
+    public boolean isUnifiedToolingEnabled()
+    {
+        return getBoolean("neodymium.ai.tooling.enabled", false);
+    }
 }

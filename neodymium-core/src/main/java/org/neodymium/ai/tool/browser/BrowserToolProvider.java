@@ -214,7 +214,7 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
-                final String selector = call.arguments().path("selector").asText();
+                final String selector = resolveSelector(call.arguments());
                 final String text = call.arguments().path("text").asText();
                 final boolean clearFirst = !call.arguments().has("clearFirst") || call.arguments().path("clearFirst").asBoolean(true);
 
@@ -277,7 +277,7 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
-                final String selector = call.arguments().path("selector").asText();
+                final String selector = resolveSelector(call.arguments());
                 final SelenideElement el = $(selector).shouldBe(Condition.visible);
 
                 if (call.arguments().hasNonNull("value"))
@@ -312,7 +312,7 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
-                final String selector = call.arguments().path("selector").asText();
+                final String selector = resolveSelector(call.arguments());
                 $(selector).shouldBe(Condition.visible).hover();
                 return ToolResult.success(call.callId(), "Hovered over " + selector);
             }
@@ -344,8 +344,10 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
-                final String selector = call.arguments().path("selector").asText();
-                final String expectedText = call.arguments().path("expectedText").asText();
+                final String selector = resolveSelector(call.arguments());
+                final String expectedText = call.arguments().hasNonNull("expectedText")
+                        ? call.arguments().path("expectedText").asText()
+                        : call.arguments().path("text").asText();
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
 
                 if (exact)
@@ -359,6 +361,22 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), "Verified text on " + selector + " matches: " + expectedText);
             }
         };
+    }
+
+    private static String resolveSelector(final JsonNode args)
+    {
+        if (args != null)
+        {
+            if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
+            {
+                return args.path("selector").asText();
+            }
+            if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+            {
+                return args.path("target").asText();
+            }
+        }
+        return "";
     }
 
     private static AiTool createScrollTool()

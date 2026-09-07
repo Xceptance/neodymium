@@ -32,11 +32,14 @@ import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
@@ -72,6 +75,25 @@ public final class PlaybookToolReplayer
             final ToolRegistry registry,
             final ToolContext context) throws Exception
     {
+        return replayStep(step, registry, context, null);
+    }
+
+    /**
+     * Replays all recorded tool calls of a playbook step using the provided registry, context, and session data.
+     *
+     * @param step the playbook step to replay
+     * @param registry tool registry containing registered tools
+     * @param context tool context for execution
+     * @param sessionData session data for variable resolution
+     * @return tool result summarizing replay outcome
+     * @throws Exception if execution fails or unrecoverable defect occurs
+     */
+    public static ToolResult replayStep(
+            final PlaybookStep step,
+            final ToolRegistry registry,
+            final ToolContext context,
+            final SessionData sessionData) throws Exception
+    {
         if (step == null)
         {
             throw new IllegalArgumentException("PlaybookStep must not be null.");
@@ -94,26 +116,31 @@ public final class PlaybookToolReplayer
 
         for (int i = 0; i < toolCalls.size(); i++)
         {
-            final ToolCall call = toolCalls.get(i);
-            ToolCall effectiveCall = call;
-
-            // Check if tool is registered
-            final AiTool tool = effectiveRegistry.getTool(call.toolName())
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown tool during replay: " + call.toolName()));
+            final ToolCall rawCall = toolCalls.get(i);
+            final ToolCall variableResolvedCall = resolveVariables(rawCall, sessionData);
 
             // Attempt locator self-healing if candidates or DomFeatureVector are available
-            final ToolCall healedCall = attemptHealing(call, step, i, effectiveContext);
+            final ToolCall healedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+            final ToolCall finalCall;
             if (healedCall != null)
             {
-                effectiveCall = healedCall;
+                finalCall = healedCall;
                 anyHealed = true;
             }
+            else
+            {
+                finalCall = variableResolvedCall;
+            }
+
+            // Check if tool is registered
+            final AiTool tool = effectiveRegistry.getTool(finalCall.toolName())
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown tool during replay: " + finalCall.toolName()));
 
             // Execute the tool without LLM invocation
             final ToolResult result;
             try
             {
-                result = tool.execute(effectiveCall, effectiveContext);
+                result = tool.execute(finalCall, effectiveContext);
             }
             catch (final AssertionError e)
             {
@@ -139,7 +166,7 @@ public final class PlaybookToolReplayer
                     step.setFailureReason(result.content());
                     throw new AssertionError(result.content());
                 }
-                throw new RuntimeException("Tool execution error in '" + effectiveCall.toolName() + "': " + result.content());
+                throw new RuntimeException("Tool execution error in '" + finalCall.toolName() + "': " + result.content());
             }
         }
 
@@ -173,10 +200,45 @@ public final class PlaybookToolReplayer
     {
         final ToolRegistry effectiveRegistry = registry != null ? registry : createDefaultRegistry();
         final ToolContext toolContext = new SimpleToolContext(effectiveRegistry);
-        final Integer replays = (Integer) executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
-        executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
+        if (executionContext != null)
+        {
+            final Integer replays = (Integer) executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
+            executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
+            return replayStep(step, effectiveRegistry, toolContext, executionContext.getSessionData());
+        }
+        return replayStep(step, effectiveRegistry, toolContext, null);
+    }
 
-        return replayStep(step, effectiveRegistry, toolContext);
+    private static ToolCall resolveVariables(final ToolCall call, final SessionData sessionData)
+    {
+        if (sessionData == null || call.arguments() == null || !call.arguments().isObject())
+        {
+            return call;
+        }
+
+        final ObjectNode args = call.arguments().deepCopy();
+        final List<String> textKeys = new ArrayList<>();
+        final Iterator<String> fieldNames = args.fieldNames();
+        while (fieldNames.hasNext())
+        {
+            final String fieldName = fieldNames.next();
+            if (args.get(fieldName).isTextual())
+            {
+                textKeys.add(fieldName);
+            }
+        }
+        boolean changed = false;
+        for (final String key : textKeys)
+        {
+            final String original = args.get(key).asText();
+            final String resolved = sessionData.resolveVariables(original);
+            if (!resolved.equals(original))
+            {
+                args.put(key, resolved);
+                changed = true;
+            }
+        }
+        return changed ? new ToolCall(call.callId(), call.toolName(), args) : call;
     }
 
     private static ToolCall attemptHealing(
@@ -186,7 +248,7 @@ public final class PlaybookToolReplayer
             final ToolContext context)
     {
         final JsonNode args = call.arguments();
-        if (args == null || !args.hasNonNull("target"))
+        if (args == null || (!args.hasNonNull("target") && !args.hasNonNull("selector")))
         {
             return null;
         }
@@ -230,13 +292,20 @@ public final class PlaybookToolReplayer
             final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedVector, liveCandidates, 0.70);
             if (best != null)
             {
-                final String currentTarget = args.path("target").asText();
+                final String currentTarget = args.hasNonNull("target") ? args.path("target").asText() : args.path("selector").asText();
                 final String healedSelector = resolveSelectorForCandidate(best);
                 if (!currentTarget.equals(healedSelector))
                 {
                     LOGGER.info("🧬 Healed locator '{}' -> '{}' using DomFeatureVector similarity", currentTarget, healedSelector);
                     final ObjectNode updatedArgs = args.deepCopy();
-                    updatedArgs.put("target", healedSelector);
+                    if (args.hasNonNull("selector"))
+                    {
+                        updatedArgs.put("selector", healedSelector);
+                    }
+                    if (args.hasNonNull("target"))
+                    {
+                        updatedArgs.put("target", healedSelector);
+                    }
                     return new ToolCall(call.callId(), call.toolName(), updatedArgs);
                 }
             }
