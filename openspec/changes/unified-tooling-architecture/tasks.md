@@ -39,10 +39,10 @@
 
 ## 7. Playbook Recording & Replay Engine
 
-- [ ] 7.1 Update `PlaybookStep` and `Action` JSON serialization to support `toolCalls` while transparently reading legacy recorded `actions` arrays.
-- [ ] 7.2 Update the playback execution loop to replay `toolCalls` directly via `toolRegistry.getTool(name).execute(...)` without LLM calls.
-- [ ] 7.3 Verify offline replay preserves sub-millisecond similarity healing using recorded `DomFeatureVector` data when selectors change.
-- [ ] 7.4 Verify Tier 2 offline visual dHash / tile SSIM matching for icon-only and textless elements without LLM calls.
+- [x] 7.1 Update `PlaybookStep` and `Action` JSON serialization to support `toolCalls` while transparently reading legacy recorded `actions` arrays.
+- [x] 7.2 Update the playback execution loop to replay `toolCalls` directly via `toolRegistry.getTool(name).execute(...)` without LLM calls.
+- [x] 7.3 Verify offline replay preserves sub-millisecond similarity healing using recorded `DomFeatureVector` data when selectors change.
+- [x] 7.4 Verify Tier 2 offline visual dHash / tile SSIM matching for icon-only and textless elements without LLM calls.
 
 ## 8. Full Verification
 

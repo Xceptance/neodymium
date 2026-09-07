@@ -30,6 +30,7 @@ import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -180,6 +181,11 @@ public final class AgentToolLoopStep implements PipelineStep
                         : "Goal completed without further actions";
                 context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
                 context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
+                final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                if (stepObj instanceof final PlaybookStep currentStep)
+                {
+                    currentStep.setToolCalls(executedCalls);
+                }
                 LOGGER.info("🎯 Goal Accomplished: {}", summary);
                 break;
             }

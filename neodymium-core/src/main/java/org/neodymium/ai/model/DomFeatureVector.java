@@ -79,8 +79,15 @@ public final class DomFeatureVector implements Serializable
     @JsonProperty("height")
     private final int height;
 
+    @JsonProperty("visualHash")
+    private final String visualHash;
+
+    @JsonProperty("tileSsim")
+    private final String tileSsim;
+
     /**
-     * Constructs a new DomFeatureVector with all fields including spatial bounding box geometry.
+     * Constructs a new DomFeatureVector with all fields including spatial bounding box geometry,
+     * perceptual visual dHash, and tile SSIM luminance matrix.
      *
      * @param tag the HTML tag name
      * @param text the visible text content
@@ -94,6 +101,8 @@ public final class DomFeatureVector implements Serializable
      * @param y the bounding box Y coordinate
      * @param width the bounding box width
      * @param height the bounding box height
+     * @param visualHash perceptual visual dHash
+     * @param tileSsim Base64 tile SSIM matrix
      */
     @JsonCreator
     public DomFeatureVector(
@@ -108,7 +117,9 @@ public final class DomFeatureVector implements Serializable
         @JsonProperty("x") final Integer x,
         @JsonProperty("y") final Integer y,
         @JsonProperty("width") final Integer width,
-        @JsonProperty("height") final Integer height)
+        @JsonProperty("height") final Integer height,
+        @JsonProperty("visualHash") final String visualHash,
+        @JsonProperty("tileSsim") final String tileSsim)
     {
         this.tag = tag != null ? tag.trim().toLowerCase() : "";
         this.text = text != null ? text.trim() : "";
@@ -122,6 +133,41 @@ public final class DomFeatureVector implements Serializable
         this.y = y != null ? y : 0;
         this.width = width != null ? width : 0;
         this.height = height != null ? height : 0;
+        this.visualHash = visualHash != null ? visualHash.trim() : "";
+        this.tileSsim = tileSsim != null ? tileSsim.trim() : "";
+    }
+
+    /**
+     * Constructs a new DomFeatureVector with spatial bounding box geometry.
+     *
+     * @param tag the HTML tag name
+     * @param text the visible text content
+     * @param classes the CSS class set
+     * @param attributes the attribute key-value map
+     * @param role the explicit or computed ARIA role
+     * @param accessibleName the computed accessible name
+     * @param parentTag the immediate parent element tag
+     * @param siblingIndex the 0-based sibling index
+     * @param x the bounding box X coordinate
+     * @param y the bounding box Y coordinate
+     * @param width the bounding box width
+     * @param height the bounding box height
+     */
+    public DomFeatureVector(
+        final String tag,
+        final String text,
+        final Set<String> classes,
+        final Map<String, String> attributes,
+        final String role,
+        final String accessibleName,
+        final String parentTag,
+        final int siblingIndex,
+        final Integer x,
+        final Integer y,
+        final Integer width,
+        final Integer height)
+    {
+        this(tag, text, classes, attributes, role, accessibleName, parentTag, siblingIndex, x, y, width, height, "", "");
     }
 
     /**
@@ -267,6 +313,36 @@ public final class DomFeatureVector implements Serializable
     public int getHeight()
     {
         return height;
+    }
+
+    /**
+     * Returns the perceptual visual dHash if present.
+     *
+     * @return the visual dHash string
+     */
+    public String getVisualHash()
+    {
+        return this.visualHash;
+    }
+
+    /**
+     * Returns the Base64 tile SSIM luminance matrix if present.
+     *
+     * @return the tile SSIM matrix string
+     */
+    public String getTileSsim()
+    {
+        return this.tileSsim;
+    }
+
+    /**
+     * Returns true if this feature vector contains a non-empty visual dHash.
+     *
+     * @return true if visual hash is available
+     */
+    public boolean hasVisualHash()
+    {
+        return this.visualHash != null && !this.visualHash.isBlank();
     }
 
     @Override

@@ -285,4 +285,84 @@ public class LocatorCascadeResolverTest
         Assertions.assertFalse(lines.isEmpty());
         Assertions.assertTrue(lines.get(0).startsWith("   │ Vector: tag=<button>"));
     }
+
+    @Test
+    public void testVisualDHashSimilarityExactAndClose()
+    {
+        final String hashA = "ffff0000ffff0000";
+        final String hashB = "ffff0000ffff0000";
+        final String hashC = "ffff0000ffff0003"; // 2 bits different
+
+        Assertions.assertEquals(1.0, LocatorCascadeResolver.calculateDHashSimilarity(hashA, hashB), 0.001);
+        final double closeSim = LocatorCascadeResolver.calculateDHashSimilarity(hashA, hashC);
+        Assertions.assertTrue(closeSim >= 0.95, "2 bits different should be >= 0.95 similarity: " + closeSim);
+    }
+
+    @Test
+    public void testIconOnlyElementMatchingViaVisualDHashAndAspect()
+    {
+        // Recorded icon-only button: text is empty, has visual dHash and 40x40 bounding box
+        final DomFeatureVector recordedIcon = new DomFeatureVector(
+            "button",
+            "",
+            Set.of("icon-btn", "btn-cart"),
+            Map.of("type", "button", "aria-label", ""),
+            "button",
+            "",
+            "header",
+            2,
+            500,
+            20,
+            40,
+            40,
+            "a1b2c3d4e5f60718",
+            ""
+        );
+
+        // Candidate 1 on live page: refactored classes, but identical aspect ratio and close visual dHash
+        final DomFeatureVector liveMatch = new DomFeatureVector(
+            "button",
+            "",
+            Set.of("btn", "action-icon"),
+            Map.of("type", "button"),
+            "button",
+            "",
+            "header",
+            2,
+            520,
+            22,
+            40,
+            40,
+            "a1b2c3d4e5f60719", // 1 bit different
+            ""
+        );
+
+        // Candidate 2 on live page: completely different aspect ratio and visual dHash
+        final DomFeatureVector liveDifferent = new DomFeatureVector(
+            "button",
+            "",
+            Set.of("btn", "text-btn"),
+            Map.of("type", "button"),
+            "button",
+            "",
+            "header",
+            1,
+            100,
+            20,
+            120,
+            40,
+            "0000000000000000",
+            ""
+        );
+
+        final double matchScore = LocatorCascadeResolver.computeSimilarity(recordedIcon, liveMatch);
+        final double diffScore = LocatorCascadeResolver.computeSimilarity(recordedIcon, liveDifferent);
+
+        Assertions.assertTrue(matchScore >= 0.85, "Icon-only match score must be >= 0.85, was: " + matchScore);
+        Assertions.assertTrue(matchScore > diffScore, "Matching candidate must score higher than different candidate");
+
+        final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedIcon, List.of(liveDifferent, liveMatch), 0.85);
+        Assertions.assertNotNull(best);
+        Assertions.assertEquals(liveMatch, best);
+    }
 }

@@ -21,13 +21,19 @@ package org.neodymium.ai.action;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Represents a single executable action parsed from LLM response or recording.
@@ -38,6 +44,8 @@ import org.neodymium.ai.model.DomFeatureVector;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Action
 {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private List<Action> condition;
     private List<Action> then;
     @JsonProperty("else")
@@ -97,6 +105,13 @@ public class Action
      */
     @JsonProperty("domFeatureVector")
     private DomFeatureVector domFeatureVector;
+
+    /**
+     * Associated structured tool call for unified tooling execution and serialization.
+     */
+    @JsonProperty("toolCall")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private ToolCall toolCall;
 
     /**
      * Dynamic parameter binding bindings for extensible runtime properties.
@@ -648,5 +663,146 @@ public class Action
     public final void setDelayMs(final Long delayMs)
     {
         this.delayMs = delayMs;
+    }
+
+    /**
+     * Gets the associated tool call, or null if none.
+     *
+     * @return tool call or null
+     */
+    public ToolCall getToolCall()
+    {
+        return this.toolCall;
+    }
+
+    /**
+     * Sets the associated tool call.
+     *
+     * @param toolCall the tool call
+     */
+    public void setToolCall(final ToolCall toolCall)
+    {
+        this.toolCall = toolCall;
+    }
+
+    /**
+     * Converts this action into a typed {@link ToolCall}, either returning its stored
+     * tool call or synthesizing one from its legacy type, target, and value properties.
+     *
+     * @return equivalent ToolCall
+     */
+    public ToolCall toToolCall()
+    {
+        if (this.toolCall != null)
+        {
+            return this.toolCall;
+        }
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        final String actionType = this.type != null ? this.type.toUpperCase(Locale.ROOT) : "";
+        final String toolName = switch (actionType)
+        {
+            case "CLICK" -> "browser_click";
+            case "TYPE" -> "browser_type";
+            case "NAVIGATE", "OPEN" -> "browser_navigate";
+            case "SELECT" -> "browser_select";
+            case "HOVER" -> "browser_hover";
+            case "ASSERT_TEXT", "ASSERT" -> "browser_assert_text";
+            case "EXECUTE_SCRIPT", "SCRIPT" -> "browser_execute_script";
+            case "SCROLL" -> "browser_scroll";
+            default -> {
+                if (this.type != null && this.type.startsWith("browser_"))
+                {
+                    yield this.type;
+                }
+                yield "browser_click";
+            }
+        };
+
+        if ("browser_navigate".equals(toolName))
+        {
+            args.put("url", this.target != null ? this.target : "");
+        }
+        else if ("browser_assert_text".equals(toolName))
+        {
+            final String txt = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
+            args.put("text", txt != null ? txt : "");
+        }
+        else if ("browser_execute_script".equals(toolName))
+        {
+            args.put("script", this.target != null ? this.target : "");
+        }
+        else
+        {
+            args.put("target", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                args.put("text", this.value.get(0));
+                args.put("value", this.value.get(0));
+            }
+        }
+
+        return new ToolCall(UUID.randomUUID().toString(), toolName, args);
+    }
+
+    /**
+     * Factory method creating an Action from a {@link ToolCall}.
+     *
+     * @param call tool call
+     * @return equivalent Action instance
+     */
+    public static Action fromToolCall(final ToolCall call)
+    {
+        if (call == null)
+        {
+            return null;
+        }
+
+        final String name = call.toolName();
+        final JsonNode args = call.arguments();
+        final String type = switch (name)
+        {
+            case "browser_click" -> "CLICK";
+            case "browser_type" -> "TYPE";
+            case "browser_navigate" -> "NAVIGATE";
+            case "browser_select" -> "SELECT";
+            case "browser_hover" -> "HOVER";
+            case "browser_assert_text" -> "ASSERT_TEXT";
+            case "browser_execute_script" -> "EXECUTE_SCRIPT";
+            case "browser_scroll" -> "SCROLL";
+            default -> name;
+        };
+
+        final String target;
+        if (args != null && args.hasNonNull("target"))
+        {
+            target = args.path("target").asText();
+        }
+        else if (args != null && args.hasNonNull("url"))
+        {
+            target = args.path("url").asText();
+        }
+        else if (args != null && args.hasNonNull("script"))
+        {
+            target = args.path("script").asText();
+        }
+        else
+        {
+            target = "";
+        }
+
+        final List<String> values = new ArrayList<>();
+        if (args != null && args.hasNonNull("text"))
+        {
+            values.add(args.path("text").asText());
+        }
+        else if (args != null && args.hasNonNull("value"))
+        {
+            values.add(args.path("value").asText());
+        }
+
+        final Action action = new Action(type, target, values, "Tool call: " + name, "");
+        action.setToolCall(call);
+        return action;
     }
 }

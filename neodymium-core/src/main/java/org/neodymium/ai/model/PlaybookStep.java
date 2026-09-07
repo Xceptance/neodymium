@@ -25,8 +25,10 @@ import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.prompt.VerificationResult;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
@@ -89,6 +91,13 @@ public final class PlaybookStep
      * The concrete executed actions list associated with this step.
      */
     private final List<Action> actions = new ArrayList<>();
+
+    /**
+     * The executed tool calls associated with this step in the unified tooling architecture.
+     */
+    @JsonProperty("toolCalls")
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    private final List<ToolCall> toolCalls = new ArrayList<>();
 
     /**
      * The current execution state of this step.
@@ -618,6 +627,16 @@ public final class PlaybookStep
      */
     public List<Action> getActions()
     {
+        if (this.actions.isEmpty() && !this.toolCalls.isEmpty())
+        {
+            for (final ToolCall call : this.toolCalls)
+            {
+                if (call != null)
+                {
+                    this.actions.add(Action.fromToolCall(call));
+                }
+            }
+        }
         return this.actions;
     }
 
@@ -632,6 +651,56 @@ public final class PlaybookStep
         if (actions != null)
         {
             this.actions.addAll(actions);
+        }
+    }
+
+    /**
+     * Returns the list of executed tool calls for this step. If no tool calls are explicitly
+     * recorded but legacy recorded actions exist, transparently synthesizes tool calls from them.
+     *
+     * @return the unmodifiable tool calls list
+     */
+    public List<ToolCall> getToolCalls()
+    {
+        if (this.toolCalls.isEmpty() && !this.actions.isEmpty())
+        {
+            final List<ToolCall> synthesized = new ArrayList<>();
+            for (final Action action : this.actions)
+            {
+                if (action != null)
+                {
+                    synthesized.add(action.toToolCall());
+                }
+            }
+            return Collections.unmodifiableList(synthesized);
+        }
+        return Collections.unmodifiableList(this.toolCalls);
+    }
+
+    /**
+     * Sets the executed tool calls for this step.
+     *
+     * @param toolCalls tool calls to set
+     */
+    public void setToolCalls(final List<ToolCall> toolCalls)
+    {
+        this.toolCalls.clear();
+        if (toolCalls != null)
+        {
+            this.toolCalls.addAll(toolCalls);
+        }
+    }
+
+    /**
+     * Adds an executed tool call to this step.
+     *
+     * @param toolCall tool call to add
+     */
+    public void addToolCall(final ToolCall toolCall)
+    {
+        if (toolCall != null)
+        {
+            this.toolCalls.add(toolCall);
         }
     }
 
