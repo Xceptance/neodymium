@@ -25,7 +25,7 @@
 ## 5. Agent Tool Loop Step & Stop Criteria
 
 - [ ] 5.1 Implement `AgentToolLoopStep` driving iterative tool execution (`Think` → `ToolCall` → `Observe` → `Finish`) in place of monolithic `CallLlmStep` + `ExecuteActionsStep`.
-- [ ] 5.2 Implement and unit test the six stop criteria: Goal Completion (`complete_step`), Assertion Failure (`AssertionError`), Turn Budget ceiling, Thrashing / Stagnation detection, Step Timeout, and Fatal Environment Failure.
+- [ ] 5.2 Implement and unit test the six stop criteria: Goal Completion (`complete_step`), Assertion Failure (`AssertionError`), Thrashing / Stagnation detection, Token Budget Guard limits, Liberal Step Timeout (180s), and Fatal Environment Failure.
 - [ ] 5.3 Retire legacy `ToLevelEscalationException`, `HealingRequiredException`, and brute-force context escalation ladders from step execution.
 
 ## 6. Composite Plugin Tools

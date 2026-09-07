@@ -64,14 +64,18 @@ The system SHALL provide interactive discovery tools (including `browser_query_d
 The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `Observe` → `Finish`) for atomic playbook steps, evaluating six explicit stop criteria:
 1. **Goal Completion**: Agent calls `complete_step` or requests no further tools (`SUCCESS`).
 2. **Assertion Failure**: An assertion tool fails with `AssertionError` (`FAILED`).
-3. **Turn Budget Ceiling**: Tool turn limit reached (`FAILED`).
-4. **Thrashing / Stagnation**: Identical consecutive tool calls detected with no progress (`FAILED`).
-5. **Wall-Clock Timeout**: Execution duration exceeds step timeout (`FAILED`).
+3. **Thrashing / Stagnation**: Identical consecutive tool calls detected with no progress (`FAILED`).
+4. **Token Budget Limit**: Cumulative input/output tokens breach configured limits via `TokenBudgetGuard` (`FAILED`).
+5. **Liberal Wall-Clock Timeout**: Execution duration exceeds the configured liberal step timeout (default 180s) (`FAILED`).
 6. **Fatal Environment Failure**: Unrecoverable target crash or user abort (`FAILED`).
 
-#### Scenario: Agent completes step within turn budget
-- **WHEN** the agent performs browser interactions and calls `complete_step` within the turn budget
+#### Scenario: Agent completes step successfully
+- **WHEN** the agent performs browser interactions and calls `complete_step` within budget
 - **THEN** the loop terminates immediately and marks the step as `SUCCESS`.
+
+#### Scenario: Token budget guard halts runaway execution
+- **WHEN** cumulative token consumption for the step breaches the configured token ceiling
+- **THEN** the loop terminates immediately with a token budget exceeded failure without burning further tokens.
 
 #### Scenario: Agent fails immediately on assertion defect
 - **WHEN** an assertion tool is executed and detects a factual mismatch

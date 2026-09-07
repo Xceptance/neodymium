@@ -64,12 +64,12 @@ This design unifies both into an in-process, schema-driven Tooling Architecture 
 ### 6. `AgentToolLoopStep` and Six Stop Criteria
 - **Decision**: Replace `CallLlmStep<List<Action>>` and `ExecuteActionsStep` with `AgentToolLoopStep`. The loop terminates upon encountering any of six explicit stop criteria:
   1. **Goal Accomplished (`SUCCESS`)**: Agent calls `complete_step(summary)` or returns with no further tool calls needed.
-  2. **Assertion Failure (`FAILED`)**: An assertion tool (`assert_text_equals`, `assert_element_exists`, `@AiTool` custom assertion) fails with `AssertionError`.
-  3. **Turn Budget Ceiling (`FAILED`)**: Step reaches maximum allowed tool turns (default 10, configurable via `neodymium.ai.agent.maxTurnsPerStep`).
-  4. **Thrashing / Stagnation (`FAILED`)**: Agent issues identical tool calls with identical arguments 3 times consecutively with no state change.
-  5. **Wall-Clock Timeout (`FAILED`)**: Step duration exceeds maximum configured step timeout.
+  2. **Assertion Failure (`FAILED`)**: An assertion tool (`assert_text_equals`, `assert_element_exists`, `@AiTool` custom assertion) fails with `AssertionError`. Immediate fail on real defects.
+  3. **Thrashing / Stagnation Breaker (`FAILED`)**: Agent issues identical tool calls with identical arguments 3 times consecutively without state change or progress.
+  4. **Token Budget Limit (`FAILED`)**: Cumulative input/output tokens tracked via `TokenBudgetGuard` breach the configured step or session token budget ceiling (`TokenBudgetExceededException`), preventing runaway cost without artificially capping legitimate multi-step progress.
+  5. **Liberal Wall-Clock Timeout (`FAILED`)**: Step duration exceeds the configured liberal step timeout (default 180s, configurable via `neodymium.ai.step.timeoutSeconds`), generously accommodating thinking/reasoning model latency and asynchronous DOM element settling.
   6. **Fatal Environment Failure (`FAILED`)**: WebDriver disconnect, browser crash, or user interactive abort (`SKIP`/`ABORT`).
-- **Rationale**: Prevents infinite loops and runaway token usage while guaranteeing immediate, decisive failure on actual application bugs.
+- **Rationale**: Eliminates arbitrary turn limits that mimic the legacy context escalation attempts ceiling. As long as the agent is making forward progress and remains within token and time limits, it is free to execute as many steps as needed.
 
 ### 7. `QualityJudgeToolInterceptor` for Locator Guarding
 - **Decision**: Adapt `QualityJudgeStep` into `QualityJudgeToolInterceptor`. When an agent issues a `browser_*` tool call with proposed locators:
