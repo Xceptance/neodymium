@@ -77,10 +77,10 @@ The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `
 - **WHEN** an assertion tool is executed and detects a factual mismatch
 - **THEN** the loop terminates immediately with `FAILED` without retrying or context escalation.
 
-#### Scenario: Optional step skips without failure when ambient obstacle absent
-- **WHEN** a step marked with the optional flag does not locate its target element within the timeout
-- **THEN** the system logs a warning and marks the step as skipped
-- **AND** execution proceeds to the next step without failing the overall test run.
+#### Scenario: Optional step exhausts up to 3 candidate options before skipping
+- **WHEN** a step marked with the optional flag does not resolve its target on the initial attempt
+- **THEN** the system explores up to 3 viable candidate options or locators to resolve the step
+- **AND** only logs a warning and marks the step as skipped after all 3 candidate options are exhausted without failing the overall test run.
 
 ### Requirement: Quality judge locator guard
 The system SHALL intercept proposed `browser_*` tool calls before browser dispatch to evaluate candidate locator stability, passing high-confidence locators through without latency and triggering deliberation when ambiguity is detected.
