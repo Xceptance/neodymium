@@ -77,6 +77,14 @@ This design unifies both into an in-process, schema-driven Tooling Architecture 
   - If ambiguous ($< 0.85$ or close runner-up), the Judge deliberates or requests clarification before browser dispatch.
 - **Rationale**: Retains Neodymium's locator stability protection while integrating seamlessly into the agent's pre-execution dispatch cycle.
 
+### 8. Human in the Loop for Ambient Obstacles and Modals via `(optional)`
+- **Decision**: The agent SHALL NOT autonomously embark on side-quests to dismiss unexpected popups, modals, or banners unless explicitly instructed. Ephemeral, environment-dependent, or profile-specific obstacles (such as cookie banners, newsletter prompts, or promo dialogs) are declared by the human test author via `(optional)` steps (e.g., `ai.step("(optional) Dismiss cookie consent banner")`). If present, the step executes and dismisses; if absent, it logs a warning/skips without failing the test run.
+- **Rationale**: Keeps the human engineer in control. Autonomous closing of unexpected modals could cover up fatal application defects (e.g. "Session Expired" or "Out of Stock" alerts). Furthermore, recording transient dismissals would poison recorded playbooks for subsequent CI runs where the popup does not appear.
+
+### 9. Replay Healing Feedback Loop (Tier 2 to Tier 1 Execution)
+- **Decision**: When `LocatorCascadeResolver` in Tier 2 heals a shifted or broken selector using `DomFeatureVector` cosine similarity, the healed locator candidate is fed back into Tier 1 for actual Selenide execution and condition polling. A step is only marked complete once physical interaction and condition polling succeed.
+- **Rationale**: Finding an element candidate is not the same as executing the action. Feeding back into Tier 1 ensures animations settle, auto-scrolling triggers, and clickability is verified before updating the recorded locator.
+
 ## Risks / Trade-offs
 
 - **[Risk] Reflection and schema generation overhead at startup** → *Mitigation*: Lazily inspect and cache `ToolDefinition`s in `ToolRegistry` on first access.

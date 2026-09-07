@@ -40,6 +40,12 @@ The system SHALL record tool calls in the recorded JSON playbook and preserve ta
 - **WHEN** a recorded playbook containing browser tool calls is executed in replay mode
 - **THEN** the system executes the recorded tool calls directly without LLM invocation, applying DOM feature vector similarity matching if the target selector has shifted.
 
+#### Scenario: Healed locator executes through native condition polling
+- **WHEN** a recorded tool call fails to find an element with the primary selector
+- **AND** similarity healing resolves a replacement element candidate from DOM feature vectors
+- **THEN** the system dispatches the interaction with the healed locator through native driver condition polling
+- **AND** marks the step complete only after the action execution succeeds.
+
 ### Requirement: Composite plugin execution via tool context
 The system SHALL provide an execution context to tools allowing them to invoke other registered tools, access or set session variables, and attach structured artifacts to the test report without accessing global driver singletons.
 
@@ -70,6 +76,11 @@ The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `
 #### Scenario: Agent fails immediately on assertion defect
 - **WHEN** an assertion tool is executed and detects a factual mismatch
 - **THEN** the loop terminates immediately with `FAILED` without retrying or context escalation.
+
+#### Scenario: Optional step skips without failure when ambient obstacle absent
+- **WHEN** a step marked with the optional flag does not locate its target element within the timeout
+- **THEN** the system logs a warning and marks the step as skipped
+- **AND** execution proceeds to the next step without failing the overall test run.
 
 ### Requirement: Quality judge locator guard
 The system SHALL intercept proposed `browser_*` tool calls before browser dispatch to evaluate candidate locator stability, passing high-confidence locators through without latency and triggering deliberation when ambiguity is detected.
