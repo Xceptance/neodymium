@@ -15,7 +15,9 @@
 
 - [ ] 3.1 Implement core `BrowserToolProvider` wrapping Selenide actions (`click`, `type`, `navigate`, `select`, `hover`, `assert_text`) as `AiTool`s with strict JSON Schemas.
 - [ ] 3.2 Implement active discovery tools (`browser_query_dom`, `browser_inspect`, `browser_scroll`, `browser_take_screenshot`, `browser_execute_script`) so the agent actively inspects page state on demand.
-- [ ] 3.3 Ensure browser action tools capture and preserve `DomFeatureVector`, candidate locators, and screenshot visual hashes, and verify vector capture tests pass.
+- [ ] 3.3 Implement `browser_inspect_visual` (targeted bounding-box crop) and Set-of-Marks visual numeric badge overlay in `browser_take_screenshot(mark_interactive=true)`.
+- [ ] 3.4 Implement visual coordinate re-anchoring bridge via `document.elementFromPoint(x, y)` to resolve underlying DOM elements and generate resilient locators and `DomFeatureVector`s.
+- [ ] 3.5 Ensure browser action tools capture and preserve `DomFeatureVector`, candidate locators, and screenshot visual hashes, and verify vector capture tests pass.
 
 ## 4. Quality Judge Tool Guard
 
@@ -40,6 +42,7 @@
 - [ ] 7.1 Update `PlaybookStep` and `Action` JSON serialization to support `toolCalls` while transparently reading legacy recorded `actions` arrays.
 - [ ] 7.2 Update the playback execution loop to replay `toolCalls` directly via `toolRegistry.getTool(name).execute(...)` without LLM calls.
 - [ ] 7.3 Verify offline replay preserves sub-millisecond similarity healing using recorded `DomFeatureVector` data when selectors change.
+- [ ] 7.4 Verify Tier 2 offline visual dHash / tile SSIM matching for icon-only and textless elements without LLM calls.
 
 ## 8. Full Verification
 

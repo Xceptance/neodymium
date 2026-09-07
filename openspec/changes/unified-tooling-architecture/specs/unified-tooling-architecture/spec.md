@@ -127,5 +127,33 @@ The system SHALL dynamically constrain active tool definitions based on the step
 - **THEN** the quality judge interceptor rejects the tool call with a journey fidelity policy violation
 - **AND** instructs the agent to reach the destination via on-screen UI elements.
 
+### Requirement: Visual discovery and Set-of-Marks tools
+The system SHALL expose targeted visual inspection (`browser_inspect_visual`) and Set-of-Marks badge rendering (`browser_take_screenshot(mark_interactive=true)`), allowing the agent to visually inspect cropped bounding boxes or resolve ambiguous and non-DOM interactive candidates using visual numeric overlays.
+
+#### Scenario: Agent inspects targeted element visual crop
+- **WHEN** an agent issues a `browser_inspect_visual` call for a specific selector or container
+- **THEN** the system returns a cropped base64 thumbnail of the target bounding box with dimension metadata.
+
+#### Scenario: Agent captures screenshot with Set-of-Marks visual badges
+- **WHEN** an agent calls `browser_take_screenshot` with interactive marking enabled
+- **THEN** the system injects temporary visual numeric badges over interactive element candidate centers and returns the annotated screenshot.
+
+### Requirement: Visual coordinate re-anchoring to DOM
+The system SHALL intercept visual badge or coordinate-based interactions, resolve the underlying DOM element via `document.elementFromPoint`, extract its hierarchical selector and `DomFeatureVector`, and record them into the playbook step to ensure future test runs replay deterministically at native machine speed.
+
+#### Scenario: Visual coordinate click re-anchors to underlying DOM element
+- **WHEN** an interaction is performed using viewport coordinates or a Set-of-Marks badge
+- **THEN** the system resolves the underlying element at those coordinates via `document.elementFromPoint`
+- **AND** generates a resilient DOM selector and `DomFeatureVector` stored in the recorded playbook step.
+
+### Requirement: Tier 2 perceptual visual similarity matching
+The system SHALL evaluate perceptual visual dHash and tile SSIM similarity in `LocatorCascadeResolver` during offline replay when candidate elements lack distinct text or classes, resolving matching icon-only elements in $< 1\text{ms}$ on CPU without invoking LLMs.
+
+#### Scenario: Heal icon button via visual dHash when text is absent
+- **WHEN** a recorded button with an icon and no inner text cannot be located by its primary selector
+- **AND** candidate elements in the container match the recorded bounding box aspect ratio and perceptual visual dHash with similarity $\ge 0.85$
+- **THEN** the system heals the locator and passes the candidate element directly to native driver condition polling without LLM invocation.
+
+
 
 
