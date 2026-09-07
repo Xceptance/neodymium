@@ -125,6 +125,16 @@ public record ToolResult(
     }
 
     /**
+     * Returns true if this tool execution failed with {@link Status#ERROR} or {@link Status#POLICY_VIOLATION}.
+     *
+     * @return true if failed or blocked by policy
+     */
+    public boolean isError()
+    {
+        return this.status == Status.ERROR || this.status == Status.POLICY_VIOLATION;
+    }
+
+    /**
      * Creates a successful tool result with the given content.
      *
      * @param callId call identifier

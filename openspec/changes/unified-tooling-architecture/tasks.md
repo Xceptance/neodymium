@@ -21,9 +21,9 @@
 
 ## 4. Quality Judge Tool Guard
 
-- [ ] 4.1 Implement `QualityJudgeToolInterceptor` intercepting proposed `browser_*` tool calls before browser dispatch.
-- [ ] 4.2 Verify candidate locator scoring passes high-confidence ($\ge 0.95$) locators immediately and triggers deliberation for ambiguous candidates.
-- [ ] 4.3 Implement Journey Fidelity policy checks in `QualityJudgeToolInterceptor` to reject direct URL mutations or script redirects during interaction steps.
+- [x] 4.1 Implement `QualityJudgeToolInterceptor` intercepting proposed `browser_*` tool calls before browser dispatch.
+- [x] 4.2 Verify candidate locator scoring passes high-confidence ($\ge 0.95$) locators immediately and triggers deliberation for ambiguous candidates.
+- [x] 4.3 Implement Journey Fidelity policy checks in `QualityJudgeToolInterceptor` to reject direct URL mutations or script redirects during interaction steps.
 
 ## 5. Agent Tool Loop Step & Stop Criteria
 
