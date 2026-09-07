@@ -1,8 +1,8 @@
 ## 1. Core Tool Abstractions
 
-- [ ] 1.1 Create `AiTool`, `ToolDefinition`, `ToolCall`, and `ToolResult` interfaces and records in `org.neodymium.ai.tool` and verify unit tests for immutability and schema access pass.
-- [ ] 1.2 Implement `ToolContext` interface providing `invokeTool`, session variable access, and artifact attachment, and verify mock invocation tests pass.
-- [ ] 1.3 Implement thread-safe `ToolRegistry` with registration, discovery, and lookup capabilities, and verify concurrent lookup tests pass.
+- [x] 1.1 Create `AiTool`, `ToolDefinition`, `ToolCall`, and `ToolResult` interfaces and records in `org.neodymium.ai.tool` and verify unit tests for immutability and schema access pass.
+- [x] 1.2 Implement `ToolContext` interface providing `invokeTool`, session variable access, and artifact attachment, and verify mock invocation tests pass.
+- [x] 1.3 Implement thread-safe `ToolRegistry` with registration, discovery, and lookup capabilities, and verify concurrent lookup tests pass.
 
 ## 2. Java Tool Reflection & Schema Generation
 
