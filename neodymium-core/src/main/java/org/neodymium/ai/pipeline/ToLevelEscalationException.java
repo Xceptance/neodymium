@@ -24,7 +24,9 @@ package org.neodymium.ai.pipeline;
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
+ * @deprecated Replaced by iterative {@link org.neodymium.ai.pipeline.steps.AgentToolLoopStep} active discovery tools.
  */
+@Deprecated(since = "5.6.0", forRemoval = true)
 public final class ToLevelEscalationException extends EscalationException
 {
     private static final long serialVersionUID = 1L;

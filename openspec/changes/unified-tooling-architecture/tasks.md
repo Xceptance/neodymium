@@ -27,10 +27,10 @@
 
 ## 5. Agent Tool Loop Step & Stop Criteria
 
-- [ ] 5.1 Implement `AgentToolLoopStep` driving iterative tool execution (`Think` → `ToolCall` → `Observe` → `Finish`) in place of monolithic `CallLlmStep` + `ExecuteActionsStep`.
-- [ ] 5.2 Implement and unit test the six stop criteria: Goal Completion (`complete_step`), Assertion Failure (`AssertionError`), Thrashing / Stagnation detection, Token Budget Guard limits, Liberal Step Timeout (180s), and Fatal Environment Failure.
-- [ ] 5.3 Implement dynamic intent-based tool filtering in `AgentToolLoopStep` based on `SemanticIntent` (omitting `browser_navigate` for interactive steps).
-- [ ] 5.4 Retire legacy `ToLevelEscalationException`, `HealingRequiredException`, and brute-force context escalation ladders from step execution.
+- [x] 5.1 Implement `AgentToolLoopStep` driving iterative tool execution (`Think` → `ToolCall` → `Observe` → `Finish`) in place of monolithic `CallLlmStep` + `ExecuteActionsStep`.
+- [x] 5.2 Implement and unit test the six stop criteria: Goal Completion (`complete_step`), Assertion Failure (`AssertionError`), Thrashing / Stagnation detection, Token Budget Guard limits, Liberal Step Timeout (180s), and Fatal Environment Failure.
+- [x] 5.3 Implement dynamic intent-based tool filtering in `AgentToolLoopStep` based on `SemanticIntent` (omitting `browser_navigate` for interactive steps).
+- [x] 5.4 Retire legacy `ToLevelEscalationException`, `HealingRequiredException`, and brute-force context escalation ladders from step execution.
 
 ## 6. Composite Plugin Tools
 
