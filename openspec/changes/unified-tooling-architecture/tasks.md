@@ -6,10 +6,10 @@
 
 ## 2. Java Tool Reflection & Schema Generation
 
-- [ ] 2.1 Create `@AiTool` and `@ToolParam` annotations with proper retention and targets in `org.neodymium.ai.tool`.
-- [ ] 2.2 Implement `JavaToolFactory` to reflectively generate OpenAPI/JSON Schema from annotated Java methods using Jackson and verify schema generation unit tests pass.
-- [ ] 2.3 Implement argument deserialization and return value variable binding in `JavaTool` and verify multi-parameter typed invocations (`BigDecimal`, `int`, `String`, POJOs) pass.
-- [ ] 2.4 Migrate utility methods in `AiAssertions` directly to `@AiTool` and retire `@AiMethod` and `JavaMethodAction`, verifying assertion execution tests pass.
+- [x] 2.1 Create `@AiTool` and `@ToolParam` annotations with proper retention and targets in `org.neodymium.ai.tool`.
+- [x] 2.2 Implement `JavaToolFactory` to reflectively generate OpenAPI/JSON Schema from annotated Java methods using Jackson and verify schema generation unit tests pass.
+- [x] 2.3 Implement argument deserialization and return value variable binding in `JavaTool` and verify multi-parameter typed invocations (`BigDecimal`, `int`, `String`, POJOs) pass.
+- [x] 2.4 Migrate utility methods in `AiAssertions` directly to `@AiTool` and retire `@AiMethod` and `JavaMethodAction`, verifying assertion execution tests pass.
 
 ## 3. Browser & Active Discovery Tools
 
