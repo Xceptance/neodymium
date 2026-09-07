@@ -105,7 +105,10 @@ public final class PesapPreStep implements PipelineStep
         final ExecutionMode executionMode = (ExecutionMode) context.getTransientData()
             .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
         final boolean isReplay = executionMode == ExecutionMode.REPLAY_STRICT
-            || (executionMode != null && executionMode.isReplay() && !this.step.isNoReplay() && this.step.getActions() != null && (!this.step.getActions().isEmpty() || this.step.getScreenshotHash() != null));
+            || (executionMode != null && executionMode.isReplay() && !this.step.isNoReplay()
+                && ((this.step.getActions() != null && !this.step.getActions().isEmpty())
+                    || (this.step.getToolCalls() != null && !this.step.getToolCalls().isEmpty())
+                    || this.step.getScreenshotHash() != null));
         final AiConfiguration config = AiConfiguration.getInstance();
 
         if (!isReplay && config.isPesapEnabled() && !alreadySplitSteps.contains(this.step))

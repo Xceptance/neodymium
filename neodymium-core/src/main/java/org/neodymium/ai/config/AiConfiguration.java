@@ -948,12 +948,12 @@ public final class AiConfiguration
 
     /**
      * Checks whether the unified tooling architecture (AgentToolLoopStep and PlaybookToolReplayer)
-     * is enabled. Default is false.
+     * is enabled. Default is true.
      *
      * @return true if unified tooling is enabled, false for legacy execution flow
      */
     public boolean isUnifiedToolingEnabled()
     {
-        return getBoolean("neodymium.ai.tooling.enabled", false);
+        return getBoolean("neodymium.ai.tooling.enabled", true);
     }
 }

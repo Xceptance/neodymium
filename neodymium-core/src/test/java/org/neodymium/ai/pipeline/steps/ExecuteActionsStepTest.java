@@ -246,52 +246,62 @@ public class ExecuteActionsStepTest
     @Test
     public void testVisualStepExecutionDispatchesStateCapturedEvent() throws PipelineException
     {
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final String base64Png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-        final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", base64Png);
-        final MockSutState visualState = new MockSutState("<html><body>Visual Layout</body></html>", List.of(screenshot), "hash-vis-1");
-        executor.enqueueState(visualState);
-
-        final MockLlmProvider mockProvider = new MockLlmProvider();
-        // 1. PESAP response predicting VISUAL context with ASSERT intent
-        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
-        // 2. Action extraction response returning a NONE action (pure visual verification passing)
-        mockProvider.addResponse(new LlmResponse("[{\"action\": \"NONE\", \"target\": \"\", \"value\": \"Visual layout verified\"}]", new TokenUsage(200, 30, 230, 0), "mock-model"));
-
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(mockProvider);
-
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final AtomicBoolean stateCapturedReceived = new AtomicBoolean(false);
-        eventBus.registerListener(event -> {
-            if (event instanceof StateCapturedEvent sce)
-            {
-                if (sce.getState() != null && sce.getState().getAttachments() != null && !sce.getState().getAttachments().isEmpty())
-                {
-                    stateCapturedReceived.set(true);
-                }
-            }
-        });
-
-        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
-
-        final PlaybookStep visualStep = new PlaybookStep();
-        visualStep.setInstruction("There are data input forms on the left and order summary on the right (visual).");
-
-        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
-        pipelineStep.execute(context);
-        while (context.hasSteps())
+        System.setProperty("neodymium.ai.tooling.enabled", "false");
+        AiConfiguration.resetInstance();
+        try
         {
-            context.popStep().execute(context);
-        }
+            final MockTargetExecutor executor = new MockTargetExecutor();
+            final String base64Png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", base64Png);
+            final MockSutState visualState = new MockSutState("<html><body>Visual Layout</body></html>", List.of(screenshot), "hash-vis-1");
+            executor.enqueueState(visualState);
 
-        assertTrue(stateCapturedReceived.get(), "StateCapturedEvent with screenshot attachment must be dispatched during visual step execution");
+            final MockLlmProvider mockProvider = new MockLlmProvider();
+            // 1. PESAP response predicting VISUAL context with ASSERT intent
+            mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
+            // 2. Action extraction response returning a NONE action (pure visual verification passing)
+            mockProvider.addResponse(new LlmResponse("[{\"action\": \"NONE\", \"target\": \"\", \"value\": \"Visual layout verified\"}]", new TokenUsage(200, 30, 230, 0), "mock-model"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockProvider);
+
+            final SessionData sessionData = new SessionData();
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final AtomicBoolean stateCapturedReceived = new AtomicBoolean(false);
+            eventBus.registerListener(event -> {
+                if (event instanceof StateCapturedEvent sce)
+                {
+                    if (sce.getState() != null && sce.getState().getAttachments() != null && !sce.getState().getAttachments().isEmpty())
+                    {
+                        stateCapturedReceived.set(true);
+                    }
+                }
+            });
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+            final ExecutionContext context = session.getExecutionContext();
+
+            context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+            final PlaybookStep visualStep = new PlaybookStep();
+            visualStep.setInstruction("There are data input forms on the left and order summary on the right (visual).");
+
+            final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+            pipelineStep.execute(context);
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+
+            assertTrue(stateCapturedReceived.get(), "StateCapturedEvent with screenshot attachment must be dispatched during visual step execution");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.tooling.enabled");
+            AiConfiguration.resetInstance();
+        }
     }
 
     @Test
@@ -349,47 +359,57 @@ public class ExecuteActionsStepTest
     @Test
     public void testVisualRichEscalationStaysOnVisualRichAndAbortsAfterThreeAttempts() throws Exception
     {
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", "dummy-base64");
-        final MockSutState visualState = new MockSutState("<html><body>Content</body></html>", List.of(screenshot), "hash-1");
-        for (int i = 0; i < 10; i++)
+        System.setProperty("neodymium.ai.tooling.enabled", "false");
+        AiConfiguration.resetInstance();
+        try
         {
-            executor.enqueueState(visualState);
-        }
+            final MockTargetExecutor executor = new MockTargetExecutor();
+            final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", "dummy-base64");
+            final MockSutState visualState = new MockSutState("<html><body>Content</body></html>", List.of(screenshot), "hash-1");
+            for (int i = 0; i < 10; i++)
+            {
+                executor.enqueueState(visualState);
+            }
 
-        final MockLlmProvider mockProvider = new MockLlmProvider();
-        // 1. PESAP predicts VISUAL_RICH with ASSERT intent
-        mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL_RICH\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
-        // 2-5. Action extraction requests escalation on VISUAL_RICH repeatedly
-        for (int i = 0; i < 5; i++)
+            final MockLlmProvider mockProvider = new MockLlmProvider();
+            // 1. PESAP predicts VISUAL_RICH with ASSERT intent
+            mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL_RICH\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
+            // 2-5. Action extraction requests escalation on VISUAL_RICH repeatedly
+            for (int i = 0; i < 5; i++)
+            {
+                mockProvider.addResponse(new LlmResponse("{\"status\": \"ESCALATE\", \"reasoning\": \"Cannot resolve visually\"}", new TokenUsage(200, 30, 230, 0), "mock-model"));
+            }
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockProvider);
+
+            final SessionData sessionData = new SessionData();
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+            final ExecutionContext context = session.getExecutionContext();
+
+            context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+            final PlaybookStep step = new PlaybookStep();
+            step.setInstruction("Look at complex interactive chart (visual)");
+
+            final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+            context.pushStep(pipelineStep);
+
+            final StateMachineRunner runner = new StateMachineRunner(session);
+            final DivergenceException ex = assertThrows(DivergenceException.class, runner::run);
+
+            assertTrue(ex.getMessage().contains("Cannot resolve visually"));
+            assertEquals(ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+        }
+        finally
         {
-            mockProvider.addResponse(new LlmResponse("{\"status\": \"ESCALATE\", \"reasoning\": \"Cannot resolve visually\"}", new TokenUsage(200, 30, 230, 0), "mock-model"));
+            System.clearProperty("neodymium.ai.tooling.enabled");
+            AiConfiguration.resetInstance();
         }
-
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(mockProvider);
-
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-
-        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
-
-        final PlaybookStep step = new PlaybookStep();
-        step.setInstruction("Look at complex interactive chart (visual)");
-
-        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
-        context.pushStep(pipelineStep);
-
-        final StateMachineRunner runner = new StateMachineRunner(session);
-        final DivergenceException ex = assertThrows(DivergenceException.class, runner::run);
-
-        assertTrue(ex.getMessage().contains("Cannot resolve visually"));
-        assertEquals(ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
 
     @Test

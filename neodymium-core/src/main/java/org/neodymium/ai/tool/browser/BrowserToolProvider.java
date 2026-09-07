@@ -33,6 +33,7 @@ import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -88,6 +89,7 @@ public final class BrowserToolProvider
         registry.register(createInspectTool());
         registry.register(createTakeScreenshotTool());
         registry.register(createInspectVisualTool());
+        registry.register(createPressKeyTool());
     }
 
     private static AiTool createClickTool()
@@ -197,6 +199,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "Selector of the input element");
         props.putObject("text").put("type", "string").put("description", "Text to type into the element");
         props.putObject("clearFirst").put("type", "boolean").put("description", "Whether to clear existing text first (default: true)");
+        props.putObject("pressEnter").put("type", "boolean").put("description", "Whether to press Enter key after typing (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
@@ -217,6 +220,7 @@ public final class BrowserToolProvider
                 final String selector = resolveSelector(call.arguments());
                 final String text = call.arguments().path("text").asText();
                 final boolean clearFirst = !call.arguments().has("clearFirst") || call.arguments().path("clearFirst").asBoolean(true);
+                final boolean pressEnter = call.arguments().path("pressEnter").asBoolean(false);
 
                 final SelenideElement el = $(selector).shouldBe(Condition.visible);
                 if (clearFirst)
@@ -224,7 +228,58 @@ public final class BrowserToolProvider
                     el.clear();
                 }
                 el.sendKeys(text);
-                return ToolResult.success(call.callId(), "Typed text into " + selector);
+                if (pressEnter)
+                {
+                    el.pressEnter();
+                }
+                return ToolResult.success(call.callId(), "Typed text into " + selector + (pressEnter ? " and pressed Enter" : ""));
+            }
+        };
+    }
+
+    private static AiTool createPressKeyTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("key").put("type", "string").put("description", "Key to press, e.g. 'Enter', 'Escape', 'Tab', 'Backspace'");
+        props.putObject("selector").put("type", "string").put("description", "Optional selector of the element to send the key to");
+        schema.putArray("required").add("key");
+
+        final ToolDefinition def = new ToolDefinition("browser_press_key", "Presses a keyboard key on the active element or specified element", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String keyName = call.arguments().path("key").asText("ENTER").toUpperCase();
+                final String selector = resolveSelector(call.arguments());
+                CharSequence resolvedKey;
+                try
+                {
+                    resolvedKey = Keys.valueOf(keyName);
+                }
+                catch (final IllegalArgumentException e)
+                {
+                    resolvedKey = Keys.ENTER;
+                }
+                final CharSequence key = resolvedKey;
+
+                if (!selector.isBlank())
+                {
+                    $(selector).sendKeys(key);
+                }
+                else
+                {
+                    Selenide.actions().sendKeys(key).perform();
+                }
+                return ToolResult.success(call.callId(), "Pressed key " + keyName + (selector.isBlank() ? "" : " on " + selector));
             }
         };
     }
@@ -350,15 +405,17 @@ public final class BrowserToolProvider
                         : call.arguments().path("text").asText();
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
 
+                final SelenideElement el = (selector == null || selector.isBlank()) ? $("body") : $(selector);
                 if (exact)
                 {
-                    $(selector).shouldHave(Condition.exactText(expectedText));
+                    el.shouldHave(Condition.exactText(expectedText));
                 }
                 else
                 {
-                    $(selector).shouldHave(Condition.text(expectedText));
+                    el.shouldHave(Condition.text(expectedText));
                 }
-                return ToolResult.success(call.callId(), "Verified text on " + selector + " matches: " + expectedText);
+                final String targetDesc = (selector == null || selector.isBlank()) ? "page" : selector;
+                return ToolResult.success(call.callId(), "Verified text on " + targetDesc + " matches: " + expectedText);
             }
         };
     }

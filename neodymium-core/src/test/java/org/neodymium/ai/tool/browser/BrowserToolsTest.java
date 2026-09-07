@@ -66,7 +66,8 @@ public class BrowserToolsTest
                 "browser_query_dom",
                 "browser_inspect",
                 "browser_take_screenshot",
-                "browser_inspect_visual"
+                "browser_inspect_visual",
+                "browser_press_key"
         );
 
         for (final String toolName : expectedTools)

@@ -21,6 +21,7 @@ package org.neodymium.ai.pipeline.steps;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
@@ -28,14 +29,21 @@ import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.SutAttachment;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.prompt.LlmResponseSanitizer;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
@@ -132,6 +140,24 @@ public final class AgentToolLoopStep implements PipelineStep
         final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : null;
         final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
 
+        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+        final Object currentLevelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+        final ContextLevel level = currentLevelObj instanceof ContextLevel cl ? cl : ContextLevel.LEAN;
+
+        // Capture initial SUT state so Turn 1 exposes interactive elements & state
+        if (executor != null)
+        {
+            try
+            {
+                final SutState initialState = executor.captureState(level);
+                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, initialState);
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not capture initial SUT state for AgentToolLoopStep: {}", e.getMessage());
+            }
+        }
+
         // Thrashing tracking
         String lastToolName = null;
         JsonNode lastArguments = null;
@@ -173,21 +199,40 @@ public final class AgentToolLoopStep implements PipelineStep
             // Parse response into ToolCall
             final ToolCall proposedCall = parseLlmToolCall(response != null ? response.content() : null);
 
-            // If no tool call returned or complete_step called -> Stop Criterion 1: Goal Accomplished
-            if (proposedCall == null || "complete_step".equals(proposedCall.toolName()))
+            // If complete_step called -> Stop Criterion 1: Goal Accomplished
+            if (proposedCall != null && "complete_step".equals(proposedCall.toolName()))
             {
-                final String summary = proposedCall != null
-                        ? proposedCall.arguments().path("summary").asText("Goal completed")
-                        : "Goal completed without further actions";
+                final String summary = proposedCall.arguments().path("summary").asText("Goal completed");
                 context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
-                context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
-                final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                if (stepObj instanceof final PlaybookStep currentStep)
-                {
-                    currentStep.setToolCalls(executedCalls);
-                }
+                finishLoop(context, executedCalls, summary);
                 LOGGER.info("🎯 Goal Accomplished: {}", summary);
                 break;
+            }
+
+            // If no tool call could be parsed
+            if (proposedCall == null)
+            {
+                LOGGER.warn("LLM turn did not produce a valid tool call: {}", response != null ? response.content() : "empty response");
+                if (executedCalls.isEmpty())
+                {
+                    final List<String> toolNames = new ArrayList<>();
+                    for (final ToolDefinition def : availableTools)
+                    {
+                        toolNames.add(def.name());
+                    }
+                    observations.add("Your response could not be parsed as a valid tool call. Available tools: "
+                            + toolNames
+                            + ". Please respond with a JSON object: {\"thought\": \"...\", \"tool_call\": {\"name\": \"<tool>\", \"arguments\": { ... }}} or call 'complete_step'.");
+                    continue;
+                }
+                else
+                {
+                    final String summary = "Goal completed after executing " + executedCalls.size() + " tool calls";
+                    context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    finishLoop(context, executedCalls, summary);
+                    LOGGER.info("🎯 Goal Accomplished: {}", summary);
+                    break;
+                }
             }
 
             // Stop Criterion 3: Thrashing / Stagnation Breaker (3 consecutive identical calls)
@@ -250,6 +295,21 @@ public final class AgentToolLoopStep implements PipelineStep
 
             executedCalls.add(effectiveCall);
 
+            // Refresh state after mutating browser actions
+            if (executor != null && effectiveCall.toolName().startsWith("browser_")
+                    && !effectiveCall.toolName().startsWith("browser_assert")
+                    && !"browser_take_screenshot".equals(effectiveCall.toolName()))
+            {
+                try
+                {
+                    final SutState updatedState = executor.captureState(level);
+                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, updatedState);
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+
             // Check if tool result content signals an assertion failure
             if (result != null && result.status() == ToolResult.Status.ERROR && result.content().startsWith("AssertionError"))
             {
@@ -262,6 +322,78 @@ public final class AgentToolLoopStep implements PipelineStep
             observations.add(obs);
             LOGGER.debug("Observation: {}", obs);
         }
+    }
+
+    private void finishLoop(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
+    {
+        context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
+        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        if (stepObj instanceof final PlaybookStep currentStep)
+        {
+            currentStep.setToolCalls(executedCalls);
+            final List<Action> actions = new ArrayList<>();
+            for (final ToolCall call : executedCalls)
+            {
+                actions.add(mapToolCallToAction(call));
+            }
+            currentStep.setActions(actions);
+        }
+    }
+
+    private static Action mapToolCallToAction(final ToolCall call)
+    {
+        final String name = call.toolName();
+        final JsonNode args = call.arguments();
+        final String type = switch (name)
+        {
+            case "browser_navigate" -> "NAVIGATE";
+            case "browser_click" -> "CLICK";
+            case "browser_type" -> "TYPE";
+            case "browser_hover" -> "HOVER";
+            case "browser_scroll" -> "SCROLL";
+            case "browser_assert_text" -> "ASSERT_TEXT";
+            case "browser_press_key" -> "KEY_PRESS";
+            default -> name.toUpperCase();
+        };
+        final String target;
+        if ("browser_navigate".equals(name) && args.hasNonNull("url"))
+        {
+            target = args.path("url").asText();
+        }
+        else if (args.hasNonNull("selector"))
+        {
+            target = args.path("selector").asText();
+        }
+        else if (args.hasNonNull("target"))
+        {
+            target = args.path("target").asText();
+        }
+        else
+        {
+            target = "";
+        }
+
+        final Object value;
+        if (args.hasNonNull("text"))
+        {
+            value = args.path("text").asText();
+        }
+        else if (args.hasNonNull("expectedText"))
+        {
+            value = args.path("expectedText").asText();
+        }
+        else if (args.hasNonNull("key"))
+        {
+            value = args.path("key").asText();
+        }
+        else
+        {
+            value = null;
+        }
+
+        final Action action = new Action(type, target, value, "Tool call: " + name, "", false);
+        action.setToolCall(call);
+        return action;
     }
 
     private List<ToolDefinition> filterToolsForIntent(final SemanticIntent intent)
@@ -288,7 +420,15 @@ public final class AgentToolLoopStep implements PipelineStep
         final StringBuilder system = new StringBuilder();
         system.append("You are an autonomous web testing agent. Execute the test goal by invoking available tools.\n");
         system.append("Always return your response as a JSON object with 'thought' and 'tool_call' fields.\n");
-        system.append("When the goal is fully achieved, call tool 'complete_step' with a summary.\n\n");
+        system.append("Example response:\n");
+        system.append("{\n");
+        system.append("  \"thought\": \"Brief explanation of what to do next based on the current page elements\",\n");
+        system.append("  \"tool_call\": {\n");
+        system.append("    \"name\": \"<tool_name>\",\n");
+        system.append("    \"arguments\": { ... }\n");
+        system.append("  }\n");
+        system.append("}\n");
+        system.append("When the goal is fully achieved and verified, call tool 'complete_step' with a summary.\n\n");
         system.append("### Available Tools:\n");
 
         for (final ToolDefinition def : tools)
@@ -300,9 +440,25 @@ public final class AgentToolLoopStep implements PipelineStep
         final StringBuilder user = new StringBuilder();
         user.append("### Test Instruction:\n").append(instruction).append("\n\n");
 
+        List<SutAttachment> attachments = Collections.emptyList();
+        final Object stateObj = context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+        if (stateObj instanceof final SutState sutState)
+        {
+            if (sutState.getTextContent() != null && !sutState.getTextContent().isBlank())
+            {
+                user.append("### Current Page State & Interactive Elements:\n")
+                    .append(sutState.getTextContent())
+                    .append("\n\n");
+            }
+            if (sutState.getAttachments() != null)
+            {
+                attachments = sutState.getAttachments();
+            }
+        }
+
         if (!observations.isEmpty())
         {
-            user.append("### Previous Tool Observations:\n");
+            user.append("### Previous Tool Observations in this step:\n");
             for (final String obs : observations)
             {
                 user.append("- ").append(obs).append("\n");
@@ -310,13 +466,6 @@ public final class AgentToolLoopStep implements PipelineStep
             user.append("\n");
         }
         user.append("What is your next tool call?");
-
-        List<SutAttachment> attachments = Collections.emptyList();
-        final Object stateObj = context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
-        if (stateObj instanceof final SutState sutState && sutState.getAttachments() != null)
-        {
-            attachments = sutState.getAttachments();
-        }
 
         return new LlmRequest(
                 system.toString(),
@@ -338,31 +487,95 @@ public final class AgentToolLoopStep implements PipelineStep
 
         try
         {
-            String cleaned = content.trim();
-            if (cleaned.startsWith("```json"))
+            final String json = LlmResponseSanitizer.extractJson(content);
+            if (json == null || json.isBlank())
             {
-                cleaned = cleaned.substring(7);
+                return null;
             }
-            else if (cleaned.startsWith("```"))
-            {
-                cleaned = cleaned.substring(3);
-            }
-            if (cleaned.endsWith("```"))
-            {
-                cleaned = cleaned.substring(0, cleaned.length() - 3);
-            }
-            cleaned = cleaned.trim();
 
-            final JsonNode root = MAPPER.readTree(cleaned);
-            final JsonNode toolCallNode = root.hasNonNull("tool_call") ? root.path("tool_call") : root;
+            final JsonNode root = MAPPER.readTree(json);
 
-            if (toolCallNode.hasNonNull("name"))
+            // Handle array root: [ { ... } ]
+            JsonNode candidate = root;
+            if (root.isArray() && root.size() > 0)
             {
-                final String name = toolCallNode.path("name").asText();
-                final JsonNode args = toolCallNode.hasNonNull("arguments")
-                        ? toolCallNode.path("arguments")
-                        : MAPPER.createObjectNode();
-                return new ToolCall(UUID.randomUUID().toString(), name, args);
+                candidate = root.get(0);
+            }
+            else if (root.hasNonNull("tool_calls") && root.path("tool_calls").isArray() && root.path("tool_calls").size() > 0)
+            {
+                candidate = root.path("tool_calls").get(0);
+            }
+            else if (root.hasNonNull("tool_call"))
+            {
+                candidate = root.path("tool_call");
+            }
+
+            String toolName = null;
+            if (candidate.hasNonNull("name"))
+            {
+                toolName = candidate.path("name").asText();
+            }
+            else if (candidate.hasNonNull("tool"))
+            {
+                toolName = candidate.path("tool").asText();
+            }
+            else if (candidate.hasNonNull("toolName"))
+            {
+                toolName = candidate.path("toolName").asText();
+            }
+            else if (candidate.hasNonNull("action"))
+            {
+                final String act = candidate.path("action").asText().toUpperCase();
+                toolName = switch (act)
+                {
+                    case "CLICK" -> "browser_click";
+                    case "TYPE" -> "browser_type";
+                    case "NAVIGATE" -> "browser_navigate";
+                    case "HOVER" -> "browser_hover";
+                    case "SCROLL" -> "browser_scroll";
+                    case "ASSERT_TEXT" -> "browser_assert_text";
+                    case "KEY_PRESS" -> "browser_press_key";
+                    case "NONE" -> "complete_step";
+                    default -> "browser_" + act.toLowerCase();
+                };
+            }
+
+            if (toolName != null && !toolName.isBlank())
+            {
+                final JsonNode args;
+                if (candidate.hasNonNull("arguments"))
+                {
+                    args = candidate.path("arguments");
+                }
+                else if (candidate.hasNonNull("parameters"))
+                {
+                    args = candidate.path("parameters");
+                }
+                else if (candidate.hasNonNull("args"))
+                {
+                    args = candidate.path("args");
+                }
+                else
+                {
+                    final ObjectNode inlined = candidate.deepCopy();
+                    inlined.remove("name");
+                    inlined.remove("tool");
+                    inlined.remove("toolName");
+                    inlined.remove("thought");
+                    inlined.remove("reasoning");
+                    inlined.remove("tool_call");
+                    inlined.remove("action");
+                    if (candidate.hasNonNull("target"))
+                    {
+                        inlined.put("selector", candidate.path("target").asText());
+                    }
+                    if (candidate.hasNonNull("value"))
+                    {
+                        inlined.put("text", candidate.path("value").asText());
+                    }
+                    args = inlined;
+                }
+                return new ToolCall(UUID.randomUUID().toString(), toolName, args);
             }
         }
         catch (final Exception e)
@@ -420,7 +633,35 @@ public final class AgentToolLoopStep implements PipelineStep
                     ? LlmCapability.VISION
                     : LlmCapability.TEXT_ONLY;
             final LlmProvider provider = session.getLlmRegistry().getProvider(cap);
-            return provider.chat(request);
+            final String capName = cap.name();
+
+            if (session.getEventBus() != null)
+            {
+                session.getEventBus().dispatch(new LlmRequestSentEvent(request, capName));
+            }
+            final long start = System.currentTimeMillis();
+            final LlmResponse response = provider.chat(request);
+            final long durationMs = System.currentTimeMillis() - start;
+            if (session.getEventBus() != null)
+            {
+                session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, capName));
+            }
+
+            final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+            context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);
+            final Integer stdCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_STANDARD_CALL_COUNT, 0);
+            context.getTransientData().put(ExecutionContext.KEY_STANDARD_CALL_COUNT, stdCalls + 1);
+
+            final TokenUsage newUsage = response != null ? response.tokenUsage() : null;
+            if (newUsage != null)
+            {
+                final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                if (statsObj instanceof final StepStats stats)
+                {
+                    stats.addStandardCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
+                }
+            }
+            return response;
         };
     }
 
