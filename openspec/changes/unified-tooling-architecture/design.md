@@ -86,6 +86,14 @@ This design unifies both into an in-process, schema-driven Tooling Architecture 
 - **Decision**: When `LocatorCascadeResolver` in Tier 2 heals a shifted or broken selector using `DomFeatureVector` cosine similarity, the healed locator candidate is fed back into Tier 1 for actual Selenide execution and condition polling. A step is only marked complete once physical interaction and condition polling succeed.
 - **Rationale**: Finding an element candidate is not the same as executing the action. Feeding back into Tier 1 ensures animations settle, auto-scrolling triggers, and clickability is verified before updating the recorded locator.
 
+### 10. Intent-Based Dynamic Tool Filtering & Journey Fidelity Policy
+- **Decision**: To prevent the agent from bypassing realistic user journeys (e.g. mutating the URL directly to `/cart` instead of finding and clicking through the cart navigation UI), the engine enforces strict multi-layer Journey Fidelity:
+  1. **Dynamic Tool Provisioning via Semantic Intent**: During `PesapPreStep`, the step's semantic intent is classified (`CLICK`, `TYPE`, `SELECT`, `ASSERT`, `NAVIGATE`). If the intent is an interactive category (`CLICK`, `TYPE`, `SELECT`), `browser_navigate` is omitted from the active tool definitions passed to the LLM. The agent cannot invoke tools not present in its schema.
+  2. **Pre-Invocation Quality Judge Guard**: `QualityJudgeToolInterceptor` enforces a journey fidelity policy. Any tool call or script that attempts to alter the browser URL or navigate directly on an interactive step is rejected immediately with an explanatory policy message (`"Journey Fidelity Violation: Direct URL navigation is prohibited. Target must be reached via on-screen UI elements"`).
+  3. **Prompt-Level Human Fidelity Constraint**: The agent's system prompt strictly instructs that it simulates a human end-user who cannot edit the address bar to skip user flows, and must interact through buttons, links, and menus.
+  4. **Script Sandboxing**: `browser_execute_script` blocks attempts to manipulate `window.location` or `history.pushState` during UI interaction steps.
+- **Rationale**: Preserves test validity. End-to-end tests must verify that the actual user interface and navigation paths function for real users. Allowing URL shortcuts masks UI bugs, breaks client-side state transitions, and creates brittle recorded playbooks.
+
 ## Risks / Trade-offs
 
 - **[Risk] Reflection and schema generation overhead at startup** → *Mitigation*: Lazily inspect and cache `ToolDefinition`s in `ToolRegistry` on first access.

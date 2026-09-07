@@ -21,12 +21,14 @@
 
 - [ ] 4.1 Implement `QualityJudgeToolInterceptor` intercepting proposed `browser_*` tool calls before browser dispatch.
 - [ ] 4.2 Verify candidate locator scoring passes high-confidence ($\ge 0.95$) locators immediately and triggers deliberation for ambiguous candidates.
+- [ ] 4.3 Implement Journey Fidelity policy checks in `QualityJudgeToolInterceptor` to reject direct URL mutations or script redirects during interaction steps.
 
 ## 5. Agent Tool Loop Step & Stop Criteria
 
 - [ ] 5.1 Implement `AgentToolLoopStep` driving iterative tool execution (`Think` → `ToolCall` → `Observe` → `Finish`) in place of monolithic `CallLlmStep` + `ExecuteActionsStep`.
 - [ ] 5.2 Implement and unit test the six stop criteria: Goal Completion (`complete_step`), Assertion Failure (`AssertionError`), Thrashing / Stagnation detection, Token Budget Guard limits, Liberal Step Timeout (180s), and Fatal Environment Failure.
-- [ ] 5.3 Retire legacy `ToLevelEscalationException`, `HealingRequiredException`, and brute-force context escalation ladders from step execution.
+- [ ] 5.3 Implement dynamic intent-based tool filtering in `AgentToolLoopStep` based on `SemanticIntent` (omitting `browser_navigate` for interactive steps).
+- [ ] 5.4 Retire legacy `ToLevelEscalationException`, `HealingRequiredException`, and brute-force context escalation ladders from step execution.
 
 ## 6. Composite Plugin Tools
 

@@ -115,4 +115,17 @@ The system SHALL dispatch execution events to the active `ExecutionEventBus` upo
 - **WHEN** any `AiTool` completes execution
 - **THEN** a tool executed event is dispatched to the session event bus containing tool name, parameters, execution duration, and success status.
 
+### Requirement: Journey fidelity and intent-based tool scoping
+The system SHALL dynamically constrain active tool definitions based on the step's semantic intent and enforce journey fidelity policies, preventing agents from bypassing realistic UI user flows via direct URL navigation or location scripts during interactive steps.
+
+#### Scenario: Interaction step excludes browser navigation tool
+- **WHEN** a playbook step has an interactive semantic intent such as click or type
+- **THEN** the system excludes `browser_navigate` from the tool definitions exposed to the agent.
+
+#### Scenario: Quality judge rejects direct navigation on interaction step
+- **WHEN** an agent emits a tool call or script that mutates the browser URL during an interactive step
+- **THEN** the quality judge interceptor rejects the tool call with a journey fidelity policy violation
+- **AND** instructs the agent to reach the destination via on-screen UI elements.
+
+
 
