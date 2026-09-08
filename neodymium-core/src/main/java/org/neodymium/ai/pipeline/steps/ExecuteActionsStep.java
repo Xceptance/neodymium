@@ -1120,6 +1120,19 @@ public final class ExecuteActionsStep implements PipelineStep
                             throw new ConclusiveFailureException(reason);
                         }
 
+                        final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                        if (executor != null)
+                        {
+                            try
+                            {
+                                final SutState state = executor.captureState(ContextLevel.STANDARD);
+                                c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+
                         ToolRegistry reg = (ToolRegistry) c.getTransientData().get("KEY_TOOL_REGISTRY");
                         if (reg == null)
                         {

@@ -19,9 +19,11 @@
 package org.neodymium.ai.tool.browser;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -98,6 +100,7 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector of the element to click");
+        props.putObject("text").put("type", "string").put("description", "Visible text of the element to click (used if selector is omitted)");
         props.putObject("target").put("type", "string").put("description", "Target expression, such as 'badge:N' or 'coord: x,y'");
         props.putObject("x").put("type", "integer").put("description", "Viewport X coordinate for pixel/visual click");
         props.putObject("y").put("type", "integer").put("description", "Viewport Y coordinate for pixel/visual click");
@@ -178,14 +181,87 @@ public final class BrowserToolProvider
                     }
                 }
 
-                // Case 3: Standard CSS or XPath selector
+                // Case 3: Element resolution via selector and text fallback
+                final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
                 final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : target;
-                if (selector.isBlank())
+
+                if (!selector.isBlank())
                 {
-                    return ToolResult.error(call.callId(), "browser_click requires either 'selector', 'coordinates' (x, y), or 'target'");
+                    try
+                    {
+                        final SelenideElement el = findElement(selector);
+                        if (el.is(Condition.visible))
+                        {
+                            el.click();
+                            return ToolResult.success(call.callId(), "Clicked element: " + selector);
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
                 }
 
-                $(selector).shouldBe(Condition.visible).click();
+                if (!text.isBlank())
+                {
+                    try
+                    {
+                        final SelenideElement el = $(Selectors.byText(text)).is(Condition.visible)
+                                ? $(Selectors.byText(text))
+                                : $(Selectors.withText(text));
+                        if (el.is(Condition.visible))
+                        {
+                            el.click();
+                            return ToolResult.success(call.callId(), "Clicked element matching text: '" + text + "'");
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
+                final SelenideElement el;
+                if (selector.startsWith("text="))
+                {
+                    final String rawText = selector.substring("text=".length()).trim();
+                    el = $(Selectors.byText(rawText)).is(Condition.visible)
+                            ? $(Selectors.byText(rawText))
+                            : $(Selectors.withText(rawText));
+                }
+                else
+                {
+                    if (selector.isBlank() && text.isBlank())
+                    {
+                        return ToolResult.error(call.callId(), "browser_click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'");
+                    }
+                    el = findElement(selector);
+                }
+
+                if (!el.is(Condition.visible))
+                {
+                    try
+                    {
+                        el.scrollIntoView(true);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                    if (!el.is(Condition.visible))
+                    {
+                        try
+                        {
+                            final SelenideElement hoverParent = el.closest("#cart-btn-wrapper, .dropdown, [class*='dropdown'], [id*='dropdown']");
+                            if (hoverParent.exists() && hoverParent.is(Condition.visible))
+                            {
+                                hoverParent.hover();
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+
+                el.shouldBe(Condition.visible).click();
                 return ToolResult.success(call.callId(), "Clicked element: " + selector);
             }
         };
@@ -222,7 +298,7 @@ public final class BrowserToolProvider
                 final boolean clearFirst = !call.arguments().has("clearFirst") || call.arguments().path("clearFirst").asBoolean(true);
                 final boolean pressEnter = call.arguments().path("pressEnter").asBoolean(false);
 
-                final SelenideElement el = $(selector).shouldBe(Condition.visible);
+                final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
                 if (clearFirst)
                 {
                     el.clear();
@@ -368,7 +444,7 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
-                $(selector).shouldBe(Condition.visible).hover();
+                findElement(selector).shouldBe(Condition.visible).hover();
                 return ToolResult.success(call.callId(), "Hovered over " + selector);
             }
         };
@@ -380,14 +456,15 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "Selector of the element to assert text on");
-        props.putObject("expectedText").put("type", "string").put("description", "Expected text content");
+        props.putObject("expectedText").put("type", "string").put("description", "Expected text content or regex pattern");
         props.putObject("exact").put("type", "boolean").put("description", "Whether text match must be exact (default: false)");
+        props.putObject("regex").put("type", "boolean").put("description", "Whether expectedText is a regular expression pattern (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("expectedText");
 
-        final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts that an element contains or exactly matches the expected text", schema);
+        final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts that an element contains or exactly matches the expected text or pattern", schema);
         return new AiTool()
         {
             @Override
@@ -404,9 +481,17 @@ public final class BrowserToolProvider
                         ? call.arguments().path("expectedText").asText()
                         : call.arguments().path("text").asText();
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
+                final boolean regex = call.arguments().path("regex").asBoolean(false)
+                        || (expectedText.contains("[0-9]") || expectedText.contains("\\d")
+                            || expectedText.contains(".*") || expectedText.contains(".+"));
 
-                final SelenideElement el = (selector == null || selector.isBlank()) ? $("body") : $(selector);
-                if (exact)
+                final SelenideElement el = (selector == null || selector.isBlank()) ? $("body") : findElement(selector);
+                if (regex)
+                {
+                    final String regPattern = expectedText.startsWith(".*") ? expectedText : ".*" + expectedText + ".*";
+                    el.shouldHave(Condition.matchText(regPattern));
+                }
+                else if (exact)
                 {
                     el.shouldHave(Condition.exactText(expectedText));
                 }
@@ -415,7 +500,7 @@ public final class BrowserToolProvider
                     el.shouldHave(Condition.text(expectedText));
                 }
                 final String targetDesc = (selector == null || selector.isBlank()) ? "page" : selector;
-                return ToolResult.success(call.callId(), "Verified text on " + targetDesc + " matches: " + expectedText);
+                return ToolResult.success(call.callId(), "Verified text on " + targetDesc + (regex ? " matches pattern: " : " matches: ") + expectedText);
             }
         };
     }
@@ -434,6 +519,16 @@ public final class BrowserToolProvider
             }
         }
         return "";
+    }
+
+    private static SelenideElement findElement(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return $("body");
+        }
+        final SelenideElement found = SelenideElementFinder.findElement(selector);
+        return found != null ? found : $(selector);
     }
 
     private static AiTool createScrollTool()
@@ -461,7 +556,7 @@ public final class BrowserToolProvider
                 if (args.hasNonNull("selector"))
                 {
                     final String sel = args.path("selector").asText();
-                    $(sel).scrollIntoView(true);
+                    findElement(sel).scrollIntoView(true);
                     return ToolResult.success(call.callId(), "Scrolled element into view: " + sel);
                 }
 
@@ -558,22 +653,48 @@ public final class BrowserToolProvider
                                 candidates = Array.from(document.querySelectorAll(sel));
                             } catch(e) {}
                         } else {
-                            candidates = Array.from(document.querySelectorAll('a, button, input, select, textarea, [role], h1, h2, h3, h4, p, span, div'));
+                            candidates = Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], label, h1, h2, h3, h4, p, span, div'));
                         }
 
-                        var results = [];
                         var lowerText = (searchText || '').toLowerCase().trim();
+                        var exactMatches = [];
+                        var wordMatches = [];
+                        var partialMatches = [];
 
                         for (var i = 0; i < candidates.length; i++) {
                             var el = candidates[i];
                             var elText = (el.innerText || el.textContent || '').trim();
-                            if (lowerText && elText.toLowerCase().indexOf(lowerText) === -1) continue;
+                            if (lowerText) {
+                                var elLower = elText.toLowerCase();
+                                if (elLower === lowerText) {
+                                    exactMatches.push(el);
+                                } else if (new RegExp('(?:^|\\\\s)' + lowerText.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '(?:$|\\\\s)').test(elLower)) {
+                                    wordMatches.push(el);
+                                } else if (elLower.indexOf(lowerText) !== -1) {
+                                    if (el.children.length <= 2) {
+                                        partialMatches.push(el);
+                                    }
+                                }
+                            } else {
+                                partialMatches.push(el);
+                            }
+                        }
+
+                        var filtered = exactMatches.concat(wordMatches).concat(partialMatches);
+                        var results = [];
+                        var seen = new Set();
+
+                        for (var j = 0; j < filtered.length; j++) {
+                            var el = filtered[j];
+                            if (seen.has(el)) continue;
+                            seen.add(el);
 
                             var rect = el.getBoundingClientRect();
                             var inViewport = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
                             var tag = el.tagName.toLowerCase();
                             var idStr = el.id ? '#' + el.id : '';
                             var clsStr = el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+                            var elText = (el.innerText || el.textContent || '').trim();
 
                             results.push({
                                 tag: tag,
@@ -590,7 +711,12 @@ public final class BrowserToolProvider
                     """;
 
                 final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit);
-                return ToolResult.success(call.callId(), res != null ? res.toString() : "[]");
+                final String resStr = res != null ? res.toString() : "[]";
+                if ("[]".equals(resStr.trim()) && !text.isBlank())
+                {
+                    return ToolResult.success(call.callId(), "[] (No elements found matching text: '" + text + "'. Verify if the element is inside a closed menu, dropdown, modal, or iframe)");
+                }
+                return ToolResult.success(call.callId(), resStr);
             }
         };
     }

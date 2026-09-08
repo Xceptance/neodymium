@@ -64,6 +64,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Pipeline step driving iterative agent tool execution (Think -&gt; ToolCall -&gt; Observe -&gt; Finish)
@@ -77,6 +79,10 @@ public final class AgentToolLoopStep implements PipelineStep
     private static final Logger LOGGER = LoggerFactory.getLogger(AgentToolLoopStep.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private static final Pattern INSTRUCTION_REGEX_PATTERN =
+            Pattern.compile("['\"]([^'\"]*(?:\\[[0-9a-zA-Z_\\-]+\\]|\\\\d|\\.\\*|\\.\\+)[^'\"]*)['\"]"
+                    + "|(?:in the form|matching)\\s+([a-zA-Z0-9_\\[\\]\\+\\\\.*-]+)");
 
     public static final String KEY_TOOL_LOOP_SUMMARY = "toolLoopSummary";
     public static final String KEY_EXECUTED_TOOL_CALLS = "executedToolCalls";
@@ -276,9 +282,15 @@ public final class AgentToolLoopStep implements PipelineStep
             }
             catch (final AssertionError e)
             {
-                // Stop Criterion 2: Immediate fail on real defects!
-                LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
-                throw e;
+                if (effectiveCall.toolName().startsWith("browser_assert"))
+                {
+                    // Stop Criterion 2: Immediate fail on real defects!
+                    LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
+                    throw e;
+                }
+                LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                observations.add("Tool '" + effectiveCall.toolName() + "' failed with error: " + e.getMessage());
+                continue;
             }
             catch (final WebDriverException e)
             {
@@ -293,7 +305,10 @@ public final class AgentToolLoopStep implements PipelineStep
                 continue;
             }
 
-            executedCalls.add(effectiveCall);
+            if (result != null && result.status() == ToolResult.Status.SUCCESS)
+            {
+                executedCalls.add(effectiveCall);
+            }
 
             // Refresh state after mutating browser actions
             if (executor != null && effectiveCall.toolName().startsWith("browser_")
@@ -321,23 +336,62 @@ public final class AgentToolLoopStep implements PipelineStep
                     : "Tool '" + effectiveCall.toolName() + "' completed with empty result";
             observations.add(obs);
             LOGGER.debug("Observation: {}", obs);
+
+            if (consecutiveIdenticalCalls == 2)
+            {
+                final String warn = "WARNING: Exact same tool call was executed twice in a row. Do NOT repeat tool '"
+                        + effectiveCall.toolName() + "' with arguments " + effectiveCall.arguments()
+                        + " again, or the step will terminate with a thrashing failure. Change your strategy or selector.";
+                observations.add(warn);
+                LOGGER.warn(warn);
+            }
         }
     }
 
     private void finishLoop(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
     {
-        context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
         final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-        if (stepObj instanceof final PlaybookStep currentStep)
+        final List<ToolCall> recordedCalls;
+        if (stepObj instanceof final PlaybookStep currentStep && currentStep.getInstruction() != null)
         {
-            currentStep.setToolCalls(executedCalls);
+            final Matcher patternMatcher = INSTRUCTION_REGEX_PATTERN.matcher(currentStep.getInstruction());
+            if (patternMatcher.find())
+            {
+                final String regexPattern = patternMatcher.group(1) != null ? patternMatcher.group(1) : patternMatcher.group(2);
+                recordedCalls = new ArrayList<>();
+                for (final ToolCall call : executedCalls)
+                {
+                    if ("browser_assert_text".equals(call.toolName()))
+                    {
+                        final ObjectNode updatedArgs = call.arguments().deepCopy();
+                        updatedArgs.put("expectedText", regexPattern);
+                        updatedArgs.put("regex", true);
+                        recordedCalls.add(new ToolCall(call.callId(), call.toolName(), updatedArgs));
+                    }
+                    else
+                    {
+                        recordedCalls.add(call);
+                    }
+                }
+            }
+            else
+            {
+                recordedCalls = executedCalls;
+            }
+            currentStep.setToolCalls(recordedCalls);
             final List<Action> actions = new ArrayList<>();
-            for (final ToolCall call : executedCalls)
+            for (final ToolCall call : recordedCalls)
             {
                 actions.add(mapToolCallToAction(call));
             }
             currentStep.setActions(actions);
         }
+        else
+        {
+            recordedCalls = executedCalls;
+        }
+
+        context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(recordedCalls));
     }
 
     private static Action mapToolCallToAction(final ToolCall call)
@@ -391,7 +445,10 @@ public final class AgentToolLoopStep implements PipelineStep
             value = null;
         }
 
-        final Action action = new Action(type, target, value, "Tool call: " + name, "", false);
+        final boolean isRegex = args.path("regex").asBoolean(false)
+                || (value != null && (value.toString().contains("[0-9]") || value.toString().contains("\\d")
+                    || value.toString().contains(".*") || value.toString().contains(".+")));
+        final Action action = new Action(type, target, value, "Tool call: " + name, "", false).withIsRegex(isRegex);
         action.setToolCall(call);
         return action;
     }
@@ -429,6 +486,14 @@ public final class AgentToolLoopStep implements PipelineStep
         system.append("  }\n");
         system.append("}\n");
         system.append("When the goal is fully achieved and verified, call tool 'complete_step' with a summary.\n\n");
+        system.append("### CRITICAL OPERATING RULES:\n");
+        system.append("1. ATOMIC STEP SCOPE: Execute ONLY the single action or assertion explicitly described in the Test Instruction. Do NOT anticipate or perform subsequent workflow steps.\n");
+        system.append("   - If the instruction asks you to click a button or link (e.g. 'Add to Cart', an accordion toggle, a dropdown button), click that button and immediately call 'complete_step'. Do NOT select options, sizes, or variants from menus, modals, or dropdowns that appear as a result of the click unless the instruction explicitly commands you to in this step.\n");
+        system.append("   - Subsequent test steps will perform any follow-up actions (such as choosing sizes, entering information, or checking out). Performing them prematurely will cause subsequent steps to fail!\n");
+        system.append("   - If the instruction explicitly asks for multiple inputs (e.g. 'Enter Mario as first name, Meier as last name, and email ...'), execute typing into all requested fields before calling 'complete_step'.\n");
+        system.append("2. COMPLETION: As soon as the instruction's described goal is achieved, you MUST invoke 'complete_step'. Do not continue calling tools.\n");
+        system.append("3. NO IDENTICAL REPEATS: Never propose the exact same tool call with the same arguments if the page state did not change. If an element was not found, inspect the DOM or Page State rather than repeating the call.\n");
+        system.append("4. DYNAMIC REGEX PATTERNS: When asserting dynamic values (such as order numbers, confirmation codes, dates, or IDs) where the instruction specifies a pattern or format (e.g. 'in the form 'V-[0-9]+-US'' or contains a regular expression in quotes), you MUST pass that pattern to `browser_assert_text` as `expectedText` and set \"regex\": true. Do NOT assert the volatile literal value seen on screen, because dynamic IDs change on subsequent test runs!\n\n");
         system.append("### Available Tools:\n");
 
         for (final ToolDefinition def : tools)
