@@ -1168,6 +1168,42 @@ public final class ExecuteActionsStep implements PipelineStep
                     // Live mode: AgentToolLoopStep performs Think -> ToolCall -> Observe -> Finish
                     standardFlow.add(new AgentToolLoopStep());
                 }
+
+                // Post-step visual state capture & step completion for report
+                standardFlow.add(c -> {
+                    final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null && session != null && session.getEventBus() != null)
+                    {
+                        try
+                        {
+                            final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                    || (step != null && step.isFullPageVisualStep());
+                            final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+                            final SutState postStepState = executor.captureState(cl, isFullPageReq);
+                            if (postStepState != null)
+                            {
+                                c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postStepState);
+                                c.getTransientData().put("KEY_POST_ACTION_STATE", postStepState);
+                                session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            }
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.debug("Failed to capture post-step visual state: {}", e.getMessage());
+                        }
+                    }
+
+                    if (step.getStatus() != PlaybookStepStatus.FAILED)
+                    {
+                        step.setStatus(step.getStatus() == PlaybookStepStatus.HEALED ? PlaybookStepStatus.HEALED : PlaybookStepStatus.SUCCESS);
+                    }
+                    step.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                    c.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
+                    }
+                });
             }
             else
             {

@@ -51,12 +51,26 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
     public record PesapResult(String contextLevel, boolean requiresJavaMethods, List<String> splitSteps, SemanticIntent intent)
     {
         /**
+         * Modern constructor without requiresJavaMethods.
+         *
+         * @param contextLevel predicted SUT context level
+         * @param splitSteps the split step instructions, or empty if no split
+         * @param intent the predicted semantic intent, or null if unclassified
+         */
+        public PesapResult(final String contextLevel, final List<String> splitSteps, final SemanticIntent intent)
+        {
+            this(contextLevel, false, splitSteps, intent);
+        }
+
+        /**
          * Backwards-compatible constructor without explicit semantic intent.
          *
          * @param contextLevel predicted SUT context level
          * @param requiresJavaMethods whether custom Java reflection methods are required
          * @param splitSteps the split step instructions, or empty if no split
+         * @deprecated Use {@link #PesapResult(String, List, SemanticIntent)} instead.
          */
+        @Deprecated
         public PesapResult(final String contextLevel, final boolean requiresJavaMethods, final List<String> splitSteps)
         {
             this(contextLevel, requiresJavaMethods, splitSteps, null);

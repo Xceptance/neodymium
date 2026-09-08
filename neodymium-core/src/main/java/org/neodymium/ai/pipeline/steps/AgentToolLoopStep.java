@@ -33,8 +33,10 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
@@ -308,6 +310,19 @@ public final class AgentToolLoopStep implements PipelineStep
             if (result != null && result.status() == ToolResult.Status.SUCCESS)
             {
                 executedCalls.add(effectiveCall);
+                if ("browser_take_screenshot".equals(effectiveCall.toolName()))
+                {
+                    final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                    final Object base64Obj = result.variables().get("screenshotBase64");
+                    if (session != null && session.getEventBus() != null && base64Obj != null)
+                    {
+                        final String base64 = String.valueOf(base64Obj);
+                        final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                        final List<SutAttachment> attachments = List.of(new SutAttachment("image/png", "screenshot", rawBase64));
+                        final SutState screenshotState = new BrowserSutState("Screenshot", attachments, "screenshot");
+                        session.getEventBus().dispatch(new StateCapturedEvent(screenshotState));
+                    }
+                }
             }
 
             // Refresh state after mutating browser actions

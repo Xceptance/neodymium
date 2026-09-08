@@ -30,9 +30,11 @@ import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.IncompatibleFrameworkException;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
@@ -440,6 +442,21 @@ public final class StateMachineRunner
                             root = root.getCause();
                         }
                         currentStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                    }
+                    final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null && this.session != null && this.session.getEventBus() != null)
+                    {
+                        try
+                        {
+                            final SutState failureState = executor.captureState(ContextLevel.VISUAL);
+                            if (failureState != null)
+                            {
+                                this.session.getEventBus().dispatch(new StateCapturedEvent(failureState));
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
                     }
                     if (this.session != null && this.session.getEventBus() != null)
                     {
