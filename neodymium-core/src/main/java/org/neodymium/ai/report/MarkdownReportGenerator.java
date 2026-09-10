@@ -21,6 +21,7 @@ package org.neodymium.ai.report;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -229,14 +230,64 @@ public final class MarkdownReportGenerator
         final List<TestExecutionReport.ReportLlmCallEntry> llmCalls = report.getLlmCalls();
         if (!llmCalls.isEmpty())
         {
+            final Map<Integer, TestExecutionReport.ReportStepEntry> stepMap = new HashMap<>();
+            for (final TestExecutionReport.ReportStepEntry s : report.getSteps())
+            {
+                stepMap.put(s.getStepIndex(), s);
+            }
+
             sb.append("## LLM Interactions\n\n");
-            sb.append("| # | Capability | Model | Duration | In Tokens | Out Tokens | Cached | Cost |\n");
-            sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+            sb.append("| # | Step | Phase / Role | Model | Duration | In Tokens | Out Tokens | Cached | Cost |\n");
+            sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+            int currentStepIndex = Integer.MIN_VALUE;
+            int turnInStep = 0;
+
             for (int i = 0; i < llmCalls.size(); i++)
             {
                 final TestExecutionReport.ReportLlmCallEntry call = llmCalls.get(i);
-                sb.append("| ").append(i + 1).append(" | `").append(call.getCapability() != null ? call.getCapability() : "").append("` | ")
-                    .append(call.getModelName() != null ? call.getModelName() : "default").append(" | ")
+                final int stepIdx = call.getStepIndex();
+                final boolean isNewStep = (stepIdx != currentStepIndex);
+
+                if (isNewStep)
+                {
+                    currentStepIndex = stepIdx;
+                    turnInStep = 0;
+                }
+
+                final String stepDisplay = stepIdx >= 0
+                    ? (isNewStep ? "Step #" + (stepIdx + 1) : "↳ Step #" + (stepIdx + 1))
+                    : "Setup";
+
+                final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
+                final String phaseRole;
+                if ("PESAP".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Intent (PESAP)";
+                }
+                else if ("VERIFICATION".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Verification";
+                }
+                else if ("JUDGE".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Quality Judge";
+                }
+                else if ("VISUAL_RCA".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Visual RCA";
+                }
+                else
+                {
+                    turnInStep++;
+                    final String modality = "VISION".equalsIgnoreCase(cap) ? "Vision 📸" : "Text";
+                    phaseRole = "Turn " + turnInStep + " (" + modality + ")";
+                }
+
+                sb.append("| ").append(i + 1).append(" | ")
+                    .append(stepDisplay).append(" | ")
+                    .append(phaseRole).append(" | `")
+                    .append(call.getModelName() != null ? call.getModelName() : "default").append("` | ")
                     .append(call.getDurationMs()).append(" ms | ")
                     .append(NUMBER_FORMAT.format(call.getInputTokens())).append(" | ")
                     .append(NUMBER_FORMAT.format(call.getOutputTokens())).append(" | ")

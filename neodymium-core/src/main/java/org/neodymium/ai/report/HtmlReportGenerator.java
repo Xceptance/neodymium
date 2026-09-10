@@ -24,6 +24,7 @@ import java.text.DecimalFormatSymbols;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -381,19 +382,127 @@ public final class HtmlReportGenerator
         final List<TestExecutionReport.ReportLlmCallEntry> llmCalls = report.getLlmCalls();
         if (!llmCalls.isEmpty())
         {
+            final Map<Integer, TestExecutionReport.ReportStepEntry> stepMap = new HashMap<>();
+            for (final TestExecutionReport.ReportStepEntry s : report.getSteps())
+            {
+                stepMap.put(s.getStepIndex(), s);
+            }
+
+            final Map<Integer, long[]> clusterStats = new HashMap<>();
+            final Map<Integer, Double> clusterCost = new HashMap<>();
+            for (final TestExecutionReport.ReportLlmCallEntry call : llmCalls)
+            {
+                final int sIdx = call.getStepIndex();
+                final long[] counts = clusterStats.computeIfAbsent(sIdx, k -> new long[2]);
+                counts[0]++;
+                counts[1] += (call.getTotalTokens() > 0 ? call.getTotalTokens() : (call.getInputTokens() + call.getOutputTokens()));
+                clusterCost.merge(sIdx, call.getEstimatedCostUsd(), Double::sum);
+            }
+
             sb.append("  <section class=\"card-section\">\n");
             sb.append("    <h2 class=\"section-title\">💬 All LLM Invocations & Prompt Trace (").append(llmCalls.size()).append(")</h2>\n");
             sb.append("    <div class=\"table-container\">\n");
-            sb.append("      <table class=\"data-table\">\n");
-            sb.append("        <thead><tr><th>#</th><th>Step</th><th>Capability</th><th>Model</th><th>Duration</th><th>In Tokens</th><th>Out Tokens</th><th>Cached</th><th>Est. Cost</th></tr></thead>\n");
+            sb.append("      <table class=\"data-table llm-trace-table\">\n");
+            sb.append("        <thead><tr><th>#</th><th>Step</th><th>Phase / Role</th><th>Model</th><th>Duration</th><th>In Tokens</th><th>Out Tokens</th><th>Cached</th><th>Est. Cost</th></tr></thead>\n");
             sb.append("        <tbody>\n");
+
+            int currentStepIndex = Integer.MIN_VALUE;
+            int turnInStep = 0;
+            int clusterColorIndex = 0;
+
             for (int i = 0; i < llmCalls.size(); i++)
             {
                 final TestExecutionReport.ReportLlmCallEntry call = llmCalls.get(i);
-                sb.append("          <tr>\n");
+                final int stepIdx = call.getStepIndex();
+                final boolean isNewStep = (stepIdx != currentStepIndex);
+
+                if (isNewStep)
+                {
+                    currentStepIndex = stepIdx;
+                    turnInStep = 0;
+                    clusterColorIndex++;
+
+                    final TestExecutionReport.ReportStepEntry step = stepMap.get(stepIdx);
+                    final String rawInstruction = step != null && step.getInstruction() != null ? step.getInstruction() : "";
+                    final String instructionSnippet = rawInstruction.length() > 80 ? rawInstruction.substring(0, 77) + "..." : rawInstruction;
+                    final long[] stats = clusterStats.get(stepIdx);
+                    final long callCount = stats != null ? stats[0] : 1;
+                    final long clusterTokens = stats != null ? stats[1] : (call.getInputTokens() + call.getOutputTokens());
+                    final double cost = clusterCost.getOrDefault(stepIdx, call.getEstimatedCostUsd());
+
+                    final String stepLabel = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Setup / Environment";
+                    final String onclick = stepIdx >= 0 ? " onclick=\"openAndSelectStep(" + stepIdx + ")\"" : "";
+
+                    sb.append("          <tr class=\"step-group-row\">\n");
+                    sb.append("            <td colspan=\"9\">\n");
+                    sb.append("              <div class=\"step-group-banner\">\n");
+                    sb.append("                <span class=\"step-group-title\"").append(onclick).append(">\n");
+                    sb.append("                  <span class=\"step-group-badge\">").append(escapeHtml(stepLabel)).append("</span>\n");
+                    if (!instructionSnippet.isBlank())
+                    {
+                        sb.append("                  <span class=\"step-group-instruction\" title=\"").append(escapeHtml(rawInstruction)).append("\">").append(escapeHtml(instructionSnippet)).append("</span>\n");
+                    }
+                    sb.append("                </span>\n");
+                    sb.append("                <span class=\"step-group-meta\">").append(callCount).append(callCount == 1 ? " call" : " calls")
+                      .append(" &bull; ").append(NUMBER_FORMAT.format(clusterTokens)).append(" tokens &bull; ")
+                      .append(COST_FORMAT.format(cost)).append("</span>\n");
+                    sb.append("              </div>\n");
+                    sb.append("            </td>\n");
+                    sb.append("          </tr>\n");
+                }
+
+                final String clusterRowClass = (clusterColorIndex % 2 == 0) ? "step-cluster-even" : "step-cluster-odd";
+                final String rowFirstClass = isNewStep ? " step-cluster-first" : "";
+
+                sb.append("          <tr class=\"").append(clusterRowClass).append(rowFirstClass).append("\">\n");
                 sb.append("            <td>").append(i + 1).append("</td>\n");
-                sb.append("            <td><span class=\"step-ref\" onclick=\"openAndSelectStep(").append(call.getStepIndex()).append(")\">Step #").append(call.getStepIndex() + 1).append("</span></td>\n");
-                sb.append("            <td><span class=\"badge-role\">").append(escapeHtml(call.getCapability() != null ? call.getCapability() : "-")).append("</span></td>\n");
+
+                final String stepDisplay = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Setup";
+                if (stepIdx >= 0)
+                {
+                    if (isNewStep)
+                    {
+                        sb.append("            <td><span class=\"step-ref\" onclick=\"openAndSelectStep(").append(stepIdx).append(")\">").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                    }
+                    else
+                    {
+                        sb.append("            <td><span class=\"step-ref subcall\" onclick=\"openAndSelectStep(").append(stepIdx).append(")\"><span class=\"step-tree-indicator\">↳</span> ").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                    }
+                }
+                else
+                {
+                    sb.append("            <td><span class=\"text-muted\">").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                }
+
+                final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
+                final String phaseRoleHtml;
+                if ("PESAP".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase pesap\" title=\"Pre-Execution Semantic Action Prediction / Intent Classification\">Intent (PESAP)</span>";
+                }
+                else if ("VERIFICATION".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase continuation\" title=\"Post-Execution Outcome Verification\">Verification</span>";
+                }
+                else if ("JUDGE".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase judge\" title=\"Step Quality Judge Evaluation\">Quality Judge</span>";
+                }
+                else if ("VISUAL_RCA".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Visual Root Cause Analysis (SSIM/Diff Diagnostics)\">Visual RCA</span>";
+                }
+                else
+                {
+                    turnInStep++;
+                    final boolean isVision = "VISION".equalsIgnoreCase(cap);
+                    final String modalityBadge = isVision
+                        ? "<span class=\"badge-modality vision\" title=\"Multimodal LLM Request (DOM Light + Visual Screenshot)\">Vision 📸</span>"
+                        : "<span class=\"badge-modality text\" title=\"Text-Only LLM Request (Pierced DOM Light)\">Text</span>";
+                    phaseRoleHtml = "<span class=\"badge-role\">Turn " + turnInStep + "</span>" + modalityBadge;
+                }
+
+                sb.append("            <td>").append(phaseRoleHtml).append("</td>\n");
                 sb.append("            <td><code>").append(escapeHtml(call.getModelName() != null ? call.getModelName() : "default")).append("</code></td>\n");
                 sb.append("            <td>").append(NUMBER_FORMAT.format(call.getDurationMs())).append(" ms</td>\n");
                 sb.append("            <td>").append(NUMBER_FORMAT.format(call.getInputTokens())).append("</td>\n");
@@ -1089,7 +1198,24 @@ public final class HtmlReportGenerator
 
                         var header = document.createElement('div');
                         header.className = 'llm-call-header';
-                        header.innerHTML = '<div class="llm-call-title">Call #' + (ci + 1) + ' &bull; <code>' + (call.modelName || 'default') + '</code> (' + (call.capability || 'TEXT') + ')</div>' +
+
+                        var cap = (call.capability || 'TEXT').toUpperCase();
+                        var callTitle;
+                        if (cap === 'PESAP') {
+                            callTitle = '<span class="badge-phase pesap">Intent (PESAP)</span>';
+                        } else if (cap === 'VERIFICATION') {
+                            callTitle = '<span class="badge-phase continuation">Verification</span>';
+                        } else if (cap === 'JUDGE') {
+                            callTitle = '<span class="badge-phase judge">Quality Judge</span>';
+                        } else if (cap === 'VISUAL_RCA') {
+                            callTitle = '<span class="badge-phase prelude">Visual RCA</span>';
+                        } else if (cap === 'VISION') {
+                            callTitle = '<span class="badge-role">Call #' + (ci + 1) + '</span><span class="badge-modality vision">Vision 📸</span>';
+                        } else {
+                            callTitle = '<span class="badge-role">Call #' + (ci + 1) + '</span><span class="badge-modality text">Text</span>';
+                        }
+
+                        header.innerHTML = '<div class="llm-call-title">' + callTitle + ' &bull; <code>' + (call.modelName || 'default') + '</code></div>' +
                                            '<div class="llm-call-meta">' + formatNumber(call.durationMs || 0) + ' ms | ' + formatNumber(call.totalTokens || 0) + ' tokens (' + formatCost(call.estimatedCostUsd) + ')</div>';
                         card.appendChild(header);
 
@@ -2577,6 +2703,92 @@ public final class HtmlReportGenerator
                 font-family: var(--font-mono);
             }
             .step-ref:hover { text-decoration: underline; }
+            .step-ref.subcall {
+                color: var(--text-sub);
+                font-weight: 500;
+            }
+            .step-ref.subcall:hover {
+                color: var(--accent-primary);
+            }
+            .step-tree-indicator {
+                color: var(--text-muted);
+                font-family: var(--font-mono);
+                margin-right: 0.25rem;
+                font-weight: 700;
+            }
+            .step-group-row td {
+                padding: 0 !important;
+                background: #f8fafc;
+                border-top: 2px solid #cbd5e1 !important;
+                border-bottom: 1px solid var(--border) !important;
+            }
+            .step-group-banner {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.45rem 0.85rem;
+                font-size: 0.82rem;
+            }
+            .step-group-title {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                cursor: pointer;
+            }
+            .step-group-title:hover .step-group-badge {
+                text-decoration: underline;
+                color: var(--accent-primary);
+            }
+            .step-group-badge {
+                font-weight: 700;
+                color: var(--text-primary);
+                font-family: var(--font-mono);
+            }
+            .step-group-instruction {
+                font-weight: 500;
+                color: var(--text-sub);
+                max-width: 620px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .step-group-meta {
+                font-size: 0.75rem;
+                font-family: var(--font-mono);
+                color: var(--text-sub);
+                font-weight: 600;
+                background: rgba(255, 255, 255, 0.8);
+                padding: 0.15rem 0.5rem;
+                border-radius: 4px;
+                border: 1px solid var(--border);
+            }
+            .step-cluster-even {
+                background: #ffffff;
+            }
+            .step-cluster-odd {
+                background: #fafbfc;
+            }
+            .badge-modality {
+                display: inline-block;
+                font-size: 0.68rem;
+                font-weight: 700;
+                padding: 0.1rem 0.35rem;
+                border-radius: 4px;
+                text-transform: uppercase;
+                font-family: var(--font-mono);
+                margin-left: 0.35rem;
+                vertical-align: middle;
+            }
+            .badge-modality.text {
+                background: #f1f5f9;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+            }
+            .badge-modality.vision {
+                background: #fef3c7;
+                color: #92400e;
+                border: 1px solid rgba(146, 64, 14, 0.3);
+            }
             .stats-sub-row {
                 display: flex;
                 flex-wrap: wrap;

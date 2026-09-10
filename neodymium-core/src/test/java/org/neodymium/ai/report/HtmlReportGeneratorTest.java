@@ -132,6 +132,88 @@ public class HtmlReportGeneratorTest
         }
     }
 
+    @Test
+    @DisplayName("Verify LLM Invocations Trace table contains step clustering banners, turn numbers, and modality badges")
+    public void testLlmTraceTableStepClusteringAndTurnFormatting()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("CheckoutTest");
+        report.setTestName("testGuestCheckout");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Enter shipping details");
+        step0.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Select payment method");
+        step1.setStatus("SUCCESS");
+
+        report.addStep(step0);
+        report.addStep(step1);
+
+        // Step 0 Call 1: PESAP
+        final TestExecutionReport.ReportLlmCallEntry call1 = new TestExecutionReport.ReportLlmCallEntry();
+        call1.setStepIndex(0);
+        call1.setCapability("PESAP");
+        call1.setModelName("gemini-2.5-flash");
+        call1.setDurationMs(200);
+        call1.setInputTokens(1000);
+        call1.setOutputTokens(20);
+        report.addLlmCall(call1);
+
+        // Step 0 Call 2: Turn 1 (Text)
+        final TestExecutionReport.ReportLlmCallEntry call2 = new TestExecutionReport.ReportLlmCallEntry();
+        call2.setStepIndex(0);
+        call2.setCapability("TEXT_ONLY");
+        call2.setModelName("gemini-2.5-flash");
+        call2.setDurationMs(300);
+        call2.setInputTokens(2000);
+        call2.setOutputTokens(30);
+        report.addLlmCall(call2);
+
+        // Step 0 Call 3: Turn 2 (Text)
+        final TestExecutionReport.ReportLlmCallEntry call3 = new TestExecutionReport.ReportLlmCallEntry();
+        call3.setStepIndex(0);
+        call3.setCapability("TEXT_ONLY");
+        call3.setModelName("gemini-2.5-flash");
+        call3.setDurationMs(250);
+        call3.setInputTokens(2500);
+        call3.setOutputTokens(25);
+        report.addLlmCall(call3);
+
+        // Step 1 Call 4: PESAP
+        final TestExecutionReport.ReportLlmCallEntry call4 = new TestExecutionReport.ReportLlmCallEntry();
+        call4.setStepIndex(1);
+        call4.setCapability("PESAP");
+        call4.setModelName("gemini-2.5-flash");
+        call4.setDurationMs(180);
+        call4.setInputTokens(1200);
+        call4.setOutputTokens(15);
+        report.addLlmCall(call4);
+
+        // Step 1 Call 5: Turn 1 (Vision)
+        final TestExecutionReport.ReportLlmCallEntry call5 = new TestExecutionReport.ReportLlmCallEntry();
+        call5.setStepIndex(1);
+        call5.setCapability("VISION");
+        call5.setModelName("gemini-2.5-flash");
+        call5.setDurationMs(600);
+        call5.setInputTokens(3000);
+        call5.setOutputTokens(40);
+        report.addLlmCall(call5);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+
+        Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("class=\"step-group-row\""), "HTML must contain step group separator rows");
+        Assertions.assertTrue(html.contains("Enter shipping details"), "HTML must display step 0 instruction in group banner");
+        Assertions.assertTrue(html.contains("Select payment method"), "HTML must display step 1 instruction in group banner");
+        Assertions.assertTrue(html.contains("Intent (PESAP)"), "HTML must format PESAP capability as Intent (PESAP)");
+        Assertions.assertTrue(html.contains("Turn 1"), "HTML must display sequential turn numbering");
+        Assertions.assertTrue(html.contains("Turn 2"), "HTML must display sequential turn 2");
+        Assertions.assertTrue(html.contains("Vision 📸"), "HTML must display vision modality badge");
+        Assertions.assertTrue(html.contains("step-tree-indicator"), "HTML must display tree branch indicator on subsequent calls");
+        Assertions.assertTrue(html.contains("step-cluster-even") && html.contains("step-cluster-odd"), "HTML must alternate step cluster classes");
+    }
+
     private static void verifyScriptWithNodeIfAvailable(final String script)
     {
         try
@@ -152,3 +234,4 @@ public class HtmlReportGeneratorTest
         }
     }
 }
+
