@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.integration.verla;
+package org.neodymium.verla;
 
 import java.io.IOException;
 import java.net.CookieManager;
