@@ -19,6 +19,7 @@
 package org.neodymium.ai.tool.browser;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
@@ -47,10 +48,12 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import static com.codeborne.selenide.Selenide.$;
 
@@ -306,7 +309,34 @@ public final class BrowserToolProvider
                     }
                 }
 
-                el.shouldBe(Condition.visible).click();
+                try
+                {
+                    el.shouldBe(Condition.visible).click();
+                }
+                catch (final Exception | AssertionError e)
+                {
+                    try
+                    {
+                        Selenide.executeJavaScript("arguments[0].click();", el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                        throw e;
+                    }
+                }
+
+                try
+                {
+                    final String tagName = el.getTagName();
+                    if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                    {
+                        Selenide.executeJavaScript("arguments[0].focus();", el);
+                    }
+                }
+                catch (final Throwable ignored)
+                {
+                }
+
                 final ObjectNode res = successNode("click");
                 res.put("target", selector);
                 if (driver != null)
@@ -353,9 +383,20 @@ public final class BrowserToolProvider
                 final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
                 if (clearFirst)
                 {
-                    el.clear();
+                    try
+                    {
+                        el.val(text);
+                    }
+                    catch (final Exception e)
+                    {
+                        el.clear();
+                        el.sendKeys(text);
+                    }
                 }
-                el.sendKeys(text);
+                else
+                {
+                    el.sendKeys(text);
+                }
                 if (pressEnter)
                 {
                     el.pressEnter();
@@ -475,20 +516,48 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
-                final SelenideElement el = $(selector).shouldBe(Condition.visible);
+                final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
 
                 final ObjectNode res = successNode("select");
                 res.put("target", selector);
                 if (call.arguments().hasNonNull("value"))
                 {
                     final String val = call.arguments().path("value").asText();
-                    el.selectOptionByValue(val);
+                    try
+                    {
+                        el.selectOptionByValue(val);
+                    }
+                    catch (final Exception e)
+                    {
+                        try
+                        {
+                            el.selectOptionContainingText(val);
+                        }
+                        catch (final Exception ex)
+                        {
+                            el.selectOption(val);
+                        }
+                    }
                     res.put("value", val);
                 }
                 else if (call.arguments().hasNonNull("text"))
                 {
                     final String txt = call.arguments().path("text").asText();
-                    el.selectOption(txt);
+                    try
+                    {
+                        el.selectOption(txt);
+                    }
+                    catch (final Exception e)
+                    {
+                        try
+                        {
+                            el.selectOptionContainingText(txt);
+                        }
+                        catch (final Exception ex)
+                        {
+                            el.selectOptionByValue(txt);
+                        }
+                    }
                     res.put("text", txt);
                 }
                 return ToolResult.success(call.callId(), res.toString());
@@ -540,21 +609,236 @@ public final class BrowserToolProvider
         return text.replaceAll("\\\\([$()\\[\\]{}.*+?^|\\\\])", "$1");
     }
 
+    /**
+     * Cleans up regular expression patterns emitted by LLMs (e.g. leading/trailing slashes,
+     * over-escaped characters, etc.).
+     *
+     * @param regex the raw regex string
+     * @return cleaned regex pattern string
+     */
+    public static String cleanRegexPattern(final String regex)
+    {
+        if (regex == null)
+        {
+            return "";
+        }
+        String pattern = regex.trim();
+        if (pattern.startsWith("/") && pattern.endsWith("/") && pattern.length() >= 2)
+        {
+            pattern = pattern.substring(1, pattern.length() - 1);
+        }
+        if (pattern.contains("\\\\"))
+        {
+            pattern = pattern.replace("\\\\", "\\");
+        }
+        return pattern;
+    }
+
+    static boolean matchesElementText(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
+    {
+        if (el == null || !el.exists())
+        {
+            return false;
+        }
+
+        final List<String> candidates = new ArrayList<>();
+        try
+        {
+            final String text = el.getText();
+            if (text != null && !text.isBlank())
+            {
+                candidates.add(text);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        try
+        {
+            final String val = el.getValue();
+            if (val != null && !val.isBlank())
+            {
+                candidates.add(val);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        try
+        {
+            final String placeholder = el.getAttribute("placeholder");
+            if (placeholder != null && !placeholder.isBlank())
+            {
+                candidates.add(placeholder);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        try
+        {
+            final String ariaLabel = el.getAttribute("aria-label");
+            if (ariaLabel != null && !ariaLabel.isBlank())
+            {
+                candidates.add(ariaLabel);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        try
+        {
+            final String parentText = el.getAttribute("data-parent-text");
+            if (parentText != null && !parentText.isBlank())
+            {
+                candidates.add(parentText);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        try
+        {
+            final String textContent = el.getAttribute("textContent");
+            if (textContent != null && !textContent.isBlank() && !candidates.contains(textContent))
+            {
+                candidates.add(textContent);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        if (candidates.isEmpty())
+        {
+            return false;
+        }
+
+        if (regex)
+        {
+            final String cleanPattern = cleanRegexPattern(expectedText);
+            Pattern pattern;
+            try
+            {
+                pattern = Pattern.compile(cleanPattern, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            }
+            catch (final PatternSyntaxException e)
+            {
+                pattern = Pattern.compile(Pattern.quote(cleanPattern), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            }
+            for (final String candidate : candidates)
+            {
+                if (pattern.matcher(candidate).find())
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        final String unescaped = unescapeLiteralText(expectedText);
+        for (final String candidate : candidates)
+        {
+            if (exact)
+            {
+                if (candidate.trim().equalsIgnoreCase(unescaped.trim()))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                if (candidate.toLowerCase().contains(unescaped.toLowerCase()))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static boolean matchesElementOrAssociatedLabel(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
+    {
+        if (matchesElementText(el, expectedText, regex, exact))
+        {
+            return true;
+        }
+        try
+        {
+            final String id = el.getAttribute("id");
+            if (id != null && !id.isBlank())
+            {
+                final ElementsCollection forLabels = Selenide.$$("label[for='" + id + "']");
+                for (final SelenideElement label : forLabels)
+                {
+                    if (matchesElementText(label, expectedText, regex, exact))
+                    {
+                        return true;
+                    }
+                }
+            }
+            final SelenideElement parentLabel = el.closest("label");
+            if (parentLabel.exists() && matchesElementText(parentLabel, expectedText, regex, exact))
+            {
+                return true;
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+        return false;
+    }
+
+    static boolean isTextPresentOnPage(final String expectedText, final boolean regex, final boolean exact)
+    {
+        try
+        {
+            if (matchesElementText($("body"), expectedText, regex, exact))
+            {
+                return true;
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        try
+        {
+            final ElementsCollection inputs = Selenide.$$("input, textarea, select");
+            for (final SelenideElement input : inputs)
+            {
+                if (matchesElementText(input, expectedText, regex, exact))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        return false;
+    }
+
     private static AiTool createAssertTextTool()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
-        props.putObject("selector").put("type", "string").put("description", "Selector of the element to assert text on");
+        props.putObject("selector").put("type", "string").put("description", "Optional selector of the element to assert text on. If omitted, verifies presence anywhere on page.");
         props.putObject("expectedText").put("type", "string").put("description", "Expected text content (plain substring) or regex pattern if regex is true");
         props.putObject("exact").put("type", "boolean").put("description", "Whether text match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedText is a regular expression pattern (default: false)");
 
         final ArrayNode req = schema.putArray("required");
-        req.add("selector");
         req.add("expectedText");
 
-        final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts that an element contains or exactly matches the expected text or pattern", schema);
+        final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts that an element contains or matches the expected text or pattern", schema);
         return new AiTool()
         {
             @Override
@@ -572,7 +856,7 @@ public final class BrowserToolProvider
                         : call.arguments().path("text").asText();
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
-                final String expectedText = regex ? rawExpectedText : unescapeLiteralText(rawExpectedText);
+                final String expectedText = regex ? cleanRegexPattern(rawExpectedText) : unescapeLiteralText(rawExpectedText);
 
                 final boolean isTitle = selector != null && ("title".equalsIgnoreCase(selector.trim())
                         || "head > title".equalsIgnoreCase(selector.trim())
@@ -585,75 +869,106 @@ public final class BrowserToolProvider
                         throw new AssertionError("No active browser window found to assert page title");
                     }
                     final String pageTitle = WebDriverRunner.getWebDriver().getTitle();
+                    final String actualTitle = pageTitle != null ? pageTitle : "";
                     if (regex)
                     {
-                        if (!Pattern.compile(expectedText, Pattern.DOTALL).matcher(pageTitle != null ? pageTitle : "").find())
+                        Pattern pattern;
+                        try
                         {
-                            throw new AssertionError("Page title \"" + pageTitle + "\" does not match regex pattern \"" + expectedText + "\"");
+                            pattern = Pattern.compile(expectedText, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                        }
+                        catch (final PatternSyntaxException e)
+                        {
+                            pattern = Pattern.compile(Pattern.quote(expectedText), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                        }
+                        if (!pattern.matcher(actualTitle).find())
+                        {
+                            throw new AssertionError("Page title \"" + actualTitle + "\" does not match regex pattern \"" + expectedText + "\"");
                         }
                     }
                     else if (exact)
                     {
-                        if (!expectedText.equals(pageTitle))
+                        if (!actualTitle.trim().equalsIgnoreCase(expectedText.trim()))
                         {
-                            throw new AssertionError("Page title \"" + pageTitle + "\" does not exactly match \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" does not exactly match \"" + expectedText + "\"");
                         }
                     }
                     else
                     {
-                        if (pageTitle == null || !pageTitle.contains(expectedText))
+                        if (!actualTitle.toLowerCase().contains(expectedText.toLowerCase()))
                         {
-                            throw new AssertionError("Page title \"" + pageTitle + "\" does not contain expected text \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" does not contain expected text \"" + expectedText + "\"");
                         }
+                    }
+                }
+                else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
+                {
+                    if (!isTextPresentOnPage(expectedText, regex, exact))
+                    {
+                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found anywhere on the page.");
                     }
                 }
                 else
                 {
-                    final SelenideElement el = (selector == null || selector.isBlank()) ? $("body") : findElement(selector);
-                    final String tagName = el.getTagName().toLowerCase();
-                    final boolean isInputOrTextarea = "input".equals(tagName) || "textarea".equals(tagName);
-
-                    if (regex)
+                    boolean matched = false;
+                    final ElementsCollection elements = findElements(selector);
+                    if (!elements.isEmpty())
                     {
-                        if (isInputOrTextarea)
+                        for (final SelenideElement el : elements)
                         {
-                            el.shouldHave(Condition.or("Text, value, or placeholder matching pattern",
-                                    Condition.matchText(expectedText),
-                                    Condition.attributeMatching("value", expectedText),
-                                    Condition.attributeMatching("placeholder", expectedText)));
-                        }
-                        else
-                        {
-                            el.shouldHave(Condition.matchText(expectedText));
-                        }
-                    }
-                    else if (exact)
-                    {
-                        if (isInputOrTextarea)
-                        {
-                            el.shouldHave(Condition.or("Exact text, value, or placeholder",
-                                    Condition.exactText(expectedText),
-                                    Condition.exactValue(expectedText),
-                                    Condition.attribute("placeholder", expectedText)));
-                        }
-                        else
-                        {
-                            el.shouldHave(Condition.exactText(expectedText));
+                            if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                            {
+                                matched = true;
+                                break;
+                            }
                         }
                     }
                     else
                     {
-                        if (isInputOrTextarea)
+                        try
                         {
-                            el.shouldHave(Condition.or("Text, value, or placeholder containing string",
-                                    Condition.text(expectedText),
-                                    Condition.value(expectedText),
-                                    Condition.attribute("placeholder", expectedText)));
+                            final SelenideElement singleEl = findElement(selector);
+                            if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
+                            {
+                                matched = true;
+                            }
                         }
-                        else
+                        catch (final Exception ignored)
                         {
-                            el.shouldHave(Condition.text(expectedText));
                         }
+                    }
+
+                    if (!matched)
+                    {
+                        try
+                        {
+                            final SelenideElement primary = elements.isEmpty() ? findElement(selector) : elements.first();
+                            if (primary.exists())
+                            {
+                                final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
+                                if (container.exists() && matchesElementText(container, expectedText, regex, exact))
+                                {
+                                    matched = true;
+                                }
+                                else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
+                                {
+                                    matched = true;
+                                }
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+
+                    if (!matched)
+                    {
+                        if (!isTextPresentOnPage(expectedText, regex, exact))
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" nor anywhere on the page.");
+                        }
+
+                        return ToolResult.error(call.callId(), errorNode("Expected text \"" + expectedText + "\" was not found on element \"" + selector + "\", but exists elsewhere on the page. Please inspect the page or invoke browser_assert_text without 'selector' to assert page presence.").toString());
                     }
                 }
 
@@ -692,6 +1007,29 @@ public final class BrowserToolProvider
         }
         final SelenideElement found = SelenideElementFinder.findElement(selector);
         return found != null ? found : $(selector);
+    }
+
+    private static ElementsCollection findElements(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return Selenide.$$("body");
+        }
+        try
+        {
+            return Selenide.$$(SelenideElementFinder.resolveLocator(selector));
+        }
+        catch (final Exception ignored)
+        {
+            try
+            {
+                return Selenide.$$(selector);
+            }
+            catch (final Exception ex)
+            {
+                return Selenide.$$("body");
+            }
+        }
     }
 
     private static AiTool createScrollTool()
