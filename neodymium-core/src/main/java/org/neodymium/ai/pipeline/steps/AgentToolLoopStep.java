@@ -331,6 +331,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("   - If the instruction asks you to click a button or link (e.g. 'Add to Cart', an accordion toggle, a dropdown button), click that button and immediately call 'complete_step'. Do NOT select options, sizes, or variants from menus, modals, or dropdowns that appear as a result of the click unless the instruction explicitly commands you to in this step.\n");
         systemPrompt.append("   - Subsequent test steps will perform any follow-up actions (such as choosing sizes, entering information, or checking out). Performing them prematurely will cause subsequent steps to fail!\n");
         systemPrompt.append("   - If the instruction explicitly asks for multiple inputs or milestones (e.g. 'Enter Mario as first name, Meier as last name, and email ...'), execute all requested milestone actions before calling 'complete_step'.\n");
+        systemPrompt.append("   - Use dedicated browser tools (`browser_type`, `browser_click`, `browser_select`) for interacting with forms and elements. Do NOT use `browser_execute_script` to fill forms or click buttons, as this bypasses validation and event tracking.\n");
         systemPrompt.append("2. COMPLETION: As soon as the instruction's described goal or milestones are achieved, you MUST invoke 'complete_step'. Do not continue calling tools.\n");
         systemPrompt.append("3. NO IDENTICAL REPEATS: Never propose the exact same tool call with the same arguments if the page state did not change. If an element was not found, inspect the DOM or Page State rather than repeating the call.\n");
         systemPrompt.append("4. DYNAMIC REGEX PATTERNS: When asserting dynamic values (such as order numbers, confirmation codes, dates, or IDs) where the instruction specifies a pattern or format (e.g. 'in the form 'V-[0-9]+-US'' or contains a regular expression in quotes), you MUST pass that pattern to `browser_assert_text` as `expectedText` and set \"regex\": true. Do NOT assert the volatile literal value seen on screen, because dynamic IDs change on subsequent test runs!\n");
@@ -523,6 +524,33 @@ public final class AgentToolLoopStep implements PipelineStep
             // If complete_step called -> Stop Criterion 1: Goal Accomplished
             if ("complete_step".equals(proposedCall.toolName()))
             {
+                if (intent != null && intent.isAssertion() && !isVisual)
+                {
+                    boolean hasSuccessfulAssertion = false;
+                    for (final ToolCall executed : executedCalls)
+                    {
+                        if (isAssertionTool(executed.toolName()))
+                        {
+                            hasSuccessfulAssertion = true;
+                            break;
+                        }
+                    }
+                    if (!hasSuccessfulAssertion)
+                    {
+                        if (!lastProposedToolWasCompleteStep)
+                        {
+                            lastProposedToolWasCompleteStep = true;
+                            final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
+                                    + "). You must execute an assertion tool (such as 'browser_assert_text') to verify the expected condition before calling complete_step. "
+                                    + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
+                            LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
+                            conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), rejectMsg));
+                            continue;
+                        }
+                        LOGGER.info("Accepting confirmed complete_step on assertion step despite no assertion tool call");
+                    }
+                }
+
                 if (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
                 {
                     if (!lastProposedToolWasCompleteStep)
@@ -1098,6 +1126,16 @@ public final class AgentToolLoopStep implements PipelineStep
             case "NONE" -> "complete_step";
             default -> name;
         };
+    }
+
+    private static boolean isAssertionTool(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String name = stripNamespacePrefix(toolName.trim()).toLowerCase();
+        return name.startsWith("assert") || name.startsWith("browser_assert");
     }
 
     private static ToolRegistry createDefaultRegistry()

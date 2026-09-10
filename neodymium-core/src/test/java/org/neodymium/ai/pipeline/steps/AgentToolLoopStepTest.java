@@ -1464,5 +1464,74 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(2, thrown.getTurn());
         Assertions.assertTrue(thrown.getRawResponse().contains("Turn 2"));
     }
+
+    @Test
+    public void testAssertionStepRejectsPrematureCompleteStepUntilAssertExecuted() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\",\"matched\":true}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Goal reached");
+            }
+        });
+
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Assert order number is displayed");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Turn 1: premature complete_step
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+            }
+            if (t == 2)
+            {
+                // Turn 2: calls browser_assert_text
+                return new LlmResponse("Asserting", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "browser_assert_text", MAPPER.createObjectNode().put("expectedText", "Order 12345"))));
+            }
+            // Turn 3: calls complete_step after assertion has succeeded
+            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("c-3", "complete_step", MAPPER.createObjectNode().put("summary", "Order verified"))));
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(3, turn.get(), "Must execute 3 turns: reject premature complete_step, execute assert tool, then complete");
+        Assertions.assertEquals("Order verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
 }
 
