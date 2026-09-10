@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.http.client.HttpMethod;
 import dev.langchain4j.http.client.HttpRequest;
+import dev.langchain4j.model.googleai.GoogleAiGeminiTokenUsage;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -231,5 +232,40 @@ public class GeminiLlmProviderTest
 
         final HttpRequest repaired = GeminiLlmProvider.repairThoughtSignatures(request);
         assertSame(request, repaired, "Non-functionCall requests should be returned unmodified without overhead.");
+    }
+
+    @Test
+    public void testExtractCachedTokens()
+    {
+        System.setProperty("neodymium.ai.gemini.apiKey", "mock-gemini-key");
+        final GeminiLlmProvider provider = new GeminiLlmProvider();
+
+        // 1. Null usage returns 0
+        assertEquals(0, provider.extractCachedTokens(null), "Null token usage must return 0 cached tokens.");
+
+        // 2. GoogleAiGeminiTokenUsage with cached tokens returns expected count
+        final GoogleAiGeminiTokenUsage usageWithCache = GoogleAiGeminiTokenUsage.builder()
+            .inputTokenCount(100)
+            .outputTokenCount(50)
+            .totalTokenCount(150)
+            .cachedContentTokenCount(75)
+            .build();
+        assertEquals(75, provider.extractCachedTokens(usageWithCache),
+            "GoogleAiGeminiTokenUsage with cached content should return exact cached count.");
+
+        // 3. GoogleAiGeminiTokenUsage with null cached tokens returns 0
+        final GoogleAiGeminiTokenUsage usageWithoutCache = GoogleAiGeminiTokenUsage.builder()
+            .inputTokenCount(100)
+            .outputTokenCount(50)
+            .totalTokenCount(150)
+            .cachedContentTokenCount(null)
+            .build();
+        assertEquals(0, provider.extractCachedTokens(usageWithoutCache),
+            "GoogleAiGeminiTokenUsage with null cached content should return 0.");
+
+        // 4. Standard LangChain4j TokenUsage without cached count returns 0
+        final dev.langchain4j.model.output.TokenUsage standardUsage = new dev.langchain4j.model.output.TokenUsage(100, 50, 150);
+        assertEquals(0, provider.extractCachedTokens(standardUsage),
+            "Standard TokenUsage without cachedContentTokenCount should return 0.");
     }
 }

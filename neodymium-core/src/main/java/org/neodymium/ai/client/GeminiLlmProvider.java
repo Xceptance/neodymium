@@ -42,6 +42,7 @@ import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.googleai.GeminiThinkingConfig;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiTokenUsage;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -554,24 +555,29 @@ public final class GeminiLlmProvider implements LlmProvider
         });
     }
 
-    private int extractCachedTokens(final dev.langchain4j.model.output.TokenUsage usage)
+    int extractCachedTokens(final dev.langchain4j.model.output.TokenUsage usage)
     {
         if (usage == null)
         {
             return 0;
         }
+        if (usage instanceof GoogleAiGeminiTokenUsage geminiUsage)
+        {
+            final Integer cached = geminiUsage.cachedContentTokenCount();
+            return cached != null ? cached.intValue() : 0;
+        }
         try
         {
             final Method method = usage.getClass().getMethod("cachedContentTokenCount");
             final Object result = method.invoke(usage);
-            if (result instanceof Number)
+            if (result instanceof Number number)
             {
-                return ((Number) result).intValue();
+                return number.intValue();
             }
         }
         catch (final Exception e)
         {
-            // Silent catch
+            // Silent fallback
         }
         return 0;
     }
