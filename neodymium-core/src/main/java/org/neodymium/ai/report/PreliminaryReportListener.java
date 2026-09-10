@@ -454,7 +454,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                 callEntry.setSystemPrompt(llmReceived.getRequest().systemMessage());
                 if (llmReceived.getRequest().isMultiTurn())
                 {
-                    callEntry.setUserPrompt(llmReceived.getRequest().fullConversationFormatted());
+                    callEntry.setUserPrompt(llmReceived.getRequest().dialogueConversationFormatted());
                 }
                 else
                 {

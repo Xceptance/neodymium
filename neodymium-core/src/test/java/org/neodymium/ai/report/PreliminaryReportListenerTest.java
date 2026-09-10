@@ -38,8 +38,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.ChatMessage;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
@@ -1596,5 +1598,55 @@ public class PreliminaryReportListenerTest
             ExecutionContext.setActiveContext(null);
         }
     }
+
+    @Test
+    @DisplayName("Verify that multi-turn LLM calls do not duplicate the system prompt in the userPrompt section")
+    public void testMultiTurnLlmCallDoesNotDuplicateSystemPromptInUserPrompt()
+    {
+        final Path reportDir = this.tempFolder.resolve("multi-turn-report");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Submit payment form");
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        final ChatMessage sysMsg = ChatMessage.system("YOU ARE A PLAYBOOK EXECUTION AGENT.");
+        final ChatMessage userMsg = ChatMessage.user("Perform step #1 now.");
+        final ChatMessage asstMsg = ChatMessage.assistant("Clicking submit button");
+        final ChatMessage toolMsg = ChatMessage.tool("call_1", "browser_click", "{\"status\":\"SUCCESS\"}");
+
+        final LlmRequest multiTurnReq = new LlmRequest(
+            List.of(sysMsg, userMsg, asstMsg, toolMsg),
+            Collections.emptyList(),
+            0.0,
+            30,
+            ReasoningEffort.LOW
+        );
+        final LlmResponse resp = new LlmResponse("Complete", new TokenUsage(100, 20, 120, 0), "gemini-flash");
+
+        bus.dispatch(new LlmRequestSentEvent(multiTurnReq, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(multiTurnReq, resp, 150, "ACTION"));
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report, "Report should be generated.");
+        assertFalse(report.getLlmCalls().isEmpty(), "LLM call should be captured.");
+
+        final TestExecutionReport.ReportLlmCallEntry callEntry = report.getLlmCalls().get(0);
+        assertEquals("YOU ARE A PLAYBOOK EXECUTION AGENT.", callEntry.getSystemPrompt(),
+            "System prompt should be captured in systemPrompt field.");
+        assertFalse(callEntry.getUserPrompt().contains("ChatMessage[SYSTEM]"),
+            "User prompt section must NOT contain ChatMessage[SYSTEM].");
+        assertFalse(callEntry.getUserPrompt().contains("YOU ARE A PLAYBOOK EXECUTION AGENT."),
+            "User prompt section must NOT contain duplicate system prompt.");
+        assertTrue(callEntry.getUserPrompt().contains("ChatMessage[USER]:\nPerform step #1 now."),
+            "User prompt section must contain user turn.");
+        assertTrue(callEntry.getUserPrompt().contains("ChatMessage[ASSISTANT]:\nClicking submit button"),
+            "User prompt section must contain assistant turn.");
+        assertTrue(callEntry.getUserPrompt().contains("ChatMessage[TOOL (tool=browser_click, id=call_1)]:\n{\"status\":\"SUCCESS\"}"),
+            "User prompt section must contain tool turn.");
+    }
 }
+
 

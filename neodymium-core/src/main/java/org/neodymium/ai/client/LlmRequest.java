@@ -21,6 +21,7 @@ package org.neodymium.ai.client;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.neodymium.ai.client.ChatMessage.Role;
 import org.neodymium.ai.tool.ToolDefinition;
 
 /**
@@ -254,7 +255,7 @@ public record LlmRequest(
         {
             final ChatMessage first = this.messages.get(0);
             final ChatMessage second = this.messages.get(1);
-            if (first.role() == ChatMessage.Role.SYSTEM && second.role() == ChatMessage.Role.USER)
+            if (first.role() == Role.SYSTEM && second.role() == Role.USER)
             {
                 return false;
             }
@@ -272,6 +273,28 @@ public record LlmRequest(
         return ChatMessage.formatConversation(this.messages);
     }
 
+    /**
+     * Formats all conversation messages in this request into a structured multi-turn conversation string,
+     * excluding system messages (which are typically rendered separately in reports).
+     *
+     * @return formatted dialogue conversation string
+     */
+    public String dialogueConversationFormatted()
+    {
+        if (this.messages == null || this.messages.isEmpty())
+        {
+            return this.userMessage != null ? this.userMessage : "";
+        }
+        final List<ChatMessage> dialogueMsgs = this.messages.stream()
+            .filter(msg -> msg.role() != Role.SYSTEM)
+            .toList();
+        if (dialogueMsgs.isEmpty())
+        {
+            return this.userMessage != null ? this.userMessage : "";
+        }
+        return ChatMessage.formatConversation(dialogueMsgs);
+    }
+
     private static String resolveSystemContent(final List<ChatMessage> msgs)
     {
         if (msgs == null)
@@ -280,7 +303,7 @@ public record LlmRequest(
         }
         for (final ChatMessage msg : msgs)
         {
-            if (msg.role() == ChatMessage.Role.SYSTEM)
+            if (msg.role() == Role.SYSTEM)
             {
                 return msg.content() != null ? msg.content() : "";
             }
@@ -297,7 +320,7 @@ public record LlmRequest(
         for (int i = msgs.size() - 1; i >= 0; i--)
         {
             final ChatMessage msg = msgs.get(i);
-            if (msg.role() == ChatMessage.Role.USER)
+            if (msg.role() == Role.USER)
             {
                 return msg.content() != null ? msg.content() : "";
             }
