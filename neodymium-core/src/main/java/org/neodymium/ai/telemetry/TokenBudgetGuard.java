@@ -37,7 +37,6 @@ import org.neodymium.ai.pipeline.TokenBudgetExceededException;
  */
 public final class TokenBudgetGuard implements ExecutionListener
 {
-    public static final int UNBOUNDED = -1;
     private static final int UNCONFIGURED = Integer.MIN_VALUE;
 
     private final int inputBudget;
@@ -58,8 +57,8 @@ public final class TokenBudgetGuard implements ExecutionListener
     /**
      * Constructs a TokenBudgetGuard with specific input and output token budget limits.
      *
-     * @param inputBudget maximum allowed input/prompt tokens (<= 0 or -1 means disabled; UNCONFIGURED means resolve dynamically)
-     * @param outputBudget maximum allowed output/completion tokens (<= 0 or -1 means disabled; UNCONFIGURED means resolve dynamically)
+     * @param inputBudget maximum allowed input/prompt tokens (must be positive, or UNCONFIGURED to resolve dynamically)
+     * @param outputBudget maximum allowed output/completion tokens (must be positive, or UNCONFIGURED to resolve dynamically)
      */
     public TokenBudgetGuard(final int inputBudget, final int outputBudget)
     {
@@ -85,7 +84,7 @@ public final class TokenBudgetGuard implements ExecutionListener
                 final int currentOutput = this.tokenUsageOutput.addAndGet(usage.outputTokenCount());
 
                 final int effectiveInputBudget = resolveInputBudget();
-                if (effectiveInputBudget > 0 && currentInput > effectiveInputBudget)
+                if (currentInput > effectiveInputBudget)
                 {
                     throw new TokenBudgetExceededException(
                         TokenBudgetExceededException.BudgetType.INPUT,
@@ -95,7 +94,7 @@ public final class TokenBudgetGuard implements ExecutionListener
                 }
 
                 final int effectiveOutputBudget = resolveOutputBudget();
-                if (effectiveOutputBudget > 0 && currentOutput > effectiveOutputBudget)
+                if (currentOutput > effectiveOutputBudget)
                 {
                     throw new TokenBudgetExceededException(
                         TokenBudgetExceededException.BudgetType.OUTPUT,
@@ -109,7 +108,7 @@ public final class TokenBudgetGuard implements ExecutionListener
 
     private int resolveInputBudget()
     {
-        if (this.inputBudget != UNCONFIGURED)
+        if (this.inputBudget > 0)
         {
             return this.inputBudget;
         }
@@ -127,7 +126,7 @@ public final class TokenBudgetGuard implements ExecutionListener
 
     private int resolveOutputBudget()
     {
-        if (this.outputBudget != UNCONFIGURED)
+        if (this.outputBudget > 0)
         {
             return this.outputBudget;
         }

@@ -39,10 +39,12 @@ import org.neodymium.ai.model.IncompatibleFrameworkException;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.pipeline.TokenBudgetExceededException;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
@@ -209,11 +211,11 @@ public final class StateMachineRunner
                         throw (Error) t;
                     }
 
-                    if (t instanceof org.neodymium.ai.pipeline.TokenBudgetExceededException tokenErr)
+                    if (t instanceof TokenBudgetExceededException tokenErr)
                     {
                         throw tokenErr;
                     }
-                    if (t.getCause() instanceof org.neodymium.ai.pipeline.TokenBudgetExceededException tokenCauseErr)
+                    if (t.getCause() instanceof TokenBudgetExceededException tokenCauseErr)
                     {
                         throw tokenCauseErr;
                     }
@@ -225,7 +227,7 @@ public final class StateMachineRunner
                     }
                     else
                     {
-                        e = new org.neodymium.ai.pipeline.ConclusiveFailureException(t.getMessage() != null ? t.getMessage() : t.toString(), t);
+                        e = new ConclusiveFailureException(t.getMessage() != null ? t.getMessage() : t.toString(), t);
                     }
 
                     // Check if an active TryCatch scope can handle this exception

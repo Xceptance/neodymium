@@ -43,12 +43,16 @@ import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
+import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.InvalidAgentResponseException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.pipeline.StepTimeoutExceededException;
+import org.neodymium.ai.pipeline.StepTurnLimitExceededException;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
 import org.neodymium.ai.prompt.LlmResponseSanitizer;
 import org.neodymium.ai.session.AiSession;
@@ -334,6 +338,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("   - Inspect the attached page screenshot visually to verify whether the condition (appearance, layout, colors, elements, icons, checkmarks, badges) is satisfied on screen.\n");
         systemPrompt.append("   - If the visual condition is satisfied in the screenshot, call tool 'complete_step' immediately with a concise summary of your visual verification.\n");
         systemPrompt.append("   - Do NOT attempt to query DOM elements or execute DOM text assertions for visual checks when the visual condition is visible on the screen.\n");
+        systemPrompt.append("6. SINGLE TOOL PER TURN: Propose exactly ONE tool call per response. Do NOT call multiple tools in parallel or batch multiple actions in a single turn. After each tool execution, you will receive the updated page state to decide your next action.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -341,6 +346,7 @@ public final class AgentToolLoopStep implements PipelineStep
 
         int stepCumulativeTokens = 0;
         int turn = 0;
+        int invalidResponseCount = 0;
 
         // Thrashing tracking
         String lastToolName = null;
@@ -363,14 +369,14 @@ public final class AgentToolLoopStep implements PipelineStep
 
             if (turn > this.maxTurns)
             {
-                throw new ConclusiveFailureException("Step turn limit of " + this.maxTurns + " turns exceeded (reached turn #" + turn + ")");
+                throw new StepTurnLimitExceededException(instruction, turn, this.maxTurns);
             }
 
             // Stop Criterion 5: Step Wall-Clock Timeout
             final long elapsedSeconds = (System.currentTimeMillis() - startTimeMs) / 1000;
             if (elapsedSeconds >= this.timeoutSeconds)
             {
-                throw new ConclusiveFailureException("Step timeout of " + this.timeoutSeconds + "s exceeded (elapsed: " + elapsedSeconds + "s)");
+                throw new StepTimeoutExceededException(instruction, elapsedSeconds, (int) this.timeoutSeconds);
             }
 
             if (LOGGER.isTraceEnabled())
@@ -413,7 +419,7 @@ public final class AgentToolLoopStep implements PipelineStep
             }
             catch (final TokenBudgetExceededException e)
             {
-                throw new ConclusiveFailureException("Token budget exceeded during step: " + e.getMessage(), e);
+                throw e;
             }
             catch (final Exception e)
             {
@@ -463,26 +469,22 @@ public final class AgentToolLoopStep implements PipelineStep
                     LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
                             tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
                 }
-                if (executedCalls.isEmpty())
+
+                if (invalidResponseCount == 0)
                 {
-                    final List<String> toolNames = new ArrayList<>();
-                    for (final ToolDefinition def : availableTools)
-                    {
-                        toolNames.add(def.name());
-                    }
+                    invalidResponseCount++;
                     conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
-                    conversation.add(ChatMessage.user("Your response did not contain a valid tool call. Available tools: "
-                            + toolNames
-                            + ". Please respond by invoking one of the tools or 'complete_step'."));
+                    conversation.add(ChatMessage.user("Your response did not contain a valid tool call. If the step's goal is complete, invoke tool 'complete_step'. Otherwise, invoke the next browser tool."));
                     continue;
                 }
                 else
                 {
-                    final String summary = "Goal completed after executing " + executedCalls.size() + " tool calls";
-                    context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
-                    finishLoop(context, executedCalls, summary);
-                    LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary, turn, executedCalls.size());
-                    break;
+                    throw new InvalidAgentResponseException(
+                            "Agent turn did not produce a valid tool call after warning",
+                            response != null ? response.content() : "",
+                            turn,
+                            invalidResponseCount + 1
+                    );
                 }
             }
 
@@ -508,8 +510,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 consecutiveIdenticalCalls++;
                 if (consecutiveIdenticalCalls >= 3)
                 {
-                    throw new ConclusiveFailureException("Thrashing breaker triggered: 3 consecutive identical tool calls to '"
-                            + proposedCall.toolName() + "' with arguments " + proposedCall.arguments());
+                    throw new AgentThrashingException(proposedCall.toolName(), proposedCall.arguments(), consecutiveIdenticalCalls);
                 }
             }
             else

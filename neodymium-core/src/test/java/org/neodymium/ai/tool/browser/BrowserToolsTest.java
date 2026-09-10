@@ -21,6 +21,7 @@ package org.neodymium.ai.tool.browser;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -383,25 +384,39 @@ public class BrowserToolsTest
     }
 
     @Test
-    public void testNormalizeRegexPattern()
+    public void testUnescapeLiteralText()
     {
-        final String doubleEscapedDollar = "\\\\$";
-        final String normalizedDollar = BrowserToolProvider.normalizeRegexPattern(doubleEscapedDollar);
-        Assertions.assertEquals("\\$", normalizedDollar);
+        Assertions.assertEquals("$27.58", BrowserToolProvider.unescapeLiteralText("\\$27.58"));
+        Assertions.assertEquals("Order (123)", BrowserToolProvider.unescapeLiteralText("Order \\(123\\)"));
+        Assertions.assertEquals("Item [A]", BrowserToolProvider.unescapeLiteralText("Item \\[A\\]"));
+        Assertions.assertEquals("Price: $10.00", BrowserToolProvider.unescapeLiteralText("Price: \\$10\\.00"));
+        Assertions.assertEquals("Clean text", BrowserToolProvider.unescapeLiteralText("Clean text"));
+        Assertions.assertNull(BrowserToolProvider.unescapeLiteralText(null));
+    }
 
-        final String text = "Total Paid: $27.58";
-        final String pattern = "(?s).*" + normalizedDollar + ".*";
-        Assertions.assertTrue(Pattern.compile(pattern).matcher(text).matches());
+    @Test
+    public void testExactAnchoredRegexSemantics()
+    {
+        final String pattern = "^V-[0-9]+-US$";
+        final Pattern compiled = Pattern.compile(pattern, Pattern.DOTALL);
 
-        final String doubleEscapedDot = "\\\\.";
-        Assertions.assertEquals("\\.", BrowserToolProvider.normalizeRegexPattern(doubleEscapedDot));
+        Assertions.assertTrue(compiled.matcher("V-12345-US").find());
+        Assertions.assertFalse(compiled.matcher("Prefix V-12345-US").find());
+        Assertions.assertFalse(compiled.matcher("V-12345-US Suffix").find());
+    }
 
-        final String doubleEscapedDigit = "\\\\d+";
-        Assertions.assertEquals("\\d+", BrowserToolProvider.normalizeRegexPattern(doubleEscapedDigit));
+    @Test
+    public void testAssertTextTitleWithoutDriverThrowsAssertionError()
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ObjectNode args = mapper.createObjectNode();
+        args.put("selector", "title");
+        args.put("expectedText", "Home Page");
+        final ToolCall call = new ToolCall("call-title-1", "browser_assert_text", args);
 
-        Assertions.assertEquals("[0-9]+", BrowserToolProvider.normalizeRegexPattern("[0-9]+"));
-        Assertions.assertEquals("", BrowserToolProvider.normalizeRegexPattern(null));
-        Assertions.assertEquals("Hello World", BrowserToolProvider.normalizeRegexPattern("Hello World"));
+        final AssertionError err = Assertions.assertThrows(AssertionError.class, () -> tool.execute(call, null));
+        Assertions.assertTrue(err.getMessage().contains("No active browser window found to assert page title"));
     }
 
     @Test
@@ -428,19 +443,5 @@ public class BrowserToolsTest
         final JsonNode json = mapper.readTree(result.content());
         Assertions.assertEquals("SUCCESS", json.path("status").asText());
         Assertions.assertEquals("RICH", json.path("level").asText());
-    }
-
-    @Test
-    public void testUnescapeLiteralText()
-    {
-        Assertions.assertEquals("Total Paid: $27.58", BrowserToolProvider.unescapeLiteralText("Total Paid: \\$27.58"));
-        Assertions.assertEquals("Cart (1)", BrowserToolProvider.unescapeLiteralText("Cart \\(1\\)"));
-        Assertions.assertEquals("[Item]", BrowserToolProvider.unescapeLiteralText("\\[Item\\]"));
-        Assertions.assertEquals("{key}", BrowserToolProvider.unescapeLiteralText("\\{key\\}"));
-        Assertions.assertEquals("a+b", BrowserToolProvider.unescapeLiteralText("a\\+b"));
-        Assertions.assertEquals("Are you sure?", BrowserToolProvider.unescapeLiteralText("Are you sure\\?"));
-        Assertions.assertEquals("Price: $100", BrowserToolProvider.unescapeLiteralText("Price: $100"));
-        Assertions.assertEquals("", BrowserToolProvider.unescapeLiteralText(""));
-        Assertions.assertNull(BrowserToolProvider.unescapeLiteralText(null));
     }
 }

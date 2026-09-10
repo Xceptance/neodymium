@@ -33,10 +33,14 @@ import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
+import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.InvalidAgentResponseException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.pipeline.StepTimeoutExceededException;
+import org.neodymium.ai.pipeline.StepTurnLimitExceededException;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.ToolCall;
@@ -195,9 +199,9 @@ public class AgentToolLoopStepTest
 
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
 
-        final PipelineException thrown = Assertions.assertThrows(PipelineException.class, () -> step.execute(this.context));
-        Assertions.assertTrue(thrown.getMessage().contains("Thrashing breaker triggered"));
-        Assertions.assertTrue(thrown.getMessage().contains("3 consecutive identical tool calls"));
+        final AgentThrashingException thrown = Assertions.assertThrows(AgentThrashingException.class, () -> step.execute(this.context));
+        Assertions.assertEquals("repeated_action", thrown.getToolName());
+        Assertions.assertEquals(3, thrown.getConsecutiveCalls());
     }
 
     @Test
@@ -209,8 +213,9 @@ public class AgentToolLoopStepTest
 
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
 
-        final PipelineException thrown = Assertions.assertThrows(PipelineException.class, () -> step.execute(this.context));
-        Assertions.assertTrue(thrown.getCause() instanceof TokenBudgetExceededException);
+        final TokenBudgetExceededException thrown = Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(5000, thrown.getConsumedTokens());
+        Assertions.assertEquals(4000, thrown.getBudgetLimit());
     }
 
     @Test
@@ -242,8 +247,9 @@ public class AgentToolLoopStepTest
         // Set timeout to 1 second
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 1);
 
-        final PipelineException thrown = Assertions.assertThrows(PipelineException.class, () -> step.execute(this.context));
-        Assertions.assertTrue(thrown.getMessage().contains("timeout of 1s exceeded"));
+        final StepTimeoutExceededException thrown = Assertions.assertThrows(StepTimeoutExceededException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(1, thrown.getTimeoutSeconds());
+        Assertions.assertTrue(thrown.getElapsedSeconds() >= 1);
     }
 
     @Test
@@ -1301,9 +1307,9 @@ public class AgentToolLoopStepTest
 
         // maxTurns = 3
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30, 3, 100_000);
-        final PipelineException thrown = Assertions.assertThrows(PipelineException.class, () -> step.execute(this.context));
-        Assertions.assertTrue(thrown instanceof ConclusiveFailureException);
-        Assertions.assertTrue(thrown.getMessage().contains("Step turn limit of 3 turns exceeded"));
+        final StepTurnLimitExceededException thrown = Assertions.assertThrows(StepTurnLimitExceededException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(3, thrown.getMaxTurns());
+        Assertions.assertEquals(4, thrown.getTurn());
     }
 
     @Test
@@ -1334,10 +1340,10 @@ public class AgentToolLoopStepTest
 
         // maxTokens = 1000
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30, 15, 1000);
-        final PipelineException thrown = Assertions.assertThrows(PipelineException.class, () -> step.execute(this.context));
-        Assertions.assertTrue(thrown instanceof ConclusiveFailureException);
-        Assertions.assertTrue(thrown.getCause() instanceof TokenBudgetExceededException);
-        Assertions.assertTrue(thrown.getMessage().contains("Token budget exceeded during step"));
+        final TokenBudgetExceededException thrown = Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(TokenBudgetExceededException.BudgetType.TOTAL, thrown.getBudgetType());
+        Assertions.assertEquals(1200, thrown.getConsumedTokens());
+        Assertions.assertEquals(1000, thrown.getBudgetLimit());
     }
 
     @Test
@@ -1409,6 +1415,54 @@ public class AgentToolLoopStepTest
         final List<?> calls = (List<?>) this.context.getTransientData().get(AgentToolLoopStep.KEY_EXECUTED_TOOL_CALLS);
         Assertions.assertNotNull(calls);
         Assertions.assertEquals(1, calls.size());
+    }
+
+    @Test
+    public void testStepWarnsOnceOnMissingToolCallBeforeFailing() throws PipelineException
+    {
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Turn 1: text only, no tool call
+                return new LlmResponse("I am thinking about what to do...", new TokenUsage(10, 10, 20), "mock");
+            }
+            else
+            {
+                // Turn 2: self-corrects after warning and calls complete_step
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Self-corrected"))));
+            }
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(2, turn.get());
+        final String summary = (String) this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY);
+        Assertions.assertEquals("Self-corrected", summary);
+    }
+
+    @Test
+    public void testStepThrowsInvalidAgentResponseExceptionOnRepeatedMissingToolCalls()
+    {
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            return new LlmResponse("Turn " + t + ": still just rambling without tools.", new TokenUsage(10, 10, 20), "mock");
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+
+        final InvalidAgentResponseException thrown = Assertions.assertThrows(
+                InvalidAgentResponseException.class,
+                () -> step.execute(this.context)
+        );
+
+        Assertions.assertEquals(2, turn.get());
+        Assertions.assertEquals(2, thrown.getTurn());
+        Assertions.assertTrue(thrown.getRawResponse().contains("Turn 2"));
     }
 }
 

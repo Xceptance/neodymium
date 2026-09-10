@@ -150,76 +150,91 @@ public final class PesapPreStep implements PipelineStep
                     }
 
                     final long startTime = System.currentTimeMillis();
+                    final LlmResponse response;
+                    final long durationMs;
                     try
                     {
-                        final LlmResponse response = provider.chat(request);
-                        final long durationMs = System.currentTimeMillis() - startTime;
-
-                        if (this.session != null && this.session.getEventBus() != null)
-                        {
-                            this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "PESAP"));
-                        }
-
-                        LOGGER.debug("LLM response received. Length: {} chars, toolCalls: {} (duration: {} ms, attempt: {})",
-                            response.content() != null ? response.content().length() : 0,
-                            response.toolCalls() != null ? response.toolCalls().size() : 0,
-                            durationMs, attempt);
-                        if (LOGGER.isTraceEnabled())
-                        {
-                            if (response.content() != null)
-                            {
-                                LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
-                            }
-                            if (response.toolCalls() != null && !response.toolCalls().isEmpty())
-                            {
-                                LOGGER.trace("Tool calls:\n{}", response.toolCalls());
-                            }
-                        }
-
-                        context.getTransientData().compute("pesapCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
-
-                        final TokenUsage newUsage = response.tokenUsage();
-                        if (newUsage != null)
-                        {
-                            if (stats != null)
-                            {
-                                stats.addPesapCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
-                            }
-
-                            LOGGER.debug("   📊 [Pre-Step PESAP] Tokens: {} in ({} cached) → {} out (total: {})",
-                                newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
-
-                            final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
-                            if (existing == null)
-                            {
-                                context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, newUsage);
-                            }
-                            else
-                            {
-                                context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new TokenUsage(
-                                    existing.inputTokenCount() + newUsage.inputTokenCount(),
-                                    existing.outputTokenCount() + newUsage.outputTokenCount(),
-                                    existing.totalTokenCount() + newUsage.totalTokenCount(),
-                                    existing.cachedTokenCount() + newUsage.cachedTokenCount()
-                                ));
-                            }
-                        }
-
-                        final PesapPrompt.PesapResult parsed = pesapPrompt.parseResponse(response, context);
-                        if (parsed != null && parsed.intent() != null)
-                        {
-                            pesapResult = parsed;
-                            break;
-                        }
-                        LOGGER.warn("⚠️ [Pre-Step PESAP] Received void/unclassified intent on attempt {} for instruction '{}'",
-                            attempt, resolvedInstruction);
+                        response = provider.chat(request);
+                        durationMs = System.currentTimeMillis() - startTime;
                     }
                     catch (final Exception e)
                     {
                         lastException = e;
-                        LOGGER.warn("⚠️ [Pre-Step PESAP] LLM call or response parsing failed on attempt {} for instruction '{}': {}",
+                        LOGGER.warn("⚠️ [Pre-Step PESAP] LLM call failed on attempt {} for instruction '{}': {}",
                             attempt, resolvedInstruction, e.getMessage());
+                        continue;
                     }
+
+                    if (this.session != null && this.session.getEventBus() != null)
+                    {
+                        this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "PESAP"));
+                    }
+
+                    LOGGER.debug("LLM response received. Length: {} chars, toolCalls: {} (duration: {} ms, attempt: {})",
+                        response.content() != null ? response.content().length() : 0,
+                        response.toolCalls() != null ? response.toolCalls().size() : 0,
+                        durationMs, attempt);
+                    if (LOGGER.isTraceEnabled())
+                    {
+                        if (response.content() != null)
+                        {
+                            LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                        }
+                        if (response.toolCalls() != null && !response.toolCalls().isEmpty())
+                        {
+                            LOGGER.trace("Tool calls:\n{}", response.toolCalls());
+                        }
+                    }
+
+                    context.getTransientData().compute("pesapCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
+
+                    final TokenUsage newUsage = response.tokenUsage();
+                    if (newUsage != null)
+                    {
+                        if (stats != null)
+                        {
+                            stats.addPesapCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
+                        }
+
+                        LOGGER.debug("   📊 [Pre-Step PESAP] Tokens: {} in ({} cached) → {} out (total: {})",
+                            newUsage.inputTokenCount(), newUsage.cachedTokenCount(), newUsage.outputTokenCount(), newUsage.totalTokenCount());
+
+                        final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
+                        if (existing == null)
+                        {
+                            context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, newUsage);
+                        }
+                        else
+                        {
+                            context.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new TokenUsage(
+                                existing.inputTokenCount() + newUsage.inputTokenCount(),
+                                existing.outputTokenCount() + newUsage.outputTokenCount(),
+                                existing.totalTokenCount() + newUsage.totalTokenCount(),
+                                existing.cachedTokenCount() + newUsage.cachedTokenCount()
+                            ));
+                        }
+                    }
+
+                    final PesapPrompt.PesapResult parsed;
+                    try
+                    {
+                        parsed = pesapPrompt.parseResponse(response, context);
+                    }
+                    catch (final Exception e)
+                    {
+                        lastException = e;
+                        LOGGER.warn("⚠️ [Pre-Step PESAP] Response parsing failed on attempt {} for instruction '{}': {}",
+                            attempt, resolvedInstruction, e.getMessage());
+                        continue;
+                    }
+
+                    if (parsed != null && parsed.intent() != null)
+                    {
+                        pesapResult = parsed;
+                        break;
+                    }
+                    LOGGER.warn("⚠️ [Pre-Step PESAP] Received void/unclassified intent on attempt {} for instruction '{}'",
+                        attempt, resolvedInstruction);
                 }
 
                 if (pesapResult == null || pesapResult.intent() == null)

@@ -525,22 +525,6 @@ public final class BrowserToolProvider
     }
 
     /**
-     * Normalizes regular expression patterns received from LLMs by fixing double-escaped
-     * regex metacharacters and shorthand classes (e.g. converting "\\$" to "\$" and "\\." to "\.").
-     *
-     * @param pattern the regex pattern to normalize
-     * @return normalized regex pattern
-     */
-    public static String normalizeRegexPattern(final String pattern)
-    {
-        if (pattern == null)
-        {
-            return "";
-        }
-        return pattern.replaceAll("\\\\\\\\([$()\\[\\]{}.*+?^|dswb])", "\\\\$1");
-    }
-
-    /**
      * Unescapes escaped literal characters (such as "\$", "\(", etc.) that LLMs often emit
      * in literal strings.
      *
@@ -596,15 +580,16 @@ public final class BrowserToolProvider
 
                 if (isTitle)
                 {
+                    if (!WebDriverRunner.hasWebDriverStarted())
+                    {
+                        throw new AssertionError("No active browser window found to assert page title");
+                    }
                     final String pageTitle = WebDriverRunner.getWebDriver().getTitle();
                     if (regex)
                     {
-                        final String normalized = normalizeRegexPattern(expectedText);
-                        final String regPattern = normalized.startsWith(".*") ? normalized : ".*" + normalized + ".*";
-                        final String effectivePattern = regPattern.startsWith("(?s)") ? regPattern : "(?s)" + regPattern;
-                        if (!Pattern.compile(effectivePattern).matcher(pageTitle != null ? pageTitle : "").find())
+                        if (!Pattern.compile(expectedText, Pattern.DOTALL).matcher(pageTitle != null ? pageTitle : "").find())
                         {
-                            throw new AssertionError("Page title \"" + pageTitle + "\" does not match regex pattern \"" + effectivePattern + "\"");
+                            throw new AssertionError("Page title \"" + pageTitle + "\" does not match regex pattern \"" + expectedText + "\"");
                         }
                     }
                     else if (exact)
@@ -630,19 +615,16 @@ public final class BrowserToolProvider
 
                     if (regex)
                     {
-                        final String normalized = normalizeRegexPattern(expectedText);
-                        final String regPattern = normalized.startsWith(".*") ? normalized : ".*" + normalized + ".*";
-                        final String effectivePattern = regPattern.startsWith("(?s)") ? regPattern : "(?s)" + regPattern;
                         if (isInputOrTextarea)
                         {
                             el.shouldHave(Condition.or("Text, value, or placeholder matching pattern",
-                                    Condition.matchText(effectivePattern),
-                                    Condition.attributeMatching("value", effectivePattern),
-                                    Condition.attributeMatching("placeholder", effectivePattern)));
+                                    Condition.matchText(expectedText),
+                                    Condition.attributeMatching("value", expectedText),
+                                    Condition.attributeMatching("placeholder", expectedText)));
                         }
                         else
                         {
-                            el.shouldHave(Condition.matchText(effectivePattern));
+                            el.shouldHave(Condition.matchText(expectedText));
                         }
                     }
                     else if (exact)

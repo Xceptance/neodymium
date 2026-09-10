@@ -857,7 +857,8 @@ public final class AiConfiguration
      */
     public int getTokenBudgetInput()
     {
-        return getInt("neodymium.ai.tokenBudget.input", 500_000);
+        final int val = getInt("neodymium.ai.tokenBudget.input", 500_000);
+        return val > 0 ? val : 500_000;
     }
 
     /**
@@ -868,7 +869,8 @@ public final class AiConfiguration
      */
     public int getTokenBudgetOutput()
     {
-        return getInt("neodymium.ai.tokenBudget.output", 50_000);
+        final int val = getInt("neodymium.ai.tokenBudget.output", 50_000);
+        return val > 0 ? val : 50_000;
     }
 
     /**
@@ -879,7 +881,8 @@ public final class AiConfiguration
      */
     public int getStepMaxTurns()
     {
-        return getInt("neodymium.ai.step.maxTurns", 15);
+        final int val = getInt("neodymium.ai.step.maxTurns", 15);
+        return val > 0 ? val : 15;
     }
 
     /**
@@ -890,7 +893,8 @@ public final class AiConfiguration
      */
     public int getStepTokenBudget()
     {
-        return getInt("neodymium.ai.step.maxTokens", 100_000);
+        final int val = getInt("neodymium.ai.step.maxTokens", 100_000);
+        return val > 0 ? val : 100_000;
     }
 
     /**
@@ -901,7 +905,8 @@ public final class AiConfiguration
      */
     public int getStepTimeoutSeconds()
     {
-        return getInt("neodymium.ai.step.timeoutSeconds", getInt("neodymium.ai.timeoutSeconds", 60));
+        final int val = getInt("neodymium.ai.step.timeoutSeconds", getInt("neodymium.ai.timeoutSeconds", 60));
+        return val > 0 ? val : 60;
     }
 
     /**

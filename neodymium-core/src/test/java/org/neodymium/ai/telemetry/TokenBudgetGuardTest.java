@@ -63,7 +63,7 @@ public class TokenBudgetGuardTest
     @DisplayName("Input token budget breach triggers TokenBudgetExceededException")
     public void testInputTokenBudgetBreachThrowsException()
     {
-        final TokenBudgetGuard guard = new TokenBudgetGuard(100, -1);
+        final TokenBudgetGuard guard = new TokenBudgetGuard(100, 50_000);
         this.eventBus.registerListener(guard);
 
         final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
@@ -86,7 +86,7 @@ public class TokenBudgetGuardTest
     @DisplayName("Output token budget breach triggers TokenBudgetExceededException")
     public void testOutputTokenBudgetBreachThrowsException()
     {
-        final TokenBudgetGuard guard = new TokenBudgetGuard(-1, 50);
+        final TokenBudgetGuard guard = new TokenBudgetGuard(500_000, 50);
         this.eventBus.registerListener(guard);
 
         final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
@@ -120,17 +120,24 @@ public class TokenBudgetGuardTest
     }
 
     @Test
-    @DisplayName("Disabled token budgets (-1) allow arbitrary token counts without throwing exception")
-    public void testDisabledBudgetsAllowArbitraryTokens()
+    @DisplayName("Non-positive budgets (-1) fall back to safe finite ceiling and enforce limits")
+    public void testNonPositiveBudgetsFallBackToSafeFiniteCeiling()
     {
         final TokenBudgetGuard guard = new TokenBudgetGuard(-1, -1);
         this.eventBus.registerListener(guard);
 
         final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
-        final LlmResponse response = new LlmResponse("Result", new TokenUsage(1_000_000, 500_000, 1_500_000), "mock-model");
+        final LlmResponse response = new LlmResponse("Result", new TokenUsage(600_000, 10_000, 610_000), "mock-model");
         final LlmResponseReceivedEvent event = new LlmResponseReceivedEvent(request, response, 100, "EXECUTION");
 
-        Assertions.assertDoesNotThrow(() -> this.eventBus.dispatch(event));
+        final TokenBudgetExceededException exception = Assertions.assertThrows(
+            TokenBudgetExceededException.class,
+            () -> this.eventBus.dispatch(event)
+        );
+
+        Assertions.assertTrue(exception.isInputBudget());
+        Assertions.assertEquals(600_000, exception.getConsumedTokens());
+        Assertions.assertEquals(500_000, exception.getBudgetLimit());
     }
 
     @Test
