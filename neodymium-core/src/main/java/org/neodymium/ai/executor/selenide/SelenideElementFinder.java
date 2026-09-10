@@ -710,7 +710,7 @@ public final class SelenideElementFinder
             {
                 try
                 {
-                    new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.LEAN);
+                    new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
                     els = Selenide.$$(By.cssSelector(transformedCss));
                     visible = findFirstVisible(els, clean);
                     if (visible != null)

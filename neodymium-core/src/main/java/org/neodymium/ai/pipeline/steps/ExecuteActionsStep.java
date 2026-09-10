@@ -869,6 +869,7 @@ public final class ExecuteActionsStep implements PipelineStep
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_STEP_ACTIONS, new CopyOnWriteArrayList<Action>());
             contextState.getTransientData().remove("KEY_IN_CONTINUATION_LOOP");
+            contextState.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
 
             final boolean stepNoReplay = step.isNoReplay();
             contextState.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", stepNoReplay);
@@ -924,7 +925,6 @@ public final class ExecuteActionsStep implements PipelineStep
                 }
             }
 
-            final String lower = resolvedInstruction.toLowerCase();
             final boolean hasVisualFull = PlaybookStep.VISUAL_FULL_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasLayout = PlaybookStep.LAYOUT_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasVisual = PlaybookStep.VISUAL_PATTERN.matcher(resolvedInstruction).find();
@@ -1030,16 +1030,24 @@ public final class ExecuteActionsStep implements PipelineStep
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, initialLevel);
             step.setContextLevel(initialLevel.name());
 
+            final ExecutionMode mode = (ExecutionMode) contextState.getTransientData()
+                .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
+
+            final boolean hasRecordedContent = (step.getActions() != null && !step.getActions().isEmpty())
+                || (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
+                || (step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
+                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING);
+            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
+
+            final boolean hasToolCalls = step.getToolCalls() != null && !step.getToolCalls().isEmpty();
+            final boolean unifiedTooling = AiConfiguration.getInstance().isUnifiedToolingEnabled() || (isReplay && hasToolCalls);
+
             final PesapPreStep pesapPreStep = new PesapPreStep(step, session);
-            final boolean isSplit = pesapPreStep.executePreStep(contextState);
-            if (isSplit)
+            pesapPreStep.executePreStep(contextState);
+
+            if (!contextState.getTransientData().containsKey(ExecutionContext.KEY_PESAP_INTENT))
             {
-                step.setStatus(PlaybookStepStatus.SUCCESS);
-                if (session != null && session.getEventBus() != null)
-                {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
-                }
-                return;
+                step.setSemanticIntent(null);
             }
 
             final ContextLevel effectiveLevel = (ContextLevel) contextState.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
@@ -1060,9 +1068,6 @@ public final class ExecuteActionsStep implements PipelineStep
             {
                 contextState.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, activePrompt);
             }
-
-            final ExecutionMode mode = (ExecutionMode) contextState.getTransientData()
-                .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 
             final VisualBaselineGateStep visualBaselineGateStep = new VisualBaselineGateStep(step, session);
             final boolean isBypassed = visualBaselineGateStep.executeGate(contextState);
@@ -1085,14 +1090,6 @@ public final class ExecuteActionsStep implements PipelineStep
 
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
-            final boolean hasRecordedContent = (step.getActions() != null && !step.getActions().isEmpty())
-                || (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
-                || (step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
-                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING);
-            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
-
-            final boolean hasToolCalls = step.getToolCalls() != null && !step.getToolCalls().isEmpty();
-            final boolean unifiedTooling = AiConfiguration.getInstance().isUnifiedToolingEnabled() || (isReplay && hasToolCalls);
             if (unifiedTooling)
             {
                 if (isReplay)

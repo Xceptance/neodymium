@@ -112,6 +112,7 @@ public final class ExecutionContext
     public static final String KEY_LINTER_TOKEN_USAGE = "linterTokenUsage";
     public static final String KEY_LINTER_CALL_COUNT = "linterCallCount";
     public static final String KEY_SCENARIO_DESCRIPTION = "scenarioDescription";
+    public static final String KEY_INTERNAL_MILESTONES = "internalMilestones";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.

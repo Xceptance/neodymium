@@ -54,6 +54,7 @@ import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.telemetry.MetricsCollector;
+import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -395,6 +396,21 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setVerificationResult(pbStep.getVerificationResult());
                     }
+                    if (targetStep.getActions().isEmpty() && pbStep.getActions() != null && !pbStep.getActions().isEmpty())
+                    {
+                        for (final Action act : pbStep.getActions())
+                        {
+                            targetStep.addAction(new TestExecutionReport.ReportActionEntry(
+                                act.getType(),
+                                act.getTarget(),
+                                act.getValue(),
+                                act.getDescription(),
+                                act.getReasoning(),
+                                true,
+                                null
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -436,13 +452,45 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (llmReceived.getRequest() != null)
             {
                 callEntry.setSystemPrompt(llmReceived.getRequest().systemMessage());
-                callEntry.setUserPrompt(llmReceived.getRequest().userMessage());
+                if (llmReceived.getRequest().isMultiTurn())
+                {
+                    callEntry.setUserPrompt(llmReceived.getRequest().fullConversationFormatted());
+                }
+                else
+                {
+                    callEntry.setUserPrompt(llmReceived.getRequest().userMessage());
+                }
+                if (llmReceived.getRequest().hasTools())
+                {
+                    callEntry.setAvailableTools(llmReceived.getRequest().tools().stream()
+                            .map(ToolDefinition::toFormattedSummary)
+                            .toList());
+                }
             }
 
             if (llmReceived.getResponse() != null)
             {
                 callEntry.setModelName(llmReceived.getResponse().modelName());
-                callEntry.setResponseContent(llmReceived.getResponse().content());
+                final String content = llmReceived.getResponse().content();
+                if (content != null && !content.isBlank())
+                {
+                    if (llmReceived.getResponse().hasToolCalls())
+                    {
+                        callEntry.setResponseContent(content + "\n\nTool Calls: " + llmReceived.getResponse().toolCalls());
+                    }
+                    else
+                    {
+                        callEntry.setResponseContent(content);
+                    }
+                }
+                else if (llmReceived.getResponse().hasToolCalls())
+                {
+                    callEntry.setResponseContent("Tool Calls: " + llmReceived.getResponse().toolCalls());
+                }
+                else
+                {
+                    callEntry.setResponseContent(content);
+                }
 
                 final TokenUsage usage = llmReceived.getResponse().tokenUsage();
                 if (usage != null)
@@ -810,7 +858,39 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TokenUsage rcaUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
             final TokenUsage linterUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_TOKEN_USAGE);
 
-            final int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
+            TokenUsage effectiveStandardUsage = standardUsage;
+            int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
+            if (effectiveStandardUsage == null && this.report.getLlmCalls() != null && !this.report.getLlmCalls().isEmpty())
+            {
+                long fallbackIn = 0;
+                long fallbackOut = 0;
+                long fallbackCached = 0;
+                long fallbackTotal = 0;
+                int fallbackCalls = 0;
+                for (final TestExecutionReport.ReportLlmCallEntry call : this.report.getLlmCalls())
+                {
+                    final String capability = call.getCapability();
+                    if (!"LINTER".equalsIgnoreCase(capability) && !"PESAP".equalsIgnoreCase(capability)
+                            && !"JUDGE".equalsIgnoreCase(capability) && !"VERIFICATION".equalsIgnoreCase(capability)
+                            && !"RCA".equalsIgnoreCase(capability))
+                    {
+                        fallbackIn += call.getInputTokens();
+                        fallbackOut += call.getOutputTokens();
+                        fallbackCached += call.getCachedTokens();
+                        fallbackTotal += call.getTotalTokens();
+                        fallbackCalls++;
+                    }
+                }
+                if (fallbackCalls > 0)
+                {
+                    effectiveStandardUsage = new TokenUsage((int) fallbackIn, (int) fallbackOut, (int) fallbackTotal, (int) fallbackCached);
+                    if (standardCalls == 0)
+                    {
+                        standardCalls = fallbackCalls;
+                    }
+                }
+            }
+
             final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
             final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
             final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
@@ -819,7 +899,7 @@ public final class PreliminaryReportListener implements ExecutionListener
 
             final String activeModel = (String) ctx.getTransientData().getOrDefault(ExecutionContext.KEY_ACTIVE_MODEL, "default");
 
-            final TestExecutionReport.CategoryTokenUsage actCat = buildCategoryUsage(standardCalls, standardUsage, activeModel);
+            final TestExecutionReport.CategoryTokenUsage actCat = buildCategoryUsage(standardCalls, effectiveStandardUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage pesapCat = buildCategoryUsage(pesapCalls, pesapUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage judgeCat = buildCategoryUsage(judgeCalls, judgeUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage verifCat = buildCategoryUsage(verificationCalls, verificationUsage, activeModel);

@@ -64,6 +64,26 @@ public class AiToolContractTest
     }
 
     @Test
+    public void testToolDefinitionSignatureFormatting()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "Selector of input");
+        props.putObject("text").put("type", "string").put("description", "Text to type");
+        props.putObject("clearFirst").put("type", "boolean").put("description", "Clear first");
+        schema.putArray("required").add("selector").add("text");
+
+        final ToolDefinition def = new ToolDefinition("browser_type", "Types text into an input", schema);
+
+        Assertions.assertEquals("browser_type(selector: String, text: String, [clearFirst: Boolean])", def.signature());
+        Assertions.assertEquals("• browser_type(selector: String, text: String, [clearFirst: Boolean]) — Types text into an input", def.toFormattedSummary());
+
+        final String formattedList = ToolDefinition.formatTools(List.of(def));
+        Assertions.assertTrue(formattedList.contains("browser_type(selector: String, text: String, [clearFirst: Boolean])"));
+    }
+
+    @Test
     public void testToolCallValidationAndAccessors()
     {
         final ObjectNode args = MAPPER.createObjectNode();

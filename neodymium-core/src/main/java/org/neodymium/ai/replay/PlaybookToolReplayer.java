@@ -41,9 +41,8 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Replay engine executing recorded {@link ToolCall}s directly via {@link ToolRegistry}
@@ -58,10 +57,6 @@ public final class PlaybookToolReplayer
     private static final Logger LOGGER = LoggerFactory.getLogger(PlaybookToolReplayer.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    private static final Pattern INSTRUCTION_REGEX_PATTERN =
-            Pattern.compile("['\"]([^'\"]*(?:\\[[0-9a-zA-Z_\\-]+\\]|\\\\d|\\.\\*|\\.\\+)[^'\"]*)['\"]"
-                    + "|(?:in the form|matching)\\s+([a-zA-Z0-9_\\[\\]\\+\\\\.*-]+)");
 
     private PlaybookToolReplayer()
     {
@@ -145,28 +140,7 @@ public final class PlaybookToolReplayer
                 continue;
             }
 
-            // If instruction explicitly specifies a regular expression pattern, ensure assertion evaluates the pattern
-            final ToolCall finalCall;
-            if ("browser_assert_text".equals(intermediateCall.toolName()) && step.getInstruction() != null)
-            {
-                final Matcher patternMatcher = INSTRUCTION_REGEX_PATTERN.matcher(step.getInstruction());
-                if (patternMatcher.find())
-                {
-                    final String regexPattern = patternMatcher.group(1) != null ? patternMatcher.group(1) : patternMatcher.group(2);
-                    final ObjectNode updatedArgs = intermediateCall.arguments().deepCopy();
-                    updatedArgs.put("expectedText", regexPattern);
-                    updatedArgs.put("regex", true);
-                    finalCall = new ToolCall(intermediateCall.callId(), intermediateCall.toolName(), updatedArgs);
-                }
-                else
-                {
-                    finalCall = intermediateCall;
-                }
-            }
-            else
-            {
-                finalCall = intermediateCall;
-            }
+            final ToolCall finalCall = intermediateCall;
 
             // Check if tool is registered
             final AiTool tool = effectiveRegistry.getTool(finalCall.toolName())

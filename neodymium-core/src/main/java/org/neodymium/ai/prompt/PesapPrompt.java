@@ -19,17 +19,23 @@ package org.neodymium.ai.prompt;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.List;
+import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolDefinition;
 
 /**
  * AI prompt implementation for the pre-step PESAP preparation phase.
  * Analyzes the active step instruction to predict minimal context level,
  * check if custom Java methods are required, classify semantic intent, and identify step splits.
+ * Supports native structured tool calling via the {@code classify_step} tool definition.
  *
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
@@ -37,6 +43,8 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
 {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private static final ToolDefinition CLASSIFY_STEP_TOOL = createClassifyStepTool();
 
     private final String currentInstruction;
 
@@ -99,6 +107,16 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
         this(currentInstruction);
     }
 
+    /**
+     * Returns the structured tool definitions for pre-step PESAP classification.
+     *
+     * @return list containing the {@code classify_step} tool definition
+     */
+    public List<ToolDefinition> getTools()
+    {
+        return List.of(CLASSIFY_STEP_TOOL);
+    }
+
     @Override
     public ResponseSchema getResponseSchema()
     {
@@ -131,9 +149,38 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
         return trimmed;
     }
 
+    /**
+     * Parses the LLM response, prioritizing native tool calls and falling back to raw content text parsing.
+     *
+     * @param response the LLM response
+     * @param context the execution context
+     * @return the parsed PESAP result
+     * @throws Exception if parsing fails
+     */
+    public PesapResult parseResponse(final LlmResponse response, final ExecutionContext context) throws Exception
+    {
+        if (response != null && response.toolCalls() != null && !response.toolCalls().isEmpty())
+        {
+            for (final ToolCall call : response.toolCalls())
+            {
+                if ("classify_step".equalsIgnoreCase(call.toolName()) || call.arguments() != null)
+                {
+                    return parseArgumentsNode(call.arguments());
+                }
+            }
+        }
+
+        return parseResponse(response != null ? response.content() : null, context);
+    }
+
     @Override
     public PesapResult parseResponse(final String rawContent, final ExecutionContext context) throws Exception
     {
+        if (rawContent == null || rawContent.isBlank())
+        {
+            return new PesapResult("LEAN", false, List.of(), null);
+        }
+
         final String jsonContent = LlmResponseSanitizer.extractJson(rawContent);
         if (jsonContent.isEmpty())
         {
@@ -141,12 +188,38 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
         }
 
         final JsonNode root = MAPPER.readTree(jsonContent);
-        
-        final String rawContextLevel = root.hasNonNull("c") ? root.path("c").asText("LEAN").toUpperCase().trim() : "LEAN";
+        return parseArgumentsNode(root);
+    }
+
+    private static PesapResult parseArgumentsNode(final JsonNode root)
+    {
+        if (root == null || root.isEmpty())
+        {
+            return new PesapResult("LEAN", false, List.of(), null);
+        }
+
+        final String rawContextLevel;
+        if (root.hasNonNull("contextLevel"))
+        {
+            rawContextLevel = root.path("contextLevel").asText("LEAN").toUpperCase().trim();
+        }
+        else if (root.hasNonNull("c"))
+        {
+            rawContextLevel = root.path("c").asText("LEAN").toUpperCase().trim();
+        }
+        else
+        {
+            rawContextLevel = "LEAN";
+        }
+
         final boolean requiresJavaMethods = root.hasNonNull("jm") && root.path("jm").asBoolean();
-        
+
         final List<String> splitSteps = new ArrayList<>();
-        final JsonNode splitNode = root.path("sp");
+        JsonNode splitNode = root.path("milestones");
+        if (!splitNode.isArray() || splitNode.isEmpty())
+        {
+            splitNode = root.path("sp");
+        }
         if (splitNode.isArray())
         {
             for (final JsonNode node : splitNode)
@@ -155,10 +228,72 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
             }
         }
 
-        final String rawIntent = root.hasNonNull("i") ? root.path("i").asText(null) : null;
+        final String rawIntent;
+        if (root.hasNonNull("intent"))
+        {
+            rawIntent = root.path("intent").asText(null);
+        }
+        else if (root.hasNonNull("i"))
+        {
+            rawIntent = root.path("i").asText(null);
+        }
+        else
+        {
+            rawIntent = null;
+        }
+
         final SemanticIntent intent = SemanticIntent.fromCode(rawIntent);
         final ContextLevel cleanedLevel = ContextLevel.clean(rawContextLevel, intent, ContextLevel.LEAN);
 
         return new PesapResult(cleanedLevel.name(), requiresJavaMethods, splitSteps, intent);
+    }
+
+    private static ToolDefinition createClassifyStepTool()
+    {
+        final ObjectNode properties = MAPPER.createObjectNode();
+
+        final ObjectNode intentProp = MAPPER.createObjectNode();
+        intentProp.put("type", "string");
+        intentProp.put("description", "The primary operational or verification objective of the instruction");
+        final ArrayNode intentEnum = MAPPER.createArrayNode();
+        for (final SemanticIntent si : SemanticIntent.values())
+        {
+            intentEnum.add(si.name());
+        }
+        intentProp.set("enum", intentEnum);
+        properties.set("intent", intentProp);
+
+        final ObjectNode milestonesProp = MAPPER.createObjectNode();
+        milestonesProp.put("type", "array");
+        milestonesProp.put("description", "Ordered list of standalone atomic sub-step instructions if this is a compound goal, or empty if atomic");
+        final ObjectNode itemsProp = MAPPER.createObjectNode();
+        itemsProp.put("type", "string");
+        milestonesProp.set("items", itemsProp);
+        properties.set("milestones", milestonesProp);
+
+        final ObjectNode contextLevelProp = MAPPER.createObjectNode();
+        contextLevelProp.put("type", "string");
+        contextLevelProp.put("description", "Minimal required SUT context level for Turn 1 execution (e.g. MINIMAL, LEAN, STANDARD, RICH, VISUAL)");
+        final ArrayNode contextEnum = MAPPER.createArrayNode();
+        for (final ContextLevel cl : ContextLevel.values())
+        {
+            contextEnum.add(cl.name());
+        }
+        contextLevelProp.set("enum", contextEnum);
+        properties.set("contextLevel", contextLevelProp);
+
+        final ArrayNode required = MAPPER.createArrayNode();
+        required.add("intent");
+
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        schema.set("properties", properties);
+        schema.set("required", required);
+
+        return new ToolDefinition(
+            "classify_step",
+            "Classify the operational intent, decompose compound milestones, and determine the minimal required SUT context level for a test instruction.",
+            schema
+        );
     }
 }

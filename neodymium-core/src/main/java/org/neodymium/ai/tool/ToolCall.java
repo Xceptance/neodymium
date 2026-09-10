@@ -54,4 +54,15 @@ public record ToolCall(String callId, String toolName, JsonNode arguments)
             throw new IllegalArgumentException("ToolCall arguments must not be null.");
         }
     }
+
+    /**
+     * Formats this tool call in standard tool invocation format: toolName(arguments).
+     *
+     * @return formatted tool invocation string
+     */
+    @Override
+    public String toString()
+    {
+        return this.toolName + "(" + this.arguments + ")";
+    }
 }

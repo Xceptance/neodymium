@@ -20,6 +20,7 @@ package org.neodymium.ai.telemetry;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.ExecutionEvent;
 import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
@@ -36,6 +37,9 @@ import org.neodymium.ai.pipeline.TokenBudgetExceededException;
  */
 public final class TokenBudgetGuard implements ExecutionListener
 {
+    public static final int UNBOUNDED = -1;
+    private static final int UNCONFIGURED = Integer.MIN_VALUE;
+
     private final int inputBudget;
     private final int outputBudget;
 
@@ -48,14 +52,14 @@ public final class TokenBudgetGuard implements ExecutionListener
      */
     public TokenBudgetGuard()
     {
-        this(-1, -1);
+        this(UNCONFIGURED, UNCONFIGURED);
     }
 
     /**
      * Constructs a TokenBudgetGuard with specific input and output token budget limits.
      *
-     * @param inputBudget maximum allowed input/prompt tokens (<= 0 means resolve dynamically)
-     * @param outputBudget maximum allowed output/completion tokens (<= 0 means resolve dynamically)
+     * @param inputBudget maximum allowed input/prompt tokens (<= 0 or -1 means disabled; UNCONFIGURED means resolve dynamically)
+     * @param outputBudget maximum allowed output/completion tokens (<= 0 or -1 means disabled; UNCONFIGURED means resolve dynamically)
      */
     public TokenBudgetGuard(final int inputBudget, final int outputBudget)
     {
@@ -105,7 +109,7 @@ public final class TokenBudgetGuard implements ExecutionListener
 
     private int resolveInputBudget()
     {
-        if (this.inputBudget > 0)
+        if (this.inputBudget != UNCONFIGURED)
         {
             return this.inputBudget;
         }
@@ -118,12 +122,12 @@ public final class TokenBudgetGuard implements ExecutionListener
                 return i;
             }
         }
-        return org.neodymium.ai.config.AiConfiguration.getInstance().getTokenBudgetInput();
+        return AiConfiguration.getInstance().getTokenBudgetInput();
     }
 
     private int resolveOutputBudget()
     {
-        if (this.outputBudget > 0)
+        if (this.outputBudget != UNCONFIGURED)
         {
             return this.outputBudget;
         }
@@ -136,7 +140,7 @@ public final class TokenBudgetGuard implements ExecutionListener
                 return i;
             }
         }
-        return org.neodymium.ai.config.AiConfiguration.getInstance().getTokenBudgetOutput();
+        return AiConfiguration.getInstance().getTokenBudgetOutput();
     }
 
     /**

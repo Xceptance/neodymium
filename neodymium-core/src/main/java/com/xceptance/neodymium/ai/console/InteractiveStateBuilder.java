@@ -870,6 +870,15 @@ public final class InteractiveStateBuilder
                     callObj.addProperty("systemPrompt", call.getSystemPrompt());
                     callObj.addProperty("userPrompt", call.getUserPrompt());
                     callObj.addProperty("responseContent", call.getResponseContent());
+                    if (call.getAvailableTools() != null && !call.getAvailableTools().isEmpty())
+                    {
+                        final JsonArray toolsArr = new JsonArray();
+                        for (final String tool : call.getAvailableTools())
+                        {
+                            toolsArr.add(tool);
+                        }
+                        callObj.add("availableTools", toolsArr);
+                    }
                     arr.add(callObj);
                 }
             }

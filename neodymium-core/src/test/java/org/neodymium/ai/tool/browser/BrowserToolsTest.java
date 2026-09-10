@@ -18,13 +18,19 @@
  */
 package org.neodymium.ai.tool.browser;
 
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.tool.AiTool;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
+import org.neodymium.ai.tool.ToolResult;
+import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 
@@ -32,6 +38,7 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * Unit tests verifying browser tool registration, JSON schema generation,
@@ -67,7 +74,8 @@ public class BrowserToolsTest
                 "browser_inspect",
                 "browser_take_screenshot",
                 "browser_inspect_visual",
-                "browser_press_key"
+                "browser_press_key",
+                "browser_request_context"
         );
 
         for (final String toolName : expectedTools)
@@ -214,5 +222,225 @@ public class BrowserToolsTest
         Assertions.assertEquals(1, badges.get(0).get("badge"));
 
         Assertions.assertDoesNotThrow(() -> VisualBadgeInjector.removeBadges(mockDriver));
+    }
+
+    @AfterEach
+    public void tearDown()
+    {
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    private MockJsDriver createStandardMockDriver()
+    {
+        final WebDriver.Navigation mockNav = (WebDriver.Navigation) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{WebDriver.Navigation.class},
+                (navProxy, navMethod, navArgs) -> null
+        );
+
+        return (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("navigate".equals(name))
+                    {
+                        return mockNav;
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String s = args != null && args.length > 0 ? String.valueOf(args[0]) : "";
+                        if (s.contains("QUERY_DOM_SCRIPT"))
+                        {
+                            return "[]";
+                        }
+                        return "mock_result";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "https://example.com/page";
+                    }
+                    if ("getTitle".equals(name))
+                    {
+                        return "Mock Page Title";
+                    }
+                    if ("toString".equals(name))
+                    {
+                        return "MockJsDriver";
+                    }
+                    if ("hashCode".equals(name))
+                    {
+                        return 42;
+                    }
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
+                    return null;
+                }
+        );
+    }
+
+    @Test
+    public void testBrowserExecuteScriptReturnsStructuredJson() throws Exception
+    {
+        WebDriverRunner.setWebDriver(createStandardMockDriver());
+        final AiTool tool = this.registry.getTool("browser_execute_script").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall call = new ToolCall("call-script-1", "browser_execute_script", mapper.createObjectNode().put("script", "return 'mock_result';"));
+
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+        final JsonNode json = mapper.readTree(result.content());
+        Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        Assertions.assertEquals("execute_script", json.path("action").asText());
+        Assertions.assertEquals("mock_result", json.path("result").asText());
+    }
+
+    @Test
+    public void testBrowserExecuteScriptHandlesExceptionsGracefully() throws Exception
+    {
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    if ("executeScript".equals(method.getName()))
+                    {
+                        throw new JavascriptException("syntax error: missing ) after argument list");
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+        final AiTool tool = this.registry.getTool("browser_execute_script").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall call = new ToolCall("call-err-1", "browser_execute_script", mapper.createObjectNode().put("script", "bad script"));
+
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+
+        final JsonNode json = mapper.readTree(result.content());
+        Assertions.assertEquals("ERROR", json.path("status").asText());
+        Assertions.assertEquals("execute_script", json.path("action").asText());
+        Assertions.assertTrue(json.path("error").asText().contains("syntax error"));
+    }
+
+    @Test
+    public void testBrowserNavigateReturnsStructuredJson() throws Exception
+    {
+        WebDriverRunner.setWebDriver(createStandardMockDriver());
+        final AiTool tool = this.registry.getTool("browser_navigate").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall call = new ToolCall("call-nav-1", "browser_navigate", mapper.createObjectNode().put("url", "https://example.com/page"));
+
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+        final JsonNode json = mapper.readTree(result.content());
+        Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        Assertions.assertEquals("navigate", json.path("action").asText());
+        Assertions.assertEquals("https://example.com/page", json.path("url").asText());
+        Assertions.assertEquals("Mock Page Title", json.path("title").asText());
+    }
+
+    @Test
+    public void testBrowserScrollReturnsStructuredJson() throws Exception
+    {
+        WebDriverRunner.setWebDriver(createStandardMockDriver());
+        final AiTool tool = this.registry.getTool("browser_scroll").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall call = new ToolCall("call-scroll-1", "browser_scroll", mapper.createObjectNode().put("direction", "down"));
+
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+        final JsonNode json = mapper.readTree(result.content());
+        Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        Assertions.assertEquals("scroll", json.path("action").asText());
+        Assertions.assertEquals("down", json.path("direction").asText());
+    }
+
+    @Test
+    public void testBrowserQueryDomReturnsStructuredJson() throws Exception
+    {
+        WebDriverRunner.setWebDriver(createStandardMockDriver());
+        final AiTool tool = this.registry.getTool("browser_query_dom").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall call = new ToolCall("call-query-1", "browser_query_dom", mapper.createObjectNode().put("selector", "#btn"));
+
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+        final JsonNode json = mapper.readTree(result.content());
+        Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        Assertions.assertEquals("query_dom", json.path("action").asText());
+        Assertions.assertTrue(json.has("matches"));
+        Assertions.assertTrue(json.path("matches").isArray());
+    }
+
+    @Test
+    public void testNormalizeRegexPattern()
+    {
+        final String doubleEscapedDollar = "\\\\$";
+        final String normalizedDollar = BrowserToolProvider.normalizeRegexPattern(doubleEscapedDollar);
+        Assertions.assertEquals("\\$", normalizedDollar);
+
+        final String text = "Total Paid: $27.58";
+        final String pattern = "(?s).*" + normalizedDollar + ".*";
+        Assertions.assertTrue(Pattern.compile(pattern).matcher(text).matches());
+
+        final String doubleEscapedDot = "\\\\.";
+        Assertions.assertEquals("\\.", BrowserToolProvider.normalizeRegexPattern(doubleEscapedDot));
+
+        final String doubleEscapedDigit = "\\\\d+";
+        Assertions.assertEquals("\\d+", BrowserToolProvider.normalizeRegexPattern(doubleEscapedDigit));
+
+        Assertions.assertEquals("[0-9]+", BrowserToolProvider.normalizeRegexPattern("[0-9]+"));
+        Assertions.assertEquals("", BrowserToolProvider.normalizeRegexPattern(null));
+        Assertions.assertEquals("Hello World", BrowserToolProvider.normalizeRegexPattern("Hello World"));
+    }
+
+    @Test
+    public void testBrowserRequestContextToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_request_context").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("level"));
+        Assertions.assertTrue(props.has("fullPage"));
+    }
+
+    @Test
+    public void testBrowserRequestContextExecutionWithoutDriver() throws Exception
+    {
+        final AiTool tool = this.registry.getTool("browser_request_context").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall call = new ToolCall("call-ctx-1", "browser_request_context", mapper.createObjectNode().put("level", "RICH"));
+
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals("RICH", result.variables().get("requestedContextLevel"));
+
+        final JsonNode json = mapper.readTree(result.content());
+        Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        Assertions.assertEquals("RICH", json.path("level").asText());
+    }
+
+    @Test
+    public void testUnescapeLiteralText()
+    {
+        Assertions.assertEquals("Total Paid: $27.58", BrowserToolProvider.unescapeLiteralText("Total Paid: \\$27.58"));
+        Assertions.assertEquals("Cart (1)", BrowserToolProvider.unescapeLiteralText("Cart \\(1\\)"));
+        Assertions.assertEquals("[Item]", BrowserToolProvider.unescapeLiteralText("\\[Item\\]"));
+        Assertions.assertEquals("{key}", BrowserToolProvider.unescapeLiteralText("\\{key\\}"));
+        Assertions.assertEquals("a+b", BrowserToolProvider.unescapeLiteralText("a\\+b"));
+        Assertions.assertEquals("Are you sure?", BrowserToolProvider.unescapeLiteralText("Are you sure\\?"));
+        Assertions.assertEquals("Price: $100", BrowserToolProvider.unescapeLiteralText("Price: $100"));
+        Assertions.assertEquals("", BrowserToolProvider.unescapeLiteralText(""));
+        Assertions.assertNull(BrowserToolProvider.unescapeLiteralText(null));
     }
 }

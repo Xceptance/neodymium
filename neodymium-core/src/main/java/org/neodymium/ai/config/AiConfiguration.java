@@ -851,24 +851,57 @@ public final class AiConfiguration
 
     /**
      * Resolves the maximum input (prompt) token budget limit per test run.
-     * Default fallback is -1 (unlimited).
+     * Default fallback is 500,000.
      *
      * @return maximum input token limit
      */
     public int getTokenBudgetInput()
     {
-        return getInt("neodymium.ai.tokenBudget.input", -1);
+        return getInt("neodymium.ai.tokenBudget.input", 500_000);
     }
 
     /**
      * Resolves the maximum output (completion) token budget limit per test run.
-     * Default fallback is -1 (unlimited).
+     * Default fallback is 50,000.
      *
      * @return maximum output token limit
      */
     public int getTokenBudgetOutput()
     {
-        return getInt("neodymium.ai.tokenBudget.output", -1);
+        return getInt("neodymium.ai.tokenBudget.output", 50_000);
+    }
+
+    /**
+     * Resolves the maximum number of tool-execution turns allowed per individual step.
+     * Default fallback is 15 turns.
+     *
+     * @return maximum turns allowed per step
+     */
+    public int getStepMaxTurns()
+    {
+        return getInt("neodymium.ai.step.maxTurns", 15);
+    }
+
+    /**
+     * Resolves the maximum cumulative token budget allowed per individual step.
+     * Default fallback is 100,000 tokens.
+     *
+     * @return maximum cumulative token budget per step
+     */
+    public int getStepTokenBudget()
+    {
+        return getInt("neodymium.ai.step.maxTokens", 100_000);
+    }
+
+    /**
+     * Resolves the wall-clock timeout in seconds for an individual agent step execution loop.
+     * Default fallback is 60 seconds (or global timeout if configured).
+     *
+     * @return step timeout in seconds
+     */
+    public int getStepTimeoutSeconds()
+    {
+        return getInt("neodymium.ai.step.timeoutSeconds", getInt("neodymium.ai.timeoutSeconds", 60));
     }
 
     /**

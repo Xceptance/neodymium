@@ -23,11 +23,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
@@ -39,6 +44,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PesapClassificationException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Unit tests for {@link PesapPreStep} verifying intent classification, context level cleaning,
@@ -100,9 +106,11 @@ public class PesapPreStepTest
         final boolean isSplit = pesapStep.executePreStep(context);
 
         assertTrue(isSplit);
-        assertEquals(2, parentStep.getSubSteps().size());
-        assertEquals("Click username", parentStep.getSubSteps().get(0).getInstruction());
-        assertEquals("Type admin", parentStep.getSubSteps().get(1).getInstruction());
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        assertEquals(2, milestones.size());
+        assertEquals("Click username", milestones.get(0));
+        assertEquals("Type admin", milestones.get(1));
     }
 
     @Test
@@ -134,9 +142,11 @@ public class PesapPreStepTest
         final boolean isSplit = pesapStep.executePreStep(context);
 
         assertTrue(isSplit);
-        assertEquals(2, parentStep.getSubSteps().size());
-        assertEquals("Type \"${email}\" into email", parentStep.getSubSteps().get(0).getInstruction());
-        assertEquals("Type \"${password}\" into password", parentStep.getSubSteps().get(1).getInstruction());
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        assertEquals(2, milestones.size());
+        assertEquals("Type \"${email}\" into email", milestones.get(0));
+        assertEquals("Type \"${password}\" into password", milestones.get(1));
     }
 
     @Test
@@ -217,5 +227,48 @@ public class PesapPreStepTest
         assertEquals(SemanticIntent.ASSERT, step.getSemanticIntent());
         assertEquals(ContextLevel.STANDARD, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
         assertEquals("STANDARD", step.getContextLevel());
+    }
+
+    @Test
+    public void testPesapStructuredToolCallResponse() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final ObjectNode args = mapper.createObjectNode();
+        args.put("intent", "TYPE");
+        args.put("contextLevel", "STANDARD");
+        final ArrayNode milestones = mapper.createArrayNode();
+        milestones.add("Type user in #user");
+        milestones.add("Type pass in #pass");
+        args.set("milestones", milestones);
+
+        final ToolCall toolCall = new ToolCall("call_1", "classify_step", args);
+        provider.addResponse(new LlmResponse("", new TokenUsage(10, 10, 20), "mock-model", List.of(toolCall)));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.PESAP, provider);
+        registry.setDefaultProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+
+        final PlaybookStep parentStep = new PlaybookStep("Fill username and password");
+        final PesapPreStep pesapStep = new PesapPreStep(parentStep, session);
+        final boolean isSplit = pesapStep.executePreStep(context);
+
+        assertTrue(isSplit);
+        assertEquals(SemanticIntent.TYPE, parentStep.getSemanticIntent());
+        assertEquals("STANDARD", parentStep.getContextLevel());
+        assertEquals(ContextLevel.STANDARD, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+
+        @SuppressWarnings("unchecked")
+        final List<String> resultMilestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        assertEquals(2, resultMilestones.size());
+        assertEquals("Type user in #user", resultMilestones.get(0));
+        assertEquals("Type pass in #pass", resultMilestones.get(1));
     }
 }

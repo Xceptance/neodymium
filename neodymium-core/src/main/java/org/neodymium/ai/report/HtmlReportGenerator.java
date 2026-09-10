@@ -892,7 +892,8 @@ public final class HtmlReportGenerator
             window.copyLlmField = function(callIndex, fieldName, btn) {
                 var step = getActiveStepObject();
                 if (!step || !step.llmCalls || !step.llmCalls[callIndex]) return;
-                var val = step.llmCalls[callIndex][fieldName] || '';
+                var rawVal = step.llmCalls[callIndex][fieldName];
+                var val = Array.isArray(rawVal) ? rawVal.join('\\n') : (rawVal || '');
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(val).then(function() {
                         var original = btn.textContent;
@@ -1094,6 +1095,12 @@ public final class HtmlReportGenerator
 
                         if (call.systemPrompt) {
                             var sec = createPromptSection('System Prompt:', call.systemPrompt, ci, 'systemPrompt');
+                            card.appendChild(sec);
+                        }
+
+                        if (call.availableTools && call.availableTools.length > 0) {
+                            var toolsText = call.availableTools.join('\\n');
+                            var sec = createPromptSection('Available Native Tools (' + call.availableTools.length + '):', toolsText, ci, 'availableTools');
                             card.appendChild(sec);
                         }
 

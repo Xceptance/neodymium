@@ -1011,6 +1011,7 @@ public final class TestExecutionReport
         private String systemPrompt;
         private String userPrompt;
         private String responseContent;
+        private List<String> availableTools = new ArrayList<>();
 
         public ReportLlmCallEntry()
         {
@@ -1134,6 +1135,16 @@ public final class TestExecutionReport
         public void setResponseContent(final String responseContent)
         {
             this.responseContent = responseContent;
+        }
+
+        public List<String> getAvailableTools()
+        {
+            return this.availableTools != null ? this.availableTools : Collections.emptyList();
+        }
+
+        public void setAvailableTools(final List<String> availableTools)
+        {
+            this.availableTools = availableTools != null ? new ArrayList<>(availableTools) : new ArrayList<>();
         }
     }
 

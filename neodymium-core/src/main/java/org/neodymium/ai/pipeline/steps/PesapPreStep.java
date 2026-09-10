@@ -34,6 +34,7 @@ import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PesapClassificationException;
 import org.neodymium.ai.pipeline.PipelineException;
@@ -91,10 +92,12 @@ public final class PesapPreStep implements PipelineStep
             return false;
         }
 
-        // Always reset transient intent at step start to prevent intent leakage across steps
+        // Always reset transient intent and milestones at step start to prevent leakage across steps
         context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
+        context.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
         this.step.setSemanticIntent(null);
 
+        final AiConfiguration config = AiConfiguration.getInstance();
         final String resolvedInstruction = context.getSessionData().resolveVariables(this.step.getInstruction());
         final StepStats stats = (StepStats) context.getTransientData().get("KEY_CURRENT_STEP_STATS");
 
@@ -109,7 +112,6 @@ public final class PesapPreStep implements PipelineStep
                 && ((this.step.getActions() != null && !this.step.getActions().isEmpty())
                     || (this.step.getToolCalls() != null && !this.step.getToolCalls().isEmpty())
                     || this.step.getScreenshotHash() != null));
-        final AiConfiguration config = AiConfiguration.getInstance();
 
         if (!isReplay && config.isPesapEnabled() && !alreadySplitSteps.contains(this.step))
         {
@@ -121,10 +123,10 @@ public final class PesapPreStep implements PipelineStep
                 final double temp = config.getTemperature("action");
                 final int timeoutSeconds = config.getTimeoutSeconds("action");
 
-                final LlmRequest request = new LlmRequest(
+                final LlmRequest request = LlmRequest.withTools(
                     pesapPrompt.compileSystemMessage(context),
                     pesapPrompt.compileUserMessage(context),
-                    Collections.emptyList(),
+                    pesapPrompt.getTools(),
                     pesapPrompt.getResponseSchema(),
                     temp,
                     timeoutSeconds
@@ -158,11 +160,20 @@ public final class PesapPreStep implements PipelineStep
                             this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "PESAP"));
                         }
 
-                        LOGGER.debug("LLM response received. Length: {} chars (duration: {} ms, attempt: {})",
-                            response.content() != null ? response.content().length() : 0, durationMs, attempt);
+                        LOGGER.debug("LLM response received. Length: {} chars, toolCalls: {} (duration: {} ms, attempt: {})",
+                            response.content() != null ? response.content().length() : 0,
+                            response.toolCalls() != null ? response.toolCalls().size() : 0,
+                            durationMs, attempt);
                         if (LOGGER.isTraceEnabled())
                         {
-                            LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                            if (response.content() != null)
+                            {
+                                LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                            }
+                            if (response.toolCalls() != null && !response.toolCalls().isEmpty())
+                            {
+                                LOGGER.trace("Tool calls:\n{}", response.toolCalls());
+                            }
                         }
 
                         context.getTransientData().compute("pesapCallCount", (k, v) -> v == null ? 1 : ((Integer) v) + 1);
@@ -194,7 +205,7 @@ public final class PesapPreStep implements PipelineStep
                             }
                         }
 
-                        final PesapPrompt.PesapResult parsed = pesapPrompt.parseResponse(response.content(), context);
+                        final PesapPrompt.PesapResult parsed = pesapPrompt.parseResponse(response, context);
                         if (parsed != null && parsed.intent() != null)
                         {
                             pesapResult = parsed;
@@ -221,37 +232,33 @@ public final class PesapPreStep implements PipelineStep
                     );
                 }
 
-                final boolean isPureNavigation = resolvedInstruction != null && resolvedInstruction.trim().matches("(?i)^(open|navigate\\s+to|go\\s+to)\\s+https?://\\S+$");
-                if (!isPureNavigation && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
+                final boolean isNavigation = pesapResult.intent() == SemanticIntent.NAVIGATE;
+                if (!isNavigation && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
                 {
-                    LOGGER.info("✂️ Upfront JIT step split detected: \"{}\" split into {}", resolvedInstruction, pesapResult.splitSteps());
+                    LOGGER.info("✂️ Compound instruction milestones detected: \"{}\" split into {}", resolvedInstruction, pesapResult.splitSteps());
                     final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                    final List<String> cleanMilestones = new ArrayList<>();
                     for (final String part : pesapResult.splitSteps())
                     {
                         final String cleanPart = sanitizer.sanitizeText(part, context.getSessionData());
-                        final PlaybookStep subStep = new PlaybookStep(cleanPart);
-                        subStep.setSourceFile(this.step.getSourceFile());
-                        subStep.setLineNumber(this.step.getLineNumber());
-                        subStep.setParent(this.step);
-                        
-                        // Explicitly copy control flags from the parent step
-                        subStep.setBug(this.step.isBug());
-                        subStep.setBugDetails(this.step.getBugDetails());
-                        subStep.setContinueOnError(this.step.isContinueOnError());
-                        subStep.setNoHealing(this.step.isNoHealing());
-                        subStep.setOptional(this.step.isOptional());
-                        
-                        this.step.getSubSteps().add(subStep);
+                        cleanMilestones.add(cleanPart);
+                    }
+                    context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, Collections.unmodifiableList(cleanMilestones));
+
+                    context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, pesapResult.intent());
+                    this.step.setSemanticIntent(pesapResult.intent());
+                    if (stats != null)
+                    {
+                        stats.setSemanticIntent(pesapResult.intent().name());
                     }
 
-                    final List<PipelineStep> subPipelineSteps = new ArrayList<>();
-                    for (final PlaybookStep subStep : this.step.getSubSteps())
+                    final ContextLevel cleanedLevel = ContextLevel.clean(pesapResult.contextLevel(), pesapResult.intent(), ContextLevel.LEAN);
+                    final ContextLevel currentLevel = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                    final boolean isExplicitTag = (currentLevel == ContextLevel.HINT || (currentLevel != null && currentLevel.includesScreenshot()));
+                    if (!isExplicitTag || (cleanedLevel.ordinal() > currentLevel.ordinal()))
                     {
-                        subPipelineSteps.add(ExecuteActionsStep.mapPlaybookStepToPipelineStep(subStep, this.session, context));
-                    }
-                    for (int i = subPipelineSteps.size() - 1; i >= 0; i--)
-                    {
-                        context.pushStep(subPipelineSteps.get(i));
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, cleanedLevel);
+                        this.step.setContextLevel(cleanedLevel.name());
                     }
                     return true;
                 }

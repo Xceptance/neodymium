@@ -18,11 +18,14 @@
  */
 package org.neodymium.ai.client;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.neodymium.ai.tool.ToolDefinition;
 
 /**
  * Immutable record representing the request parameters and context payload sent to an LLM provider.
+ * Supports both single-turn prompt calls and native multi-turn tool conversations.
  *
  * @param systemMessage the system level instruction prompt
  * @param userMessage the user query or instruction prompt
@@ -31,6 +34,8 @@ import java.util.List;
  * @param temperature the model generation temperature setting
  * @param timeoutSeconds the request timeout in seconds
  * @param reasoningEffort the reasoning/thinking effort tier for this request
+ * @param messages the native multi-turn conversation messages
+ * @param tools the list of available tools provided as structured schemas
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -42,7 +47,9 @@ public record LlmRequest(
     ResponseSchema responseSchema,
     double temperature,
     int timeoutSeconds,
-    ReasoningEffort reasoningEffort
+    ReasoningEffort reasoningEffort,
+    List<ChatMessage> messages,
+    List<ToolDefinition> tools
 )
 {
     /**
@@ -55,7 +62,9 @@ public record LlmRequest(
         final ResponseSchema responseSchema,
         final double temperature,
         final int timeoutSeconds,
-        final ReasoningEffort reasoningEffort
+        final ReasoningEffort reasoningEffort,
+        final List<ChatMessage> messages,
+        final List<ToolDefinition> tools
     )
     {
         this.systemMessage = systemMessage;
@@ -65,10 +74,101 @@ public record LlmRequest(
         this.temperature = temperature;
         this.timeoutSeconds = timeoutSeconds;
         this.reasoningEffort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(responseSchema);
+        this.tools = tools == null ? Collections.emptyList() : List.copyOf(tools);
+
+        if (messages != null && !messages.isEmpty())
+        {
+            this.messages = List.copyOf(messages);
+        }
+        else
+        {
+            final List<ChatMessage> synthesized = new ArrayList<>();
+            if (systemMessage != null && !systemMessage.isBlank())
+            {
+                synthesized.add(ChatMessage.system(systemMessage));
+            }
+            if (userMessage != null && !userMessage.isBlank())
+            {
+                synthesized.add(ChatMessage.user(userMessage, this.attachments));
+            }
+            this.messages = Collections.unmodifiableList(synthesized);
+        }
     }
 
     /**
-     * Convenience constructor resolving default reasoning effort from responseSchema.
+     * Multi-turn native tool calling constructor.
+     *
+     * @param messages native multi-turn dialogue messages
+     * @param tools available tools as structured schemas
+     * @param temperature model temperature
+     * @param timeoutSeconds request timeout
+     * @param reasoningEffort reasoning tier
+     */
+    public LlmRequest(
+        final List<ChatMessage> messages,
+        final List<ToolDefinition> tools,
+        final double temperature,
+        final int timeoutSeconds,
+        final ReasoningEffort reasoningEffort
+    )
+    {
+        this(
+            resolveSystemContent(messages),
+            resolveLastUserContent(messages),
+            Collections.emptyList(),
+            ResponseSchema.TEXT,
+            temperature,
+            timeoutSeconds,
+            reasoningEffort,
+            messages,
+            tools
+        );
+    }
+
+    /**
+     * Multi-turn native tool calling constructor with attachments and response schema.
+     */
+    public LlmRequest(
+        final List<ChatMessage> messages,
+        final List<ToolDefinition> tools,
+        final List<SutAttachment> attachments,
+        final ResponseSchema responseSchema,
+        final double temperature,
+        final int timeoutSeconds,
+        final ReasoningEffort reasoningEffort
+    )
+    {
+        this(
+            resolveSystemContent(messages),
+            resolveLastUserContent(messages),
+            attachments,
+            responseSchema,
+            temperature,
+            timeoutSeconds,
+            reasoningEffort,
+            messages,
+            tools
+        );
+    }
+
+    /**
+     * Legacy constructor resolving default reasoning effort from responseSchema.
+     */
+    public LlmRequest(
+        final String systemMessage,
+        final String userMessage,
+        final List<SutAttachment> attachments,
+        final ResponseSchema responseSchema,
+        final double temperature,
+        final int timeoutSeconds,
+        final ReasoningEffort reasoningEffort
+    )
+    {
+        this(systemMessage, userMessage, attachments, responseSchema, temperature, timeoutSeconds, reasoningEffort, Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Convenience constructor without explicit reasoning effort or native tools.
      */
     public LlmRequest(
         final String systemMessage,
@@ -79,6 +179,129 @@ public record LlmRequest(
         final int timeoutSeconds
     )
     {
-        this(systemMessage, userMessage, attachments, responseSchema, temperature, timeoutSeconds, ResponseSchema.resolveReasoningEffort(responseSchema));
+        this(systemMessage, userMessage, attachments, responseSchema, temperature, timeoutSeconds, ResponseSchema.resolveReasoningEffort(responseSchema), Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Single-turn structured tool calling constructor with tools and response schema.
+     *
+     * @param systemMessage the system prompt instructions
+     * @param userMessage the user instruction prompt
+     * @param attachments SUT attachments
+     * @param tools the list of available structured tool definitions
+     * @param responseSchema the response schema type
+     * @param temperature model sampling temperature
+     * @param timeoutSeconds request execution timeout
+     */
+    public LlmRequest(
+        final String systemMessage,
+        final String userMessage,
+        final List<SutAttachment> attachments,
+        final List<ToolDefinition> tools,
+        final ResponseSchema responseSchema,
+        final double temperature,
+        final int timeoutSeconds
+    )
+    {
+        this(systemMessage, userMessage, attachments, responseSchema, temperature, timeoutSeconds, ResponseSchema.resolveReasoningEffort(responseSchema), Collections.emptyList(), tools);
+    }
+
+    /**
+     * Creates a single-turn request with structured tools and no attachments.
+     *
+     * @param systemMessage the system prompt instructions
+     * @param userMessage the user instruction prompt
+     * @param tools the list of available structured tool definitions
+     * @param responseSchema the response schema type
+     * @param temperature model sampling temperature
+     * @param timeoutSeconds request execution timeout
+     * @return the created LlmRequest instance
+     */
+    public static LlmRequest withTools(
+        final String systemMessage,
+        final String userMessage,
+        final List<ToolDefinition> tools,
+        final ResponseSchema responseSchema,
+        final double temperature,
+        final int timeoutSeconds
+    )
+    {
+        return new LlmRequest(systemMessage, userMessage, Collections.emptyList(), tools, responseSchema, temperature, timeoutSeconds);
+    }
+
+    /**
+     * Whether this request contains structured tool definitions.
+     *
+     * @return true if tools are provided
+     */
+    public boolean hasTools()
+    {
+        return this.tools != null && !this.tools.isEmpty();
+    }
+
+    /**
+     * Whether this request contains a multi-turn conversation beyond a single prompt/system exchange.
+     *
+     * @return true if the conversation contains assistant responses, tool results, or multiple dialogue turns
+     */
+    public boolean isMultiTurn()
+    {
+        if (this.messages == null || this.messages.size() <= 1)
+        {
+            return false;
+        }
+        if (this.messages.size() == 2)
+        {
+            final ChatMessage first = this.messages.get(0);
+            final ChatMessage second = this.messages.get(1);
+            if (first.role() == ChatMessage.Role.SYSTEM && second.role() == ChatMessage.Role.USER)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Formats all conversation messages in this request into a structured multi-turn conversation string.
+     *
+     * @return formatted conversation string
+     */
+    public String fullConversationFormatted()
+    {
+        return ChatMessage.formatConversation(this.messages);
+    }
+
+    private static String resolveSystemContent(final List<ChatMessage> msgs)
+    {
+        if (msgs == null)
+        {
+            return "";
+        }
+        for (final ChatMessage msg : msgs)
+        {
+            if (msg.role() == ChatMessage.Role.SYSTEM)
+            {
+                return msg.content() != null ? msg.content() : "";
+            }
+        }
+        return "";
+    }
+
+    private static String resolveLastUserContent(final List<ChatMessage> msgs)
+    {
+        if (msgs == null)
+        {
+            return "";
+        }
+        for (int i = msgs.size() - 1; i >= 0; i--)
+        {
+            final ChatMessage msg = msgs.get(i);
+            if (msg.role() == ChatMessage.Role.USER)
+            {
+                return msg.content() != null ? msg.content() : "";
+            }
+        }
+        return "";
     }
 }

@@ -18,12 +18,23 @@
  */
 package org.neodymium.ai.prompt;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import org.neodymium.ai.client.ChatMessage;
+import org.neodymium.ai.client.ChatMessage.Role;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.tool.ToolCall;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Helper utility for central outbound LLM request secret masking and response unmasking.
@@ -34,6 +45,9 @@ import org.neodymium.ai.pipeline.ExecutionContext;
  */
 public final class LlmSanitizerHelper
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(LlmSanitizerHelper.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private LlmSanitizerHelper()
     {
     }
@@ -54,8 +68,7 @@ public final class LlmSanitizerHelper
         final ExecutionContext ctx = ExecutionContext.getActiveContext();
         if (ctx == null || ctx.getSessionData() == null)
         {
-            org.slf4j.LoggerFactory.getLogger(LlmSanitizerHelper.class)
-                .warn("⚠️ [Security Warning] Outbound LLM request dispatched without active ExecutionContext bound to thread. Secret masking skipped.");
+            LOGGER.warn("⚠️ [Security Warning] Outbound LLM request dispatched without active ExecutionContext bound to thread. Secret masking skipped.");
             return new SanitizedPayload(request.userMessage(), null, Map.of());
         }
 
@@ -65,7 +78,8 @@ public final class LlmSanitizerHelper
     }
 
     /**
-     * Creates a new LlmRequest replacing the user prompt with the sanitized prompt text.
+     * Creates a new LlmRequest replacing the user prompt with the sanitized prompt text,
+     * preserving multi-turn messages, tools, and attachments.
      *
      * @param original the original raw LlmRequest
      * @param payload the sanitized payload
@@ -78,7 +92,7 @@ public final class LlmSanitizerHelper
             return original;
         }
 
-        List<org.neodymium.ai.client.SutAttachment> sanitizedAttachments = original.attachments();
+        List<SutAttachment> sanitizedAttachments = original.attachments();
         if (sanitizedAttachments != null && !sanitizedAttachments.isEmpty() && payload.maskToVariableMap() != null && !payload.maskToVariableMap().isEmpty())
         {
             final ExecutionContext ctx = ExecutionContext.getActiveContext();
@@ -86,14 +100,14 @@ public final class LlmSanitizerHelper
                 ? ctx.getSessionData().getRawSensitiveData()
                 : Map.of();
 
-            final List<org.neodymium.ai.client.SutAttachment> updated = new java.util.ArrayList<>();
-            for (final org.neodymium.ai.client.SutAttachment att : sanitizedAttachments)
+            final List<SutAttachment> updated = new ArrayList<>();
+            for (final SutAttachment att : sanitizedAttachments)
             {
                 if (att.base64Data() != null && att.mediaType() != null && !att.mediaType().startsWith("image/"))
                 {
                     try
                     {
-                        String decoded = new String(java.util.Base64.getDecoder().decode(att.base64Data()), java.nio.charset.StandardCharsets.UTF_8);
+                        String decoded = new String(Base64.getDecoder().decode(att.base64Data()), StandardCharsets.UTF_8);
                         if (!sensitiveMap.isEmpty())
                         {
                             for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
@@ -114,8 +128,8 @@ public final class LlmSanitizerHelper
                                 decoded = decoded.replace(entry.getValue(), entry.getKey());
                             }
                         }
-                        final String encoded = java.util.Base64.getEncoder().encodeToString(decoded.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                        updated.add(new org.neodymium.ai.client.SutAttachment(att.mediaType(), att.filePath(), encoded));
+                        final String encoded = Base64.getEncoder().encodeToString(decoded.getBytes(StandardCharsets.UTF_8));
+                        updated.add(new SutAttachment(att.mediaType(), att.filePath(), encoded));
                     }
                     catch (final Exception e)
                     {
@@ -130,18 +144,40 @@ public final class LlmSanitizerHelper
             sanitizedAttachments = updated;
         }
 
+        final List<ChatMessage> updatedMessages;
+        if (original.messages() != null && !original.messages().isEmpty())
+        {
+            updatedMessages = new ArrayList<>();
+            for (final ChatMessage msg : original.messages())
+            {
+                if (msg.role() == Role.USER && msg.content() != null && msg.content().equals(original.userMessage()))
+                {
+                    updatedMessages.add(ChatMessage.user(payload.sanitizedPrompt()));
+                }
+                else
+                {
+                    updatedMessages.add(msg);
+                }
+            }
+        }
+        else
+        {
+            updatedMessages = List.of();
+        }
+
         return new LlmRequest(
-            original.systemMessage(),
-            payload.sanitizedPrompt(),
+            updatedMessages,
+            original.tools(),
             sanitizedAttachments,
             original.responseSchema(),
             original.temperature(),
-            original.timeoutSeconds()
+            original.timeoutSeconds(),
+            original.reasoningEffort()
         );
     }
 
     /**
-     * Unmasks returned LLM response content by mapping format-preserving placeholders back to variable references.
+     * Unmasks returned LLM response content and tool call arguments by mapping format-preserving placeholders back to variable references.
      *
      * @param response the raw LLM response
      * @param maskMap the reverse variable map ([MASKED_VAR_key] -> ${key})
@@ -149,17 +185,63 @@ public final class LlmSanitizerHelper
      */
     public static LlmResponse unmaskResponse(final LlmResponse response, final Map<String, String> maskMap)
     {
-        if (response == null || response.content() == null || maskMap == null || maskMap.isEmpty())
+        if (response == null || maskMap == null || maskMap.isEmpty())
         {
             return response;
         }
 
         String content = response.content();
-        for (final Map.Entry<String, String> entry : maskMap.entrySet())
+        if (content != null)
         {
-            content = content.replace(entry.getKey(), entry.getValue());
+            for (final Map.Entry<String, String> entry : maskMap.entrySet())
+            {
+                content = content.replace(entry.getKey(), entry.getValue());
+            }
         }
 
-        return new LlmResponse(content, response.tokenUsage(), response.modelName());
+        final List<ToolCall> unmaskedToolCalls;
+        if (response.hasToolCalls())
+        {
+            unmaskedToolCalls = new ArrayList<>();
+            for (final ToolCall tc : response.toolCalls())
+            {
+                if (tc.arguments() != null)
+                {
+                    String argsStr = tc.arguments().toString();
+                    for (final Map.Entry<String, String> entry : maskMap.entrySet())
+                    {
+                        argsStr = argsStr.replace(entry.getKey(), entry.getValue());
+                    }
+                    try
+                    {
+                        final JsonNode unmaskedNode = MAPPER.readTree(argsStr);
+                        unmaskedToolCalls.add(new ToolCall(tc.callId(), tc.toolName(), unmaskedNode));
+                    }
+                    catch (final Exception e)
+                    {
+                        unmaskedToolCalls.add(tc);
+                    }
+                }
+                else
+                {
+                    unmaskedToolCalls.add(tc);
+                }
+            }
+        }
+        else
+        {
+            unmaskedToolCalls = List.of();
+        }
+
+        String thinking = response.thinking();
+        if (thinking != null)
+        {
+            for (final Map.Entry<String, String> entry : maskMap.entrySet())
+            {
+                thinking = thinking.replace(entry.getKey(), entry.getValue());
+            }
+        }
+
+        return new LlmResponse(content, response.tokenUsage(), response.modelName(), unmaskedToolCalls, thinking);
     }
 }

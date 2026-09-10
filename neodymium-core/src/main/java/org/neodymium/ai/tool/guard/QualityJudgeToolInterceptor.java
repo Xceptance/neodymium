@@ -55,6 +55,9 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
     public static final String JOURNEY_FIDELITY_SCRIPT_VIOLATION =
             "Journey Fidelity Violation: Direct URL mutation via script is prohibited. Target must be reached via on-screen UI elements";
 
+    public static final String ASSERTION_MUTATION_VIOLATION =
+            "Assertion Violation: Interactive mutating action is prohibited during assertion steps";
+
     private static final Pattern URL_MUTATION_PATTERN = Pattern.compile(
             "(?i)((window\\.)?location(\\.href|\\.assign|\\.replace)?\\s*=|history\\.(pushState|replaceState))");
 
@@ -145,6 +148,16 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
     private InterceptionVerdict checkJourneyFidelity(final ToolCall call, final SemanticIntent intent)
     {
+        if (intent != null && intent.isAssertion())
+        {
+            final String name = call.toolName();
+            if ("browser_click".equals(name) || "browser_type".equals(name) || "browser_select".equals(name)
+                    || "browser_press_key".equals(name) || "browser_navigate".equals(name))
+            {
+                return InterceptionVerdict.reject(call.callId(), ASSERTION_MUTATION_VIOLATION);
+            }
+        }
+
         if (intent != null && intent.isInteraction())
         {
             if ("browser_navigate".equals(call.toolName()))

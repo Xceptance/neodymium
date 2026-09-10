@@ -23,7 +23,9 @@ import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.model.ContextLevel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -48,6 +50,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static com.codeborne.selenide.Selenide.$;
 
@@ -65,6 +68,24 @@ public final class BrowserToolProvider
     private BrowserToolProvider()
     {
         // Static provider
+    }
+
+    private static ObjectNode successNode(final String action)
+    {
+        final ObjectNode node = MAPPER.createObjectNode();
+        node.put("status", "SUCCESS");
+        node.put("action", action);
+        return node;
+    }
+
+    private static ObjectNode errorNode(final String message)
+    {
+        final ObjectNode node = MAPPER.createObjectNode();
+        final String effectiveMessage = message != null ? message : "Unknown error";
+        node.put("status", "ERROR");
+        node.put("message", effectiveMessage);
+        node.put("error", effectiveMessage);
+        return node;
     }
 
     /**
@@ -92,6 +113,7 @@ public final class BrowserToolProvider
         registry.register(createTakeScreenshotTool());
         registry.register(createInspectVisualTool());
         registry.register(createPressKeyTool());
+        registry.register(createRequestContextTool());
     }
 
     private static AiTool createClickTool()
@@ -130,17 +152,22 @@ public final class BrowserToolProvider
 
                     final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
                     final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
+                    final ObjectNode res = successNode("click");
+                    res.put("x", x);
+                    res.put("y", y);
 
                     if (reanchored != null)
                     {
-                        builder.withContent("Clicked at coordinates (" + x + ", " + y + ") [re-anchored to " + reanchored.selector() + "]");
+                        res.put("selector", reanchored.selector());
                         builder.withVariable("reanchoredSelector", reanchored.selector());
                         builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
                     }
-                    else
+                    if (driver != null)
                     {
-                        builder.withContent("Clicked at coordinates (" + x + ", " + y + ")");
+                        res.put("url", driver.getCurrentUrl());
+                        res.put("title", driver.getTitle());
                     }
+                    builder.withContent(res.toString());
                     return builder.build();
                 }
 
@@ -168,15 +195,19 @@ public final class BrowserToolProvider
 
                         final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
                         final ToolResult.Builder b = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
+                        final ObjectNode res = successNode("click");
+                        res.put("target", "badge:" + badgeNum);
                         if (reanchored != null)
                         {
-                            b.withContent("Clicked Set-of-Marks badge [" + badgeNum + "] [re-anchored to " + reanchored.selector() + "]");
+                            res.put("selector", reanchored.selector());
                             b.withVariable("reanchoredSelector", reanchored.selector());
                         }
-                        else
+                        if (driver != null)
                         {
-                            b.withContent("Clicked Set-of-Marks badge [" + badgeNum + "]");
+                            res.put("url", driver.getCurrentUrl());
+                            res.put("title", driver.getTitle());
                         }
+                        b.withContent(res.toString());
                         return b.build();
                     }
                 }
@@ -193,7 +224,14 @@ public final class BrowserToolProvider
                         if (el.is(Condition.visible))
                         {
                             el.click();
-                            return ToolResult.success(call.callId(), "Clicked element: " + selector);
+                            final ObjectNode res = successNode("click");
+                            res.put("target", selector);
+                            if (driver != null)
+                            {
+                                res.put("url", driver.getCurrentUrl());
+                                res.put("title", driver.getTitle());
+                            }
+                            return ToolResult.success(call.callId(), res.toString());
                         }
                     }
                     catch (final Exception ignored)
@@ -211,7 +249,14 @@ public final class BrowserToolProvider
                         if (el.is(Condition.visible))
                         {
                             el.click();
-                            return ToolResult.success(call.callId(), "Clicked element matching text: '" + text + "'");
+                            final ObjectNode res = successNode("click");
+                            res.put("text", text);
+                            if (driver != null)
+                            {
+                                res.put("url", driver.getCurrentUrl());
+                                res.put("title", driver.getTitle());
+                            }
+                            return ToolResult.success(call.callId(), res.toString());
                         }
                     }
                     catch (final Exception ignored)
@@ -231,7 +276,7 @@ public final class BrowserToolProvider
                 {
                     if (selector.isBlank() && text.isBlank())
                     {
-                        return ToolResult.error(call.callId(), "browser_click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'");
+                        return ToolResult.error(call.callId(), errorNode("browser_click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
                     }
                     el = findElement(selector);
                 }
@@ -262,7 +307,14 @@ public final class BrowserToolProvider
                 }
 
                 el.shouldBe(Condition.visible).click();
-                return ToolResult.success(call.callId(), "Clicked element: " + selector);
+                final ObjectNode res = successNode("click");
+                res.put("target", selector);
+                if (driver != null)
+                {
+                    res.put("url", driver.getCurrentUrl());
+                    res.put("title", driver.getTitle());
+                }
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -308,7 +360,11 @@ public final class BrowserToolProvider
                 {
                     el.pressEnter();
                 }
-                return ToolResult.success(call.callId(), "Typed text into " + selector + (pressEnter ? " and pressed Enter" : ""));
+                final ObjectNode res = successNode("type");
+                res.put("target", selector);
+                res.put("value", text);
+                res.put("pressedEnter", pressEnter);
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -355,7 +411,13 @@ public final class BrowserToolProvider
                 {
                     Selenide.actions().sendKeys(key).perform();
                 }
-                return ToolResult.success(call.callId(), "Pressed key " + keyName + (selector.isBlank() ? "" : " on " + selector));
+                final ObjectNode res = successNode("press_key");
+                res.put("key", keyName);
+                if (!selector.isBlank())
+                {
+                    res.put("target", selector);
+                }
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -381,7 +443,11 @@ public final class BrowserToolProvider
             {
                 final String url = call.arguments().path("url").asText();
                 Selenide.open(url);
-                return ToolResult.success(call.callId(), "Navigated to " + url);
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ObjectNode res = successNode("navigate");
+                res.put("url", driver != null ? driver.getCurrentUrl() : url);
+                res.put("title", driver != null ? driver.getTitle() : "");
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -411,15 +477,21 @@ public final class BrowserToolProvider
                 final String selector = resolveSelector(call.arguments());
                 final SelenideElement el = $(selector).shouldBe(Condition.visible);
 
+                final ObjectNode res = successNode("select");
+                res.put("target", selector);
                 if (call.arguments().hasNonNull("value"))
                 {
-                    el.selectOptionByValue(call.arguments().path("value").asText());
+                    final String val = call.arguments().path("value").asText();
+                    el.selectOptionByValue(val);
+                    res.put("value", val);
                 }
                 else if (call.arguments().hasNonNull("text"))
                 {
-                    el.selectOption(call.arguments().path("text").asText());
+                    final String txt = call.arguments().path("text").asText();
+                    el.selectOption(txt);
+                    res.put("text", txt);
                 }
-                return ToolResult.success(call.callId(), "Selected option in " + selector);
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -445,9 +517,43 @@ public final class BrowserToolProvider
             {
                 final String selector = resolveSelector(call.arguments());
                 findElement(selector).shouldBe(Condition.visible).hover();
-                return ToolResult.success(call.callId(), "Hovered over " + selector);
+                final ObjectNode res = successNode("hover");
+                res.put("target", selector);
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
+    }
+
+    /**
+     * Normalizes regular expression patterns received from LLMs by fixing double-escaped
+     * regex metacharacters and shorthand classes (e.g. converting "\\$" to "\$" and "\\." to "\.").
+     *
+     * @param pattern the regex pattern to normalize
+     * @return normalized regex pattern
+     */
+    public static String normalizeRegexPattern(final String pattern)
+    {
+        if (pattern == null)
+        {
+            return "";
+        }
+        return pattern.replaceAll("\\\\\\\\([$()\\[\\]{}.*+?^|dswb])", "\\\\$1");
+    }
+
+    /**
+     * Unescapes escaped literal characters (such as "\$", "\(", etc.) that LLMs often emit
+     * in literal strings.
+     *
+     * @param text the text to unescape
+     * @return unescaped literal string
+     */
+    public static String unescapeLiteralText(final String text)
+    {
+        if (text == null || !text.contains("\\"))
+        {
+            return text;
+        }
+        return text.replaceAll("\\\\([$()\\[\\]{}.*+?^|\\\\])", "$1");
     }
 
     private static AiTool createAssertTextTool()
@@ -456,7 +562,7 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "Selector of the element to assert text on");
-        props.putObject("expectedText").put("type", "string").put("description", "Expected text content or regex pattern");
+        props.putObject("expectedText").put("type", "string").put("description", "Expected text content (plain substring) or regex pattern if regex is true");
         props.putObject("exact").put("type", "boolean").put("description", "Whether text match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedText is a regular expression pattern (default: false)");
 
@@ -477,30 +583,105 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
-                final String expectedText = call.arguments().hasNonNull("expectedText")
+                final String rawExpectedText = call.arguments().hasNonNull("expectedText")
                         ? call.arguments().path("expectedText").asText()
                         : call.arguments().path("text").asText();
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
-                final boolean regex = call.arguments().path("regex").asBoolean(false)
-                        || (expectedText.contains("[0-9]") || expectedText.contains("\\d")
-                            || expectedText.contains(".*") || expectedText.contains(".+"));
+                final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final String expectedText = regex ? rawExpectedText : unescapeLiteralText(rawExpectedText);
 
-                final SelenideElement el = (selector == null || selector.isBlank()) ? $("body") : findElement(selector);
-                if (regex)
+                final boolean isTitle = selector != null && ("title".equalsIgnoreCase(selector.trim())
+                        || "head > title".equalsIgnoreCase(selector.trim())
+                        || "head title".equalsIgnoreCase(selector.trim()));
+
+                if (isTitle)
                 {
-                    final String regPattern = expectedText.startsWith(".*") ? expectedText : ".*" + expectedText + ".*";
-                    el.shouldHave(Condition.matchText(regPattern));
-                }
-                else if (exact)
-                {
-                    el.shouldHave(Condition.exactText(expectedText));
+                    final String pageTitle = WebDriverRunner.getWebDriver().getTitle();
+                    if (regex)
+                    {
+                        final String normalized = normalizeRegexPattern(expectedText);
+                        final String regPattern = normalized.startsWith(".*") ? normalized : ".*" + normalized + ".*";
+                        final String effectivePattern = regPattern.startsWith("(?s)") ? regPattern : "(?s)" + regPattern;
+                        if (!Pattern.compile(effectivePattern).matcher(pageTitle != null ? pageTitle : "").find())
+                        {
+                            throw new AssertionError("Page title \"" + pageTitle + "\" does not match regex pattern \"" + effectivePattern + "\"");
+                        }
+                    }
+                    else if (exact)
+                    {
+                        if (!expectedText.equals(pageTitle))
+                        {
+                            throw new AssertionError("Page title \"" + pageTitle + "\" does not exactly match \"" + expectedText + "\"");
+                        }
+                    }
+                    else
+                    {
+                        if (pageTitle == null || !pageTitle.contains(expectedText))
+                        {
+                            throw new AssertionError("Page title \"" + pageTitle + "\" does not contain expected text \"" + expectedText + "\"");
+                        }
+                    }
                 }
                 else
                 {
-                    el.shouldHave(Condition.text(expectedText));
+                    final SelenideElement el = (selector == null || selector.isBlank()) ? $("body") : findElement(selector);
+                    final String tagName = el.getTagName().toLowerCase();
+                    final boolean isInputOrTextarea = "input".equals(tagName) || "textarea".equals(tagName);
+
+                    if (regex)
+                    {
+                        final String normalized = normalizeRegexPattern(expectedText);
+                        final String regPattern = normalized.startsWith(".*") ? normalized : ".*" + normalized + ".*";
+                        final String effectivePattern = regPattern.startsWith("(?s)") ? regPattern : "(?s)" + regPattern;
+                        if (isInputOrTextarea)
+                        {
+                            el.shouldHave(Condition.or("Text, value, or placeholder matching pattern",
+                                    Condition.matchText(effectivePattern),
+                                    Condition.attributeMatching("value", effectivePattern),
+                                    Condition.attributeMatching("placeholder", effectivePattern)));
+                        }
+                        else
+                        {
+                            el.shouldHave(Condition.matchText(effectivePattern));
+                        }
+                    }
+                    else if (exact)
+                    {
+                        if (isInputOrTextarea)
+                        {
+                            el.shouldHave(Condition.or("Exact text, value, or placeholder",
+                                    Condition.exactText(expectedText),
+                                    Condition.exactValue(expectedText),
+                                    Condition.attribute("placeholder", expectedText)));
+                        }
+                        else
+                        {
+                            el.shouldHave(Condition.exactText(expectedText));
+                        }
+                    }
+                    else
+                    {
+                        if (isInputOrTextarea)
+                        {
+                            el.shouldHave(Condition.or("Text, value, or placeholder containing string",
+                                    Condition.text(expectedText),
+                                    Condition.value(expectedText),
+                                    Condition.attribute("placeholder", expectedText)));
+                        }
+                        else
+                        {
+                            el.shouldHave(Condition.text(expectedText));
+                        }
+                    }
                 }
+
                 final String targetDesc = (selector == null || selector.isBlank()) ? "page" : selector;
-                return ToolResult.success(call.callId(), "Verified text on " + targetDesc + (regex ? " matches pattern: " : " matches: ") + expectedText);
+                final ObjectNode res = successNode("assert_text");
+                res.put("target", targetDesc);
+                res.put("expected", expectedText);
+                res.put("regex", regex);
+                res.put("matched", true);
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -557,7 +738,9 @@ public final class BrowserToolProvider
                 {
                     final String sel = args.path("selector").asText();
                     findElement(sel).scrollIntoView(true);
-                    return ToolResult.success(call.callId(), "Scrolled element into view: " + sel);
+                    final ObjectNode res = successNode("scroll");
+                    res.put("target", sel);
+                    return ToolResult.success(call.callId(), res.toString());
                 }
 
                 final String direction = args.path("direction").asText("down").toLowerCase();
@@ -585,7 +768,9 @@ public final class BrowserToolProvider
                         Selenide.executeJavaScript("window.scrollBy(0, Math.round(window.innerHeight * 0.8));");
                     }
                 }
-                return ToolResult.success(call.callId(), "Scrolled viewport: " + direction);
+                final ObjectNode res = successNode("scroll");
+                res.put("direction", direction);
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -596,7 +781,7 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("script").put("type", "string").put("description", "JavaScript code to execute in browser context");
-        props.putObject("args").put("type", "array").put("description", "Optional arguments passed to the script");
+        props.putObject("args").put("type", "array").put("description", "Optional arguments passed to the script").putObject("items").put("type", "string");
         schema.putArray("required").add("script");
 
         final ToolDefinition def = new ToolDefinition("browser_execute_script", "Executes JavaScript in the browser context and returns result", schema);
@@ -612,8 +797,26 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String script = call.arguments().path("script").asText();
-                final Object result = Selenide.executeJavaScript(script);
-                return ToolResult.success(call.callId(), result != null ? result.toString() : "null");
+                try
+                {
+                    final Object result = Selenide.executeJavaScript(script);
+                    final ObjectNode res = successNode("execute_script");
+                    if (result != null)
+                    {
+                        res.put("result", result.toString());
+                    }
+                    else
+                    {
+                        res.putNull("result");
+                    }
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+                catch (final Exception e)
+                {
+                    final ObjectNode res = errorNode("JavaScript execution failed: " + e.getMessage());
+                    res.put("action", "execute_script");
+                    return ToolResult.error(call.callId(), res.toString());
+                }
             }
         };
     }
@@ -712,11 +915,20 @@ public final class BrowserToolProvider
 
                 final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit);
                 final String resStr = res != null ? res.toString() : "[]";
+                final ObjectNode rootNode = successNode("query_dom");
+                try
+                {
+                    rootNode.set("matches", MAPPER.readTree(resStr));
+                }
+                catch (final Exception e)
+                {
+                    rootNode.putArray("matches");
+                }
                 if ("[]".equals(resStr.trim()) && !text.isBlank())
                 {
-                    return ToolResult.success(call.callId(), "[] (No elements found matching text: '" + text + "'. Verify if the element is inside a closed menu, dropdown, modal, or iframe)");
+                    rootNode.put("note", "No elements found matching text: '" + text + "'. Verify if the element is inside a closed menu, dropdown, modal, or iframe");
                 }
-                return ToolResult.success(call.callId(), resStr);
+                return ToolResult.success(call.callId(), rootNode.toString());
             }
         };
     }
@@ -761,9 +973,19 @@ public final class BrowserToolProvider
                 final Object result = Selenide.executeJavaScript(inspectScript, selector);
                 if (result == null)
                 {
-                    return ToolResult.error(call.callId(), "Element not found for selector: " + selector);
+                    return ToolResult.error(call.callId(), errorNode("Element not found for selector: " + selector).toString());
                 }
-                return ToolResult.success(call.callId(), result.toString());
+                try
+                {
+                    final ObjectNode node = (ObjectNode) MAPPER.readTree(result.toString());
+                    node.put("status", "SUCCESS");
+                    node.put("action", "inspect");
+                    return ToolResult.success(call.callId(), node.toString());
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.success(call.callId(), result.toString());
+                }
             }
         };
     }
@@ -793,7 +1015,7 @@ public final class BrowserToolProvider
 
                 if (driver == null)
                 {
-                    return ToolResult.error(call.callId(), "WebDriver is not running; cannot capture screenshot");
+                    return ToolResult.error(call.callId(), errorNode("WebDriver is not running; cannot capture screenshot").toString());
                 }
 
                 List<Map<String, Object>> badges = null;
@@ -816,8 +1038,15 @@ public final class BrowserToolProvider
                 }
 
                 final String base64 = Base64.getEncoder().encodeToString(screenshotBytes);
+                final ObjectNode res = successNode("take_screenshot");
+                res.put("bytes", screenshotBytes.length);
+                if (badges != null && !badges.isEmpty())
+                {
+                    res.put("badgeCount", badges.size());
+                }
+
                 final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
-                        .withContent("Screenshot captured successfully (" + screenshotBytes.length + " bytes)")
+                        .withContent(res.toString())
                         .withArtifact("screenshot", "image/png", screenshotBytes)
                         .withVariable("screenshotBase64", "data:image/png;base64," + base64);
 
@@ -857,7 +1086,7 @@ public final class BrowserToolProvider
 
                 if (driver == null)
                 {
-                    return ToolResult.error(call.callId(), "WebDriver not started");
+                    return ToolResult.error(call.callId(), errorNode("WebDriver not started").toString());
                 }
 
                 final byte[] fullScreenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
@@ -884,14 +1113,113 @@ public final class BrowserToolProvider
                     final byte[] cropBytes = baos.toByteArray();
                     final String base64 = Base64.getEncoder().encodeToString(cropBytes);
 
+                    final ObjectNode res = successNode("inspect_visual");
+                    res.put("target", selector);
+                    res.put("width", w);
+                    res.put("height", h);
+
                     return ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
-                            .withContent("Visual crop captured for " + selector + " (" + w + "x" + h + " px)")
+                            .withContent(res.toString())
                             .withArtifact("crop_" + selector, "image/png", cropBytes)
                             .withVariable("cropBase64", "data:image/png;base64," + base64)
                             .build();
                 }
 
-                return ToolResult.error(call.callId(), "Could not resolve bounding box for selector: " + selector);
+                return ToolResult.error(call.callId(), errorNode("Could not resolve bounding box for selector: " + selector).toString());
+            }
+        };
+    }
+
+    private static AiTool createRequestContextTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        final ArrayNode levelEnum = props.putObject("level")
+                .put("type", "string")
+                .put("description", "Depth and scope of the context to capture ('LEAN', 'STANDARD', 'RICH', 'VISUAL', 'VISUAL_RICH')")
+                .putArray("enum");
+        levelEnum.add("LEAN");
+        levelEnum.add("STANDARD");
+        levelEnum.add("RICH");
+        levelEnum.add("VISUAL");
+        levelEnum.add("VISUAL_RICH");
+        props.putObject("fullPage")
+                .put("type", "boolean")
+                .put("description", "Whether screenshot capture should be full scrollable page (default: false)");
+
+        final ToolDefinition def = new ToolDefinition(
+                "browser_request_context",
+                "Requests a fresh page DOM snapshot at a specified depth and scope (e.g. 'STANDARD' to include static text leaves, 'RICH' for all attributes and deep hierarchy, or 'VISUAL' for screenshots).",
+                schema);
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final JsonNode args = call.arguments();
+                final String levelStr = args.hasNonNull("level") ? args.path("level").asText() : "STANDARD";
+                final boolean fullPage = args.path("fullPage").asBoolean(false);
+                final ContextLevel targetLevel = ContextLevel.fromString(levelStr, ContextLevel.STANDARD);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (driver == null)
+                {
+                    final ObjectNode res = successNode("request_context");
+                    res.put("level", targetLevel.name());
+                    res.put("message", "Requested context level updated to " + targetLevel.name());
+
+                    if (context != null)
+                    {
+                        context.setVariable("KEY_REQUESTED_CONTEXT_LEVEL", targetLevel);
+                    }
+
+                    return ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
+                            .withContent(res.toString())
+                            .withVariable("requestedContextLevel", targetLevel.name())
+                            .build();
+                }
+
+                final PageAnalyzer analyzer = new PageAnalyzer(driver);
+                final String dom = analyzer.captureSimplifiedDom(targetLevel);
+
+                final ObjectNode res = successNode("request_context");
+                res.put("level", targetLevel.name());
+                res.put("dom", dom);
+
+                final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
+                        .withContent(res.toString())
+                        .withVariable("requestedContextLevel", targetLevel.name());
+
+                if (targetLevel.includesScreenshot())
+                {
+                    try
+                    {
+                        final String base64 = analyzer.captureScreenshot("context_" + System.currentTimeMillis(), targetLevel, fullPage, null);
+                        if (base64 != null)
+                        {
+                            builder.withVariable("screenshotBase64", "data:image/png;base64," + base64);
+                            builder.withArtifact("screenshot", "image/png", Base64.getDecoder().decode(base64));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
+                if (context != null)
+                {
+                    context.setVariable("KEY_REQUESTED_CONTEXT_LEVEL", targetLevel);
+                }
+
+                return builder.build();
             }
         };
     }

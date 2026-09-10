@@ -160,4 +160,43 @@ public class TokenBudgetGuardTest
         final AssertionError outputErr = Assertions.assertThrows(AssertionError.class, () -> asserter.hasOutputTokens(50, 100));
         Assertions.assertTrue(outputErr.getMessage().contains("output tokens"));
     }
+
+    @Test
+    @DisplayName("Default unconfigured TokenBudgetGuard enforces finite defaults from AiConfiguration")
+    public void testDefaultFiniteTokenBudgetsBreachThrowsException()
+    {
+        final TokenBudgetGuard guard = new TokenBudgetGuard();
+        this.eventBus.registerListener(guard);
+
+        final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
+        final LlmResponse response = new LlmResponse("Result", new TokenUsage(500_001, 10, 500_011), "mock-model");
+        final LlmResponseReceivedEvent event = new LlmResponseReceivedEvent(request, response, 100, "EXECUTION");
+
+        final TokenBudgetExceededException exception = Assertions.assertThrows(
+            TokenBudgetExceededException.class,
+            () -> this.eventBus.dispatch(event)
+        );
+
+        Assertions.assertTrue(exception.isInputBudget());
+        Assertions.assertEquals(500_001, exception.getConsumedTokens());
+        Assertions.assertEquals(500_000, exception.getBudgetLimit());
+    }
+
+    @Test
+    @DisplayName("TokenBudgetExceededException correctly supports TOTAL budget type")
+    public void testTotalBudgetType()
+    {
+        final TokenBudgetExceededException ex = new TokenBudgetExceededException(
+            TokenBudgetExceededException.BudgetType.TOTAL,
+            120_000,
+            100_000
+        );
+
+        Assertions.assertTrue(ex.isTotalBudget());
+        Assertions.assertFalse(ex.isInputBudget());
+        Assertions.assertFalse(ex.isOutputBudget());
+        Assertions.assertEquals(120_000, ex.getConsumedTokens());
+        Assertions.assertEquals(100_000, ex.getBudgetLimit());
+        Assertions.assertTrue(ex.getMessage().contains("Total tokens consumed (120000) exceeded configured step token budget (100000)"));
+    }
 }

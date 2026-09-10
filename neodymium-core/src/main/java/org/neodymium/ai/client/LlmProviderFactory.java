@@ -47,7 +47,51 @@ public final class LlmProviderFactory
         {
             return new MockLlmProvider();
         }
-        
+        if ("gemini".equalsIgnoreCase(providerType))
+        {
+            try
+            {
+                return new GeminiLlmProvider();
+            }
+            catch (final Exception e)
+            {
+                return new MockLlmProvider();
+            }
+        }
+        if ("openai".equalsIgnoreCase(providerType))
+        {
+            try
+            {
+                return new OpenAiLlmProvider();
+            }
+            catch (final Exception e)
+            {
+                return new MockLlmProvider();
+            }
+        }
+        if ("mistral".equalsIgnoreCase(providerType))
+        {
+            try
+            {
+                return new MistralLlmProvider();
+            }
+            catch (final Exception e)
+            {
+                return new MockLlmProvider();
+            }
+        }
+        if ("vertex".equalsIgnoreCase(providerType) || "llama".equalsIgnoreCase(providerType))
+        {
+            try
+            {
+                return new VertexAiLlamaProvider();
+            }
+            catch (final Exception e)
+            {
+                return new MockLlmProvider();
+            }
+        }
+
         // Dynamically load class name if configured
         final String className = config.getProperty("neodymium.ai.provider." + providerType + ".class", null);
         if (className != null)
@@ -60,11 +104,10 @@ public final class LlmProviderFactory
             }
             catch (final Exception e)
             {
-                // Fall back to MockLlmProvider if class loading fails
                 return new MockLlmProvider();
             }
         }
-        
+
         // Default to a MockLlmProvider for testing purposes
         return new MockLlmProvider();
     }
