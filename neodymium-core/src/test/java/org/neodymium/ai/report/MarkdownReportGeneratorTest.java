@@ -48,6 +48,16 @@ public class MarkdownReportGeneratorTest
         report.addStep(step0);
         report.addStep(step1);
 
+        // Pre-Flight LINTER Call: stepIndex -1
+        final TestExecutionReport.ReportLlmCallEntry linterCall = new TestExecutionReport.ReportLlmCallEntry();
+        linterCall.setStepIndex(-1);
+        linterCall.setCapability("LINTER");
+        linterCall.setModelName("gemini-2.5-flash");
+        linterCall.setDurationMs(1500);
+        linterCall.setInputTokens(1500);
+        linterCall.setOutputTokens(200);
+        report.addLlmCall(linterCall);
+
         // Step 0 Call 1: PESAP
         final TestExecutionReport.ReportLlmCallEntry call1 = new TestExecutionReport.ReportLlmCallEntry();
         call1.setStepIndex(0);
@@ -94,6 +104,8 @@ public class MarkdownReportGeneratorTest
         Assertions.assertNotNull(md);
         Assertions.assertTrue(md.contains("## LLM Interactions"));
         Assertions.assertTrue(md.contains("| # | Step | Phase / Role | Model | Duration | In Tokens | Out Tokens | Cached | Cost |"));
+        Assertions.assertTrue(md.contains("Pre-Flight"));
+        Assertions.assertTrue(md.contains("Playbook Linter"));
         Assertions.assertTrue(md.contains("Step #1"));
         Assertions.assertTrue(md.contains("↳ Step #1"));
         Assertions.assertTrue(md.contains("Intent (PESAP)"));

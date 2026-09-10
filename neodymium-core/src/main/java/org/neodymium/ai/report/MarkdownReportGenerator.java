@@ -257,7 +257,7 @@ public final class MarkdownReportGenerator
 
                 final String stepDisplay = stepIdx >= 0
                     ? (isNewStep ? "Step #" + (stepIdx + 1) : "↳ Step #" + (stepIdx + 1))
-                    : "Setup";
+                    : "Pre-Flight";
 
                 final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
                 final String phaseRole;
@@ -276,6 +276,10 @@ public final class MarkdownReportGenerator
                 else if ("VISUAL_RCA".equalsIgnoreCase(cap))
                 {
                     phaseRole = "Visual RCA";
+                }
+                else if ("LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Playbook Linter";
                 }
                 else
                 {

@@ -430,7 +430,7 @@ public final class HtmlReportGenerator
                     final long clusterTokens = stats != null ? stats[1] : (call.getInputTokens() + call.getOutputTokens());
                     final double cost = clusterCost.getOrDefault(stepIdx, call.getEstimatedCostUsd());
 
-                    final String stepLabel = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Setup / Environment";
+                    final String stepLabel = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Pre-Flight / Setup";
                     final String onclick = stepIdx >= 0 ? " onclick=\"openAndSelectStep(" + stepIdx + ")\"" : "";
 
                     sb.append("          <tr class=\"step-group-row\">\n");
@@ -457,7 +457,7 @@ public final class HtmlReportGenerator
                 sb.append("          <tr class=\"").append(clusterRowClass).append(rowFirstClass).append("\">\n");
                 sb.append("            <td>").append(i + 1).append("</td>\n");
 
-                final String stepDisplay = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Setup";
+                final String stepDisplay = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Pre-Flight";
                 if (stepIdx >= 0)
                 {
                     if (isNewStep)
@@ -491,6 +491,10 @@ public final class HtmlReportGenerator
                 else if ("VISUAL_RCA".equalsIgnoreCase(cap))
                 {
                     phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Visual Root Cause Analysis (SSIM/Diff Diagnostics)\">Visual RCA</span>";
+                }
+                else if ("LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Pre-Flight Playbook Static & Semantic Linter\">Playbook Linter</span>";
                 }
                 else
                 {
@@ -1209,6 +1213,8 @@ public final class HtmlReportGenerator
                             callTitle = '<span class="badge-phase judge">Quality Judge</span>';
                         } else if (cap === 'VISUAL_RCA') {
                             callTitle = '<span class="badge-phase prelude">Visual RCA</span>';
+                        } else if (cap === 'LINTER') {
+                            callTitle = '<span class="badge-phase prelude">Playbook Linter</span>';
                         } else if (cap === 'VISION') {
                             callTitle = '<span class="badge-role">Call #' + (ci + 1) + '</span><span class="badge-modality vision">Vision 📸</span>';
                         } else {

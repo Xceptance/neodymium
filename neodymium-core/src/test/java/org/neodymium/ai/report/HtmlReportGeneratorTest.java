@@ -149,6 +149,16 @@ public class HtmlReportGeneratorTest
         report.addStep(step0);
         report.addStep(step1);
 
+        // Pre-Flight LINTER Call: stepIndex -1
+        final TestExecutionReport.ReportLlmCallEntry linterCall = new TestExecutionReport.ReportLlmCallEntry();
+        linterCall.setStepIndex(-1);
+        linterCall.setCapability("LINTER");
+        linterCall.setModelName("gemini-2.5-flash");
+        linterCall.setDurationMs(1500);
+        linterCall.setInputTokens(1500);
+        linterCall.setOutputTokens(200);
+        report.addLlmCall(linterCall);
+
         // Step 0 Call 1: PESAP
         final TestExecutionReport.ReportLlmCallEntry call1 = new TestExecutionReport.ReportLlmCallEntry();
         call1.setStepIndex(0);
@@ -204,6 +214,8 @@ public class HtmlReportGeneratorTest
 
         Assertions.assertNotNull(html);
         Assertions.assertTrue(html.contains("class=\"step-group-row\""), "HTML must contain step group separator rows");
+        Assertions.assertTrue(html.contains("Pre-Flight / Setup"), "HTML must display pre-flight setup banner");
+        Assertions.assertTrue(html.contains("Playbook Linter"), "HTML must format LINTER capability as Playbook Linter");
         Assertions.assertTrue(html.contains("Enter shipping details"), "HTML must display step 0 instruction in group banner");
         Assertions.assertTrue(html.contains("Select payment method"), "HTML must display step 1 instruction in group banner");
         Assertions.assertTrue(html.contains("Intent (PESAP)"), "HTML must format PESAP capability as Intent (PESAP)");

@@ -443,7 +443,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else if (event instanceof LlmResponseReceivedEvent llmReceived)
         {
-            final int stepIdx = this.currentStep != null ? this.currentStep.getStepIndex() : 0;
+            final int stepIdx = this.currentStep != null ? this.currentStep.getStepIndex() : -1;
             final TestExecutionReport.ReportLlmCallEntry callEntry = new TestExecutionReport.ReportLlmCallEntry();
             callEntry.setStepIndex(stepIdx);
             callEntry.setCapability(llmReceived.getCapability());
