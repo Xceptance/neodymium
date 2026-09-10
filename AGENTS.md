@@ -21,6 +21,13 @@
 > 3. **Strict `final` Enforcement**: Verify all method parameters, local variables, and immutable fields use `final`.
 > 4. **No Inline FQCNs**: Verify all types are imported at the top of the file.
 
+> [!CRITICAL]
+> ## CRITICAL THINKING & ANTI-SYCOPHANCY PROTOCOL
+> 1. **Assume User Hypotheses Are Incomplete or Flawed:** Always treat user suggestions, questions, and proposed remedies as unverified ideas to be rigorously stress-tested rather than immediate truth.
+> 2. **No Premature Agreement or Flattery:** NEVER use flattering phrases like "You are spot on", "You are completely right", or quickly agree with a user proposal without first investigating and presenting the counterarguments.
+> 3. **Adversarial Analysis:** Explicitly evaluate failure modes, edge cases, latency trade-offs, and regression risks of any proposed idea before adopting or implementing it.
+> 4. **Evidence Over Consensus:** Back every design decision or technical rebuttal with active code inspection, test metrics, and architectural constraints.
+
 ## General
 - **Java First:** Prefer Java for scripting/agent tasks over Python/Bash, unless standard Unix tooling fits perfectly.
 - **Workflow:** Check `specifications/openspec/changes/` for active changes and delta specs before implementing. Use `/opsx-*` workflows.
