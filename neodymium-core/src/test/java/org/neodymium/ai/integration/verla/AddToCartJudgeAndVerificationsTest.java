@@ -26,6 +26,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -48,6 +49,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraJudge")
 @Tag("AuraVerification")
 @NeodymiumAiTest
+@AiJudge(true)
 @AiPlaybook(value = "verla/AddToCartTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
@@ -71,7 +73,6 @@ public final class AddToCartJudgeAndVerificationsTest extends BaseAiTest
         }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
-        Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
         Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "true");
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "true");
         AiConfiguration.resetInstance();

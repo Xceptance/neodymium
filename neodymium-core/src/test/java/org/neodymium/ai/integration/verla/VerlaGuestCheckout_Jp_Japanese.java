@@ -88,4 +88,22 @@ public class VerlaGuestCheckout_Jp_Japanese extends BaseAiTest
     public void testCheckoutReplayPerfect()
     {
     }
+
+    @Order(3)
+    @AiJudge(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook
+    public void testCheckoutLivePerfectWithJudge()
+    {
+    }
+
+    @Order(4)
+    @AiJudge(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePerfectWithJudge")
+    public void testCheckoutReplayPerfectWithJudge()
+    {
+    }
 }

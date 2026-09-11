@@ -26,11 +26,11 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -48,6 +48,7 @@ import org.neodymium.util.Neodymium;
 @Tag("LiveAPI")
 @Tag("AuraJudge")
 @NeodymiumAiTest
+@AiJudge(true)
 @AiPlaybook(recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class AddToCartWithJudgeTest extends BaseAiTest
@@ -71,7 +72,6 @@ public final class AddToCartWithJudgeTest extends BaseAiTest
         }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
-        Neodymium.getData().put("neodymium.ai.judge.enabled", "true");
         Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();

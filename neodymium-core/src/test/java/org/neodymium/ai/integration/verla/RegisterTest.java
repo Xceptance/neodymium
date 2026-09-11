@@ -26,6 +26,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -46,6 +47,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
+@AiJudge(false)
 @AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class RegisterTest extends BaseAiTest
@@ -69,7 +71,6 @@ public final class RegisterTest extends BaseAiTest
         Neodymium.getData().put("neodymium.ai.multilingual", "true");
         Neodymium.getData().put("random", String.valueOf(Neodymium.getRandom().nextInt(1_000, 100_000_000)));
         Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-        Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
         Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
