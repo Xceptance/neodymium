@@ -300,6 +300,8 @@ function updateCenterLayout() {
     }
 }
 window.updateCenterLayout = updateCenterLayout;
+updateCenterLayout();
+document.addEventListener('DOMContentLoaded', updateCenterLayout);
 
 function closeConsole() {
     consoleOpened = false;

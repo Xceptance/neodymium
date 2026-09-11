@@ -192,7 +192,6 @@
             overflow: hidden;
         }
 
-        .workspace-layout .panel,
         .panel {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -205,6 +204,15 @@
             min-width: 0;
             min-height: 0;
             padding: 0;
+        }
+
+        .workspace-layout .panel {
+            padding: 0;
+        }
+
+        #consolePanel {
+            display: none;
+            height: 0;
         }
 
         .col-minimized {
