@@ -18,27 +18,44 @@
  */
 package org.neodymium.ai.tool.guard;
 
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.neodymium.ai.action.LocatorCandidate;
-import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.ai.model.SemanticIntent;
-import org.neodymium.ai.tool.ToolCall;
-import org.neodymium.ai.tool.ToolContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.action.LocatorCandidate;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
+import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.model.SemanticIntent;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.prompt.QualityJudgePrompt;
+import org.neodymium.ai.prompt.QualityJudgePrompt.QualityJudgeResult;
+import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolContext;
+import org.neodymium.ai.util.LocatorImprover;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Quality Judge interceptor enforcing Journey Fidelity policies and locator stability confidence scoring
- * before browser tools are dispatched to the browser.
+ * Quality Judge interceptor enforcing Journey Fidelity policies, fast-path unique locator gating,
+ * and pre-action LLM Quality Judge deliberation before browser tools are dispatched to the browser.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -122,7 +139,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             return journeyVerdict;
         }
 
-        // 2. If Quality Judge is disabled, bypass locator deliberation
+        // 2. If Quality Judge is disabled via instance flag, bypass locator deliberation
         if (!this.enabled)
         {
             return InterceptionVerdict.allow("Quality Judge disabled");
@@ -135,15 +152,65 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             return InterceptionVerdict.allow("Tool " + toolName + " is exempt from locator quality judging");
         }
 
-        // 4. Extract candidate locators from call arguments or execution context
-        final List<LocatorCandidate> candidates = extractCandidates(call, context);
+        // 4. Extract target selector from call arguments
+        final String selector = call.arguments().path("selector").asText("").trim();
+        List<LocatorCandidate> candidates = extractCandidates(call, context);
+
+        final ExecutionContext activeContext = ExecutionContext.getActiveContext();
+
+        // 5. Inspect live DOM when WebDriver has started and selector is provided
+        if (!selector.isEmpty() && WebDriverRunner.hasWebDriverStarted())
+        {
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            List<WebElement> matchedElements = Collections.emptyList();
+            try
+            {
+                matchedElements = driver.findElements(By.cssSelector(selector));
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Quality Judge could not query DOM for selector '{}': {}", selector, e.getMessage());
+            }
+
+            final int score = LocatorImprover.scoreLocator(selector);
+
+            // Fast-path: single match and strong resilience score (>= 8) passes immediately in 0ms
+            if (matchedElements.size() == 1 && score >= 8 && candidates.isEmpty())
+            {
+                LOGGER.debug("Quality Judge fast-path: decisive unique selector '{}' (score: {})", selector, score);
+                return InterceptionVerdict.allow("Clean unique high-resilience selector (score: " + score + " >= 8)");
+            }
+
+            // If selector does not match any element in DOM and no candidates exist, defer to normal execution
+            if (matchedElements.isEmpty() && candidates.isEmpty())
+            {
+                return InterceptionVerdict.allow("Element not currently matched in DOM; proceeding to execution");
+            }
+
+            // If ambiguous (multiple elements) or volatile (score < 6), generate candidate alternatives
+            if (candidates.isEmpty() && !matchedElements.isEmpty() && (matchedElements.size() > 1 || score < 6))
+            {
+                final List<String> generated = LocatorImprover.generateCandidates(matchedElements.get(0));
+                candidates = new ArrayList<>();
+                candidates.add(new LocatorCandidate(selector, determineStrategy(selector), (double) score / 10.0, "Original proposed selector"));
+                for (final String gen : generated)
+                {
+                    if (!gen.equals(selector))
+                    {
+                        final int genScore = LocatorImprover.scoreLocator(gen);
+                        candidates.add(new LocatorCandidate(gen, determineStrategy(gen), (double) genScore / 10.0, "Generated DOM attribute candidate"));
+                    }
+                }
+            }
+        }
+
         if (candidates.isEmpty())
         {
             return InterceptionVerdict.allow("No candidate locators provided for scoring");
         }
 
-        // 5. Evaluate locator candidate stability scoring
-        return evaluateCandidateScoring(call, candidates);
+        // 6. Evaluate candidate confidence scoring and trigger LLM deliberation if needed
+        return evaluateCandidateScoring(call, selector, candidates, activeContext);
     }
 
     private InterceptionVerdict checkJourneyFidelity(final ToolCall call, final SemanticIntent intent)
@@ -220,7 +287,11 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         return Collections.emptyList();
     }
 
-    private InterceptionVerdict evaluateCandidateScoring(final ToolCall call, final List<LocatorCandidate> candidates)
+    private InterceptionVerdict evaluateCandidateScoring(
+            final ToolCall call,
+            final String selector,
+            final List<LocatorCandidate> candidates,
+            final ExecutionContext activeContext)
     {
         final LocatorCandidate top = candidates.get(0);
         final double score1 = top.getScore();
@@ -232,11 +303,19 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             return InterceptionVerdict.allow("Decisive high-confidence locator (score: " + score1 + " >= 0.95)");
         }
 
+        final String judgeMode = this.config.getJudgeMode();
+        final boolean isRetry = activeContext != null && Boolean.TRUE.equals(activeContext.getTransientData().get("isRetryExecution"));
+        if ("ON_FAIL".equalsIgnoreCase(judgeMode) && !isRetry)
+        {
+            return InterceptionVerdict.allow("Quality Judge mode is ON_FAIL; skipping pre-action deliberation");
+        }
+
         // Low confidence top candidate (< 0.85) triggers deliberation
         if (score1 < 0.85)
         {
             LOGGER.info("⚖️ Quality Judge triggered deliberation: top candidate score {} < 0.85", score1);
-            return deliberateCandidates(call, candidates, "Top candidate confidence is below threshold (" + score1 + " < 0.85)");
+            return deliberateWithLlmJudge(call, selector, candidates, activeContext,
+                    "Top candidate confidence is below threshold (" + score1 + " < 0.85)");
         }
 
         // Multiple candidates with ambiguous score difference (< 0.15) trigger deliberation
@@ -247,19 +326,119 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             if (diff < 0.15)
             {
                 LOGGER.info("⚖️ Quality Judge triggered deliberation: ambiguous score difference {} < 0.15 between top candidates", diff);
-                return deliberateCandidates(call, candidates, "Ambiguous candidates with close scores (diff: " + diff + " < 0.15)");
+                return deliberateWithLlmJudge(call, selector, candidates, activeContext,
+                        "Ambiguous candidates with close scores (diff: " + diff + " < 0.15)");
             }
         }
 
         return InterceptionVerdict.allow("Decisive candidate winner passed (score: " + score1 + ")");
     }
 
-    private InterceptionVerdict deliberateCandidates(
+    private InterceptionVerdict deliberateWithLlmJudge(
+            final ToolCall call,
+            final String selector,
+            final List<LocatorCandidate> candidates,
+            final ExecutionContext activeContext,
+            final String deliberationReason)
+    {
+        final AiSession session = activeContext != null
+                ? (AiSession) activeContext.getTransientData().get(ExecutionContext.KEY_SESSION)
+                : null;
+
+        if (this.config.isJudgeEnabled() && session != null && session.getLlmRegistry() != null)
+        {
+            try
+            {
+                final String instruction = (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
+                final Object stateObj = activeContext.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+                final String domContext = stateObj instanceof final SutState sutState ? sutState.getTextContent() : "";
+
+                final Action proposedAction = new Action(call.toolName(), selector.isEmpty() ? candidates.get(0).getLocator() : selector, "");
+                proposedAction.setCandidateLocators(candidates);
+
+                final QualityJudgePrompt judgePrompt = new QualityJudgePrompt();
+                final LlmRequest request = judgePrompt.compileRequest(instruction, domContext, proposedAction, this.config);
+
+                final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+                LOGGER.debug("💬 [Quality Judge] Deliberating proposed locator '{}' with LLM provider '{}'",
+                        proposedAction.getTarget(), provider.getClass().getSimpleName());
+
+                if (session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new LlmRequestSentEvent(request, "JUDGE"));
+                }
+                final long startTime = System.currentTimeMillis();
+                final LlmResponse response = provider.chat(request);
+                final long durationMs = System.currentTimeMillis() - startTime;
+
+                if (session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
+                }
+
+                // Track total calls and judge calls in execution metrics
+                final Integer totalCalls = (Integer) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+                activeContext.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, totalCalls + 1);
+                final Integer judgeCalls = (Integer) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0);
+                activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_CALL_COUNT, judgeCalls + 1);
+
+                // Accumulate token usage
+                final TokenUsage newUsage = response != null ? response.tokenUsage() : null;
+                if (newUsage != null)
+                {
+                    final TokenUsage existing = (TokenUsage) activeContext.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+                    if (existing != null)
+                    {
+                        activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new TokenUsage(
+                                existing.inputTokenCount() + newUsage.inputTokenCount(),
+                                existing.outputTokenCount() + newUsage.outputTokenCount(),
+                                existing.totalTokenCount() + newUsage.totalTokenCount(),
+                                existing.cachedTokenCount() + newUsage.cachedTokenCount()
+                        ));
+                    }
+                    else
+                    {
+                        activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, newUsage);
+                    }
+                }
+
+                if (response != null && response.content() != null)
+                {
+                    final QualityJudgeResult judgeResult = judgePrompt.parseResponse(response.content());
+                    LOGGER.info("⚖️ Quality Judge Judgment: {} | Chosen Locator: '{}' | Reasoning: {}",
+                            judgeResult.getJudgment(), judgeResult.getChosenLocator(), judgeResult.getReasoning());
+
+                    final String chosen = judgeResult.getChosenLocator();
+                    if (chosen != null && !chosen.isBlank() && !chosen.equals(selector))
+                    {
+                        final ObjectNode newArgs = call.arguments().deepCopy();
+                        newArgs.put("selector", chosen);
+                        final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
+                        return InterceptionVerdict.deliberated(
+                                adjusted,
+                                "LLM Quality Judge selected refined locator: " + chosen + " (" + judgeResult.getReasoning() + ")"
+                        );
+                    }
+                    return InterceptionVerdict.allow(
+                            "LLM Quality Judge confirmed locator: " + selector + " (" + judgeResult.getReasoning() + ")"
+                    );
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.warn("⚠️ Quality Judge LLM deliberation encountered an error: {}. Falling back to candidate heuristic.", e.getMessage());
+            }
+        }
+
+        // Fallback: heuristic candidate deliberation
+        return deliberateCandidatesHeuristically(call, candidates, deliberationReason);
+    }
+
+    private InterceptionVerdict deliberateCandidatesHeuristically(
             final ToolCall call,
             final List<LocatorCandidate> candidates,
             final String deliberationReason)
     {
-        // Deliberation strategy: choose candidate with highest strategy weight (DATA_AI > ID > ATTRIBUTE > CLASS)
         LocatorCandidate bestCandidate = candidates.get(0);
         int bestWeight = getStrategyWeight(bestCandidate.getStrategy());
 
@@ -295,6 +474,44 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         );
     }
 
+    private static String determineStrategy(final String locator)
+    {
+        if (locator == null)
+        {
+            return "UNKNOWN";
+        }
+        final String trimmed = locator.trim();
+        if (trimmed.startsWith("#") || trimmed.contains("#"))
+        {
+            return "ID";
+        }
+        if (trimmed.contains("data-testid") || trimmed.contains("data-test"))
+        {
+            return "TEST_ID";
+        }
+        if (trimmed.contains("aria-label"))
+        {
+            return "ARIA";
+        }
+        if (trimmed.contains("[name="))
+        {
+            return "NAME";
+        }
+        if (trimmed.contains("placeholder"))
+        {
+            return "PLACEHOLDER";
+        }
+        if (trimmed.startsWith("."))
+        {
+            return "CLASS";
+        }
+        if (trimmed.contains("data-ai"))
+        {
+            return "DATA_AI";
+        }
+        return "ATTRIBUTE";
+    }
+
     private static int getStrategyWeight(final String strategy)
     {
         if (strategy == null)
@@ -305,8 +522,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         {
             case "DATA_AI", "AI_ID" -> 100;
             case "ID" -> 90;
+            case "TEST_ID", "DATA_TESTID", "DATA-TESTID" -> 85;
             case "ACCESSIBILITY", "ARIA" -> 80;
             case "ATTRIBUTE", "NAME" -> 70;
+            case "PLACEHOLDER" -> 60;
             case "TEXT" -> 50;
             case "CLASS" -> 40;
             default -> 10;

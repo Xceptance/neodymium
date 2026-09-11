@@ -70,6 +70,7 @@ public final class ExecutionContext
     public static final String KEY_TARGET_EXECUTOR = "targetExecutor";
     public static final String KEY_LAST_LLM_RESULT = "lastLlmResult";
     public static final String KEY_LAST_STATE = "lastState";
+    public static final String KEY_POST_ACTION_STATE = "postActionState";
     public static final String KEY_RECORDING = "recording";
     public static final String KEY_RESOURCE_MANAGER = "resourceManager";
     public static final String KEY_PLAYBOOK_PARSER = "playbookParser";

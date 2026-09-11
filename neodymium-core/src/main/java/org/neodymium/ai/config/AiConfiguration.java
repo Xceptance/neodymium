@@ -510,6 +510,16 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if semantic outcome verification failures should abort execution.
+     *
+     * @return true if verification failure throws VerificationFailureException (default: true), false for report-only warning
+     */
+    public boolean isSemanticVerificationFailOnError()
+    {
+        return getBoolean("neodymium.ai.semanticVerification.failOnError", true);
+    }
+
+    /**
      * Checks if Visual Root Cause Analysis (RCA) is enabled on step execution failures.
      *
      * @return true if Visual RCA is enabled (default: true), false otherwise

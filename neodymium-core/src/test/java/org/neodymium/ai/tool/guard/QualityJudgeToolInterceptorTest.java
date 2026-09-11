@@ -21,17 +21,26 @@ package org.neodymium.ai.tool.guard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.HashMap;
+import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.LocatorCandidate;
+import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.SemanticIntent;
+import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
-
-import java.util.List;
 
 /**
  * Unit tests verifying {@link QualityJudgeToolInterceptor} Journey Fidelity policies
@@ -200,5 +209,66 @@ public class QualityJudgeToolInterceptorTest
 
         Assertions.assertTrue(verdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+    }
+
+    @Test
+    public void testLlmJudgeDeliberationRewritesSelector()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String judgeResponse = """
+                {
+                  "judgment": "REFINED",
+                  "chosenLocator": "#refined-button",
+                  "confidence": 0.96,
+                  "reasoning": "Unique stable ID attribute"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(judgeResponse, new TokenUsage(25, 15, 40), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click submit button");
+
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".brittle-button");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", ".brittle-button");
+            c1.put("strategy", "CLASS");
+            c1.put("score", 0.60);
+
+            final ToolCall call = new ToolCall("call-9", "browser_click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("#refined-button", verdict.adjustedCall().arguments().path("selector").asText());
+
+            final Integer judgeCalls = (Integer) execContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
+            Assertions.assertEquals(1, judgeCalls);
+            final TokenUsage tokenUsage = (TokenUsage) execContext.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+            Assertions.assertNotNull(tokenUsage);
+            Assertions.assertEquals(40, tokenUsage.totalTokenCount());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+        }
     }
 }

@@ -1166,7 +1166,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     standardFlow.add(new AgentToolLoopStep());
                 }
 
-                // Post-step visual state capture & step completion for report
+                // Post-step visual state capture for outcome verification & report
                 standardFlow.add(c -> {
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     if (executor != null && session != null && session.getEventBus() != null)
@@ -1179,8 +1179,7 @@ public final class ExecuteActionsStep implements PipelineStep
                             final SutState postStepState = executor.captureState(cl, isFullPageReq);
                             if (postStepState != null)
                             {
-                                c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postStepState);
-                                c.getTransientData().put("KEY_POST_ACTION_STATE", postStepState);
+                                c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
                                 session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
                             }
                         }
@@ -1189,18 +1188,9 @@ public final class ExecuteActionsStep implements PipelineStep
                             LOGGER.debug("Failed to capture post-step visual state: {}", e.getMessage());
                         }
                     }
-
-                    if (step.getStatus() != PlaybookStepStatus.FAILED)
-                    {
-                        step.setStatus(step.getStatus() == PlaybookStepStatus.HEALED ? PlaybookStepStatus.HEALED : PlaybookStepStatus.SUCCESS);
-                    }
-                    step.setDurationMs(System.currentTimeMillis() - stepStartTime);
-                    c.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
-                    }
                 });
+
+                standardFlow.add(verifyStep);
             }
             else
             {
@@ -1309,6 +1299,7 @@ public final class ExecuteActionsStep implements PipelineStep
                     handlers.put(HealingRequiredException.class, c -> {
                         c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                         LOGGER.warn("⚠️ Replay step requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
+                        c.pushStep(verifyStep);
                         c.pushStep(new AgentToolLoopStep());
                     });
                 }

@@ -41,9 +41,11 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.VerificationFailureException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.util.ScreenshotHasher;
 
@@ -176,41 +178,98 @@ public class VerifyOutcomeStepTest
     }
 
     /**
-     * Goal: Verifies that a failing verification rubric response records a structured warning string
-     * in the context's `verificationWarnings` transient list.
+     * Goal: Verifies that a failing verification rubric response throws a VerificationFailureException
+     * when failOnError is true (default), marks the step FAILED, and records structured verification result.
      */
     @Test
-    public void testFailedOutcomeVerificationRecordsWarning() throws Exception
+    public void testFailedOutcomeVerificationThrowsException() throws Exception
     {
         System.setProperty("neodymium.ai.semanticVerificationEnabled", "true");
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
-        final PlaybookStep playbookStep = new PlaybookStep("Click sign in");
-        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        System.setProperty("neodymium.ai.semanticVerification.failOnError", "true");
+        try
+        {
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+            final PlaybookStep playbookStep = new PlaybookStep("Click sign in");
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
 
-        final String jsonResponse = """
+            final String jsonResponse = """
+                {
+                  "rubrics": {
+                    "intentMatch": { "analysis": "Sign in button was disabled", "score": "FAIL" },
+                    "visualDelta": { "analysis": "Page state did not change", "score": "FAIL" },
+                    "absenceOfErrors": { "analysis": "Error prompt visible", "score": "FAIL" }
+                  },
+                  "overallVerdict": { "passed": false, "summary": "Sign in button was disabled" }
+                }
+                """;
+            mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+
+            final VerifyOutcomeStep step = new VerifyOutcomeStep();
+            final VerificationFailureException thrown = Assertions.assertThrows(VerificationFailureException.class, () ->
             {
-              "rubrics": {
-                "intentMatch": { "analysis": "Sign in button was disabled", "score": "FAIL" },
-                "visualDelta": { "analysis": "Page state did not change", "score": "FAIL" },
-                "absenceOfErrors": { "analysis": "Error prompt visible", "score": "FAIL" }
-              },
-              "overallVerdict": { "passed": false, "summary": "Sign in button was disabled" }
-            }
-            """;
-        mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+                step.execute(context);
+            });
 
-        final VerifyOutcomeStep step = new VerifyOutcomeStep();
-        step.execute(context);
+            Assertions.assertTrue(thrown.getMessage().contains("Sign in button was disabled"));
+            Assertions.assertEquals(PlaybookStepStatus.FAILED, playbookStep.getStatus());
+            Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
+            Assertions.assertFalse(playbookStep.getVerificationResult().passed());
+            Assertions.assertEquals("FAIL", playbookStep.getVerificationResult().getRubrics().intentMatch().score());
 
-        @SuppressWarnings("unchecked")
-        final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
-        // Assert exactly 1 warning recorded with specific failing reason
-        Assertions.assertNotNull(warnings);
-        Assertions.assertEquals(1, warnings.size());
-        Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
-        Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
-        Assertions.assertFalse(playbookStep.getVerificationResult().passed());
-        Assertions.assertEquals("FAIL", playbookStep.getVerificationResult().getRubrics().intentMatch().score());
+            @SuppressWarnings("unchecked")
+            final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
+            Assertions.assertNotNull(warnings);
+            Assertions.assertEquals(1, warnings.size());
+            Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.semanticVerification.failOnError");
+        }
+    }
+
+    /**
+     * Goal: Verifies that when failOnError is explicitly disabled (false), failing verification
+     * does not throw an exception, but records a diagnostic warning.
+     */
+    @Test
+    public void testFailedOutcomeVerificationDiagnosticWarningMode() throws Exception
+    {
+        System.setProperty("neodymium.ai.semanticVerificationEnabled", "true");
+        System.setProperty("neodymium.ai.semanticVerification.failOnError", "false");
+        try
+        {
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+            final PlaybookStep playbookStep = new PlaybookStep("Click sign in");
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+
+            final String jsonResponse = """
+                {
+                  "rubrics": {
+                    "intentMatch": { "analysis": "Sign in button was disabled", "score": "FAIL" },
+                    "visualDelta": { "analysis": "Page state did not change", "score": "FAIL" },
+                    "absenceOfErrors": { "analysis": "Error prompt visible", "score": "FAIL" }
+                  },
+                  "overallVerdict": { "passed": false, "summary": "Sign in button was disabled" }
+                }
+                """;
+            mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+
+            final VerifyOutcomeStep step = new VerifyOutcomeStep();
+            step.execute(context);
+
+            @SuppressWarnings("unchecked")
+            final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
+            Assertions.assertNotNull(warnings);
+            Assertions.assertEquals(1, warnings.size());
+            Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
+            Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
+            Assertions.assertFalse(playbookStep.getVerificationResult().passed());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.semanticVerification.failOnError");
+        }
     }
 
     /**

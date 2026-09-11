@@ -20,9 +20,11 @@ package org.neodymium.ai.prompt;
 
 import java.util.List;
 
-import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Prompt implementation that evaluates step execution outcomes and assertions
@@ -58,10 +60,23 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
     public String compileUserMessage(final ExecutionContext context)
     {
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String agentSummary = (String) context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY);
+        final Object rawCalls = context.getTransientData().get(AgentToolLoopStep.KEY_EXECUTED_TOOL_CALLS);
+        final List<?> toolCalls = rawCalls instanceof List<?> list ? list : null;
         final List<Action> actions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
 
         final StringBuilder actionsStr = new StringBuilder();
-        if (actions != null && !actions.isEmpty())
+        if (toolCalls != null && !toolCalls.isEmpty())
+        {
+            for (final Object obj : toolCalls)
+            {
+                if (obj instanceof final ToolCall call)
+                {
+                    actionsStr.append("- ").append(call.toolName()).append("(").append(call.arguments().toString()).append(")\n");
+                }
+            }
+        }
+        else if (actions != null && !actions.isEmpty())
         {
             for (final Action act : actions)
             {
@@ -70,21 +85,17 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
         }
         else
         {
-            actionsStr.append("(No actions executed)");
+            actionsStr.append("(No actions executed)\n");
         }
 
-        return String.format("""
-            Instruction:
-            \"\"\"
-            %s
-            \"\"\"
-
-            Executed Actions:
-            %s
-            """,
-            instruction != null ? instruction : "",
-            actionsStr.toString()
-        );
+        final StringBuilder sb = new StringBuilder();
+        sb.append("Instruction:\n\"\"\"\n").append(instruction != null ? instruction : "").append("\n\"\"\"\n\n");
+        if (agentSummary != null && !agentSummary.isBlank())
+        {
+            sb.append("Agent Claimed Summary:\n\"\"\"\n").append(agentSummary).append("\n\"\"\"\n\n");
+        }
+        sb.append("Executed Tool Calls / Actions:\n").append(actionsStr);
+        return sb.toString();
     }
 
     @Override

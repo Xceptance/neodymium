@@ -785,10 +785,13 @@ For every extracted action, the primary LLM generates 2–3 candidate locators r
 3. **Identity Check**: The element returned by the candidate locator must be the **exact same `WebElement` instance** (`matchedElement.equals(targetElement)`).
 4. **Volatile ID Protection**: Ignores dynamic/framework auto-generated IDs using `VolatileIdDetector`.
 
-#### D. External Quality Judge (`QualityJudgeStep` - Optional / Second Opinion)
+#### D. External Quality Judge (`QualityJudgeToolInterceptor` / `QualityJudgeStep` - Pre-Action Deliberation)
 When an independent "second opinion" model is desired:
-* **Execution**: Executes `QualityJudgePrompt` passing the proposed primary action, candidate locators, and full DOM tree context.
-* **Output**: Returns structured `QualityJudgeResult` JSON containing `judgment` (`APPROVED`, `REFINED`, `REJECTED`), `chosenLocator`, `chosenValue`, `isRegex`, `confidence`, and `reasoning`.
+* **Pre-Action Guard & Interceptor**: In the unified tooling architecture, `QualityJudgeToolInterceptor` guards browser tool calls before execution. It enforces Journey Fidelity policies (e.g. prohibiting URL jumps or script mutations during interactive workflows).
+* **0ms Fast-Path Gating**: If the proposed CSS selector matches **exactly 1 element** in the live DOM and scores a high resilience rating (`LocatorImprover.scoreLocator(selector) >= 8`), it passes immediately with 0ms overhead, avoiding redundant LLM calls.
+* **Cognitive Deliberation on Ambiguity & Volatility**: If a selector matches multiple elements (`size > 1`) or has a fragile/volatile score (`score < 6`), the interceptor extracts candidate locators from the target element's DOM attributes and invokes the LLM Judge (`QualityJudgePrompt`) with the current DOM context and step instruction to pick or refine the optimal selector.
+* **Output & Rewriting**: The Judge returns structured `QualityJudgeResult` JSON (`APPROVED`, `REFINED`, `REJECTED`). When refined, the tool call selector is dynamically rewritten with the superior locator prior to browser dispatch.
+* **Telemetry**: All Judge invocations and token usage are tracked in `ExecutionContext.KEY_JUDGE_CALL_COUNT` and `ExecutionContext.KEY_JUDGE_TOKEN_USAGE`.
 
 ```properties
 # Enables or disables the external LLM Quality Judge ("second opinion") step.
@@ -1097,9 +1100,15 @@ neodymium.ai.visual.stabilityThreshold=0.999
 
 ### 6.3 Post-Action AI Outcome Verification
 
-After executing SUT actions for a step, the framework performs a **Post-Action Outcome Verification**:
-* **Always Visual**: Captures SUT state at `VISUAL` level to record baseline images and compute SSIM baselines.
-* **Advisory & Diagnostic by Design (Soft Failures)**: Verification failures perform post-step semantic auditing and diagnostic scoring. They are reported as warnings at the end of the test case, allowing developers to inspect discrepancies without crashing the test run.
+After executing SUT actions for a step, the framework performs a **Post-Action Outcome Verification** (`VerifyOutcomeStep` & `VerificationPrompt`):
+* **Dual-State Multimodal Audit**: Evaluates the pre-execution initial state against the post-execution state (including live screenshots and executed browser `ToolCall`s / actions) across three independent rubrics:
+  1. `intentMatch`: Whether the observed DOM mutations and screen changes fulfill the step instruction.
+  2. `visualDelta`: Whether visual changes are coherent and free of layout destruction.
+  3. `absenceOfErrors`: Whether error banners, toast warnings, or validation messages unexpectedly appeared.
+* **Failure Termination & Reporting Modes**: Configured via `neodymium.ai.semanticVerification.failOnError`:
+  * **Strict Failure Mode (Default: `true`)**: Throws `VerificationFailureException` upon verification failure, failing the step conclusively without attempting in-place retry/mutation (since SUT application state has already changed).
+  * **Diagnostic Advisory Mode (`false`)**: Records failures and rubric evaluations into `verificationWarnings` as advisory diagnostics, allowing developers to inspect discrepancies at the end of the test without halting execution.
+* **Deterministic Replay Exemption**: During offline recorded replay (`ExecutionMode.REPLAY_STRICT`, `ExecutionMode.REPLAY_WITH_HEALING`), outcome verification is automatically bypassed unless online self-healing was actively engaged for the step.
 
 ---
 
@@ -1304,6 +1313,7 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 * `neodymium.ai.linter.enabled` - (Boolean) Upfront Playbook Pre-Flight Linter. Aliases: `neodymium.ai.prelinter.enabled`, `neodymium.ai.prelint.enabled`. (Default: `true`)
 * `neodymium.ai.pesap.enabled` - (Boolean) Pre-Execution Structural Analysis & Prediction. (Default: `true`)
 * `neodymium.ai.semanticVerification.enabled` - (Boolean) SSIM and Visual Anchor validation gates. (Default: `true`)
+* `neodymium.ai.semanticVerification.failOnError` - (Boolean) Whether outcome verification failure throws `VerificationFailureException` to fail the step, or logs soft diagnostic warnings. (Default: `true`)
 * `neodymium.ai.visualRca.enabled` - (Boolean) Visual Root Cause Analysis on failure. (Default: `true`)
 * `neodymium.ai.locatorImprover.enabled` - (Boolean) Automatic locator upgrading for recorded playbooks. (Default: `true`)
 * `neodymium.ai.judge.enabled` - (Boolean) LLM Quality Judge second-opinion evaluation. (Default: `false`)
