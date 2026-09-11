@@ -33,7 +33,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executors;
+
+import com.xceptance.neodymium.aura.AuraInteractiveService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -434,17 +437,12 @@ public final class InteractiveConsoleServer
 
                 if (fileName != null)
                 {
-                    if (fileName.contains("/") || fileName.contains("\\") || fileName.contains(".."))
-                    {
-                        exchange.sendResponseHeaders(403, -1);
-                        return;
-                    }
-                    final String screenshotsDir = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
-                    final Path file = Paths.get(screenshotsDir, fileName);
-                    if (Files.exists(file))
+                    final AuraInteractiveService interactiveService = new AuraInteractiveService();
+                    final Optional<File> targetFile = interactiveService.getScreenshotFile(fileName, null);
+                    if (targetFile.isPresent())
                     {
                         exchange.getResponseHeaders().set("Content-Type", "image/png");
-                        final byte[] bytes = Files.readAllBytes(file);
+                        final byte[] bytes = Files.readAllBytes(targetFile.get().toPath());
                         exchange.sendResponseHeaders(200, bytes.length);
                         try (final OutputStream os = exchange.getResponseBody())
                         {

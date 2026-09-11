@@ -236,4 +236,64 @@ public final class LlmClientAndRegistryTest
         System.clearProperty("neodymium.ai.provider");
         System.clearProperty("neodymium.ai.visual.provider");
     }
+
+    /**
+     * Verifies that LlmProviderFactory fails fast with a helpful message if provider is unknown.
+     */
+    @Test
+    public void testLlmProviderFactoryThrowsOnUnknownProvider()
+    {
+        System.setProperty("neodymium.ai.provider", "unknown-ai-provider");
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
+
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            LlmProviderFactory.createProvider("global", config);
+        });
+
+        assertTrue(exception.getMessage().contains("Unknown LLM provider 'unknown-ai-provider'"));
+        assertTrue(exception.getMessage().contains("neodymium.ai.provider.unknown-ai-provider.class"));
+
+        System.clearProperty("neodymium.ai.provider");
+    }
+
+    /**
+     * Verifies that LlmProviderFactory fails fast with a helpful message if provider is blank.
+     */
+    @Test
+    public void testLlmProviderFactoryThrowsOnBlankProvider()
+    {
+        System.setProperty("neodymium.ai.provider", "   ");
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
+
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            LlmProviderFactory.createProvider("global", config);
+        });
+
+        assertTrue(exception.getMessage().contains("LLM provider is not configured"));
+
+        System.clearProperty("neodymium.ai.provider");
+    }
+
+    /**
+     * Verifies that LlmProviderFactory fails fast if configured class cannot be found on classpath.
+     */
+    @Test
+    public void testLlmProviderFactoryThrowsOnClassNotFound()
+    {
+        System.setProperty("neodymium.ai.provider", "custom");
+        System.setProperty("neodymium.ai.provider.custom.class", "com.doesnotexist.FakeProvider");
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
+
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            LlmProviderFactory.createProvider("global", config);
+        });
+
+        assertTrue(exception.getMessage().contains("was not found on the classpath"));
+
+        System.clearProperty("neodymium.ai.provider");
+        System.clearProperty("neodymium.ai.provider.custom.class");
+    }
 }

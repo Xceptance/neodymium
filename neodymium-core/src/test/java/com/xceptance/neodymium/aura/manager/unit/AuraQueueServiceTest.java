@@ -20,7 +20,6 @@ package com.xceptance.neodymium.aura.manager.unit;
 
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
-import com.xceptance.neodymium.aura.AuraReportingService;
 import java.lang.reflect.Field;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Assertions;
@@ -38,16 +37,14 @@ import org.junit.jupiter.api.Test;
 @Tag("aura-manager")
 public final class AuraQueueServiceTest
 {
-    private AuraReportingService reportingService;
     private AuraInteractiveService interactiveService;
     private AuraQueueService queueService;
 
     @BeforeEach
     public void setUp()
     {
-        reportingService = new AuraReportingService();
         interactiveService = new AuraInteractiveService();
-        queueService = new AuraQueueService(reportingService, interactiveService);
+        queueService = new AuraQueueService(interactiveService);
     }
 
     @Test

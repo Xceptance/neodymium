@@ -94,7 +94,7 @@ public enum ExecutionMode
      */
     public boolean isReplay()
     {
-        return this == LLM_RECORDING || this == REPLAY_WITH_HEALING || this == REPLAY_STRICT;
+        return this == REPLAY_WITH_HEALING || this == REPLAY_STRICT;
     }
 
     /**

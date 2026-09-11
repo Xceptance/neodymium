@@ -43,8 +43,7 @@
 
 	<modules>
 		<module>neodymium-core</module>
-		<module>aura-report-manager</module>
-		<module>aura-test-manager</module>
+		<module>aura-manager</module>
 	</modules>
 
 	<properties>

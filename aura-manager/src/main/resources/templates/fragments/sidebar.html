@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Collapsible Sidebar Navigation Fragment -->
+<aside th:fragment="sidebar" id="mainSidebar">
+    <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()" title="Collapse / Expand Navigation Panel">
+        <span class="material-symbols-outlined">chevron_left</span>
+    </button>
+
+    <div class="logo-container">
+        <div class="logo-icon"><span class="material-symbols-outlined">auto_awesome</span></div>
+        <div class="logo-text">Neodymium <span>Aura Manager</span></div>
+    </div>
+
+    <div class="nav-group-label">Workspace & Execution</div>
+    <nav>
+        <a class="nav-item-btn" id="navAuraManager" 
+           th:classappend="${activeTab == 'AuraTestManager'} ? ' active' : ''"
+           href="/" 
+           onclick="setActiveNavBtn(this)"
+           title="Playbooks & Test Queue">
+            <span class="material-symbols-outlined">play_circle</span> <span>Playbooks & Queue</span>
+        </a>
+    </nav>
+
+    <div class="nav-group-label" style="margin-top: 1rem;">Analytics & Reports</div>
+    <nav>
+        <a class="nav-item-btn" id="navRunsList" 
+           th:classappend="${activeTab == 'Directory'} ? ' active' : ''"
+           href="/report" 
+           onclick="setActiveNavBtn(this)"
+           title="Overview of Runs">
+            <span class="material-symbols-outlined">format_list_bulleted</span> <span>Run History</span>
+        </a>
+
+        <a class="nav-item-btn" id="navTestBase" 
+           th:classappend="${activeTab == 'TestBase'} ? ' active' : ''"
+           href="/test-base" 
+           onclick="setActiveNavBtn(this)"
+           title="Comprehensive Test Base">
+            <span class="material-symbols-outlined">database</span> <span>Test Base</span>
+        </a>
+    </nav>
+
+    <a class="run-context-card" id="sidebarContextCard" href="/report" style="text-decoration: none; cursor: pointer;">
+        <div class="context-symbolic-icon" title="Active Context">
+            <span class="material-symbols-outlined">science</span>
+        </div>
+        <div class="context-full-details">
+            <div class="status-indicator">
+                <div class="pulse-dot"></div>
+                <span>Active Run Context</span>
+            </div>
+            <div style="font-weight: 700; color: var(--text-main); margin-top: 0.2rem;" id="sidebarActiveBatchName" th:text="${activeBatchName ?: 'Unknown'}">Unknown</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+                <span id="sidebarActiveRunId" th:text="${activeRunId != null ? 'Run #' + activeRunId : 'Run #RUN_ID'}">Run #RUN_ID</span>
+                <span class="tag-chip" id="sidebarActiveEnv" th:text="${activeEnv ?: 'Unknown'}">Unknown</span>
+            </div>
+        </div>
+    </a>
+</aside>
+
+</body>
+</html>

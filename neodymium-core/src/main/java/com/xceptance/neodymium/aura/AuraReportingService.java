@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.google.gson.Gson;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import org.neodymium.util.Neodymium;
@@ -53,6 +54,7 @@ import org.neodymium.ai.config.AiConfiguration;
 public final class AuraReportingService
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraReportingService.class);
+    private static final Gson GSON = new Gson();
 
     private final AtomicReference<Process> activeProcess = new AtomicReference<>(null);
     private AuraInteractiveService interactiveService;
@@ -122,7 +124,7 @@ public final class AuraReportingService
                         try
                         {
                             final String meta = Files.readString(metadataFile.toPath(), StandardCharsets.UTF_8);
-                            final Map<?, ?> map = AuraHttpUtils.gson.fromJson(meta, Map.class);
+                            final Map<?, ?> map = GSON.fromJson(meta, Map.class);
                             if (map != null)
                             {
                                 if (map.containsKey("status"))
@@ -189,7 +191,7 @@ public final class AuraReportingService
                                     .parseString(meta).getAsJsonObject();
                             if (metaObj.has("runConfig") && !metaObj.get("runConfig").isJsonNull())
                             {
-                                runConfigRaw = AuraHttpUtils.gson.toJson(metaObj.get("runConfig"));
+                                runConfigRaw = GSON.toJson(metaObj.get("runConfig"));
                             }
                         }
                         catch (final Exception e)
@@ -451,7 +453,7 @@ public final class AuraReportingService
                 metadataMap.put("runConfig", req);
             }
 
-            final String metadataContent = AuraHttpUtils.gson.toJson(metadataMap);
+            final String metadataContent = GSON.toJson(metadataMap);
             Files.writeString(metadataFile.toPath(), metadataContent, StandardCharsets.UTF_8);
 
             // Write full execution log
@@ -535,7 +537,7 @@ public final class AuraReportingService
                                 testData.put("status", status);
                                 testData.put("steps", Collections.emptyList());
                                 
-                                final String json = AuraHttpUtils.gson.toJson(testData);
+                                final String json = GSON.toJson(testData);
                                 Files.writeString(new File(destDir, "console-execution-" + (testCounter++) + ".json").toPath(), json, StandardCharsets.UTF_8);
                             }
                         }
@@ -547,7 +549,7 @@ public final class AuraReportingService
                             testData.put("status", status);
                             testData.put("steps", Collections.emptyList());
                             
-                            final String json = AuraHttpUtils.gson.toJson(testData);
+                            final String json = GSON.toJson(testData);
                             Files.writeString(new File(destDir, "console-execution-" + (testCounter++) + ".json").toPath(), json, StandardCharsets.UTF_8);
                         }
                     }
@@ -595,7 +597,7 @@ public final class AuraReportingService
                 try
                 {
                     final String content = Files.readString(cf.toPath(), StandardCharsets.UTF_8);
-                    final Map<?, ?> map = AuraHttpUtils.gson.fromJson(content, Map.class);
+                    final Map<?, ?> map = GSON.fromJson(content, Map.class);
                     if (map != null && map.containsKey("testName"))
                     {
                         final String testName = String.valueOf(map.get("testName"));

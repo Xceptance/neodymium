@@ -1,0 +1,833 @@
+// ============================================================================
+// Neodymium Aura Dashboard - Test Execution & Status Polling Engine
+// ============================================================================
+
+var wasInLiveRunView = false;
+var lastKnownRunning = false;
+var pollingIntervalId = null;
+var lastLogIndex = 0;
+var lastEventIndex = 0;
+var currentPollSession = 0;
+var serverSessionId = null;
+
+window.wasInLiveRunView = wasInLiveRunView;
+window.lastKnownRunning = lastKnownRunning;
+
+function openInteractiveConsoleViewLive(url) {
+    let targetUrl = url;
+    if (url && url.includes('interactive_console.html') && !url.includes('dataUrl=')) {
+        const buster = (typeof activeRunStats !== 'undefined' && (activeRunStats.activeTestId || activeRunStats.activeFile)) || Date.now();
+        targetUrl = url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(buster);
+    }
+    if (typeof openInteractiveConsoleView === 'function') {
+        openInteractiveConsoleView(targetUrl);
+    }
+}
+window.openInteractiveConsoleViewLive = openInteractiveConsoleViewLive;
+
+function renderLiveTestList() {
+    const testsList = document.getElementById('historyTestsList');
+    if (!testsList) return;
+
+    let liveTests = activeRunStats.tests || [];
+    if (liveTests.length === 0 && activeRunStats.activeFile) {
+        liveTests = [{ file: activeRunStats.activeFile, id: null }];
+    }
+
+    if (liveTests.length === 0) {
+        testsList.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px;">No tests available.</div>`;
+        return;
+    }
+
+    const activeFile = activeRunStats.activeFile || '';
+    const activeTestId = activeRunStats.activeTestId || '';
+
+    let activeIdx = -1;
+    if (activeFile) {
+        if (activeTestId) {
+            const normalizeId = (id) => {
+                if (!id) return '';
+                let s = String(id).trim().toLowerCase();
+                if (s.startsWith('dataset ')) {
+                    s = s.substring(8).trim();
+                }
+                return s;
+            };
+            const normActive = normalizeId(activeTestId);
+            activeIdx = liveTests.findIndex(t => t.file === activeFile && t.id && normalizeId(t.id) === normActive);
+        }
+        if (activeIdx < 0) {
+            activeIdx = liveTests.findIndex(t => t.file === activeFile);
+        }
+    }
+
+    testsList.innerHTML = liveTests.map((t, idx) => {
+        const isCurrent = (activeIdx >= 0) ? (idx === activeIdx) : (t.file === activeFile);
+        const isDone = liveCompletedFiles.has(t.file) || (activeIdx >= 0 && idx < activeIdx);
+        const isPending = !isDone && !isCurrent;
+
+        let cardStyle = '';
+        let iconHtml = '';
+        let onclick = '';
+        let cursor = 'pointer';
+
+        if (isCurrent) {
+            cardStyle = 'background-color: var(--bg-hover); border-left: 3px solid var(--accent);';
+            iconHtml = `<span class="material-symbols-outlined spinner" style="color: var(--accent); margin-left: 6px; flex-shrink: 0; font-size: 14px;">progress_activity</span>`;
+            onclick = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
+        } else if (isDone) {
+            cardStyle = 'opacity: 0.80;';
+            iconHtml = `<span class="material-symbols-outlined" style="color: var(--success, #22c55e); margin-left: 6px; flex-shrink: 0; font-size: 14px;">check_circle</span>`;
+            onclick = `onclick="openInteractiveConsoleViewLive('/interactive_console.html')"`;
+        } else {
+            cardStyle = 'opacity: 0.40; pointer-events: none;';
+            iconHtml = `<span class="material-symbols-outlined" style="color: var(--text-secondary); margin-left: 6px; flex-shrink: 0; font-size: 14px;">schedule</span>`;
+            cursor = 'default';
+        }
+
+        const label = t.file ? t.file.replace(/\\/g, '/').split('/').pop() : t.file;
+        
+        let datasetPart = '';
+        if (t.id) {
+            const isNumeric = /^\d+$/.test(String(t.id).trim());
+            datasetPart = isNumeric ? ` · Dataset ${t.id}` : ` · ${t.id}`;
+        }
+
+        const cardClass = isCurrent ? 'test-card active' : 'test-card';
+        return `<div class="${cardClass}" style="cursor: ${cursor}; ${cardStyle}" ${onclick}>
+            <div class="test-card-title-row" style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="test-card-label" style="word-break: break-all; flex: 1;" title="${t.file}">${label}${datasetPart}</span>
+                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                    ${iconHtml}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    requestAnimationFrame(() => {
+        const activeCard = testsList.querySelector('.test-card.active');
+        if (activeCard) {
+            activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+}
+window.renderLiveTestList = renderLiveTestList;
+
+function openCurrentRunView() {
+    wasInLiveRunView = true;
+    window.wasInLiveRunView = true;
+    const colRuns = document.getElementById('colRuns');
+    if (colRuns) {
+        colRuns.classList.remove('col-minimized');
+        colRuns.style.width = '320px';
+    }
+
+    const colTests = document.getElementById('colTests');
+    const historyResizer2 = document.getElementById('historyResizer2');
+    if (colTests) {
+        colTests.classList.remove('col-minimized');
+        colTests.style.display = 'flex';
+        colTests.style.width = '280px';
+    }
+    if (historyResizer2) historyResizer2.style.display = 'block';
+
+    renderLiveTestList();
+    openInteractiveConsoleViewLive('/interactive_console.html');
+}
+window.openCurrentRunView = openCurrentRunView;
+
+function updateRunButtons() {
+    const runQueueBtn = document.getElementById('runQueueBtn');
+    const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
+    const stopQueueBtn = document.getElementById('stopQueueBtn');
+
+    if (isRunning) {
+        if (runQueueBtn) {
+            runQueueBtn.classList.add('d-none');
+            runQueueBtn.classList.remove('d-flex');
+        }
+        if (runCurrentTestBtn) {
+            runCurrentTestBtn.classList.add('d-none');
+            runCurrentTestBtn.classList.remove('d-flex');
+        }
+        if (stopQueueBtn) {
+            stopQueueBtn.classList.remove('d-none');
+            stopQueueBtn.classList.add('d-flex');
+        }
+    } else {
+        if (stopQueueBtn) {
+            stopQueueBtn.classList.add('d-none');
+            stopQueueBtn.classList.remove('d-flex');
+        }
+        if (runQueueBtn) {
+            runQueueBtn.classList.remove('d-none');
+            runQueueBtn.classList.add('d-flex');
+        }
+        if (activeEditingFile && runCurrentTestBtn) {
+            runCurrentTestBtn.classList.remove('d-none');
+            runCurrentTestBtn.classList.add('d-flex');
+        } else if (runCurrentTestBtn) {
+            runCurrentTestBtn.classList.add('d-none');
+            runCurrentTestBtn.classList.remove('d-flex');
+        }
+    }
+}
+window.updateRunButtons = updateRunButtons;
+
+function stopQueue() {
+    fetch('/api/stop', { method: 'POST' }).catch(e => console.error('Failed to stop queue', e));
+    isRunning = false;
+    window.isRunning = false;
+    updateRunButtons();
+}
+window.stopQueue = stopQueue;
+
+function prepareClientForExecution() {
+    isRunning = true;
+    consoleOpened = true;
+    window.isRunning = true;
+    window.consoleOpened = true;
+    currentPollSession++;
+    lastLogIndex = 0;
+    lastEventIndex = 0;
+
+    activeRunStats.running = true;
+    activeRunStats.startTime = new Date();
+    activeRunStats.total = 0;
+    activeRunStats.passed = 0;
+    activeRunStats.failed = 0;
+    activeRunStats.skipped = 0;
+    activeRunStats.activeFile = null;
+    activeRunStats.activeTestId = null;
+    activeRunStats.tests = [];
+    liveCompletedFiles.clear();
+    liveLastActiveFile = null;
+
+    const runSpinner = document.getElementById('runSpinner');
+    const terminalConsole = document.getElementById('terminalConsole');
+    if (runSpinner) runSpinner.style.display = 'inline-block';
+    if (typeof updateCenterLayout === 'function') updateCenterLayout();
+    updateRunButtons();
+    if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
+    hasShownStartMessage = false;
+}
+window.prepareClientForExecution = prepareClientForExecution;
+
+async function rerunFullRun(runConfigJson) {
+    if (isRunning) return;
+    let payload;
+    try {
+        payload = JSON.parse(runConfigJson);
+    } catch (e) {
+        if (typeof showToast === 'function') showToast('Invalid run configuration — cannot rerun.', 'error');
+        return;
+    }
+
+    prepareClientForExecution();
+    activeRunStats.tests = (payload.datasets || []).map(d => ({ file: d.file, id: d.id }));
+
+    try {
+        const res = await fetch('/api/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.error) {
+            if (typeof showToast === 'function') showToast('Re-run failed to start: ' + data.error, 'error');
+            isRunning = false;
+            window.isRunning = false;
+            activeRunStats.running = false;
+            consoleOpened = false;
+            window.consoleOpened = false;
+            if (typeof updateCenterLayout === 'function') updateCenterLayout();
+        }
+    } catch (e) {
+        if (typeof showToast === 'function') showToast('Failed to start re-run: ' + e.message, 'error');
+        isRunning = false;
+        window.isRunning = false;
+        activeRunStats.running = false;
+        consoleOpened = false;
+        window.consoleOpened = false;
+        if (typeof updateCenterLayout === 'function') updateCenterLayout();
+    }
+}
+window.rerunFullRun = rerunFullRun;
+
+async function rerunSingleTest(payloadJson) {
+    await rerunFullRun(payloadJson);
+}
+window.rerunSingleTest = rerunSingleTest;
+
+function isAiLogLine(line) {
+    if (!line) return false;
+
+    const lower = line.toLowerCase();
+
+    const isMavenLog = lower.includes('[info] command: mvn') ||
+        lower.includes('[info] --<') ||
+        lower.includes('[info] building ') ||
+        lower.includes('[info] --- maven-') ||
+        lower.includes('[info] skip non existing resource') ||
+        lower.includes('[info] deleting ');
+    if (isMavenLog) return false;
+
+    const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║│├└─═▶✅❌\?]/u;
+    if (emojiPattern.test(line)) {
+        return true;
+    }
+
+    const aiKeywords = [
+        'aura',
+        'pesap',
+        'playbook',
+        'llmclient',
+        'aiagent',
+        'actionexecutor',
+        'aibrowser',
+        'aiassertion',
+        'reasoning',
+        'token usage',
+        'execution statistics',
+        'llm calls',
+        'input tokens',
+        'output tokens',
+        'total tokens',
+        'context levels',
+        'escalations',
+        'direct parses',
+        'step',
+        'open http',
+        'navigating to',
+        'capturing',
+        'sending prompt',
+        'sending multimodal',
+        'sending chat message',
+        'tokens:',
+        'llm response',
+        'llm reasoning',
+        'parsed',
+        'llm proposed actions',
+        'action{type=',
+        '[exec]',
+        'executing action',
+        'resolved using strategy',
+        'assertion passed',
+        'all steps completed successfully',
+        'playbook saved',
+        'navigating to:',
+        'simplified dom size'
+    ];
+
+    if (aiKeywords.some(keyword => lower.includes(keyword))) {
+        return true;
+    }
+
+    return false;
+}
+window.isAiLogLine = isAiLogLine;
+
+function toggleAiOnly(checked) {
+    logFilterAiOnly = checked;
+    window.logFilterAiOnly = logFilterAiOnly;
+    refreshLogFiltering();
+}
+window.toggleAiOnly = toggleAiOnly;
+
+function toggleErrorsOnly(checked) {
+    logFilterErrorsOnly = checked;
+    window.logFilterErrorsOnly = logFilterErrorsOnly;
+    refreshLogFiltering();
+}
+window.toggleErrorsOnly = toggleErrorsOnly;
+
+function refreshLogFiltering() {
+    const terminalConsole = document.getElementById('terminalConsole');
+    if (!terminalConsole) return;
+    const logLines = terminalConsole.querySelectorAll('.log-line');
+    logLines.forEach(line => {
+        const text = line.innerText;
+        const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]');
+
+        const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text);
+
+        if (matchesErrorFilter && matchesAiFilter) {
+            line.style.display = 'block';
+        } else {
+            line.style.display = 'none';
+        }
+    });
+}
+window.refreshLogFiltering = refreshLogFiltering;
+
+function appendLog(line) {
+    const terminalConsole = document.getElementById('terminalConsole');
+    if (!terminalConsole) return;
+    if (terminalConsole.innerHTML.includes('Console idle.') || terminalConsole.innerHTML.includes('Connecting to run stream...')) {
+        terminalConsole.innerHTML = '';
+        if (logFilterAiOnly && !hasShownStartMessage) {
+            hasShownStartMessage = true;
+            window.hasShownStartMessage = true;
+            const startLine = '🤖 Test runner started. Compiling and initializing AI tests (this may take a few seconds)...';
+            terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line log-info" style="display: block; margin: 0; padding: 0;">${startLine}</div>`);
+        }
+    }
+    const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
+
+    const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+    const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
+
+    const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
+    const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
+
+    terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
+    terminalConsole.scrollTop = terminalConsole.scrollHeight;
+}
+window.appendLog = appendLog;
+
+function copyTerminalOutput() {
+    const terminalConsole = document.getElementById('terminalConsole');
+    if (!terminalConsole) return;
+
+    const logLines = terminalConsole.querySelectorAll('.log-line');
+    let textToCopy = '';
+
+    if (logLines.length > 0) {
+        const visibleLines = [];
+        logLines.forEach(line => {
+            if (line.style.display !== 'none' && window.getComputedStyle(line).display !== 'none') {
+                visibleLines.push(line.innerText || line.textContent);
+            }
+        });
+        textToCopy = visibleLines.join('\n');
+    } else {
+        textToCopy = terminalConsole.innerText || terminalConsole.textContent;
+    }
+
+    const copyIcon = document.getElementById('copyTerminalIcon');
+    const copyText = document.getElementById('copyTerminalText');
+
+    const showFeedback = () => {
+        if (copyIcon && copyText) {
+            copyIcon.textContent = 'check';
+            copyText.textContent = 'Copied!';
+            setTimeout(() => {
+                copyIcon.textContent = 'content_copy';
+                copyText.textContent = 'Copy';
+            }, 2000);
+        }
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(showFeedback).catch(() => {
+            fallbackCopyText(textToCopy, showFeedback);
+        });
+    } else {
+        fallbackCopyText(textToCopy, showFeedback);
+    }
+}
+window.copyTerminalOutput = copyTerminalOutput;
+
+function fallbackCopyText(text, callback) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        if (callback) callback();
+    } catch (err) {
+        console.error('Fallback copy failed', err);
+    }
+    document.body.removeChild(textArea);
+}
+
+function startPolling() {
+    if (pollingIntervalId) {
+        clearTimeout(pollingIntervalId);
+    }
+    pollStatus();
+}
+window.startPolling = startPolling;
+
+async function pollStatus() {
+    let thisSession = currentPollSession;
+    try {
+        const response = await fetch('/api/status?clientId=' + encodeURIComponent(clientId) + '&lastIndex=' + lastLogIndex + '&lastEventIndex=' + lastEventIndex);
+        if (thisSession !== currentPollSession) return;
+
+        if (response.ok) {
+            const data = await response.json();
+
+            if (data.logs && data.logs.length > 0) {
+                data.logs.forEach(log => appendLog(log));
+            }
+            if (data.newIndex !== undefined) {
+                lastLogIndex = data.newIndex;
+            }
+
+            if (data.events && data.events.length > 0) {
+                data.events.forEach(event => {
+                    if (event.type === 'reportReady') {
+                        const reportUrl = `/run-report?runId=${encodeURIComponent(event.reportId)}`;
+                        if (typeof showToast === 'function') {
+                            showToast(`Execution finished! <a href="${reportUrl}" style="color: var(--accent); text-decoration: underline; margin-left: 6px;">View Report</a>`, 'success');
+                        }
+                    }
+                    if (event.type === 'interactiveConsoleReady') {
+                        openInteractiveConsoleViewLive(event.url);
+                    }
+                });
+            }
+            if (data.newEventIndex !== undefined) {
+                lastEventIndex = data.newEventIndex;
+            }
+
+            if (data.status) {
+                const statusData = data.status;
+
+                if (statusData.tests) {
+                    activeRunStats.tests = statusData.tests;
+                }
+                if (statusData.completedFiles) {
+                    liveCompletedFiles = new Set(statusData.completedFiles);
+                    window.liveCompletedFiles = liveCompletedFiles;
+                }
+
+                if (serverSessionId === null) {
+                    serverSessionId = statusData.sessionId;
+                } else if (serverSessionId !== statusData.sessionId) {
+                    window.location.reload();
+                    return;
+                }
+
+                const statsPanel = document.getElementById('statsPanel');
+                if (statsPanel) {
+                    statsPanel.style.display = (statusData.running || statusData.total > 0) ? 'block' : 'none';
+                }
+
+                const elTotal = document.getElementById('statsTotalExecution');
+                const elPassed = document.getElementById('statsPassed');
+                const elFailed = document.getElementById('statsFailed');
+                const elSkipped = document.getElementById('statsSkipped');
+                if (elTotal) elTotal.innerText = statusData.total;
+                if (elPassed) elPassed.innerText = statusData.passed;
+                if (elFailed) elFailed.innerText = statusData.failed;
+                if (elSkipped) elSkipped.innerText = statusData.skipped || 0;
+
+                activeRunStats.running = statusData.running;
+                activeRunStats.total = statusData.total;
+                activeRunStats.passed = statusData.passed;
+                activeRunStats.failed = statusData.failed;
+                activeRunStats.skipped = statusData.skipped || 0;
+                if (statusData.running && !activeRunStats.startTime) {
+                    activeRunStats.startTime = new Date();
+                }
+                const currentStatsStr = `${activeRunStats.running}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${activeRunStats.skipped}`;
+                if (window._lastStatsStr !== currentStatsStr) {
+                    window._lastStatsStr = currentStatsStr;
+                }
+
+                try {
+                    isRunning = statusData.running;
+                    window.isRunning = isRunning;
+                    updateRunButtons();
+                    const runSpinner = document.getElementById('runSpinner');
+                    if (isRunning) {
+                        lastKnownRunning = true;
+                        window.lastKnownRunning = true;
+                        if (activeRunStats.activeFile !== statusData.activeFile || activeRunStats.activeTestId !== statusData.activeTestId) {
+                            if (activeRunStats.activeFile && activeRunStats.activeFile !== statusData.activeFile) {
+                                liveCompletedFiles.add(activeRunStats.activeFile);
+                            }
+                            activeRunStats.activeFile = statusData.activeFile;
+                            activeRunStats.activeTestId = statusData.activeTestId;
+                        }
+
+                        if (runSpinner) runSpinner.style.display = 'inline-block';
+                        const sidebarBadge = document.getElementById('sidebarRunBadge');
+                        if (sidebarBadge) {
+                            sidebarBadge.style.display = 'flex';
+                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
+                        }
+                    } else {
+                        if (runSpinner) runSpinner.style.display = 'none';
+                        const sidebarBadge = document.getElementById('sidebarRunBadge');
+                        if (sidebarBadge) sidebarBadge.style.display = 'none';
+
+                        activeRunStats.running = false;
+                        activeRunStats.startTime = null;
+
+                        if (wasInLiveRunView) {
+                            const icView = document.getElementById('interactiveConsoleView');
+                            if (icView && icView.style.display === 'flex') {
+                                if (typeof showView === 'function') showView('dashboardView');
+                            }
+                            wasInLiveRunView = false;
+                            window.wasInLiveRunView = false;
+                        }
+
+                        if (lastKnownRunning) {
+                            if (typeof updateCenterLayout === 'function') updateCenterLayout();
+                        }
+                    }
+                    lastKnownRunning = statusData.running;
+                    window.lastKnownRunning = lastKnownRunning;
+                } catch (err) {
+                    console.error('Error updating UI state from status:', err);
+                }
+            }
+            const apiKeyBanner = document.getElementById('apiKeyBanner');
+            if (apiKeyBanner && apiKeyBanner.style.display === 'block' && document.getElementById('apiKeyBannerText').innerHTML.includes('offline')) {
+                apiKeyBanner.style.display = 'none';
+            }
+        } else {
+            console.error("Polling response error:", response.status);
+            const apiKeyBanner = document.getElementById('apiKeyBanner');
+            const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+            if (apiKeyBanner && apiKeyBannerText) {
+                apiKeyBanner.style.display = 'block';
+                apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+            }
+        }
+    } catch (err) {
+        console.error("Polling fetch error:", err);
+        const apiKeyBanner = document.getElementById('apiKeyBanner');
+        const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+        if (apiKeyBanner && apiKeyBannerText) {
+            apiKeyBanner.style.display = 'block';
+            apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+        }
+    } finally {
+        if (thisSession !== currentPollSession) return;
+        if (!disconnected) {
+            pollingIntervalId = setTimeout(pollStatus, 2000);
+        }
+    }
+}
+window.pollStatus = pollStatus;
+
+window.addEventListener('beforeunload', (event) => {
+    if (isRunning) {
+        event.preventDefault();
+        event.returnValue = 'A test queue is currently running. If you close this tab, the server will shut down and the test execution will be terminated.';
+        return event.returnValue;
+    }
+});
+
+function sendDisconnect() {
+    if (!disconnected) {
+        disconnected = true;
+        window.disconnected = true;
+        navigator.sendBeacon('/api/disconnect?clientId=' + encodeURIComponent(clientId));
+    }
+}
+window.sendDisconnect = sendDisconnect;
+
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.action === 'stepSelected') {
+        if (historyNavState === 3) {
+            if (typeof applyHistoryState === 'function') applyHistoryState(4);
+        }
+    } else if (event.data && event.data.action === 'rerunTest') {
+        if (event.data.testId) {
+            const testFile = event.data.testId.split('.')[0] + '.yaml';
+            if (typeof runTestByFile === 'function') runTestByFile(testFile);
+            if (typeof showToast === 'function') showToast("Triggered rerun for " + testFile, "info");
+        }
+    }
+});
+
+window.addEventListener('pagehide', sendDisconnect);
+window.addEventListener('unload', sendDisconnect);
+
+// ============================================================================
+// Per-Queue-Item Browser Selection Modal Handler
+// ============================================================================
+
+function updateItemBrowserCount() {
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const countText = document.getElementById('itemBrowserCountText');
+    if (!countText) return;
+
+    if (inheritSwitch && inheritSwitch.checked) {
+        countText.textContent = "Inheriting global profiles";
+        return;
+    }
+    const checked = document.querySelectorAll('#itemBrowserCustomList .item-profile-cb:checked');
+    const cnt = checked.length;
+    countText.textContent = cnt + (cnt === 1 ? ' profile selected' : ' profiles selected');
+}
+
+function openItemBrowserModal(event, index, file, id, customProfilesCsv) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const modal = document.getElementById('itemBrowserModal');
+    if (!modal) return;
+
+    document.getElementById('itemBrowserTargetIndex').value = index;
+    const headerTitle = document.getElementById('itemBrowserHeaderTitle');
+    if (headerTitle) {
+        headerTitle.textContent = 'Item #' + (parseInt(index, 10) + 1) + ' Profiles';
+    }
+    document.getElementById('itemBrowserTargetFile').textContent = file || '';
+    document.getElementById('itemBrowserTargetId').textContent = id ? id : '';
+
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const customList = document.getElementById('itemBrowserCustomList');
+    const inheritHint = document.getElementById('itemBrowserInheritHint');
+
+    const customProfiles = (customProfilesCsv && customProfilesCsv.trim().length > 0) 
+        ? customProfilesCsv.split(',').map(s => s.trim()) 
+        : [];
+
+    const isInherited = (customProfiles.length === 0);
+    if (inheritSwitch) inheritSwitch.checked = isInherited;
+
+    // Set checkboxes based on customProfiles
+    const rows = document.querySelectorAll('.item-profile-row');
+    rows.forEach(row => {
+        const profId = row.getAttribute('data-profile-id');
+        const cb = row.querySelector('.item-profile-cb');
+        if (customProfiles.includes(profId)) {
+            if (cb) cb.checked = true;
+            row.classList.add('checked');
+        } else {
+            if (cb) cb.checked = false;
+            row.classList.remove('checked');
+        }
+    });
+
+    toggleItemBrowserInherit();
+    updateItemBrowserCount();
+    modal.style.display = 'flex';
+}
+window.openItemBrowserModal = openItemBrowserModal;
+
+function closeItemBrowserModal() {
+    const modal = document.getElementById('itemBrowserModal');
+    if (modal) modal.style.display = 'none';
+}
+window.closeItemBrowserModal = closeItemBrowserModal;
+
+function toggleItemBrowserInherit() {
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const customList = document.getElementById('itemBrowserCustomList');
+    const inheritHint = document.getElementById('itemBrowserInheritHint');
+
+    if (!inheritSwitch || !customList) return;
+
+    if (inheritSwitch.checked) {
+        customList.style.opacity = '0.35';
+        customList.style.pointerEvents = 'none';
+        if (inheritHint) inheritHint.textContent = "Inheriting browser selection from global Run Configuration.";
+    } else {
+        customList.style.opacity = '1';
+        customList.style.pointerEvents = 'auto';
+        if (inheritHint) inheritHint.textContent = "Custom profiles configured specifically for this test item.";
+    }
+    updateItemBrowserCount();
+}
+window.toggleItemBrowserInherit = toggleItemBrowserInherit;
+
+function toggleItemProfileRow(row) {
+    if (!row || row.classList.contains('disabled')) return;
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    if (inheritSwitch && inheritSwitch.checked) return;
+
+    const cb = row.querySelector('.item-profile-cb');
+    if (cb && !cb.disabled) {
+        cb.checked = !cb.checked;
+        if (cb.checked) {
+            row.classList.add('checked');
+        } else {
+            row.classList.remove('checked');
+        }
+        updateItemBrowserCount();
+    }
+}
+window.toggleItemProfileRow = toggleItemProfileRow;
+
+async function saveItemBrowserModal() {
+    const index = document.getElementById('itemBrowserTargetIndex').value;
+    const inheritSwitch = document.getElementById('itemBrowserInheritSwitch');
+    const isInherit = inheritSwitch ? inheritSwitch.checked : true;
+
+    let selectedProfiles = [];
+    if (!isInherit) {
+        const checkedCbs = document.querySelectorAll('#itemBrowserCustomList .item-profile-cb:checked');
+        checkedCbs.forEach(cb => selectedProfiles.push(cb.value));
+    }
+
+    try {
+        const resp = await fetch('/api/queue/item-browser', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                index: index,
+                inherit: isInherit,
+                profiles: selectedProfiles.join(',')
+            })
+        });
+        if (resp.ok) {
+            const html = await resp.text();
+            const queueContainer = document.getElementById('queueListContainer');
+            if (queueContainer) {
+                queueContainer.innerHTML = html;
+                if (typeof htmx !== 'undefined') {
+                    htmx.process(queueContainer);
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Error saving item browser profiles:", err);
+    } finally {
+        closeItemBrowserModal();
+    }
+}
+window.saveItemBrowserModal = saveItemBrowserModal;
+
+// ============================================================================
+// Floating Aura AI Assistant Chat Bubble & Drawer Handlers
+// ============================================================================
+
+function toggleAuraChat() {
+    const overlay = document.getElementById('auraChatOverlay');
+    if (!overlay) return;
+    if (overlay.style.display === 'none' || !overlay.style.display) {
+        openAuraChat();
+    } else {
+        closeAuraChat();
+    }
+}
+window.toggleAuraChat = toggleAuraChat;
+
+function openAuraChat() {
+    const overlay = document.getElementById('auraChatOverlay');
+    const launcher = document.getElementById('auraChatLauncher');
+    if (overlay) {
+        overlay.style.display = 'block';
+        const input = document.getElementById('chatInput');
+        if (input) setTimeout(() => input.focus(), 150);
+    }
+    if (launcher) launcher.classList.add('active');
+}
+window.openAuraChat = openAuraChat;
+
+function closeAuraChat() {
+    const overlay = document.getElementById('auraChatOverlay');
+    const launcher = document.getElementById('auraChatLauncher');
+    if (overlay) overlay.style.display = 'none';
+    if (launcher) launcher.classList.remove('active');
+}
+window.closeAuraChat = closeAuraChat;
+
+

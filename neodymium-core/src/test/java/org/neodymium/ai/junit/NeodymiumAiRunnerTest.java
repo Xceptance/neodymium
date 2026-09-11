@@ -19,6 +19,7 @@
 package org.neodymium.ai.junit;
 
 import java.io.FileNotFoundException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -289,5 +290,44 @@ public class NeodymiumAiRunnerTest
             Assertions.assertEquals("REPLAY_STRICT", root.get("executionMode").asText());
             Assertions.assertTrue(root.get("failureReason").asText().contains("No recorded companion JSON file found"));
         }
+    }
+
+    /**
+     * Sample test class decorated with LLM_RECORDING mode and no pre-existing companion file.
+     */
+    public static class SampleLlmRecordingClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_RECORDING)
+        @AiInlinePlaybook("name: recording_sample\nsteps:\n  - step: Click search button\n")
+        public void testLlmRecordingInitial()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that when a test executes in LLM_RECORDING mode without a pre-existing companion JSON,
+     * it does not throw FileNotFoundException, but rather loads the playbook and registers the recorder.
+     */
+    @Test
+    public void testLlmRecordingDoesNotRequirePreExistingCompanionFile() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = SampleLlmRecordingClass.class.getMethod("testLlmRecordingInitial");
+        final ExtensionContext extensionContext = createMockExtensionContext(SampleLlmRecordingClass.class, method);
+
+        final List<TestTemplateInvocationContext> contexts =
+            runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+        Assertions.assertFalse(contexts.isEmpty());
+
+        final List<Extension> extensions = contexts.get(0).getAdditionalExtensions();
+        final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+
+        Assertions.assertDoesNotThrow(() -> {
+            beforeEach.beforeEach(extensionContext);
+        });
     }
 }

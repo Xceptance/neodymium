@@ -1,9 +1,14 @@
 @echo off
-rem AI-generated: Gemini 3.5 Flash
-rem Compiles the project and executes the Neodymium Aura Manager.
+rem AI-generated: Gemini 3.8 Flash
+rem Xceptance GmbH 2026
+rem Compiles the project and executes the Neodymium Aura Manager (dual-mode).
 
 echo ========================================================================
-echo   Starting Neodymium Aura Manager compilation and startup...
+echo   Starting Neodymium Aura Manager...
 echo ========================================================================
 
-mvn test-compile exec:java -pl neodymium-core -Dexec.mainClass="com.xceptance.neodymium.aura.NeodymiumAuraManager" -Dexec.classpathScope="test"
+if exist aura-manager (
+    mvn -U spring-boot:run -pl aura-manager -am
+) else (
+    mvn -U test-compile exec:java -Dexec.mainClass="com.xceptance.aura.AuraManagerApplication" -Dexec.classpathScope="test"
+)

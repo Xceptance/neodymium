@@ -110,6 +110,17 @@ public class AiConfigurationTest
     }
 
     @Test
+    public void testDefaultExecutionModeIsLlmRecording()
+    {
+        System.clearProperty("neodymium.ai.executionMode");
+        System.clearProperty("neodymium.ai.execution.mode");
+
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
+        assertEquals(ExecutionMode.LLM_RECORDING, config.getExecutionMode(), "Default execution mode should be LLM_RECORDING.");
+    }
+
+    @Test
     public void testSystemPropertyCamelCaseResolution()
     {
         System.setProperty("neodymium.ai.executionMode", "LLM_ONLY");

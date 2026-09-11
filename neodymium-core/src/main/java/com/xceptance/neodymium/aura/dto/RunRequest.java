@@ -33,7 +33,7 @@ public final class RunRequest
     public boolean interactive;
     public boolean allure;
     public boolean video;
-    public String executionMode = "REPLAY_WITH_HEALING";
+    public String executionMode = "LLM_RECORDING";
     public List<String> globalBrowserProfiles;
 
     public RunRequest()
@@ -54,7 +54,7 @@ public final class RunRequest
         this.interactive = interactive;
         this.allure = allure;
         this.video = video;
-        this.executionMode = executionMode != null ? executionMode : "REPLAY_WITH_HEALING";
+        this.executionMode = executionMode != null ? executionMode : "LLM_RECORDING";
         this.globalBrowserProfiles = globalBrowserProfiles;
     }
 }

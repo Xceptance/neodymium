@@ -18,17 +18,11 @@
  */
 package com.xceptance.neodymium.aura.manager.unit;
 
-import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
-import com.xceptance.neodymium.aura.AuraManagerQueueController;
 import com.xceptance.neodymium.aura.AuraQueueService;
-import com.xceptance.neodymium.aura.AuraReportingService;
-import com.xceptance.neodymium.aura.dto.BrowserGroupDto;
 import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
-import com.xceptance.neodymium.aura.dto.ChatResponse;
-import java.io.IOException;
+import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,17 +30,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests verifying browser profile classification, icon detection accuracy,
- * and AI-driven browser configuration payloads.
+ * Unit tests verifying browser profile classification and mapping.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Tag("unit")
 @Tag("aura-manager")
 public final class AuraBrowserSelectionTest
 {
-    private AuraManagerQueueController queueController;
+    private AuraQueueService queueService;
 
     @BeforeAll
     public static void beforeAll()
@@ -57,17 +50,14 @@ public final class AuraBrowserSelectionTest
     @BeforeEach
     public void setUp()
     {
-        final AuraReportingService reportingService = new AuraReportingService();
         final AuraInteractiveService interactiveService = new AuraInteractiveService();
-        final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
-        final AuraFileService fileService = new AuraFileService();
-        this.queueController = new AuraManagerQueueController(queueService, fileService, interactiveService, null);
+        this.queueService = new AuraQueueService(interactiveService);
     }
 
     @Test
     public void testBrowserProfilesClassification()
     {
-        final List<BrowserProfileDto> profiles = queueController.getAvailableBrowserProfiles();
+        final List<BrowserProfileDto> profiles = queueService.getAvailableBrowserProfiles();
         Assertions.assertNotNull(profiles);
         Assertions.assertFalse(profiles.isEmpty());
 
@@ -81,100 +71,56 @@ public final class AuraBrowserSelectionTest
     }
 
     @Test
-    public void testBrowserTypesForProfilesAccurateIcons()
+    public void testBrowserProfilesAvailability()
     {
-        // When setting only Chrome profiles globally
-        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "Chrome_1500x1000_headless"));
-        final List<String> chromeOnlyIcons = queueController.getBrowserTypesForProfiles(null);
-        Assertions.assertEquals(1, chromeOnlyIcons.size());
-        Assertions.assertEquals("chrome", chromeOnlyIcons.get(0));
+        final List<BrowserProfileDto> profiles = queueService.getAvailableBrowserProfiles();
+        Assertions.assertNotNull(profiles);
+        Assertions.assertFalse(profiles.isEmpty());
 
-        // When setting custom profiles with only Firefox on an item
-        final List<String> customFfIcons = queueController.getBrowserTypesForProfiles(List.of("FF_1024x768"));
-        Assertions.assertEquals(1, customFfIcons.size());
-        Assertions.assertEquals("firefox", customFfIcons.get(0));
-
-        // When setting Chrome + Firefox
-        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "FF_1024x768"));
-        final List<String> dualIcons = queueController.getBrowserTypesForProfiles(null);
-        Assertions.assertEquals(2, dualIcons.size());
-        Assertions.assertTrue(dualIcons.contains("chrome"));
-        Assertions.assertTrue(dualIcons.contains("firefox"));
-    }
-
-    @Test
-    public void testGroupedBrowserProfilesSelectedCount()
-    {
-        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "Chrome_1500x1000_headless"));
-        final List<BrowserGroupDto> groups = queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles());
-        Assertions.assertNotNull(groups);
-
-        BrowserGroupDto chromeGroup = null;
-        for (final BrowserGroupDto g : groups)
+        final String osName = System.getProperty("os.name", "").toLowerCase();
+        for (final BrowserProfileDto p : profiles)
         {
-            if ("chrome".equals(g.key))
+            if ("safari".equalsIgnoreCase(p.browser) && !osName.contains("mac"))
             {
-                chromeGroup = g;
+                Assertions.assertFalse(p.available, "Safari should not be available on non-macOS platforms");
+                Assertions.assertNotNull(p.unavailableReason);
+                Assertions.assertTrue(p.unavailableReason.contains("macOS"),
+                        "Expected explanation mentioning macOS, got: " + p.unavailableReason);
+            }
+            if (!p.available)
+            {
+                Assertions.assertNotNull(p.unavailableReason, "Unavailable profiles must provide an explanation");
+                Assertions.assertFalse(p.unavailableReason.isBlank(), "Unavailable reason cannot be blank");
             }
         }
-        Assertions.assertNotNull(chromeGroup);
-        Assertions.assertEquals(2, chromeGroup.selectedCount);
     }
 
     @Test
-    public void testSingleIconPerBrowserGroupInDashboard() throws IOException, InterruptedException
+    public void testEffectiveBrowserProfilesFiltersUnavailable()
     {
-        final com.sun.net.httpserver.HttpServer server = com.xceptance.neodymium.aura.NeodymiumAuraManager.startServer(0, false);
-        final int port = server.getAddress().getPort();
-        try
+        final String osName = System.getProperty("os.name", "").toLowerCase();
+        if (!osName.contains("mac"))
         {
-            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create("http://127.0.0.1:" + port + "/"))
-                .GET()
-                .build();
-            final java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            final DatasetSelection selection = new DatasetSelection();
+            selection.browserProfiles = List.of("Safari_1920x1080");
 
-            Assertions.assertEquals(200, response.statusCode());
-            final String body = response.body();
-
-            // Verify Google Chrome group summary contains only ONE SVG icon, not 6
-            final int chromeSummaryIdx = body.indexOf("Google Chrome");
-            Assertions.assertTrue(chromeSummaryIdx > 0, "Google Chrome accordion summary must exist");
-
-            final int summaryStartIdx = body.lastIndexOf("<summary", chromeSummaryIdx);
-            final int summaryEndIdx = body.indexOf("</summary>", chromeSummaryIdx);
-            final String summaryHtml = body.substring(summaryStartIdx, summaryEndIdx);
-
-            final int svgCount = summaryHtml.split("<svg", -1).length - 1;
-            Assertions.assertEquals(1, svgCount, "Google Chrome header must contain exactly 1 SVG icon");
-
-            // Verify Google Chrome header contains the blue info icon
-            Assertions.assertTrue(summaryHtml.contains("browser-info-icon"), "Google Chrome header summary must contain browser-info-icon");
-        }
-        finally
-        {
-            com.xceptance.neodymium.aura.NeodymiumAuraManager.stopServer(server);
+            final List<String> effective = queueService.getEffectiveBrowserProfiles(selection, null);
+            Assertions.assertNotNull(effective);
+            Assertions.assertFalse(effective.isEmpty());
+            Assertions.assertFalse(effective.contains("Safari_1920x1080"),
+                    "Unavailable Safari profile must be filtered out on non-macOS platforms");
         }
     }
 
     @Test
-    public void testPerItemBrowserProfileOverrideAndTotalRunCounts()
+    public void testEffectiveBrowserProfilesDefaultsToChrome()
     {
-        // Set global browser profiles to 2 profiles
-        queueController.setGlobalBrowserProfiles(Set.of("Chrome_1024x768", "FF_1024x768"));
+        final List<String> effective = queueService.getEffectiveBrowserProfiles(null, null);
+        Assertions.assertNotNull(effective);
+        Assertions.assertFalse(effective.isEmpty());
 
-        // Add 2 queue items
-        queueController.getSelectedQueue().add(new com.xceptance.neodymium.aura.dto.DatasetSelection("test1.yaml", "dataset1"));
-        queueController.getSelectedQueue().add(new com.xceptance.neodymium.aura.dto.DatasetSelection("test2.yaml", "dataset1"));
-
-        // Item 1 inherits global (2 profiles), Item 2 inherits global (2 profiles) -> Total runs = 4
-        Assertions.assertEquals(4, queueController.getTotalExecutionRuns());
-
-        // Override Item 2 with custom 3 profiles
-        queueController.getSelectedQueue().get(1).browserProfiles = List.of("Chrome_1024x768", "FF_1024x768", "Edge_1024x768");
-
-        // Item 1 (2 profiles) + Item 2 (3 profiles) -> Total runs = 5
-        Assertions.assertEquals(5, queueController.getTotalExecutionRuns());
+        final String defaultProfile = effective.get(0).toLowerCase();
+        Assertions.assertTrue(defaultProfile.contains("chrome"),
+                "Default browser profile should be a Chrome profile, but got: " + effective.get(0));
     }
 }

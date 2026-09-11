@@ -1041,9 +1041,9 @@ public final class PreliminaryReportListener implements ExecutionListener
         try
         {
             final Path configuredDiskReportDir = Paths.get(AiConfiguration.getInstance().getDiskReportDirectory());
-            final Path rootOutputDir = (this.isCustomOutputDirectory && !this.outputDirectory.equals(configuredDiskReportDir))
+            final Path rootOutputDir = this.isCustomOutputDirectory
                 ? this.outputDirectory
-                : Paths.get("target/ai-results");
+                : (configuredDiskReportDir != null ? configuredDiskReportDir : Paths.get("target/ai-results"));
             if (!Files.exists(rootOutputDir))
             {
                 Files.createDirectories(rootOutputDir);

@@ -955,7 +955,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     final String msg = String.format(
                         "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s\n"
-                        + "Please run the live recording test first to generate the recording.",
+                        + "Please run the test in recording mode ('LLM_RECORDING' or 'FORCE_RECORDING') first to generate the recording.",
                         this.mode,
                         testClass != null ? testClass.getSimpleName() : "UnknownClass",
                         method != null ? method.getName() : "unknownMethod",

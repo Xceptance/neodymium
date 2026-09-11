@@ -23,6 +23,7 @@ import org.neodymium.ai.client.LlmProviderFactory;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.config.AiConfiguration;
+import com.google.gson.Gson;
 import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.ChatMessageDto;
 import com.xceptance.neodymium.aura.dto.ChatRequest;
@@ -53,24 +54,25 @@ import org.slf4j.LoggerFactory;
 public final class AuraChatService
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraChatService.class);
+    private static final Gson GSON = new Gson();
 
     private final AuraFileService fileService;
-    private AuraManagerQueueController queueController;
+    private AuraQueueService queueService;
 
     public AuraChatService(final AuraFileService fileService)
     {
         this.fileService = fileService;
     }
 
-    public AuraChatService(final AuraFileService fileService, final AuraManagerQueueController queueController)
+    public AuraChatService(final AuraFileService fileService, final AuraQueueService queueService)
     {
         this.fileService = fileService;
-        this.queueController = queueController;
+        this.queueService = queueService;
     }
 
-    public void setQueueController(final AuraManagerQueueController queueController)
+    public void setQueueService(final AuraQueueService queueService)
     {
-        this.queueController = queueController;
+        this.queueService = queueService;
     }
 
     public ChatResponse runChatWorkflow(final ChatRequest req)
@@ -110,7 +112,7 @@ public final class AuraChatService
         String intent = "neither";
         try
         {
-            final Map<?, ?> result = AuraHttpUtils.gson.fromJson(cleanJsonResponse(stage1Response), Map.class);
+            final Map<?, ?> result = GSON.fromJson(cleanJsonResponse(stage1Response), Map.class);
             if (result != null && result.containsKey("intent"))
             {
                 intent = String.valueOf(result.get("intent"));
@@ -127,8 +129,8 @@ public final class AuraChatService
         if ("browser".equalsIgnoreCase(intent))
         {
             thinkingLog.append("[AI Browser Configuration] Running Stage 2 (Browser Selection)...\n");
-            final List<BrowserProfileDto> availableProfiles = queueController != null
-                    ? queueController.getAvailableBrowserProfiles()
+            final List<BrowserProfileDto> availableProfiles = queueService != null
+                    ? queueService.getAvailableBrowserProfiles()
                     : new ArrayList<>();
 
             final StringBuilder profilesJson = new StringBuilder("[");
@@ -171,7 +173,7 @@ public final class AuraChatService
                 final String respText = resp != null ? resp.content() : "";
                 thinkingLog.append("Browser configuration LLM response: ").append(respText).append("\n");
 
-                final Map<?, ?> parsed = AuraHttpUtils.gson.fromJson(cleanJsonResponse(respText), Map.class);
+                final Map<?, ?> parsed = GSON.fromJson(cleanJsonResponse(respText), Map.class);
                 final String message = parsed != null && parsed.containsKey("message")
                         ? String.valueOf(parsed.get("message"))
                         : "Updated browser configuration.";
@@ -264,7 +266,7 @@ public final class AuraChatService
 
             try
             {
-                final Map<?, ?> editResult = AuraHttpUtils.gson.fromJson(cleanJsonResponse(editorResponse), Map.class);
+                final Map<?, ?> editResult = GSON.fromJson(cleanJsonResponse(editorResponse), Map.class);
                 final String status = String.valueOf(editResult.get("status"));
                 final String message = String.valueOf(editResult.get("message"));
 
@@ -333,7 +335,7 @@ public final class AuraChatService
                     + "- Only rule out/discard files whose names and IDs make it completely impossible or highly improbable to match.\n"
                     + "- If a filename or ID is generic or ambiguous, you MUST request Level 2 metadata (\"NEED_DETAILS\") to inspect its steps before making a decision.\n\n"
                     + "The current available datasets (Level 1) are:\n"
-                    + AuraHttpUtils.gson.toJson(availableDatasets) + "\n\n"
+                    + GSON.toJson(availableDatasets) + "\n\n"
                     + "You MUST respond in JSON format with the following schema:\n"
                     + "{\n"
                     + "  \"status\": \"NEED_DETAILS\" | \"NEED_FULL_CONTENT\" | \"COMPLETE\" | \"ASK_USER\",\n"
@@ -381,7 +383,7 @@ public final class AuraChatService
 
                 try
                 {
-                    final Map<?, ?> selResult = AuraHttpUtils.gson.fromJson(cleanJsonResponse(responseText), Map.class);
+                    final Map<?, ?> selResult = GSON.fromJson(cleanJsonResponse(responseText), Map.class);
                     final String status = String.valueOf(selResult.get("status"));
                     final String message = String.valueOf(selResult.get("message"));
 
@@ -425,7 +427,7 @@ public final class AuraChatService
                         conversation.add(AiMessage.from(responseText));
                         conversation.add(UserMessage.from(
                                 "Here is the Level 2 metadata for your requested files:\n"
-                                        + AuraHttpUtils.gson.toJson(detailsList)));
+                                        + GSON.toJson(detailsList)));
                     }
                     else if ("NEED_FULL_CONTENT".equalsIgnoreCase(status))
                     {
@@ -441,7 +443,7 @@ public final class AuraChatService
 
                         conversation.add(AiMessage.from(responseText));
                         conversation.add(UserMessage.from("Here is the Level 3 full content for your requested files:\n"
-                                + AuraHttpUtils.gson.toJson(contentsMap)));
+                                + GSON.toJson(contentsMap)));
                     }
                     else
                     {
@@ -503,7 +505,7 @@ public final class AuraChatService
             String message = fallbackResponse;
             try
             {
-                final Map<?, ?> fallbackResult = AuraHttpUtils.gson.fromJson(cleanJsonResponse(fallbackResponse), Map.class);
+                final Map<?, ?> fallbackResult = GSON.fromJson(cleanJsonResponse(fallbackResponse), Map.class);
                 if (fallbackResult != null && fallbackResult.containsKey("message"))
                 {
                     message = String.valueOf(fallbackResult.get("message"));

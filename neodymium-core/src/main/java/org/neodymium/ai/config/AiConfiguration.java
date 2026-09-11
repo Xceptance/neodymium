@@ -124,7 +124,21 @@ public final class AiConfiguration
             }
         });
 
+        // 7. Register framework default properties if not explicitly configured
+        loadDefaultProperties();
+        rebuildNormalizedCache();
+    }
 
+    /**
+     * Registers framework-level default properties for Neodymium AI if not already defined.
+     */
+    private void loadDefaultProperties()
+    {
+        this.properties.putIfAbsent("neodymium.ai.provider", "gemini");
+        this.properties.putIfAbsent("neodymium.ai.provider.gemini.class", "org.neodymium.ai.client.GeminiLlmProvider");
+        this.properties.putIfAbsent("neodymium.ai.provider.mistral.class", "org.neodymium.ai.client.MistralLlmProvider");
+        this.properties.putIfAbsent("neodymium.ai.provider.vertexaillama.class", "org.neodymium.ai.client.VertexAiLlamaProvider");
+        this.properties.putIfAbsent("neodymium.ai.provider.mock.class", "org.neodymium.ai.client.MockLlmProvider");
     }
 
     /**
@@ -775,20 +789,20 @@ public final class AiConfiguration
 
     /**
      * Gets the active execution mode for the AI pipeline.
-     * Defaults to REPLAY_WITH_HEALING.
+     * Defaults to LLM_RECORDING.
      *
      * @return the execution mode enum
      */
     public ExecutionMode getExecutionMode()
     {
-        final String modeStr = getProperty("neodymium.ai.executionMode", "REPLAY_WITH_HEALING");
+        final String modeStr = getProperty("neodymium.ai.executionMode", "LLM_RECORDING");
         try
         {
             return ExecutionMode.valueOf(modeStr.trim().toUpperCase());
         }
         catch (final IllegalArgumentException e)
         {
-            return ExecutionMode.REPLAY_WITH_HEALING;
+            return ExecutionMode.LLM_RECORDING;
         }
     }
 
