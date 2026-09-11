@@ -506,7 +506,7 @@ public final class AiConfiguration
      */
     public boolean isSemanticVerificationEnabled()
     {
-        return getBoolean("neodymium.ai.semanticVerification.enabled", true);
+        return getBoolean("neodymium.ai.semanticVerification.enabled", false);
     }
 
     /**
@@ -539,15 +539,6 @@ public final class AiConfiguration
         return getBoolean("neodymium.ai.judge.enabled", false);
     }
 
-    /**
-     * Checks if multilingual prompt guidance is enabled.
-     *
-     * @return true if neodymium.ai.multilingual is set to true (default: false)
-     */
-    public boolean isMultilingual()
-    {
-        return getBoolean("neodymium.ai.multilingual", false);
-    }
 
     /**
      * Checks if replay execution should respect recorded delays and pacing.
@@ -992,16 +983,5 @@ public final class AiConfiguration
     public long getLlmInitialRetryDelayMs()
     {
         return Math.max(10L, getLong("neodymium.ai.llm.initialRetryDelayMs", 100L));
-    }
-
-    /**
-     * Checks whether the unified tooling architecture (AgentToolLoopStep and PlaybookToolReplayer)
-     * is enabled. Default is true.
-     *
-     * @return true if unified tooling is enabled, false for legacy execution flow
-     */
-    public boolean isUnifiedToolingEnabled()
-    {
-        return getBoolean("neodymium.ai.tooling.enabled", true);
     }
 }

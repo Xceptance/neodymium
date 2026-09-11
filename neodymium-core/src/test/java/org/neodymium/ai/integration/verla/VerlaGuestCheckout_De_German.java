@@ -27,6 +27,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
@@ -68,11 +69,11 @@ public class VerlaGuestCheckout_De_German extends BaseAiTest
             server.resetInventory();
         }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
-        Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 
     @Order(1)
     @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
     @AiPlaybook
@@ -82,6 +83,7 @@ public class VerlaGuestCheckout_De_German extends BaseAiTest
 
     @Order(2)
     @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
     @AiPlaybook(recordingMethod = "testCheckoutLivePerfect")
@@ -91,6 +93,7 @@ public class VerlaGuestCheckout_De_German extends BaseAiTest
 
     @Order(3)
     @AiJudge(true)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
     @AiPlaybook
@@ -100,10 +103,51 @@ public class VerlaGuestCheckout_De_German extends BaseAiTest
 
     @Order(4)
     @AiJudge(true)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
     @AiPlaybook(recordingMethod = "testCheckoutLivePerfectWithJudge")
     public void testCheckoutReplayPerfectWithJudge()
+    {
+    }
+
+    @Order(5)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook
+    public void testCheckoutLivePerfectWithOutcome()
+    {
+    }
+
+    @Order(6)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePerfectWithOutcome")
+    public void testCheckoutReplayPerfectWithOutcome()
+    {
+    }
+
+    @Order(7)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook
+    public void testCheckoutLivePerfectWithJudgeAndOutcome()
+    {
+    }
+
+    @Order(8)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(recordingMethod = "testCheckoutLivePerfectWithJudgeAndOutcome")
+    public void testCheckoutReplayPerfectWithJudgeAndOutcome()
     {
     }
 }
