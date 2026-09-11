@@ -33,6 +33,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -250,5 +251,60 @@ public class AuraInteractiveController
     public ResponseEntity<Map<String, Object>> handleDisconnect()
     {
         return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @GetMapping(
+    {
+      "/interactive_console.html", "/interactive_console"
+    })
+    public ResponseEntity<Resource> getInteractiveConsoleHtml()
+    {
+        final Resource resource = new ClassPathResource("com/xceptance/neodymium/ai/console/interactive_console.html");
+        if (!resource.exists())
+        {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .body(resource);
+    }
+
+    @GetMapping(value = "/interactive_console.css", produces = "text/css")
+    public ResponseEntity<Resource> getInteractiveConsoleCss()
+    {
+        final Resource resource = new ClassPathResource("com/xceptance/neodymium/ai/console/interactive_console.css");
+        if (!resource.exists())
+        {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/css; charset=UTF-8"))
+                .body(resource);
+    }
+
+    @GetMapping(value = "/interactive_console.js", produces = "application/javascript")
+    public ResponseEntity<Resource> getInteractiveConsoleJs()
+    {
+        final Resource resource = new ClassPathResource("com/xceptance/neodymium/ai/console/interactive_console.js");
+        if (!resource.exists())
+        {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/javascript; charset=UTF-8"))
+                .body(resource);
+    }
+
+    @GetMapping(value = "/run_example.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Resource> getRunExampleJson()
+    {
+        final Resource resource = new ClassPathResource("com/xceptance/neodymium/ai/console/run_example.json");
+        if (!resource.exists())
+        {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(resource);
     }
 }

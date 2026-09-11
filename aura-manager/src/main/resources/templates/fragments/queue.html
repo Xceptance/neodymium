@@ -64,28 +64,15 @@
     </div>
 </th:block>
 
-<div class="config-panel neo-u-29" id="configPanel" th:fragment="configPanel" style="flex: 1; overflow-y: auto;">
+<div class="config-panel" id="configPanel" th:fragment="configPanel" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 0;">
     <th:block th:replace="~{fragments/queue :: configPanelContent}"></th:block>
-    <div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
-        <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
-    </div>
 </div>
 
 <th:block th:fragment="configPanelContent">
-    <!-- Global Multi-Browser & Multi-Profile Selection Section -->
-    <div class="config-row-wrapper neo-u-30" style="padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border);">
-        <div class="browser-section-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span class="material-symbols-outlined" style="font-size: 17px; color: var(--accent);">language</span>
-                <span style="font-weight: 700; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-primary);">Browser Profiles</span>
-            </div>
-            <span class="badge-count" id="globalProfileCountBadge" 
-                  style="background: rgba(37, 99, 235, 0.12); color: var(--accent); font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 12px;"
-                  th:text="${globalBrowserProfiles != null ? globalBrowserProfiles.size() : 0} + ' selected'">6 selected</span>
-        </div>
-        
+    <!-- Top Scroll Container: Browser Profiles -->
+    <div class="browser-scroll-container" id="browserProfilesScrollContainer" style="flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
         <!-- Quick Preset Filter Buttons -->
-        <div class="quick-presets-bar" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px;">
+        <div class="quick-presets-bar" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
             <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=chrome-ff" hx-target="#configPanel" hx-swap="outerHTML">Chrome + FF</button>
             <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=desktop" hx-target="#configPanel" hx-swap="outerHTML">All Desktop</button>
             <button type="button" class="preset-btn" hx-post="/api/config/browser/preset?preset=mobile" hx-target="#configPanel" hx-swap="outerHTML">Mobile Only</button>
@@ -135,74 +122,88 @@
         </div>
     </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Headless Mode</span>
-            <label class="switch" for="optHeadless">
-                <input type="checkbox" id="optHeadless" 
-                       th:checked="${headless != null ? headless : false}" 
-                       hx-post="/api/config/toggle?key=headless" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
+    <!-- Bottom Fixed Container: Run Configuration -->
+    <div class="run-config-container" id="runConfigContainer" style="flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg-card); display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px;">
+        <div class="run-config-header" style="display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-primary);">
+            <span class="material-symbols-outlined" style="color: var(--accent); font-size: 16px;">tune</span>
+            <span>Run Configuration</span>
         </div>
-        <span class="neo-u-32">Runs the browser in the background without a GUI.</span>
-    </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Record Video</span>
-            <label class="switch" for="optVideo">
-                <input type="checkbox" id="optVideo" 
-                       th:checked="${video != null ? video : false}" 
-                       hx-post="/api/config/toggle?key=video" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Headless Mode</span>
+                <label class="switch" for="optHeadless">
+                    <input type="checkbox" id="optHeadless" 
+                           th:checked="${headless != null ? headless : false}" 
+                           hx-post="/api/config/toggle?key=headless" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32">Runs the browser in the background without a GUI.</span>
         </div>
-        <span class="neo-u-32">Records execution video and attaches it to the report.</span>
-    </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Interactive Mode</span>
-            <label class="switch" for="optInteractive">
-                <input type="checkbox" id="optInteractive" 
-                       th:checked="${interactive != null ? interactive : false}" 
-                       hx-post="/api/config/toggle?key=interactive" 
-                       hx-target="#configPanel" 
-                       hx-swap="outerHTML" 
-                       onclick="event.stopPropagation()"/>
-                <span class="slider"></span>
-            </label>
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Record Video</span>
+                <label class="switch" for="optVideo">
+                    <input type="checkbox" id="optVideo" 
+                           th:checked="${video != null ? video : false}" 
+                           hx-post="/api/config/toggle?key=video" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32">Records execution video and attaches it to the report.</span>
         </div>
-        <span class="neo-u-32">Enables interactive AI elements in the browser during execution.</span>
-    </div>
 
-    <div class="config-row-wrapper neo-u-30">
-        <div class="config-row neo-u-31">
-            <span class="neo-u-2">Execution Mode</span>
-            <select id="optExecutionMode" name="mode" class="neo-select" 
-                    hx-post="/api/config/mode" 
-                    hx-target="#configPanel" 
-                    hx-swap="outerHTML" 
-                    onclick="event.stopPropagation()">
-                <option value="LLM_RECORDING" th:selected="${executionMode == null or executionMode == 'LLM_RECORDING'}">LLM Recording</option>
-                <option value="REPLAY_WITH_HEALING" th:selected="${executionMode == 'REPLAY_WITH_HEALING'}">Replay with Healing</option>
-                <option value="REPLAY_STRICT" th:selected="${executionMode == 'REPLAY_STRICT'}">Replay Strict</option>
-                <option value="FORCE_RECORDING" th:selected="${executionMode == 'FORCE_RECORDING'}">Force Recording</option>
-                <option value="LLM_ONLY" th:selected="${executionMode == 'LLM_ONLY'}">LLM Only</option>
-            </select>
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Interactive Mode</span>
+                <label class="switch" for="optInteractive">
+                    <input type="checkbox" id="optInteractive" 
+                           th:checked="${interactive != null ? interactive : false}" 
+                           hx-post="/api/config/toggle?key=interactive" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32">Enables interactive AI elements in the browser during execution.</span>
         </div>
-        <span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
+
+        <div class="config-row-wrapper neo-u-30">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2">Execution Mode</span>
+                <select id="optExecutionMode" name="mode" class="neo-select" 
+                        hx-post="/api/config/mode" 
+                        hx-target="#configPanel" 
+                        hx-swap="outerHTML" 
+                        onclick="event.stopPropagation()">
+                    <option value="LLM_RECORDING" th:selected="${executionMode == null or executionMode == 'LLM_RECORDING'}">LLM Recording</option>
+                    <option value="REPLAY_WITH_HEALING" th:selected="${executionMode == 'REPLAY_WITH_HEALING'}">Replay with Healing</option>
+                    <option value="REPLAY_STRICT" th:selected="${executionMode == 'REPLAY_STRICT'}">Replay Strict</option>
+                    <option value="FORCE_RECORDING" th:selected="${executionMode == 'FORCE_RECORDING'}">Force Recording</option>
+                    <option value="LLM_ONLY" th:selected="${executionMode == 'LLM_ONLY'}">LLM Only</option>
+                </select>
+            </div>
+            <span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
+        </div>
+
+        <!-- Run Controls Action Buttons (in-band within configPanel) -->
+        <div id="runControls" class="run-controls-container" style="margin-top: 4px; padding: 0; flex-shrink: 0;">
+            <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
+        </div>
     </div>
 </th:block>
 
-<div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true">
+<!-- Standalone out-of-band fragment for /api/run and /api/stop execution state updates -->
+<div id="runControls" class="run-controls-container" th:fragment="runControls" hx-swap-oob="true" style="margin-top: 4px; padding: 0; flex-shrink: 0;">
     <th:block th:replace="~{fragments/queue :: runControlsContent}"></th:block>
 </div>
 

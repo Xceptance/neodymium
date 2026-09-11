@@ -326,6 +326,7 @@ function init() {
     }
 
     let savedYamlFileListScrollTop = 0;
+    let savedBrowserScrollTop = 0;
 
     document.addEventListener('htmx:beforeSwap', function(evt) {
         if (evt.detail && evt.detail.target && evt.detail.target.id === 'yamlFileList') {
@@ -334,6 +335,11 @@ function init() {
                 savedYamlFileListScrollTop = 0;
             } else {
                 savedYamlFileListScrollTop = evt.detail.target.scrollTop;
+            }
+        } else if (evt.detail && evt.detail.target && evt.detail.target.id === 'configPanel') {
+            const browserScroll = document.getElementById('browserProfilesScrollContainer');
+            if (browserScroll) {
+                savedBrowserScrollTop = browserScroll.scrollTop;
             }
         }
     });
@@ -356,6 +362,15 @@ function init() {
                     }
                 });
                 if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
+            } else if (evt.detail.target.id === 'configPanel') {
+                const browserScroll = document.getElementById('browserProfilesScrollContainer');
+                if (browserScroll && savedBrowserScrollTop > 0) {
+                    browserScroll.scrollTop = savedBrowserScrollTop;
+                    requestAnimationFrame(() => {
+                        const bs = document.getElementById('browserProfilesScrollContainer');
+                        if (bs) bs.scrollTop = savedBrowserScrollTop;
+                    });
+                }
             } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls') {
                 if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
             }

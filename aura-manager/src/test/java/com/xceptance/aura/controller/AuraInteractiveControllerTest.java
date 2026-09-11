@@ -265,4 +265,40 @@ public class AuraInteractiveControllerTest
 
         assertTrue(mvcResult.getResponse().getContentType().startsWith("text/event-stream"));
     }
+
+    @Test
+    public void testInteractiveConsoleHtml() throws Exception
+    {
+        mockMvc.perform(get("/interactive_console.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML));
+
+        mockMvc.perform(get("/interactive_console"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML));
+    }
+
+    @Test
+    public void testInteractiveConsoleCss() throws Exception
+    {
+        mockMvc.perform(get("/interactive_console.css"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.parseMediaType("text/css")));
+    }
+
+    @Test
+    public void testInteractiveConsoleJs() throws Exception
+    {
+        mockMvc.perform(get("/interactive_console.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.parseMediaType("application/javascript")));
+    }
+
+    @Test
+    public void testRunExampleJson() throws Exception
+    {
+        mockMvc.perform(get("/run_example.json"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
 }
