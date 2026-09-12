@@ -27,6 +27,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
@@ -47,6 +48,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiPlaybook(value = "playbooks/integration/VerlaAutoTranslateCheckout.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@AiOutcomeVerification(failOnError = false)
 public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 {
     /**
@@ -67,11 +69,11 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
             server.resetInventory();
         }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
-        Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 
     @Order(1)
     @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("ca_fr")
     @AiPlaybook
@@ -81,6 +83,7 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 
     @Order(2)
     @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("ca_fr")
     @AiPlaybook(recordingMethod = "testCheckoutLiveFrenchCanada")
@@ -90,6 +93,7 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 
     @Order(3)
     @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("de")
     @AiPlaybook
@@ -99,6 +103,7 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 
     @Order(4)
     @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("de")
     @AiPlaybook(recordingMethod = "testCheckoutLiveGerman")
@@ -108,6 +113,7 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 
     @Order(5)
     @AiJudge(true)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("ca_fr")
     @AiPlaybook
@@ -117,6 +123,7 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 
     @Order(6)
     @AiJudge(true)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("ca_fr")
     @AiPlaybook(recordingMethod = "testCheckoutLiveFrenchCanadaWithJudge")
@@ -126,6 +133,7 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 
     @Order(7)
     @AiJudge(true)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("de")
     @AiPlaybook
@@ -135,10 +143,91 @@ public class VerlaAutoTranslateCheckoutIntegrationTest extends BaseAiTest
 
     @Order(8)
     @AiJudge(true)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("de")
     @AiPlaybook(recordingMethod = "testCheckoutLiveGermanWithJudge")
     public void testCheckoutReplayGermanWithJudge()
+    {
+    }
+
+    @Order(9)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("ca_fr")
+    @AiPlaybook
+    public void testCheckoutLiveFrenchCanadaWithOutcome()
+    {
+    }
+
+    @Order(10)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("ca_fr")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveFrenchCanadaWithOutcome")
+    public void testCheckoutReplayFrenchCanadaWithOutcome()
+    {
+    }
+
+    @Order(11)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("de")
+    @AiPlaybook
+    public void testCheckoutLiveGermanWithOutcome()
+    {
+    }
+
+    @Order(12)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("de")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveGermanWithOutcome")
+    public void testCheckoutReplayGermanWithOutcome()
+    {
+    }
+
+    @Order(13)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("ca_fr")
+    @AiPlaybook
+    public void testCheckoutLiveFrenchCanadaWithJudgeAndOutcome()
+    {
+    }
+
+    @Order(14)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("ca_fr")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveFrenchCanadaWithJudgeAndOutcome")
+    public void testCheckoutReplayFrenchCanadaWithJudgeAndOutcome()
+    {
+    }
+
+    @Order(15)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("de")
+    @AiPlaybook
+    public void testCheckoutLiveGermanWithJudgeAndOutcome()
+    {
+    }
+
+    @Order(16)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("de")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveGermanWithJudgeAndOutcome")
+    public void testCheckoutReplayGermanWithJudgeAndOutcome()
     {
     }
 }

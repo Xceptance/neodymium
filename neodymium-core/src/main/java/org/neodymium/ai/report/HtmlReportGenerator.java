@@ -388,17 +388,6 @@ public final class HtmlReportGenerator
                 stepMap.put(s.getStepIndex(), s);
             }
 
-            final Map<Integer, long[]> clusterStats = new HashMap<>();
-            final Map<Integer, Double> clusterCost = new HashMap<>();
-            for (final TestExecutionReport.ReportLlmCallEntry call : llmCalls)
-            {
-                final int sIdx = call.getStepIndex();
-                final long[] counts = clusterStats.computeIfAbsent(sIdx, k -> new long[2]);
-                counts[0]++;
-                counts[1] += (call.getTotalTokens() > 0 ? call.getTotalTokens() : (call.getInputTokens() + call.getOutputTokens()));
-                clusterCost.merge(sIdx, call.getEstimatedCostUsd(), Double::sum);
-            }
-
             sb.append("  <section class=\"card-section\">\n");
             sb.append("    <h2 class=\"section-title\">💬 All LLM Invocations & Prompt Trace (").append(llmCalls.size()).append(")</h2>\n");
             sb.append("    <div class=\"table-container\">\n");
@@ -425,10 +414,17 @@ public final class HtmlReportGenerator
                     final TestExecutionReport.ReportStepEntry step = stepMap.get(stepIdx);
                     final String rawInstruction = step != null && step.getInstruction() != null ? step.getInstruction() : "";
                     final String instructionSnippet = rawInstruction.length() > 80 ? rawInstruction.substring(0, 77) + "..." : rawInstruction;
-                    final long[] stats = clusterStats.get(stepIdx);
-                    final long callCount = stats != null ? stats[0] : 1;
-                    final long clusterTokens = stats != null ? stats[1] : (call.getInputTokens() + call.getOutputTokens());
-                    final double cost = clusterCost.getOrDefault(stepIdx, call.getEstimatedCostUsd());
+
+                    int clusterCallCount = 0;
+                    long clusterTokens = 0;
+                    double clusterCost = 0.0;
+                    for (int j = i; j < llmCalls.size() && llmCalls.get(j).getStepIndex() == stepIdx; j++)
+                    {
+                        final TestExecutionReport.ReportLlmCallEntry c = llmCalls.get(j);
+                        clusterCallCount++;
+                        clusterTokens += (c.getTotalTokens() > 0 ? c.getTotalTokens() : (c.getInputTokens() + c.getOutputTokens()));
+                        clusterCost += c.getEstimatedCostUsd();
+                    }
 
                     final String stepLabel = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Pre-Flight / Setup";
                     final String onclick = stepIdx >= 0 ? " onclick=\"openAndSelectStep(" + stepIdx + ")\"" : "";
@@ -443,9 +439,9 @@ public final class HtmlReportGenerator
                         sb.append("                  <span class=\"step-group-instruction\" title=\"").append(escapeHtml(rawInstruction)).append("\">").append(escapeHtml(instructionSnippet)).append("</span>\n");
                     }
                     sb.append("                </span>\n");
-                    sb.append("                <span class=\"step-group-meta\">").append(callCount).append(callCount == 1 ? " call" : " calls")
+                    sb.append("                <span class=\"step-group-meta\">").append(clusterCallCount).append(clusterCallCount == 1 ? " call" : " calls")
                       .append(" &bull; ").append(NUMBER_FORMAT.format(clusterTokens)).append(" tokens &bull; ")
-                      .append(COST_FORMAT.format(cost)).append("</span>\n");
+                      .append(COST_FORMAT.format(clusterCost)).append("</span>\n");
                     sb.append("              </div>\n");
                     sb.append("            </td>\n");
                     sb.append("          </tr>\n");
@@ -1225,24 +1221,74 @@ public final class HtmlReportGenerator
                                            '<div class="llm-call-meta">' + formatNumber(call.durationMs || 0) + ' ms | ' + formatNumber(call.totalTokens || 0) + ' tokens (' + formatCost(call.estimatedCostUsd) + ')</div>';
                         card.appendChild(header);
 
+                        var promptItems = [];
                         if (call.systemPrompt) {
-                            var sec = createPromptSection('System Prompt:', call.systemPrompt, ci, 'systemPrompt');
-                            card.appendChild(sec);
+                            promptItems.push({ label: 'System Prompt:', text: call.systemPrompt, field: 'systemPrompt', name: 'System' });
                         }
-
                         if (call.availableTools && call.availableTools.length > 0) {
                             var toolsText = call.availableTools.join('\\n');
-                            var sec = createPromptSection('Available Native Tools (' + call.availableTools.length + '):', toolsText, ci, 'availableTools');
-                            card.appendChild(sec);
+                            promptItems.push({ label: 'Available Native Tools (' + call.availableTools.length + '):', text: toolsText, field: 'availableTools', name: 'Tools' });
+                        }
+                        if (call.userPrompt) {
+                            promptItems.push({ label: 'User Prompt & DOM Context (Plain Text):', text: call.userPrompt, field: 'userPrompt', name: 'User Prompt & DOM' });
                         }
 
-                        if (call.userPrompt) {
-                            var sec = createPromptSection('User Prompt & DOM Context (Plain Text):', call.userPrompt, ci, 'userPrompt');
-                            card.appendChild(sec);
+                        if (promptItems.length > 0) {
+                            var promptsWrapper = document.createElement('div');
+                            promptsWrapper.className = 'llm-prompts-wrapper collapsed';
+
+                            var promptNames = promptItems.map(function(p) { return p.name; }).join(', ');
+
+                            var toggleBar = document.createElement('div');
+                            toggleBar.className = 'llm-prompts-toggle';
+                            toggleBar.title = 'Click to expand/collapse prompt details (' + promptNames + ')';
+
+                            var toggleTitle = document.createElement('div');
+                            toggleTitle.className = 'llm-prompts-toggle-title';
+
+                            var chevron = document.createElement('span');
+                            chevron.className = 'prompts-chevron';
+                            chevron.textContent = '▶';
+                            toggleTitle.appendChild(chevron);
+
+                            var toggleLabel = document.createElement('span');
+                            toggleLabel.className = 'prompts-toggle-label';
+                            toggleLabel.textContent = 'Prompts & Context (' + promptItems.length + ')';
+                            toggleTitle.appendChild(toggleLabel);
+
+                            var toggleSummary = document.createElement('span');
+                            toggleSummary.className = 'prompts-toggle-summary';
+                            toggleSummary.textContent = '• ' + promptNames;
+                            toggleTitle.appendChild(toggleSummary);
+
+                            toggleBar.appendChild(toggleTitle);
+
+                            var toggleHint = document.createElement('span');
+                            toggleHint.className = 'prompts-toggle-hint';
+                            toggleHint.textContent = 'Click to expand';
+                            toggleBar.appendChild(toggleHint);
+
+                            var promptsBody = document.createElement('div');
+                            promptsBody.className = 'llm-prompts-body';
+
+                            promptItems.forEach(function(p) {
+                                var sec = createPromptSection(p.label, p.text, ci, p.field, true);
+                                promptsBody.appendChild(sec);
+                            });
+
+                            toggleBar.onclick = function() {
+                                var isNowCollapsed = promptsWrapper.classList.toggle('collapsed');
+                                chevron.textContent = isNowCollapsed ? '▶' : '▼';
+                                toggleHint.textContent = isNowCollapsed ? 'Click to expand' : 'Click to collapse';
+                            };
+
+                            promptsWrapper.appendChild(toggleBar);
+                            promptsWrapper.appendChild(promptsBody);
+                            card.appendChild(promptsWrapper);
                         }
 
                         if (call.responseContent) {
-                            var sec = createPromptSection('Raw Model Response:', call.responseContent, ci, 'responseContent');
+                            var sec = createPromptSection('Raw Model Response:', call.responseContent, ci, 'responseContent', false);
                             sec.classList.add('response-section');
                             card.appendChild(sec);
                         }
@@ -1273,16 +1319,26 @@ public final class HtmlReportGenerator
 
                         var displayTarget = a.resolvedTarget || a.target || '-';
                         var hasTargetTpl = a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
-                        var targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
-                        if (hasTargetTpl) {
-                            targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                        var targetHtml;
+                        if (displayTarget === '-') {
+                            targetHtml = '<span class="text-muted">-</span>';
+                        } else {
+                            targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
+                            if (hasTargetTpl) {
+                                targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                            }
                         }
 
                         var displayValue = a.resolvedValue || a.value || '-';
                         var hasValueTpl = a.value && a.resolvedValue && a.value !== a.resolvedValue;
-                        var valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
-                        if (hasValueTpl) {
-                            valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                        var valueHtml;
+                        if (displayValue === '-') {
+                            valueHtml = '<span class="text-muted">-</span>';
+                        } else {
+                            valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
+                            if (hasValueTpl) {
+                                valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                            }
                         }
 
                         var phaseHtml = '';
@@ -1645,7 +1701,7 @@ public final class HtmlReportGenerator
                 }
             });
 
-            function createPromptSection(label, text, callIdx, fieldName) {
+            function createPromptSection(label, text, callIdx, fieldName, isCollapsible) {
                 var sec = document.createElement('div');
                 sec.className = 'prompt-section';
 
@@ -1653,13 +1709,17 @@ public final class HtmlReportGenerator
                 row.className = 'prompt-label-row';
 
                 var labelSpan = document.createElement('span');
+                labelSpan.className = 'prompt-label-title';
                 labelSpan.textContent = label;
                 row.appendChild(labelSpan);
 
                 var copyBtn = document.createElement('button');
                 copyBtn.className = 'btn-copy';
                 copyBtn.textContent = 'Copy';
-                copyBtn.onclick = function() { window.copyLlmField(callIdx, fieldName, copyBtn); };
+                copyBtn.onclick = function(e) {
+                    if (e && e.stopPropagation) e.stopPropagation();
+                    window.copyLlmField(callIdx, fieldName, copyBtn);
+                };
                 row.appendChild(copyBtn);
 
                 sec.appendChild(row);
@@ -1668,6 +1728,14 @@ public final class HtmlReportGenerator
                 pre.className = 'prompt-text';
                 pre.textContent = text;
                 sec.appendChild(pre);
+
+                if (isCollapsible) {
+                    row.classList.add('clickable');
+                    row.title = 'Click to toggle section';
+                    row.onclick = function() {
+                        sec.classList.toggle('prompt-collapsed');
+                    };
+                }
 
                 return sec;
             }
@@ -2468,6 +2536,78 @@ public final class HtmlReportGenerator
                 overflow-y: auto;
                 white-space: pre-wrap;
                 word-break: break-word;
+            }
+            .prompt-section.prompt-collapsed .prompt-text {
+                display: none;
+            }
+            .prompt-section.prompt-collapsed .prompt-label-row {
+                margin-bottom: 0;
+            }
+            .prompt-label-row.clickable {
+                cursor: pointer;
+                user-select: none;
+            }
+            .prompt-label-row.clickable:hover {
+                color: var(--text);
+            }
+            .llm-prompts-wrapper {
+                border-bottom: 1px solid var(--border);
+            }
+            .llm-prompts-wrapper:last-child {
+                border-bottom: none;
+            }
+            .llm-prompts-toggle {
+                background: #ffffff;
+                padding: 0.45rem 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                user-select: none;
+                font-size: 0.78rem;
+                transition: background 0.15s ease;
+                border-bottom: 1px solid transparent;
+            }
+            .llm-prompts-toggle:hover {
+                background: #f1f5f9;
+            }
+            .llm-prompts-wrapper:not(.collapsed) .llm-prompts-toggle {
+                border-bottom: 1px solid var(--border);
+                background: #f8fafc;
+            }
+            .llm-prompts-toggle-title {
+                display: flex;
+                align-items: center;
+                gap: 0.45rem;
+                font-weight: 600;
+                color: var(--text-sub);
+            }
+            .prompts-chevron {
+                font-size: 0.7rem;
+                color: var(--text-muted);
+                display: inline-block;
+                width: 0.85rem;
+            }
+            .prompts-toggle-label {
+                color: var(--text);
+                font-weight: 600;
+            }
+            .prompts-toggle-summary {
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                font-weight: 400;
+            }
+            .prompts-toggle-hint {
+                font-size: 0.72rem;
+                color: var(--accent-primary);
+                font-weight: 500;
+            }
+            .llm-prompts-body {
+                display: block;
+                background: #f8fafc;
+            }
+            .llm-prompts-wrapper.collapsed .llm-prompts-body {
+                display: none;
             }
             .response-section {
                 background: #ffffff;

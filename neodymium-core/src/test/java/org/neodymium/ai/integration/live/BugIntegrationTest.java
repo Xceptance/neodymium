@@ -29,7 +29,7 @@ import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.pipeline.UnexpectedSuccessException;
+import org.neodymium.ai.pipeline.ExpectedBugNotReproducedException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
@@ -72,7 +72,7 @@ public class BugIntegrationTest extends BaseAiTest
     }
 
     /**
-     * Verifies that a succeeding step tagged with (bug) unexpectedly fails the test with UnexpectedSuccessException.
+     * Verifies that a succeeding step tagged with (bug) unexpectedly fails the test with ExpectedBugNotReproducedException.
      *
      * @param session the thread-isolated AiSession
      */
@@ -83,7 +83,7 @@ public class BugIntegrationTest extends BaseAiTest
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
         session.data().putDynamic("bug.test.url", pageUrl, false);
 
-        assertThrows(UnexpectedSuccessException.class, () -> {
+        assertThrows(ExpectedBugNotReproducedException.class, () -> {
             session.execute( """
                 steps: |
                   Open ${bug.test.url} in the browser

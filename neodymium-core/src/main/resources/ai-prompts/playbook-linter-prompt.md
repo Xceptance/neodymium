@@ -19,12 +19,12 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
 
 ---
 
-## 9 Quality Check Categories
+## 12 Quality Check Categories
 
 1. **`STEP_SPLITTING_CANDIDATE`**:
    - Single step contains multiple interactive operations (e.g. joined by conjunctions like `and`, `then`, `und`, `et`, `そして`).
    - Single step mixes an interactive action with a post-condition verification.
-   - *Suggested Rewrite*: Split into discrete numbered atomic steps.
+   - *Suggested Rewrite*: Split into discrete atomic steps on separate lines (without numbered prefixes).
 
 2. **`MISSING_VISUAL_TAG`**:
    - Instruction asserts visual appearance, colors, badges, icons, styling, alignment, or spatial layouts without a visual modality tag.
@@ -51,11 +51,24 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
    - Logical sequence inversion across steps in the scenario (e.g. attempting to interact with a modal dialog, popup, or dropdown menu before the step that opens it, or submitting a form before filling it).
 
 8. **`HARDCODED_VOLATILE_DATA`**:
-   - Hardcoded execution-time dynamic timestamps, absolute current dates, or generated IDs in assertions instead of parameterized `${...}` variables.
+   - Hardcoded execution-time dynamic timestamps, absolute current dates, or generated IDs in assertions instead of parameterized `${...}` variables or dynamic regular expression patterns (e.g. `Assert order ID matches 'V-[0-9]+-US'`).
+   - *Suggested Rewrite*: Parameterize with `${...}` or replace literal ID with a regular expression pattern.
 
 9. **`INCOMPLETE_BRANCH_CLAUSE`**:
    - Dangling conditional clause (e.g. `If...`, `When...`, `Falls...`, `Wenn...`, `〜の場合`) that omits the imperative consequence or action to execute when the condition is met.
    - *Suggested Rewrite*: Complete the branch with an explicit action or convert into an explicit assertion.
+
+10. **`JOURNEY_FIDELITY_VIOLATION`**:
+    - Instruction performs direct URL navigation or jumping mid-scenario after the initial page load (e.g. `Navigate to .../checkout`), bypassing standard on-screen UI workflows.
+    - *Suggested Rewrite*: Reach destination via on-screen UI interaction (e.g. `Click the "Checkout" button`).
+
+11. **`UNRECOGNIZED_MODALITY_TAG`**:
+    - Instruction contains non-standard, misspelled, or unsupported parenthetical tags (e.g. `(screenshot)`, `(fullpage)`, `(visual-check)`, `(no_replay)`) instead of canonical Neodymium tags (`(visual)`, `(visual: full)`, `(layout)`, `(hint: ...)`, `(no-replay)`, `(optional)`, `(bug)`).
+    - *Suggested Rewrite*: Replace with the standard supported Neodymium tag (e.g. `(visual)` instead of `(screenshot)`).
+
+12. **`EXPLICIT_SCRIPT_INTERACTION`**:
+    - Instruction explicitly commands raw script or code execution to interact with elements or submit forms (e.g. `Run JavaScript to click the button`, `Execute script to fill out the form`), bypassing standard user events and validation.
+    - *Suggested Rewrite*: Rephrase as a standard user action (e.g. `Click the button`, `Type "..." into the input field`).
 
 ---
 
@@ -71,7 +84,7 @@ Return a JSON object containing a `findings` array:
       "category": "STEP_SPLITTING_CANDIDATE",
       "severity": "WARNING",
       "message": "Instruction combines opening the selector dropdown and clicking an item.",
-      "suggestedRewrite": "1. Open the country selector\n2. Click \"${country}\"",
+      "suggestedRewrite": "Open the country selector\nClick \"${country}\"",
       "scope": null
     },
     {

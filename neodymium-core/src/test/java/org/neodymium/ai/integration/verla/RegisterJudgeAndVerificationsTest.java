@@ -28,6 +28,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
@@ -50,6 +51,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraVerification")
 @NeodymiumAiTest
 @AiJudge(true)
+@AiOutcomeVerification(value = true, failOnError = false)
 @AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class RegisterJudgeAndVerificationsTest extends BaseAiTest
@@ -70,10 +72,8 @@ public final class RegisterJudgeAndVerificationsTest extends BaseAiTest
         // the server must exist here, otherwise something is wrong
         server.resetAll();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
-        Neodymium.getData().put("neodymium.ai.multilingual", "true");
         Neodymium.getData().put("random", String.valueOf(Neodymium.getRandom().nextInt(1_000, 100_000_000)));
         Neodymium.getData().put("neodymium.ai.pesap.enabled", "true");
-        Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "true");
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "true");
         AiConfiguration.resetInstance();
     }

@@ -82,16 +82,6 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the action extraction system prompt template.
-     *
-     * @return the action extraction system prompt
-     */
-    public static String getActionExtractionPrompt()
-    {
-        return getPrompt("action-extraction-prompt.md");
-    }
-
-    /**
      * Loads the verification system prompt template.
      *
      * @return the verification system prompt
@@ -122,16 +112,6 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the candidate locators rule template for Quality Judge evaluations.
-     *
-     * @return the candidate locators rule markdown
-     */
-    public static String getCandidateLocatorsRule()
-    {
-        return getPrompt("candidate-locators-rule.md");
-    }
-
-    /**
      * Loads the Quality Judge system prompt template.
      *
      * @return the quality judge system prompt
@@ -142,13 +122,13 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the lightweight visual-only system prompt template.
+     * Loads the Quality Judge multi-turn discussion system prompt template.
      *
-     * @return the visual-only system prompt
+     * @return the quality judge discussion system prompt
      */
-    public static String getVisualOnlyPrompt()
+    public static String getQualityJudgeDiscussionPrompt()
     {
-        return getPrompt("visual-only-prompt.md");
+        return getPrompt("quality-judge-discussion-prompt.md");
     }
 
     /**

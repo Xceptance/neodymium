@@ -23,8 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Unit tests for {@link Action} model serialization, getters, and pattern properties.
@@ -156,5 +158,116 @@ public class ActionTest
         assertEquals("button[data-testid='order-submit']", all.get(1));
         assertEquals("button.fallback-btn", all.get(2));
         assertEquals("button.low-score", all.get(3));
+    }
+
+    @Test
+    public void testFromToolCallBrowserClick()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "[data-ai='xcz0f8a5']");
+        final ToolCall call = new ToolCall("call-1", "browser_click", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("CLICK", action.getType());
+        assertEquals("[data-ai='xcz0f8a5']", action.getTarget());
+        assertEquals("Click [data-ai='xcz0f8a5']", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallBrowserType()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#couponCode");
+        args.put("text", "10p-off");
+        final ToolCall call = new ToolCall("call-2", "browser_type", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("TYPE", action.getType());
+        assertEquals("#couponCode", action.getTarget());
+        assertEquals("10p-off", action.getValue());
+        assertEquals("Type '10p-off' into #couponCode", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallBrowserNavigate()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("url", "https://localhost:8543/verla-normal/index.html");
+        final ToolCall call = new ToolCall("call-3", "browser_navigate", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("NAVIGATE", action.getType());
+        assertEquals("https://localhost:8543/verla-normal/index.html", action.getTarget());
+        assertEquals("Navigate to https://localhost:8543/verla-normal/index.html", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallBrowserAssertText()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".order-summary");
+        args.put("expectedText", "Discount (10P-OFF)");
+        final ToolCall call = new ToolCall("call-4", "browser_assert_text", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_TEXT", action.getType());
+        assertEquals(".order-summary", action.getTarget());
+        assertEquals("Discount (10P-OFF)", action.getValue());
+        assertEquals("Assert text 'Discount (10P-OFF)' on .order-summary", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallCoordinateClick()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("x", 150);
+        args.put("y", 300);
+        final ToolCall call = new ToolCall("call-5", "browser_click", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("CLICK", action.getType());
+        assertEquals("coord: 150,300", action.getTarget());
+    }
+
+    @Test
+    public void testDeserializationWithAliases() throws Exception
+    {
+        final String json = """
+            {
+              "type": "CLICK",
+              "selector": "#submit-order",
+              "thought": "Submit customer order"
+            }
+            """;
+
+        final Action action = this.mapper.readValue(json, Action.class);
+        assertEquals("CLICK", action.getType());
+        assertEquals("#submit-order", action.getTarget());
+        assertEquals("Submit customer order", action.getReasoning());
+    }
+
+    @Test
+    public void testFromToolCallBrowserAssertCount()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".search-suggestion-item");
+        args.put("minCount", 6);
+        final ToolCall call = new ToolCall("call-cnt", "browser_assert_count", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_COUNT", action.getType());
+        assertEquals(".search-suggestion-item", action.getTarget());
+        assertEquals(">=6", action.getValue());
+    }
+
+    @Test
+    public void testToToolCallBrowserAssertCount()
+    {
+        final Action action = new Action("ASSERT_COUNT", ".search-suggestion-item", List.of(">=6"), "Assert count", "Verify at least 6 items", false);
+        final ToolCall call = action.toToolCall();
+
+        assertEquals("browser_assert_count", call.toolName());
+        assertEquals(".search-suggestion-item", call.arguments().path("selector").asText());
+        assertEquals(6, call.arguments().path("minCount").asInt());
     }
 }

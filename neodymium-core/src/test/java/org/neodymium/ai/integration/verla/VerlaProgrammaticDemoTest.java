@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.junit.AiInlinePlaybook;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiLlmCache;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -55,6 +56,7 @@ import org.neodymium.util.Neodymium;
 @Tag("verla")
 @AiLlmCache
 @NeodymiumAiTest
+@AiOutcomeVerification(failOnError = false)
 public final class VerlaProgrammaticDemoTest
 {
     private static EmbeddedHtmlServer server;

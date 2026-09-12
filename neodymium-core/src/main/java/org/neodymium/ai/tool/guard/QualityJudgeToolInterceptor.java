@@ -39,6 +39,9 @@ import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.executor.selenide.SelenideLocatorProber;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.QualityJudgePrompt;
@@ -314,7 +317,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         if (score1 < 0.85)
         {
             LOGGER.info("⚖️ Quality Judge triggered deliberation: top candidate score {} < 0.85", score1);
-            return deliberateWithLlmJudge(call, selector, candidates, activeContext,
+            return deliberate(call, selector, candidates, activeContext,
                     "Top candidate confidence is below threshold (" + score1 + " < 0.85)");
         }
 
@@ -326,7 +329,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             if (diff < 0.15)
             {
                 LOGGER.info("⚖️ Quality Judge triggered deliberation: ambiguous score difference {} < 0.15 between top candidates", diff);
-                return deliberateWithLlmJudge(call, selector, candidates, activeContext,
+                return deliberate(call, selector, candidates, activeContext,
                         "Ambiguous candidates with close scores (diff: " + diff + " < 0.15)");
             }
         }
@@ -334,7 +337,253 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         return InterceptionVerdict.allow("Decisive candidate winner passed (score: " + score1 + ")");
     }
 
-    private InterceptionVerdict deliberateWithLlmJudge(
+    private InterceptionVerdict deliberate(
+            final ToolCall call,
+            final String selector,
+            final List<LocatorCandidate> candidates,
+            final ExecutionContext activeContext,
+            final String deliberationReason)
+    {
+        final String judgeMode = this.config.getJudgeMode();
+        if ("DISCUSSION".equalsIgnoreCase(judgeMode))
+        {
+            return deliberateInteractiveDiscussion(call, selector, candidates, activeContext, deliberationReason);
+        }
+        return deliberateWithLlmJudgeSingleShot(call, selector, candidates, activeContext, deliberationReason);
+    }
+
+    private InterceptionVerdict deliberateInteractiveDiscussion(
+            final ToolCall call,
+            final String selector,
+            final List<LocatorCandidate> candidates,
+            final ExecutionContext activeContext,
+            final String deliberationReason)
+    {
+        final AiSession session = activeContext != null
+                ? (AiSession) activeContext.getTransientData().get(ExecutionContext.KEY_SESSION)
+                : null;
+
+        if (this.config.isJudgeEnabled() && session != null && session.getLlmRegistry() != null)
+        {
+            try
+            {
+                final String instruction = (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
+                final Object stateObj = activeContext.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+                final String domContext = stateObj instanceof final SutState sutState ? sutState.getTextContent() : "";
+
+                final int probeDepth = this.config.getJudgeDiscussionProbeDepth();
+                List<String> currentCandidateStrings = new ArrayList<>();
+                for (final LocatorCandidate c : candidates)
+                {
+                    final String loc = c.getLocator();
+                    if (loc != null && !loc.isBlank() && !currentCandidateStrings.contains(loc))
+                    {
+                        currentCandidateStrings.add(loc);
+                    }
+                }
+                if (currentCandidateStrings.isEmpty() && !selector.isBlank())
+                {
+                    currentCandidateStrings.add(selector);
+                }
+
+                // Initial probe
+                List<LocatorProbeResult> probeResults = probeCandidateLocators(currentCandidateStrings, activeContext, probeDepth);
+
+                // Fast-Path: if Candidate 1 has strong confidence (>= 0.85) and probe confirms unique visible match
+                if (this.config.isJudgeDiscussionFastPathEnabled() && !probeResults.isEmpty())
+                {
+                    final LocatorProbeResult firstProbe = probeResults.get(0);
+                    final LocatorCandidate firstCandidate = candidates.get(0);
+                    if (firstCandidate.getScore() >= 0.85
+                            && firstProbe.isUnique()
+                            && !firstProbe.getMatches().isEmpty()
+                            && firstProbe.getMatches().get(0).isVisible())
+                    {
+                        LOGGER.info("⚡ [Quality Judge Fast-Path] Decisive unique locator '{}' confirmed in live DOM (0 extra LLM calls)", firstProbe.getCandidateLocator());
+                        return InterceptionVerdict.allow("Fast-path auto-approved unique locator: " + firstProbe.getCandidateLocator());
+                    }
+                }
+
+                final int maxTurns = Math.max(1, this.config.getJudgeDiscussionMaxTurns());
+                final List<String> history = new ArrayList<>();
+                String lastProposal = selector.isEmpty() && !currentCandidateStrings.isEmpty() ? currentCandidateStrings.get(0) : selector;
+                final QualityJudgePrompt judgePrompt = new QualityJudgePrompt();
+                final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+                for (int turn = 1; turn <= maxTurns; turn++)
+                {
+                    if (turn > 1)
+                    {
+                        probeResults = probeCandidateLocators(currentCandidateStrings, activeContext, probeDepth);
+                    }
+
+                    LOGGER.info("⚖️ [Quality Judge Discussion] Turn {}/{} probing candidates: {}", turn, maxTurns, currentCandidateStrings);
+
+                    final LlmRequest request = judgePrompt.compileDiscussionRequest(
+                            instruction, probeResults, history, turn, maxTurns, domContext, this.config);
+
+                    if (session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new LlmRequestSentEvent(request, "JUDGE_DISCUSSION"));
+                    }
+                    final long startTime = System.currentTimeMillis();
+                    final LlmResponse response = provider.chat(request);
+                    final long durationMs = System.currentTimeMillis() - startTime;
+
+                    if (session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "JUDGE_DISCUSSION"));
+                    }
+
+                    recordMetrics(activeContext, response);
+
+                    if (response == null || response.content() == null || response.content().isBlank())
+                    {
+                        LOGGER.warn("Empty response from Judge in turn {}/{}", turn, maxTurns);
+                        break;
+                    }
+
+                    final QualityJudgeResult judgeResult = judgePrompt.parseResponse(response.content());
+                    final String status = judgeResult.getStatus();
+                    LOGGER.info("⚖️ [Quality Judge] Turn {}/{} Status: {} | Chosen: '{}' | Refined: '{}' | Reasoning: {}",
+                            turn, maxTurns, status, judgeResult.getChosenLocator(), judgeResult.getRefinedProposal(), judgeResult.getReasoning());
+
+                    if ("APPROVED".equalsIgnoreCase(status))
+                    {
+                        final String winningLocator = !judgeResult.getChosenLocator().isBlank()
+                                ? judgeResult.getChosenLocator()
+                                : currentCandidateStrings.get(0);
+                        LOGGER.info("⚖️ [Quality Judge Consensus] APPROVED in Turn {}/{}: '{}' ({})", turn, maxTurns, winningLocator, judgeResult.getReasoning());
+                        if (!winningLocator.equals(selector))
+                        {
+                            final ObjectNode newArgs = call.arguments().deepCopy();
+                            newArgs.put("selector", winningLocator);
+                            final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
+                            return InterceptionVerdict.deliberated(adjusted, "LLM Quality Judge approved locator: " + winningLocator + " (" + judgeResult.getReasoning() + ")");
+                        }
+                        return InterceptionVerdict.allow("LLM Quality Judge confirmed locator: " + selector + " (" + judgeResult.getReasoning() + ")");
+                    }
+                    else if ("REFINED".equalsIgnoreCase(status))
+                    {
+                        final String chosen = judgeResult.getChosenLocator();
+                        if (chosen != null && !chosen.isBlank())
+                        {
+                            lastProposal = chosen;
+                            final Optional<LocatorProbeResult> matchedProbe = probeResults.stream()
+                                    .filter(pr -> pr.getCandidateLocator().equals(chosen))
+                                    .findFirst();
+                            final boolean probingSupported = probeResults.stream().anyMatch(LocatorProbeResult::isSupported);
+                            if (!probingSupported || (matchedProbe.isPresent() && matchedProbe.get().isUnique()))
+                            {
+                                LOGGER.info("⚖️ [Quality Judge Consensus] REFINED to verified candidate in Turn {}/{}: '{}'", turn, maxTurns, chosen);
+                                final ObjectNode newArgs = call.arguments().deepCopy();
+                                newArgs.put("selector", chosen);
+                                final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
+                                return InterceptionVerdict.deliberated(adjusted, "LLM Quality Judge selected verified candidate: " + chosen + " (" + judgeResult.getReasoning() + ")");
+                            }
+
+                            if (turn < maxTurns)
+                            {
+                                history.add(String.format("Turn %d Refinement: %s -> Chosen candidate: '%s'", turn, judgeResult.getReasoning(), chosen));
+                                currentCandidateStrings = new ArrayList<>(List.of(chosen));
+                                continue;
+                            }
+                        }
+                    }
+                    else if ("NEED_REFINEMENT".equalsIgnoreCase(status))
+                    {
+                        final String refined = judgeResult.getRefinedProposal();
+                        if (refined != null && !refined.isBlank())
+                        {
+                            lastProposal = refined;
+                            history.add(String.format("Turn %d Critique: %s -> Refined Proposal: '%s'", turn, judgeResult.getReasoning(), refined));
+                            if (turn < maxTurns)
+                            {
+                                currentCandidateStrings = new ArrayList<>(List.of(refined));
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            history.add(String.format("Turn %d Critique: %s", turn, judgeResult.getReasoning()));
+                        }
+                    }
+                }
+
+                // Exhaustion Fallback: limit turns to X and proceed with last proposal
+                LOGGER.warn("⚠️ [Quality Judge] Reached max turns ({}) without explicit consensus. Proceeding with last proposal: '{}'", maxTurns, lastProposal);
+                if (lastProposal != null && !lastProposal.isBlank() && !lastProposal.equals(selector))
+                {
+                    final ObjectNode newArgs = call.arguments().deepCopy();
+                    newArgs.put("selector", lastProposal);
+                    final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
+                    return InterceptionVerdict.deliberated(adjusted, "Max discussion turns (" + maxTurns + ") reached; proceeded with last proposal: " + lastProposal);
+                }
+                return InterceptionVerdict.allow("Max discussion turns (" + maxTurns + ") reached; proceeded with locator: " + selector);
+            }
+            catch (final Exception e)
+            {
+                LOGGER.warn("⚠️ Quality Judge LLM discussion deliberation encountered an error: {}. Falling back to candidate heuristic.", e.getMessage());
+            }
+        }
+
+        return deliberateCandidatesHeuristically(call, candidates, deliberationReason);
+    }
+
+    private List<LocatorProbeResult> probeCandidateLocators(
+            final List<String> candidateLocators,
+            final ExecutionContext activeContext,
+            final int maxDepth)
+    {
+        final Object executorObj = activeContext != null ? activeContext.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
+        if (executorObj instanceof final TargetExecutor targetExecutor && targetExecutor.supportsLocatorProbing())
+        {
+            return targetExecutor.probeLocators(candidateLocators, maxDepth);
+        }
+        if (activeContext != null && activeContext.getTransientData().get(ExecutionContext.KEY_SESSION) instanceof final AiSession session
+                && session.getTargetExecutor() != null && session.getTargetExecutor().supportsLocatorProbing())
+        {
+            return session.getTargetExecutor().probeLocators(candidateLocators, maxDepth);
+        }
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            return SelenideLocatorProber.probe(WebDriverRunner.getWebDriver(), candidateLocators, maxDepth);
+        }
+        return candidateLocators.stream().map(LocatorProbeResult::unsupported).toList();
+    }
+
+    private static void recordMetrics(final ExecutionContext activeContext, final LlmResponse response)
+    {
+        if (activeContext == null)
+        {
+            return;
+        }
+        final Integer totalCalls = (Integer) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+        activeContext.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, totalCalls + 1);
+        final Integer judgeCalls = (Integer) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0);
+        activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_CALL_COUNT, judgeCalls + 1);
+
+        final TokenUsage newUsage = response != null ? response.tokenUsage() : null;
+        if (newUsage != null)
+        {
+            final TokenUsage existing = (TokenUsage) activeContext.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+            if (existing != null)
+            {
+                activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new TokenUsage(
+                        existing.inputTokenCount() + newUsage.inputTokenCount(),
+                        existing.outputTokenCount() + newUsage.outputTokenCount(),
+                        existing.totalTokenCount() + newUsage.totalTokenCount(),
+                        existing.cachedTokenCount() + newUsage.cachedTokenCount()
+                ));
+            }
+            else
+            {
+                activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, newUsage);
+            }
+        }
+    }
+
+    private InterceptionVerdict deliberateWithLlmJudgeSingleShot(
             final ToolCall call,
             final String selector,
             final List<LocatorCandidate> candidates,
@@ -376,31 +625,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                     session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, "JUDGE"));
                 }
 
-                // Track total calls and judge calls in execution metrics
-                final Integer totalCalls = (Integer) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
-                activeContext.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, totalCalls + 1);
-                final Integer judgeCalls = (Integer) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0);
-                activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_CALL_COUNT, judgeCalls + 1);
-
-                // Accumulate token usage
-                final TokenUsage newUsage = response != null ? response.tokenUsage() : null;
-                if (newUsage != null)
-                {
-                    final TokenUsage existing = (TokenUsage) activeContext.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
-                    if (existing != null)
-                    {
-                        activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, new TokenUsage(
-                                existing.inputTokenCount() + newUsage.inputTokenCount(),
-                                existing.outputTokenCount() + newUsage.outputTokenCount(),
-                                existing.totalTokenCount() + newUsage.totalTokenCount(),
-                                existing.cachedTokenCount() + newUsage.cachedTokenCount()
-                        ));
-                    }
-                    else
-                    {
-                        activeContext.getTransientData().put(ExecutionContext.KEY_JUDGE_TOKEN_USAGE, newUsage);
-                    }
-                }
+                recordMetrics(activeContext, response);
 
                 if (response != null && response.content() != null)
                 {

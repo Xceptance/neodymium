@@ -176,4 +176,100 @@ public final class PlaybookLinterPromptTest
         assertTrue(prompt.parseResponse("Invalid content", null).isEmpty());
         assertTrue(prompt.parseResponse("{\"findings\": []}", null).isEmpty());
     }
+
+    @Test
+    @DisplayName("Verify parsing enhanced architecture categories: journey fidelity, unrecognized tags, script interactions, and regex patterns")
+    public void testParseEnhancedArchitectureCategories()
+    {
+        final PlaybookStep s1 = new PlaybookStep("Navigate to https://example.com/checkout directly");
+        s1.setLineNumber(10);
+        s1.setSourceFile("checkout.yaml");
+
+        final PlaybookStep s2 = new PlaybookStep("Check badge is green (screenshot)");
+        s2.setLineNumber(15);
+        s2.setSourceFile("checkout.yaml");
+
+        final PlaybookStep s3 = new PlaybookStep("Run JavaScript to click the submit button");
+        s3.setLineNumber(20);
+        s3.setSourceFile("checkout.yaml");
+
+        final PlaybookStep s4 = new PlaybookStep("Verify order ID matches #ORD-2026-9988");
+        s4.setLineNumber(25);
+        s4.setSourceFile("checkout.yaml");
+
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Enhanced Architecture Scenario", List.of(s1, s2, s3, s4), null);
+
+        final String jsonResponse = """
+            ```json
+            {
+              "findings": [
+                {
+                  "stepIndex": 1,
+                  "category": "JOURNEY_FIDELITY_VIOLATION",
+                  "severity": "ERROR",
+                  "message": "Direct URL navigation mid-scenario violates journey fidelity.",
+                  "suggestedRewrite": "Click the \\"Proceed to Checkout\\" button",
+                  "scope": null
+                },
+                {
+                  "stepIndex": 2,
+                  "category": "UNRECOGNIZED_MODALITY_TAG",
+                  "severity": "WARNING",
+                  "message": "Tag (screenshot) is not recognized; use standard (visual) tag.",
+                  "suggestedRewrite": "Check badge is green (visual)",
+                  "scope": "VIEWPORT"
+                },
+                {
+                  "stepIndex": 3,
+                  "category": "EXPLICIT_SCRIPT_INTERACTION",
+                  "severity": "WARNING",
+                  "message": "Script execution to click elements bypasses standard user validation.",
+                  "suggestedRewrite": "Click the submit button",
+                  "scope": null
+                },
+                {
+                  "stepIndex": 4,
+                  "category": "HARDCODED_VOLATILE_DATA",
+                  "severity": "WARNING",
+                  "message": "Hardcoded dynamic ID will fail in replay; use regex pattern.",
+                  "suggestedRewrite": "Verify order ID matches pattern \\"#ORD-[0-9]{4}-[0-9]+\\"",
+                  "scope": null
+                }
+              ]
+            }
+            ```
+            """;
+
+        final List<PlaybookLinterFinding> findings = prompt.parseResponse(jsonResponse, null);
+        assertEquals(4, findings.size());
+
+        final PlaybookLinterFinding f1 = findings.get(0);
+        assertEquals(1, f1.stepIndex());
+        assertEquals(10, f1.lineNumber());
+        assertEquals("checkout.yaml", f1.sourceFile());
+        assertEquals(LinterCategory.JOURNEY_FIDELITY_VIOLATION, f1.category());
+        assertEquals(LinterSeverity.ERROR, f1.severity());
+        assertTrue(f1.suggestedRewrite().contains("Proceed to Checkout"));
+
+        final PlaybookLinterFinding f2 = findings.get(1);
+        assertEquals(2, f2.stepIndex());
+        assertEquals(15, f2.lineNumber());
+        assertEquals(LinterCategory.UNRECOGNIZED_MODALITY_TAG, f2.category());
+        assertEquals(LinterSeverity.WARNING, f2.severity());
+        assertTrue(f2.suggestedRewrite().contains("(visual)"));
+
+        final PlaybookLinterFinding f3 = findings.get(2);
+        assertEquals(3, f3.stepIndex());
+        assertEquals(20, f3.lineNumber());
+        assertEquals(LinterCategory.EXPLICIT_SCRIPT_INTERACTION, f3.category());
+        assertEquals(LinterSeverity.WARNING, f3.severity());
+        assertEquals("Click the submit button", f3.suggestedRewrite());
+
+        final PlaybookLinterFinding f4 = findings.get(3);
+        assertEquals(4, f4.stepIndex());
+        assertEquals(25, f4.lineNumber());
+        assertEquals(LinterCategory.HARDCODED_VOLATILE_DATA, f4.category());
+        assertEquals(LinterSeverity.WARNING, f4.severity());
+        assertTrue(f4.suggestedRewrite().contains("matches pattern"));
+    }
 }

@@ -54,8 +54,10 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.StepTimeoutExceededException;
 import org.neodymium.ai.pipeline.StepTurnLimitExceededException;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.LlmResponseSanitizer;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
@@ -252,6 +254,14 @@ public final class AgentToolLoopStep implements PipelineStep
 
         if (isZeroDom)
         {
+            activeContextLevel = ContextLevel.MINIMAL;
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+            final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+            if (statsObj instanceof final StepStats stats)
+            {
+                stats.addContextLevel(activeContextLevel.name());
+            }
+
             // Zero DOM nodes: Provide only page URL and Title
             final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
             if (driver != null)
@@ -340,6 +350,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("   - If the visual condition is satisfied in the screenshot, call tool 'complete_step' immediately with a concise summary of your visual verification.\n");
         systemPrompt.append("   - Do NOT attempt to query DOM elements or execute DOM text assertions for visual checks when the visual condition is visible on the screen.\n");
         systemPrompt.append("6. SINGLE TOOL PER TURN: Propose exactly ONE tool call per response. Do NOT call multiple tools in parallel or batch multiple actions in a single turn. After each tool execution, you will receive the updated page state to decide your next action.\n");
+        systemPrompt.append("7. COUNT & COLLECTION ASSERTIONS: When an instruction asserts the number of items, rows, entries, or suggestions (e.g. 'contains at least 6 entries', '3 items in cart', '10 results'), you MUST invoke `browser_assert_count` with the target `selector` and `expectedCount`, `minCount`, or `maxCount`.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -447,16 +458,18 @@ public final class AgentToolLoopStep implements PipelineStep
 
             // Extract proposed tool calls (native first, then text JSON fallback)
             List<ToolCall> proposedCalls = null;
+            boolean isSingleShotAction = false;
             if (response != null && response.hasToolCalls())
             {
                 proposedCalls = response.toolCalls();
             }
             else if (response != null && response.content() != null && !response.content().isBlank())
             {
-                final ToolCall single = parseLlmToolCall(response.content());
-                if (single != null)
+                final ParsedCallsResult parsed = parseLlmToolCalls(response.content());
+                if (parsed != null && parsed.calls() != null && !parsed.calls().isEmpty())
                 {
-                    proposedCalls = List.of(single);
+                    proposedCalls = parsed.calls();
+                    isSingleShotAction = parsed.isSingleShotAction();
                 }
             }
 
@@ -487,6 +500,101 @@ public final class AgentToolLoopStep implements PipelineStep
                             invalidResponseCount + 1
                     );
                 }
+            }
+
+            if (isSingleShotAction)
+            {
+                for (final ToolCall singleShotCall : proposedCalls)
+                {
+                    logToolCall(singleShotCall);
+                    final InterceptionVerdict verdict = this.interceptor.intercept(singleShotCall, toolContext, intent);
+                    final ToolCall effectiveCall = verdict.getEffectiveCall(singleShotCall);
+                    if (!verdict.isAllowed())
+                    {
+                        throw new ConclusiveFailureException("Tool call rejected by guard: " + verdict.reason());
+                    }
+                    final java.util.Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
+                    if (toolOpt.isPresent())
+                    {
+                        final ToolResult result;
+                        try
+                        {
+                            result = toolOpt.get().execute(effectiveCall, toolContext);
+                        }
+                        catch (final AssertionError e)
+                        {
+                            throw e;
+                        }
+                        catch (final Exception e)
+                        {
+                            throw new ConclusiveFailureException("Action execution failed: " + e.getMessage(), e);
+                        }
+                        if (result != null && result.status() == ToolResult.Status.ERROR)
+                        {
+                            if (result.content().startsWith("AssertionError"))
+                            {
+                                throw new AssertionError(result.content());
+                            }
+                            throw new ConclusiveFailureException("Action execution failed: " + result.content());
+                        }
+                        executedCalls.add(effectiveCall);
+                        if (effectiveCall.toolName().startsWith("browser_") && !"browser_take_screenshot".equals(effectiveCall.toolName()))
+                        {
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                Action mappedAction = mapToolCallToAction(effectiveCall);
+                                if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                                {
+                                    mappedAction = mappedAction.withReasoning(thought.trim());
+                                }
+                                final SessionData sessionData = context.getSessionData();
+                                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                                final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                            }
+                        }
+                    }
+                    else if (executor != null)
+                    {
+                        Action mappedAction = mapToolCallToAction(effectiveCall);
+                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                        {
+                            mappedAction = mappedAction.withReasoning(thought.trim());
+                        }
+                        try
+                        {
+                            executor.execute(mappedAction);
+                        }
+                        catch (final AssertionError e)
+                        {
+                            throw e;
+                        }
+                        catch (final Exception e)
+                        {
+                            throw new ConclusiveFailureException("Action execution failed: " + e.getMessage(), e);
+                        }
+                        executedCalls.add(effectiveCall);
+                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                        if (session != null && session.getEventBus() != null)
+                        {
+                            final SessionData sessionData = context.getSessionData();
+                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                        }
+                    }
+                    else
+                    {
+                        throw new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName());
+                    }
+                }
+                final String summary = "Actions completed";
+                context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                finishLoop(context, executedCalls, summary);
+                LOGGER.info("🎯 Single-shot action goal accomplished (Executed Calls: {})", executedCalls.size());
+                LOGGER.info(TURN_DIVIDER);
+                break;
             }
 
             // Strict 1 tool call per turn for browser automation: execute first, ignore rest to prevent stale DOM errors
@@ -541,7 +649,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             lastProposedToolWasCompleteStep = true;
                             final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
-                                    + "). You must execute an assertion tool (such as 'browser_assert_text') to verify the expected condition before calling complete_step. "
+                                    + "). You must execute an assertion tool (such as 'browser_assert_text' or 'browser_assert_count') to verify the expected condition before calling complete_step. "
                                     + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
                             LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
                             conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), rejectMsg));
@@ -592,12 +700,11 @@ public final class AgentToolLoopStep implements PipelineStep
 
             if (!verdict.isAllowed())
             {
-                // Policy violation rejected by guard: feed back to agent to self-correct
-                LOGGER.warn("Guard rejected tool call {}: {}", proposedCall.toolName(), verdict.reason());
                 final ToolResult rejResult = verdict.rejectionResult();
                 final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
-                conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), "REJECTED by policy: " + rejContent));
-                continue;
+                LOGGER.error("❌ Guard rejected tool call {} due to policy violation during {} step: {}",
+                        proposedCall.toolName(), intent, rejContent);
+                throw new AssertionError("Policy violation: " + rejContent);
             }
 
             // Execute the tool
@@ -674,8 +781,15 @@ public final class AgentToolLoopStep implements PipelineStep
                     final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                     if (session != null && session.getEventBus() != null)
                     {
-                        final Action mappedAction = mapToolCallToAction(effectiveCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mappedAction, true));
+                        Action mappedAction = mapToolCallToAction(effectiveCall);
+                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                        {
+                            mappedAction = mappedAction.withReasoning(thought.trim());
+                        }
+                        final SessionData sessionData = context.getSessionData();
+                        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                        session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
                     }
                 }
                 if ("browser_take_screenshot".equals(effectiveCall.toolName()))
@@ -744,41 +858,69 @@ public final class AgentToolLoopStep implements PipelineStep
             attachments = Collections.emptyList();
 
             // Submit fresh ground-truth DOM from SUT for the next turn
-            if (executor != null)
+            final boolean requireDomForNextTurn = !isZeroDom
+                    || (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
+                    || activeContextLevel != ContextLevel.MINIMAL;
+
+            if (requireDomForNextTurn)
             {
-                try
+                if (executor != null)
                 {
-                    final SutState freshState = executor.captureState(activeContextLevel, activeContextLevel.isFullPageScreenshot());
-                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
-                    final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
-                    if (statsObj instanceof final StepStats stats)
+                    try
                     {
-                        stats.addContextLevel(activeContextLevel.name());
-                    }
-                    if (freshState.getTextContent() != null && !freshState.getTextContent().isBlank())
-                    {
-                        final List<SutAttachment> freshAttachments = freshState.getAttachments() != null
-                                ? freshState.getAttachments()
-                                : Collections.emptyList();
-                        final StringBuilder turnPrompt = new StringBuilder();
-                        turnPrompt.append("### Current Page State & Interactive Elements:\n")
-                                .append(freshState.getTextContent());
-                        if (milestones != null && !milestones.isEmpty())
+                        final SutState freshState = executor.captureState(activeContextLevel, activeContextLevel.isFullPageScreenshot());
+                        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                        final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                        if (statsObj instanceof final StepStats stats)
                         {
-                            turnPrompt.append("\n\n### Compound Milestones To Complete:\n");
-                            for (int i = 0; i < milestones.size(); i++)
-                            {
-                                turnPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
-                            }
+                            stats.addContextLevel(activeContextLevel.name());
                         }
-                        turnPrompt.append("\n\nWhat is your next tool call?");
-                        conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
-                        attachments = freshAttachments;
+                        if (freshState.getTextContent() != null && !freshState.getTextContent().isBlank())
+                        {
+                            final List<SutAttachment> freshAttachments = freshState.getAttachments() != null
+                                    ? freshState.getAttachments()
+                                    : Collections.emptyList();
+                            final StringBuilder turnPrompt = new StringBuilder();
+                            turnPrompt.append("### Current Page State & Interactive Elements:\n")
+                                    .append(freshState.getTextContent());
+                            if (milestones != null && !milestones.isEmpty())
+                            {
+                                turnPrompt.append("\n\n### Compound Milestones To Complete:\n");
+                                for (int i = 0; i < milestones.size(); i++)
+                                {
+                                    turnPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
+                                }
+                            }
+                            turnPrompt.append("\n\nWhat is your next tool call?");
+                            conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
+                            attachments = freshAttachments;
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.debug("Could not capture fresh SUT state for next turn: {}", e.getMessage());
                     }
                 }
-                catch (final Exception e)
+            }
+            else
+            {
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (driver != null)
                 {
-                    LOGGER.debug("Could not capture fresh SUT state for next turn: {}", e.getMessage());
+                    try
+                    {
+                        final String currentUrl = driver.getCurrentUrl();
+                        final String currentTitle = driver.getTitle();
+                        final StringBuilder turnPrompt = new StringBuilder();
+                        turnPrompt.append("### Current Page:\n")
+                                .append("URL: ").append(currentUrl).append("\n")
+                                .append("Title: ").append(currentTitle).append("\n\n")
+                                .append("What is your next tool call?");
+                        conversation.add(ChatMessage.user(turnPrompt.toString()));
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
                 }
             }
         }
@@ -836,13 +978,24 @@ public final class AgentToolLoopStep implements PipelineStep
         final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         if (stepObj instanceof final PlaybookStep currentStep)
         {
-            currentStep.setToolCalls(executedCalls);
+            final SessionData sessionData = context.getSessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+            final List<ToolCall> sanitizedCalls = new ArrayList<>();
+            for (final ToolCall call : executedCalls)
+            {
+                sanitizedCalls.add(sanitizeToolCall(call, sessionData, sanitizer));
+            }
+            currentStep.setToolCalls(sanitizedCalls);
+
             final List<Action> actions = new ArrayList<>();
             for (final ToolCall call : executedCalls)
             {
-                if (call.toolName().startsWith("browser_") && !"browser_take_screenshot".equals(call.toolName()))
+                if (!"complete_step".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()))
                 {
-                    actions.add(mapToolCallToAction(call));
+                    final Action mapped = mapToolCallToAction(call);
+                    final Action sanitizedAction = sanitizer.sanitize(mapped, sessionData);
+                    actions.add(sanitizedAction);
                 }
             }
             currentStep.setActions(actions);
@@ -852,63 +1005,40 @@ public final class AgentToolLoopStep implements PipelineStep
         context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
     }
 
-    private static Action mapToolCallToAction(final ToolCall call)
+    private static ToolCall sanitizeToolCall(final ToolCall call, final SessionData sessionData, final DefaultActionSanitizer sanitizer)
     {
-        final String name = call.toolName();
+        if (call == null || sessionData == null || sanitizer == null)
+        {
+            return call;
+        }
         final JsonNode args = call.arguments();
-        final String type = switch (name)
+        if (args == null || !args.isObject())
         {
-            case "browser_navigate" -> "NAVIGATE";
-            case "browser_click" -> "CLICK";
-            case "browser_type" -> "TYPE";
-            case "browser_hover" -> "HOVER";
-            case "browser_scroll" -> "SCROLL";
-            case "browser_assert_text" -> "ASSERT_TEXT";
-            case "browser_press_key" -> "KEY_PRESS";
-            default -> name.toUpperCase();
-        };
-        final String target;
-        if ("browser_navigate".equals(name) && args.hasNonNull("url"))
-        {
-            target = args.path("url").asText();
-        }
-        else if (args.hasNonNull("selector"))
-        {
-            target = args.path("selector").asText();
-        }
-        else if (args.hasNonNull("target"))
-        {
-            target = args.path("target").asText();
-        }
-        else
-        {
-            target = "";
+            return call;
         }
 
-        final Object value;
-        if (args.hasNonNull("text"))
+        final ObjectNode sanitizedArgs = MAPPER.createObjectNode();
+        final Iterator<Map.Entry<String, JsonNode>> fields = args.fields();
+        while (fields.hasNext())
         {
-            value = args.path("text").asText();
+            final Map.Entry<String, JsonNode> field = fields.next();
+            if (field.getValue().isTextual())
+            {
+                final String rawText = field.getValue().asText();
+                final String cleanText = sanitizer.sanitizeText(rawText, sessionData);
+                sanitizedArgs.put(field.getKey(), cleanText);
+            }
+            else
+            {
+                sanitizedArgs.set(field.getKey(), field.getValue().deepCopy());
+            }
         }
-        else if (args.hasNonNull("expectedText"))
-        {
-            value = args.path("expectedText").asText();
-        }
-        else if (args.hasNonNull("key"))
-        {
-            value = args.path("key").asText();
-        }
-        else
-        {
-            value = null;
-        }
+        return new ToolCall(call.callId(), call.toolName(), sanitizedArgs);
+    }
 
-        final boolean isRegex = args.path("regex").asBoolean(false)
-                || (value != null && (value.toString().contains("[0-9]") || value.toString().contains("\\d")
-                    || value.toString().contains(".*") || value.toString().contains(".+")));
-        final Action action = new Action(type, target, value, "Tool call: " + name, "", false).withIsRegex(isRegex);
-        action.setToolCall(call);
-        return action;
+    public static Action mapToolCallToAction(final ToolCall call)
+    {
+        return Action.fromToolCall(call);
     }
 
     private List<ToolDefinition> filterToolsForIntent(final SemanticIntent intent, final boolean isVisual)
@@ -949,6 +1079,11 @@ public final class AgentToolLoopStep implements PipelineStep
         return "browser_click".equals(name)
                 || "browser_type".equals(name)
                 || "browser_select".equals(name)
+                || "browser_clear".equals(name)
+                || "browser_clear_cookies".equals(name)
+                || "browser_back".equals(name)
+                || "browser_forward".equals(name)
+                || "browser_refresh".equals(name)
                 || "browser_press_key".equals(name)
                 || "browser_execute_script".equals(name)
                 || "browser_navigate".equals(name);
@@ -958,10 +1093,146 @@ public final class AgentToolLoopStep implements PipelineStep
     {
         return "browser_query_dom".equals(name)
                 || "browser_assert_text".equals(name)
+                || "browser_assert_count".equals(name)
                 || "browser_inspect".equals(name);
     }
 
-    private ToolCall parseLlmToolCall(final String content)
+    private record ParsedCallsResult(List<ToolCall> calls, boolean isSingleShotAction) {}
+
+    private ToolCall parseToolCallFromCandidate(final JsonNode candidate)
+    {
+        if (candidate == null || !candidate.isObject())
+        {
+            return null;
+        }
+
+        String toolName = null;
+        JsonNode candidateArgs = null;
+        if (candidate.hasNonNull("name"))
+        {
+            toolName = normalizeToolName(candidate.path("name").asText());
+        }
+        else if (candidate.hasNonNull("tool"))
+        {
+            toolName = normalizeToolName(candidate.path("tool").asText());
+        }
+        else if (candidate.hasNonNull("toolName"))
+        {
+            toolName = normalizeToolName(candidate.path("toolName").asText());
+        }
+        else if (candidate.hasNonNull("action"))
+        {
+            toolName = normalizeToolName(candidate.path("action").asText());
+        }
+        else if (candidate.isObject())
+        {
+            final Iterator<String> it = candidate.fieldNames();
+            while (it.hasNext())
+            {
+                final String field = it.next();
+                if (isKnownToolOrAction(field))
+                {
+                    toolName = normalizeToolName(field);
+                    candidateArgs = candidate.path(field);
+                    break;
+                }
+            }
+        }
+
+        if (toolName != null && !toolName.isBlank())
+        {
+            final JsonNode rawArgs;
+            if (candidateArgs != null && candidateArgs.isObject())
+            {
+                rawArgs = candidateArgs;
+            }
+            else if (candidate.hasNonNull("arguments"))
+            {
+                rawArgs = candidate.path("arguments");
+            }
+            else if (candidate.hasNonNull("parameters"))
+            {
+                rawArgs = candidate.path("parameters");
+            }
+            else if (candidate.hasNonNull("args"))
+            {
+                rawArgs = candidate.path("args");
+            }
+            else
+            {
+                final ObjectNode inlined = candidate.deepCopy();
+                inlined.remove("name");
+                inlined.remove("tool");
+                inlined.remove("toolName");
+                inlined.remove("thought");
+                inlined.remove("reasoning");
+                inlined.remove("tool_call");
+                inlined.remove("action");
+                rawArgs = inlined;
+            }
+
+            final JsonNode args;
+            if (rawArgs instanceof ObjectNode)
+            {
+                final ObjectNode obj = ((ObjectNode) rawArgs).deepCopy();
+                if (obj.hasNonNull("target") && !obj.hasNonNull("selector"))
+                {
+                    obj.put("selector", obj.path("target").asText());
+                }
+                if (obj.hasNonNull("locator") && !obj.hasNonNull("selector"))
+                {
+                    obj.put("selector", obj.path("locator").asText());
+                }
+                if (obj.hasNonNull("selector") && !obj.hasNonNull("target"))
+                {
+                    obj.put("target", obj.path("selector").asText());
+                }
+                if (obj.hasNonNull("locator") && !obj.hasNonNull("target"))
+                {
+                    obj.put("target", obj.path("locator").asText());
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("text"))
+                {
+                    obj.put("text", obj.path("value").asText());
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("expectedText"))
+                {
+                    obj.put("expectedText", obj.path("value").asText());
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("url"))
+                {
+                    obj.put("url", obj.path("value").asText());
+                }
+                if ("browser_navigate".equals(toolName) || "navigate".equalsIgnoreCase(toolName))
+                {
+                    if (!obj.hasNonNull("url") || obj.path("url").asText().isBlank())
+                    {
+                        if (obj.hasNonNull("target") && !obj.path("target").asText().isBlank())
+                        {
+                            obj.put("url", obj.path("target").asText());
+                        }
+                        else if (obj.hasNonNull("locator") && !obj.path("locator").asText().isBlank())
+                        {
+                            obj.put("url", obj.path("locator").asText());
+                        }
+                        else if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                        {
+                            obj.put("url", obj.path("value").asText());
+                        }
+                    }
+                }
+                args = obj;
+            }
+            else
+            {
+                args = rawArgs;
+            }
+            return new ToolCall(UUID.randomUUID().toString(), toolName, args);
+        }
+        return null;
+    }
+
+    private ParsedCallsResult parseLlmToolCalls(final String content)
     {
         if (content == null || content.isBlank())
         {
@@ -978,103 +1249,82 @@ public final class AgentToolLoopStep implements PipelineStep
 
             final JsonNode root = MAPPER.readTree(json);
 
-            // Handle array root: [ { ... } ]
-            JsonNode candidate = root;
+            // Handle legacy actions array: { "actions": [ { ... } ] }
+            if (root.hasNonNull("actions") && root.path("actions").isArray() && root.path("actions").size() > 0)
+            {
+                final List<ToolCall> calls = new ArrayList<>();
+                for (final JsonNode actNode : root.path("actions"))
+                {
+                    final ToolCall call = parseToolCallFromCandidate(actNode);
+                    if (call != null)
+                    {
+                        calls.add(call);
+                    }
+                }
+                if (!calls.isEmpty())
+                {
+                    return new ParsedCallsResult(calls, true);
+                }
+            }
+
+            // Handle root with single "action" field
+            if (root.hasNonNull("action"))
+            {
+                final ToolCall call = parseToolCallFromCandidate(root);
+                if (call != null)
+                {
+                    return new ParsedCallsResult(List.of(call), true);
+                }
+            }
+
+            // Handle root array: [ { ... } ]
             if (root.isArray() && root.size() > 0)
             {
-                candidate = root.get(0);
-            }
-            else if (root.hasNonNull("tool_calls") && root.path("tool_calls").isArray() && root.path("tool_calls").size() > 0)
-            {
-                candidate = root.path("tool_calls").get(0);
-            }
-            else if (root.hasNonNull("tool_call"))
-            {
-                candidate = root.path("tool_call");
-            }
-
-            String toolName = null;
-            JsonNode candidateArgs = null;
-            if (candidate.hasNonNull("name"))
-            {
-                toolName = normalizeToolName(candidate.path("name").asText());
-            }
-            else if (candidate.hasNonNull("tool"))
-            {
-                toolName = normalizeToolName(candidate.path("tool").asText());
-            }
-            else if (candidate.hasNonNull("toolName"))
-            {
-                toolName = normalizeToolName(candidate.path("toolName").asText());
-            }
-            else if (candidate.hasNonNull("action"))
-            {
-                toolName = normalizeToolName(candidate.path("action").asText());
-            }
-            else if (candidate.isObject())
-            {
-                final Iterator<String> it = candidate.fieldNames();
-                while (it.hasNext())
+                final List<ToolCall> calls = new ArrayList<>();
+                for (final JsonNode elem : root)
                 {
-                    final String field = it.next();
-                    if (isKnownToolOrAction(field))
+                    final ToolCall call = parseToolCallFromCandidate(elem);
+                    if (call != null)
                     {
-                        toolName = normalizeToolName(field);
-                        candidateArgs = candidate.path(field);
-                        break;
+                        calls.add(call);
                     }
+                }
+                if (!calls.isEmpty())
+                {
+                    return new ParsedCallsResult(calls, false);
                 }
             }
 
-            if (toolName != null && !toolName.isBlank())
+            if (root.hasNonNull("tool_calls") && root.path("tool_calls").isArray() && root.path("tool_calls").size() > 0)
             {
-                final JsonNode args;
-                if (candidateArgs != null && candidateArgs.isObject())
+                final List<ToolCall> calls = new ArrayList<>();
+                for (final JsonNode elem : root.path("tool_calls"))
                 {
-                    final ObjectNode inlined = candidateArgs.deepCopy();
-                    if (inlined.hasNonNull("target") && !inlined.hasNonNull("selector"))
+                    final ToolCall call = parseToolCallFromCandidate(elem);
+                    if (call != null)
                     {
-                        inlined.put("selector", inlined.path("target").asText());
+                        calls.add(call);
                     }
-                    if (inlined.hasNonNull("value") && !inlined.hasNonNull("text"))
-                    {
-                        inlined.put("text", inlined.path("value").asText());
-                    }
-                    args = inlined;
                 }
-                else if (candidate.hasNonNull("arguments"))
+                if (!calls.isEmpty())
                 {
-                    args = candidate.path("arguments");
+                    return new ParsedCallsResult(calls, false);
                 }
-                else if (candidate.hasNonNull("parameters"))
+            }
+
+            if (root.hasNonNull("tool_call"))
+            {
+                final ToolCall call = parseToolCallFromCandidate(root.path("tool_call"));
+                if (call != null)
                 {
-                    args = candidate.path("parameters");
+                    return new ParsedCallsResult(List.of(call), false);
                 }
-                else if (candidate.hasNonNull("args"))
-                {
-                    args = candidate.path("args");
-                }
-                else
-                {
-                    final ObjectNode inlined = candidate.deepCopy();
-                    inlined.remove("name");
-                    inlined.remove("tool");
-                    inlined.remove("toolName");
-                    inlined.remove("thought");
-                    inlined.remove("reasoning");
-                    inlined.remove("tool_call");
-                    inlined.remove("action");
-                    if (candidate.hasNonNull("target"))
-                    {
-                        inlined.put("selector", candidate.path("target").asText());
-                    }
-                    if (candidate.hasNonNull("value"))
-                    {
-                        inlined.put("text", candidate.path("value").asText());
-                    }
-                    args = inlined;
-                }
-                return new ToolCall(UUID.randomUUID().toString(), toolName, args);
+            }
+
+            final ToolCall single = parseToolCallFromCandidate(root);
+            if (single != null)
+            {
+                return new ParsedCallsResult(List.of(single), false);
             }
         }
         catch (final Exception e)
@@ -1082,6 +1332,12 @@ public final class AgentToolLoopStep implements PipelineStep
             LOGGER.debug("Could not parse LLM output as structured tool call: {}", e.getMessage());
         }
         return null;
+    }
+
+    ToolCall parseLlmToolCall(final String content)
+    {
+        final ParsedCallsResult res = parseLlmToolCalls(content);
+        return res != null && res.calls() != null && !res.calls().isEmpty() ? res.calls().get(0) : null;
     }
 
     private static String stripNamespacePrefix(final String toolName)
@@ -1100,11 +1356,16 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             return false;
         }
-        final String name = stripNamespacePrefix(rawName.trim());
-        return name.startsWith("browser_") || "complete_step".equals(name) || "click".equalsIgnoreCase(name)
-                || "type".equalsIgnoreCase(name) || "navigate".equalsIgnoreCase(name) || "hover".equalsIgnoreCase(name)
-                || "scroll".equalsIgnoreCase(name) || "assert_text".equalsIgnoreCase(name) || "key_press".equalsIgnoreCase(name)
-                || this.toolRegistry.hasTool(name);
+        final String name = stripNamespacePrefix(rawName.trim()).toLowerCase();
+        return name.startsWith("browser_") || "complete_step".equals(name) || "click".equals(name)
+                || "type".equals(name) || "navigate".equals(name) || "hover".equals(name)
+                || "scroll".equals(name) || "select".equals(name) || "clear".equals(name)
+                || "clear_cookies".equals(name) || "back".equals(name) || "forward".equals(name)
+                || "refresh".equals(name) || "wait".equals(name) || "assert".equals(name)
+                || "assert_text".equals(name) || "assert_title".equals(name) || "key_press".equals(name)
+                || "check".equals(name) || "store".equals(name) || "branch".equals(name)
+                || "include".equals(name) || "java_method".equals(name)
+                || this.toolRegistry.hasTool(name) || this.toolRegistry.hasTool(rawName.trim());
     }
 
     private static String normalizeToolName(final String rawName)
@@ -1114,17 +1375,29 @@ public final class AgentToolLoopStep implements PipelineStep
             return null;
         }
         final String name = stripNamespacePrefix(rawName.trim());
-        return switch (name.toUpperCase())
+        final String lower = name.toLowerCase();
+        return switch (lower)
         {
-            case "CLICK" -> "browser_click";
-            case "TYPE" -> "browser_type";
-            case "NAVIGATE" -> "browser_navigate";
-            case "HOVER" -> "browser_hover";
-            case "SCROLL" -> "browser_scroll";
-            case "ASSERT_TEXT" -> "browser_assert_text";
-            case "KEY_PRESS" -> "browser_press_key";
-            case "NONE" -> "complete_step";
-            default -> name;
+            case "click" -> "browser_click";
+            case "type" -> "browser_type";
+            case "navigate" -> "browser_navigate";
+            case "hover" -> "browser_hover";
+            case "scroll" -> "browser_scroll";
+            case "select" -> "browser_select";
+            case "clear" -> "browser_clear";
+            case "clear_cookies" -> "browser_clear_cookies";
+            case "back" -> "browser_back";
+            case "forward" -> "browser_forward";
+            case "refresh" -> "browser_refresh";
+            case "wait" -> "browser_wait";
+            case "assert" -> "browser_assert_text";
+            case "assert_text" -> "browser_assert_text";
+            case "assert_title" -> "browser_assert_text";
+            case "assert_count" -> "browser_assert_count";
+            case "key_press" -> "browser_press_key";
+            case "none" -> "complete_step";
+            case "check" -> "browser_click";
+            default -> lower.startsWith("browser_") ? lower : name;
         };
     }
 

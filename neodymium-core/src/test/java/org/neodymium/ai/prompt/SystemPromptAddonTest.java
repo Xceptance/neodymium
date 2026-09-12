@@ -234,36 +234,4 @@ public final class SystemPromptAddonTest
             SystemPromptAddonHelper.getAddon("general", context);
         });
     }
-
-    /**
-     * Verifies that when multilingual guidance is enabled, Language Universality is appended.
-     */
-    @Test
-    public void testMultilingualAddonInjection()
-    {
-        final Map<String, SessionData.DataEntry> data = new HashMap<>();
-        data.put("neodymium.ai.multilingual", new SessionData.DataEntry("true", false));
-        final ExecutionContext context = new ExecutionContext(new SessionData(data));
-
-        final String pesapAddon = SystemPromptAddonHelper.getAddon("pesap", context);
-        assertNotNull(pesapAddon);
-        assertTrue(pesapAddon.contains("Language Universality"));
-        assertTrue(pesapAddon.contains("sub-steps"));
-
-        final String generalAddon = SystemPromptAddonHelper.getAddon("general", context);
-        assertNotNull(generalAddon);
-        assertTrue(generalAddon.contains("Language Universality"));
-        assertTrue(generalAddon.contains("button texts, labels"));
-
-        final String visualAddon = SystemPromptAddonHelper.getAddon("visual", context);
-        assertNotNull(visualAddon);
-        assertTrue(visualAddon.contains("Language Universality"));
-        assertTrue(visualAddon.contains("visual appearance"));
-
-        final String basePrompt = "Base system prompt instructions";
-        final String combined = SystemPromptAddonHelper.appendAddon(basePrompt, "pesap", context);
-        assertNotNull(combined);
-        assertTrue(combined.contains("Language Universality"));
-        assertTrue(combined.contains("CRITICAL REMINDER"));
-    }
 }

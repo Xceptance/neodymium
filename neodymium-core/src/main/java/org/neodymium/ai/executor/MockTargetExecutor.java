@@ -22,17 +22,22 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.model.ContextLevel;
 
 /**
  * Mock implementation of {@link TargetExecutor} used in unit testing to simulate
- * a SUT executor environment and track action calls.
+ * a SUT executor environment, track action calls, and mock locator probing.
  *
  * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 public final class MockTargetExecutor implements TargetExecutor
@@ -46,6 +51,16 @@ public final class MockTargetExecutor implements TargetExecutor
      * The queue of canned states to be consumed sequentially during captureState calls.
      */
     private final Queue<SutState> stateQueue = new ConcurrentLinkedQueue<>();
+
+    /**
+     * Canned locator probe results for headless testing.
+     */
+    private final Map<String, LocatorProbeResult> cannedProbeResults = new ConcurrentHashMap<>();
+
+    /**
+     * Flag indicating whether this mock executor reports probing support.
+     */
+    private boolean probingSupported = true;
 
     /**
      * The set of supported actions declared by this executor.
@@ -87,6 +102,62 @@ public final class MockTargetExecutor implements TargetExecutor
     }
 
     /**
+     * Sets whether this mock executor declares support for locator probing.
+     *
+     * @param supported whether probing is supported
+     */
+    public void setProbingSupported(final boolean supported)
+    {
+        this.probingSupported = supported;
+    }
+
+    /**
+     * Registers a canned probe result for a specific candidate locator.
+     *
+     * @param locator candidate locator
+     * @param result probe result to return
+     */
+    public void registerProbeResult(final String locator, final LocatorProbeResult result)
+    {
+        if (locator != null && result != null)
+        {
+            this.cannedProbeResults.put(locator, result);
+        }
+    }
+
+    /**
+     * Clears all registered canned probe results.
+     */
+    public void clearProbeResults()
+    {
+        this.cannedProbeResults.clear();
+    }
+
+    @Override
+    public boolean supportsLocatorProbing()
+    {
+        return this.probingSupported;
+    }
+
+    @Override
+    public List<LocatorProbeResult> probeLocators(final List<String> candidateLocators, final int maxDepth)
+    {
+        if (!this.probingSupported)
+        {
+            return candidateLocators != null
+                    ? candidateLocators.stream().map(LocatorProbeResult::unsupported).toList()
+                    : Collections.emptyList();
+        }
+        if (candidateLocators == null || candidateLocators.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+        return candidateLocators.stream()
+                .map(loc -> this.cannedProbeResults.getOrDefault(loc, LocatorProbeResult.supported(loc, 0, Collections.emptyList())))
+                .toList();
+    }
+
+    /**
      * Retrieves the list of actions that have been executed on this target.
      *
      * @return the list of executed actions
@@ -103,7 +174,7 @@ public final class MockTargetExecutor implements TargetExecutor
      * @throws IOException if state capture fails
      */
     @Override
-    public SutState captureState(final org.neodymium.ai.model.ContextLevel level) throws IOException
+    public SutState captureState(final ContextLevel level) throws IOException
     {
         final SutState next = this.stateQueue.poll();
         if (next != null)

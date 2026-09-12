@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.client.LlmCapability;
@@ -38,6 +39,7 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
 
 /**
  * Mock programmatic integration test for the CLICK action plugin.
@@ -60,6 +62,7 @@ public class ClickIntegrationTest extends BaseAiTest
     @BeforeEach
     public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
         session.data().putDynamic("click.test.url", pageUrl, false);
 
@@ -92,6 +95,12 @@ public class ClickIntegrationTest extends BaseAiTest
               ]
             }
             """, null, "mock"));
+    }
+
+    @AfterEach
+    public void tearDownProperties()
+    {
+        Neodymium.getData().remove("neodymium.ai.pesap.enabled");
     }
 
     /**

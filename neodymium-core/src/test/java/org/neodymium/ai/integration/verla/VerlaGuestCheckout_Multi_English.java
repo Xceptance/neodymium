@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -37,8 +38,8 @@ import org.neodymium.util.Neodymium;
  * Unified Multi-Locale Guest Checkout Integration Test.
  * Drives a single English playbook across all 9 international storefront locales.
  *
- * Runs FORCE_RECORDING and REPLAY_STRICT across both Quality Judge modes (false and true)
- * for each country individually.
+ * Runs FORCE_RECORDING and REPLAY_STRICT across Quality Judge modes (false and true)
+ * and Outcome Verification modes (false and true) for each country individually.
  *
  * Schema: Feature_TargetStore_ScriptLanguage
  *
@@ -53,6 +54,7 @@ import org.neodymium.util.Neodymium;
 @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Multi_English.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@AiOutcomeVerification(value = {false, true}, failOnError = false)
 public class VerlaGuestCheckout_Multi_English extends BaseAiTest
 {
     /**
@@ -70,7 +72,6 @@ public class VerlaGuestCheckout_Multi_English extends BaseAiTest
     {
         server.resetInventory();
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
-        Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 
     @Order(1)

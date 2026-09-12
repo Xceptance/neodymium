@@ -139,13 +139,13 @@ public class PlaybookStepTest
         final String json = mapper.writeValueAsString(step);
 
         Assertions.assertTrue(json.contains("\"targetFramework\" : \"SELENIUM_SELENIDE\"") || json.contains("\"targetFramework\":\"SELENIUM_SELENIDE\""));
-        Assertions.assertTrue(json.contains("\"schemaVersion\" : \"3.0\"") || json.contains("\"schemaVersion\":\"3.0\""));
+        Assertions.assertTrue(json.contains("\"schemaVersion\" : \"" + PlaybookStep.CURRENT_SCHEMA_VERSION + "\"") || json.contains("\"schemaVersion\":\"" + PlaybookStep.CURRENT_SCHEMA_VERSION + "\""));
         Assertions.assertTrue(json.contains("\"semanticContext\" : \"Primary checkout purchase button\"") || json.contains("\"semanticContext\":\"Primary checkout purchase button\""));
         Assertions.assertTrue(json.contains("\"domFeatureVector\""));
 
         final PlaybookStep deserialized = mapper.readValue(json, PlaybookStep.class);
         Assertions.assertEquals("SELENIUM_SELENIDE", deserialized.getTargetFramework());
-        Assertions.assertEquals("3.0", deserialized.getSchemaVersion());
+        Assertions.assertEquals(PlaybookStep.CURRENT_SCHEMA_VERSION, deserialized.getSchemaVersion());
         Assertions.assertEquals("Primary checkout purchase button", deserialized.getSemanticContext());
         Assertions.assertNotNull(deserialized.getDomFeatureVector());
         Assertions.assertEquals("button", deserialized.getDomFeatureVector().getTag());

@@ -235,9 +235,9 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
 
 ---
 
-### 2.2 Execution Patterns & Developer APIs (The 9 Patterns)
+### 2.2 Execution Patterns & Developer APIs (The 11 Patterns)
 
-Neodymium AI provides 9 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
+Neodymium AI provides 11 distinct execution patterns for prompt execution, annotation-driven test methods, and hybrid Selenide debugging:
 
 #### A. Annotation-Driven Execution
 
@@ -318,11 +318,41 @@ public void test5_StaticLintOnly(final AiSession session)
 }
 ```
 
+##### Pattern 6: Semantic Outcome Verification Matrix Execution (`@AiOutcomeVerification`)
+Runs test cases with post-action semantic outcome verification enabled, disabled, or across variations:
+```java
+// Single execution with Outcome Verification enabled (no parameter defaults to true)
+@AiOutcomeVerification
+@AiPlaybook
+public void test6_VerifiedOutcome(final AiSession session)
+{
+    // Executes with post-action semantic outcome verification active [Outcome: ON]
+}
+
+// Single execution explicitly disabling Outcome Verification
+@AiOutcomeVerification(false)
+@AiPlaybook
+public void test6_OutcomeDisabled(final AiSession session)
+{
+    // Executes with post-action semantic outcome verification disabled [Outcome: OFF]
+}
+
+// Matrix variation: test with and without post-action semantic verification
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+@AiOutcomeVerification({false, true})
+@AiPlaybook
+public void test6_OutcomeMatrix(final AiSession session)
+{
+    // Executed 4 times: [FORCE_RECORDING, Outcome: OFF], [FORCE_RECORDING, Outcome: ON],
+    //                   [REPLAY_STRICT, Outcome: OFF],    [REPLAY_STRICT, Outcome: ON]
+}
+```
+
 ---
 
 #### B. Programmatic & Debugging APIs
 
-##### Pattern 6: Fully Programmatic Java Builder (`Playbook.builder()`)
+##### Pattern 7: Fully Programmatic Java Builder (`Playbook.builder()`)
 Construct steps programmatically using `PlaybookStep` and `Playbook.builder()`:
 ```java
 final Playbook playbook = Playbook.builder()
@@ -337,7 +367,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 7: Multiline Text Block String with Embedded YAML Data
+##### Pattern 8: Multiline Text Block String with Embedded YAML Data
 Execute raw multiline text blocks containing embedded YAML `steps:` and `data:` sections via `session.execute(...)`:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
@@ -355,7 +385,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 8: Multiline Text Block String with `SessionData` Container
+##### Pattern 9: Multiline Text Block String with `SessionData` Container
 Execute text block prompt strings seeded with a programmatic `SessionData` container:
 ```java
 final SessionData sessionData = new SessionData();
@@ -371,7 +401,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 9: Step-by-Step Java Statement Debugging
+##### Pattern 10: Step-by-Step Java Statement Debugging
 Execute single-statement prompts allowing standard IDE breakpoints on individual Java lines:
 ```java
 try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING))
@@ -382,7 +412,7 @@ try (final AiSession session = AiSession.selenide(ExecutionMode.FORCE_RECORDING)
 }
 ```
 
-##### Pattern 10: Programmatic Playbook with External Test Data (`@AiDataFile` & Convention)
+##### Pattern 11: Programmatic Playbook with External Test Data (`@AiDataFile` & Convention)
 Execute programmatic Java tests using external companion YAML/JSON test data files without writing dummy playbooks:
 
 ```java

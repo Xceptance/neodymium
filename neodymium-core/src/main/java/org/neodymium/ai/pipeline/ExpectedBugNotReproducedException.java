@@ -19,42 +19,35 @@
 package org.neodymium.ai.pipeline;
 
 /**
- * Concrete escalation exception targeting a specific depth level or identifier
- * in the execution context pipeline hierarchy.
+ * Thrown when a test step marked with an expected bug succeeds unexpectedly.
+ * Extends {@link AssertionError} so test runners (e.g. JUnit, Surefire, Allure) report
+ * this unexpected pass as an assertion failure.
  *
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
- * @deprecated Replaced by iterative {@link org.neodymium.ai.pipeline.steps.AgentToolLoopStep} active discovery tools.
  */
-@Deprecated(since = "5.6.0", forRemoval = true)
-public final class ToLevelEscalationException extends EscalationException
+public final class ExpectedBugNotReproducedException extends AssertionError
 {
     private static final long serialVersionUID = 1L;
 
     /**
-     * The target depth level or identifier to escalate to.
-     */
-    private final String targetLevel;
-
-    /**
-     * Constructs a ToLevelEscalationException.
+     * Constructs an ExpectedBugNotReproducedException with a detail message.
      *
-     * @param message the escalation details message
-     * @param targetLevel the target depth level or identifier
+     * @param message the detail message describing the step and expected bug
      */
-    public ToLevelEscalationException(final String message, final String targetLevel)
+    public ExpectedBugNotReproducedException(final String message)
     {
         super(message);
-        this.targetLevel = targetLevel;
     }
 
     /**
-     * Gets the target level.
+     * Constructs an ExpectedBugNotReproducedException with a detail message and cause.
      *
-     * @return the target level string
+     * @param message the detail message describing the step and expected bug
+     * @param cause the underlying cause
      */
-    public String getTargetLevel()
+    public ExpectedBugNotReproducedException(final String message, final Throwable cause)
     {
-        return this.targetLevel;
+        super(message, cause);
     }
 }

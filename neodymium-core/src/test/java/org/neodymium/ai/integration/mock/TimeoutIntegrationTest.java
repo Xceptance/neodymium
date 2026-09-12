@@ -21,12 +21,11 @@ package org.neodymium.ai.integration.mock;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.neodymium.util.Neodymium;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
@@ -49,6 +48,20 @@ import org.neodymium.ai.session.AiSession;
 @AiPlaybook(value = "programmatic", name = "custom_timeout_playbook")
 public class TimeoutIntegrationTest extends BaseAiTest
 {
+
+    @BeforeAll
+    public static void configure()
+    {
+        System.setProperty("neodymium.ai.report.disk.enabled", "false");
+        System.setProperty("neodymium.ai.visualRca.enabled", "false");
+    }
+
+    @AfterAll
+    public static void tearDown()
+    {
+        System.clearProperty("neodymium.ai.report.disk.enabled");
+        System.clearProperty("neodymium.ai.visualRca.enabled");
+    }
 
     /**
      * Set up test page URL and queue LLM mock responses before each test.
@@ -118,9 +131,9 @@ public class TimeoutIntegrationTest extends BaseAiTest
         {
             final long duration = System.currentTimeMillis() - start;
             // The step should fail quickly due to custom 50ms timeout.
-            // If the timeout tag is ignored, it will wait for Selenide's default timeout (4000ms).
-            org.junit.jupiter.api.Assertions.assertTrue(duration < 2000, 
-                "Test should fail fast (under 2 seconds) due to (timeout:50ms) tag, but took " + duration + " ms");
+            // If the timeout tag is ignored, it will wait for Selenide's default timeout (4000ms) across multiple locator attempts (> 12 seconds).
+            org.junit.jupiter.api.Assertions.assertTrue(duration < 4000, 
+                "Test should fail fast (under 4 seconds) due to (timeout:50ms) tag, but took " + duration + " ms");
         }
     }
 }

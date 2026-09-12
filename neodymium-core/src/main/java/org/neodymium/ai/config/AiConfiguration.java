@@ -506,17 +506,17 @@ public final class AiConfiguration
      */
     public boolean isSemanticVerificationEnabled()
     {
-        return getBoolean("neodymium.ai.semanticVerification.enabled", true);
+        return getBoolean("neodymium.ai.semanticVerification.enabled", false);
     }
 
     /**
      * Checks if semantic outcome verification failures should abort execution.
      *
-     * @return true if verification failure throws VerificationFailureException (default: true), false for report-only warning
+     * @return true if verification failure throws VerificationFailureException (default: false), false for report-only warning
      */
     public boolean isSemanticVerificationFailOnError()
     {
-        return getBoolean("neodymium.ai.semanticVerification.failOnError", true);
+        return getBoolean("neodymium.ai.semanticVerification.failOnError", false);
     }
 
     /**
@@ -539,15 +539,6 @@ public final class AiConfiguration
         return getBoolean("neodymium.ai.judge.enabled", false);
     }
 
-    /**
-     * Checks if multilingual prompt guidance is enabled.
-     *
-     * @return true if neodymium.ai.multilingual is set to true (default: false)
-     */
-    public boolean isMultilingual()
-    {
-        return getBoolean("neodymium.ai.multilingual", false);
-    }
 
     /**
      * Checks if replay execution should respect recorded delays and pacing.
@@ -628,14 +619,44 @@ public final class AiConfiguration
 
     /**
      * Resolves the execution mode for the LLM Quality Judge.
-     * Valid options: "ON_AMBIGUITY" (default), "ALWAYS", "ON_FAIL".
+     * Valid options: "DISCUSSION" (default), "ON_AMBIGUITY", "ALWAYS", "ON_FAIL".
      *
      * @return the resolved judge mode string (uppercase)
      */
     public String getJudgeMode()
     {
-        final String mode = getProperty("neodymium.ai.judge.mode", "ON_AMBIGUITY");
-        return mode != null ? mode.trim().toUpperCase() : "ON_AMBIGUITY";
+        final String mode = getProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        return mode != null ? mode.trim().toUpperCase() : "DISCUSSION";
+    }
+
+    /**
+     * Maximum interactive deliberation discussion turns between Judge and live SUT prober.
+     *
+     * @return max discussion turns (default: 3)
+     */
+    public int getJudgeDiscussionMaxTurns()
+    {
+        return getInt("neodymium.ai.judge.discussion.maxTurns", 3);
+    }
+
+    /**
+     * Maximum matching elements summarized per candidate during live SUT probing.
+     *
+     * @return probe depth (default: 3)
+     */
+    public int getJudgeDiscussionProbeDepth()
+    {
+        return getInt("neodymium.ai.judge.discussion.probeDepth", 3);
+    }
+
+    /**
+     * Whether fast-path auto-approval is enabled for decisive score-10 unique matches.
+     *
+     * @return true if fast-path is enabled (default: true)
+     */
+    public boolean isJudgeDiscussionFastPathEnabled()
+    {
+        return getBoolean("neodymium.ai.judge.discussion.fastPath", true);
     }
 
     /**
@@ -992,16 +1013,5 @@ public final class AiConfiguration
     public long getLlmInitialRetryDelayMs()
     {
         return Math.max(10L, getLong("neodymium.ai.llm.initialRetryDelayMs", 100L));
-    }
-
-    /**
-     * Checks whether the unified tooling architecture (AgentToolLoopStep and PlaybookToolReplayer)
-     * is enabled. Default is true.
-     *
-     * @return true if unified tooling is enabled, false for legacy execution flow
-     */
-    public boolean isUnifiedToolingEnabled()
-    {
-        return getBoolean("neodymium.ai.tooling.enabled", true);
     }
 }

@@ -934,4 +934,45 @@ public final class SelenideElementFinder
     {
         return LocatorResolver.resolveLocator(target);
     }
+
+    /**
+     * Scrolls the given element into view using centered block alignment if any part of the element
+     * lies outside the current browser viewport boundaries.
+     * <p>
+     * Uses centered alignment ({@code block: 'center', inline: 'nearest'}) to prevent sticky headers
+     * or footers from occluding the target element.
+     * </p>
+     *
+     * @param element the Selenide element to inspect and scroll if needed
+     */
+    public static void scrollIntoViewIfNeeded(final SelenideElement element)
+    {
+        if (element == null)
+        {
+            return;
+        }
+        try
+        {
+            Selenide.executeJavaScript(
+                "(function(el) {" +
+                "  if (!el || typeof el.getBoundingClientRect !== 'function') return;" +
+                "  var target = el;" +
+                "  var rect = target.getBoundingClientRect();" +
+                "  if (rect.width === 0 && rect.height === 0 && target.parentElement) {" +
+                "    target = target.parentElement;" +
+                "    rect = target.getBoundingClientRect();" +
+                "  }" +
+                "  var vh = window.innerHeight || document.documentElement.clientHeight;" +
+                "  var vw = window.innerWidth || document.documentElement.clientWidth;" +
+                "  var outOfView = rect.top < 0 || rect.bottom > vh || rect.left < 0 || rect.right > vw;" +
+                "  if (outOfView) {" +
+                "    target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });" +
+                "  }" +
+                "})(arguments[0]);",
+                element);
+        }
+        catch (final Throwable ignored)
+        {
+        }
+    }
 }

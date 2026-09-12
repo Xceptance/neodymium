@@ -43,6 +43,7 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.LlmLoggingUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -178,7 +179,7 @@ public final class PesapPreStep implements PipelineStep
                     {
                         if (response.content() != null)
                         {
-                            LOGGER.trace("Raw response content:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                            LOGGER.trace("Raw response content:\n{}", LlmLoggingUtils.formatJsonForLogging(response.content()));
                         }
                         if (response.toolCalls() != null && !response.toolCalls().isEmpty())
                         {

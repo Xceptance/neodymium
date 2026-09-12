@@ -34,9 +34,9 @@ import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.pipeline.steps.CallLlmStep;
 import org.neodymium.ai.prompt.PlaybookLinterPrompt;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.LlmLoggingUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -159,7 +159,7 @@ public final class PlaybookLinter
 
             if (LOGGER.isDebugEnabled() && response != null && response.content() != null)
             {
-                LOGGER.debug("   🔍 [Playbook Linter Response]:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                LOGGER.debug("   🔍 [Playbook Linter Response]:\n{}", LlmLoggingUtils.formatJsonForLogging(response.content()));
             }
 
             // Track tokens and call count

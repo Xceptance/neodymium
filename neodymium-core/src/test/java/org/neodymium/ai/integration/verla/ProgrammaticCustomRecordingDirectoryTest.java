@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiLlmCache;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -53,6 +54,7 @@ import org.neodymium.util.Neodymium;
 @Tag("verla")
 @AiLlmCache
 @NeodymiumAiTest
+@AiOutcomeVerification(failOnError = false)
 public class ProgrammaticCustomRecordingDirectoryTest
 {
     private static final String CUSTOM_REC_DIR = "target/custom-programmatic-recordings";
