@@ -122,6 +122,16 @@ public final class AiAgentPrompts
     }
 
     /**
+     * Loads the Quality Judge multi-turn discussion system prompt template.
+     *
+     * @return the quality judge discussion system prompt
+     */
+    public static String getQualityJudgeDiscussionPrompt()
+    {
+        return getPrompt("quality-judge-discussion-prompt.md");
+    }
+
+    /**
      * Loads the upfront playbook pre-flight linter system prompt template.
      *
      * @return the playbook linter system prompt

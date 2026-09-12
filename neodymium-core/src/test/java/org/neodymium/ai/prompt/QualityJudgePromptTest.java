@@ -24,11 +24,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.executor.probe.ProbeElementSummary;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -120,7 +123,7 @@ public class QualityJudgePromptTest
             final LlmRequest selenideReq = prompt.compileRequest("Click the submit button", "=== DOM Context ===", action, AiConfiguration.getInstance());
             assertNotNull(selenideReq);
             assertTrue(selenideReq.systemMessage().contains("## Selenide/Selenium Engine Locators"), "Judge system prompt must include Selenide engine locator rule in Selenide mode.");
-            assertTrue(selenideReq.systemMessage().contains("FORBIDDEN: Playwright pseudo-selectors"), "Judge system prompt must forbid Playwright pseudo-selectors.");
+            assertTrue(selenideReq.systemMessage().contains("Neodymium Text Pseudo-Selectors"), "Judge system prompt must describe Neodymium text pseudo-selectors.");
 
             // 2. REST mode context -> excludes Selenide locator rule
             final ExecutionContext restContext = new ExecutionContext(null);
@@ -135,5 +138,48 @@ public class QualityJudgePromptTest
         {
             ExecutionContext.setActiveContext(null);
         }
+    }
+
+    @Test
+    public void testCompileDiscussionRequestAndParseStatus()
+    {
+        final QualityJudgePrompt prompt = new QualityJudgePrompt();
+        final LocatorProbeResult p1 = LocatorProbeResult.supported(
+                ".size-btn", 5, List.of(new ProbeElementSummary(0, "button", "S", Map.of("class", "size-btn"), true, true, false, null, ""))
+        );
+
+        final LlmRequest req = prompt.compileDiscussionRequest(
+                "Click size S",
+                List.of(p1),
+                List.of("Turn 1 Critique: Ambiguous"),
+                2,
+                3,
+                "=== DOM Context ===",
+                AiConfiguration.getInstance());
+
+        assertNotNull(req);
+        assertTrue(req.userMessage().contains("## Live SUT Probe Telemetry (Turn 2 of 3)"));
+        assertTrue(req.userMessage().contains("Candidate 1: `.size-btn`"));
+        assertTrue(req.userMessage().contains("Status: AMBIGUOUS (5 matches in live DOM)"));
+        assertTrue(req.userMessage().contains("Turn 1 Critique: Ambiguous"));
+
+        final String jsonResponse = """
+                ```json
+                {
+                  "status": "NEED_REFINEMENT",
+                  "judgment": "REFINED",
+                  "chosenLocator": "",
+                  "refinedProposal": ".quick-add-dropdown.active button:text-is('S')",
+                  "isRegex": false,
+                  "confidence": 0.92,
+                  "reasoning": "Need text-based scoping"
+                }
+                ```
+                """;
+
+        final QualityJudgeResult result = prompt.parseResponse(jsonResponse);
+        assertEquals("NEED_REFINEMENT", result.getStatus());
+        assertEquals(".quick-add-dropdown.active button:text-is('S')", result.getRefinedProposal());
+        assertEquals("Need text-based scoping", result.getReasoning());
     }
 }

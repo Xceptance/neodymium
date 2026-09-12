@@ -18,14 +18,15 @@
  */
 package org.neodymium.ai.prompt;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.executor.probe.ProbeElementSummary;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.slf4j.Logger;
@@ -191,6 +192,135 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
         return new LlmRequest(compiledSystemPrompt, userMsg, java.util.Collections.emptyList(), null, temp, timeout);
     }
 
+    /**
+     * Compiles an interactive deliberation discussion user message.
+     *
+     * @param instruction step instruction
+     * @param probeResults live SUT probe results for current candidates
+     * @param deliberationHistory list of prior turn exchange summaries
+     * @param currentTurn current turn index (1-based)
+     * @param maxTurns maximum allowed turns
+     * @param domContext full SUT DOM context
+     * @return compiled user prompt message
+     */
+    public String compileDiscussionUserMessage(
+            final String instruction,
+            final List<LocatorProbeResult> probeResults,
+            final List<String> deliberationHistory,
+            final int currentTurn,
+            final int maxTurns,
+            final String domContext)
+    {
+        final StringBuilder userMsg = new StringBuilder();
+        userMsg.append("## Execution Instruction\n");
+        userMsg.append(instruction != null ? instruction.trim() : "").append("\n\n");
+
+        userMsg.append("## Live SUT Probe Telemetry (Turn ").append(currentTurn).append(" of ").append(maxTurns).append(")\n");
+        if (probeResults != null && !probeResults.isEmpty())
+        {
+            for (int i = 0; i < probeResults.size(); i++)
+            {
+                final LocatorProbeResult pr = probeResults.get(i);
+                userMsg.append(String.format("Candidate %d: `%s`\n", i + 1, pr.getCandidateLocator()));
+                userMsg.append(String.format("  - Match Count: %d\n", pr.getMatchCount()));
+                if (pr.getErrorMessage() != null)
+                {
+                    userMsg.append(String.format("  - Error: %s\n", pr.getErrorMessage()));
+                }
+                else if (pr.getMatchCount() == 0)
+                {
+                    userMsg.append("  - Status: DEAD (0 matches in live DOM)\n");
+                }
+                else if (pr.getMatchCount() > 1)
+                {
+                    userMsg.append(String.format("  - Status: AMBIGUOUS (%d matches in live DOM)\n", pr.getMatchCount()));
+                }
+                else
+                {
+                    userMsg.append("  - Status: UNIQUE (1 match)\n");
+                }
+
+                final List<ProbeElementSummary> matches = pr.getMatches();
+                if (matches != null && !matches.isEmpty())
+                {
+                    for (final ProbeElementSummary match : matches)
+                    {
+                        userMsg.append(String.format("  * [%d] <%s> text=\"%s\" (visible=%b, enabled=%b, rect=%s)\n",
+                                match.getIndex(), match.getTagName(), match.getText(),
+                                match.isVisible(), match.isEnabled(),
+                                match.getRect() != null ? match.getRect().toString() : "N/A"));
+                        if (!match.getAttributes().isEmpty())
+                        {
+                            userMsg.append("    Attributes: ").append(match.getAttributes()).append("\n");
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            userMsg.append("No probe telemetry available.\n");
+        }
+        userMsg.append("\n");
+
+        userMsg.append("## Deliberation History\n");
+        if (deliberationHistory != null && !deliberationHistory.isEmpty())
+        {
+            for (final String historyTurn : deliberationHistory)
+            {
+                userMsg.append(historyTurn).append("\n");
+            }
+        }
+        else
+        {
+            userMsg.append("None (Initial Turn)\n");
+        }
+        userMsg.append("\n");
+
+        userMsg.append("## Current DOM Context\n");
+        userMsg.append(domContext != null ? domContext : "").append("\n");
+
+        return userMsg.toString();
+    }
+
+    /**
+     * Compiles an LlmRequest for an interactive deliberation discussion turn.
+     *
+     * @param instruction step instruction
+     * @param probeResults live SUT probe results for current candidates
+     * @param deliberationHistory list of prior turn exchange summaries
+     * @param currentTurn current turn index (1-based)
+     * @param maxTurns maximum allowed turns
+     * @param domContext full SUT DOM context
+     * @param aiConfig configuration instance
+     * @return compiled discussion LlmRequest
+     */
+    public LlmRequest compileDiscussionRequest(
+            final String instruction,
+            final List<LocatorProbeResult> probeResults,
+            final List<String> deliberationHistory,
+            final int currentTurn,
+            final int maxTurns,
+            final String domContext,
+            final AiConfiguration aiConfig)
+    {
+        final String userMsg = compileDiscussionUserMessage(instruction, probeResults, deliberationHistory, currentTurn, maxTurns, domContext);
+
+        final double temp = aiConfig != null ? aiConfig.getTemperature("judge") : 0.0;
+        final int timeout = aiConfig != null ? aiConfig.getTimeoutSeconds("judge") : 30;
+
+        String compiledSystemPrompt = AiAgentPrompts.getQualityJudgeDiscussionPrompt().trim();
+        final ExecutionContext activeContext = ExecutionContext.getActiveContext();
+        final Object targetExecutor = activeContext != null ? activeContext.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
+        final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;
+        if (isSelenideMode)
+        {
+            compiledSystemPrompt = compiledSystemPrompt + "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
+        }
+
+        return new LlmRequest(compiledSystemPrompt, userMsg, Collections.emptyList(), null, temp, timeout);
+    }
+
     @Override
     public QualityJudgeResult parseResponse(final String rawContent, final ExecutionContext context) throws Exception
     {
@@ -207,7 +337,7 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
     {
         if (rawResponse == null || rawResponse.isBlank())
         {
-            return new QualityJudgeResult("APPROVED", "", null, false, 0.5, "Empty response from judge");
+            return new QualityJudgeResult("APPROVED", "APPROVED", "", null, false, 0.5, "Empty response from judge", null);
         }
 
         try
@@ -232,7 +362,7 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
         catch (final Exception e)
         {
             LOGGER.warn("Failed to parse Quality Judge LLM response: {}. Raw: {}", e.getMessage(), rawResponse);
-            return new QualityJudgeResult("APPROVED", "", null, false, 0.5, "Parse error, defaulting to primary action");
+            return new QualityJudgeResult("APPROVED", "APPROVED", "", null, false, 0.5, "Parse error, defaulting to primary action", null);
         }
     }
 
@@ -242,58 +372,75 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class QualityJudgeResult
     {
+        private final String status;
         private final String judgment;
         private final String chosenLocator;
         private final String chosenValue;
         private final boolean isRegex;
         private final double confidence;
         private final String reasoning;
+        private final String refinedProposal;
 
         @JsonCreator
         public QualityJudgeResult(
+                @JsonProperty("status") final String status,
                 @JsonProperty("judgment") final String judgment,
                 @JsonProperty("chosenLocator") final String chosenLocator,
                 @JsonProperty("chosenValue") final String chosenValue,
                 @JsonProperty("isRegex") @JsonAlias({"isRegex", "regex"}) final Boolean isRegex,
                 @JsonProperty("confidence") final Double confidence,
-                @JsonProperty("reasoning") final String reasoning)
+                @JsonProperty("reasoning") final String reasoning,
+                @JsonProperty("refinedProposal") final String refinedProposal)
         {
-            this.judgment = judgment != null ? judgment.trim().toUpperCase() : "APPROVED";
+            final String resolvedStatus = status != null ? status.trim().toUpperCase() : (judgment != null ? judgment.trim().toUpperCase() : "APPROVED");
+            this.status = resolvedStatus;
+            this.judgment = judgment != null ? judgment.trim().toUpperCase() : resolvedStatus;
             this.chosenLocator = chosenLocator != null ? chosenLocator.trim() : "";
             this.chosenValue = chosenValue != null ? chosenValue.trim() : null;
             this.isRegex = isRegex != null ? isRegex : false;
             this.confidence = confidence != null ? confidence : 0.9;
             this.reasoning = reasoning != null ? reasoning.trim() : "";
+            this.refinedProposal = refinedProposal != null ? refinedProposal.trim() : "";
+        }
+
+        public String getStatus()
+        {
+            return this.status;
         }
 
         public String getJudgment()
         {
-            return judgment;
+            return this.judgment;
         }
 
         public String getChosenLocator()
         {
-            return chosenLocator;
+            return this.chosenLocator;
         }
 
         public String getChosenValue()
         {
-            return chosenValue;
+            return this.chosenValue;
         }
 
         public boolean isRegex()
         {
-            return isRegex;
+            return this.isRegex;
         }
 
         public double getConfidence()
         {
-            return confidence;
+            return this.confidence;
         }
 
         public String getReasoning()
         {
-            return reasoning;
+            return this.reasoning;
+        }
+
+        public String getRefinedProposal()
+        {
+            return this.refinedProposal;
         }
     }
 }

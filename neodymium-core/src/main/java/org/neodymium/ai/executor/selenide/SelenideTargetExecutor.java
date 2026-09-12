@@ -43,6 +43,7 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.executor.selenide.plugins.BackAction;
 import org.neodymium.ai.executor.selenide.plugins.AssertAction;
@@ -530,6 +531,28 @@ public final class SelenideTargetExecutor implements TargetExecutor
             // ignore
         }
         return null;
+    }
+
+    @Override
+    public boolean supportsLocatorProbing()
+    {
+        return true;
+    }
+
+    @Override
+    public List<LocatorProbeResult> probeLocators(final List<String> candidateLocators, final int maxDepth)
+    {
+        if (candidateLocators == null || candidateLocators.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+        if (!WebDriverRunner.hasWebDriverStarted())
+        {
+            return candidateLocators.stream()
+                    .map(LocatorProbeResult::unsupported)
+                    .toList();
+        }
+        return SelenideLocatorProber.probe(WebDriverRunner.getWebDriver(), candidateLocators, maxDepth);
     }
 
     @Override

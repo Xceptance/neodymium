@@ -24,8 +24,9 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiOutcomeVerification;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
@@ -34,8 +35,8 @@ import org.neodymium.util.Neodymium;
 
 /**
  * Runs YAML-based VERLA integration tests for product search and search result filtering in German
- * in recording mode first and strict replay mode second. This tests search but with a test 
- * script in German.
+ * in recording mode first and strict replay mode second, supporting Quality Judge and Outcome Verification modes.
+ * This tests search but with a test script in German.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
@@ -48,11 +49,22 @@ import org.neodymium.util.Neodymium;
 public final class SearchTest_German extends BaseAiTest
 {
     /**
+     * Constructs a default SearchTest_German instance.
+     */
+    public SearchTest_German()
+    {
+    }
+
+    /**
      * Setup method to inject dynamic server URLs.
      */
     @BeforeEach
     public void setup()
     {
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
     }
 
@@ -60,6 +72,8 @@ public final class SearchTest_German extends BaseAiTest
      * Live recording mode execution for dataset 'US'.
      */
     @Order(1)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("US")
     @AiPlaybook("/verla/SearchTest_German.yaml")
@@ -71,6 +85,8 @@ public final class SearchTest_German extends BaseAiTest
      * Strict replay mode execution using recorded playbook for dataset 'US'.
      */
     @Order(2)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("US")
     @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveUs")
@@ -82,6 +98,8 @@ public final class SearchTest_German extends BaseAiTest
      * Live recording mode execution for dataset 'DE'.
      */
     @Order(3)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("DE")
     @AiPlaybook("/verla/SearchTest_German.yaml")
@@ -93,6 +111,8 @@ public final class SearchTest_German extends BaseAiTest
      * Strict replay mode execution using recorded playbook for dataset 'DE'.
      */
     @Order(4)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("DE")
     @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveDe")
@@ -104,6 +124,8 @@ public final class SearchTest_German extends BaseAiTest
      * Live recording mode execution for dataset 'FIN'.
      */
     @Order(5)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("FIN")
     @AiPlaybook("/verla/SearchTest_German.yaml")
@@ -115,6 +137,8 @@ public final class SearchTest_German extends BaseAiTest
      * Strict replay mode execution using recorded playbook for dataset 'FIN'.
      */
     @Order(6)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("FIN")
     @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveFin")
@@ -126,6 +150,8 @@ public final class SearchTest_German extends BaseAiTest
      * Live recording mode execution across all datasets in the playbook.
      */
     @Order(7)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook("/verla/SearchTest_German.yaml")
     public void testSearchDeLiveAllDataSets()
@@ -136,9 +162,37 @@ public final class SearchTest_German extends BaseAiTest
      * Strict replay mode execution across all datasets in the playbook.
      */
     @Order(8)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveAllDataSets")
     public void testSearchDeReplayAllDataSets()
+    {
+    }
+
+    /**
+     * Live recording mode execution for dataset 'US' with LLM Quality Judge and Semantic Outcome Verification combined.
+     */
+    @Order(9)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("US")
+    @AiPlaybook("/verla/SearchTest_German.yaml")
+    public void testSearchDeLiveUsWithJudgeAndOutcome()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'US' with LLM Quality Judge and Semantic Outcome Verification combined.
+     */
+    @Order(10)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("US")
+    @AiPlaybook(value = "/verla/SearchTest_German.yaml", recordingMethod = "testSearchDeLiveUsWithJudgeAndOutcome")
+    public void testSearchDeReplayUsWithJudgeAndOutcome()
     {
     }
 }

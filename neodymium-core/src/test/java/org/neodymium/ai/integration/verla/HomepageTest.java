@@ -25,8 +25,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiOutcomeVerification;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
@@ -35,7 +36,7 @@ import org.neodymium.util.Neodymium;
 
 /**
  * Runs YAML-based VERLA integration tests for homepage navigation and layout verification
- * in recording mode first and strict replay mode second.
+ * in recording mode first and strict replay mode second, supporting Quality Judge and Outcome Verification modes.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
@@ -75,6 +76,8 @@ public final class HomepageTest extends BaseAiTest
      * Live recording mode execution for dataset 'perfect'.
      */
     @Order(1)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("perfect")
     @AiPlaybook
@@ -86,6 +89,8 @@ public final class HomepageTest extends BaseAiTest
      * Strict replay mode execution using recorded playbook for dataset 'perfect'.
      */
     @Order(2)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("perfect")
     @AiPlaybook(recordingMethod = "testHomepageLivePerfect")
@@ -97,6 +102,8 @@ public final class HomepageTest extends BaseAiTest
      * Live recording mode execution for dataset 'normal'.
      */
     @Order(3)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("normal")
     @AiPlaybook
@@ -108,6 +115,8 @@ public final class HomepageTest extends BaseAiTest
      * Strict replay mode execution using recorded playbook for dataset 'normal'.
      */
     @Order(4)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("normal")
     @AiPlaybook(recordingMethod = "testHomepageLiveNormal")
@@ -119,6 +128,8 @@ public final class HomepageTest extends BaseAiTest
      * Live recording mode execution for dataset 'bad'.
      */
     @Order(5)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("bad")
     @AiPlaybook
@@ -130,6 +141,8 @@ public final class HomepageTest extends BaseAiTest
      * Strict replay mode execution using recorded playbook for dataset 'bad'.
      */
     @Order(6)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("bad")
     @AiPlaybook(recordingMethod = "testHomepageLiveBad")
@@ -141,6 +154,8 @@ public final class HomepageTest extends BaseAiTest
      * Live recording mode execution across all datasets in the playbook.
      */
     @Order(7)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook
     public void testHomepageLiveAllDataSets()
@@ -151,9 +166,37 @@ public final class HomepageTest extends BaseAiTest
      * Strict replay mode execution across all datasets in the playbook.
      */
     @Order(8)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook(recordingMethod = "testHomepageLiveAllDataSets")
     public void testHomepageReplayAllDataSets()
+    {
+    }
+
+    /**
+     * Live recording mode execution for dataset 'perfect' with LLM Quality Judge and Semantic Outcome Verification combined.
+     */
+    @Order(9)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("perfect")
+    @AiPlaybook
+    public void testHomepageLivePerfectWithJudgeAndOutcome()
+    {
+    }
+
+    /**
+     * Strict replay mode execution using recorded playbook for dataset 'perfect' with LLM Quality Judge and Semantic Outcome Verification combined.
+     */
+    @Order(10)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("perfect")
+    @AiPlaybook(recordingMethod = "testHomepageLivePerfectWithJudgeAndOutcome")
+    public void testHomepageReplayPerfectWithJudgeAndOutcome()
     {
     }
 }

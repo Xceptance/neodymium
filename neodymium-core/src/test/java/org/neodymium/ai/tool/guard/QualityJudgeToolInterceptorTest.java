@@ -21,6 +21,7 @@ package org.neodymium.ai.tool.guard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -33,6 +34,9 @@ import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.executor.probe.ProbeBoundingRect;
+import org.neodymium.ai.executor.probe.ProbeElementSummary;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -215,6 +219,7 @@ public class QualityJudgeToolInterceptorTest
     public void testLlmJudgeDeliberationRewritesSelector()
     {
         System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "ON_AMBIGUITY");
         try
         {
             final MockLlmProvider mockLlm = new MockLlmProvider();
@@ -269,6 +274,294 @@ public class QualityJudgeToolInterceptorTest
         {
             ExecutionContext.setActiveContext(null);
             System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+        }
+    }
+
+    @Test
+    public void testDiscussionModeFastPathPassesUniqueVisibleCandidateWithoutLlmCalls()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        System.setProperty("neodymium.ai.judge.discussion.fastPath", "true");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final ProbeElementSummary summary = new ProbeElementSummary(
+                    0,
+                    "button",
+                    "Submit",
+                    true,
+                    true,
+                    new ProbeBoundingRect(10.0, 20.0, 100.0, 40.0)
+            );
+            targetExecutor.registerProbeResult("#btn-checkout",
+                    LocatorProbeResult.supported("#btn-checkout", 1, List.of(summary)));
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click checkout");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#btn-checkout");
+            final ArrayNode candidates = args.putArray("candidates");
+
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "#btn-checkout");
+            c1.put("strategy", "ID");
+            c1.put("score", 0.88);
+
+            final ObjectNode c2 = candidates.addObject();
+            c2.put("locator", ".btn-primary");
+            c2.put("strategy", "CLASS");
+            c2.put("score", 0.86);
+
+            final ToolCall call = new ToolCall("call-fastpath", "browser_click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+            Assertions.assertTrue(verdict.reason().contains("Fast-path auto-approved unique locator: #btn-checkout"));
+            Assertions.assertNull(execContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+            System.clearProperty("neodymium.ai.judge.discussion.fastPath");
+        }
+    }
+
+    @Test
+    public void testDiscussionModeMultiTurnDeliberationReachesConsensus()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        System.setProperty("neodymium.ai.judge.discussion.maxTurns", "3");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String turn1Response = """
+                {
+                  "status": "NEED_REFINEMENT",
+                  "refinedProposal": "button.size-btn[data-ai='s']",
+                  "reasoning": "Candidate is ambiguous; refine to semantic size button"
+                }
+                """;
+            final String turn2Response = """
+                {
+                  "status": "APPROVED",
+                  "chosenLocator": "button.size-btn[data-ai='s']",
+                  "confidence": 0.98,
+                  "reasoning": "Probe confirmed unique visible match for size S"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(turn1Response, new TokenUsage(30, 20, 50), "mock-judge"));
+            mockLlm.addResponse(new LlmResponse(turn2Response, new TokenUsage(35, 15, 50), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final ProbeElementSummary summary = new ProbeElementSummary(
+                    0,
+                    "button",
+                    "S",
+                    true,
+                    true,
+                    new ProbeBoundingRect(50.0, 100.0, 30.0, 30.0)
+            );
+            targetExecutor.registerProbeResult("button.size-btn[data-ai='s']",
+                    LocatorProbeResult.supported("button.size-btn[data-ai='s']", 1, List.of(summary)));
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click size S");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".size-option");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", ".size-option");
+            c1.put("strategy", "CLASS");
+            c1.put("score", 0.60);
+
+            final ToolCall call = new ToolCall("call-multiturn", "browser_click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("button.size-btn[data-ai='s']", verdict.adjustedCall().arguments().path("selector").asText());
+
+            final Integer judgeCalls = (Integer) execContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
+            Assertions.assertEquals(2, judgeCalls);
+            final TokenUsage tokenUsage = (TokenUsage) execContext.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
+            Assertions.assertNotNull(tokenUsage);
+            Assertions.assertEquals(100, tokenUsage.totalTokenCount());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+            System.clearProperty("neodymium.ai.judge.discussion.maxTurns");
+        }
+    }
+
+    @Test
+    public void testDiscussionModeRefinedToExistingVerifiedCandidate()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String judgeResponse = """
+                {
+                  "status": "REFINED",
+                  "chosenLocator": "[data-ai='submit-btn']",
+                  "confidence": 0.95,
+                  "reasoning": "Unique data-ai attribute candidate verified"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(judgeResponse, new TokenUsage(25, 15, 40), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final ProbeElementSummary summary = new ProbeElementSummary(
+                    0,
+                    "button",
+                    "Submit",
+                    true,
+                    true,
+                    new ProbeBoundingRect(10.0, 10.0, 80.0, 30.0)
+            );
+            targetExecutor.registerProbeResult("[data-ai='submit-btn']",
+                    LocatorProbeResult.supported("[data-ai='submit-btn']", 1, List.of(summary)));
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Submit form");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "div.btn > span");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "div.btn > span");
+            c1.put("strategy", "CLASS");
+            c1.put("score", 0.70);
+
+            final ObjectNode c2 = candidates.addObject();
+            c2.put("locator", "[data-ai='submit-btn']");
+            c2.put("strategy", "DATA_AI");
+            c2.put("score", 0.80);
+
+            final ToolCall call = new ToolCall("call-refined", "browser_click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("[data-ai='submit-btn']", verdict.adjustedCall().arguments().path("selector").asText());
+            Assertions.assertEquals(1, (Integer) execContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+        }
+    }
+
+    @Test
+    public void testDiscussionModeTurnExhaustionFallsBackToLastProposal()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        System.setProperty("neodymium.ai.judge.discussion.maxTurns", "2");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String turn1Response = """
+                {
+                  "status": "NEED_REFINEMENT",
+                  "refinedProposal": "div.attempt-one",
+                  "reasoning": "Try attempt one"
+                }
+                """;
+            final String turn2Response = """
+                {
+                  "status": "NEED_REFINEMENT",
+                  "refinedProposal": "div.attempt-two",
+                  "reasoning": "Try attempt two"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(turn1Response, new TokenUsage(20, 10, 30), "mock-judge"));
+            mockLlm.addResponse(new LlmResponse(turn2Response, new TokenUsage(25, 10, 35), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click something");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".initial-selector");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", ".initial-selector");
+            c1.put("strategy", "CLASS");
+            c1.put("score", 0.50);
+
+            final ToolCall call = new ToolCall("call-exhaust", "browser_click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("div.attempt-two", verdict.adjustedCall().arguments().path("selector").asText());
+            Assertions.assertTrue(verdict.reason().contains("Max discussion turns (2) reached; proceeded with last proposal: div.attempt-two"));
+
+            final Integer judgeCalls = (Integer) execContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
+            Assertions.assertEquals(2, judgeCalls);
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+            System.clearProperty("neodymium.ai.judge.discussion.maxTurns");
         }
     }
 }

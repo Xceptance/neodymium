@@ -38,8 +38,8 @@ import org.neodymium.util.Neodymium;
  * Unified Multi-Locale Guest Checkout Integration Test.
  * Drives a single English playbook across all 9 international storefront locales.
  *
- * Runs FORCE_RECORDING and REPLAY_STRICT across both Quality Judge modes (false and true)
- * for each country individually.
+ * Runs FORCE_RECORDING and REPLAY_STRICT across Quality Judge modes (false and true)
+ * and Outcome Verification modes (false and true) for each country individually.
  *
  * Schema: Feature_TargetStore_ScriptLanguage
  *
@@ -54,7 +54,7 @@ import org.neodymium.util.Neodymium;
 @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Multi_English.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@AiOutcomeVerification(failOnError = false)
+@AiOutcomeVerification(value = {false, true}, failOnError = false)
 public class VerlaGuestCheckout_Multi_English extends BaseAiTest
 {
     /**

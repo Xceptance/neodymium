@@ -619,14 +619,44 @@ public final class AiConfiguration
 
     /**
      * Resolves the execution mode for the LLM Quality Judge.
-     * Valid options: "ON_AMBIGUITY" (default), "ALWAYS", "ON_FAIL".
+     * Valid options: "DISCUSSION" (default), "ON_AMBIGUITY", "ALWAYS", "ON_FAIL".
      *
      * @return the resolved judge mode string (uppercase)
      */
     public String getJudgeMode()
     {
-        final String mode = getProperty("neodymium.ai.judge.mode", "ON_AMBIGUITY");
-        return mode != null ? mode.trim().toUpperCase() : "ON_AMBIGUITY";
+        final String mode = getProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        return mode != null ? mode.trim().toUpperCase() : "DISCUSSION";
+    }
+
+    /**
+     * Maximum interactive deliberation discussion turns between Judge and live SUT prober.
+     *
+     * @return max discussion turns (default: 3)
+     */
+    public int getJudgeDiscussionMaxTurns()
+    {
+        return getInt("neodymium.ai.judge.discussion.maxTurns", 3);
+    }
+
+    /**
+     * Maximum matching elements summarized per candidate during live SUT probing.
+     *
+     * @return probe depth (default: 3)
+     */
+    public int getJudgeDiscussionProbeDepth()
+    {
+        return getInt("neodymium.ai.judge.discussion.probeDepth", 3);
+    }
+
+    /**
+     * Whether fast-path auto-approval is enabled for decisive score-10 unique matches.
+     *
+     * @return true if fast-path is enabled (default: true)
+     */
+    public boolean isJudgeDiscussionFastPathEnabled()
+    {
+        return getBoolean("neodymium.ai.judge.discussion.fastPath", true);
     }
 
     /**
