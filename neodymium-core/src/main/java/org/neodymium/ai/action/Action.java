@@ -136,10 +136,10 @@ public class Action
     @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     public Action(
             @JsonProperty(value = "type", required = false) @JsonAlias({"type", "action"}) final String type,
-            @JsonProperty(value = "target", required = false) @JsonAlias({"locator", "target"}) final String target,
-            @JsonProperty(value = "value", required = false) @JsonAlias({"values", "value"}) final Object value,
+            @JsonProperty(value = "target", required = false) @JsonAlias({"locator", "target", "selector", "url", "script"}) final String target,
+            @JsonProperty(value = "value", required = false) @JsonAlias({"values", "value", "text", "expectedText", "key"}) final Object value,
             @JsonProperty(value = "description", required = false) final String description,
-            @JsonProperty(value = "reasoning", required = false) final String reasoning,
+            @JsonProperty(value = "reasoning", required = false) @JsonAlias({"reasoning", "thought"}) final String reasoning,
             @JsonProperty(value = "isRegex", required = false) @JsonAlias({"isRegex", "regex"}) final Boolean isRegex)
     {
         this.type = type != null ? type : "";
@@ -263,6 +263,7 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -296,6 +297,7 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -324,6 +326,35 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    /**
+     * Creates a new Action copy with an updated reasoning string.
+     *
+     * @param newReasoning the new reasoning string
+     * @return a new Action instance with the updated reasoning
+     */
+    public Action withReasoning(final String newReasoning)
+    {
+        final Action copy = new Action(this.type, this.target, this.value, this.description, newReasoning, this.isRegex);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -351,6 +382,7 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = featureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -758,50 +790,185 @@ public class Action
             return null;
         }
 
-        final String name = call.toolName();
+        final String name = call.toolName() != null ? call.toolName() : "";
         final JsonNode args = call.arguments();
         final String type = switch (name)
         {
+            case "browser_navigate" -> "NAVIGATE";
             case "browser_click" -> "CLICK";
             case "browser_type" -> "TYPE";
-            case "browser_navigate" -> "NAVIGATE";
-            case "browser_select" -> "SELECT";
             case "browser_hover" -> "HOVER";
-            case "browser_assert_text" -> "ASSERT_TEXT";
-            case "browser_execute_script" -> "EXECUTE_SCRIPT";
             case "browser_scroll" -> "SCROLL";
-            default -> name;
+            case "browser_select" -> "SELECT";
+            case "browser_clear" -> "CLEAR";
+            case "browser_clear_cookies" -> "CLEAR_COOKIES";
+            case "browser_back" -> "BACK";
+            case "browser_forward" -> "FORWARD";
+            case "browser_refresh" -> "REFRESH";
+            case "browser_wait" -> "WAIT";
+            case "browser_assert_text" -> "ASSERT_TEXT";
+            case "browser_press_key" -> "KEY_PRESS";
+            case "browser_branch" -> "BRANCH";
+            case "browser_store" -> "STORE";
+            case "browser_include" -> "INCLUDE";
+            case "browser_execute_script" -> "EXECUTE_SCRIPT";
+            default -> {
+                if (args != null && args.hasNonNull("action") && !args.path("action").asText().isBlank())
+                {
+                    yield args.path("action").asText().toUpperCase(Locale.ROOT);
+                }
+                if (args != null && args.hasNonNull("type") && !args.path("type").asText().isBlank())
+                {
+                    yield args.path("type").asText().toUpperCase(Locale.ROOT);
+                }
+                yield name.startsWith("browser_") ? name.substring("browser_".length()).toUpperCase(Locale.ROOT) : name.toUpperCase(Locale.ROOT);
+            }
         };
 
-        final String target;
-        if (args != null && args.hasNonNull("target"))
+        String target = "";
+        if (args != null && args.isObject())
         {
-            target = args.path("target").asText();
+            if ("browser_navigate".equals(name))
+            {
+                if (args.hasNonNull("url") && !args.path("url").asText().isBlank())
+                {
+                    target = args.path("url").asText();
+                }
+                else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+                {
+                    target = args.path("target").asText();
+                }
+                else if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
+                {
+                    target = args.path("locator").asText();
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    target = args.path("value").asText();
+                }
+            }
+            else if ("browser_execute_script".equals(name))
+            {
+                if (args.hasNonNull("script") && !args.path("script").asText().isBlank())
+                {
+                    target = args.path("script").asText();
+                }
+                else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+                {
+                    target = args.path("target").asText();
+                }
+            }
+            else if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
+            {
+                target = args.path("selector").asText();
+            }
+            else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+            {
+                target = args.path("target").asText();
+            }
+            else if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
+            {
+                target = args.path("locator").asText();
+            }
+            else if (args.hasNonNull("url") && !args.path("url").asText().isBlank())
+            {
+                target = args.path("url").asText();
+            }
+            else if (args.hasNonNull("x") && args.hasNonNull("y"))
+            {
+                target = "coord: " + args.path("x").asInt() + "," + args.path("y").asInt();
+            }
+            else if (args.hasNonNull("text") && !args.path("text").asText().isBlank()
+                    && ("browser_click".equals(name) || "browser_hover".equals(name)))
+            {
+                target = "text:" + args.path("text").asText();
+            }
         }
-        else if (args != null && args.hasNonNull("url"))
+
+        Object value = null;
+        if (args != null && args.isObject())
         {
-            target = args.path("url").asText();
+            if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
+            {
+                value = args.path("text").asText();
+            }
+            else if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+            {
+                value = args.path("value").asText();
+            }
+            else if (args.hasNonNull("expectedText") && !args.path("expectedText").asText().isBlank())
+            {
+                value = args.path("expectedText").asText();
+            }
+            else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
+            {
+                value = args.path("key").asText();
+            }
+            else if (args.hasNonNull("durationMs") && !args.path("durationMs").asText().isBlank())
+            {
+                value = args.path("durationMs").asText();
+            }
+            else if (args.hasNonNull("time") && !args.path("time").asText().isBlank())
+            {
+                value = args.path("time").asText();
+            }
+            else if (args.hasNonNull("direction") && !args.path("direction").asText().isBlank())
+            {
+                value = args.path("direction").asText();
+            }
+            else if (args.hasNonNull("values") && args.path("values").isArray())
+            {
+                final List<String> valList = new ArrayList<>();
+                for (final JsonNode node : args.path("values"))
+                {
+                    valList.add(node.asText());
+                }
+                value = valList;
+            }
         }
-        else if (args != null && args.hasNonNull("script"))
+
+        String description = "";
+        if (args != null && args.hasNonNull("description") && !args.path("description").asText().isBlank())
         {
-            target = args.path("script").asText();
+            description = args.path("description").asText();
         }
         else
         {
-            target = "";
+            description = switch (type)
+            {
+                case "NAVIGATE" -> "Navigate to " + target;
+                case "CLICK" -> !target.isBlank() ? "Click " + target : "Click element";
+                case "TYPE" -> "Type '" + (value != null ? value : "") + "' into " + target;
+                case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
+                case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
+                case "HOVER" -> "Hover over " + target;
+                case "KEY_PRESS" -> "Press key '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
+                case "SCROLL" -> "Scroll " + (!target.isBlank() ? target : (value != null ? value : ""));
+                case "WAIT" -> "Wait " + (value != null ? value : "") + " ms";
+                case "CLEAR" -> "Clear " + target;
+                case "CLEAR_COOKIES" -> "Clear browser cookies";
+                case "BACK" -> "Navigate back";
+                case "FORWARD" -> "Navigate forward";
+                case "REFRESH" -> "Refresh page";
+                default -> "Tool call: " + name;
+            };
         }
 
-        final List<String> values = new ArrayList<>();
-        if (args != null && args.hasNonNull("text"))
+        String reasoning = "";
+        if (args != null && args.hasNonNull("reasoning") && !args.path("reasoning").asText().isBlank())
         {
-            values.add(args.path("text").asText());
+            reasoning = args.path("reasoning").asText().trim();
         }
-        else if (args != null && args.hasNonNull("value"))
+        else if (args != null && args.hasNonNull("thought") && !args.path("thought").asText().isBlank())
         {
-            values.add(args.path("value").asText());
+            reasoning = args.path("thought").asText().trim();
         }
 
-        final Action action = new Action(type, target, values, "Tool call: " + name, "");
+        final boolean isRegex = args != null && (args.path("regex").asBoolean(false)
+                || (value != null && (value.toString().contains("[0-9]") || value.toString().contains("\\d")
+                    || value.toString().contains(".*") || value.toString().contains(".+"))));
+
+        final Action action = new Action(type, target, value, description, reasoning, isRegex);
         action.setToolCall(call);
         return action;
     }

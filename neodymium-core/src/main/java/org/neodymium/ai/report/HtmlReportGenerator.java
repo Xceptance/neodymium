@@ -1273,16 +1273,26 @@ public final class HtmlReportGenerator
 
                         var displayTarget = a.resolvedTarget || a.target || '-';
                         var hasTargetTpl = a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
-                        var targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
-                        if (hasTargetTpl) {
-                            targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                        var targetHtml;
+                        if (displayTarget === '-') {
+                            targetHtml = '<span class="text-muted">-</span>';
+                        } else {
+                            targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
+                            if (hasTargetTpl) {
+                                targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                            }
                         }
 
                         var displayValue = a.resolvedValue || a.value || '-';
                         var hasValueTpl = a.value && a.resolvedValue && a.value !== a.resolvedValue;
-                        var valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
-                        if (hasValueTpl) {
-                            valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                        var valueHtml;
+                        if (displayValue === '-') {
+                            valueHtml = '<span class="text-muted">-</span>';
+                        } else {
+                            valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
+                            if (hasValueTpl) {
+                                valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                            }
                         }
 
                         var phaseHtml = '';
