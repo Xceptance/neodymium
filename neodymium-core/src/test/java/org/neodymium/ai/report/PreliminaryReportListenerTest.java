@@ -804,6 +804,137 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
+    @DisplayName("Verify expected bug on sub-step propagates to compound parent in report and badges")
+    public void testExpectedBugOnSubStepPropagatesToParentReportEntry() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-substep-bug");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("AddToCartTest");
+        listener.getReport().setTestMethod("testCompoundBug");
+
+        final PlaybookStep parentStep = new PlaybookStep("Locate promo field:");
+        final PlaybookStep subAction = new PlaybookStep("type 'FREEGIFT' into it");
+        final PlaybookStep subBug = new PlaybookStep("Assert cart has Free Gift (bug: Gift missing).");
+
+        parentStep.getSubSteps().add(subAction);
+        parentStep.getSubSteps().add(subBug);
+        subAction.setParent(parentStep);
+        subBug.setParent(parentStep);
+
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+        bus.dispatch(new DiagnosticErrorEvent("Free Gift not found", new AssertionError("Item absent")));
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.FAILED));
+
+        // Test passes overall because bug was expected on sub-step
+        bus.dispatch(new SessionFinishedEvent(1500, true));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode parentNode = root.get("steps").get(0);
+        assertTrue(parentNode.get("bug").asBoolean(), "Parent step must have bug=true in JSON");
+        assertEquals("Gift missing", parentNode.get("bugDetails").asText(), "Parent step must inherit bugDetails");
+
+        final JsonNode subStepsNode = parentNode.get("subSteps");
+        assertNotNull(subStepsNode, "subSteps array must be present in JSON report");
+        assertEquals(2, subStepsNode.size(), "Compound step must contain both sub-steps");
+        assertEquals("type 'FREEGIFT' into it", subStepsNode.get(0).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(0).get("status").asText());
+        assertEquals("Assert cart has Free Gift .", subStepsNode.get(1).get("instruction").asText());
+        assertEquals("FAILED", subStepsNode.get(1).get("status").asText());
+        assertTrue(subStepsNode.get(1).get("bug").asBoolean());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("bug-badge") || html.contains("BUG EXPECTED"), "HTML report must display bug badge on compound step");
+        assertTrue(html.contains("Gift missing"), "HTML report must include bug details tooltip");
+        assertTrue(html.contains("sub-steps-container"), "HTML report must render sub-steps container");
+        assertTrue(html.contains("sub-step-card"), "HTML report must render sub-step cards");
+        assertTrue(html.contains("type 'FREEGIFT' into it"), "Sub-step action must be visible in HTML");
+        assertTrue(html.contains("Assert cart has Free Gift"), "Sub-step assertion must be visible in HTML");
+        assertTrue(html.contains("Sub-Steps:"), "Header must show Sub-Steps:");
+    }
+
+    @Test
+    @DisplayName("Verify successful compound step renders all nested sub-steps in report and inspector")
+    public void testCompoundStepWithSubStepsRenderedInReport() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-compound-success");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("AddToCartTest");
+        listener.getReport().setTestMethod("testAddToCartNormal");
+
+        final PlaybookStep parentStep = new PlaybookStep("Locate the first product card");
+        parentStep.setSourceFile("AddToCartTest.yaml");
+        parentStep.setLineNumber(9);
+
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        sub1.setSourceFile("AddToCartTest.yaml");
+        sub1.setLineNumber(10);
+
+        final PlaybookStep sub2 = new PlaybookStep("Click its 'Add to Cart' button");
+        sub2.setSourceFile("AddToCartTest.yaml");
+        sub2.setLineNumber(11);
+
+        final PlaybookStep sub3 = new PlaybookStep("When this string '${testId}' is not equal 'bad', click the size 'S'");
+        sub3.setSourceFile("AddToCartTest.yaml");
+        sub3.setLineNumber(13);
+
+        parentStep.getSubSteps().add(sub1);
+        parentStep.getSubSteps().add(sub2);
+        parentStep.getSubSteps().add(sub3);
+        sub1.setParent(parentStep);
+        sub2.setParent(parentStep);
+        sub3.setParent(parentStep);
+
+        bus.dispatch(new StepStartedEvent(parentStep, 2));
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(2500, true));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode parentNode = root.get("steps").get(0);
+        assertEquals("SUCCESS", parentNode.get("status").asText());
+
+        final JsonNode subStepsNode = parentNode.get("subSteps");
+        assertNotNull(subStepsNode);
+        assertEquals(3, subStepsNode.size());
+        assertEquals("Hover over it", subStepsNode.get(0).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(0).get("status").asText());
+        assertEquals(10, subStepsNode.get(0).get("lineNumber").asInt());
+        assertEquals("Click its 'Add to Cart' button", subStepsNode.get(1).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(1).get("status").asText());
+        assertEquals(11, subStepsNode.get(1).get("lineNumber").asInt());
+        assertEquals("When this string '${testId}' is not equal 'bad', click the size 'S'", subStepsNode.get(2).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(2).get("status").asText());
+        assertEquals(13, subStepsNode.get(2).get("lineNumber").asInt());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("sub-steps-container"));
+        assertTrue(html.contains("sub-step-card"));
+        assertTrue(html.contains("Hover over it"));
+        assertTrue(html.contains("Click its &#39;Add to Cart&#39; button") || html.contains("Click its 'Add to Cart' button"));
+        assertTrue(html.contains("Sub-Steps:"));
+        assertTrue(html.contains("3 sub-step(s)"));
+    }
+
+    @Test
     @DisplayName("Verify no disk reports are written when disabled")
     public void testDisabledReporting() throws Exception
     {

@@ -694,9 +694,36 @@ public final class HtmlReportGenerator
     {
         final boolean isSub = subIndex >= 0;
         final String footerClass = isSub ? "sub-step-footer" : "step-card-footer";
-        final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
+        int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
+        int actionCount = step.getActions().size();
+        int screenshotCount = step.getScreenshots().size();
 
-        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty() || step.getSsimScore() != null || step.getVerificationResult() != null)
+        if (hasSubSteps && !isSub)
+        {
+            if (actionCount == 0)
+            {
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    actionCount += sub.getActions().size();
+                }
+            }
+            if (screenshotCount == 0)
+            {
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    screenshotCount += sub.getScreenshots().size();
+                }
+            }
+            if (llmCount == 0)
+            {
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    llmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getPesapCalls() + sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
+                }
+            }
+        }
+
+        if (actionCount > 0 || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || screenshotCount > 0 || step.getSsimScore() != null || step.getVerificationResult() != null)
         {
             sb.append("          <div class=\"").append(footerClass).append("\">\n");
             if (step.getSsimScore() != null)
@@ -713,15 +740,19 @@ public final class HtmlReportGenerator
                 sb.append("            <span class=\"footer-tag ").append(pass ? "verif-pass" : "verif-fail")
                   .append("\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'verification')\">🔍 Verification: ").append(pass ? "PASSED" : "FAILED").append("</span>\n");
             }
-            if (!step.getActions().isEmpty())
+            if (actionCount > 0)
             {
-                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'actions')\">🎯 ").append(step.getActions().size()).append(" action(s)</span>\n");
+                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'actions')\">🎯 ").append(actionCount).append(" action(s)</span>\n");
             }
-            if (!step.getScreenshots().isEmpty())
+            if (screenshotCount > 0)
             {
-                final String firstDims = step.getScreenshots().get(0).getDimensions();
+                final String firstDims = !step.getScreenshots().isEmpty()
+                    ? step.getScreenshots().get(0).getDimensions()
+                    : (hasSubSteps && !step.getSubSteps().isEmpty() && !step.getSubSteps().get(0).getScreenshots().isEmpty()
+                        ? step.getSubSteps().get(0).getScreenshots().get(0).getDimensions()
+                        : null);
                 final String dimText = firstDims != null ? " (" + firstDims + ")" : "";
-                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'visuals')\">📸 ").append(step.getScreenshots().size()).append(" screenshot(s)").append(dimText).append("</span>\n");
+                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'visuals')\">📸 ").append(screenshotCount).append(" screenshot(s)").append(dimText).append("</span>\n");
             }
             if (llmCount > 0)
             {
@@ -729,7 +760,7 @@ public final class HtmlReportGenerator
             }
             if (hasSubSteps)
             {
-                sb.append("            <span class=\"footer-tag highlight\">✂️ Split into ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
+                sb.append("            <span class=\"footer-tag highlight\">✂️ ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
             }
             sb.append("          </div>\n");
         }
@@ -753,9 +784,17 @@ public final class HtmlReportGenerator
         appendStepBadges(sb, step);
         sb.append("            </div>\n");
         sb.append("            <div class=\"step-header-right\">\n");
-        if (step.getDurationMs() > 0)
+        long stepDuration = step.getDurationMs();
+        if (stepDuration <= 0 && hasSubSteps)
         {
-            sb.append("              <span class=\"step-duration\">").append(NUMBER_FORMAT.format(step.getDurationMs())).append(" ms</span>\n");
+            for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+            {
+                stepDuration += sub.getDurationMs();
+            }
+        }
+        if (stepDuration > 0)
+        {
+            sb.append("              <span class=\"step-duration\">").append(NUMBER_FORMAT.format(stepDuration)).append(" ms</span>\n");
         }
         sb.append("              <button class=\"btn-inspect-step\" onclick=\"openAndSelectStep(").append(index).append(", -1)\">🔍 Inspect</button>\n");
         sb.append("            </div>\n");
@@ -783,7 +822,7 @@ public final class HtmlReportGenerator
         if (hasSubSteps)
         {
             sb.append("          <div class=\"sub-steps-container\">\n");
-            sb.append("            <div class=\"sub-steps-header\">✂️ JIT Compound Step Split:</div>\n");
+            sb.append("            <div class=\"sub-steps-header\">Sub-Steps:</div>\n");
             for (int s = 0; s < step.getSubSteps().size(); s++)
             {
                 final TestExecutionReport.ReportStepEntry sub = step.getSubSteps().get(s);
@@ -1079,7 +1118,13 @@ public final class HtmlReportGenerator
                     status === 'SKIPPED' ? 'pill-skip' : 'pill-pending'
                 );
 
-                document.getElementById('inspDuration').textContent = formatNumber(step.durationMs || 0) + ' ms';
+                var duration = step.durationMs || 0;
+                if (currentSubIdx < 0 && step.subSteps && step.subSteps.length > 0 && duration <= 0) {
+                    step.subSteps.forEach(function(sub) {
+                        duration += (sub.durationMs || 0);
+                    });
+                }
+                document.getElementById('inspDuration').textContent = formatNumber(duration) + ' ms';
                 document.getElementById('inspInstruction').textContent = step.instruction || 'No instruction';
 
                 var rawTpl = document.getElementById('inspRawTemplate');
@@ -1160,9 +1205,33 @@ public final class HtmlReportGenerator
                 }
 
                 // Update Tab Counts
-                var llmCalls = step.llmCalls || [];
-                var actions = step.actions || [];
-                var visuals = step.screenshots || [];
+                var llmCalls = (step.llmCalls && step.llmCalls.length > 0) ? step.llmCalls : [];
+                var actions = (step.actions && step.actions.length > 0) ? step.actions : [];
+                var visuals = (step.screenshots && step.screenshots.length > 0) ? step.screenshots : [];
+
+                if (currentSubIdx < 0 && step.subSteps && step.subSteps.length > 0) {
+                    if (llmCalls.length === 0) {
+                        step.subSteps.forEach(function(sub) {
+                            if (sub.llmCalls) {
+                                llmCalls = llmCalls.concat(sub.llmCalls);
+                            }
+                        });
+                    }
+                    if (actions.length === 0) {
+                        step.subSteps.forEach(function(sub) {
+                            if (sub.actions) {
+                                actions = actions.concat(sub.actions);
+                            }
+                        });
+                    }
+                    if (visuals.length === 0) {
+                        step.subSteps.forEach(function(sub) {
+                            if (sub.screenshots) {
+                                visuals = visuals.concat(sub.screenshots);
+                            }
+                        });
+                    }
+                }
 
                 document.getElementById('tabLlmCount').textContent = llmCalls.length;
                 document.getElementById('tabActionsCount').textContent = actions.length;

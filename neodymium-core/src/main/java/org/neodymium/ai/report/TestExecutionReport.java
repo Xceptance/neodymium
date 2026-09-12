@@ -632,7 +632,21 @@ public final class TestExecutionReport
 
         public boolean isBug()
         {
-            return this.bug;
+            if (this.bug)
+            {
+                return true;
+            }
+            if (this.subSteps != null)
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    if (sub.isBug())
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         public void setBug(final boolean bug)
@@ -642,7 +656,22 @@ public final class TestExecutionReport
 
         public String getBugDetails()
         {
-            return this.bugDetails;
+            if (this.bugDetails != null)
+            {
+                return this.bugDetails;
+            }
+            if (this.subSteps != null)
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    final String subDetails = sub.getBugDetails();
+                    if (subDetails != null)
+                    {
+                        return subDetails;
+                    }
+                }
+            }
+            return null;
         }
 
         public void setBugDetails(final String bugDetails)
@@ -652,7 +681,21 @@ public final class TestExecutionReport
 
         public boolean isOptional()
         {
-            return this.optional;
+            if (this.optional)
+            {
+                return true;
+            }
+            if (this.subSteps != null)
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    if (sub.isOptional())
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         public void setOptional(final boolean optional)
