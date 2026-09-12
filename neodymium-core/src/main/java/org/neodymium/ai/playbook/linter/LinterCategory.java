@@ -69,7 +69,22 @@ public enum LinterCategory
     /**
      * Dangling or incomplete conditional clause ("If...", "When...", "Falls...") lacking a consequence or action.
      */
-    INCOMPLETE_BRANCH_CLAUSE;
+    INCOMPLETE_BRANCH_CLAUSE,
+
+    /**
+     * Mid-scenario direct URL navigation or mutation skipping interactive user journeys.
+     */
+    JOURNEY_FIDELITY_VIOLATION,
+
+    /**
+     * Unsupported, misspelled, or non-standard parenthetical modality tags (e.g. {@code (screenshot)}, {@code (fullpage)}).
+     */
+    UNRECOGNIZED_MODALITY_TAG,
+
+    /**
+     * Instructions explicitly commanding raw script or code execution (e.g. "Run JS to click...") instead of standard user interactions.
+     */
+    EXPLICIT_SCRIPT_INTERACTION;
 
     /**
      * Resolves an enum constant from a string code safely, case-insensitively.
