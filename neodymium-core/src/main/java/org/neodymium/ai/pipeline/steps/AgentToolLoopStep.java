@@ -254,6 +254,14 @@ public final class AgentToolLoopStep implements PipelineStep
 
         if (isZeroDom)
         {
+            activeContextLevel = ContextLevel.MINIMAL;
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+            final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+            if (statsObj instanceof final StepStats stats)
+            {
+                stats.addContextLevel(activeContextLevel.name());
+            }
+
             // Zero DOM nodes: Provide only page URL and Title
             final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
             if (driver != null)
@@ -850,41 +858,69 @@ public final class AgentToolLoopStep implements PipelineStep
             attachments = Collections.emptyList();
 
             // Submit fresh ground-truth DOM from SUT for the next turn
-            if (executor != null)
+            final boolean requireDomForNextTurn = !isZeroDom
+                    || (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
+                    || activeContextLevel != ContextLevel.MINIMAL;
+
+            if (requireDomForNextTurn)
             {
-                try
+                if (executor != null)
                 {
-                    final SutState freshState = executor.captureState(activeContextLevel, activeContextLevel.isFullPageScreenshot());
-                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
-                    final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
-                    if (statsObj instanceof final StepStats stats)
+                    try
                     {
-                        stats.addContextLevel(activeContextLevel.name());
-                    }
-                    if (freshState.getTextContent() != null && !freshState.getTextContent().isBlank())
-                    {
-                        final List<SutAttachment> freshAttachments = freshState.getAttachments() != null
-                                ? freshState.getAttachments()
-                                : Collections.emptyList();
-                        final StringBuilder turnPrompt = new StringBuilder();
-                        turnPrompt.append("### Current Page State & Interactive Elements:\n")
-                                .append(freshState.getTextContent());
-                        if (milestones != null && !milestones.isEmpty())
+                        final SutState freshState = executor.captureState(activeContextLevel, activeContextLevel.isFullPageScreenshot());
+                        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                        final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                        if (statsObj instanceof final StepStats stats)
                         {
-                            turnPrompt.append("\n\n### Compound Milestones To Complete:\n");
-                            for (int i = 0; i < milestones.size(); i++)
-                            {
-                                turnPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
-                            }
+                            stats.addContextLevel(activeContextLevel.name());
                         }
-                        turnPrompt.append("\n\nWhat is your next tool call?");
-                        conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
-                        attachments = freshAttachments;
+                        if (freshState.getTextContent() != null && !freshState.getTextContent().isBlank())
+                        {
+                            final List<SutAttachment> freshAttachments = freshState.getAttachments() != null
+                                    ? freshState.getAttachments()
+                                    : Collections.emptyList();
+                            final StringBuilder turnPrompt = new StringBuilder();
+                            turnPrompt.append("### Current Page State & Interactive Elements:\n")
+                                    .append(freshState.getTextContent());
+                            if (milestones != null && !milestones.isEmpty())
+                            {
+                                turnPrompt.append("\n\n### Compound Milestones To Complete:\n");
+                                for (int i = 0; i < milestones.size(); i++)
+                                {
+                                    turnPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
+                                }
+                            }
+                            turnPrompt.append("\n\nWhat is your next tool call?");
+                            conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
+                            attachments = freshAttachments;
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.debug("Could not capture fresh SUT state for next turn: {}", e.getMessage());
                     }
                 }
-                catch (final Exception e)
+            }
+            else
+            {
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (driver != null)
                 {
-                    LOGGER.debug("Could not capture fresh SUT state for next turn: {}", e.getMessage());
+                    try
+                    {
+                        final String currentUrl = driver.getCurrentUrl();
+                        final String currentTitle = driver.getTitle();
+                        final StringBuilder turnPrompt = new StringBuilder();
+                        turnPrompt.append("### Current Page:\n")
+                                .append("URL: ").append(currentUrl).append("\n")
+                                .append("Title: ").append(currentTitle).append("\n\n")
+                                .append("What is your next tool call?");
+                        conversation.add(ChatMessage.user(turnPrompt.toString()));
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
                 }
             }
         }

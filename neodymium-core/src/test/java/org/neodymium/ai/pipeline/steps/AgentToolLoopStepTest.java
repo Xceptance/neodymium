@@ -1533,5 +1533,190 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(3, turn.get(), "Must execute 3 turns: reject premature complete_step, execute assert tool, then complete");
         Assertions.assertEquals("Order verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
     }
+
+    @Test
+    public void testTurn2ZeroDomNavigateDoesNotIncludeStructuralDom() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_navigate", "Navigates to URL", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\",\"action\":\"navigate\",\"url\":\"https://example.com\"}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div id='fullDom'>Huge DOM</div>", Collections.emptyList(), "DOM_STANDARD"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.NAVIGATE);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Open https://example.com");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-nav", "browser_navigate", MAPPER.createObjectNode().put("url", "https://example.com"))));
+            }
+            if (t == 2)
+            {
+                final List<ChatMessage> messages = req.messages();
+                final ChatMessage latestMsg = messages.get(messages.size() - 1);
+                Assertions.assertEquals(Role.TOOL, latestMsg.role());
+                Assertions.assertTrue(latestMsg.content().contains("\"status\":\"SUCCESS\""));
+
+                for (final ChatMessage msg : messages)
+                {
+                    if (msg.content() != null)
+                    {
+                        Assertions.assertFalse(msg.content().contains("Huge DOM"),
+                                "Turn 2 for pure NAVIGATE must not include structural DOM tree!");
+                        Assertions.assertFalse(msg.content().contains("=== Structural DOM Tree ==="),
+                                "Turn 2 for pure NAVIGATE must not include structural DOM header!");
+                    }
+                }
+
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-complete", "complete_step", MAPPER.createObjectNode().put("summary", "Opened site"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(2, turn.get());
+        Assertions.assertEquals("Opened site", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+        Assertions.assertEquals(ContextLevel.MINIMAL, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+    }
+
+    @Test
+    public void testTurn2CompoundMilestoneNavigateIncludesDom() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_navigate", "Navigates to URL", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\",\"action\":\"navigate\",\"url\":\"https://example.com\"}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Clicks element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\",\"action\":\"click\"}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<a id='login'>Login</a>", Collections.emptyList(), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.NAVIGATE);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Open https://example.com and click Login");
+        this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Open https://example.com", "Click Login"));
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-nav", "browser_navigate", MAPPER.createObjectNode().put("url", "https://example.com"))));
+            }
+            if (t == 2)
+            {
+                final List<ChatMessage> messages = req.messages();
+                final ChatMessage latestUserMsg = messages.get(messages.size() - 1);
+                Assertions.assertEquals(Role.USER, latestUserMsg.role());
+                Assertions.assertTrue(latestUserMsg.content().contains("<a id='login'>Login</a>"),
+                        "Turn 2 for compound NAVIGATE with remaining milestones must include structural DOM!");
+                Assertions.assertTrue(latestUserMsg.content().contains("### Compound Milestones To Complete:"));
+
+                return new LlmResponse("", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-click", "mock_click", MAPPER.createObjectNode().put("selector", "#login"))));
+            }
+            if (t == 3)
+            {
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-complete", "complete_step", MAPPER.createObjectNode().put("summary", "Logged in"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(3, turn.get());
+        Assertions.assertEquals("Logged in", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
 }
 
