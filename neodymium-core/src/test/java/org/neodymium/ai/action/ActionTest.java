@@ -245,4 +245,29 @@ public class ActionTest
         assertEquals("#submit-order", action.getTarget());
         assertEquals("Submit customer order", action.getReasoning());
     }
+
+    @Test
+    public void testFromToolCallBrowserAssertCount()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".search-suggestion-item");
+        args.put("minCount", 6);
+        final ToolCall call = new ToolCall("call-cnt", "browser_assert_count", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_COUNT", action.getType());
+        assertEquals(".search-suggestion-item", action.getTarget());
+        assertEquals(">=6", action.getValue());
+    }
+
+    @Test
+    public void testToToolCallBrowserAssertCount()
+    {
+        final Action action = new Action("ASSERT_COUNT", ".search-suggestion-item", List.of(">=6"), "Assert count", "Verify at least 6 items", false);
+        final ToolCall call = action.toToolCall();
+
+        assertEquals("browser_assert_count", call.toolName());
+        assertEquals(".search-suggestion-item", call.arguments().path("selector").asText());
+        assertEquals(6, call.arguments().path("minCount").asInt());
+    }
 }

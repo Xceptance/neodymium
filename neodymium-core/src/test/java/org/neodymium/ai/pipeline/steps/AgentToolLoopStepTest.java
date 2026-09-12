@@ -1718,5 +1718,22 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(3, turn.get());
         Assertions.assertEquals("Logged in", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
     }
+
+    @Test
+    public void testPolicyViolationThrowsAssertionErrorImmediately()
+    {
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify order total is $50");
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("{\"thought\":\"clicking button during assert\",\"tool_call\":{\"name\":\"browser_click\",\"arguments\":{\"selector\":\"#btn\"}}}",
+                        new TokenUsage(10, 10, 20), "mock");
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+
+        final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
+        Assertions.assertTrue(thrown.getMessage().contains("Policy violation"));
+    }
 }
+
 

@@ -350,6 +350,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("   - If the visual condition is satisfied in the screenshot, call tool 'complete_step' immediately with a concise summary of your visual verification.\n");
         systemPrompt.append("   - Do NOT attempt to query DOM elements or execute DOM text assertions for visual checks when the visual condition is visible on the screen.\n");
         systemPrompt.append("6. SINGLE TOOL PER TURN: Propose exactly ONE tool call per response. Do NOT call multiple tools in parallel or batch multiple actions in a single turn. After each tool execution, you will receive the updated page state to decide your next action.\n");
+        systemPrompt.append("7. COUNT & COLLECTION ASSERTIONS: When an instruction asserts the number of items, rows, entries, or suggestions (e.g. 'contains at least 6 entries', '3 items in cart', '10 results'), you MUST invoke `browser_assert_count` with the target `selector` and `expectedCount`, `minCount`, or `maxCount`.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -648,7 +649,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             lastProposedToolWasCompleteStep = true;
                             final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
-                                    + "). You must execute an assertion tool (such as 'browser_assert_text') to verify the expected condition before calling complete_step. "
+                                    + "). You must execute an assertion tool (such as 'browser_assert_text' or 'browser_assert_count') to verify the expected condition before calling complete_step. "
                                     + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
                             LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
                             conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), rejectMsg));
@@ -699,12 +700,11 @@ public final class AgentToolLoopStep implements PipelineStep
 
             if (!verdict.isAllowed())
             {
-                // Policy violation rejected by guard: feed back to agent to self-correct
-                LOGGER.warn("Guard rejected tool call {}: {}", proposedCall.toolName(), verdict.reason());
                 final ToolResult rejResult = verdict.rejectionResult();
                 final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
-                conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), "REJECTED by policy: " + rejContent));
-                continue;
+                LOGGER.error("❌ Guard rejected tool call {} due to policy violation during {} step: {}",
+                        proposedCall.toolName(), intent, rejContent);
+                throw new AssertionError("Policy violation: " + rejContent);
             }
 
             // Execute the tool
@@ -1093,6 +1093,7 @@ public final class AgentToolLoopStep implements PipelineStep
     {
         return "browser_query_dom".equals(name)
                 || "browser_assert_text".equals(name)
+                || "browser_assert_count".equals(name)
                 || "browser_inspect".equals(name);
     }
 
@@ -1392,6 +1393,7 @@ public final class AgentToolLoopStep implements PipelineStep
             case "assert" -> "browser_assert_text";
             case "assert_text" -> "browser_assert_text";
             case "assert_title" -> "browser_assert_text";
+            case "assert_count" -> "browser_assert_count";
             case "key_press" -> "browser_press_key";
             case "none" -> "complete_step";
             case "check" -> "browser_click";

@@ -69,6 +69,7 @@ public class BrowserToolsTest
                 "browser_select",
                 "browser_hover",
                 "browser_assert_text",
+                "browser_assert_count",
                 "browser_scroll",
                 "browser_execute_script",
                 "browser_query_dom",
@@ -381,6 +382,8 @@ public class BrowserToolsTest
         Assertions.assertEquals("query_dom", json.path("action").asText());
         Assertions.assertTrue(json.has("matches"));
         Assertions.assertTrue(json.path("matches").isArray());
+        Assertions.assertTrue(json.has("matchCount"));
+        Assertions.assertEquals(0, json.path("matchCount").asInt());
     }
 
     @Test
@@ -444,4 +447,50 @@ public class BrowserToolsTest
         Assertions.assertEquals("SUCCESS", json.path("status").asText());
         Assertions.assertEquals("RICH", json.path("level").asText());
     }
+
+    @Test
+    public void testBrowserAssertCountToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_count").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("expectedCount"));
+        Assertions.assertTrue(props.has("minCount"));
+        Assertions.assertTrue(props.has("maxCount"));
+        Assertions.assertTrue(props.has("visibleOnly"));
+
+        final JsonNode req = tool.getDefinition().parametersSchema().path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals("selector", req.get(0).asText());
+    }
+
+    @Test
+    public void testBrowserAssertCountThrowsWhenNoConstraints() throws Exception
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_count").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ObjectNode args = mapper.createObjectNode();
+        args.put("selector", ".item");
+        final ToolCall call = new ToolCall("call-cnt-1", "browser_assert_count", args);
+
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertTrue(result.content().contains("At least one count constraint"));
+    }
+
+    @Test
+    public void testBrowserAssertCountWithoutDriverThrowsAssertionError() throws Exception
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_count").orElseThrow();
+        final ObjectMapper mapper = new ObjectMapper();
+        final ObjectNode args = mapper.createObjectNode();
+        args.put("selector", ".item");
+        args.put("minCount", 3);
+        final ToolCall call = new ToolCall("call-cnt-2", "browser_assert_count", args);
+
+        final AssertionError err = Assertions.assertThrows(AssertionError.class, () -> tool.execute(call, null));
+        Assertions.assertTrue(err.getMessage().contains("No active browser window found to assert element count"));
+    }
 }
+

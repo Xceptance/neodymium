@@ -106,21 +106,9 @@ public final class ExecuteActionsStep
 
                 if (session != null && session.getEventBus() != null)
                 {
-                    int stepIndex = -1;
                     @SuppressWarnings("unchecked")
                     final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
-                    if (flatSteps != null)
-                    {
-                        for (int i = 0; i < flatSteps.size(); i++)
-                        {
-                            final PlaybookStep fs = flatSteps.get(i);
-                            if (fs == step || (fs.getInstruction() != null && fs.getInstruction().equals(step.getInstruction())))
-                            {
-                                stepIndex = i;
-                                break;
-                            }
-                        }
-                    }
+                    final int stepIndex = resolveStepIndex(step, step, flatSteps);
                     session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
                 }
 
@@ -249,28 +237,8 @@ public final class ExecuteActionsStep
 
             if (session != null && session.getEventBus() != null)
             {
-                int stepIndex = -1;
                 final PlaybookStep targetForIndex = step.getParent() != null ? step.getParent() : step;
-                if (flatSteps != null)
-                {
-                    for (int i = 0; i < flatSteps.size(); i++)
-                    {
-                        final PlaybookStep fs = flatSteps.get(i);
-                        if (fs == targetForIndex)
-                        {
-                            stepIndex = i;
-                            break;
-                        }
-                        if (fs.getInstruction() != null && fs.getInstruction().equals(targetForIndex.getInstruction()))
-                        {
-                            if (fs.getLineNumber() == targetForIndex.getLineNumber() || fs.getLineNumber() == -1 || targetForIndex.getLineNumber() == -1)
-                            {
-                                stepIndex = i;
-                                break;
-                            }
-                        }
-                    }
-                }
+                final int stepIndex = resolveStepIndex(step, targetForIndex, flatSteps);
                 session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
             }
 
@@ -668,5 +636,63 @@ public final class ExecuteActionsStep
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*layout\\s*\\)\\s*", " ");
         prepared = prepared.replaceAll("(?i)\\s*\\(\\s*hint(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
         return prepared.replaceAll("\\s+", " ").trim();
+    }
+
+    /**
+     * Resolves the 0-based sequential index of a step within the execution context's flattened steps.
+     * Prioritizes exact instance identity matches over textual heuristics to prevent step collisions
+     * when YAML anchors or repeated steps are used.
+     *
+     * @param step the leaf step being executed
+     * @param targetForIndex the step or its parent to resolve an index for
+     * @param flatSteps the flattened list of all execution steps
+     * @return the resolved 0-based index, or -1 if not found
+     */
+    private static int resolveStepIndex(
+        final PlaybookStep step,
+        final PlaybookStep targetForIndex,
+        final List<PlaybookStep> flatSteps
+    )
+    {
+        if (flatSteps == null || flatSteps.isEmpty())
+        {
+            return -1;
+        }
+
+        // 1. Exact identity match for targetForIndex
+        for (int i = 0; i < flatSteps.size(); i++)
+        {
+            if (flatSteps.get(i) == targetForIndex)
+            {
+                return i;
+            }
+        }
+
+        // 2. If targetForIndex was step's parent and not in flatSteps, try step itself by identity
+        if (targetForIndex != step)
+        {
+            for (int i = 0; i < flatSteps.size(); i++)
+            {
+                if (flatSteps.get(i) == step)
+                {
+                    return i;
+                }
+            }
+        }
+
+        // 3. Fallback heuristic by matching instruction and line number
+        for (int i = 0; i < flatSteps.size(); i++)
+        {
+            final PlaybookStep fs = flatSteps.get(i);
+            if (fs.getInstruction() != null && fs.getInstruction().equals(targetForIndex.getInstruction()))
+            {
+                if (fs.getLineNumber() == targetForIndex.getLineNumber() || fs.getLineNumber() == -1 || targetForIndex.getLineNumber() == -1)
+                {
+                    return i;
+                }
+            }
+        }
+
+        return -1;
     }
 }

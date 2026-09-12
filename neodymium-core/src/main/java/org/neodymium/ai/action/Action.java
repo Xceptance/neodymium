@@ -740,6 +740,7 @@ public class Action
             case "SELECT" -> "browser_select";
             case "HOVER" -> "browser_hover";
             case "ASSERT_TEXT", "ASSERT" -> "browser_assert_text";
+            case "ASSERT_COUNT" -> "browser_assert_count";
             case "EXECUTE_SCRIPT", "SCRIPT" -> "browser_execute_script";
             case "SCROLL" -> "browser_scroll";
             default -> {
@@ -759,6 +760,44 @@ public class Action
         {
             final String txt = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
             args.put("text", txt != null ? txt : "");
+        }
+        else if ("browser_assert_count".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String v = this.value.get(0).trim();
+                if (v.startsWith(">="))
+                {
+                    try
+                    {
+                        args.put("minCount", Integer.parseInt(v.substring(2).trim()));
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+                else if (v.startsWith("<="))
+                {
+                    try
+                    {
+                        args.put("maxCount", Integer.parseInt(v.substring(2).trim()));
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        args.put("expectedCount", Integer.parseInt(v));
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+            }
         }
         else if ("browser_execute_script".equals(toolName))
         {
@@ -807,6 +846,7 @@ public class Action
             case "browser_refresh" -> "REFRESH";
             case "browser_wait" -> "WAIT";
             case "browser_assert_text" -> "ASSERT_TEXT";
+            case "browser_assert_count" -> "ASSERT_COUNT";
             case "browser_press_key" -> "KEY_PRESS";
             case "browser_branch" -> "BRANCH";
             case "browser_store" -> "STORE";
@@ -899,6 +939,18 @@ public class Action
             else if (args.hasNonNull("expectedText") && !args.path("expectedText").asText().isBlank())
             {
                 value = args.path("expectedText").asText();
+            }
+            else if (args.hasNonNull("expectedCount"))
+            {
+                value = String.valueOf(args.path("expectedCount").asInt());
+            }
+            else if (args.hasNonNull("minCount"))
+            {
+                value = ">=" + args.path("minCount").asInt();
+            }
+            else if (args.hasNonNull("maxCount"))
+            {
+                value = "<=" + args.path("maxCount").asInt();
             }
             else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
             {
