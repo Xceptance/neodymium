@@ -121,6 +121,13 @@ public final class SessionData
         {
             return dynamicNested;
         }
+        for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
+        {
+            if (entry.getKey().equalsIgnoreCase(key))
+            {
+                return entry.getValue();
+            }
+        }
 
         // 2. Check Neodymium test data properties (runtime code overrides via Neodymium.getData().put)
         try
@@ -179,6 +186,13 @@ public final class SessionData
         if (staticNested != null)
         {
             return staticNested;
+        }
+        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
+        {
+            if (entry.getKey().equalsIgnoreCase(key))
+            {
+                return entry.getValue();
+            }
         }
 
         // 4. Fallback to System properties

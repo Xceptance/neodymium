@@ -77,7 +77,8 @@ public class BrowserToolsTest
                 "browser_take_screenshot",
                 "browser_inspect_visual",
                 "browser_press_key",
-                "browser_request_context"
+                "browser_request_context",
+                "browser_store"
         );
 
         for (final String toolName : expectedTools)
@@ -91,6 +92,22 @@ public class BrowserToolsTest
             Assertions.assertNotNull(def.parametersSchema());
             Assertions.assertEquals("object", def.parametersSchema().path("type").asText());
         }
+    }
+
+    @Test
+    public void testBrowserStoreToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_store").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("variableName"));
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("value"));
+        Assertions.assertTrue(props.has("adjust"));
+
+        final JsonNode req = tool.getDefinition().parametersSchema().path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals("variableName", req.get(0).asText());
     }
 
     @Test

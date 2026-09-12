@@ -229,4 +229,27 @@ public final class SessionDataTest
         assertEquals("example.com", allVars.get("server.host"));
         assertEquals("8080", allVars.get("server.port"));
     }
+
+    /**
+     * Verifies that get and resolveVariables fall back to case-insensitive match
+     * when an exact key match is not found.
+     */
+    @Test
+    public void testCaseInsensitiveFallback()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("apiKey", new SessionData.DataEntry("secret-123", true));
+        final SessionData session = new SessionData(staticMap);
+
+        session.putDynamic("lineItemCount", 5, false);
+
+        // Dynamic lookup with differing casing
+        assertEquals(5, session.get("lineitemCount"));
+        assertEquals(5, session.get("LINEITEMCOUNT"));
+        assertEquals("Count is 5", session.resolveVariables("Count is ${lineitemCount}"));
+
+        // Static lookup with differing casing
+        assertEquals("secret-123", session.get("APIKEY"));
+        assertEquals("Key: secret-123", session.resolveVariables("Key: ${apikey}"));
+    }
 }

@@ -928,7 +928,40 @@ public class Action
         Object value = null;
         if (args != null && args.isObject())
         {
-            if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
+            if ("browser_store".equals(name))
+            {
+                final String varName;
+                if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
+                {
+                    varName = args.path("variableName").asText();
+                }
+                else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
+                {
+                    varName = args.path("variable").asText();
+                }
+                else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
+                {
+                    varName = args.path("name").asText();
+                }
+                else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
+                {
+                    varName = args.path("key").asText();
+                }
+                else
+                {
+                    varName = "";
+                }
+
+                if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    value = List.of(varName, args.path("value").asText());
+                }
+                else
+                {
+                    value = varName;
+                }
+            }
+            else if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
             {
                 value = args.path("text").asText();
             }
@@ -1002,6 +1035,10 @@ public class Action
                 case "BACK" -> "Navigate back";
                 case "FORWARD" -> "Navigate forward";
                 case "REFRESH" -> "Refresh page";
+                case "STORE" -> {
+                    final String varName = value instanceof List<?> l && !l.isEmpty() ? String.valueOf(l.get(0)) : String.valueOf(value != null ? value : "");
+                    yield !target.isBlank() ? "Store text from " + target + " as variable '" + varName + "'" : "Store variable '" + varName + "'";
+                }
                 default -> "Tool call: " + name;
             };
         }
@@ -1020,7 +1057,10 @@ public class Action
                 || (value != null && (value.toString().contains("[0-9]") || value.toString().contains("\\d")
                     || value.toString().contains(".*") || value.toString().contains(".+"))));
 
+        final boolean adjust = args != null && args.path("adjust").asBoolean(false);
+
         final Action action = new Action(type, target, value, description, reasoning, isRegex);
+        action.setAdjust(adjust);
         action.setToolCall(call);
         return action;
     }

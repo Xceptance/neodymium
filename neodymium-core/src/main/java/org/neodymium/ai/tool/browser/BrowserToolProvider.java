@@ -27,6 +27,8 @@ import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.util.AiAssertions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -128,6 +130,7 @@ public final class BrowserToolProvider
         registry.register(createInspectVisualTool());
         registry.register(createPressKeyTool());
         registry.register(createRequestContextTool());
+        registry.register(createStoreTool());
     }
 
     private static AiTool createClickTool()
@@ -1937,6 +1940,114 @@ public final class BrowserToolProvider
                 }
 
                 return builder.build();
+            }
+        };
+    }
+
+    private static AiTool createStoreTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("variableName").put("type", "string").put("description", "Name of the variable to store the value in session data");
+        props.putObject("selector").put("type", "string").put("description", "CSS, XPath, or text locator of the element to capture text from");
+        props.putObject("value").put("type", "string").put("description", "Literal value to store directly instead of reading element text");
+        props.putObject("adjust").put("type", "boolean").put("description", "Whether to normalize price/currency/numeric formatting (default: false)");
+        final ArrayNode req = schema.putArray("required");
+        req.add("variableName");
+
+        final ToolDefinition def = new ToolDefinition("browser_store", "Captures text from a DOM element or stores a specified value into an execution session variable for later use", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final JsonNode args = call.arguments();
+                final String variableName;
+                if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
+                {
+                    variableName = args.path("variableName").asText().trim();
+                }
+                else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
+                {
+                    variableName = args.path("variable").asText().trim();
+                }
+                else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
+                {
+                    variableName = args.path("name").asText().trim();
+                }
+                else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
+                {
+                    variableName = args.path("key").asText().trim();
+                }
+                else
+                {
+                    variableName = "";
+                }
+
+                if (variableName.isEmpty())
+                {
+                    return ToolResult.error(call.callId(), errorNode("browser_store requires a non-empty 'variableName'").toString());
+                }
+
+                final boolean adjust = args.path("adjust").asBoolean(false);
+                final String valueToStore;
+
+                if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    final String literalVal = args.path("value").asText();
+                    valueToStore = adjust ? AiAssertions.normalizeNumericOrPrice(literalVal) : literalVal;
+                }
+                else
+                {
+                    final String selector = resolveSelector(args);
+                    if (selector == null || selector.isBlank())
+                    {
+                        return ToolResult.error(call.callId(), errorNode("browser_store requires either a 'selector' to capture text from or a literal 'value'").toString());
+                    }
+
+                    try
+                    {
+                        final SelenideElement el = findElement(selector);
+                        final String text = el.getText();
+                        final String actualText = (text != null && !text.isBlank()) ? text : el.getValue();
+                        final String trimmed = actualText != null ? actualText.trim() : "";
+                        valueToStore = adjust ? AiAssertions.normalizeNumericOrPrice(trimmed) : trimmed;
+                    }
+                    catch (final Exception e)
+                    {
+                        return ToolResult.error(call.callId(), errorNode("Failed to capture text from element '" + selector + "': " + e.getMessage()).toString());
+                    }
+                }
+
+                ExecutionContext execCtx = ExecutionContext.getActiveContext();
+                if (execCtx == null && context != null)
+                {
+                    execCtx = context.getVariable("neodymium.executionContext", ExecutionContext.class).orElse(null);
+                }
+
+                if (execCtx != null && execCtx.getSessionData() != null)
+                {
+                    final boolean isSensitive = variableName.toLowerCase().contains("password") || variableName.toLowerCase().contains("secret");
+                    execCtx.getSessionData().putDynamic(variableName, valueToStore, isSensitive);
+                }
+                else
+                {
+                    return ToolResult.error(call.callId(), errorNode("No active ExecutionContext or SessionData found to store variable '" + variableName + "'").toString());
+                }
+
+                final ObjectNode resultNode = MAPPER.createObjectNode();
+                resultNode.put("status", "success");
+                resultNode.put("variableName", variableName);
+                resultNode.put("storedValue", valueToStore);
+                resultNode.put("message", "Stored variable '" + variableName + "' = \"" + valueToStore + "\"");
+                return ToolResult.success(call.callId(), resultNode.toString());
             }
         };
     }
