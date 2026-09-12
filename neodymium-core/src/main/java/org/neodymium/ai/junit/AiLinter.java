@@ -42,4 +42,12 @@ public @interface AiLinter
      * @return boolean flag(s) indicating if pre-flight linter is active
      */
     boolean[] value() default {true};
+
+    /**
+     * Whether detected pre-flight linter findings should halt and fail the test execution.
+     * Defaults to {@code false} (findings are non-blocking advisory warnings).
+     *
+     * @return boolean flag indicating if findings trigger test failure
+     */
+    boolean failOnFindings() default false;
 }

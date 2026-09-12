@@ -318,6 +318,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         // 2c. Resolve Linter variations
         final List<Boolean> linterVariants = new ArrayList<>();
         final AiLinter methodLinter = method.getAnnotation(AiLinter.class);
+        final AiLinter classLinter = testClass.getAnnotation(AiLinter.class);
         if (methodLinter != null)
         {
             for (final boolean l : methodLinter.value())
@@ -325,20 +326,30 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 linterVariants.add(l);
             }
         }
-        else
+        else if (classLinter != null)
         {
-            final AiLinter classLinter = testClass.getAnnotation(AiLinter.class);
-            if (classLinter != null)
+            for (final boolean l : classLinter.value())
             {
-                for (final boolean l : classLinter.value())
-                {
-                    linterVariants.add(l);
-                }
+                linterVariants.add(l);
             }
         }
         if (linterVariants.isEmpty())
         {
             linterVariants.add(null);
+        }
+
+        final Boolean linterFailOnFindings;
+        if (methodLinter != null && methodLinter.failOnFindings())
+        {
+            linterFailOnFindings = true;
+        }
+        else if (classLinter != null && classLinter.failOnFindings())
+        {
+            linterFailOnFindings = true;
+        }
+        else
+        {
+            linterFailOnFindings = false;
         }
 
         // 2d. Resolve Outcome Verification variations
@@ -599,7 +610,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                                             {
                                                 extensions.add(new BrowserExecutionCallback(browser, method.getName()));
                                             }
-                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, outcomeEnabled, outcomeFailOnError));
+                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, linterFailOnFindings, outcomeEnabled, outcomeFailOnError));
                                             return extensions;
                                         }
                                     });
@@ -700,6 +711,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final BrowserMethodData browser;
         private final Boolean judgeEnabled;
         private final Boolean linterEnabled;
+        private final Boolean linterFailOnFindings;
         private final Boolean outcomeEnabled;
         private final Boolean outcomeFailOnError;
         private AiSession session;
@@ -715,6 +727,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final BrowserMethodData browser,
             final Boolean judgeEnabled,
             final Boolean linterEnabled,
+            final Boolean linterFailOnFindings,
             final Boolean outcomeEnabled,
             final Boolean outcomeFailOnError
         )
@@ -726,6 +739,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.browser = browser;
             this.judgeEnabled = judgeEnabled;
             this.linterEnabled = linterEnabled;
+            this.linterFailOnFindings = linterFailOnFindings;
             this.outcomeEnabled = outcomeEnabled;
             this.outcomeFailOnError = outcomeFailOnError;
         }
@@ -806,6 +820,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.linter.enabled", String.valueOf(this.linterEnabled));
             }
 
+            if (this.linterFailOnFindings != null)
+            {
+                Neodymium.getData().put("neodymium.ai.linter.failOnFindings", String.valueOf(this.linterFailOnFindings));
+            }
+
             if (this.outcomeEnabled != null)
             {
                 Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled));
@@ -835,6 +854,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 this.session.data().putDynamic("neodymium.ai.linter.enabled", String.valueOf(this.linterEnabled), false);
             }
+            if (this.linterFailOnFindings != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.linter.failOnFindings", String.valueOf(this.linterFailOnFindings), false);
+            }
             if (this.outcomeEnabled != null)
             {
                 this.session.data().putDynamic("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled), false);
@@ -844,6 +867,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 this.session.data().putDynamic("neodymium.ai.semanticVerification.failOnError", String.valueOf(this.outcomeFailOnError), false);
             }
             final ExecutionContext executionContext = this.session.getExecutionContext();
+            if (this.linterFailOnFindings != null)
+            {
+                executionContext.getTransientData().put("neodymium.ai.linter.failOnFindings", this.linterFailOnFindings);
+            }
             if (this.outcomeFailOnError != null)
             {
                 executionContext.getTransientData().put("neodymium.ai.semanticVerification.failOnError", this.outcomeFailOnError);

@@ -19,8 +19,10 @@
 package org.neodymium.ai.playbook;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
@@ -421,5 +423,142 @@ public class YamlPlaybookParserTest
         assertEquals(27, playbook.getSteps().size());
         assertEquals(3, playbook.getDataSets().size());
         assertEquals("US", playbook.getDataSets().get(0).get("testId").value());
+    }
+
+    @Test
+    public void testParseGroupedStepsMultilineBlock() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              1. Open demo store homepage
+              Add first product to cart:
+                - Locate the first product card and hover over it
+                - Click its 'Add to Cart' button
+                - When this string '${testId}' is not equal 'bad', click the size 'S'
+              Verify cart count is '1'
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("grouped-multiline.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("grouped-multiline.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size(), "Should parse 3 top-level steps");
+        assertEquals("1. Open demo store homepage", playbook.getSteps().get(0).getInstruction());
+        assertFalse(playbook.getSteps().get(0).hasSubSteps());
+
+        final PlaybookStep groupStep = playbook.getSteps().get(1);
+        assertEquals("Add first product to cart", groupStep.getInstruction(), "Trailing colon should be stripped from goal header");
+        assertTrue(groupStep.hasSubSteps(), "Group step must have sub-steps");
+        assertEquals(3, groupStep.getSubSteps().size(), "Should have 3 child milestones");
+        assertEquals("Locate the first product card and hover over it", groupStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Click its 'Add to Cart' button", groupStep.getSubSteps().get(1).getInstruction());
+        assertEquals("When this string '${testId}' is not equal 'bad', click the size 'S'", groupStep.getSubSteps().get(2).getInstruction());
+        assertEquals(groupStep, groupStep.getSubSteps().get(0).getParent(), "Child step parent reference must point to group step");
+
+        assertEquals("Verify cart count is '1'", playbook.getSteps().get(2).getInstruction());
+        assertFalse(playbook.getSteps().get(2).hasSubSteps());
+    }
+
+    @Test
+    public void testParseGroupedStepsStructuredYaml() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - "Open demo store homepage"
+              - Add first product to cart:
+                  - "Locate the first product card and hover over it"
+                  - "Click its 'Add to Cart' button"
+              - "Verify cart count is '1'"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("grouped-structured.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("grouped-structured.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size());
+        assertEquals("Open demo store homepage", playbook.getSteps().get(0).getInstruction());
+
+        final PlaybookStep groupStep = playbook.getSteps().get(1);
+        assertEquals("Add first product to cart", groupStep.getInstruction());
+        assertTrue(groupStep.hasSubSteps());
+        assertEquals(2, groupStep.getSubSteps().size());
+        assertEquals("Locate the first product card and hover over it", groupStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Click its 'Add to Cart' button", groupStep.getSubSteps().get(1).getInstruction());
+        assertEquals(groupStep, groupStep.getSubSteps().get(0).getParent());
+
+        assertEquals("Verify cart count is '1'", playbook.getSteps().get(2).getInstruction());
+    }
+
+    @Test
+    public void testParseGroupedStepsWithInstructionAndSubSteps() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - instruction: "Select product variant and purchase"
+                subSteps:
+                  - "Select size M"
+                  - "Select color Blue"
+                  - "Click Add to Cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("instruction-substeps.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("instruction-substeps.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+
+        final PlaybookStep groupStep = playbook.getSteps().get(0);
+        assertEquals("Select product variant and purchase", groupStep.getInstruction());
+        assertTrue(groupStep.hasSubSteps());
+        assertEquals(3, groupStep.getSubSteps().size());
+        assertEquals("Select size M", groupStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Select color Blue", groupStep.getSubSteps().get(1).getInstruction());
+        assertEquals("Click Add to Cart", groupStep.getSubSteps().get(2).getInstruction());
+    }
+
+    @Test
+    public void testDuplicateStepInstructionsResolveDistinctLineNumbers() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              Locate the promo code input field:
+                - and type '10p-off' into it.
+                - Submit the form.
+
+              Locate the promo code input field:
+                - clear its content
+                - type 'FREEGIFT' into it
+                - Assert promo line item is shown (bug).
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("duplicate-steps.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("duplicate-steps.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+
+        final PlaybookStep firstOccurrence = playbook.getSteps().get(0);
+        final PlaybookStep secondOccurrence = playbook.getSteps().get(1);
+
+        assertEquals("Locate the promo code input field", firstOccurrence.getInstruction());
+        assertEquals("Locate the promo code input field", secondOccurrence.getInstruction());
+
+        assertEquals(2, firstOccurrence.getLineNumber());
+        assertEquals(6, secondOccurrence.getLineNumber());
+
+        assertTrue(secondOccurrence.isBug());
+        assertFalse(firstOccurrence.isBug());
     }
 }

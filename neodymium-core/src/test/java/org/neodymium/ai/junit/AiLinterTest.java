@@ -19,8 +19,10 @@
 package org.neodymium.ai.junit;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.DisplayName;
@@ -81,5 +83,28 @@ public final class AiLinterTest
 
         final Method inheritMethod = ClassWithLinterMatrix.class.getMethod("inheritClass");
         assertNull(inheritMethod.getAnnotation(AiLinter.class));
+    }
+
+    @AiLinter(failOnFindings = true)
+    private static class ClassWithFailOnFindings
+    {
+    }
+
+    @Test
+    @DisplayName("AiLinter failOnFindings defaults to false")
+    public void testAiLinterFailOnFindingsDefault()
+    {
+        final AiLinter annot = ClassWithDefaultLinter.class.getAnnotation(AiLinter.class);
+        assertNotNull(annot);
+        assertFalse(annot.failOnFindings());
+    }
+
+    @Test
+    @DisplayName("AiLinter failOnFindings can be configured to true")
+    public void testAiLinterFailOnFindingsTrue()
+    {
+        final AiLinter annot = ClassWithFailOnFindings.class.getAnnotation(AiLinter.class);
+        assertNotNull(annot);
+        assertTrue(annot.failOnFindings());
     }
 }

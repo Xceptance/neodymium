@@ -81,7 +81,7 @@ public final class PlaybookLinterPrompt implements AiPrompt<List<PlaybookLinterF
             for (int i = 0; i < playbookSteps.size(); i++)
             {
                 final PlaybookStep pbStep = playbookSteps.get(i);
-                final String raw = pbStep.getInstruction() != null ? pbStep.getInstruction() : "";
+                final String raw = pbStep.hasSubSteps() ? pbStep.getFullInstruction() : (pbStep.getInstruction() != null ? pbStep.getInstruction() : "");
                 String resolved = raw;
 
                 if (context != null && context.getSessionData() != null && !raw.isBlank())

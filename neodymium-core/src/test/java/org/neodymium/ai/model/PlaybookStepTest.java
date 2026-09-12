@@ -19,6 +19,7 @@
 
 package org.neodymium.ai.model;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -183,7 +184,7 @@ public class PlaybookStepTest
     {
         final PlaybookStep step = new PlaybookStep();
         step.setInstruction("An order number is shown in the form 'V-[0-9]+-US'.");
-        final Action action = new Action("ASSERT", "[data-ai='xcuulzml']", java.util.List.of("V-[0-9]+-US"),
+        final Action action = new Action("ASSERT", "[data-ai='xcuulzml']", List.of("V-[0-9]+-US"),
                 "Extracted ASSERT action", "Matching dynamic order number pattern", true);
         step.getActions().add(action);
 
@@ -219,5 +220,66 @@ public class PlaybookStepTest
 
         final PlaybookStep deserialized = mapper.readValue(json, PlaybookStep.class);
         Assertions.assertEquals(10000L, deserialized.getTimeoutMs());
+    }
+
+    @Test
+    public void testGetFullInstructionAndInteractiveSubSteps()
+    {
+        final PlaybookStep parent = new PlaybookStep("Locate the promo code input field:");
+        Assertions.assertFalse(parent.hasInteractiveSubSteps());
+        Assertions.assertEquals("Locate the promo code input field:", parent.getFullInstruction());
+
+        final PlaybookStep sub1 = new PlaybookStep("clear its content");
+        final PlaybookStep sub2 = new PlaybookStep("type 'FREEGIFT' into it");
+        final PlaybookStep sub3 = new PlaybookStep("Submit the promo code form.");
+        final PlaybookStep sub4 = new PlaybookStep("Assert that the cart items table contains a line item for 'Free Bonus Gift'.");
+
+        parent.getSubSteps().addAll(List.of(sub1, sub2, sub3, sub4));
+        sub1.setParent(parent);
+        sub2.setParent(parent);
+        sub3.setParent(parent);
+        sub4.setParent(parent);
+
+        Assertions.assertTrue(parent.hasInteractiveSubSteps());
+        final String full = parent.getFullInstruction();
+        Assertions.assertTrue(full.contains("Locate the promo code input field:"));
+        Assertions.assertTrue(full.contains("  - clear its content"));
+        Assertions.assertTrue(full.contains("  - type 'FREEGIFT' into it"));
+        Assertions.assertTrue(full.contains("  - Submit the promo code form."));
+        Assertions.assertTrue(full.contains("  - Assert that the cart items table contains a line item for 'Free Bonus Gift'."));
+
+        final PlaybookStep pureAssertParent = new PlaybookStep("Verify cart details:");
+        pureAssertParent.getSubSteps().add(new PlaybookStep("Verify total is $10.00"));
+        Assertions.assertFalse(pureAssertParent.hasInteractiveSubSteps());
+    }
+
+    @Test
+    public void testSubStepModifierInheritance()
+    {
+        final PlaybookStep parent = new PlaybookStep("Locate promo field:");
+        final PlaybookStep subAction = new PlaybookStep("type 'DISCOUNT' into field");
+        final PlaybookStep subBug = new PlaybookStep("Assert item 'Free Gift' is present (bug: PROMO-101)");
+        final PlaybookStep subOptional = new PlaybookStep("Check badge (optional)");
+        final PlaybookStep subContinue = new PlaybookStep("Check tooltip (continue-on-error)");
+        final PlaybookStep subNoHealing = new PlaybookStep("Click legacy link (no-healing)");
+        final PlaybookStep subNoReplay = new PlaybookStep("Generate OTP token (no-replay)");
+
+        parent.getSubSteps().addAll(List.of(subAction, subBug, subOptional, subContinue, subNoHealing, subNoReplay));
+
+        Assertions.assertTrue(parent.isBug());
+        Assertions.assertEquals("PROMO-101", parent.getBugDetails());
+        Assertions.assertTrue(parent.isOptional());
+        Assertions.assertTrue(parent.isContinueOnError());
+        Assertions.assertTrue(parent.isNoHealing());
+        Assertions.assertTrue(parent.isNoReplay());
+
+        final PlaybookStep cleanParent = new PlaybookStep("Standard step:");
+        cleanParent.getSubSteps().add(new PlaybookStep("click search button"));
+        Assertions.assertFalse(cleanParent.isBug());
+        Assertions.assertNull(cleanParent.getBugDetails());
+        Assertions.assertFalse(cleanParent.isOptional());
+        Assertions.assertFalse(cleanParent.isContinueOnError());
+        Assertions.assertFalse(cleanParent.isNoHealing());
+        Assertions.assertFalse(cleanParent.isNoReplay());
     }
 }

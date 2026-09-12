@@ -272,4 +272,36 @@ public final class PlaybookLinterPromptTest
         assertEquals(LinterSeverity.WARNING, f4.severity());
         assertTrue(f4.suggestedRewrite().contains("matches pattern"));
     }
+
+    @Test
+    @DisplayName("Verify prompt compilation with hierarchical sub-steps")
+    public void testPromptCompilationWithHierarchicalSubSteps()
+    {
+        final PlaybookStep parent = new PlaybookStep("Locate the first product card:");
+        parent.setLineNumber(9);
+        parent.setSourceFile("AddToCartTest.yaml");
+
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        final PlaybookStep sub2 = new PlaybookStep("Click its 'Add to Cart' button");
+        final PlaybookStep sub3 = new PlaybookStep("When this string '${testId}' is not equal 'bad', click the size 'S'");
+
+        parent.getSubSteps().addAll(List.of(sub1, sub2, sub3));
+
+        final PlaybookStep step2 = new PlaybookStep("Verify cart count is 1");
+        step2.setLineNumber(15);
+        step2.setSourceFile("AddToCartTest.yaml");
+
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Sub-Step Scenario", List.of(parent, step2), null);
+
+        final String userMsg = prompt.compileUserMessage(null);
+        assertTrue(userMsg.contains("1. Locate the first product card:"));
+        assertTrue(userMsg.contains("  - Hover over it"));
+        assertTrue(userMsg.contains("  - Click its 'Add to Cart' button"));
+        assertTrue(userMsg.contains("  - When this string '${testId}' is not equal 'bad', click the size 'S'"));
+        assertTrue(userMsg.contains("2. Verify cart count is 1"));
+
+        final String sysMsg = prompt.compileSystemMessage(null);
+        assertTrue(sysMsg.contains("Hierarchical Steps & Sub-Steps (Turn Groups)"));
+        assertTrue(sysMsg.contains("already explicitly split"));
+    }
 }
