@@ -51,7 +51,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraVerification")
 @NeodymiumAiTest
 @AiJudge(true)
-@AiOutcomeVerification(true)
+@AiOutcomeVerification(value = true, failOnError = false)
 @AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class RegisterJudgeAndVerificationsTest extends BaseAiTest

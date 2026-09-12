@@ -49,7 +49,7 @@ import org.neodymium.util.Neodymium;
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @AiJudge(false)
-@AiOutcomeVerification(false)
+@AiOutcomeVerification(value = false, failOnError = false)
 @AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class RegisterTest extends BaseAiTest

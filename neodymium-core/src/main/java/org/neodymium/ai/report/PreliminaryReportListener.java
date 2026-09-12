@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -181,6 +182,15 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         if (event instanceof StepStartedEvent stepStarted)
         {
+            if (this.currentStep != null && "RUNNING".equalsIgnoreCase(this.currentStep.getStatus()))
+            {
+                this.currentStep.setStatus("SUCCESS");
+                if (this.currentStep.getDurationMs() <= 0 && this.currentStep.getStartTimeMs() > 0)
+                {
+                    this.currentStep.setDurationMs(Math.max(1, System.currentTimeMillis() - this.currentStep.getStartTimeMs()));
+                }
+            }
+
             final PlaybookStep pbStep = stepStarted.getStep();
             final String rawInstruction = pbStep != null ? pbStep.getInstruction() : null;
             String resolvedInstruction = rawInstruction;
@@ -559,15 +569,37 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else if (event instanceof DiagnosticErrorEvent errorEvent)
         {
-            if (this.report.getFailureReason() == null)
+            final String msg = errorEvent.getMessage();
+            if (msg != null && (msg.startsWith("Visual RCA analysis:") || msg.startsWith("Visual RCA Diagnosis:")))
             {
-                this.report.setFailureReason(errorEvent.getMessage());
+                final String cleanRca = msg.replaceFirst("^Visual RCA (analysis|Diagnosis):\\s*", "").trim();
+                if (this.report.getVisualRcaExplanation() == null)
+                {
+                    this.report.setVisualRcaExplanation(cleanRca);
+                }
             }
-            if (errorEvent.getCause() != null && this.report.getFailureStackTrace() == null)
+            else if (this.report.getFailureReason() == null)
             {
-                final StringWriter sw = new StringWriter();
-                errorEvent.getCause().printStackTrace(new PrintWriter(sw));
-                this.report.setFailureStackTrace(sw.toString());
+                this.report.setFailureReason(msg);
+            }
+
+            if (errorEvent.getCause() != null)
+            {
+                if (this.report.getFailureStackTrace() == null)
+                {
+                    final StringWriter sw = new StringWriter();
+                    errorEvent.getCause().printStackTrace(new PrintWriter(sw));
+                    this.report.setFailureStackTrace(sw.toString());
+                }
+                if (this.report.getFailureReason() == null)
+                {
+                    Throwable root = errorEvent.getCause();
+                    while (root.getCause() != null && root != root.getCause())
+                    {
+                        root = root.getCause();
+                    }
+                    this.report.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                }
             }
         }
         else if (event instanceof DiagnosticWarningEvent warningEvent)
@@ -597,82 +629,199 @@ public final class PreliminaryReportListener implements ExecutionListener
 
     private void resolveUnfinishedSteps()
     {
-        final List<TestExecutionReport.ReportStepEntry> steps = this.report.getSteps();
-        for (int i = 0; i < steps.size(); i++)
-        {
-            resolveStep(steps.get(i));
-        }
-    }
-
-    private void resolveStep(final TestExecutionReport.ReportStepEntry step)
-    {
-        if (step == null)
+        final List<TestExecutionReport.ReportStepEntry> rootSteps = this.report.getSteps();
+        if (rootSteps.isEmpty())
         {
             return;
         }
 
-        if (!step.getSubSteps().isEmpty())
+        final List<TestExecutionReport.ReportStepEntry> leafSteps = new ArrayList<>();
+        for (final TestExecutionReport.ReportStepEntry root : rootSteps)
         {
-            boolean anySubFailed = false;
-            boolean allSubSuccess = true;
-            long totalSubDuration = 0;
+            collectLeafSteps(root, leafSteps);
+        }
 
-            for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+        if (this.report.isSuccess())
+        {
+            for (final TestExecutionReport.ReportStepEntry leaf : leafSteps)
             {
-                resolveStep(sub);
-                totalSubDuration += sub.getDurationMs();
-                if ("FAILED".equalsIgnoreCase(sub.getStatus()))
+                if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus()) || leaf.getStatus() == null)
                 {
-                    anySubFailed = true;
-                    allSubSuccess = false;
+                    leaf.setStatus("SUCCESS");
+                    if (leaf.getDurationMs() <= 0 && leaf.getStartTimeMs() > 0)
+                    {
+                        leaf.setDurationMs(Math.max(1, System.currentTimeMillis() - leaf.getStartTimeMs()));
+                    }
                 }
-                else if (!"SUCCESS".equalsIgnoreCase(sub.getStatus()) && !"PASSED".equalsIgnoreCase(sub.getStatus()) && !"HEALED".equalsIgnoreCase(sub.getStatus()))
-                {
-                    allSubSuccess = false;
-                }
-            }
-
-            if (anySubFailed || (!this.report.isSuccess() && !allSubSuccess))
-            {
-                step.setStatus("FAILED");
-                if (step.getFailureReason() == null && this.report.getFailureReason() != null)
-                {
-                    step.setFailureReason(this.report.getFailureReason());
-                }
-            }
-            else if (allSubSuccess)
-            {
-                step.setStatus("SUCCESS");
-            }
-            else
-            {
-                step.setStatus(!this.report.isSuccess() ? "FAILED" : "SUCCESS");
-            }
-
-            if (step.getDurationMs() <= 0)
-            {
-                step.setDurationMs(totalSubDuration);
             }
         }
-        else if ("RUNNING".equalsIgnoreCase(step.getStatus()) || "PENDING".equalsIgnoreCase(step.getStatus()) || step.getStatus() == null)
+        else
         {
-            if (!this.report.isSuccess())
+            // The session failed. Find the failing leaf step.
+            int failedIndex = -1;
+            for (int i = 0; i < leafSteps.size(); i++)
             {
-                step.setStatus("FAILED");
-                if (step.getFailureReason() == null && this.report.getFailureReason() != null)
+                if ("FAILED".equalsIgnoreCase(leafSteps.get(i).getStatus()))
                 {
-                    step.setFailureReason(this.report.getFailureReason());
+                    failedIndex = i;
+                    break;
                 }
+            }
+
+            if (failedIndex == -1)
+            {
+                // No step was explicitly marked FAILED yet.
+                // Find the active running step (or this.currentStep), or the last non-skipped step.
+                for (int i = 0; i < leafSteps.size(); i++)
+                {
+                    final TestExecutionReport.ReportStepEntry leaf = leafSteps.get(i);
+                    if (leaf == this.currentStep || "RUNNING".equalsIgnoreCase(leaf.getStatus()))
+                    {
+                        failedIndex = i;
+                        break;
+                    }
+                }
+                if (failedIndex == -1)
+                {
+                    failedIndex = leafSteps.size() - 1;
+                }
+            }
+
+            for (int i = 0; i < leafSteps.size(); i++)
+            {
+                final TestExecutionReport.ReportStepEntry leaf = leafSteps.get(i);
+                if (i < failedIndex)
+                {
+                    // Steps executed before the failure completed successfully
+                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus()) || leaf.getStatus() == null)
+                    {
+                        leaf.setStatus("SUCCESS");
+                        if (leaf.getDurationMs() <= 0 && leaf.getStartTimeMs() > 0)
+                        {
+                            leaf.setDurationMs(Math.max(1, System.currentTimeMillis() - leaf.getStartTimeMs()));
+                        }
+                    }
+                }
+                else if (i == failedIndex)
+                {
+                    // The failing step
+                    leaf.setStatus("FAILED");
+                    if (leaf.getFailureReason() == null && this.report.getFailureReason() != null)
+                    {
+                        leaf.setFailureReason(this.report.getFailureReason());
+                    }
+                    if (leaf.getDurationMs() <= 0 && leaf.getStartTimeMs() > 0)
+                    {
+                        leaf.setDurationMs(Math.max(1, System.currentTimeMillis() - leaf.getStartTimeMs()));
+                    }
+                }
+                else
+                {
+                    // Steps after the failure were not executed
+                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus()) || leaf.getStatus() == null)
+                    {
+                        leaf.setStatus("SKIPPED");
+                        leaf.setFailureReason(null);
+                    }
+                }
+            }
+        }
+
+        // Propagate status and durations to parent steps
+        for (final TestExecutionReport.ReportStepEntry root : rootSteps)
+        {
+            resolveParentStepStatus(root);
+        }
+    }
+
+    private void collectLeafSteps(final TestExecutionReport.ReportStepEntry entry, final List<TestExecutionReport.ReportStepEntry> leafList)
+    {
+        if (entry == null)
+        {
+            return;
+        }
+        if (entry.getSubSteps().isEmpty())
+        {
+            leafList.add(entry);
+        }
+        else
+        {
+            for (final TestExecutionReport.ReportStepEntry sub : entry.getSubSteps())
+            {
+                collectLeafSteps(sub, leafList);
+            }
+        }
+    }
+
+    private void resolveParentStepStatus(final TestExecutionReport.ReportStepEntry step)
+    {
+        if (step == null || step.getSubSteps().isEmpty())
+        {
+            return;
+        }
+
+        long totalSubDuration = 0;
+        boolean anyFailed = false;
+        boolean allSuccess = true;
+        boolean allSkipped = true;
+        String firstFailedReason = null;
+
+        for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+        {
+            resolveParentStepStatus(sub);
+            totalSubDuration += sub.getDurationMs();
+            final String subStatus = sub.getStatus();
+            if ("FAILED".equalsIgnoreCase(subStatus))
+            {
+                anyFailed = true;
+                allSuccess = false;
+                allSkipped = false;
+                if (firstFailedReason == null && sub.getFailureReason() != null)
+                {
+                    firstFailedReason = sub.getFailureReason();
+                }
+            }
+            else if ("SUCCESS".equalsIgnoreCase(subStatus) || "PASSED".equalsIgnoreCase(subStatus) || "HEALED".equalsIgnoreCase(subStatus))
+            {
+                allSkipped = false;
+            }
+            else if ("SKIPPED".equalsIgnoreCase(subStatus))
+            {
+                allSuccess = false;
             }
             else
             {
-                step.setStatus("SUCCESS");
+                allSuccess = false;
+                allSkipped = false;
             }
+        }
 
-            if (step.getDurationMs() <= 0 && step.getStartTimeMs() > 0)
+        if (anyFailed)
+        {
+            step.setStatus("FAILED");
+            if (step.getFailureReason() == null)
             {
-                step.setDurationMs(Math.max(1, System.currentTimeMillis() - step.getStartTimeMs()));
+                step.setFailureReason(firstFailedReason);
             }
+        }
+        else if (allSkipped)
+        {
+            step.setStatus("SKIPPED");
+            step.setFailureReason(null);
+        }
+        else if (allSuccess)
+        {
+            step.setStatus("SUCCESS");
+            step.setFailureReason(null);
+        }
+        else
+        {
+            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "SKIPPED");
+        }
+
+        if (step.getDurationMs() <= 0)
+        {
+            step.setDurationMs(totalSubDuration);
         }
     }
 

@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -61,7 +62,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class YamlPlaybookParser implements PlaybookParser
 {
     private static final Logger LOG = LoggerFactory.getLogger(YamlPlaybookParser.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     /**
      * Pattern matching standard top-level YAML section keys at the start of lines.

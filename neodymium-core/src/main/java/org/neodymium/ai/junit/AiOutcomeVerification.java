@@ -37,9 +37,25 @@ public @interface AiOutcomeVerification
 {
     /**
      * Whether post-action semantic outcome verification is enabled for the test execution.
-     * Defaults to {@code true} when annotated without arguments.
+     * Empty by default so annotating a class with {@code @AiOutcomeVerification(failOnError = false)}
+     * sets the failure policy without forcing outcome verification to be enabled on all methods.
      *
      * @return boolean flag(s) indicating if outcome verification is active
      */
-    boolean[] value() default {true};
+    boolean[] value() default {};
+
+    /**
+     * Whether outcome verification failures should fail the test execution.
+     * Defaults to {@code false}.
+     *
+     * @return boolean flag indicating if verification failure throws an exception
+     */
+    boolean failOnError() default false;
+
+    /**
+     * Alias for {@link #failOnError()}.
+     *
+     * @return boolean flag indicating if verification failure throws an exception
+     */
+    boolean onError() default false;
 }

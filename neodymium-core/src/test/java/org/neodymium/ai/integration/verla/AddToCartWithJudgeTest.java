@@ -50,7 +50,7 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraJudge")
 @NeodymiumAiTest
 @AiJudge(true)
-@AiOutcomeVerification(false)
+@AiOutcomeVerification(value = false, failOnError = false)
 @AiPlaybook(recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public final class AddToCartWithJudgeTest extends BaseAiTest

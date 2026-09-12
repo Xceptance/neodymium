@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.runner;
 
+import com.codeborne.selenide.Configuration;
 import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
@@ -26,6 +27,7 @@ import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
@@ -41,6 +43,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.ExpectedBugNotReproducedException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
@@ -105,7 +108,7 @@ public final class StateMachineRunner
 
         if (LOGGER.isTraceEnabled())
         {
-            final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
+            final AiConfiguration config = AiConfiguration.getInstance();
             LOGGER.trace("   ┌─ [Configured LLM Capabilities & Providers] ──────────────────────────────");
             for (final LlmCapability cap : LlmCapability.values())
             {
@@ -206,9 +209,19 @@ public final class StateMachineRunner
                     }
                 catch (final Throwable t)
                 {
-                    if (t instanceof VirtualMachineError || t instanceof LinkageError)
+                    final Long origTimeout = (Long) context.getTransientData().remove("KEY_ORIG_SELENIDE_TIMEOUT");
+                    if (origTimeout != null)
+                    {
+                        Configuration.timeout = origTimeout;
+                    }
+
+                    if (t instanceof VirtualMachineError || t instanceof LinkageError || t instanceof ExpectedBugNotReproducedException)
                     {
                         throw (Error) t;
+                    }
+                    if (t.getCause() instanceof ExpectedBugNotReproducedException expectedBugErr)
+                    {
+                        throw expectedBugErr;
                     }
 
                     if (t instanceof TokenBudgetExceededException tokenErr)
@@ -251,9 +264,7 @@ public final class StateMachineRunner
 
                     // Check if the current PlaybookStep is marked with a bug
                     final org.neodymium.ai.model.PlaybookStep playbookStep = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                    if (playbookStep != null && playbookStep.isBug()
-                        && !(e instanceof org.neodymium.ai.pipeline.UnexpectedSuccessException)
-                        && !(e instanceof org.neodymium.ai.pipeline.ToLevelEscalationException))
+                    if (playbookStep != null && playbookStep.isBug())
                     {
                         if (activeScope instanceof TryCatchStep tryCatch)
                         {
@@ -428,6 +439,12 @@ public final class StateMachineRunner
         }
         finally
         {
+            final Long origTimeout = (Long) context.getTransientData().remove("KEY_ORIG_SELENIDE_TIMEOUT");
+            if (origTimeout != null)
+            {
+                Configuration.timeout = origTimeout;
+            }
+
             final long durationMs = System.currentTimeMillis() - startTime;
             if (!success && failureCause != null)
             {
@@ -698,7 +715,7 @@ public final class StateMachineRunner
      */
     private void runVisualRca(final ExecutionContext context, final Throwable exception)
     {
-        if (!org.neodymium.ai.config.AiConfiguration.getInstance().isVisualRcaEnabled())
+        if (!AiConfiguration.getInstance().isVisualRcaEnabled())
         {
             LOGGER.debug("Visual RCA is disabled via configuration (neodymium.ai.visualRca.enabled=false). Skipping Visual RCA analysis.");
             return;

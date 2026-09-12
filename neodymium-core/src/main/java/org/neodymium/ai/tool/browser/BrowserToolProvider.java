@@ -108,6 +108,12 @@ public final class BrowserToolProvider
         registry.register(createNavigateTool());
         registry.register(createSelectTool());
         registry.register(createHoverTool());
+        registry.register(createClearTool());
+        registry.register(createClearCookiesTool());
+        registry.register(createBackTool());
+        registry.register(createForwardTool());
+        registry.register(createRefreshTool());
+        registry.register(createWaitTool());
         registry.register(createAssertTextTool());
         registry.register(createScrollTool());
         registry.register(createExecuteScriptTool());
@@ -224,6 +230,7 @@ public final class BrowserToolProvider
                     try
                     {
                         final SelenideElement el = findElement(selector);
+                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
                         if (el.is(Condition.visible))
                         {
                             el.click();
@@ -249,6 +256,7 @@ public final class BrowserToolProvider
                         final SelenideElement el = $(Selectors.byText(text)).is(Condition.visible)
                                 ? $(Selectors.byText(text))
                                 : $(Selectors.withText(text));
+                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
                         if (el.is(Condition.visible))
                         {
                             el.click();
@@ -284,28 +292,20 @@ public final class BrowserToolProvider
                     el = findElement(selector);
                 }
 
+                SelenideElementFinder.scrollIntoViewIfNeeded(el);
+
                 if (!el.is(Condition.visible))
                 {
                     try
                     {
-                        el.scrollIntoView(true);
+                        final SelenideElement hoverParent = el.closest("#cart-btn-wrapper, .dropdown, [class*='dropdown'], [id*='dropdown']");
+                        if (hoverParent.exists() && hoverParent.is(Condition.visible))
+                        {
+                            hoverParent.hover();
+                        }
                     }
                     catch (final Exception ignored)
                     {
-                    }
-                    if (!el.is(Condition.visible))
-                    {
-                        try
-                        {
-                            final SelenideElement hoverParent = el.closest("#cart-btn-wrapper, .dropdown, [class*='dropdown'], [id*='dropdown']");
-                            if (hoverParent.exists() && hoverParent.is(Condition.visible))
-                            {
-                                hoverParent.hover();
-                            }
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
                     }
                 }
 
@@ -317,6 +317,7 @@ public final class BrowserToolProvider
                 {
                     try
                     {
+                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
                         Selenide.executeJavaScript("arguments[0].click();", el);
                     }
                     catch (final Throwable ignored)
@@ -380,7 +381,9 @@ public final class BrowserToolProvider
                 final boolean clearFirst = !call.arguments().has("clearFirst") || call.arguments().path("clearFirst").asBoolean(true);
                 final boolean pressEnter = call.arguments().path("pressEnter").asBoolean(false);
 
-                final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
+                final SelenideElement el = findElement(selector);
+                SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                el.shouldBe(Condition.visible);
                 if (clearFirst)
                 {
                     try
@@ -482,7 +485,7 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
-                final String url = call.arguments().path("url").asText();
+                final String url = resolveUrl(call.arguments());
                 Selenide.open(url);
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 final ObjectNode res = successNode("navigate");
@@ -588,6 +591,225 @@ public final class BrowserToolProvider
                 findElement(selector).shouldBe(Condition.visible).hover();
                 final ObjectNode res = successNode("hover");
                 res.put("target", selector);
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    private static AiTool createClearTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "Selector of the input element to clear");
+        schema.putArray("required").add("selector");
+
+        final ToolDefinition def = new ToolDefinition("browser_clear", "Clears text in an input or textarea element", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String selector = resolveSelector(call.arguments());
+                findElement(selector).shouldBe(Condition.visible).clear();
+                final ObjectNode res = successNode("clear");
+                res.put("target", selector);
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    private static AiTool createClearCookiesTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ToolDefinition def = new ToolDefinition("browser_clear_cookies", "Clears all browser cookies", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                if (WebDriverRunner.hasWebDriverStarted())
+                {
+                    WebDriverRunner.getWebDriver().manage().deleteAllCookies();
+                }
+                return ToolResult.success(call.callId(), successNode("clear_cookies").toString());
+            }
+        };
+    }
+
+    private static AiTool createBackTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ToolDefinition def = new ToolDefinition("browser_back", "Navigates back in browser history", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                Selenide.back();
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ObjectNode res = successNode("back");
+                if (driver != null)
+                {
+                    res.put("url", driver.getCurrentUrl());
+                    res.put("title", driver.getTitle());
+                }
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    private static AiTool createForwardTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ToolDefinition def = new ToolDefinition("browser_forward", "Navigates forward in browser history", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                Selenide.forward();
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ObjectNode res = successNode("forward");
+                if (driver != null)
+                {
+                    res.put("url", driver.getCurrentUrl());
+                    res.put("title", driver.getTitle());
+                }
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    private static AiTool createRefreshTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ToolDefinition def = new ToolDefinition("browser_refresh", "Refreshes the current browser page", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                Selenide.refresh();
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ObjectNode res = successNode("refresh");
+                if (driver != null)
+                {
+                    res.put("url", driver.getCurrentUrl());
+                    res.put("title", driver.getTitle());
+                }
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    private static AiTool createWaitTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("durationMs").put("type", "integer").put("description", "Duration to wait in milliseconds");
+        props.putObject("time").put("type", "string").put("description", "Duration to wait (e.g. '1000' or '1s')");
+
+        final ToolDefinition def = new ToolDefinition("browser_wait", "Pauses execution for a specified duration", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                long waitMs = 1000;
+                final JsonNode args = call.arguments();
+                if (args.hasNonNull("durationMs"))
+                {
+                    waitMs = args.path("durationMs").asLong(1000);
+                }
+                else if (args.hasNonNull("time"))
+                {
+                    final String timeStr = args.path("time").asText().trim().toLowerCase();
+                    try
+                    {
+                        if (timeStr.endsWith("ms"))
+                        {
+                            waitMs = Long.parseLong(timeStr.substring(0, timeStr.length() - 2).trim());
+                        }
+                        else if (timeStr.endsWith("s"))
+                        {
+                            waitMs = (long) (Double.parseDouble(timeStr.substring(0, timeStr.length() - 1).trim()) * 1000);
+                        }
+                        else
+                        {
+                            waitMs = Long.parseLong(timeStr);
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                else if (args.hasNonNull("value"))
+                {
+                    final String valStr = args.path("value").asText().trim().toLowerCase();
+                    try
+                    {
+                        if (valStr.endsWith("ms"))
+                        {
+                            waitMs = Long.parseLong(valStr.substring(0, valStr.length() - 2).trim());
+                        }
+                        else if (valStr.endsWith("s"))
+                        {
+                            waitMs = (long) (Double.parseDouble(valStr.substring(0, valStr.length() - 1).trim()) * 1000);
+                        }
+                        else
+                        {
+                            waitMs = Long.parseLong(valStr);
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                Selenide.sleep(waitMs);
+                final ObjectNode res = successNode("wait");
+                res.put("durationMs", waitMs);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -995,6 +1217,34 @@ public final class BrowserToolProvider
             {
                 return args.path("target").asText();
             }
+            if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
+            {
+                return args.path("locator").asText();
+            }
+        }
+        return "";
+    }
+
+    private static String resolveUrl(final JsonNode args)
+    {
+        if (args != null)
+        {
+            if (args.hasNonNull("url") && !args.path("url").asText().isBlank())
+            {
+                return args.path("url").asText();
+            }
+            if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+            {
+                return args.path("target").asText();
+            }
+            if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
+            {
+                return args.path("locator").asText();
+            }
+            if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+            {
+                return args.path("value").asText();
+            }
         }
         return "";
     }
@@ -1057,7 +1307,11 @@ public final class BrowserToolProvider
                 if (args.hasNonNull("selector"))
                 {
                     final String sel = args.path("selector").asText();
-                    findElement(sel).scrollIntoView(true);
+                    final SelenideElement el = findElement(sel);
+                    Selenide.executeJavaScript(
+                        "if (arguments[0] && typeof arguments[0].scrollIntoView === 'function') {" +
+                        "  arguments[0].scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });" +
+                        "}", el);
                     final ObjectNode res = successNode("scroll");
                     res.put("target", sel);
                     return ToolResult.success(call.callId(), res.toString());

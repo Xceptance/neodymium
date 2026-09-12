@@ -10,6 +10,7 @@ import org.neodymium.common.browser.Browser;
 
 import java.io.File;
 import java.io.IOException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.client.LlmCapability;
@@ -19,6 +20,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.pipeline.ExpectedBugNotReproducedException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.util.Neodymium;
 
@@ -40,8 +42,15 @@ public class BugIntegrationTest extends BaseAiTest
     @BeforeEach
     public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
+        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
         session.data().putDynamic("bug.test.url", pageUrl, false);
+    }
+
+    @AfterEach
+    public void tearDownProperties()
+    {
+        Neodymium.getData().remove("neodymium.ai.pesap.enabled");
     }
 
     /**
@@ -195,7 +204,7 @@ public class BugIntegrationTest extends BaseAiTest
             }
             """, null, "mock"));
 
-        org.junit.jupiter.api.Assertions.assertThrows(org.neodymium.ai.pipeline.UnexpectedSuccessException.class, () -> {
+        org.junit.jupiter.api.Assertions.assertThrows(ExpectedBugNotReproducedException.class, () -> {
             session.execute( """
                 data:
                   - testId: bugData
@@ -280,6 +289,14 @@ public class BugIntegrationTest extends BaseAiTest
         try
         {
             final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+            // Step 1: PESAP classification for Open SUT
+            mock.addResponse(new LlmResponse("""
+                {
+                  "c": "LEAN",
+                  "i": "NAVIGATE"
+                }
+                """, null, "mock"));
 
             // Step 1: Open SUT (NAVIGATE)
             mock.addResponse(new LlmResponse("""

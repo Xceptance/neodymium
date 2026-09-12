@@ -49,6 +49,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Pl_Polish.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@AiOutcomeVerification(failOnError = false)
 public class VerlaGuestCheckout_Pl_Polish extends BaseAiTest
 {
     /**

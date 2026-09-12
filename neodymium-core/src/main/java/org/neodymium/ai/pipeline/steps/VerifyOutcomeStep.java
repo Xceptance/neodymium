@@ -51,6 +51,7 @@ import org.neodymium.ai.prompt.VerificationIssue;
 import org.neodymium.ai.prompt.VerificationPrompt;
 import org.neodymium.ai.prompt.VerificationResult;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.LlmLoggingUtils;
 import org.neodymium.ai.util.ScreenshotHasher;
 import org.neodymium.ai.util.VisualStabilityDetector;
 import org.slf4j.Logger;
@@ -113,11 +114,11 @@ public final class VerifyOutcomeStep implements PipelineStep
                 SutState capturedState = null;
                 if (step.getActions() != null && !step.getActions().isEmpty())
                 {
-                    capturedState = (SutState) context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                    capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
                 }
                 else
                 {
-                    context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                    context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
                 }
                 if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
                 {
@@ -248,10 +249,6 @@ public final class VerifyOutcomeStep implements PipelineStep
                 {
                     step.setStatus(PlaybookStepStatus.SUCCESS);
                 }
-                if (session != null && session.getEventBus() != null)
-                {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
-                }
             }
             LOGGER.debug("Semantic outcome verification is disabled in configuration. Skipping step.");
             return;
@@ -287,10 +284,6 @@ public final class VerifyOutcomeStep implements PipelineStep
                 if (step.getStatus() != PlaybookStepStatus.HEALED)
                 {
                     step.setStatus(PlaybookStepStatus.SUCCESS);
-                }
-                if (session != null && session.getEventBus() != null)
-                {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
                 }
             }
             LOGGER.debug("Step was replayed from baseline. Bypassing semantic outcome verification.");
@@ -350,7 +343,10 @@ public final class VerifyOutcomeStep implements PipelineStep
 
             // 6. Gather visual image attachments from initial and final SUT states for multimodal LLM comparison
             final List<SutAttachment> attachments = new ArrayList<>();
-            final SutState initialState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+            final SutState preActionState = (SutState) context.getTransientData().get(ExecutionContext.KEY_PRE_ACTION_STATE);
+            final SutState initialState = preActionState != null
+                ? preActionState
+                : (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
             if (initialState != null && initialState.getAttachments() != null)
             {
                 for (final SutAttachment att : initialState.getAttachments())
@@ -399,7 +395,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             if (LOGGER.isTraceEnabled())
             {
                 LOGGER.trace("┌─ [Verification Raw Response] ─────────────────────────────────────────────");
-                LOGGER.trace("{}", CallLlmStep.formatJsonForLogging(response.content()));
+                LOGGER.trace("{}", LlmLoggingUtils.formatJsonForLogging(response.content()));
                 LOGGER.trace("└──────────────────────────────────────────────────────────────────────────");
             }
 
@@ -496,7 +492,17 @@ public final class VerifyOutcomeStep implements PipelineStep
                     warnings.add(issue);
                     LOGGER.warn("   ⚠️ Semantic outcome verification FAILED for step {}: \"{}\"", stepLoc, instruction);
 
-                    if (config.isSemanticVerificationFailOnError())
+                    boolean failOnError = config.isSemanticVerificationFailOnError();
+                    final Object transientFailOnError = context.getTransientData().get("neodymium.ai.semanticVerification.failOnError");
+                    if (transientFailOnError instanceof Boolean b)
+                    {
+                        failOnError = b;
+                    }
+                    else if (transientFailOnError instanceof String s)
+                    {
+                        failOnError = Boolean.parseBoolean(s);
+                    }
+                    if (failOnError)
                     {
                         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, finalState);
                         throw new VerificationFailureException(result, String.format("Semantic outcome verification failed for step %s: \"%s\". Summary: %s", stepLoc, instruction, summary));
@@ -591,10 +597,6 @@ public final class VerifyOutcomeStep implements PipelineStep
                 {
                     step.setStatus(PlaybookStepStatus.SUCCESS);
                 }
-                if (session != null && session.getEventBus() != null)
-                {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
-                }
             }
         }
         catch (final VerificationFailureException e)
@@ -649,6 +651,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             // Always clean transient state to prevent context leakage across pipeline steps
             context.getTransientData().remove("finalState");
             context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
+            context.getTransientData().remove(ExecutionContext.KEY_PRE_ACTION_STATE);
         }
     }
 

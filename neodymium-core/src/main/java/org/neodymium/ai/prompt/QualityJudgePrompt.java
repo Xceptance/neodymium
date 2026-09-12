@@ -70,7 +70,7 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
         String compiledSystemPrompt = systemPrompt;
         if (isSelenideMode)
         {
-            compiledSystemPrompt = compiledSystemPrompt + ActionExtractionPrompt.SELENIDE_LOCATOR_RULE;
+            compiledSystemPrompt = compiledSystemPrompt + "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
         }
         return compiledSystemPrompt;
     }
@@ -185,7 +185,7 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
         String compiledSystemPrompt = systemPrompt;
         if (isSelenideMode)
         {
-            compiledSystemPrompt = compiledSystemPrompt + ActionExtractionPrompt.SELENIDE_LOCATOR_RULE;
+            compiledSystemPrompt = compiledSystemPrompt + "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
         }
 
         return new LlmRequest(compiledSystemPrompt, userMsg, java.util.Collections.emptyList(), null, temp, timeout);

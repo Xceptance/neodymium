@@ -87,7 +87,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.reportListener = new PreliminaryReportListener(
             Paths.get(config.getDiskReportDirectory()),
             DiskReportFormat.parseFormats(config.getDiskReportFormat()),
-            true
+            config.isDiskReportEnabled()
         );
     }
 

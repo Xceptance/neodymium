@@ -49,24 +49,11 @@ public final class SystemPromptAddonHelper
         // utility class
     }
 
-    private static final String MULTILINGUAL_PESAP_ADDON =
-        "Language Universality: Instructions may be written in any natural language. Apply all semantic splitting, context level, and non-splitting rules to equivalent phrasing in the given language. Always preserve the original language in generated sub-steps.";
-
-    private static final String MULTILINGUAL_GENERAL_ADDON =
-        "Language Universality: The System Under Test and test step instructions may be localized in any language. When evaluating button texts, labels, links, and assertions, apply all action and assertion rules to the localized equivalents in the page DOM.";
-
-    private static final String MULTILINGUAL_VERIFICATION_ADDON =
-        "Language Universality: The System Under Test and test step instructions may be localized in any language. Verify outcomes against localized content and labels accordingly.";
-
-    private static final String MULTILINGUAL_VISUAL_ADDON =
-        "Language Universality: The System Under Test and test step instructions may be localized in any language. When evaluating visual appearance, text, labels, and assertions on the screenshot, apply all rules to the localized equivalents.";
-
     /**
      * Resolves and accumulates custom prompt add-ons across all active layers:
-     * 1. Multilingual layer (if enabled via neodymium.ai.multilingual)
-     * 2. Model / Disk layer (model-specific general + capability-targeted)
-     * 3. YAML Playbook layer (general + capability-targeted)
-     * 4. Test Dataset layer (general + capability-targeted)
+     * 1. Model / Disk layer (model-specific general + capability-targeted)
+     * 2. YAML Playbook layer (general + capability-targeted)
+     * 3. Test Dataset layer (general + capability-targeted)
      *
      * Resolves dynamic variable placeholders (${variableName}) against active session data.
      *
@@ -86,16 +73,6 @@ public final class SystemPromptAddonHelper
         final List<String> segments = new ArrayList<>();
         final SessionData sessionData = context.getSessionData();
 
-        // 0. Multilingual layer
-        if (isMultilingualEnabled(context, sessionData))
-        {
-            final String multiAddon = getMultilingualAddon(type);
-            if (multiAddon != null && !multiAddon.isBlank())
-            {
-                segments.add(multiAddon);
-            }
-        }
-
         // 1. Model / Disk layer
         collectModelAddons(type, context, sessionData, segments);
 
@@ -114,40 +91,6 @@ public final class SystemPromptAddonHelper
         final String combined = String.join("\n\n", segments);
         validateLength(combined);
         return combined;
-    }
-
-    private static boolean isMultilingualEnabled(final ExecutionContext context, final SessionData sessionData)
-    {
-        if (sessionData != null)
-        {
-            final Object sessionProp = sessionData.get("neodymium.ai.multilingual");
-            if (sessionProp != null)
-            {
-                return Boolean.parseBoolean(sessionProp.toString().trim());
-            }
-        }
-        return AiConfiguration.getInstance().isMultilingual();
-    }
-
-    private static String getMultilingualAddon(final String type)
-    {
-        if (type == null || "general".equalsIgnoreCase(type) || "default".equalsIgnoreCase(type))
-        {
-            return MULTILINGUAL_GENERAL_ADDON;
-        }
-        if ("pesap".equalsIgnoreCase(type))
-        {
-            return MULTILINGUAL_PESAP_ADDON;
-        }
-        if ("verification".equalsIgnoreCase(type))
-        {
-            return MULTILINGUAL_VERIFICATION_ADDON;
-        }
-        if ("visual".equalsIgnoreCase(type))
-        {
-            return MULTILINGUAL_VISUAL_ADDON;
-        }
-        return null;
     }
 
     private static void collectModelAddons(

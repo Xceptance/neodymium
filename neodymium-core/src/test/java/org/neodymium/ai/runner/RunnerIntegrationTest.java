@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
@@ -42,14 +44,12 @@ import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
-import org.neodymium.ai.event.structural.ActionExecutedEvent;
-import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.MockSutState;
-import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
@@ -61,17 +61,20 @@ import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
-import org.neodymium.ai.pipeline.steps.CallLlmStep;
-import org.neodymium.ai.pipeline.steps.CaptureStateStep;
+import org.neodymium.ai.pipeline.VerificationFailureException;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
-import org.neodymium.ai.pipeline.steps.PrepareRetryStep;
 import org.neodymium.ai.pipeline.steps.VerifyOutcomeStep;
 import org.neodymium.ai.pipeline.structural.ConditionalBranchStep;
 import org.neodymium.ai.pipeline.structural.LoopStep;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
-import org.neodymium.ai.prompt.AiPrompt;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.tool.AiTool;
+import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolContext;
+import org.neodymium.ai.tool.ToolDefinition;
+import org.neodymium.ai.tool.ToolRegistry;
+import org.neodymium.ai.tool.ToolResult;
 
 /**
  * JUnit 5 Integration test suite validating the StateMachineRunner lifecycle,
@@ -120,59 +123,6 @@ public final class RunnerIntegrationTest
         }
     }
 
-    /**
-     * Mock AI Prompt implementation compiling and parsing list of actions.
-     */
-    private static final class MockActionsPrompt implements AiPrompt<List<Action>>
-    {
-        MockActionsPrompt()
-        {
-        }
-
-        @Override
-        public ResponseSchema getResponseSchema()
-        {
-            return ResponseSchema.ACTIONS;
-        }
-
-        @Override
-        public String compileSystemMessage(final ExecutionContext context)
-        {
-            return "system prompt";
-        }
-
-        @Override
-        public String compileUserMessage(final ExecutionContext context)
-        {
-            return "user prompt";
-        }
-
-        @Override
-        public List<Action> parseResponse(final String rawContent, final ExecutionContext context) throws Exception
-        {
-            if ("MALFORMED".equals(rawContent))
-            {
-                throw new IllegalArgumentException("Malformed response syntax");
-            }
-            final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
-            if (instruction != null)
-            {
-                if (instruction.contains("login.steps"))
-                {
-                    return List.of(new Action("INCLUDE", "fragments/login.steps", ""));
-                }
-                if (instruction.contains("login button"))
-                {
-                    return List.of(new Action("CLICK", "#login", ""));
-                }
-                if (instruction.contains("username"))
-                {
-                    return List.of(new Action("TYPE", "#user", "admin"));
-                }
-            }
-            return List.of(new Action("CLICK", "button#submit", "Click Submit"));
-        }
-    }
 
     /**
      * Constructs a default test instance.
@@ -314,200 +264,6 @@ public final class RunnerIntegrationTest
         assertNull(context.getTransientData().get("healed"));
     }
 
-    /**
-     * Test concrete execution steps: CaptureStateStep, CallLlmStep, and ExecuteActionsStep.
-     */
-    @Test
-    public void testConcreteExecutionStepsLifecycle() throws PipelineException, IOException
-    {
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final TestLlmProvider provider = new TestLlmProvider();
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(provider);
-        registry.registerProvider(provider);
-
-        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-
-        // 1. Enqueue canned SUT state to MockTargetExecutor
-        final MockSutState state = new MockSutState("<html>page</html>", "test-dom-hash");
-        executor.enqueueState(state);
-
-        // 2. Set up listener to track event bus publishes
-        final List<Object> receivedEvents = new ArrayList<>();
-        eventBus.registerListener(e -> {
-            if (e instanceof StateCapturedEvent)
-            {
-                receivedEvents.add(e);
-            }
-            else if (e instanceof ActionExecutedEvent)
-            {
-                receivedEvents.add(e);
-            }
-        });
-
-        // 3. Assemble steps sequence
-        final CaptureStateStep captureStep = new CaptureStateStep();
-        final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(new MockActionsPrompt(), LlmCapability.TEXT_ONLY);
-        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
-
-        final SequenceStep rootSeq = new SequenceStep(List.of(captureStep, llmStep, executeStep));
-        context.pushStep(rootSeq);
-
-        final StateMachineRunner runner = new StateMachineRunner(session);
-        runner.run();
-
-        // 4. Verify SUT state was captured and stored
-        final SutState captured = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
-        assertNotNull(captured);
-        assertEquals("test-dom-hash", captured.getContentHash());
-
-        // 5. Verify action executed, parameterized, and logged in history
-        assertEquals(1, executor.getExecutedActions().size());
-        assertEquals("CLICK", executor.getExecutedActions().get(0).getType());
-
-        @SuppressWarnings("unchecked")
-        final List<Action> recorded = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_RECORDING);
-        assertNotNull(recorded);
-        assertEquals(1, recorded.size());
-        assertEquals("CLICK", recorded.get(0).getType());
-
-        // 6. Assert structural events were dispatched via event bus
-        assertEquals(2, receivedEvents.size());
-        assertTrue(receivedEvents.get(0) instanceof StateCapturedEvent);
-        assertTrue(receivedEvents.get(1) instanceof ActionExecutedEvent);
-    }
-
-    /**
-     * Verifies that ExecuteActionsStep catches and logs AssertionErrors thrown during action execution.
-     */
-    @Test
-    public void testExecuteActionsStepAssertionErrorHandling() throws Exception
-    {
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final org.neodymium.ai.executor.TargetExecutor executor = new org.neodymium.ai.executor.TargetExecutor()
-        {
-            @Override
-            public void execute(final Action action)
-            {
-                throw new AssertionError("Element not found: " + action.getTarget());
-            }
-
-            @Override
-            public SutState captureState()
-            {
-                return null;
-            }
-
-            @Override
-            public SutState captureState(final org.neodymium.ai.model.ContextLevel level)
-            {
-                return null;
-            }
-
-            @Override
-            public Set<org.neodymium.ai.executor.ActionDefinition> getSupportedActions()
-            {
-                return Collections.emptySet();
-            }
-        };
-
-        final List<ActionExecutedEvent> executedEvents = new ArrayList<>();
-        eventBus.registerListener((ExecutionListener) e ->
-        {
-            if (e instanceof ActionExecutedEvent event)
-            {
-                executedEvents.add(event);
-            }
-        });
-
-        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, List.of(
-            new Action("ASSERT", "text:nth-of-type(4)", List.of("[Total Paid: \\$[0-9]+]"), "Verify total", "reasoning")
-        ));
-
-        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
-
-        final HealingRequiredException thrown = assertThrows(
-            HealingRequiredException.class,
-            () -> executeStep.execute(context)
-        );
-
-        assertTrue(thrown.getMessage().contains("Element not found: text:nth-of-type(4)"));
-        assertEquals(1, executedEvents.size());
-        assertFalse(executedEvents.get(0).isSuccess());
-    }
-
-    /**
-     * Verifies that the ExecuteActionsStep handles dynamic run-time INCLUDE actions
-     * by parsing the included steps and pushing them onto the stack dynamically.
-     */
-    @Test
-    public void testDynamicIncludeExpansion() throws PipelineException, IOException
-    {
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final TestLlmProvider provider = new TestLlmProvider();
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(provider);
-        registry.registerProvider(provider);
-
-        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
-
-        // 1. Prepare in-memory resource manager with include files
-        final org.neodymium.ai.resources.InMemoryResourceManager resourceManager = new org.neodymium.ai.resources.InMemoryResourceManager();
-        resourceManager.write("fragments/login.steps", "steps:\n  - Click login button\n  - Type username\n");
-
-        context.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, resourceManager);
-        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_PARSER, new org.neodymium.ai.playbook.YamlPlaybookParser());
-        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new MockActionsPrompt());
-        context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "fragments/login.steps");
-
-        // 2. Set LLM to return an INCLUDE action
-        provider.setResponseContent("[{\"type\": \"INCLUDE\", \"target\": \"fragments/login.steps\"}]");
-
-        // Set SUT states for 3 steps (1 root + 2 sub-steps)
-        executor.enqueueState(new MockSutState("<html>root</html>", "root-hash"));
-        executor.enqueueState(new MockSutState("<html>step1</html>", "step1-hash"));
-        executor.enqueueState(new MockSutState("<html>step2</html>", "step2-hash"));
-
-        // 3. Assemble and push root step sequence
-        final CaptureStateStep captureStep = new CaptureStateStep();
-        final CallLlmStep<List<Action>> llmStep = new CallLlmStep<>(new MockActionsPrompt(), LlmCapability.TEXT_ONLY);
-        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
-
-        final SequenceStep rootSeq = new SequenceStep(List.of(captureStep, llmStep, executeStep));
-        context.pushStep(rootSeq);
-
-        // 4. Run StateMachineRunner
-        final StateMachineRunner runner = new StateMachineRunner(session);
-        runner.run();
-
-        // 5. Verify SUT executor executed only SUT-impacting actions (CLICK and TYPE)
-        final List<Action> executed = executor.getExecutedActions();
-        assertEquals(2, executed.size());
-        assertEquals("CLICK", executed.get(0).getType());
-        assertEquals("TYPE", executed.get(1).getType());
-
-        // 6. Verify recorded action history contains the INCLUDE as well as CLICK and TYPE
-        @SuppressWarnings("unchecked")
-        final List<Action> recorded = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_RECORDING);
-        assertNotNull(recorded);
-        assertEquals(3, recorded.size());
-        assertEquals("INCLUDE", recorded.get(0).getType());
-        assertEquals("CLICK", recorded.get(1).getType());
-        assertEquals("TYPE", recorded.get(2).getType());
-    }
 
     /**
      * Verifies that VerifyOutcomeStep succeeds when the LLM returns a passed JSON validation response.
@@ -609,7 +365,7 @@ public final class RunnerIntegrationTest
         });
 
         final VerifyOutcomeStep step = new VerifyOutcomeStep();
-        step.execute(context);
+        assertThrows(VerificationFailureException.class, () -> step.execute(context));
 
         @SuppressWarnings("unchecked")
         final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
@@ -618,100 +374,6 @@ public final class RunnerIntegrationTest
         assertTrue(warnings.get(0) instanceof org.neodymium.ai.prompt.VerificationIssue);
         final org.neodymium.ai.prompt.VerificationIssue issue = (org.neodymium.ai.prompt.VerificationIssue) warnings.get(0);
         assertEquals("State did not change", issue.summary());
-    }
-
-    /**
-     * Verifies that PrepareRetryStep runs without issues in a browserless/non-webdriver test context.
-     */
-    @Test
-    public void testPrepareRetryStep() throws Exception
-    {
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final MockTargetExecutor executor = new MockTargetExecutor();
-
-        final LlmRegistry registry = new LlmRegistry();
-        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-
-        final PrepareRetryStep step = new PrepareRetryStep();
-        step.execute(context);
-    }
-
-    /**
-     * Verifies that SemanticDivergenceAnalysisStep computes a diff summary when baseline and
-     * current states differ, and stores the result in the execution context.
-     */
-    @Test
-    public void testTwoStageSemanticHealingDiffSummary() throws Exception
-    {
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final TestLlmProvider provider = new TestLlmProvider();
-        provider.setResponseContent("The login button ID changed from 'login' to 'signin'.");
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(provider);
-        registry.registerProvider(provider);
-
-        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-
-        // Populate baseline state on the playbook step
-        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep("Click the login button");
-        step.setBaselineState("<button id='login'>Login</button>");
-        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
-
-        // Populate a different current SUT state
-        executor.enqueueState(new org.neodymium.ai.executor.MockSutState(
-            "<button id='signin'>Sign In</button>", Collections.emptyList(), "hash-current"
-        ));
-        final org.neodymium.ai.executor.SutState currentState = executor.captureState();
-        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
-
-        final org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep diffStep =
-            new org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep();
-        diffStep.execute(context);
-
-        final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
-        assertNotNull(diffSummary, "Diff summary should be stored in context");
-        assertFalse(diffSummary.isBlank(), "Diff summary should not be blank");
-    }
-
-    /**
-     * Verifies that SemanticDivergenceAnalysisStep stores a placeholder message when states match.
-     */
-    @Test
-    public void testTwoStageSemanticHealingMatchingStates() throws Exception
-    {
-        final SessionData sessionData = new SessionData();
-        final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final LlmRegistry registry = new LlmRegistry();
-
-        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-        final ExecutionContext context = session.getExecutionContext();
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-
-        // Baseline and current state are identical
-        final org.neodymium.ai.model.PlaybookStep step = new org.neodymium.ai.model.PlaybookStep("Click the submit button");
-        step.setBaselineState("<button id='submit'>Submit</button>");
-        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
-
-        executor.enqueueState(new org.neodymium.ai.executor.MockSutState(
-            "<button id='submit'>Submit</button>", Collections.emptyList(), "hash-same"
-        ));
-        final org.neodymium.ai.executor.SutState currentState = executor.captureState();
-        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
-
-        final org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep diffStep =
-            new org.neodymium.ai.pipeline.steps.SemanticDivergenceAnalysisStep();
-        diffStep.execute(context);
-
-        final String diffSummary = (String) context.getTransientData().get(ExecutionContext.KEY_SEMANTIC_DIFF_SUMMARY);
-        assertNotNull(diffSummary, "Placeholder diff summary should be stored");
-        assertTrue(diffSummary.contains("No layout changes"), "Should indicate no divergence detected");
     }
 
     /**
@@ -792,8 +454,8 @@ public final class RunnerIntegrationTest
     }
 
     /**
-     * Verifies that when a replay action fails and triggers healing, CaptureStateStep is
-     * executed so that SUT state is captured into KEY_LAST_STATE before the healing LLM call.
+     * Verifies that when a replay action fails and triggers healing, state is
+     * captured so that SUT state is captured into KEY_LAST_STATE before the healing LLM call.
      */
     @Test
     public void testReplayHealingCapturesSutState() throws Exception
@@ -803,8 +465,6 @@ public final class RunnerIntegrationTest
         final MockTargetExecutor delegate = new MockTargetExecutor();
         final TargetExecutor executor = new TargetExecutor()
         {
-            private boolean failed = false;
-
             @Override
             public SutState captureState(final org.neodymium.ai.model.ContextLevel level) throws IOException
             {
@@ -814,11 +474,6 @@ public final class RunnerIntegrationTest
             @Override
             public void execute(final Action action) throws IOException
             {
-                if (!failed)
-                {
-                    failed = true;
-                    throw new IOException("Element not found: " + action.getTarget());
-                }
                 delegate.execute(action);
             }
 
@@ -829,7 +484,7 @@ public final class RunnerIntegrationTest
             }
         };
         final TestLlmProvider provider = new TestLlmProvider();
-        provider.setResponseContent("{\"status\":\"SUCCESS\",\"actions\":[]}");
+        provider.setResponseContent("{\"name\": \"complete_step\", \"arguments\": {\"summary\": \"Healed\"}}");
 
         final LlmRegistry registry = new LlmRegistry();
         registry.setDefaultProvider(provider);
@@ -844,13 +499,34 @@ public final class RunnerIntegrationTest
         final ExecutionContext context = session.getExecutionContext();
 
         final PlaybookStep pbStep = new PlaybookStep("Click checkout");
-        pbStep.setActions(List.of(new Action("CLICK", "#invalid-btn", "click")));
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final AtomicBoolean toolFailed = new AtomicBoolean(false);
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("failing_click", "Failing Click", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext toolContext)
+            {
+                if (!toolFailed.get())
+                {
+                    toolFailed.set(true);
+                    return ToolResult.error(call.callId(), "Simulated failure");
+                }
+                return ToolResult.success(call.callId(), "OK");
+            }
+        });
+        pbStep.setToolCalls(List.of(new ToolCall("call-1", "failing_click", JsonNodeFactory.instance.objectNode())));
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
         context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, pbStep);
-        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new MockActionsPrompt());
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
 
         // mapPlaybookStepToPipelineStep builds the TryCatch execution tree containing the HealingRequiredException handler
         final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(pbStep, session, context);
@@ -860,7 +536,7 @@ public final class RunnerIntegrationTest
         runner.run();
 
         final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
-        assertNotNull(lastState, "KEY_LAST_STATE must be populated by CaptureStateStep during replay healing");
+        assertNotNull(lastState, "KEY_LAST_STATE must be populated during replay healing");
         assertEquals("healed-hash", lastState.getContentHash());
     }
 

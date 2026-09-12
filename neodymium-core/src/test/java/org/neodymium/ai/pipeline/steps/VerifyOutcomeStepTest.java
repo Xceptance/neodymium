@@ -22,6 +22,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -360,7 +361,7 @@ public class VerifyOutcomeStepTest
             "viewport_hash");
 
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
-        context.getTransientData().put("KEY_POST_ACTION_STATE", staleState);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, staleState);
         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, viewportState);
 
         final PlaybookStep pureVisualStep = new PlaybookStep("Verify page header (visual)");
@@ -376,6 +377,54 @@ public class VerifyOutcomeStepTest
         Assertions.assertNotNull(pureVisualStep.getScreenshotHash(), "Screenshot hash should be recorded.");
         Assertions.assertEquals(expectedViewportHash, pureVisualStep.getScreenshotHash(), "Baseline hash MUST match active viewport state, NOT stale full-page action state.");
         Assertions.assertNotEquals(expectedStaleHash, pureVisualStep.getScreenshotHash(), "Baseline hash must NOT match stale action state.");
-        Assertions.assertNull(context.getTransientData().get("KEY_POST_ACTION_STATE"), "KEY_POST_ACTION_STATE must be removed.");
+        Assertions.assertNull(context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE), "KEY_POST_ACTION_STATE must be removed.");
+    }
+
+    /**
+     * Goal: Verifies that semantic outcome verification includes both pre-action and post-action
+     * image attachments when KEY_PRE_ACTION_STATE and KEY_POST_ACTION_STATE are populated.
+     */
+    @Test
+    public void testOutcomeVerificationIncludesPreAndPostActionAttachments() throws Exception
+    {
+        final String preBase64 = Base64.getEncoder().encodeToString("pre_img".getBytes(StandardCharsets.UTF_8));
+        final String postBase64 = Base64.getEncoder().encodeToString("post_img".getBytes(StandardCharsets.UTF_8));
+
+        final MockSutState preState = new MockSutState(
+            "<html>pre</html>",
+            List.of(new SutAttachment("image/png", "pre.png", preBase64)),
+            "pre_hash");
+        final MockSutState postState = new MockSutState(
+            "<html>post</html>",
+            List.of(new SutAttachment("image/png", "post.png", postBase64)),
+            "post_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, preState);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+        context.getTransientData().put("semanticVerification.enabled", true);
+
+        final PlaybookStep step = new PlaybookStep("Click purchase");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final String jsonResponse = """
+            {
+              "rubrics": {
+                "intentMatch": { "analysis": "Clicked purchase", "score": "PASS" },
+                "visualDelta": { "analysis": "Confirmation shown", "score": "PASS" },
+                "absenceOfErrors": { "analysis": "No errors", "score": "PASS" }
+              },
+              "overallVerdict": { "passed": true, "summary": "Order placed successfully" }
+            }
+            """;
+        mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+
+        final VerifyOutcomeStep verifyOutcomeStep = new VerifyOutcomeStep();
+        verifyOutcomeStep.execute(context);
+
+        Assertions.assertNotNull(mockLlmProvider.getLastRequest(), "LLM request must have been sent.");
+        Assertions.assertEquals(2, mockLlmProvider.getLastRequest().attachments().size(), "Both pre-action and post-action screenshots must be passed.");
+        Assertions.assertEquals(preBase64, mockLlmProvider.getLastRequest().attachments().get(0).base64Data());
+        Assertions.assertEquals(postBase64, mockLlmProvider.getLastRequest().attachments().get(1).base64Data());
     }
 }

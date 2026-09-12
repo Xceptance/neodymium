@@ -344,27 +344,47 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         // 2d. Resolve Outcome Verification variations
         final List<Boolean> outcomeVariants = new ArrayList<>();
         final AiOutcomeVerification methodOutcome = method.getAnnotation(AiOutcomeVerification.class);
+        final AiOutcomeVerification classOutcome = testClass.getAnnotation(AiOutcomeVerification.class);
         if (methodOutcome != null)
         {
-            for (final boolean o : methodOutcome.value())
+            if (methodOutcome.value().length > 0)
             {
-                outcomeVariants.add(o);
-            }
-        }
-        else
-        {
-            final AiOutcomeVerification classOutcome = testClass.getAnnotation(AiOutcomeVerification.class);
-            if (classOutcome != null)
-            {
-                for (final boolean o : classOutcome.value())
+                for (final boolean o : methodOutcome.value())
                 {
                     outcomeVariants.add(o);
                 }
+            }
+            else
+            {
+                // Bare @AiOutcomeVerification on method enables outcome verification
+                outcomeVariants.add(true);
+            }
+        }
+        else if (classOutcome != null && classOutcome.value().length > 0)
+        {
+            for (final boolean o : classOutcome.value())
+            {
+                outcomeVariants.add(o);
             }
         }
         if (outcomeVariants.isEmpty())
         {
             outcomeVariants.add(null);
+        }
+
+        // Resolve failOnError: method level overrides class level, fallback to config
+        final Boolean outcomeFailOnError;
+        if (methodOutcome != null && (methodOutcome.failOnError() || methodOutcome.onError()))
+        {
+            outcomeFailOnError = true;
+        }
+        else if (classOutcome != null && (classOutcome.failOnError() || classOutcome.onError()))
+        {
+            outcomeFailOnError = true;
+        }
+        else
+        {
+            outcomeFailOnError = false;
         }
 
         // 3. Resolve dataset filters
@@ -579,7 +599,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                                             {
                                                 extensions.add(new BrowserExecutionCallback(browser, method.getName()));
                                             }
-                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, outcomeEnabled));
+                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, outcomeEnabled, outcomeFailOnError));
                                             return extensions;
                                         }
                                     });
@@ -681,6 +701,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final Boolean judgeEnabled;
         private final Boolean linterEnabled;
         private final Boolean outcomeEnabled;
+        private final Boolean outcomeFailOnError;
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
@@ -694,7 +715,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final BrowserMethodData browser,
             final Boolean judgeEnabled,
             final Boolean linterEnabled,
-            final Boolean outcomeEnabled
+            final Boolean outcomeEnabled,
+            final Boolean outcomeFailOnError
         )
         {
             this.playbookPath = playbookPath;
@@ -705,6 +727,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.judgeEnabled = judgeEnabled;
             this.linterEnabled = linterEnabled;
             this.outcomeEnabled = outcomeEnabled;
+            this.outcomeFailOnError = outcomeFailOnError;
         }
 
         @Override
@@ -786,7 +809,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.outcomeEnabled != null)
             {
                 Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled));
-                com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled));
+            }
+
+            if (this.outcomeFailOnError != null)
+            {
+                Neodymium.getData().put("neodymium.ai.semanticVerification.failOnError", String.valueOf(this.outcomeFailOnError));
             }
 
             final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
@@ -812,7 +839,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 this.session.data().putDynamic("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled), false);
             }
+            if (this.outcomeFailOnError != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.semanticVerification.failOnError", String.valueOf(this.outcomeFailOnError), false);
+            }
             final ExecutionContext executionContext = this.session.getExecutionContext();
+            if (this.outcomeFailOnError != null)
+            {
+                executionContext.getTransientData().put("neodymium.ai.semanticVerification.failOnError", this.outcomeFailOnError);
+            }
             executor.setExecutionContext(executionContext);
 
             final boolean isInteractive = config.isInteractive();

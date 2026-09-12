@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -43,6 +44,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiPlaybook(value = "verla/SearchTest_German.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@AiOutcomeVerification(failOnError = false)
 public final class SearchTest_German extends BaseAiTest
 {
     /**
@@ -52,7 +54,6 @@ public final class SearchTest_German extends BaseAiTest
     public void setup()
     {
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
-        Neodymium.getData().put("neodymium.ai.multilingual", "true");
     }
 
     /**

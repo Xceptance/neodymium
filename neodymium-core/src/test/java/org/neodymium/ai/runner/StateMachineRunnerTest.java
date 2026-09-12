@@ -33,10 +33,13 @@ import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
+import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.session.AiSession;
 
 /**
@@ -116,14 +119,14 @@ public class StateMachineRunnerTest
         final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), new MockTargetExecutor());
 
         final PlaybookStep recordedStep = new PlaybookStep("When string A is not equal A, click button");
-        recordedStep.setActions(new ArrayList<>());
+        recordedStep.setStatus(PlaybookStepStatus.SUCCESS);
 
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_SESSION, session);
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new MockTargetExecutor());
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, recordedStep);
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
 
-        final org.neodymium.ai.pipeline.steps.ExecuteActionsStep step = new org.neodymium.ai.pipeline.steps.ExecuteActionsStep();
+        final PipelineStep step = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, session.getExecutionContext());
         assertDoesNotThrow(() -> step.execute(session.getExecutionContext()));
     }
 }

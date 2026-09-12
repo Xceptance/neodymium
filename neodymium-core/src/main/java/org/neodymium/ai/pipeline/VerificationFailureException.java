@@ -21,13 +21,14 @@ package org.neodymium.ai.pipeline;
 import org.neodymium.ai.prompt.VerificationResult;
 
 /**
- * Pipeline exception indicating that independent post-execution semantic outcome verification
+ * Assertion error indicating that independent post-execution semantic outcome verification
  * has evaluated the step outcome and concluded that the goal was not achieved.
+ * Extends {@link AssertionError} so test runners report verification failures as test assertion failures.
  *
  * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
-public final class VerificationFailureException extends PipelineException
+public final class VerificationFailureException extends AssertionError
 {
     private static final long serialVersionUID = 1L;
 

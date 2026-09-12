@@ -22,11 +22,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
@@ -95,13 +98,46 @@ public final class PlaybookToolReplayer
             final ToolContext context,
             final SessionData sessionData) throws Exception
     {
+        return replayStep(step, registry, context, sessionData, null);
+    }
+
+    /**
+     * Replays all recorded tool calls of a playbook step using the provided registry, context, session data, and target executor.
+     *
+     * @param step the playbook step to replay
+     * @param registry tool registry containing registered tools
+     * @param context tool context for execution
+     * @param sessionData session data for variable resolution
+     * @param targetExecutor target executor for fallback action dispatch
+     * @return tool result summarizing replay outcome
+     * @throws Exception if execution fails or unrecoverable defect occurs
+     */
+    public static ToolResult replayStep(
+            final PlaybookStep step,
+            final ToolRegistry registry,
+            final ToolContext context,
+            final SessionData sessionData,
+            final TargetExecutor targetExecutor) throws Exception
+    {
         if (step == null)
         {
             throw new IllegalArgumentException("PlaybookStep must not be null.");
         }
 
+        final String schemaVersion = step.getSchemaVersion();
+        if (schemaVersion == null || !PlaybookStep.CURRENT_SCHEMA_VERSION.equals(schemaVersion.trim()))
+        {
+            throw new ConclusiveFailureException(String.format(
+                "Playbook recording schema version '%s' is obsolete or incompatible with current schema '%s'. "
+                    + "Legacy recording formats are no longer supported. Re-record the playbook using ExecutionMode.FORCE_RECORDING.",
+                schemaVersion != null ? schemaVersion : "null", PlaybookStep.CURRENT_SCHEMA_VERSION));
+        }
+
         final ToolRegistry effectiveRegistry = registry != null ? registry : createDefaultRegistry();
         final ToolContext effectiveContext = context != null ? context : new SimpleToolContext(effectiveRegistry);
+        final TargetExecutor effectiveExecutor = targetExecutor != null
+            ? targetExecutor
+            : effectiveContext.getVariable("neodymium.targetExecutor", TargetExecutor.class).orElse(null);
 
         final List<ToolCall> toolCalls = step.getToolCalls();
         if (toolCalls.isEmpty())
@@ -143,28 +179,55 @@ public final class PlaybookToolReplayer
             final ToolCall finalCall = intermediateCall;
 
             // Check if tool is registered
-            final AiTool tool = effectiveRegistry.getTool(finalCall.toolName())
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown tool during replay: " + finalCall.toolName()));
-
-            // Execute the tool without LLM invocation
+            final Optional<AiTool> toolOpt = effectiveRegistry.getTool(finalCall.toolName());
             final ToolResult result;
-            try
+            if (toolOpt.isPresent())
             {
-                result = tool.execute(finalCall, effectiveContext);
+                try
+                {
+                    result = toolOpt.get().execute(finalCall, effectiveContext);
+                }
+                catch (final AssertionError e)
+                {
+                    step.setStatus(PlaybookStepStatus.FAILED);
+                    step.setFailed(true);
+                    step.setFailureReason(e.getMessage());
+                    throw e;
+                }
+                catch (final Exception e)
+                {
+                    step.setStatus(PlaybookStepStatus.FAILED);
+                    step.setFailed(true);
+                    step.setFailureReason(e.getMessage());
+                    throw e;
+                }
             }
-            catch (final AssertionError e)
+            else if (effectiveExecutor != null)
             {
-                step.setStatus(PlaybookStepStatus.FAILED);
-                step.setFailed(true);
-                step.setFailureReason(e.getMessage());
-                throw e;
+                final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
+                try
+                {
+                    effectiveExecutor.execute(mapped);
+                    result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
+                }
+                catch (final AssertionError e)
+                {
+                    step.setStatus(PlaybookStepStatus.FAILED);
+                    step.setFailed(true);
+                    step.setFailureReason(e.getMessage());
+                    throw e;
+                }
+                catch (final Exception e)
+                {
+                    step.setStatus(PlaybookStepStatus.FAILED);
+                    step.setFailed(true);
+                    step.setFailureReason(e.getMessage());
+                    throw e;
+                }
             }
-            catch (final Exception e)
+            else
             {
-                step.setStatus(PlaybookStepStatus.FAILED);
-                step.setFailed(true);
-                step.setFailureReason(e.getMessage());
-                throw e;
+                throw new IllegalArgumentException("Unknown tool during replay: " + finalCall.toolName());
             }
 
             if (result != null && result.status() == ToolResult.Status.ERROR)

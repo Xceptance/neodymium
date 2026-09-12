@@ -120,6 +120,7 @@ public final class ClickAction implements BrowserActionPlugin
             }
 
             final SelenideElement element = SelenideElementFinder.findElement(action);
+            SelenideElementFinder.scrollIntoViewIfNeeded(element);
             
             // Safety net: If the element is an anchor and is visually hidden for accessibility, 
             // native clicking it directly often bypasses the parent container's event listeners or navigates away.
@@ -147,6 +148,7 @@ public final class ClickAction implements BrowserActionPlugin
             {
                 try
                 {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(element);
                     Selenide.executeJavaScript("arguments[0].click();", element);
                 }
                 catch (final Throwable ignored)

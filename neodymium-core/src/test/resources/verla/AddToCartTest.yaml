@@ -7,7 +7,10 @@ steps: |
   Verify that the storefront home page has loaded.
   Locate the first product card and hover over it
   Click its 'Add to Cart' button
-  Click the size 'S'
+  
+  # Bad interface design has no size
+  When this string '${testId}' is not equal 'bad', click the size 'S'
+  
   Verify that the cart item count in the header updated.
   Go to the cart.
   Verify that the shopping cart page is loaded showing the added product.

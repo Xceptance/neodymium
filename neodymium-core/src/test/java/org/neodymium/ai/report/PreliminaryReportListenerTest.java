@@ -1647,6 +1647,73 @@ public class PreliminaryReportListenerTest
         assertTrue(callEntry.getUserPrompt().contains("ChatMessage[TOOL (tool=browser_click, id=call_1)]:\n{\"status\":\"SUCCESS\"}"),
             "User prompt section must contain tool turn.");
     }
+
+    @Test
+    @DisplayName("Verify Visual RCA explanation is stored once and not propagated as step error across previous or subsequent steps")
+    public void testVisualRcaSingleRenderingAndStepStatusResolution(@TempDir final Path reportDir) throws Exception
+    {
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        final PreliminaryReportListener listener = new PreliminaryReportListener(
+            reportDir,
+            EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON),
+            true
+        );
+        bus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Open homepage");
+        final PlaybookStep step1 = new PlaybookStep("Click product");
+        final PlaybookStep step2 = new PlaybookStep("Check cart total");
+
+        // Step 0 starts and finishes
+        bus.dispatch(new StepStartedEvent(step0, 0));
+        bus.dispatch(new StepFinishedEvent(step0, PlaybookStepStatus.SUCCESS));
+
+        // Step 1 starts (not explicitly finished with StepFinishedEvent, simulating live execution before next step starts)
+        bus.dispatch(new StepStartedEvent(step1, 1));
+
+        // Step 2 starts (StepStartedEvent auto-advances step 1 to SUCCESS)
+        bus.dispatch(new StepStartedEvent(step2, 2));
+
+        // Error occurs during Step 2 without StepFinishedEvent
+        final String visualRcaMessage = "Visual RCA analysis: The test failed because the expected dollar symbol ($) was not found.";
+        bus.dispatch(new DiagnosticErrorEvent(visualRcaMessage, new AssertionError("Element not found: cart total")));
+
+        // Session finishes
+        bus.dispatch(new SessionFinishedEvent(2000, false, List.of()));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertFalse(report.isSuccess());
+        assertEquals("The test failed because the expected dollar symbol ($) was not found.", report.getVisualRcaExplanation());
+        assertEquals("Element not found: cart total", report.getFailureReason());
+
+        final List<TestExecutionReport.ReportStepEntry> steps = report.getSteps();
+        assertEquals(3, steps.size());
+        assertEquals("SUCCESS", steps.get(0).getStatus());
+        assertEquals(null, steps.get(0).getFailureReason());
+
+        assertEquals("SUCCESS", steps.get(1).getStatus());
+        assertEquals(null, steps.get(1).getFailureReason());
+
+        assertEquals("FAILED", steps.get(2).getStatus());
+        assertEquals("Element not found: cart total", steps.get(2).getFailureReason());
+
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        assertTrue(Files.exists(htmlPath));
+        final String html = Files.readString(htmlPath);
+
+        // Visual RCA explanation should appear in the visual RCA section
+        assertTrue(html.contains("Visual Root Cause Analysis (RCA)"), "HTML must contain Visual RCA section");
+        assertTrue(html.contains("visual-rca-box"), "HTML must contain visual-rca-box");
+
+        // Check that visual RCA message does not appear as a step card error banner
+        assertFalse(html.contains("Visual RCA analysis: The test failed"), "Prefix should be stripped and not in step card error");
+
+        // Ensure the explanation text appears exactly once in the document
+        final String needle = "The test failed because the expected dollar symbol ($) was not found.";
+        final int firstPos = html.indexOf(needle);
+        final int lastPos = html.lastIndexOf(needle);
+        assertTrue(firstPos >= 0, "HTML must contain Visual RCA explanation text");
+        assertEquals(firstPos, lastPos, "Visual RCA explanation text must appear exactly ONCE in HTML report");
+    }
 }
-
-

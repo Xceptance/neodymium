@@ -18,7 +18,9 @@
  */
 package org.neodymium.ai.prompt;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import com.google.gson.annotations.SerializedName;
 
 /**
@@ -28,6 +30,7 @@ import com.google.gson.annotations.SerializedName;
  * @author AI-generated: Gemini 3.5 Flash
  * @author Xceptance GmbH 2026
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public final class VerificationResult
 {
     @JsonProperty("rubrics")
@@ -42,6 +45,16 @@ public final class VerificationResult
      * Default constructor for serialization.
      */
     public VerificationResult()
+    {
+    }
+
+    /**
+     * Setter for 'passed' property during deserialization to tolerate serialized synthetic property.
+     *
+     * @param ignored the passed value (ignored in favor of overallVerdict)
+     */
+    @JsonSetter("passed")
+    public void setPassed(final boolean ignored)
     {
     }
 

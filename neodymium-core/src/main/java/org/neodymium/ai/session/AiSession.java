@@ -47,7 +47,6 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
-import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.telemetry.TokenBudgetGuard;
@@ -481,11 +480,6 @@ public abstract class AiSession implements AutoCloseable
 
         this.executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.executionMode);
         this.executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
-
-        if (!this.executionContext.getTransientData().containsKey(ExecutionContext.KEY_ACTIVE_PROMPT))
-        {
-            this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
-        }
         this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
 
         final List<PlaybookStep> playbookSteps = playbook.getSteps();
@@ -502,6 +496,26 @@ public abstract class AiSession implements AutoCloseable
                 if (recorded.getActions() != null)
                 {
                     parsed.setActions(recorded.getActions());
+                }
+                if (recorded.getToolCalls() != null && !recorded.getToolCalls().isEmpty())
+                {
+                    parsed.setToolCalls(recorded.getToolCalls());
+                }
+                if (recorded.getSchemaVersion() != null)
+                {
+                    parsed.setSchemaVersion(recorded.getSchemaVersion());
+                }
+                if (recorded.getBaselineState() != null)
+                {
+                    parsed.setBaselineState(recorded.getBaselineState());
+                }
+                if (recorded.getScreenshotHash() != null)
+                {
+                    parsed.setScreenshotHash(recorded.getScreenshotHash());
+                }
+                if (recorded.getScreenshotHashDim() != null)
+                {
+                    parsed.setScreenshotHashDim(recorded.getScreenshotHashDim());
                 }
             }
         }

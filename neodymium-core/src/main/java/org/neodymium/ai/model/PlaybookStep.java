@@ -197,9 +197,14 @@ public final class PlaybookStep
     private DomFeatureVector domFeatureVector;
 
     /**
+     * Current schema version for recorded playbook steps.
+     */
+    public static final String CURRENT_SCHEMA_VERSION = "4.0";
+
+    /**
      * The schema version of the recorded playbook step.
      */
-    private String schemaVersion = "3.0";
+    private String schemaVersion = CURRENT_SCHEMA_VERSION;
 
     /**
      * The context level (e.g. VISUAL_LEAN, LEAN) recorded for this step during execution.
@@ -627,17 +632,20 @@ public final class PlaybookStep
      */
     public List<Action> getActions()
     {
-        if (this.actions.isEmpty() && !this.toolCalls.isEmpty())
-        {
-            for (final ToolCall call : this.toolCalls)
-            {
-                if (call != null)
-                {
-                    this.actions.add(Action.fromToolCall(call));
-                }
-            }
-        }
         return this.actions;
+    }
+
+    /**
+     * Adds an action to the executed actions list.
+     *
+     * @param action the action to add
+     */
+    public void addAction(final Action action)
+    {
+        if (action != null)
+        {
+            this.actions.add(action);
+        }
     }
 
     /**
@@ -655,25 +663,12 @@ public final class PlaybookStep
     }
 
     /**
-     * Returns the list of executed tool calls for this step. If no tool calls are explicitly
-     * recorded but legacy recorded actions exist, transparently synthesizes tool calls from them.
+     * Returns the list of executed tool calls for this step.
      *
      * @return the unmodifiable tool calls list
      */
     public List<ToolCall> getToolCalls()
     {
-        if (this.toolCalls.isEmpty() && !this.actions.isEmpty())
-        {
-            final List<ToolCall> synthesized = new ArrayList<>();
-            for (final Action action : this.actions)
-            {
-                if (action != null)
-                {
-                    synthesized.add(action.toToolCall());
-                }
-            }
-            return Collections.unmodifiableList(synthesized);
-        }
         return Collections.unmodifiableList(this.toolCalls);
     }
 

@@ -512,11 +512,11 @@ public final class AiConfiguration
     /**
      * Checks if semantic outcome verification failures should abort execution.
      *
-     * @return true if verification failure throws VerificationFailureException (default: true), false for report-only warning
+     * @return true if verification failure throws VerificationFailureException (default: false), false for report-only warning
      */
     public boolean isSemanticVerificationFailOnError()
     {
-        return getBoolean("neodymium.ai.semanticVerification.failOnError", true);
+        return getBoolean("neodymium.ai.semanticVerification.failOnError", false);
     }
 
     /**

@@ -86,13 +86,24 @@ public class AiOutcomeVerificationTest
         }
     }
 
+    @AiOutcomeVerification(failOnError = false)
+    public static class ClassLevelFailOnErrorOnlyTestClass
+    {
+        @AiInlinePlaybook("name: outcome-none\nsteps:\n  - instruction: Step 1\n")
+        public void testNoMethodAnnotation()
+        {
+        }
+    }
+
     @Test
-    @DisplayName("AiOutcomeVerification default value is true")
+    @DisplayName("AiOutcomeVerification default value is empty array and failOnError is false")
     public void testAiOutcomeVerificationDefaultValue()
     {
         final AiOutcomeVerification annot = ClassWithDefaultOutcome.class.getAnnotation(AiOutcomeVerification.class);
         Assertions.assertNotNull(annot);
-        Assertions.assertArrayEquals(new boolean[]{true}, annot.value());
+        Assertions.assertArrayEquals(new boolean[]{}, annot.value());
+        Assertions.assertFalse(annot.failOnError());
+        Assertions.assertFalse(annot.onError());
     }
 
     @Test
@@ -164,6 +175,19 @@ public class AiOutcomeVerificationTest
         final NeodymiumAiRunner runner = new NeodymiumAiRunner();
         final Method method = RunnerMatrixTestClass.class.getMethod("testNoAnnotationOutcome");
         final ExtensionContext context = createMockExtensionContext(RunnerMatrixTestClass.class, method);
+
+        final List<TestTemplateInvocationContext> contexts = runner.provideTestTemplateInvocationContexts(context).toList();
+        Assertions.assertEquals(1, contexts.size());
+        Assertions.assertFalse(contexts.get(0).getDisplayName(1).contains("[Outcome:"));
+    }
+
+    @Test
+    @DisplayName("NeodymiumAiRunner does not activate outcome verification when class only defines failOnError")
+    public void testRunnerClassLevelFailOnErrorDoesNotActivateOutcome() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = ClassLevelFailOnErrorOnlyTestClass.class.getMethod("testNoMethodAnnotation");
+        final ExtensionContext context = createMockExtensionContext(ClassLevelFailOnErrorOnlyTestClass.class, method);
 
         final List<TestTemplateInvocationContext> contexts = runner.provideTestTemplateInvocationContexts(context).toList();
         Assertions.assertEquals(1, contexts.size());

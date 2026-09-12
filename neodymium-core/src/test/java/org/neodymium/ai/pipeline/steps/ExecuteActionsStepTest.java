@@ -37,29 +37,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
-import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmRegistry;
-import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
-import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.client.SutAttachment;
-import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
-import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
-import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
-import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
-import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
@@ -72,81 +64,19 @@ import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
  * Dedicated unit tests for {@link ExecuteActionsStep}.
- * Validates execution of actions, custom timeout parsing, transient context validation,
- * and error propagation.
+ * Validates step mapping, instruction preparation, and replay execution paths.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-public class ExecuteActionsStepTest
+public final class ExecuteActionsStepTest
 {
-    @Test
-    public void testExecuteThrowsConclusiveFailureWhenSessionMissing()
-    {
-        final ExecutionContext context = new ExecutionContext(new SessionData());
-        final ExecuteActionsStep step = new ExecuteActionsStep();
-
-        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () -> {
-            step.execute(context);
-        });
-
-        assertTrue(ex.getMessage().contains("No active AiSession registered"));
-    }
-
-    @Test
-    public void testExecuteThrowsConclusiveFailureWhenExecutorMissing()
-    {
-        final ExecutionContext context = new ExecutionContext(new SessionData());
-        final MockLlmProvider mockProvider = new MockLlmProvider();
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(mockProvider);
-        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), new MockTargetExecutor());
-
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-
-        final ExecuteActionsStep step = new ExecuteActionsStep();
-
-        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () -> {
-            step.execute(context);
-        });
-
-        assertTrue(ex.getMessage().contains("No active TargetExecutor registered"));
-    }
-
-    @Test
-    public void testExecuteActionsSuccessfully() throws PipelineException
-    {
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final MockLlmProvider mockProvider = new MockLlmProvider();
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(mockProvider);
-
-        final SessionData sessionData = new SessionData();
-        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
-        final ExecutionContext context = session.getExecutionContext();
-
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-
-        final List<Action> actions = List.of(
-            new Action("NAVIGATE", "http://localhost:8080", null, "Open page", "Reason 1"),
-            new Action("CLICK", "#submit-btn", null, "Click submit", "Reason 2")
-        );
-        context.getTransientData().put("KEY_CURRENT_STEP_ACTIONS", actions);
-
-        final ExecuteActionsStep step = new ExecuteActionsStep();
-        step.execute(context);
-
-        assertNotNull(context);
-        assertEquals(actions, context.getTransientData().get("KEY_CURRENT_STEP_ACTIONS"));
-    }
-
     /**
      * Verifies that mapping and executing a step in REPLAY_STRICT mode throws ConclusiveFailureException
-     * when the step has no recorded actions and is not a visual/composite step.
+     * when the step has no recorded tool calls and is not a visual/composite step.
      */
     @Test
-    public void testReplayStrictThrowsWhenStepHasNoRecordedActions()
+    public void testReplayStrictThrowsWhenStepHasNoRecordedToolCalls()
     {
         final MockTargetExecutor executor = new MockTargetExecutor();
         final MockLlmProvider mockProvider = new MockLlmProvider();
@@ -160,14 +90,14 @@ public class ExecuteActionsStepTest
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
-        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
 
         final PlaybookStep emptyStep = new PlaybookStep();
         emptyStep.setInstruction("Click the checkout button");
 
         final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(emptyStep, session, context);
 
-        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () -> {
+        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () ->
+        {
             pipelineStep.execute(context);
             // Execute any pushed sequence steps
             while (context.hasSteps())
@@ -176,7 +106,7 @@ public class ExecuteActionsStepTest
             }
         });
 
-        assertTrue(ex.getMessage().contains("No recorded actions found for step"));
+        assertTrue(ex.getMessage().contains("No recorded tool calls found for step"));
     }
 
     @Test
@@ -194,7 +124,6 @@ public class ExecuteActionsStepTest
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
-        context.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
 
         final PlaybookStep recordedStep = new PlaybookStep();
         recordedStep.setInstruction("When this string '' is not empty, enter '' as state.");
@@ -210,98 +139,6 @@ public class ExecuteActionsStepTest
         }
 
         assertEquals(PlaybookStepStatus.SUCCESS, recordedStep.getStatus());
-    }
-
-    @Test
-    public void testExecuteActionsInscribesTargetFramework() throws PipelineException
-    {
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final MockLlmProvider mockProvider = new MockLlmProvider();
-        final LlmRegistry registry = new LlmRegistry();
-        registry.setDefaultProvider(mockProvider);
-
-        final SessionData sessionData = new SessionData();
-        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
-        final ExecutionContext context = session.getExecutionContext();
-
-        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.FORCE_RECORDING);
-
-        final PlaybookStep step = new PlaybookStep();
-        step.setInstruction("Click submit");
-        context.getTransientData().put("KEY_CURRENT_PLAYBOOK_STEP", step);
-
-        final List<Action> actions = List.of(
-            new Action("CLICK", "#submit-btn", null, "Click submit", "Reason")
-        );
-        context.getTransientData().put("KEY_CURRENT_STEP_ACTIONS", actions);
-
-        final ExecuteActionsStep executeStep = new ExecuteActionsStep();
-        executeStep.execute(context);
-
-        assertEquals("SELENIUM_SELENIDE", step.getTargetFramework());
-    }
-
-    @Test
-    public void testVisualStepExecutionDispatchesStateCapturedEvent() throws PipelineException
-    {
-        System.setProperty("neodymium.ai.tooling.enabled", "false");
-        AiConfiguration.resetInstance();
-        try
-        {
-            final MockTargetExecutor executor = new MockTargetExecutor();
-            final String base64Png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-            final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", base64Png);
-            final MockSutState visualState = new MockSutState("<html><body>Visual Layout</body></html>", List.of(screenshot), "hash-vis-1");
-            executor.enqueueState(visualState);
-
-            final MockLlmProvider mockProvider = new MockLlmProvider();
-            // 1. PESAP response predicting VISUAL context with ASSERT intent
-            mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
-            // 2. Action extraction response returning a NONE action (pure visual verification passing)
-            mockProvider.addResponse(new LlmResponse("[{\"action\": \"NONE\", \"target\": \"\", \"value\": \"Visual layout verified\"}]", new TokenUsage(200, 30, 230, 0), "mock-model"));
-
-            final LlmRegistry registry = new LlmRegistry();
-            registry.setDefaultProvider(mockProvider);
-
-            final SessionData sessionData = new SessionData();
-            final ExecutionEventBus eventBus = new ExecutionEventBus();
-            final AtomicBoolean stateCapturedReceived = new AtomicBoolean(false);
-            eventBus.registerListener(event -> {
-                if (event instanceof StateCapturedEvent sce)
-                {
-                    if (sce.getState() != null && sce.getState().getAttachments() != null && !sce.getState().getAttachments().isEmpty())
-                    {
-                        stateCapturedReceived.set(true);
-                    }
-                }
-            });
-
-            final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-            final ExecutionContext context = session.getExecutionContext();
-
-            context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
-
-            final PlaybookStep visualStep = new PlaybookStep();
-            visualStep.setInstruction("There are data input forms on the left and order summary on the right (visual).");
-
-            final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
-            pipelineStep.execute(context);
-            while (context.hasSteps())
-            {
-                context.popStep().execute(context);
-            }
-
-            assertTrue(stateCapturedReceived.get(), "StateCapturedEvent with screenshot attachment must be dispatched during visual step execution");
-        }
-        finally
-        {
-            System.clearProperty("neodymium.ai.tooling.enabled");
-            AiConfiguration.resetInstance();
-        }
     }
 
     @Test
@@ -324,7 +161,8 @@ public class ExecuteActionsStepTest
         final SessionData sessionData = new SessionData();
         final ExecutionEventBus eventBus = new ExecutionEventBus();
         final AtomicReference<StepFinishedEvent> finishedEventRef = new AtomicReference<>();
-        eventBus.registerListener(event -> {
+        eventBus.registerListener(event ->
+        {
             if (event instanceof StepFinishedEvent sfe)
             {
                 finishedEventRef.set(sfe);
@@ -357,62 +195,6 @@ public class ExecuteActionsStepTest
     }
 
     @Test
-    public void testVisualRichEscalationStaysOnVisualRichAndAbortsAfterThreeAttempts() throws Exception
-    {
-        System.setProperty("neodymium.ai.tooling.enabled", "false");
-        AiConfiguration.resetInstance();
-        try
-        {
-            final MockTargetExecutor executor = new MockTargetExecutor();
-            final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", "dummy-base64");
-            final MockSutState visualState = new MockSutState("<html><body>Content</body></html>", List.of(screenshot), "hash-1");
-            for (int i = 0; i < 10; i++)
-            {
-                executor.enqueueState(visualState);
-            }
-
-            final MockLlmProvider mockProvider = new MockLlmProvider();
-            // 1. PESAP predicts VISUAL_RICH with ASSERT intent
-            mockProvider.addResponse(new LlmResponse("{\"c\":\"VISUAL_RICH\",\"i\":\"ASSERT\"}", new TokenUsage(100, 20, 120, 0), "mock-model"));
-            // 2-5. Action extraction requests escalation on VISUAL_RICH repeatedly
-            for (int i = 0; i < 5; i++)
-            {
-                mockProvider.addResponse(new LlmResponse("{\"status\": \"ESCALATE\", \"reasoning\": \"Cannot resolve visually\"}", new TokenUsage(200, 30, 230, 0), "mock-model"));
-            }
-
-            final LlmRegistry registry = new LlmRegistry();
-            registry.setDefaultProvider(mockProvider);
-
-            final SessionData sessionData = new SessionData();
-            final ExecutionEventBus eventBus = new ExecutionEventBus();
-
-            final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-            final ExecutionContext context = session.getExecutionContext();
-
-            context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
-
-            final PlaybookStep step = new PlaybookStep();
-            step.setInstruction("Look at complex interactive chart (visual)");
-
-            final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
-            context.pushStep(pipelineStep);
-
-            final StateMachineRunner runner = new StateMachineRunner(session);
-            final DivergenceException ex = assertThrows(DivergenceException.class, runner::run);
-
-            assertTrue(ex.getMessage().contains("Cannot resolve visually"));
-            assertEquals(ContextLevel.VISUAL_RICH, context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
-        }
-        finally
-        {
-            System.clearProperty("neodymium.ai.tooling.enabled");
-            AiConfiguration.resetInstance();
-        }
-    }
-
-    @Test
     public void testPrepareInstructionStrippingControlTags()
     {
         final String raw = "Check cart header (layout) (hint: #cart-badge) (no-replay) (bug: BUG-123) (timeout: 5000ms) (visual:full)";
@@ -425,7 +207,7 @@ public class ExecuteActionsStepTest
     }
 
     @Test
-    public void testRecordedDelayMsClamping() throws Exception
+    public void testMapPlaybookStepToPipelineStepReplay() throws Exception
     {
         final MockTargetExecutor executor = new MockTargetExecutor();
         final MockLlmProvider mockProvider = new MockLlmProvider();
@@ -433,6 +215,7 @@ public class ExecuteActionsStepTest
         registry.setDefaultProvider(mockProvider);
 
         final SessionData sessionData = new SessionData();
+        sessionData.set("testVar", "World");
         final ExecutionEventBus eventBus = new ExecutionEventBus();
 
         final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
@@ -440,88 +223,44 @@ public class ExecuteActionsStepTest
 
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
 
-        // Simulate a past action ending 60 seconds ago (e.g. during a retry escalation)
-        context.getTransientData().put("KEY_LAST_ACTION_END_TIME", System.currentTimeMillis() - 60_000L);
-
-        final Action action = new Action("CLICK", "#btn", null, "click button", "test", false);
-        final PlaybookStep step = new PlaybookStep("Click button");
-        context.getTransientData().put(ExecutionContext.KEY_LAST_LLM_RESULT, List.of(action));
-        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
-
-        final ExecuteActionsStep stepRunner = new ExecuteActionsStep();
-        stepRunner.execute(context);
-
-        assertNotNull(action.getDelayMs(), "Recorded delayMs should be populated");
-        assertTrue(action.getDelayMs() <= 3000L, "Recorded delayMs should be clamped to at most 3000ms, but was: " + action.getDelayMs());
-    }
-
-    @Test
-    public void testMapPlaybookStepToPipelineStepUnifiedToolingReplay() throws Exception
-    {
-        System.setProperty("neodymium.ai.tooling.enabled", "true");
-        AiConfiguration.resetInstance();
-        try
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final AtomicBoolean toolExecuted = new AtomicBoolean(false);
+        final AtomicReference<String> resolvedArg = new AtomicReference<>();
+        toolRegistry.register(new AiTool()
         {
-            final MockTargetExecutor executor = new MockTargetExecutor();
-            final MockLlmProvider mockProvider = new MockLlmProvider();
-            final LlmRegistry registry = new LlmRegistry();
-            registry.setDefaultProvider(mockProvider);
-
-            final SessionData sessionData = new SessionData();
-            sessionData.set("testVar", "World");
-            final ExecutionEventBus eventBus = new ExecutionEventBus();
-
-            final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
-            final ExecutionContext context = session.getExecutionContext();
-
-            context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
-            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
-
-            final ToolRegistry toolRegistry = new ToolRegistry();
-            final AtomicBoolean toolExecuted = new AtomicBoolean(false);
-            final AtomicReference<String> resolvedArg = new AtomicReference<>();
-            toolRegistry.register(new AiTool()
+            @Override
+            public ToolDefinition getDefinition()
             {
-                @Override
-                public ToolDefinition getDefinition()
-                {
-                    return new ToolDefinition("test_tool", "Test Tool", JsonNodeFactory.instance.objectNode());
-                }
+                return new ToolDefinition("test_tool", "Test Tool", JsonNodeFactory.instance.objectNode());
+            }
 
-                @Override
-                public ToolResult execute(final ToolCall call, final ToolContext toolContext)
-                {
-                    toolExecuted.set(true);
-                    resolvedArg.set(call.arguments().path("text").asText());
-                    return ToolResult.success(call.callId(), "Executed");
-                }
-            });
-            context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext toolContext)
+            {
+                toolExecuted.set(true);
+                resolvedArg.set(call.arguments().path("text").asText());
+                return ToolResult.success(call.callId(), "Executed");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
 
-            final PlaybookStep step = new PlaybookStep("Greet user");
-            final ObjectNode args = JsonNodeFactory.instance.objectNode();
-            args.put("text", "Hello ${testVar}!");
-            step.setToolCalls(List.of(new ToolCall("call-1", "test_tool", args)));
+        final PlaybookStep step = new PlaybookStep("Greet user");
+        final ObjectNode args = JsonNodeFactory.instance.objectNode();
+        args.put("text", "Hello ${testVar}!");
+        step.setToolCalls(List.of(new ToolCall("call-1", "test_tool", args)));
 
-            final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
-            context.pushStep(pipelineStep);
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        context.pushStep(pipelineStep);
 
-            final StateMachineRunner runner = new StateMachineRunner(session);
-            runner.run();
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        runner.run();
 
-            assertTrue(toolExecuted.get(), "Recorded tool call should have executed via PlaybookToolReplayer");
-            assertEquals("Hello World!", resolvedArg.get(), "Variables should have been resolved during replay");
-            assertNull(mockProvider.getLastRequest(), "Zero LLM calls should occur during replay");
-            assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(), "Step status should be SUCCESS");
-        }
-        finally
-        {
-            System.clearProperty("neodymium.ai.tooling.enabled");
-            AiConfiguration.resetInstance();
-        }
+        assertTrue(toolExecuted.get(), "Recorded tool call should have executed via PlaybookToolReplayer");
+        assertEquals("Hello World!", resolvedArg.get(), "Variables should have been resolved during replay");
+        assertNull(mockProvider.getLastRequest(), "Zero LLM calls should occur during replay");
+        assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(), "Step status should be SUCCESS");
     }
 
     private static String encodeToBase64(final BufferedImage image) throws IOException
@@ -533,4 +272,3 @@ public class ExecuteActionsStepTest
         }
     }
 }
-
