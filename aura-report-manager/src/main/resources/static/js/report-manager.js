@@ -2159,7 +2159,7 @@ function renderStepsForExecution(activeRow) {
                                     <div class="llm-subsection-body">${userPromptText ? escapeHtml(userPromptText) : '<em style="color: var(--text-muted);">No user prompt/DOM context recorded</em>'}</div>
                                 </div>
 
-                                <div class="llm-subsection-card">
+                                <div class="llm-subsection-card expanded">
                                     <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
                                         <div class="llm-subsection-title">
                                             <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
@@ -2198,7 +2198,7 @@ function renderStepsForExecution(activeRow) {
                                 </div>
                                 <div class="llm-subsection-body">${escapeHtml(promptSnippet)}</div>
                             </div>
-                            <div class="llm-subsection-card">
+                            <div class="llm-subsection-card expanded">
                                 <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
                                     <div class="llm-subsection-title">
                                         <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>

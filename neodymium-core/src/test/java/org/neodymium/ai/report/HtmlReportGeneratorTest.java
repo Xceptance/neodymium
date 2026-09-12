@@ -226,6 +226,113 @@ public class HtmlReportGeneratorTest
         Assertions.assertTrue(html.contains("step-cluster-even") && html.contains("step-cluster-odd"), "HTML must alternate step cluster classes");
     }
 
+    @Test
+    @DisplayName("Verify that non-contiguous step clusters display contiguous metrics in banner, not global aggregates")
+    public void testNonContiguousStepClustersDisplayContiguousMetricsInBanner()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("TestClass");
+        report.setTestName("testRepeatedClusters");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Search product");
+        step0.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Navigate page");
+        step1.setStatus("SUCCESS");
+
+        report.addStep(step0);
+        report.addStep(step1);
+
+        // Cluster 1: Step 0 (1 call, 1,000 tokens)
+        final TestExecutionReport.ReportLlmCallEntry call1 = new TestExecutionReport.ReportLlmCallEntry();
+        call1.setStepIndex(0);
+        call1.setCapability("TEXT");
+        call1.setInputTokens(900);
+        call1.setOutputTokens(100);
+        report.addLlmCall(call1);
+
+        // Cluster 2: Step 1 (1 call, 2,000 tokens)
+        final TestExecutionReport.ReportLlmCallEntry call2 = new TestExecutionReport.ReportLlmCallEntry();
+        call2.setStepIndex(1);
+        call2.setCapability("TEXT");
+        call2.setInputTokens(1800);
+        call2.setOutputTokens(200);
+        report.addLlmCall(call2);
+
+        // Cluster 3: Step 0 again (2 calls: 3,000 + 4,000 = 7,000 tokens)
+        final TestExecutionReport.ReportLlmCallEntry call3 = new TestExecutionReport.ReportLlmCallEntry();
+        call3.setStepIndex(0);
+        call3.setCapability("TEXT");
+        call3.setInputTokens(2700);
+        call3.setOutputTokens(300);
+        report.addLlmCall(call3);
+
+        final TestExecutionReport.ReportLlmCallEntry call4 = new TestExecutionReport.ReportLlmCallEntry();
+        call4.setStepIndex(0);
+        call4.setCapability("TEXT");
+        call4.setInputTokens(3600);
+        call4.setOutputTokens(400);
+        report.addLlmCall(call4);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+
+        Assertions.assertNotNull(html);
+        // Verify banner 1 for Step #1 has 1 call and 1,000 tokens (not 3 calls / 8,000 tokens)
+        Assertions.assertTrue(html.contains("1 call &bull; 1,000 tokens"),
+            "First Step #1 banner must display 1 call and 1,000 tokens for its contiguous cluster");
+        // Verify banner 2 for Step #1 has 2 calls and 7,000 tokens (not 3 calls / 8,000 tokens)
+        Assertions.assertTrue(html.contains("2 calls &bull; 7,000 tokens"),
+            "Second Step #1 banner must display 2 calls and 7,000 tokens for its contiguous cluster");
+    }
+
+    @Test
+    @DisplayName("Verify LLM Details panel wraps prompt sections in a collapsible container that is collapsed by default")
+    public void testLlmPromptsCollapsedByDefault()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("CheckoutTest");
+        report.setTestName("testPromptsCollapsible");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step = new TestExecutionReport.ReportStepEntry(0, "Add item to cart");
+        step.setStatus("SUCCESS");
+
+        final TestExecutionReport.ReportLlmCallEntry llmCall = new TestExecutionReport.ReportLlmCallEntry();
+        llmCall.setStepIndex(0);
+        llmCall.setCapability("PESAP");
+        llmCall.setModelName("gemini-3.5-flash-lite");
+        llmCall.setDurationMs(458);
+        llmCall.setInputTokens(1400);
+        llmCall.setOutputTokens(92);
+        llmCall.setEstimatedCostUsd(0.0005);
+        llmCall.setSystemPrompt("You are an autonomous testing agent.");
+        llmCall.setAvailableTools(List.of("browser_click", "classify_step"));
+        llmCall.setUserPrompt("## Active Instruction\nAdd item to cart");
+        llmCall.setResponseContent("Tool Calls: [classify_step({\"intent\":\"ACTION\"})]");
+        step.addLlmCall(llmCall);
+
+        report.addStep(step);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+
+        Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("llm-prompts-wrapper collapsed"),
+            "Client script must create a collapsible prompts container that starts in the collapsed state");
+        Assertions.assertTrue(html.contains("llm-prompts-toggle"),
+            "Client script must render a toggle bar for prompts & context");
+        Assertions.assertTrue(html.contains("prompts-chevron"),
+            "Client script must render a chevron indicator for the prompt toggle bar");
+        Assertions.assertTrue(html.contains("response-section"),
+            "Client script must render Raw Model Response with response-section class outside the prompt drawer");
+
+        // Verify JavaScript compilation with Node.js
+        final Matcher matcher = SCRIPT_PATTERN.matcher(html);
+        Assertions.assertTrue(matcher.find(), "Generated HTML must contain client script");
+        verifyScriptWithNodeIfAvailable(matcher.group(1));
+    }
+
     private static void verifyScriptWithNodeIfAvailable(final String script)
     {
         try
