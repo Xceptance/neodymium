@@ -838,17 +838,22 @@ neodymium.ai.judge.mode=ON_AMBIGUITY
 To detect linguistic defects, atomic step violations, and ambiguous assertions before runtime execution begins, the pipeline incorporates an **Upfront Playbook Pre-Flight Linter** (`PlaybookLinter.java`):
 
 * **Single-Batch Upfront Execution**: During session initialization (`StateMachineRunner`), all playbook scenario steps are compiled and analyzed in a single batch LLM call using `LlmCapability.LINTER` before any browser interaction or JIT step processing begins.
-* **Non-Blocking & Purely Advisory**: The pre-flight linter never fails, aborts, or halts test execution. Findings are recorded into the test execution context (`ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS`) and presented as advisory quality telemetry in test reports.
+* **Advisory by Default with Strict Gating Option (`failOnFindings`)**: By default, pre-flight linter findings are non-blocking advisory warnings recorded in `ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS` and logged with clear remediation hints. When strict quality gating is required, tests can set `@AiLinter(failOnFindings = true)` (or property `neodymium.ai.linter.failOnFindings=true`):
+  ```java
+  @AiLinter(failOnFindings = true) // Fails the test immediately during pre-flight if any linting issues are detected
+  public void testStrictQuality() { ... }
+  ```
+  If any findings are detected, execution halts before browser startup with a `PlaybookLinterException`.
 * **Automatic Replay Mode Bypass**: In offline deterministic modes (`ExecutionMode.REPLAY_STRICT`, `ExecutionMode.REPLAY_WITH_HEALING`), the linter is automatically bypassed, ensuring zero LLM network requests during recorded playback.
-* **Granular Control (`@AiLinter`)**: Tests can enable, disable, or parameterize prelinting via the `@AiLinter` annotation on classes or test methods:
+* **Granular Control (`@AiLinter`)**: Tests can enable, disable, or configure prelinting via the `@AiLinter` annotation on classes or test methods:
   ```java
   @AiLinter(false) // Disable prelinting for this specific test method
   public void testQuickReplay() { ... }
 
-  @AiLinter({false, true}) // Run test variations with and without prelinting
-  public void testMatrix() { ... }
+  @AiLinter(failOnFindings = true) // Run prelinting and fail immediately on findings
+  public void testStrict() { ... }
   ```
-* **Property Toggles**: Enabled by default (`neodymium.ai.linter.enabled=true`). Can be globally disabled via `neodymium.ai.linter.enabled=false` (or aliases `neodymium.ai.prelinter.enabled=false`, `neodymium.ai.prelint.enabled=false`).
+* **Property Toggles**: Enabled by default (`neodymium.ai.linter.enabled=true`). Can be globally disabled via `neodymium.ai.linter.enabled=false`. Strict failure on findings can be set via `neodymium.ai.linter.failOnFindings=true`.
 * **Static-Only Test Execution (`ExecutionMode.LINTER_ONLY`)**: Tests can be annotated with `@AiMode(ExecutionMode.LINTER_ONLY)` to run upfront playbook linting against live LLMs, record token telemetry, and generate reports, while completely bypassing browser action dispatch for fast, always-succeeding quality auditing.
 * **Optional Scenario Description Grounding**: Reads high-level scenario context from playbook YAML `description:` headers or `@Description("...")` test annotations to ground linguistic evaluation without hardcoding domain assumptions.
 
@@ -875,6 +880,27 @@ To handle complex, compound, or ambiguous instructions, the pipeline executes a 
 * **JIT Upfront Step Splitting**: If a compound step (e.g. `"Search for shirt, select size L, and click Checkout"`) is identified, the LLM splits the instruction into distinct leaf sub-steps. These are instantiated dynamically as child `PlaybookStep` instances and pushed onto the execution stack.
 * **Conservative Non-Splitting Invariants**: Single-target instructions with multiple descriptive clauses (e.g. `"Select standard shipping option (5-7 business days) for $5.00"`) or referential verification instructions (e.g. `"Verify order total matches previous summary"`) are strictly preserved as single steps.
 * **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal initial interaction mode across the 8-tier context escalation ladder.
+
+---
+
+### 4.2.1 YAML Step Grouping & Turn Groups (Compound Milestones)
+
+To resolve cross-step pronoun dependencies (e.g. *"Click its 'Add to Cart' button"*) and sequential UI interactions (e.g. *"Hover over card"* $\rightarrow$ *"Click Add to Cart"* $\rightarrow$ *"Select size 'S'"*) without losing context, playbooks support **YAML Step Grouping**:
+
+```yaml
+steps: |
+  Add product to cart:
+    Locate the first product card and hover over it
+    Click its 'Add to Cart' button
+    When this string '${testId}' is not equal 'bad', click the size 'S'
+```
+
+* **Executable Goal Step**: The top-level header line (`Add product to cart:`) is an **executable intent**, not an inert comment.
+* **Indented Child Milestones**: Lines indented under the goal header are parsed as child milestones (`PlaybookStep.getSubSteps()`).
+* **Turn Group Execution Semantics**: Instead of executing each line in an isolated pipeline step (which resets conversation memory), the entire group executes within a single compound `AgentToolLoopStep`.
+  * The goal header is provided as the overall objective, and child instructions are injected as ordered `milestones`.
+  * The agent retains complete conversation history across all milestones, allowing the LLM to naturally resolve anaphora ("its", "the button") and reference earlier tool actions.
+  * Turn limits dynamically scale with the number of milestones (`baseTurns + milestones.size() * 3`).
 
 ---
 

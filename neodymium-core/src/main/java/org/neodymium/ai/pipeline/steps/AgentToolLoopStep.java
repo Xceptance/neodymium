@@ -78,9 +78,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -218,10 +220,45 @@ public final class AgentToolLoopStep implements PipelineStep
 
         final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
 
+        final int effectiveMaxTurns = (milestones != null && !milestones.isEmpty())
+                ? this.maxTurns + (milestones.size() * 3)
+                : this.maxTurns;
+        Set<String> previousElementSignatures = new HashSet<>();
+        String lastSeenUrl = null;
+
         // Turn-Aware Dynamic Context Resolution for Turn 1: Zero DOM only when LLM classified NAVIGATE or ASSERT_METADATA
         final boolean isZeroDom = intent == SemanticIntent.NAVIGATE || intent == SemanticIntent.ASSERT_METADATA;
 
         final StringBuilder userPrompt = new StringBuilder();
+        if (step != null && step.getParent() != null && step.getParent().getInstruction() != null)
+        {
+            final String parentRaw = step.getParent().getInstruction();
+            final String parentResolved = context.getSessionData() != null
+                ? context.getSessionData().resolveVariables(parentRaw)
+                : parentRaw;
+            userPrompt.append("### Scoping Context:\n")
+                .append(parentResolved)
+                .append(" (Note: Scoping defines context for actions/assertions targeting this element or pronouns like 'it' / 'its'. Global page elements such as the header cart, page title, or notifications remain global and should be verified globally.)")
+                .append("\n\n");
+        }
+
+        final SessionData activeSessionData = context.getSessionData();
+        if (activeSessionData != null)
+        {
+            final Map<String, Object> guardedData = activeSessionData.getGuardedDataMap();
+            if (!guardedData.isEmpty())
+            {
+                userPrompt.append("### Active Session Variables:\n");
+                final List<String> sortedKeys = new ArrayList<>(guardedData.keySet());
+                Collections.sort(sortedKeys);
+                for (final String key : sortedKeys)
+                {
+                    userPrompt.append("- ").append(key).append(": \"").append(guardedData.get(key)).append("\"\n");
+                }
+                userPrompt.append("\n");
+            }
+        }
+
         userPrompt.append("### Test Instruction:\n").append(instruction);
         if (isVisual && !instruction.toLowerCase().contains("(visual)"))
         {
@@ -312,6 +349,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                     if (initialState.getTextContent() != null && !initialState.getTextContent().isBlank())
                     {
+                        previousElementSignatures = extractElementSignatures(initialState.getTextContent());
                         userPrompt.append("### Current Page State & Interactive Elements:\n")
                                 .append(initialState.getTextContent())
                                 .append("\n\n");
@@ -326,22 +364,44 @@ public final class AgentToolLoopStep implements PipelineStep
                     LOGGER.debug("Could not capture initial SUT state for AgentToolLoopStep: {}", e.getMessage());
                 }
             }
+
+            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+            if (driver != null)
+            {
+                try
+                {
+                    lastSeenUrl = driver.getCurrentUrl();
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
         }
 
         userPrompt.append("What is your next tool call?");
 
         // Compile available tools (Intent-Based Scoping: exclude browser_navigate for interactive steps)
-        final List<ToolDefinition> availableTools = filterToolsForIntent(intent, isVisual);
+        final List<ToolDefinition> availableTools = filterToolsForIntent(intent, isVisual, context);
+
+        final boolean hasInteractive = hasInteractiveMilestones(context);
+        final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
 
         final StringBuilder systemPrompt = new StringBuilder();
         systemPrompt.append("You are an autonomous web testing agent. Execute the test goal by invoking the available tools directly.\n");
         systemPrompt.append("When the goal is fully achieved and verified, call tool 'complete_step' with a summary.\n\n");
         systemPrompt.append("### CRITICAL OPERATING RULES:\n");
         systemPrompt.append("1. ATOMIC STEP SCOPE: Execute ONLY the action or assertion explicitly described in the Test Instruction or required by the Compound Instruction Milestones. Do NOT anticipate or perform subsequent workflow steps.\n");
-        systemPrompt.append("   - If the instruction asks you to click a button or link (e.g. 'Add to Cart', an accordion toggle, a dropdown button), click that button and immediately call 'complete_step'. Do NOT select options, sizes, or variants from menus, modals, or dropdowns that appear as a result of the click unless the instruction explicitly commands you to in this step.\n");
-        systemPrompt.append("   - Subsequent test steps will perform any follow-up actions (such as choosing sizes, entering information, or checking out). Performing them prematurely will cause subsequent steps to fail!\n");
-        systemPrompt.append("   - If the instruction explicitly asks for multiple inputs or milestones (e.g. 'Enter Mario as first name, Meier as last name, and email ...'), execute all requested milestone actions before calling 'complete_step'.\n");
-        systemPrompt.append("   - Use dedicated browser tools (`browser_type`, `browser_click`, `browser_select`) for interacting with forms and elements. Do NOT use `browser_execute_script` to fill forms or click buttons, as this bypasses validation and event tracking.\n");
+        if (isAssertion)
+        {
+            systemPrompt.append("   - This is an assertion/verification step. Interactive mutating tools (such as clicking or typing) are strictly PROHIBITED. Use assertion tools (`browser_assert_text`, `browser_assert_count`) or inspection tools (`browser_inspect`, `browser_query_dom`) to verify page state, then call 'complete_step'.\n");
+        }
+        else
+        {
+            systemPrompt.append("   - If the instruction asks you to click a button or link (e.g. 'Add to Cart', an accordion toggle, a dropdown button), click that button and immediately call 'complete_step'. Do NOT select options, sizes, or variants from menus, modals, or dropdowns that appear as a result of the click unless the instruction explicitly commands you to in this step.\n");
+            systemPrompt.append("   - Subsequent test steps will perform any follow-up actions (such as choosing sizes, entering information, or checking out). Performing them prematurely will cause subsequent steps to fail!\n");
+            systemPrompt.append("   - If the instruction explicitly asks for multiple inputs or milestones (e.g. 'Enter Mario as first name, Meier as last name, and email ...'), execute all requested milestone actions before calling 'complete_step'.\n");
+            systemPrompt.append("   - Use dedicated browser tools (`browser_type`, `browser_click`, `browser_select`) for interacting with forms and elements. Do NOT use `browser_execute_script` to fill forms or click buttons, as this bypasses validation and event tracking.\n");
+        }
         systemPrompt.append("2. COMPLETION: As soon as the instruction's described goal or milestones are achieved, you MUST invoke 'complete_step'. Do not continue calling tools.\n");
         systemPrompt.append("3. NO IDENTICAL REPEATS: Never propose the exact same tool call with the same arguments if the page state did not change. If an element was not found, inspect the DOM or Page State rather than repeating the call.\n");
         systemPrompt.append("4. DYNAMIC REGEX PATTERNS: When asserting dynamic values (such as order numbers, confirmation codes, dates, or IDs) where the instruction specifies a pattern or format (e.g. 'in the form 'V-[0-9]+-US'' or contains a regular expression in quotes), you MUST pass that pattern to `browser_assert_text` as `expectedText` and set \"regex\": true. Do NOT assert the volatile literal value seen on screen, because dynamic IDs change on subsequent test runs!\n");
@@ -377,11 +437,11 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             turn++;
             LOGGER.info(TURN_DIVIDER);
-            LOGGER.info("🤖 Agent Turn #{} (max: {}) | Step: \"{}\"", turn, this.maxTurns, instruction);
+            LOGGER.info("🤖 Agent Turn #{} (max: {}) | Step: \"{}\"", turn, effectiveMaxTurns, instruction);
 
-            if (turn > this.maxTurns)
+            if (turn > effectiveMaxTurns)
             {
-                throw new StepTurnLimitExceededException(instruction, turn, this.maxTurns);
+                throw new StepTurnLimitExceededException(instruction, turn, effectiveMaxTurns);
             }
 
             // Stop Criterion 5: Step Wall-Clock Timeout
@@ -776,6 +836,10 @@ public final class AgentToolLoopStep implements PipelineStep
             if (result != null && result.status() == ToolResult.Status.SUCCESS)
             {
                 executedCalls.add(effectiveCall);
+                if ("browser_navigate".equals(effectiveCall.toolName()))
+                {
+                    previousElementSignatures.clear();
+                }
                 if (effectiveCall.toolName().startsWith("browser_") && !"browser_take_screenshot".equals(effectiveCall.toolName()))
                 {
                     final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
@@ -868,6 +932,23 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     try
                     {
+                        final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (currentDriver != null)
+                        {
+                            try
+                            {
+                                final String currentUrl = currentDriver.getCurrentUrl();
+                                if (lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl))
+                                {
+                                    previousElementSignatures.clear();
+                                }
+                                lastSeenUrl = currentUrl;
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+
                         final SutState freshState = executor.captureState(activeContextLevel, activeContextLevel.isFullPageScreenshot());
                         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
                         final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
@@ -880,9 +961,12 @@ public final class AgentToolLoopStep implements PipelineStep
                             final List<SutAttachment> freshAttachments = freshState.getAttachments() != null
                                     ? freshState.getAttachments()
                                     : Collections.emptyList();
+                            final String annotatedDom = annotateNewElements(freshState.getTextContent(), previousElementSignatures);
+                            previousElementSignatures = extractElementSignatures(freshState.getTextContent());
+
                             final StringBuilder turnPrompt = new StringBuilder();
                             turnPrompt.append("### Current Page State & Interactive Elements:\n")
-                                    .append(freshState.getTextContent());
+                                    .append(annotatedDom);
                             if (milestones != null && !milestones.isEmpty())
                             {
                                 turnPrompt.append("\n\n### Compound Milestones To Complete:\n");
@@ -1041,11 +1125,16 @@ public final class AgentToolLoopStep implements PipelineStep
         return Action.fromToolCall(call);
     }
 
-    private List<ToolDefinition> filterToolsForIntent(final SemanticIntent intent, final boolean isVisual)
+    private List<ToolDefinition> filterToolsForIntent(
+        final SemanticIntent intent,
+        final boolean isVisual,
+        final ExecutionContext context
+    )
     {
         final List<ToolDefinition> defs = new ArrayList<>();
+        final boolean hasInteractive = hasInteractiveMilestones(context);
         final boolean isVisualAssertion = isVisual && (intent == null || intent.isAssertion());
-        final boolean isAssertion = intent != null && intent.isAssertion();
+        final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
 
         for (final ToolDefinition def : this.toolRegistry.getDefinitions())
         {
@@ -1057,14 +1146,14 @@ public final class AgentToolLoopStep implements PipelineStep
                 continue;
             }
 
-            // Assertion steps must never mutate page state
-            if ((isAssertion || isVisualAssertion) && isMutatingTool(name))
+            // Assertion steps must never mutate page state (unless step has compound interactive milestones)
+            if ((isAssertion || (isVisualAssertion && !hasInteractive)) && isMutatingTool(name))
             {
                 continue;
             }
 
             // Pure visual assertions omit DOM querying/text matching tools to prevent brittle DOM matching
-            if (isVisualAssertion && isDomMatchingTool(name))
+            if (isVisualAssertion && !hasInteractive && isDomMatchingTool(name))
             {
                 continue;
             }
@@ -1072,6 +1161,32 @@ public final class AgentToolLoopStep implements PipelineStep
             defs.add(def);
         }
         return Collections.unmodifiableList(defs);
+    }
+
+    private static boolean hasInteractiveMilestones(final ExecutionContext context)
+    {
+        if (context == null)
+        {
+            return false;
+        }
+        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        if (stepObj instanceof final PlaybookStep step && step.hasInteractiveSubSteps())
+        {
+            return true;
+        }
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        if (milestones != null)
+        {
+            for (final String ms : milestones)
+            {
+                if (ms != null && PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(ms).find())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isMutatingTool(final String name)
@@ -1849,5 +1964,119 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             LOGGER.info("📥 Result [{}]:\n{}", toolName, indent(prettyPrintJson(trimmed), "   "));
         }
+    }
+
+    /**
+     * Extracts normalized element signatures from a simplified DOM text string.
+     *
+     * @param textContent the raw simplified DOM text
+     * @return set of unique normalized element signatures
+     */
+    static Set<String> extractElementSignatures(final String textContent)
+    {
+        if (textContent == null || textContent.isBlank())
+        {
+            return Collections.emptySet();
+        }
+        final Set<String> signatures = new HashSet<>();
+        final String[] lines = textContent.split("\r?\n");
+        for (final String line : lines)
+        {
+            final String trimmed = line.trim();
+            if (isElementLine(trimmed))
+            {
+                signatures.add(computeElementSignature(trimmed));
+            }
+        }
+        return signatures;
+    }
+
+    /**
+     * Annotates newly appeared elements in the simplified DOM text with {@code *[NEW] }.
+     *
+     * @param textContent the current simplified DOM text
+     * @param previousSignatures set of element signatures observed in prior turn(s)
+     * @return annotated simplified DOM text
+     */
+    static String annotateNewElements(final String textContent, final Set<String> previousSignatures)
+    {
+        if (textContent == null || textContent.isBlank() || previousSignatures == null || previousSignatures.isEmpty())
+        {
+            return textContent;
+        }
+        final String[] lines = textContent.split("\r?\n", -1);
+        final StringBuilder sb = new StringBuilder(textContent.length() + 256);
+        for (int i = 0; i < lines.length; i++)
+        {
+            final String line = lines[i];
+            final String trimmed = line.trim();
+            if (isElementLine(trimmed) && !trimmed.startsWith("*[NEW] "))
+            {
+                final String sig = computeElementSignature(trimmed);
+                if (!previousSignatures.contains(sig))
+                {
+                    final int tagIdx = line.indexOf('<');
+                    if (tagIdx >= 0)
+                    {
+                        sb.append(line, 0, tagIdx).append("*[NEW] ").append(line.substring(tagIdx));
+                    }
+                    else
+                    {
+                        sb.append("*[NEW] ").append(line);
+                    }
+                }
+                else
+                {
+                    sb.append(line);
+                }
+            }
+            else
+            {
+                sb.append(line);
+            }
+            if (i < lines.length - 1)
+            {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Determines whether a trimmed DOM text line represents an opening or leaf element node.
+     *
+     * @param trimmed the trimmed line
+     * @return true if the line represents an opening or leaf element
+     */
+    private static boolean isElementLine(final String trimmed)
+    {
+        return trimmed != null
+                && trimmed.startsWith("<")
+                && !trimmed.startsWith("</")
+                && !trimmed.startsWith("<!--")
+                && !trimmed.startsWith("<!");
+    }
+
+    /**
+     * Computes a normalized signature for an element line by stripping volatile attributes.
+     *
+     * @param line the element line
+     * @return normalized signature
+     */
+    static String computeElementSignature(final String line)
+    {
+        if (line == null)
+        {
+            return "";
+        }
+        String sig = line.trim();
+        if (sig.startsWith("*[NEW] "))
+        {
+            sig = sig.substring(7).trim();
+        }
+        sig = sig.replaceAll("\\s*data-ai=\"[^\"]*\"", "");
+        sig = sig.replaceAll("\\s*frameId=\"[^\"]*\"", "");
+        sig = sig.replaceAll("\\s+", " ");
+        return sig;
     }
 }

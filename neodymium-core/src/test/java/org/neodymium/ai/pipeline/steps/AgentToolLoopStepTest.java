@@ -55,6 +55,7 @@ import org.openqa.selenium.WebDriverException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -1733,6 +1734,194 @@ public class AgentToolLoopStepTest
 
         final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
         Assertions.assertTrue(thrown.getMessage().contains("Policy violation"));
+    }
+
+    @Test
+    public void testExtractElementSignaturesNormalizesVolatileAttributes()
+    {
+        final String domText = """
+                === Window: win_0 ===
+                Page URL: https://example.com
+                Page Title: Example Store
+
+                <div class="product-grid">
+                  <button id="cart-btn" class="utility-btn" data-ai="btn_123" frameId="win_0:main">View Cart</button>
+                  <input name="q" placeholder="Search..." data-ai="input_456" />
+                </div>
+                """;
+
+        final Set<String> signatures = AgentToolLoopStep.extractElementSignatures(domText);
+
+        Assertions.assertTrue(signatures.contains("<div class=\"product-grid\">"));
+        Assertions.assertTrue(signatures.contains("<button id=\"cart-btn\" class=\"utility-btn\">View Cart</button>"));
+        Assertions.assertTrue(signatures.contains("<input name=\"q\" placeholder=\"Search...\" />"));
+        Assertions.assertFalse(signatures.contains("=== Window: win_0 ==="));
+        Assertions.assertFalse(signatures.contains("</div>"));
+    }
+
+    @Test
+    public void testAnnotateNewElementsMarksInteractiveDelta()
+    {
+        final String turn1Dom = """
+                <div class="product">
+                  <button id="add-to-cart" class="btn">Add to Cart</button>
+                </div>
+                """;
+
+        final Set<String> turn1Signatures = AgentToolLoopStep.extractElementSignatures(turn1Dom);
+
+        final String turn2Dom = """
+                <div class="product">
+                  <button id="add-to-cart" class="btn">Add to Cart</button>
+                  <div class="size-modal">
+                    <button class="size-btn" data-ai="size_s">S</button>
+                    <button class="size-btn" data-ai="size_m">M</button>
+                  </div>
+                </div>
+                """;
+
+        final String annotated = AgentToolLoopStep.annotateNewElements(turn2Dom, turn1Signatures);
+
+        Assertions.assertTrue(annotated.contains("<button id=\"add-to-cart\" class=\"btn\">Add to Cart</button>"));
+        Assertions.assertFalse(annotated.contains("*[NEW] <button id=\"add-to-cart\""));
+        Assertions.assertTrue(annotated.contains("*[NEW] <button class=\"size-btn\" data-ai=\"size_s\">S</button>"));
+        Assertions.assertTrue(annotated.contains("*[NEW] <button class=\"size-btn\" data-ai=\"size_m\">M</button>"));
+        Assertions.assertTrue(annotated.contains("*[NEW] <div class=\"size-modal\">"));
+    }
+
+    @Test
+    public void testAnnotateNewElementsReturnsOriginalWhenNoPreviousSignatures()
+    {
+        final String dom = "<button id=\"add-to-cart\">Add to Cart</button>";
+        Assertions.assertEquals(dom, AgentToolLoopStep.annotateNewElements(dom, null));
+        Assertions.assertEquals(dom, AgentToolLoopStep.annotateNewElements(dom, Collections.emptySet()));
+    }
+
+    @Test
+    public void testCompoundInstructionExpandsTurnLimitDynamically() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_action", "Executes action", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\"}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        // Milestones: 2 milestones. Configured maxTurns = 2.
+        // Effective max turns should be: 2 + (2 * 3) = 8.
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Compound step");
+        this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Milestone 1", "Milestone 2"));
+
+        final AtomicInteger turnCounter = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            final int t = turnCounter.incrementAndGet();
+            if (t < 4)
+            {
+                return new LlmResponse("Thinking", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-" + t, "mock_action", MAPPER.createObjectNode().put("step", t))));
+            }
+            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-complete", "complete_step", MAPPER.createObjectNode().put("summary", "All done"))));
+        };
+
+        // If turn limit was fixed to 2, this would fail at turn 3.
+        // With dynamic scaling for 2 milestones, effective limit is 8, so 4 turns succeed smoothly.
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30, 2, 10_000);
+        step.execute(this.context);
+
+        Assertions.assertEquals(4, turnCounter.get());
+        Assertions.assertEquals("All done", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    @Test
+    public void testCompoundStepWithInteractiveMilestonesPreservesMutatingTools() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_type", "Types text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Typed");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_click", "Clicks target", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+
+        final PlaybookStep parent = new PlaybookStep("Locate promo code:");
+        parent.getSubSteps().add(new PlaybookStep("clear its content"));
+        parent.getSubSteps().add(new PlaybookStep("type 'FREEGIFT'"));
+        parent.getSubSteps().add(new PlaybookStep("submit and assert bonus gift"));
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, parent.getFullInstruction());
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            Assertions.assertTrue(req.tools().stream().anyMatch(t -> "browser_click".equals(t.name())));
+            Assertions.assertTrue(req.tools().stream().anyMatch(t -> "browser_type".equals(t.name())));
+            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                List.of(new ToolCall("call-c", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+        Assertions.assertEquals("Done", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
     }
 }
 
