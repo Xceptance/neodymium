@@ -93,13 +93,17 @@ public final class PesapPreStep implements PipelineStep
             return false;
         }
 
-        // Always reset transient intent and milestones at step start to prevent leakage across steps
+        // Always reset transient intent at step start to prevent leakage across steps
         context.getTransientData().remove(ExecutionContext.KEY_PESAP_INTENT);
-        context.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        if (!this.step.hasSubSteps())
+        {
+            context.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        }
         this.step.setSemanticIntent(null);
 
         final AiConfiguration config = AiConfiguration.getInstance();
-        final String resolvedInstruction = context.getSessionData().resolveVariables(this.step.getInstruction());
+        final String rawInstruction = this.step.hasSubSteps() ? this.step.getFullInstruction() : this.step.getInstruction();
+        final String resolvedInstruction = context.getSessionData().resolveVariables(rawInstruction);
         final StepStats stats = (StepStats) context.getTransientData().get("KEY_CURRENT_STEP_STATS");
 
         @SuppressWarnings("unchecked")
@@ -249,7 +253,7 @@ public final class PesapPreStep implements PipelineStep
                 }
 
                 final boolean isNavigation = pesapResult.intent() == SemanticIntent.NAVIGATE;
-                if (!isNavigation && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
+                if (!isNavigation && !this.step.hasSubSteps() && this.step.getParent() == null && pesapResult.splitSteps() != null && pesapResult.splitSteps().size() > 1)
                 {
                     LOGGER.info("✂️ Compound instruction milestones detected: \"{}\" split into {}", resolvedInstruction, pesapResult.splitSteps());
                     final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
@@ -261,14 +265,15 @@ public final class PesapPreStep implements PipelineStep
                     }
                     context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, Collections.unmodifiableList(cleanMilestones));
 
-                    context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, pesapResult.intent());
-                    this.step.setSemanticIntent(pesapResult.intent());
+                    final SemanticIntent effectiveIntent = coerceIntentIfMixed(this.step, pesapResult.intent(), context);
+                    context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, effectiveIntent);
+                    this.step.setSemanticIntent(effectiveIntent);
                     if (stats != null)
                     {
-                        stats.setSemanticIntent(pesapResult.intent().name());
+                        stats.setSemanticIntent(effectiveIntent.name());
                     }
 
-                    final ContextLevel cleanedLevel = ContextLevel.clean(pesapResult.contextLevel(), pesapResult.intent(), ContextLevel.LEAN);
+                    final ContextLevel cleanedLevel = ContextLevel.clean(pesapResult.contextLevel(), effectiveIntent, ContextLevel.LEAN);
                     final ContextLevel currentLevel = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                     final boolean isExplicitTag = (currentLevel == ContextLevel.HINT || (currentLevel != null && currentLevel.includesScreenshot()));
                     if (!isExplicitTag || (cleanedLevel.ordinal() > currentLevel.ordinal()))
@@ -279,15 +284,16 @@ public final class PesapPreStep implements PipelineStep
                     return true;
                 }
 
-                context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, pesapResult.intent());
-                this.step.setSemanticIntent(pesapResult.intent());
+                final SemanticIntent effectiveIntent = coerceIntentIfMixed(this.step, pesapResult.intent(), context);
+                context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, effectiveIntent);
+                this.step.setSemanticIntent(effectiveIntent);
                 if (stats != null)
                 {
-                    stats.setSemanticIntent(pesapResult.intent().name());
+                    stats.setSemanticIntent(effectiveIntent.name());
                 }
-                LOGGER.debug("   🎯 [Pre-Step PESAP] Classified intent: {}", pesapResult.intent());
+                LOGGER.debug("   🎯 [Pre-Step PESAP] Classified intent: {}", effectiveIntent);
 
-                final ContextLevel cleanedLevel = ContextLevel.clean(pesapResult.contextLevel(), pesapResult.intent(), ContextLevel.LEAN);
+                final ContextLevel cleanedLevel = ContextLevel.clean(pesapResult.contextLevel(), effectiveIntent, ContextLevel.LEAN);
                 final ContextLevel currentLevel = (ContextLevel) context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                 final boolean isExplicitTag = (currentLevel == ContextLevel.HINT || (currentLevel != null && currentLevel.includesScreenshot()));
                 if (!isExplicitTag || (cleanedLevel.ordinal() > currentLevel.ordinal()))
@@ -308,5 +314,58 @@ public final class PesapPreStep implements PipelineStep
             }
         }
         return false;
+    }
+
+    private static SemanticIntent coerceIntentIfMixed(
+        final PlaybookStep step,
+        final SemanticIntent classifiedIntent,
+        final ExecutionContext context
+    )
+    {
+        if (classifiedIntent == null || !classifiedIntent.isAssertion())
+        {
+            return classifiedIntent;
+        }
+
+        boolean hasInteractive = step != null && step.hasInteractiveSubSteps();
+        if (!hasInteractive && context != null)
+        {
+            @SuppressWarnings("unchecked")
+            final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+            if (milestones != null)
+            {
+                for (final String ms : milestones)
+                {
+                    if (ms != null && PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(ms).find())
+                    {
+                        hasInteractive = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!hasInteractive)
+        {
+            return classifiedIntent;
+        }
+
+        final String combinedText = (step != null ? step.getFullInstruction() : "").toLowerCase();
+        final SemanticIntent coerced;
+        if (combinedText.contains("type") || combinedText.contains("clear") || combinedText.contains("fill") || combinedText.contains("enter"))
+        {
+            coerced = SemanticIntent.TYPE;
+        }
+        else if (combinedText.contains("select") || combinedText.contains("choose"))
+        {
+            coerced = SemanticIntent.SELECT;
+        }
+        else
+        {
+            coerced = SemanticIntent.CLICK;
+        }
+
+        LOGGER.info("🔄 [Pre-Step PESAP] Coerced assertion intent to '{}' for compound step with interactive sub-steps/milestones", coerced);
+        return coerced;
     }
 }

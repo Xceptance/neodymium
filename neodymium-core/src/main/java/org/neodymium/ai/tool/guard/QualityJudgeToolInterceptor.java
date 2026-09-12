@@ -42,6 +42,7 @@ import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.executor.selenide.SelenideLocatorProber;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.QualityJudgePrompt;
@@ -134,8 +135,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             return InterceptionVerdict.allow("Null tool call");
         }
 
+        final ExecutionContext activeContext = ExecutionContext.getActiveContext();
+
         // 1. Enforce Journey Fidelity Policy (hard constraint, always evaluated)
-        final InterceptionVerdict journeyVerdict = checkJourneyFidelity(call, intent);
+        final InterceptionVerdict journeyVerdict = checkJourneyFidelity(call, intent, activeContext);
         if (!journeyVerdict.isAllowed())
         {
             LOGGER.warn("🚨 Journey Fidelity Violation detected: {}", journeyVerdict.reason());
@@ -158,8 +161,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         // 4. Extract target selector from call arguments
         final String selector = call.arguments().path("selector").asText("").trim();
         List<LocatorCandidate> candidates = extractCandidates(call, context);
-
-        final ExecutionContext activeContext = ExecutionContext.getActiveContext();
 
         // 5. Inspect live DOM when WebDriver has started and selector is provided
         if (!selector.isEmpty() && WebDriverRunner.hasWebDriverStarted())
@@ -216,7 +217,11 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         return evaluateCandidateScoring(call, selector, candidates, activeContext);
     }
 
-    private InterceptionVerdict checkJourneyFidelity(final ToolCall call, final SemanticIntent intent)
+    private InterceptionVerdict checkJourneyFidelity(
+        final ToolCall call,
+        final SemanticIntent intent,
+        final ExecutionContext activeContext
+    )
     {
         if (intent != null && intent.isAssertion())
         {
@@ -224,6 +229,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             if ("browser_click".equals(name) || "browser_type".equals(name) || "browser_select".equals(name)
                     || "browser_press_key".equals(name) || "browser_navigate".equals(name))
             {
+                if (hasInteractiveMilestones(activeContext))
+                {
+                    return InterceptionVerdict.allow("Permitting interactive tool for compound step with interactive milestones");
+                }
                 return InterceptionVerdict.reject(call.callId(), ASSERTION_MUTATION_VIOLATION);
             }
         }
@@ -245,6 +254,32 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             }
         }
         return InterceptionVerdict.allow("Journey fidelity checks passed");
+    }
+
+    private static boolean hasInteractiveMilestones(final ExecutionContext context)
+    {
+        if (context == null)
+        {
+            return false;
+        }
+        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        if (stepObj instanceof final PlaybookStep step && step.hasInteractiveSubSteps())
+        {
+            return true;
+        }
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        if (milestones != null)
+        {
+            for (final String ms : milestones)
+            {
+                if (ms != null && PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(ms).find())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private List<LocatorCandidate> extractCandidates(final ToolCall call, final ToolContext context)

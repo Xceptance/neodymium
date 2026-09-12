@@ -37,6 +37,7 @@ import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.executor.probe.ProbeBoundingRect;
 import org.neodymium.ai.executor.probe.ProbeElementSummary;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -122,6 +123,47 @@ public class QualityJudgeToolInterceptorTest
 
         Assertions.assertTrue(verdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+    }
+
+    @Test
+    public void testJourneyFidelityRejectsMutationOnPureAssertionStep()
+    {
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", "#couponCode");
+        final ToolCall clickCall = new ToolCall("call-assert-mut", "browser_click", args);
+
+        final InterceptionVerdict verdict = this.interceptor.intercept(clickCall, this.context, SemanticIntent.ASSERT);
+
+        Assertions.assertFalse(verdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.REJECT, verdict.decision());
+        Assertions.assertEquals(QualityJudgeToolInterceptor.ASSERTION_MUTATION_VIOLATION, verdict.reason());
+    }
+
+    @Test
+    public void testJourneyFidelityAllowsMutationOnCompoundStepWithInteractiveMilestones()
+    {
+        final ExecutionContext execCtx = new ExecutionContext(null);
+        final PlaybookStep parent = new PlaybookStep("Locate promo code:");
+        parent.getSubSteps().add(new PlaybookStep("clear its content"));
+        parent.getSubSteps().add(new PlaybookStep("type 'FREEGIFT'"));
+        execCtx.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
+        ExecutionContext.setActiveContext(execCtx);
+
+        try
+        {
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#couponCode");
+            final ToolCall clickCall = new ToolCall("call-compound", "browser_click", args);
+
+            final InterceptionVerdict verdict = this.interceptor.intercept(clickCall, this.context, SemanticIntent.ASSERT);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 
     @Test

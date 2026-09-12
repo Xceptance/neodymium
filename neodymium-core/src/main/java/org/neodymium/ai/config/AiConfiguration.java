@@ -717,6 +717,21 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if the upfront playbook pre-flight linter is configured to fail on findings.
+     *
+     * @return true if linter findings should fail test execution (default: false), false otherwise
+     */
+    public boolean isLinterFailOnFindings()
+    {
+        final String val = getProperty("neodymium.ai.linter.failOnFindings", null);
+        if (val != null)
+        {
+            return Boolean.parseBoolean(val.trim());
+        }
+        return false;
+    }
+
+    /**
      * Resolves the configured provider identifier for the pre-flight linter,
      * checking {@code neodymium.ai.llm.linter.provider} then {@code neodymium.ai.linter.provider}
      * before falling back to the global default provider.

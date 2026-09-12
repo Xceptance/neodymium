@@ -90,25 +90,56 @@ public final class ExecuteActionsStep
             };
         }
 
-        // If the step has sub-steps (composite), schedule the sub-steps in sequence
+        // If the step has sub-steps, schedule the sub-steps in sequence
         if (step.getSubSteps() != null && !step.getSubSteps().isEmpty())
         {
             return contextState ->
             {
                 contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
                 step.setStatus(PlaybookStepStatus.RUNNING);
+                final long parentStartTime = System.currentTimeMillis();
+                step.setStartTimeMs(parentStartTime);
                 final String rawInstruction = step.getInstruction();
-                final String resolvedInstruction = contextState.getSessionData() != null
-                    ? contextState.getSessionData().resolveVariables(rawInstruction)
-                    : rawInstruction;
+                String resolvedInstruction = rawInstruction;
+                if (contextState.getSessionData() != null && rawInstruction != null)
+                {
+                    try
+                    {
+                        resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
+                    }
+                    catch (final IllegalArgumentException ignored)
+                    {
+                    }
+                }
                 contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
                 contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, rawInstruction);
+
+                final Object statsListObj = contextState.getTransientData().get("execution.stepStatsList");
+                @SuppressWarnings("unchecked")
+                final List<StepStats> allStats = statsListObj instanceof List<?> list
+                    ? (List<StepStats>) list
+                    : new ArrayList<>();
+                if (statsListObj == null)
+                {
+                    contextState.getTransientData().put("execution.stepStatsList", allStats);
+                }
+
+                @SuppressWarnings("unchecked")
+                final Map<PlaybookStep, StepStats> stepStatsMap =
+                    (Map<PlaybookStep, StepStats>) contextState.getTransientData()
+                        .computeIfAbsent("execution.stepStatsMap", k -> new HashMap<>());
+
+                final ExecutionMode executionMode = (ExecutionMode) contextState.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+                final boolean isReplayStats = executionMode != null && executionMode.isReplay() && !step.isNoReplay();
+                final StepStats parentStats = getOrCreateStatsForStep(step, parentStartTime, isReplayStats, stepStatsMap, allStats, contextState);
 
                 if (session != null && session.getEventBus() != null)
                 {
                     @SuppressWarnings("unchecked")
                     final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
-                    final int stepIndex = resolveStepIndex(step, step, flatSteps);
+                    @SuppressWarnings("unchecked")
+                    final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.steps");
+                    final int stepIndex = resolveStepIndex(step, step, flatSteps, playbookSteps);
                     session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
                 }
 
@@ -128,6 +159,12 @@ public final class ExecuteActionsStep
                         }
                     }
                     step.setStatus(finalStatus);
+                    final long parentDuration = System.currentTimeMillis() - parentStartTime;
+                    step.setDurationMs(parentDuration);
+                    if (parentStats != null)
+                    {
+                        parentStats.setDurationMs(parentDuration);
+                    }
                     if (session != null && session.getEventBus() != null)
                     {
                         session.getEventBus().dispatch(new StepFinishedEvent(step, finalStatus));
@@ -137,12 +174,17 @@ public final class ExecuteActionsStep
                 contextState.pushStep(finishParent);
                 for (int i = step.getSubSteps().size() - 1; i >= 0; i--)
                 {
-                    contextState.pushStep(mapPlaybookStepToPipelineStep(step.getSubSteps().get(i), session, contextState));
+                    final PlaybookStep child = step.getSubSteps().get(i);
+                    if (child.getParent() == null)
+                    {
+                        child.setParent(step);
+                    }
+                    contextState.pushStep(mapPlaybookStepToPipelineStep(child, session, contextState));
                 }
             };
         }
 
-        // For leaf steps, return a pipeline step wrapper setting the active instruction and pushing execution loop
+        // For leaf steps (or compound turn groups), return a pipeline step wrapper setting the active instruction and pushing execution loop
         return contextState ->
         {
             final PlaybookStepStatus initialStepStatus = step.getStatus();
@@ -234,11 +276,13 @@ public final class ExecuteActionsStep
 
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.flatSteps");
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) contextState.getTransientData().get("playbook.steps");
 
             if (session != null && session.getEventBus() != null)
             {
                 final PlaybookStep targetForIndex = step.getParent() != null ? step.getParent() : step;
-                final int stepIndex = resolveStepIndex(step, targetForIndex, flatSteps);
+                final int stepIndex = resolveStepIndex(step, targetForIndex, flatSteps, playbookSteps);
                 session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
             }
 
@@ -502,10 +546,6 @@ public final class ExecuteActionsStep
             // Push end-hook step first, so it runs AFTER tryCatch executes
             contextState.pushStep(c ->
             {
-                if (step.getSubSteps() != null && !step.getSubSteps().isEmpty())
-                {
-                    return;
-                }
                 final Boolean isHealed = (Boolean) c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
                 if (Boolean.TRUE.equals(isHealed))
                 {
@@ -560,6 +600,8 @@ public final class ExecuteActionsStep
                 c.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
                 c.getTransientData().remove(ExecutionContext.KEY_PRE_ACTION_STATE);
                 c.getTransientData().remove("KEY_IS_FULL_PAGE_SCREENSHOT");
+
+
 
                 if (session != null && session.getEventBus() != null)
                 {
@@ -651,15 +693,28 @@ public final class ExecuteActionsStep
     private static int resolveStepIndex(
         final PlaybookStep step,
         final PlaybookStep targetForIndex,
-        final List<PlaybookStep> flatSteps
+        final List<PlaybookStep> flatSteps,
+        final List<PlaybookStep> playbookSteps
     )
     {
+        // 1. Check playbook.steps for top-level step match
+        if (playbookSteps != null && !playbookSteps.isEmpty())
+        {
+            for (int i = 0; i < playbookSteps.size(); i++)
+            {
+                if (playbookSteps.get(i) == targetForIndex)
+                {
+                    return i;
+                }
+            }
+        }
+
         if (flatSteps == null || flatSteps.isEmpty())
         {
             return -1;
         }
 
-        // 1. Exact identity match for targetForIndex
+        // 2. Exact identity match for targetForIndex in flatSteps
         for (int i = 0; i < flatSteps.size(); i++)
         {
             if (flatSteps.get(i) == targetForIndex)
@@ -668,7 +723,7 @@ public final class ExecuteActionsStep
             }
         }
 
-        // 2. If targetForIndex was step's parent and not in flatSteps, try step itself by identity
+        // 3. If targetForIndex was step's parent and not in flatSteps, try step itself by identity
         if (targetForIndex != step)
         {
             for (int i = 0; i < flatSteps.size(); i++)
@@ -680,7 +735,7 @@ public final class ExecuteActionsStep
             }
         }
 
-        // 3. Fallback heuristic by matching instruction and line number
+        // 4. Fallback heuristic by matching instruction and line number
         for (int i = 0; i < flatSteps.size(); i++)
         {
             final PlaybookStep fs = flatSteps.get(i);

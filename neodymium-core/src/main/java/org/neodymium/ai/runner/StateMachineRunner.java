@@ -28,6 +28,7 @@ import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
@@ -50,8 +51,11 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
+import org.neodymium.ai.playbook.linter.PlaybookLinterException;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,11 +96,14 @@ public final class StateMachineRunner
         this.session.runPreHooks();
         final ExecutionContext context = this.session.getExecutionContext();
         context.getTransientData().put(ExecutionContext.KEY_SESSION, this.session);
-        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, this.session.getTargetExecutor());
+        if (this.session.getTargetExecutor() != null)
+        {
+            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, this.session.getTargetExecutor());
+        }
 
-        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+        final ExecutionMode mode = (ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final String datasetLabel = (String) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL);
-        final String testName = org.neodymium.util.Neodymium.getTestName();
+        final String testName = Neodymium.getTestName();
         final String loadedPlaybook = (String) context.getTransientData().get("playbook.resolvedPath");
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
@@ -189,7 +196,36 @@ public final class StateMachineRunner
                 }
 
                 final PlaybookLinter linter = new PlaybookLinter(this.session);
-                linter.lint(sessionSteps, scenarioDesc);
+                final List<PlaybookLinterFinding> findings = linter.lint(sessionSteps, scenarioDesc);
+
+                boolean failOnFindings = AiConfiguration.getInstance().isLinterFailOnFindings();
+                if (context.getTransientData().containsKey("neodymium.ai.linter.failOnFindings"))
+                {
+                    final Object val = context.getTransientData().get("neodymium.ai.linter.failOnFindings");
+                    if (val instanceof Boolean b)
+                    {
+                        failOnFindings = b;
+                    }
+                    else if (val != null)
+                    {
+                        failOnFindings = Boolean.parseBoolean(String.valueOf(val).trim());
+                    }
+                }
+                else if (this.session != null && this.session.data() != null)
+                {
+                    final Object val = this.session.data().get("neodymium.ai.linter.failOnFindings");
+                    if (val != null)
+                    {
+                        failOnFindings = Boolean.parseBoolean(String.valueOf(val).trim());
+                    }
+                }
+
+                if (failOnFindings && findings != null && !findings.isEmpty())
+                {
+                    LOGGER.error("❌ Upfront Playbook Pre-Flight Linter detected {} finding(s) and failOnFindings is enabled! Aborting execution before browser launch.",
+                                 findings.size());
+                    throw new PlaybookLinterException("Playbook pre-flight linting failed with " + findings.size() + " finding(s).", findings);
+                }
             }
 
             if (this.session.getExecutionMode().isLinterOnly())
@@ -715,6 +751,11 @@ public final class StateMachineRunner
      */
     private void runVisualRca(final ExecutionContext context, final Throwable exception)
     {
+        if (exception instanceof PlaybookLinterException)
+        {
+            return;
+        }
+
         if (!AiConfiguration.getInstance().isVisualRcaEnabled())
         {
             LOGGER.debug("Visual RCA is disabled via configuration (neodymium.ai.visualRca.enabled=false). Skipping Visual RCA analysis.");

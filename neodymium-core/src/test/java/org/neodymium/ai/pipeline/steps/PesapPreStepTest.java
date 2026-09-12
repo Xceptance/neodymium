@@ -271,4 +271,35 @@ public class PesapPreStepTest
         assertEquals("Type user in #user", resultMilestones.get(0));
         assertEquals("Type pass in #pass", resultMilestones.get(1));
     }
+
+    @Test
+    public void testPesapCoercesAssertionIntentWhenSubStepsContainInteractiveActions() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider provider = new MockLlmProvider();
+        // LLM returns ASSERT intent for compound step
+        provider.addResponse(new LlmResponse("{\"c\": \"STANDARD\", \"i\": \"ASSERT\"}", null, "mock-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.PESAP, provider);
+        registry.setDefaultProvider(provider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+
+        final PlaybookStep parentStep = new PlaybookStep("Locate promo code input field");
+        parentStep.getSubSteps().add(new PlaybookStep("clear its content"));
+        parentStep.getSubSteps().add(new PlaybookStep("type 'FREEGIFT'"));
+        parentStep.getSubSteps().add(new PlaybookStep("submit and assert bonus gift"));
+
+        final PesapPreStep pesapStep = new PesapPreStep(parentStep, session);
+        final boolean isSplit = pesapStep.executePreStep(context);
+
+        assertFalse(isSplit);
+        // Assert intent must be coerced to TYPE because sub-steps contain type and clear
+        assertEquals(SemanticIntent.TYPE, parentStep.getSemanticIntent());
+        assertEquals(SemanticIntent.TYPE, context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT));
+    }
 }

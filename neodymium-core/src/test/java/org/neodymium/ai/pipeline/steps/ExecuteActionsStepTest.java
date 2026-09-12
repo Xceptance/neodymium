@@ -24,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.awt.Color;
@@ -31,7 +33,11 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,6 +51,7 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
@@ -52,6 +59,8 @@ import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.report.DiskReportFormat;
+import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
@@ -270,5 +279,114 @@ public final class ExecuteActionsStepTest
             ImageIO.write(image, "png", baos);
             return Base64.getEncoder().encodeToString(baos.toByteArray());
         }
+    }
+
+    /**
+     * Verifies that composite playbook steps with sub-steps schedule their sub-steps sequentially
+     * onto the runner pipeline and record individual durations, actions, and status in the preliminary report.
+     */
+    @Test
+    public void testCompositeStepSequentiallySchedulesSubStepsWithDataFidelity() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final List<String> executedTools = new ArrayList<>();
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("test_action", "Test Action", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext toolContext)
+            {
+                executedTools.add(call.arguments().path("name").asText());
+                return ToolResult.success(call.callId(), "OK");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep parent = new PlaybookStep("Locate the first product card:");
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        final ObjectNode args1 = JsonNodeFactory.instance.objectNode();
+        args1.put("name", "hover");
+        sub1.setToolCalls(List.of(new ToolCall("call-1", "test_action", args1)));
+        sub1.getActions().add(new Action("hover", "#card", "Hover card"));
+
+        final PlaybookStep sub2 = new PlaybookStep("Click add to cart");
+        final ObjectNode args2 = JsonNodeFactory.instance.objectNode();
+        args2.put("name", "click");
+        sub2.setToolCalls(List.of(new ToolCall("call-2", "test_action", args2)));
+        sub2.getActions().add(new Action("click", "#btn", "Click button"));
+
+        parent.getSubSteps().add(sub1);
+        parent.getSubSteps().add(sub2);
+        sub1.setParent(parent);
+        sub2.setParent(parent);
+
+        final List<PlaybookStep> flatSteps = List.of(sub1, sub2);
+        context.getTransientData().put("playbook.flatSteps", flatSteps);
+        context.getTransientData().put("playbook.steps", List.of(parent));
+
+        final Path tempDir = Files.createTempDirectory("substep-test-");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+        listener.getReport().setTestClass("CompositeStepTest");
+        listener.getReport().setTestMethod("testDataFidelity");
+        eventBus.registerListener(listener);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(parent, session, context);
+        context.pushStep(pipelineStep);
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        runner.run();
+        listener.flushReport();
+
+        assertEquals(List.of("hover", "click"), executedTools, "Both sub-step tool actions must be executed in order");
+        assertEquals(PlaybookStepStatus.SUCCESS, parent.getStatus());
+        assertEquals(PlaybookStepStatus.SUCCESS, sub1.getStatus());
+        assertEquals(PlaybookStepStatus.SUCCESS, sub2.getStatus());
+        assertTrue(parent.getDurationMs() >= 0);
+        assertTrue(sub1.getDurationMs() >= 0);
+        assertTrue(sub2.getDurationMs() >= 0);
+
+        final Path jsonPath = tempDir.resolve(listener.getLastBaseFileName() + ".json");
+        assertTrue(Files.exists(jsonPath), "JSON report must exist");
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode parentNode = root.get("steps").get(0);
+        assertEquals("SUCCESS", parentNode.get("status").asText());
+        assertEquals(2, parentNode.get("subSteps").size());
+
+        final JsonNode sub1Node = parentNode.get("subSteps").get(0);
+        assertEquals("Hover over it", sub1Node.get("instruction").asText());
+        assertEquals("SUCCESS", sub1Node.get("status").asText());
+        assertEquals(1, sub1Node.get("actions").size());
+
+        final JsonNode sub2Node = parentNode.get("subSteps").get(1);
+        assertEquals("Click add to cart", sub2Node.get("instruction").asText());
+        assertEquals("SUCCESS", sub2Node.get("status").asText());
+        assertEquals(1, sub2Node.get("actions").size());
+
+        final Path htmlPath = tempDir.resolve(listener.getLastBaseFileName() + ".html");
+        assertTrue(Files.exists(htmlPath), "HTML report must exist");
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("substep-item-0-0"), "HTML report must contain sub-step 1 card");
+        assertTrue(html.contains("substep-item-0-1"), "HTML report must contain sub-step 2 card");
+        assertTrue(html.contains("2 sub-step(s)"), "Parent card must display sub-steps count");
     }
 }

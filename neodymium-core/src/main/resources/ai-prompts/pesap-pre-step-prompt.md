@@ -13,7 +13,7 @@ Analyze the active test instruction to classify operational intent, compound mil
    - Default -> LEAN
 
 2. Semantic Intent ('intent'): Classify the primary operational objective:
-   - `ASSERT`: Page & element verifications (text content, pattern matching, badges, messages, presence, visibility, enabled/disabled state, checked/unchecked, focused state, counts, wait-for-text).
+   - `ASSERT`: Page & element verifications (text content, pattern matching, badges, messages, presence, visibility, enabled/disabled state, checked/unchecked, focused state, counts, wait-for-text). Pure `ASSERT` is strictly reserved for standalone verification steps with zero mutating actions.
    - `ASSERT_METADATA`: Page URL, page title, or browser metadata assertions.
    - `CLICK`: Clicking buttons, links, checkboxes, icons, tabs, or interactive triggers.
    - `TYPE`: Form data entry into input fields, textareas, contenteditable elements.
@@ -23,6 +23,7 @@ Analyze the active test instruction to classify operational intent, compound mil
    - `WAIT`: Explicit temporal pauses, sleeps, or waiting for spinners/animations.
    - `STORE`: Extracting or reading on-screen values into session variables.
    - `BRANCH`: Conditional logic (If / Else execution branches).
+   - Mixed / Compound Steps: When an instruction contains BOTH interactive mutating operations (typing, clicking, selecting, submitting, clearing) AND assertions/verifications, classify the intent by the primary interactive operation (`TYPE` or `CLICK`), NEVER as `ASSERT`. `ASSERT` steps must never mutate page state.
 
 3. Step Splitting ('milestones'):
    - Default: Omit or empty (keep unsplit). Unsplit instructions are always safer.
