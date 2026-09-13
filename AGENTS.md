@@ -18,7 +18,7 @@
 > Before concluding any implementation or reporting completion, you MUST:
 > 1. **Zero Unused Imports**: Inspect all touched files and remove any unreferenced imports (classes, interfaces, static methods).
 > 2. **Zero Unused Variables**: Ensure no unreferenced local variables, fields, or parameters exist.
-> 3. **Strict `final` Enforcement**: Verify all method parameters, local variables, and immutable fields use `final`.
+> 3. **Pragmatic `final` Enforcement**: Verify method parameters, immutable fields, and single-assignment local variables use `final`. Legitimate mutable local variables (such as re-assigned loop accumulators, retry fallbacks, or variables updated across `try`/`catch` blocks) should remain mutable without forcing artificial blank-final gymnastics or unnecessary helper wrappers.
 > 4. **No Inline FQCNs**: Verify all types are imported at the top of the file.
 
 > [!CRITICAL]
@@ -39,7 +39,7 @@
 - **Style:** Allman code style (new line braces), document non-obvious logic and all public API, JDK 21 features.
 - **Headers:** Add GNU AGPLv3 license header to all AI-related source files, but MIT license header for the rest.
 - **Attribution:** Do not use inline comments like `// AI-generated: <Model>`. Use `@author` tags on class/interface Javadoc level instead (e.g., `@author AI-generated: <Model Name>`), and always add a second author tag for `Xceptance GmbH 2026`.
-- **Strict Java:** Aggressive `final` modifiers (variables, args, methods, fields). NO inline FQCNs; use explicit top imports. Unused imports and variables are strictly prohibited.
+- **Strict Java:** Aggressive `final` modifiers on method arguments, immutable fields, and non-reassigned local variables. Do NOT force `final` where variables are legitimately reassigned or mutated (e.g. accumulators, fallbacks, or try/catch recovery). NO inline FQCNs; use explicit top imports. Unused imports and variables are strictly prohibited.
 - **Documentation:** Write proper method comments, inline comments, class comments, and clearly document what fields are for. Make it as useful for a human as possible. Also keep in mind, that this is also documentation for AI to reconstruct decisions.
 - **Imports:** Always import fully qualified. Use static imports such as `Assertions.assertEquals`, only when it increases readability and the import is used multiple times. Remove unused imports.
 
