@@ -529,5 +529,41 @@ public class BrowserToolsTest
         final AssertionError err = Assertions.assertThrows(AssertionError.class, () -> tool.execute(call, null));
         Assertions.assertTrue(err.getMessage().contains("No active browser window found to assert element count"));
     }
+
+    @Test
+    public void testBrowserRequestContextSupportsVisualLean() throws Exception
+    {
+        final AiTool tool = this.registry.getTool("browser_request_context").orElseThrow();
+        final JsonNode enumValues = tool.getDefinition().parametersSchema().path("properties").path("level").path("enum");
+        Assertions.assertTrue(enumValues.isArray());
+
+        boolean hasVisualLean = false;
+        for (final JsonNode val : enumValues)
+        {
+            if ("VISUAL_LEAN".equals(val.asText()))
+            {
+                hasVisualLean = true;
+                break;
+            }
+        }
+        Assertions.assertTrue(hasVisualLean, "browser_request_context enum must contain VISUAL_LEAN");
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall call = new ToolCall("call-ctx-vl", "browser_request_context", mapper.createObjectNode().put("level", "VISUAL_LEAN"));
+        final ToolResult result = tool.execute(call, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals("VISUAL_LEAN", result.variables().get("requestedContextLevel"));
+    }
+
+    @Test
+    public void testBrowserClickSchemaCoordinates()
+    {
+        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+        Assertions.assertTrue(props.has("x"));
+        Assertions.assertTrue(props.has("y"));
+        Assertions.assertTrue(props.path("x").path("description").asText().contains("relative to selector"));
+        Assertions.assertTrue(props.path("y").path("description").asText().contains("relative to selector"));
+    }
 }
 

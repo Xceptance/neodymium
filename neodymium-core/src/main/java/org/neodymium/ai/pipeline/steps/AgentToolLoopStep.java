@@ -427,6 +427,8 @@ public final class AgentToolLoopStep implements PipelineStep
         JsonNode lastArguments = null;
         int consecutiveIdenticalCalls = 0;
         boolean lastProposedToolWasCompleteStep = false;
+        List<SutAttachment> pendingVisualAttachments = null;
+        String pendingVisualNote = null;
 
         LOGGER.info("🚀 Starting Agent Tool Loop for instruction: \"{}\" (intent: {}, milestones: {})",
                 instruction, intent, milestones != null ? milestones.size() : 0);
@@ -857,15 +859,57 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
                 if ("browser_take_screenshot".equals(effectiveCall.toolName()))
                 {
-                    final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                     final Object base64Obj = result.variables().get("screenshotBase64");
-                    if (session != null && session.getEventBus() != null && base64Obj != null)
+                    if (base64Obj != null)
                     {
                         final String base64 = String.valueOf(base64Obj);
                         final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
                         final List<SutAttachment> newAttachments = List.of(new SutAttachment("image/png", "screenshot", rawBase64));
-                        final SutState screenshotState = new BrowserSutState("Screenshot", newAttachments, "screenshot");
-                        session.getEventBus().dispatch(new StateCapturedEvent(screenshotState));
+                        pendingVisualAttachments = newAttachments;
+                        activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                        if (session != null && session.getEventBus() != null)
+                        {
+                            final SutState screenshotState = new BrowserSutState("Screenshot", newAttachments, "screenshot");
+                            session.getEventBus().dispatch(new StateCapturedEvent(screenshotState));
+                        }
+                    }
+                }
+                else if ("browser_inspect_visual".equals(effectiveCall.toolName()))
+                {
+                    final Object base64Obj = result.variables().get("cropBase64");
+                    if (base64Obj != null)
+                    {
+                        final String base64 = String.valueOf(base64Obj);
+                        final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                        final String selector = String.valueOf(result.variables().getOrDefault("cropSelector", "element"));
+                        final Object widthObj = result.variables().get("cropWidth");
+                        final Object heightObj = result.variables().get("cropHeight");
+                        final List<SutAttachment> cropAttachments = List.of(new SutAttachment("image/png", "crop_" + selector, rawBase64));
+                        pendingVisualAttachments = cropAttachments;
+                        activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                        final StringBuilder note = new StringBuilder();
+                        note.append("Visual crop of element `").append(selector).append("`");
+                        if (widthObj != null && heightObj != null)
+                        {
+                            note.append(" (dimensions: ").append(widthObj).append("x").append(heightObj).append("px)");
+                        }
+                        note.append(" is attached to this turn. Inspect the visual content to determine target coordinates or verify visual state. ");
+                        note.append("To click inside this element, use `browser_click` with `selector`: \"")
+                                .append(selector)
+                                .append("\" and relative `x`, `y` coordinates within the element.");
+                        pendingVisualNote = note.toString();
+
+                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                        if (session != null && session.getEventBus() != null)
+                        {
+                            final SutState cropState = new BrowserSutState("Visual Crop: " + selector, cropAttachments, "crop");
+                            session.getEventBus().dispatch(new StateCapturedEvent(cropState));
+                        }
                     }
                 }
             }
@@ -924,7 +968,8 @@ public final class AgentToolLoopStep implements PipelineStep
             // Submit fresh ground-truth DOM from SUT for the next turn
             final boolean requireDomForNextTurn = !isZeroDom
                     || (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
-                    || activeContextLevel != ContextLevel.MINIMAL;
+                    || activeContextLevel != ContextLevel.MINIMAL
+                    || (pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty());
 
             if (requireDomForNextTurn)
             {
@@ -957,17 +1002,34 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             stats.addContextLevel(activeContextLevel.name());
                         }
-                        if (freshState.getTextContent() != null && !freshState.getTextContent().isBlank())
-                        {
-                            final List<SutAttachment> freshAttachments = freshState.getAttachments() != null
-                                    ? freshState.getAttachments()
-                                    : Collections.emptyList();
-                            final String annotatedDom = annotateNewElements(freshState.getTextContent(), previousElementSignatures);
-                            previousElementSignatures = extractElementSignatures(freshState.getTextContent());
 
+                        final List<SutAttachment> freshAttachments = (pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty())
+                                ? pendingVisualAttachments
+                                : (freshState.getAttachments() != null ? freshState.getAttachments() : Collections.emptyList());
+                        pendingVisualAttachments = null;
+
+                        final String textContent = freshState.getTextContent();
+                        if ((textContent != null && !textContent.isBlank()) || !freshAttachments.isEmpty())
+                        {
                             final StringBuilder turnPrompt = new StringBuilder();
-                            turnPrompt.append("### Current Page State & Interactive Elements:\n")
-                                    .append(annotatedDom);
+                            if (textContent != null && !textContent.isBlank())
+                            {
+                                final String annotatedDom = annotateNewElements(textContent, previousElementSignatures);
+                                previousElementSignatures = extractElementSignatures(textContent);
+                                turnPrompt.append("### Current Page State & Interactive Elements:\n")
+                                        .append(annotatedDom);
+                            }
+                            else
+                            {
+                                turnPrompt.append("### Current Page State:\n[DOM empty or omitted]");
+                            }
+
+                            if (pendingVisualNote != null)
+                            {
+                                turnPrompt.append("\n\n### Visual Inspection:\n").append(pendingVisualNote);
+                                pendingVisualNote = null;
+                            }
+
                             if (milestones != null && !milestones.isEmpty())
                             {
                                 turnPrompt.append("\n\n### Compound Milestones To Complete:\n");
@@ -1003,9 +1065,17 @@ public final class AgentToolLoopStep implements PipelineStep
                         final StringBuilder turnPrompt = new StringBuilder();
                         turnPrompt.append("### Current Page:\n")
                                 .append("URL: ").append(currentUrl).append("\n")
-                                .append("Title: ").append(currentTitle).append("\n\n")
-                                .append("What is your next tool call?");
-                        conversation.add(ChatMessage.user(turnPrompt.toString()));
+                                .append("Title: ").append(currentTitle).append("\n\n");
+                        if (pendingVisualNote != null)
+                        {
+                            turnPrompt.append("### Visual Inspection:\n").append(pendingVisualNote).append("\n\n");
+                            pendingVisualNote = null;
+                        }
+                        turnPrompt.append("What is your next tool call?");
+                        final List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : Collections.emptyList();
+                        pendingVisualAttachments = null;
+                        conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
+                        attachments = nextAttachments;
                     }
                     catch (final Exception ignored)
                     {

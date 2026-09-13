@@ -8,7 +8,7 @@ Analyze the active test instruction to classify operational intent, compound mil
    - Page & element text verifications, message assertions, labels, order numbers, totals, confirmation messages (`ASSERT`), or full-page static text -> STANDARD
    - Complex data grid, table validation, or multi-field calculation -> RICH
    - Visual assertion `(visual)` -> VISUAL 
-   - Visual interaction -> VISUAL_LEAN
+   - Visual interaction (interacting with a canvas, chart, drawing area, visual map, canvas buttons, or non-DOM graphical elements) -> VISUAL_LEAN
    - Visual layout `(layout)` -> VISUAL_RICH
    - Default -> LEAN
 

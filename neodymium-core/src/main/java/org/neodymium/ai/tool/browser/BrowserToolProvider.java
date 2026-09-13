@@ -143,8 +143,8 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector of the element to click");
         props.putObject("text").put("type", "string").put("description", "Visible text of the element to click (used if selector is omitted)");
         props.putObject("target").put("type", "string").put("description", "Target expression, such as 'badge:N' or 'coord: x,y'");
-        props.putObject("x").put("type", "integer").put("description", "Viewport X coordinate for pixel/visual click");
-        props.putObject("y").put("type", "integer").put("description", "Viewport Y coordinate for pixel/visual click");
+        props.putObject("x").put("type", "integer").put("description", "X coordinate for pixel/visual click (relative to selector if selector is provided, or viewport X if omitted)");
+        props.putObject("y").put("type", "integer").put("description", "Y coordinate for pixel/visual click (relative to selector if selector is provided, or viewport Y if omitted)");
 
         final ToolDefinition def = new ToolDefinition("browser_click", "Clicks an interactive element or viewport coordinate in the browser", schema);
         return new AiTool()
@@ -163,11 +163,50 @@ public final class BrowserToolProvider
 
                 DomQuiescenceWatcher.installTracker();
 
-                // Case 1: Viewport coordinates provided
-                if (args.hasNonNull("x") && args.hasNonNull("y") && driver != null)
+                final String target = args.hasNonNull("target") ? args.path("target").asText().trim() : "";
+                int parsedX = args.hasNonNull("x") ? args.path("x").asInt() : Integer.MIN_VALUE;
+                int parsedY = args.hasNonNull("y") ? args.path("y").asInt() : Integer.MIN_VALUE;
+
+                if ((parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE) && target.startsWith("coord:"))
                 {
-                    final int x = args.path("x").asInt();
-                    final int y = args.path("y").asInt();
+                    final String[] parts = target.substring("coord:".length()).split(",");
+                    if (parts.length == 2)
+                    {
+                        try
+                        {
+                            parsedX = Integer.parseInt(parts[0].trim());
+                            parsedY = Integer.parseInt(parts[1].trim());
+                        }
+                        catch (final NumberFormatException ignored)
+                        {
+                        }
+                    }
+                }
+
+                // Case 1: Coordinates provided
+                if (parsedX != Integer.MIN_VALUE && parsedY != Integer.MIN_VALUE && driver != null)
+                {
+                    final int rawX = parsedX;
+                    final int rawY = parsedY;
+                    final String sel = args.hasNonNull("selector") ? args.path("selector").asText().trim() : "";
+
+                    int x = rawX;
+                    int y = rawY;
+                    if (!sel.isBlank())
+                    {
+                        final String rectScript = """
+                            var el = document.querySelector(arguments[0]);
+                            if (!el) return null;
+                            var r = el.getBoundingClientRect();
+                            return { x: Math.round(r.left), y: Math.round(r.top) };
+                            """;
+                        final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, sel);
+                        if (rectObj instanceof Map<?, ?> map)
+                        {
+                            x = ((Number) map.get("x")).intValue() + rawX;
+                            y = ((Number) map.get("y")).intValue() + rawY;
+                        }
+                    }
 
                     new Actions(driver).moveToLocation(x, y).click().perform();
 
@@ -176,6 +215,12 @@ public final class BrowserToolProvider
                     final ObjectNode res = successNode("click");
                     res.put("x", x);
                     res.put("y", y);
+                    if (!sel.isBlank())
+                    {
+                        res.put("elementSelector", sel);
+                        res.put("offsetX", rawX);
+                        res.put("offsetY", rawY);
+                    }
 
                     if (reanchored != null)
                     {
@@ -193,7 +238,6 @@ public final class BrowserToolProvider
                 }
 
                 // Case 2: Target is badge:N
-                final String target = args.hasNonNull("target") ? args.path("target").asText() : "";
                 if (target.startsWith("badge:") && driver != null)
                 {
                     final String badgeNum = target.substring("badge:".length()).trim();
@@ -1860,10 +1904,19 @@ public final class BrowserToolProvider
                     res.put("width", w);
                     res.put("height", h);
 
+                    final String prompt = call.arguments().path("prompt").asText("");
+                    if (!prompt.isBlank())
+                    {
+                        res.put("prompt", prompt);
+                    }
+
                     return ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
                             .withContent(res.toString())
                             .withArtifact("crop_" + selector, "image/png", cropBytes)
                             .withVariable("cropBase64", "data:image/png;base64," + base64)
+                            .withVariable("cropSelector", selector)
+                            .withVariable("cropWidth", w)
+                            .withVariable("cropHeight", h)
                             .build();
                 }
 
@@ -1879,12 +1932,13 @@ public final class BrowserToolProvider
         final ObjectNode props = schema.putObject("properties");
         final ArrayNode levelEnum = props.putObject("level")
                 .put("type", "string")
-                .put("description", "Depth and scope of the context to capture ('LEAN', 'STANDARD', 'RICH', 'VISUAL', 'VISUAL_RICH')")
+                .put("description", "Depth and scope of the context to capture ('LEAN', 'STANDARD', 'RICH', 'VISUAL', 'VISUAL_LEAN', 'VISUAL_RICH')")
                 .putArray("enum");
         levelEnum.add("LEAN");
         levelEnum.add("STANDARD");
         levelEnum.add("RICH");
         levelEnum.add("VISUAL");
+        levelEnum.add("VISUAL_LEAN");
         levelEnum.add("VISUAL_RICH");
         props.putObject("fullPage")
                 .put("type", "boolean")

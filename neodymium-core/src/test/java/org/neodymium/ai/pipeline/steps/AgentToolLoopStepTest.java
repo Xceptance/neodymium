@@ -1923,6 +1923,130 @@ public class AgentToolLoopStepTest
         step.execute(this.context);
         Assertions.assertEquals("Done", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
     }
+
+    @Test
+    public void testTurn2ReceivesVisualAttachmentsAfterScreenshotTool() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_take_screenshot", "Captures screenshot", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
+                        .withContent("{\"status\":\"SUCCESS\"}")
+                        .withVariable("screenshotBase64", "data:image/png;base64,mockScreenshotBase64Data")
+                        .build();
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<canvas id='myCanvas'></canvas>", Collections.emptyList(), "DOM_LIGHT"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click canvas button");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                Assertions.assertTrue(req.attachments().isEmpty());
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "browser_take_screenshot", MAPPER.createObjectNode())));
+            }
+            if (t == 2)
+            {
+                Assertions.assertEquals(1, req.attachments().size());
+                Assertions.assertEquals("mockScreenshotBase64Data", req.attachments().get(0).base64Data());
+                Assertions.assertEquals(ContextLevel.VISUAL_LEAN, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Verified"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+        Assertions.assertEquals(2, turn.get());
+    }
+
+    @Test
+    public void testTurn2ReceivesCropAttachmentAndNoteAfterInspectVisualTool() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_inspect_visual", "Captures visual crop", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
+                        .withContent("{\"status\":\"SUCCESS\",\"width\":400,\"height\":150}")
+                        .withVariable("cropBase64", "data:image/png;base64,mockCropBase64Data")
+                        .withVariable("cropSelector", "#myCanvas")
+                        .withVariable("cropWidth", 400)
+                        .withVariable("cropHeight", 150)
+                        .build();
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<canvas id='myCanvas'></canvas>", Collections.emptyList(), "DOM_LIGHT"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click button inside canvas");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                Assertions.assertTrue(req.attachments().isEmpty());
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "browser_inspect_visual", MAPPER.createObjectNode().put("selector", "#myCanvas"))));
+            }
+            if (t == 2)
+            {
+                Assertions.assertEquals(1, req.attachments().size());
+                Assertions.assertEquals("mockCropBase64Data", req.attachments().get(0).base64Data());
+                Assertions.assertEquals("crop_#myCanvas", req.attachments().get(0).filePath());
+                final String userPrompt = req.messages().get(req.messages().size() - 1).content();
+                Assertions.assertTrue(userPrompt.contains("Visual crop of element `#myCanvas`"));
+                Assertions.assertTrue(userPrompt.contains("400x150px"));
+                Assertions.assertTrue(userPrompt.contains("use `browser_click` with `selector`: \"#myCanvas\""));
+                Assertions.assertEquals(ContextLevel.VISUAL_LEAN, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Canvas clicked"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Canvas clicked", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+        Assertions.assertEquals(2, turn.get());
+    }
 }
 
 
