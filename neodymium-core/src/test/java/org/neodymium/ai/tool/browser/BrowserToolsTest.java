@@ -725,6 +725,22 @@ public class BrowserToolsTest
         Assertions.assertTrue(synthFile.getName().contains("test-report"));
         Assertions.assertTrue(synthFile.getName().endsWith(".pdf"));
     }
+
+    @Test
+    public void testBrowserScrollSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_scroll").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_scroll", def.name());
+
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode props = schema.path("properties");
+        Assertions.assertTrue(props.has("direction"));
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("container"));
+        Assertions.assertTrue(props.has("yOffset"));
+        Assertions.assertTrue(props.has("xOffset"));
+    }
 }
 
 

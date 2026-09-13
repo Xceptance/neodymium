@@ -1502,16 +1502,34 @@ public final class BrowserToolProvider
         }
     }
 
+    private static int windowInnerHeight()
+    {
+        try
+        {
+            final Object val = Selenide.executeJavaScript("return window.innerHeight;");
+            if (val instanceof final Number n)
+            {
+                return n.intValue();
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+        return 600;
+    }
+
     private static AiTool createScrollTool()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
-        props.putObject("direction").put("type", "string").put("description", "Direction to scroll ('down', 'up', 'top', 'bottom')");
-        props.putObject("selector").put("type", "string").put("description", "Optional element selector to scroll into view");
+        props.putObject("direction").put("type", "string").put("description", "Direction to scroll ('down', 'up', 'top', 'bottom', 'left', 'right')");
+        props.putObject("selector").put("type", "string").put("description", "Optional element selector to scroll into view, or target container element");
+        props.putObject("container").put("type", "string").put("description", "Optional selector for the scrollable container element (defaults to window/document)");
         props.putObject("yOffset").put("type", "integer").put("description", "Optional pixel distance to scroll vertically");
+        props.putObject("xOffset").put("type", "integer").put("description", "Optional pixel distance to scroll horizontally");
 
-        final ToolDefinition def = new ToolDefinition("browser_scroll", "Scrolls the page viewport or scrolls a specific element into view", schema);
+        final ToolDefinition def = new ToolDefinition("browser_scroll", "Scrolls the page viewport, scrolls a specific element into view, or scrolls inside a container element", schema);
         return new AiTool()
         {
             @Override
@@ -1524,20 +1542,98 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final JsonNode args = call.arguments();
-                if (args.hasNonNull("selector"))
+                final String direction = args.path("direction").asText("down").toLowerCase();
+                final int yOffset;
+                if (args.hasNonNull("yOffset"))
                 {
-                    final String sel = args.path("selector").asText();
+                    yOffset = args.path("yOffset").asInt();
+                }
+                else if (args.hasNonNull("value") && args.path("value").asText().trim().matches("^-?\\d+$"))
+                {
+                    yOffset = Integer.parseInt(args.path("value").asText().trim());
+                }
+                else
+                {
+                    yOffset = 0;
+                }
+                final int xOffset = args.hasNonNull("xOffset") ? args.path("xOffset").asInt() : 0;
+                final String containerSelector = args.hasNonNull("container") ? args.path("container").asText().trim() : null;
+
+                // 1. Explicit or detected container scroll
+                final String targetContainer = (containerSelector != null && !containerSelector.isBlank())
+                        ? containerSelector
+                        : ((args.hasNonNull("selector") && (args.hasNonNull("direction") || yOffset != 0 || xOffset != 0))
+                                ? args.path("selector").asText().trim()
+                                : null);
+
+                if (targetContainer != null && !targetContainer.isBlank()
+                        && !"body".equalsIgnoreCase(targetContainer)
+                        && !"html".equalsIgnoreCase(targetContainer)
+                        && !"window".equalsIgnoreCase(targetContainer)
+                        && !"document".equalsIgnoreCase(targetContainer))
+                {
+                    final Object result = Selenide.executeJavaScript(
+                            "const target = arguments[0];"
+                            + "const dir = arguments[1];"
+                            + "const yOff = arguments[2];"
+                            + "const xOff = arguments[3];"
+                            + "const el = document.querySelector(target);"
+                            + "if (!el) { return false; }"
+                            + "const distY = (yOff !== 0) ? yOff : Math.round(el.clientHeight ? el.clientHeight * 0.8 : 400);"
+                            + "const distX = (xOff !== 0) ? xOff : Math.round(el.clientWidth ? el.clientWidth * 0.8 : 400);"
+                            + "if (dir === 'top') { el.scrollTop = 0; }"
+                            + "else if (dir === 'bottom') { el.scrollTop = el.scrollHeight; }"
+                            + "else if (dir === 'up') { el.scrollTop -= distY; }"
+                            + "else if (dir === 'left') { el.scrollLeft -= distX; }"
+                            + "else if (dir === 'right') { el.scrollLeft += distX; }"
+                            + "else { el.scrollTop += distY; }"
+                            + "el.dispatchEvent(new Event('scroll', { bubbles: true }));"
+                            + "return true;",
+                            targetContainer, direction, yOffset, xOffset);
+
+                    if (Boolean.TRUE.equals(result))
+                    {
+                        final ObjectNode res = successNode("scroll");
+                        res.put("container", targetContainer);
+                        res.put("direction", direction);
+                        if (yOffset != 0)
+                        {
+                            res.put("yOffset", yOffset);
+                        }
+                        return ToolResult.success(call.callId(), res.toString());
+                    }
+                }
+
+                // 2. Element scroll into view
+                if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
+                {
+                    final String sel = args.path("selector").asText().trim();
                     final SelenideElement el = findElement(sel);
+                    if (el.exists())
+                    {
+                        Selenide.executeJavaScript(
+                            "if (arguments[0] && typeof arguments[0].scrollIntoView === 'function') {"
+                            + "  arguments[0].scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });"
+                            + "}", el);
+                        final ObjectNode res = successNode("scroll");
+                        res.put("target", sel);
+                        return ToolResult.success(call.callId(), res.toString());
+                    }
+
+                    // Element not in DOM yet (e.g. unmounted in a virtual list) -> scroll nearest scrollable container or window
                     Selenide.executeJavaScript(
-                        "if (arguments[0] && typeof arguments[0].scrollIntoView === 'function') {" +
-                        "  arguments[0].scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });" +
-                        "}", el);
+                        "const scrollable = document.querySelector('.virtual-scroll-viewport, [data-virtual-scroll], [role=\"feed\"], [overflow=\"auto\"]') || "
+                        + "  Array.from(document.querySelectorAll('div, main, section')).find(e => { const s = window.getComputedStyle(e); return (s.overflowY === 'auto' || s.overflowY === 'scroll') && e.scrollHeight > e.clientHeight; }); "
+                        + "if (scrollable) { scrollable.scrollTop += Math.round(scrollable.clientHeight * 0.8); scrollable.dispatchEvent(new Event('scroll', { bubbles: true })); } "
+                        + "else { window.scrollBy(0, Math.round(window.innerHeight * 0.8)); }"
+                    );
                     final ObjectNode res = successNode("scroll");
                     res.put("target", sel);
+                    res.put("note", "Element '" + sel + "' was not found in the current DOM (possibly unmounted in a virtual list). Scrolled container downward to reveal more items.");
                     return ToolResult.success(call.callId(), res.toString());
                 }
 
-                final String direction = args.path("direction").asText("down").toLowerCase();
+                // 3. Window scroll
                 if ("top".equals(direction))
                 {
                     Selenide.executeJavaScript("window.scrollTo(0, 0);");
@@ -1548,22 +1644,35 @@ public final class BrowserToolProvider
                 }
                 else if ("up".equals(direction))
                 {
-                    Selenide.executeJavaScript("window.scrollBy(0, -Math.round(window.innerHeight * 0.8));");
+                    final int dist = (yOffset != 0) ? -Math.abs(yOffset) : -Math.round((float) (windowInnerHeight() * 0.8));
+                    Selenide.executeJavaScript("window.scrollBy(0, arguments[0]);", dist);
+                }
+                else if ("left".equals(direction))
+                {
+                    final int dist = (xOffset != 0) ? -Math.abs(xOffset) : -500;
+                    Selenide.executeJavaScript("window.scrollBy(arguments[0], 0);", dist);
+                }
+                else if ("right".equals(direction))
+                {
+                    final int dist = (xOffset != 0) ? Math.abs(xOffset) : 500;
+                    Selenide.executeJavaScript("window.scrollBy(arguments[0], 0);", dist);
                 }
                 else
                 {
-                    final int yOffset = args.hasNonNull("yOffset") ? args.path("yOffset").asInt() : 0;
-                    if (yOffset != 0)
-                    {
-                        Selenide.executeJavaScript("window.scrollBy(0, arguments[0]);", yOffset);
-                    }
-                    else
-                    {
-                        Selenide.executeJavaScript("window.scrollBy(0, Math.round(window.innerHeight * 0.8));");
-                    }
+                    final int dist = (yOffset != 0) ? yOffset : Math.round((float) (windowInnerHeight() * 0.8));
+                    Selenide.executeJavaScript("window.scrollBy(0, arguments[0]);", dist);
                 }
+
                 final ObjectNode res = successNode("scroll");
                 res.put("direction", direction);
+                if (yOffset != 0)
+                {
+                    res.put("yOffset", yOffset);
+                }
+                if (xOffset != 0)
+                {
+                    res.put("xOffset", xOffset);
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };

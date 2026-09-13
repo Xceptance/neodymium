@@ -61,6 +61,35 @@ public final class ScrollAction implements BrowserActionPlugin
         final String value = action.getValue() != null ? action.getValue().toUpperCase().trim() : "";
         final String normalizedValue = value.replace(" ", "");
 
+        final boolean isContainerTarget = target != null && !target.trim().isEmpty()
+                && !"body".equalsIgnoreCase(target.trim())
+                && !"html".equalsIgnoreCase(target.trim())
+                && !"window".equalsIgnoreCase(target.trim())
+                && !"document".equalsIgnoreCase(target.trim());
+
+        if (isContainerTarget && !value.isEmpty())
+        {
+            LOGGER.debug("Scroll container element {} with value {}", target, value);
+            Selenide.executeJavaScript(
+                    "const el = arguments[0];"
+                    + "if (el) {"
+                    + "  const val = arguments[1];"
+                    + "  const dist = Math.round(el.clientHeight ? el.clientHeight * 0.8 : 400);"
+                    + "  if (val === 'TOP') { el.scrollTop = 0; }"
+                    + "  else if (val === 'UP') { el.scrollTop -= dist; }"
+                    + "  else if (val === 'BOTTOM') { el.scrollTop = el.scrollHeight; }"
+                    + "  else if (val.includes(',')) {"
+                    + "    const parts = val.split(',');"
+                    + "    el.scrollTo(parseInt(parts[0], 10), parseInt(parts[1], 10));"
+                    + "  }"
+                    + "  else if (!isNaN(parseInt(val, 10))) { el.scrollTop = parseInt(val, 10); }"
+                    + "  else { el.scrollTop += dist; }"
+                    + "  el.dispatchEvent(new Event('scroll', { bubbles: true }));"
+                    + "}",
+                    SelenideElementFinder.findElement(action), value);
+            return;
+        }
+
         if ("UP".equals(value) || "TOP".equals(value))
         {
             LOGGER.debug("Scroll to top of window.");
@@ -73,15 +102,11 @@ public final class ScrollAction implements BrowserActionPlugin
         }
         else if (normalizedValue.matches("^[+-]?\\d+,[+-]?\\d+$"))
         {
-            String[] parts = normalizedValue.split(",");
+            final String[] parts = normalizedValue.split(",");
             LOGGER.debug("Scroll to coordinates: x={}, y={}", parts[0], parts[1]);
             Selenide.executeJavaScript("window.scrollTo(" + parts[0] + ", " + parts[1] + ")");
         }
-        else if (target != null && !target.trim().isEmpty() && 
-                 !"body".equalsIgnoreCase(target.trim()) && 
-                 !"html".equalsIgnoreCase(target.trim()) &&
-                 !"window".equalsIgnoreCase(target.trim()) &&
-                 !"document".equalsIgnoreCase(target.trim()))
+        else if (isContainerTarget)
         {
             LOGGER.debug("Scroll element into view: {}", target);
             SelenideElementFinder.findElement(action).scrollIntoView("{behavior: 'instant', block: 'start', inline: 'nearest'}");

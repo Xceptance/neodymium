@@ -415,6 +415,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("   - Do NOT attempt to query DOM elements or execute DOM text assertions for visual checks when the visual condition is visible on the screen.\n");
         systemPrompt.append("6. SINGLE TOOL PER TURN: Propose exactly ONE tool call per response. Do NOT call multiple tools in parallel or batch multiple actions in a single turn. After each tool execution, you will receive the updated page state to decide your next action.\n");
         systemPrompt.append("7. COUNT & COLLECTION ASSERTIONS: When an instruction asserts the number of items, rows, entries, or suggestions (e.g. 'contains at least 6 entries', '3 items in cart', '10 results'), you MUST invoke `browser_assert_count` with the target `selector` and `expectedCount`, `minCount`, or `maxCount`.\n");
+        systemPrompt.append("8. SCROLLABLE CONTAINERS & VIRTUALIZED FEEDS: In infinite feeds, dynamic virtual lists, or scrollable tables, offscreen items may not be present in the DOM snapshot yet. If the targeted element, item, or text described in the instruction is not found in the current DOM snapshot, invoke `browser_scroll` (e.g. direction 'down', or targeting the scrollable container selector like `container: \"#virtual-list-container\"` or `yOffset: 400`) to scroll the container, receive newly mounted elements in the next turn's DOM snapshot, and locate the target.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -1419,6 +1420,43 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (obj.hasNonNull("path") && !obj.hasNonNull("filePath"))
                 {
                     obj.put("filePath", obj.path("path").asText());
+                }
+                if (obj.hasNonNull("containerSelector") && !obj.hasNonNull("container"))
+                {
+                    obj.put("container", obj.path("containerSelector").asText());
+                }
+                if (obj.hasNonNull("scrollContainer") && !obj.hasNonNull("container"))
+                {
+                    obj.put("container", obj.path("scrollContainer").asText());
+                }
+                if ("browser_scroll".equals(toolName) || "scroll".equalsIgnoreCase(toolName))
+                {
+                    if (!obj.hasNonNull("container") && obj.hasNonNull("target") && !obj.path("target").asText().isBlank())
+                    {
+                        obj.put("container", obj.path("target").asText());
+                    }
+                    if (!obj.hasNonNull("direction") && obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim().toLowerCase();
+                        if (val.matches("^(down|up|top|bottom|left|right)$"))
+                        {
+                            obj.put("direction", val);
+                        }
+                    }
+                    if (!obj.hasNonNull("yOffset") && obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if (val.matches("^-?\\d+$"))
+                        {
+                            try
+                            {
+                                obj.put("yOffset", Integer.parseInt(val));
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                    }
                 }
                 if ("browser_navigate".equals(toolName) || "navigate".equalsIgnoreCase(toolName))
                 {

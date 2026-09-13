@@ -14,9 +14,9 @@
 
 ## 3. Dynamic Virtualized Lists & Infinite Feeds
 
-- [ ] 3.1 Create `AuraGlanceTest/shop/sandbox/virtualized-list.html` where items are dynamically mounted and unmounted based on scroll position
-- [ ] 3.2 Enhance `AgentToolLoopStep` with iterative scroll-and-scan perception when targeted elements are unmounted from the DOM
-- [ ] 3.3 Create `VirtualizedListSandboxLiveTest` and `VirtualizedListSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
+- [x] 3.1 Create `AuraGlanceTest/shop/sandbox/virtualized-list.html` where items are dynamically mounted and unmounted based on scroll position
+- [x] 3.2 Enhance `AgentToolLoopStep` with iterative scroll-and-scan perception when targeted elements are unmounted from the DOM
+- [x] 3.3 Create `VirtualizedListSandboxLiveTest` and `VirtualizedListSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
 
 ## 4. Native Browser Alerts & Dialogs
 
