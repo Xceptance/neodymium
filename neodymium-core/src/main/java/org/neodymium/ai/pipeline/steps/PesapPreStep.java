@@ -125,7 +125,12 @@ public final class PesapPreStep implements PipelineStep
             alreadySplitSteps.add(this.step);
             try
             {
-                final PesapPrompt pesapPrompt = new PesapPrompt(resolvedInstruction);
+                final String scopingContext = (this.step != null && this.step.getParent() != null && this.step.getParent().getInstruction() != null)
+                    ? ((context != null && context.getSessionData() != null)
+                        ? context.getSessionData().resolveAvailableVariables(this.step.getParent().getInstruction())
+                        : this.step.getParent().getInstruction())
+                    : null;
+                final PesapPrompt pesapPrompt = new PesapPrompt(resolvedInstruction, scopingContext);
                 final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.PESAP);
                 final double temp = config.getTemperature("action");
                 final int timeoutSeconds = config.getTimeoutSeconds("action");

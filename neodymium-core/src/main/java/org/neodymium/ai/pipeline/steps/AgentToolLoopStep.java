@@ -69,6 +69,7 @@ import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.ai.tool.guard.InterceptionVerdict;
 import org.neodymium.ai.tool.guard.QualityJudgeToolInterceptor;
 import org.neodymium.ai.tool.guard.ToolInterceptor;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
 import org.openqa.selenium.InvalidSelectorException;
 import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.WebDriver;
@@ -769,7 +770,7 @@ public final class AgentToolLoopStep implements PipelineStep
             }
 
             // Execute the tool
-            final ToolResult result;
+            ToolResult result;
             try
             {
                 final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
@@ -785,26 +786,24 @@ public final class AgentToolLoopStep implements PipelineStep
                     throw e;
                 }
                 LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
-                conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), "Tool failed with error: " + e.getMessage()));
+                result = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
                 if (activeContextLevel.escalate() != null)
                 {
                     activeContextLevel = activeContextLevel.escalate();
                     context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
                     LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
                 }
-                continue;
             }
             catch (final JavascriptException | InvalidSelectorException e)
             {
                 LOGGER.warn("Tool syntax error in '{}': {}", effectiveCall.toolName(), e.getMessage());
-                conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), "Tool failed with syntax error: " + e.getMessage()));
+                result = ToolResult.error(effectiveCall.callId(), "Tool failed with syntax error: " + e.getMessage());
                 if (activeContextLevel.escalate() != null)
                 {
                     activeContextLevel = activeContextLevel.escalate();
                     context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
                     LOGGER.warn("⚠️ Tool syntax error; escalating active context depth to: {}", activeContextLevel);
                 }
-                continue;
             }
             catch (final WebDriverException e)
             {
@@ -815,8 +814,7 @@ public final class AgentToolLoopStep implements PipelineStep
             catch (final Exception e)
             {
                 LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
-                conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), "Tool error: " + e.getMessage()));
-                continue;
+                result = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
             }
 
             if (result != null && result.variables().containsKey("requestedContextLevel"))
@@ -888,6 +886,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     && !effectiveCall.toolName().startsWith("browser_assert")
                     && !"browser_take_screenshot".equals(effectiveCall.toolName()))
             {
+                DomQuiescenceWatcher.waitForDomQuiet();
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 if (driver != null)
                 {
@@ -929,6 +928,7 @@ public final class AgentToolLoopStep implements PipelineStep
 
             if (requireDomForNextTurn)
             {
+                DomQuiescenceWatcher.waitForDomQuiet();
                 if (executor != null)
                 {
                     try
@@ -975,6 +975,10 @@ public final class AgentToolLoopStep implements PipelineStep
                                 {
                                     turnPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
                                 }
+                            }
+                            else if (!executedCalls.isEmpty())
+                            {
+                                turnPrompt.append("\n\nNote: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step' rather than repeating interactions.");
                             }
                             turnPrompt.append("\n\nWhat is your next tool call?");
                             conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));

@@ -48,6 +48,8 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
 
     private final String currentInstruction;
 
+    private final String scopingContext;
+
     /**
      * Represents the parsed result of the PESAP analysis.
      *
@@ -92,7 +94,19 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
      */
     public PesapPrompt(final String currentInstruction)
     {
+        this(currentInstruction, null);
+    }
+
+    /**
+     * Constructs a PesapPrompt for the active step instruction with scoping context.
+     *
+     * @param currentInstruction the current step instruction
+     * @param scopingContext parent step scoping context, or null if none
+     */
+    public PesapPrompt(final String currentInstruction, final String scopingContext)
+    {
         this.currentInstruction = currentInstruction;
+        this.scopingContext = scopingContext;
     }
 
     /**
@@ -104,7 +118,7 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
      */
     public PesapPrompt(final String currentInstruction, final String previousInstruction, final List<String> nextInstructions)
     {
-        this(currentInstruction);
+        this(currentInstruction, null);
     }
 
     /**
@@ -132,7 +146,16 @@ public final class PesapPrompt implements AiPrompt<PesapPrompt.PesapResult>
     @Override
     public String compileUserMessage(final ExecutionContext context)
     {
-        return "## Active Instruction\n" + (this.currentInstruction != null ? truncateInstruction(this.currentInstruction) : "");
+        final StringBuilder sb = new StringBuilder();
+        if (this.scopingContext != null && !this.scopingContext.isBlank())
+        {
+            sb.append("### Scoping Context:\n")
+              .append(truncateInstruction(this.scopingContext))
+              .append(" (Note: Scoping defines context for actions/assertions targeting this element or pronouns like 'it' / 'its'. Global page elements such as the header cart, page title, or notifications remain global and should be verified globally.)\n\n");
+        }
+        sb.append("## Active Instruction\n")
+          .append(this.currentInstruction != null ? truncateInstruction(this.currentInstruction) : "");
+        return sb.toString();
     }
 
     private static String truncateInstruction(final String instruction)

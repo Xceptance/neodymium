@@ -19,6 +19,7 @@
 package org.neodymium.ai.tool.browser;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
@@ -29,6 +30,7 @@ import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.util.AiAssertions;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -159,6 +161,8 @@ public final class BrowserToolProvider
                 final JsonNode args = call.arguments();
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
 
+                DomQuiescenceWatcher.installTracker();
+
                 // Case 1: Viewport coordinates provided
                 if (args.hasNonNull("x") && args.hasNonNull("y") && driver != null)
                 {
@@ -233,71 +237,33 @@ public final class BrowserToolProvider
                 final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
                 final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : target;
 
+                if (selector.isBlank() && text.isBlank())
+                {
+                    return ToolResult.error(call.callId(), errorNode("browser_click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
+                }
+
+                final String targetDesc = !selector.isBlank() ? selector : text;
+                final SelenideElement el;
+
                 if (!selector.isBlank())
                 {
-                    try
+                    if (selector.startsWith("text="))
                     {
-                        final SelenideElement el = findElement(selector);
-                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                        if (el.is(Condition.visible))
-                        {
-                            el.click();
-                            final ObjectNode res = successNode("click");
-                            res.put("target", selector);
-                            if (driver != null)
-                            {
-                                res.put("url", driver.getCurrentUrl());
-                                res.put("title", driver.getTitle());
-                            }
-                            return ToolResult.success(call.callId(), res.toString());
-                        }
+                        final String rawText = selector.substring("text=".length()).trim();
+                        el = $(Selectors.byText(rawText)).is(Condition.visible)
+                                ? $(Selectors.byText(rawText))
+                                : $(Selectors.withText(rawText));
                     }
-                    catch (final Exception ignored)
+                    else
                     {
+                        el = findElement(selector);
                     }
-                }
-
-                if (!text.isBlank())
-                {
-                    try
-                    {
-                        final SelenideElement el = $(Selectors.byText(text)).is(Condition.visible)
-                                ? $(Selectors.byText(text))
-                                : $(Selectors.withText(text));
-                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                        if (el.is(Condition.visible))
-                        {
-                            el.click();
-                            final ObjectNode res = successNode("click");
-                            res.put("text", text);
-                            if (driver != null)
-                            {
-                                res.put("url", driver.getCurrentUrl());
-                                res.put("title", driver.getTitle());
-                            }
-                            return ToolResult.success(call.callId(), res.toString());
-                        }
-                    }
-                    catch (final Exception ignored)
-                    {
-                    }
-                }
-
-                final SelenideElement el;
-                if (selector.startsWith("text="))
-                {
-                    final String rawText = selector.substring("text=".length()).trim();
-                    el = $(Selectors.byText(rawText)).is(Condition.visible)
-                            ? $(Selectors.byText(rawText))
-                            : $(Selectors.withText(rawText));
                 }
                 else
                 {
-                    if (selector.isBlank() && text.isBlank())
-                    {
-                        return ToolResult.error(call.callId(), errorNode("browser_click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
-                    }
-                    el = findElement(selector);
+                    el = $(Selectors.byText(text)).is(Condition.visible)
+                            ? $(Selectors.byText(text))
+                            : $(Selectors.withText(text));
                 }
 
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
@@ -317,29 +283,53 @@ public final class BrowserToolProvider
                     }
                 }
 
+                SelenideElement clickedEl = el;
+                String actualTarget = targetDesc;
                 try
                 {
-                    el.shouldBe(Condition.visible).click();
+                    el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
                 }
                 catch (final Exception | AssertionError e)
                 {
-                    try
+                    SelenideElement fallbackTargetEl = null;
+                    if (!text.isBlank() && !selector.isBlank())
                     {
-                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                        Selenide.executeJavaScript("arguments[0].click();", el);
+                        try
+                        {
+                            final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
+                                    ? $(Selectors.byText(text))
+                                    : $(Selectors.withText(text));
+                            SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
+                            textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                            fallbackTargetEl = textEl;
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
+                        }
                     }
-                    catch (final Throwable ignored)
+
+                    if (fallbackTargetEl == null)
                     {
-                        throw e;
+                        try
+                        {
+                            SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                            Selenide.executeJavaScript("arguments[0].click();", el);
+                        }
+                        catch (final Throwable ignored)
+                        {
+                            throw e;
+                        }
                     }
+                    clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
+                    actualTarget = (fallbackTargetEl != null) ? text : targetDesc;
                 }
 
                 try
                 {
-                    final String tagName = el.getTagName();
+                    final String tagName = clickedEl.getTagName();
                     if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
                     {
-                        Selenide.executeJavaScript("arguments[0].focus();", el);
+                        Selenide.executeJavaScript("arguments[0].focus();", clickedEl);
                     }
                 }
                 catch (final Throwable ignored)
@@ -347,7 +337,7 @@ public final class BrowserToolProvider
                 }
 
                 final ObjectNode res = successNode("click");
-                res.put("target", selector);
+                res.put("target", actualTarget);
                 if (driver != null)
                 {
                     res.put("url", driver.getCurrentUrl());
@@ -384,6 +374,7 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
+                DomQuiescenceWatcher.installTracker();
                 final String selector = resolveSelector(call.arguments());
                 final String text = call.arguments().path("text").asText();
                 final boolean clearFirst = !call.arguments().has("clearFirst") || call.arguments().path("clearFirst").asBoolean(true);
@@ -391,7 +382,7 @@ public final class BrowserToolProvider
 
                 final SelenideElement el = findElement(selector);
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                el.shouldBe(Condition.visible);
+                el.shouldBe(Condition.visible).shouldBe(Condition.editable);
                 if (clearFirst)
                 {
                     try
@@ -442,6 +433,7 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
+                DomQuiescenceWatcher.installTracker();
                 final String keyName = call.arguments().path("key").asText("ENTER").toUpperCase();
                 final String selector = resolveSelector(call.arguments());
                 CharSequence resolvedKey;
@@ -495,6 +487,8 @@ public final class BrowserToolProvider
             {
                 final String url = resolveUrl(call.arguments());
                 Selenide.open(url);
+                DomQuiescenceWatcher.installTracker();
+                DomQuiescenceWatcher.waitForDomQuiet();
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 final ObjectNode res = successNode("navigate");
                 res.put("url", driver != null ? driver.getCurrentUrl() : url);
@@ -526,8 +520,9 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
+                DomQuiescenceWatcher.installTracker();
                 final String selector = resolveSelector(call.arguments());
-                final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
+                final SelenideElement el = findElement(selector).shouldBe(Condition.visible).shouldBe(Condition.enabled);
 
                 final ObjectNode res = successNode("select");
                 res.put("target", selector);
@@ -1133,61 +1128,88 @@ public final class BrowserToolProvider
                 }
                 else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
                 {
-                    if (!isTextPresentOnPage(expectedText, regex, exact))
+                    boolean found = false;
+                    final long start = System.currentTimeMillis();
+                    final long timeout = Configuration.timeout;
+                    while (!found && (System.currentTimeMillis() - start) < timeout)
                     {
-                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found anywhere on the page.");
+                        found = isTextPresentOnPage(expectedText, regex, exact);
+                        if (!found)
+                        {
+                            Selenide.sleep(100);
+                        }
+                    }
+                    if (!found)
+                    {
+                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found anywhere on the page within " + timeout + "ms.");
                     }
                 }
                 else
                 {
                     boolean matched = false;
-                    final ElementsCollection elements = findElements(selector);
-                    if (!elements.isEmpty())
+                    final long start = System.currentTimeMillis();
+                    final long timeout = Configuration.timeout;
+
+                    while (!matched && (System.currentTimeMillis() - start) < timeout)
                     {
-                        for (final SelenideElement el : elements)
+                        final ElementsCollection elements = findElements(selector);
+                        if (!elements.isEmpty())
                         {
-                            if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                            for (final SelenideElement el : elements)
                             {
-                                matched = true;
+                                if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                {
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                final SelenideElement singleEl = findElement(selector);
+                                if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
+                                {
+                                    matched = true;
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+
+                        if (!matched)
+                        {
+                            try
+                            {
+                                final ElementsCollection currentElements = findElements(selector);
+                                final SelenideElement primary = currentElements.isEmpty() ? findElement(selector) : currentElements.first();
+                                if (primary.exists())
+                                {
+                                    final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
+                                    if (container.exists() && matchesElementText(container, expectedText, regex, exact))
+                                    {
+                                        matched = true;
+                                    }
+                                    else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
+                                    {
+                                        matched = true;
+                                    }
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+
+                        if (!matched)
+                        {
+                            if (isTextPresentOnPage(expectedText, regex, exact))
+                            {
                                 break;
                             }
-                        }
-                    }
-                    else
-                    {
-                        try
-                        {
-                            final SelenideElement singleEl = findElement(selector);
-                            if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
-                            {
-                                matched = true;
-                            }
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
-                    }
-
-                    if (!matched)
-                    {
-                        try
-                        {
-                            final SelenideElement primary = elements.isEmpty() ? findElement(selector) : elements.first();
-                            if (primary.exists())
-                            {
-                                final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
-                                if (container.exists() && matchesElementText(container, expectedText, regex, exact))
-                                {
-                                    matched = true;
-                                }
-                                else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
-                                {
-                                    matched = true;
-                                }
-                            }
-                        }
-                        catch (final Exception ignored)
-                        {
+                            Selenide.sleep(100);
                         }
                     }
 
@@ -1195,7 +1217,7 @@ public final class BrowserToolProvider
                     {
                         if (!isTextPresentOnPage(expectedText, regex, exact))
                         {
-                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" nor anywhere on the page.");
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" nor anywhere on the page within " + timeout + "ms.");
                         }
 
                         return ToolResult.error(call.callId(), errorNode("Expected text \"" + expectedText + "\" was not found on element \"" + selector + "\".").toString());

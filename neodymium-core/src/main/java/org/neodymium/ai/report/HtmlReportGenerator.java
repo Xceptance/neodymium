@@ -349,6 +349,7 @@ public final class HtmlReportGenerator
             sb.append("            </div>\n");
             sb.append("            <div class=\"inspector-instruction\" id=\"inspInstruction\">Select a step</div>\n");
             sb.append("            <div class=\"inspector-raw-template\" id=\"inspRawTemplate\" style=\"display:none;\"></div>\n");
+            sb.append("            <div class=\"inspector-scope-context\" id=\"inspScopeContext\" style=\"display:none;\"></div>\n");
             sb.append("            <div class=\"inspector-sub-meta\" id=\"inspSourceFile\"></div>\n");
             sb.append("            <div class=\"inspector-error-banner\" id=\"inspErrorBanner\" style=\"display:none;\"></div>\n");
             sb.append("          </div>\n");
@@ -714,11 +715,16 @@ public final class HtmlReportGenerator
                     screenshotCount += sub.getScreenshots().size();
                 }
             }
-            if (llmCount == 0)
+            if (step.getLlmCalls().isEmpty())
             {
+                int aggregatedLlmCount = 0;
                 for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
                 {
-                    llmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getPesapCalls() + sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
+                    aggregatedLlmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getPesapCalls() + sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
+                }
+                if (aggregatedLlmCount > 0)
+                {
+                    llmCount = aggregatedLlmCount;
                 }
             }
         }
@@ -837,6 +843,10 @@ public final class HtmlReportGenerator
                 sb.append("                  <span class=\"sub-step-number\">#").append(index + 1).append(".").append(s + 1).append("</span>\n");
                 sb.append("                  <span class=\"step-status-pill ").append(subPillClass).append("\">").append(subStatus).append("</span>\n");
                 appendStepBadges(sb, sub);
+                if (step.getInstruction() != null && !step.getInstruction().isBlank())
+                {
+                    sb.append("                  <span class=\"badge-flag scope-badge\" title=\"Scoping Context: ").append(escapeHtml(step.getInstruction())).append("\">📍 ").append(escapeHtml(step.getInstruction())).append("</span>\n");
+                }
                 sb.append("                  <span class=\"sub-step-instruction\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">").append(escapeHtml(sub.getInstruction())).append("</span>\n");
                 sb.append("                </div>\n");
                 sb.append("                <div class=\"sub-step-header-right\">\n");
@@ -1133,6 +1143,16 @@ public final class HtmlReportGenerator
                     rawTpl.style.display = 'block';
                 } else {
                     rawTpl.style.display = 'none';
+                }
+
+                var scopeEl = document.getElementById('inspScopeContext');
+                if (scopeEl) {
+                    if (currentSubIdx >= 0 && steps[currentParentIdx] && steps[currentParentIdx].instruction) {
+                        scopeEl.textContent = '📍 Scope: ' + steps[currentParentIdx].instruction;
+                        scopeEl.style.display = 'block';
+                    } else {
+                        scopeEl.style.display = 'none';
+                    }
                 }
 
                 var bugBadge = document.getElementById('inspBugBadge');
@@ -2202,6 +2222,23 @@ public final class HtmlReportGenerator
                 background: #e0e7ff;
                 color: #4338ca;
                 border-color: rgba(67, 56, 202, 0.35);
+            }
+            .badge-flag.scope-badge {
+                background: #fdf4ff;
+                color: #a21caf;
+                border-color: rgba(162, 28, 175, 0.35);
+                max-width: 280px;
+                text-overflow: ellipsis;
+                overflow: hidden;
+                white-space: nowrap;
+                display: inline-block;
+                vertical-align: middle;
+            }
+            .inspector-scope-context {
+                font-size: 0.82rem;
+                font-weight: 600;
+                color: #a21caf;
+                margin-top: 0.25rem;
             }
             .step-header-right {
                 display: flex;

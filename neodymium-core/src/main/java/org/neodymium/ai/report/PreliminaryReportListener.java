@@ -1372,8 +1372,24 @@ public final class PreliminaryReportListener implements ExecutionListener
                     }
                 }
 
+                if (matchingSub == null && s < entry.getSubSteps().size())
+                {
+                    matchingSub = entry.getSubSteps().get(s);
+                }
+
                 if (matchingSub != null)
                 {
+                    if (sub.getInstruction() != null && !sub.getInstruction().isBlank())
+                    {
+                        if (matchingSub.getRawInstruction() == null)
+                        {
+                            matchingSub.setRawInstruction(matchingSub.getInstruction());
+                        }
+                        if (matchingSub.getInstruction() != null && matchingSub.getInstruction().contains("${"))
+                        {
+                            matchingSub.setInstruction(sub.getInstruction());
+                        }
+                    }
                     mergeStepStats(matchingSub, sub);
                     if (matchingSub.getStatus() == null || "PENDING".equalsIgnoreCase(matchingSub.getStatus()) || "RUNNING".equalsIgnoreCase(matchingSub.getStatus()))
                     {

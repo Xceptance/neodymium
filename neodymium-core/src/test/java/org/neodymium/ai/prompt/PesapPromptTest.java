@@ -59,6 +59,22 @@ public final class PesapPromptTest
     }
 
     /**
+     * Verifies that the prompt correctly compiles the user message with scoping context.
+     */
+    @Test
+    public void testCompileUserMessageWithScopingContext()
+    {
+        final PesapPrompt prompt = new PesapPrompt("Hover over it", "Locate the first product card");
+        final String userMessage = prompt.compileUserMessage(new ExecutionContext(null));
+
+        assertNotNull(userMessage);
+        assertTrue(userMessage.contains("### Scoping Context:"));
+        assertTrue(userMessage.contains("Locate the first product card"));
+        assertTrue(userMessage.contains("## Active Instruction"));
+        assertTrue(userMessage.contains("Hover over it"));
+    }
+
+    /**
      * Verifies that the prompt successfully parses minified JSON responses from the LLM.
      */
     @Test
@@ -182,8 +198,8 @@ public final class PesapPromptTest
         final String systemMessage = prompt.compileSystemMessage(new ExecutionContext(null));
 
         assertNotNull(systemMessage);
-        assertTrue(systemMessage.contains("Step Splitting ('sp')"));
-        assertTrue(systemMessage.contains("Semantic Intent ('i')"));
+        assertTrue(systemMessage.contains("Step Splitting ('milestones')"));
+        assertTrue(systemMessage.contains("Semantic Intent ('intent')"));
         assertTrue(systemMessage.contains("Sequential multi-action interaction chains requiring intermediate UI state changes"));
         assertTrue(systemMessage.contains("Complete Action Invariant"));
         assertTrue(systemMessage.contains("NEVER split scoped element targeting phrases"));
