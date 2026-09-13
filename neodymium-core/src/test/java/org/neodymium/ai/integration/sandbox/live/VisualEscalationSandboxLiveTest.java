@@ -18,7 +18,7 @@
  */
 package org.neodymium.ai.integration.sandbox.live;
 
-import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Condition.text;
 import static com.codeborne.selenide.Selenide.$;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -76,10 +76,11 @@ public class VisualEscalationSandboxLiveTest extends BaseAiTest
         session.execute( """
             steps: |
               Open ${visual.escalation.test.url} in the browser
-              Click the canvas element containing the target text
-              Verify that the canvas element #canvas-target is visible
+              Click the canvas element containing the text "VISUAL-ONLY-TOKEN"
+              Click the container displaying the pseudo-element text "PSEUDO-ELEMENT-SECRET"
+              Verify that #escalation-status shows "Status: Pseudo-Element Clicked"
             """);
 
-        $("#canvas-target").shouldBe(visible);
+        $("#escalation-status").shouldHave(text("Status: Pseudo-Element Clicked"));
     }
 }

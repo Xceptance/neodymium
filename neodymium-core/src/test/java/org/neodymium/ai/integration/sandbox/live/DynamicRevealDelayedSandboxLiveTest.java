@@ -1,7 +1,7 @@
 /*
  * GNU Affero General Public License (AGPLv3)
  *
- * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ * Copyright (c) 2026 Xceptance
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -32,23 +32,24 @@ import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
 /**
- * Live LLM integration test for the Context Escalation sandbox challenge.
- * Verifies dynamic context escalation from LEAN to STANDARD mode.
+ * Live LLM integration test for the Dynamic Reveal Random Delay sandbox challenge.
+ * Verifies that the agent gracefully handles asynchronous DOM insertion after
+ * an unlisted random delay (300ms - 900ms).
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @Tag("LiveLlm")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", recordingFileName = "live_context_escalation_playbook")
-public class ContextEscalationSandboxLiveTest extends BaseAiTest
+@AiPlaybook(value = "programmatic", recordingFileName = "live_dynamic_reveal_delayed_playbook")
+public class DynamicRevealDelayedSandboxLiveTest extends BaseAiTest
 {
     /**
-     * Constructs a default ContextEscalationSandboxLiveTest.
+     * Constructs a default DynamicRevealDelayedSandboxLiveTest.
      */
-    public ContextEscalationSandboxLiveTest()
+    public DynamicRevealDelayedSandboxLiveTest()
     {
     }
 
@@ -58,30 +59,30 @@ public class ContextEscalationSandboxLiveTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
-        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/escalation.html", server.getPort());
-        session.data().putDynamic("escalation.test.url", pageUrl, false);
+        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/dynamic-reveal-delayed.html", server.getPort());
+        session.data().putDynamic("reveal.delayed.test.url", pageUrl, false);
     }
 
     /**
-     * Tests context escalation challenge using live LLM across 3 execution modes.
+     * Tests delayed dynamic reveal challenge using live LLM across 3 execution modes.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testContextEscalationLive(final AiSession session) throws Exception
+    public void testDynamicRevealDelayedLive(final AiSession session) throws Exception
     {
         session.execute( """
             steps: |
-              Open ${escalation.test.url} in the browser
-              Click the span element with text "Click Link Challenge"
-              Verify that #escalation-status shows "Status: Link Clicked"
-              Verify that the page body contains "AURA-9921-SECURE"
+              Open ${reveal.delayed.test.url} in the browser
+              Click the link with text "Have a promo code?"
+              Type DISCOUNT into the coupon input field
+              Click the apply coupon button
+              Verify that #promo-status-delayed shows "Coupon DISCOUNT applied successfully!"
             """);
 
-        $("#escalation-status").shouldHave(text("Status: Link Clicked"));
-        $("#secret-text").shouldHave(text("AURA-9921-SECURE"));
+        $("#promo-status-delayed").shouldHave(text("Coupon DISCOUNT applied successfully!"));
     }
 }

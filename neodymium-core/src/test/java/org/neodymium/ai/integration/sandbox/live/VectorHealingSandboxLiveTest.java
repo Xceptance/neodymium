@@ -1,7 +1,7 @@
 /*
  * GNU Affero General Public License (AGPLv3)
  *
- * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ * Copyright (c) 2026 Xceptance
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -32,56 +32,59 @@ import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
 /**
- * Live LLM integration test for the Context Escalation sandbox challenge.
- * Verifies dynamic context escalation from LEAN to STANDARD mode.
+ * Live LLM integration test for the DOM Vector Drift and Self-Healing sandbox challenge.
+ * Verifies that actions recorded on a clean DOM successfully self-heal during replay
+ * when element IDs and class names drift dynamically.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @Tag("LiveLlm")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", recordingFileName = "live_context_escalation_playbook")
-public class ContextEscalationSandboxLiveTest extends BaseAiTest
+@AiPlaybook(value = "programmatic", recordingFileName = "live_vector_drift_playbook")
+public class VectorHealingSandboxLiveTest extends BaseAiTest
 {
     /**
-     * Constructs a default ContextEscalationSandboxLiveTest.
+     * Constructs a default VectorHealingSandboxLiveTest.
      */
-    public ContextEscalationSandboxLiveTest()
+    public VectorHealingSandboxLiveTest()
     {
     }
 
     /**
      * Set up test page URL dynamically before each test.
+     * Serves clean DOM during recording and attribute-drifted DOM during replay.
      *
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session)
+    public void setupProperties(final AiSession session) throws Exception
     {
-        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/escalation.html", server.getPort());
-        session.data().putDynamic("escalation.test.url", pageUrl, false);
+        final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
+        final boolean isReplay = session.getExecutionMode().isReplay();
+        final String attrUrl = isReplay ? (baseUrl + "?drift=attribute") : baseUrl;
+        session.data().putDynamic("drift.live.url", attrUrl, false);
     }
 
     /**
-     * Tests context escalation challenge using live LLM across 3 execution modes.
+     * Tests live recording on clean DOM and replay with DOM vector self-healing on attribute drifted DOM.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    public void testContextEscalationLive(final AiSession session) throws Exception
+    public void testVectorAttributeDriftHealingLive(final AiSession session) throws Exception
     {
         session.execute( """
             steps: |
-              Open ${escalation.test.url} in the browser
-              Click the span element with text "Click Link Challenge"
-              Verify that #escalation-status shows "Status: Link Clicked"
-              Verify that the page body contains "AURA-9921-SECURE"
+              Open ${drift.live.url} in the browser
+              Type "SAVE20" into the coupon input field
+              Click the apply coupon button
+              Verify that #status-message shows "Coupon APPLIED successfully!"
             """);
 
-        $("#escalation-status").shouldHave(text("Status: Link Clicked"));
-        $("#secret-text").shouldHave(text("AURA-9921-SECURE"));
+        $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
     }
 }
