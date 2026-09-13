@@ -71,6 +71,7 @@ import org.neodymium.ai.executor.selenide.plugins.SelectAction;
 import org.neodymium.ai.executor.selenide.plugins.SwitchWindowAction;
 import org.neodymium.ai.executor.selenide.plugins.TypeAction;
 import org.neodymium.ai.executor.selenide.plugins.UploadAction;
+import org.neodymium.ai.executor.selenide.plugins.AlertAction;
 import org.neodymium.ai.executor.selenide.plugins.WaitAction;
 import org.neodymium.ai.executor.selenide.plugins.CheckAction;
 import org.neodymium.ai.executor.selenide.plugins.StoreAction;
@@ -118,6 +119,9 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("KEY_PRESS", new KeyPressAction());
         this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
         this.plugins.put("UPLOAD", new UploadAction());
+        final AlertAction alertPlugin = new AlertAction();
+        this.plugins.put("HANDLE_ALERT", alertPlugin);
+        this.plugins.put("ALERT", alertPlugin);
         final AssertAction assertPlugin = new AssertAction();
         this.plugins.put("ASSERT", assertPlugin);
         this.plugins.put("ASSERT_EXISTS", assertPlugin);
@@ -182,6 +186,16 @@ public final class SelenideTargetExecutor implements TargetExecutor
         }
 
         final WebDriver driver = WebDriverRunner.getWebDriver();
+        final String alertText = BrowserToolProvider.getActiveAlertText(driver);
+        if (alertText != null)
+        {
+            final String modalAlertDom = "### [NATIVE BROWSER MODAL OPEN]\n"
+                    + "A native modal alert/dialog is currently blocking browser interaction.\n"
+                    + "Dialog message: \"" + alertText + "\"\n\n"
+                    + "Please invoke tool 'browser_handle_alert' with action ('accept' or 'dismiss') and optional 'promptText' to resolve it.";
+            return new BrowserSutState(modalAlertDom, Collections.emptyList(), "modal-alert-" + alertText.hashCode());
+        }
+
         BrowserToolProvider.ensureValidWindowFocus(driver);
         try
         {
@@ -376,6 +390,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("WAIT", "Wait for element state or pause", Collections.emptyMap()),
             new ActionDefinition("KEY_PRESS", "Send key press events", Collections.emptyMap()),
             new ActionDefinition("SWITCH_WINDOW", "Switch WebDriver focus to another window or tab", Collections.emptyMap()),
+            new ActionDefinition("HANDLE_ALERT", "Handle or dismiss native browser alert/confirm/prompt", Collections.emptyMap()),
             new ActionDefinition("ASSERT", "Assert state or value (legacy)", Collections.emptyMap()),
             new ActionDefinition("ASSERT_EXISTS", "Assert element presence and visibility", Collections.emptyMap()),
             new ActionDefinition("ASSERT_VISIBLE", "Assert element visibility", Collections.emptyMap()),

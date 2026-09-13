@@ -979,17 +979,21 @@ public final class AgentToolLoopStep implements PipelineStep
 
             if (requireDomForNextTurn)
             {
-                if (WebDriverRunner.hasWebDriverStarted())
+                final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final boolean alertOpen = BrowserToolProvider.isAlertPresent(currentDriver);
+                if (!alertOpen)
                 {
-                    BrowserToolProvider.ensureValidWindowFocus(WebDriverRunner.getWebDriver());
+                    if (currentDriver != null)
+                    {
+                        BrowserToolProvider.ensureValidWindowFocus(currentDriver);
+                    }
+                    DomQuiescenceWatcher.waitForDomQuiet();
                 }
-                DomQuiescenceWatcher.waitForDomQuiet();
                 if (executor != null)
                 {
                     try
                     {
-                        final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                        if (currentDriver != null)
+                        if (currentDriver != null && !alertOpen)
                         {
                             BrowserToolProvider.ensureValidWindowFocus(currentDriver);
                             try
@@ -1029,8 +1033,11 @@ public final class AgentToolLoopStep implements PipelineStep
                             final StringBuilder turnPrompt = new StringBuilder();
                             if (textContent != null && !textContent.isBlank())
                             {
-                                final String annotatedDom = annotateNewElements(textContent, previousElementSignatures);
-                                previousElementSignatures = extractElementSignatures(textContent);
+                                final String annotatedDom = alertOpen ? textContent : annotateNewElements(textContent, previousElementSignatures);
+                                if (!alertOpen)
+                                {
+                                    previousElementSignatures = extractElementSignatures(textContent);
+                                }
                                 turnPrompt.append("### Current Page State & Interactive Elements:\n")
                                         .append(annotatedDom);
                             }
@@ -1284,6 +1291,8 @@ public final class AgentToolLoopStep implements PipelineStep
         return "browser_click".equals(name)
                 || "browser_type".equals(name)
                 || "browser_upload_file".equals(name)
+                || "browser_handle_alert".equals(name)
+                || "browser_switch_window".equals(name)
                 || "browser_select".equals(name)
                 || "browser_clear".equals(name)
                 || "browser_clear_cookies".equals(name)
@@ -1428,6 +1437,65 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (obj.hasNonNull("scrollContainer") && !obj.hasNonNull("container"))
                 {
                     obj.put("container", obj.path("scrollContainer").asText());
+                }
+                if ("browser_handle_alert".equals(toolName) || "handle_alert".equalsIgnoreCase(toolName) || "alert".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("target") && !obj.hasNonNull("promptText"))
+                    {
+                        final String tVal = obj.path("target").asText().trim();
+                        if (!tVal.matches("(?i)^(accept|dismiss|ok|cancel|alert|confirm|prompt)$") && !tVal.isBlank())
+                        {
+                            obj.put("promptText", tVal);
+                        }
+                    }
+                    if (obj.hasNonNull("locator") && !obj.hasNonNull("promptText"))
+                    {
+                        final String lVal = obj.path("locator").asText().trim();
+                        if (!lVal.matches("(?i)^(accept|dismiss|ok|cancel|alert|confirm|prompt)$") && !lVal.isBlank())
+                        {
+                            obj.put("promptText", lVal);
+                        }
+                    }
+                    if (obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if ("accept".equalsIgnoreCase(val) || "dismiss".equalsIgnoreCase(val) || "ok".equalsIgnoreCase(val) || "cancel".equalsIgnoreCase(val))
+                        {
+                            if (!obj.hasNonNull("action"))
+                            {
+                                obj.put("action", "cancel".equalsIgnoreCase(val) ? "dismiss" : val.toLowerCase());
+                            }
+                            obj.remove("text");
+                        }
+                        else if (!obj.hasNonNull("promptText") && !val.isBlank())
+                        {
+                            obj.put("promptText", val);
+                        }
+                    }
+                    if (obj.hasNonNull("text"))
+                    {
+                        final String textVal = obj.path("text").asText().trim();
+                        if ("accept".equalsIgnoreCase(textVal) || "dismiss".equalsIgnoreCase(textVal) || "ok".equalsIgnoreCase(textVal) || "cancel".equalsIgnoreCase(textVal))
+                        {
+                            if (!obj.hasNonNull("action"))
+                            {
+                                obj.put("action", "cancel".equalsIgnoreCase(textVal) ? "dismiss" : textVal.toLowerCase());
+                            }
+                            obj.remove("text");
+                        }
+                    }
+                    if (obj.hasNonNull("prompt") && !obj.hasNonNull("promptText"))
+                    {
+                        obj.put("promptText", obj.path("prompt").asText());
+                    }
+                    if (obj.hasNonNull("text") && !obj.hasNonNull("promptText"))
+                    {
+                        final String textVal = obj.path("text").asText().trim();
+                        if (!"accept".equalsIgnoreCase(textVal) && !"dismiss".equalsIgnoreCase(textVal) && !"ok".equalsIgnoreCase(textVal) && !"cancel".equalsIgnoreCase(textVal))
+                        {
+                            obj.put("promptText", textVal);
+                        }
+                    }
                 }
                 if ("browser_scroll".equals(toolName) || "scroll".equalsIgnoreCase(toolName))
                 {
@@ -1614,6 +1682,7 @@ public final class AgentToolLoopStep implements PipelineStep
         final String name = stripNamespacePrefix(rawName.trim()).toLowerCase();
         return name.startsWith("browser_") || "complete_step".equals(name) || "click".equals(name)
                 || "type".equals(name) || "upload".equals(name) || "upload_file".equals(name)
+                || "handle_alert".equals(name) || "alert".equals(name) || "switch_window".equals(name)
                 || "navigate".equals(name) || "hover".equals(name)
                 || "scroll".equals(name) || "select".equals(name) || "clear".equals(name)
                 || "clear_cookies".equals(name) || "back".equals(name) || "forward".equals(name)
@@ -1637,6 +1706,8 @@ public final class AgentToolLoopStep implements PipelineStep
             case "click" -> "browser_click";
             case "type" -> "browser_type";
             case "upload", "upload_file" -> "browser_upload_file";
+            case "handle_alert", "alert" -> "browser_handle_alert";
+            case "switch_window" -> "browser_switch_window";
             case "navigate" -> "browser_navigate";
             case "hover" -> "browser_hover";
             case "scroll" -> "browser_scroll";

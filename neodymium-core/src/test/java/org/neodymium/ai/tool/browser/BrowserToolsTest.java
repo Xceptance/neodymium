@@ -89,7 +89,8 @@ public class BrowserToolsTest
                 "browser_list_tabs",
                 "browser_switch_tab",
                 "browser_close_tab",
-                "browser_upload_file"
+                "browser_upload_file",
+                "browser_handle_alert"
         );
 
         for (final String toolName : expectedTools)
@@ -740,6 +741,19 @@ public class BrowserToolsTest
         Assertions.assertTrue(props.has("container"));
         Assertions.assertTrue(props.has("yOffset"));
         Assertions.assertTrue(props.has("xOffset"));
+    }
+
+    @Test
+    public void testBrowserHandleAlertSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_handle_alert").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_handle_alert", def.name());
+
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode props = schema.path("properties");
+        Assertions.assertTrue(props.has("action"));
+        Assertions.assertTrue(props.has("promptText"));
     }
 }
 

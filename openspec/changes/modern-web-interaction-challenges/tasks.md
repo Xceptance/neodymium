@@ -20,10 +20,10 @@
 
 ## 4. Native Browser Alerts & Dialogs
 
-- [ ] 4.1 Create `AuraGlanceTest/shop/sandbox/native-alerts.html` with triggers for `window.alert`, `window.confirm`, and `window.prompt`
-- [ ] 4.2 Implement `browser_handle_alert(action, promptText)` in `BrowserToolProvider` supporting accept, dismiss, and prompt entry
-- [ ] 4.3 Add proactive alert detection in `AgentToolLoopStep` to notify the agent and avoid `UnhandledAlertException` during DOM capture
-- [ ] 4.4 Create `NativeAlertSandboxLiveTest` and `NativeAlertSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
+- [x] 4.1 Create `AuraGlanceTest/shop/sandbox/native-alerts.html` with triggers for `window.alert`, `window.confirm`, and `window.prompt`
+- [x] 4.2 Implement `browser_handle_alert(action, promptText)` in `BrowserToolProvider` supporting accept, dismiss, and prompt entry
+- [x] 4.3 Add proactive alert detection in `AgentToolLoopStep` to notify the agent and avoid `UnhandledAlertException` during DOM capture
+- [x] 4.4 Create `NativeAlertSandboxLiveTest` and `NativeAlertSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
 
 ## 5. Dual-Thumb Range Sliders & Drag Gestures
 

@@ -41,8 +41,10 @@ import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
+import org.openqa.selenium.Alert;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
+import org.openqa.selenium.NoAlertPresentException;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -144,6 +146,7 @@ public final class BrowserToolProvider
         registry.register(createSwitchTabTool());
         registry.register(createCloseTabTool());
         registry.register(createUploadFileTool());
+        registry.register(createHandleAlertTool());
     }
 
     private static AiTool createClickTool()
@@ -379,16 +382,19 @@ public final class BrowserToolProvider
                     actualTarget = (fallbackTargetEl != null) ? text : targetDesc;
                 }
 
-                try
+                if (!isAlertPresent(driver))
                 {
-                    final String tagName = clickedEl.getTagName();
-                    if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                    try
                     {
-                        Selenide.executeJavaScript("arguments[0].focus();", clickedEl);
+                        final String tagName = clickedEl.getTagName();
+                        if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                        {
+                            Selenide.executeJavaScript("arguments[0].focus();", clickedEl);
+                        }
                     }
-                }
-                catch (final Throwable ignored)
-                {
+                    catch (final Throwable ignored)
+                    {
+                    }
                 }
 
                 final ObjectNode res = successNode("click");
@@ -2568,6 +2574,39 @@ public final class BrowserToolProvider
     }
 
     /**
+     * Checks if a native modal alert or dialog is currently present, and returns its message text.
+     *
+     * @param driver the active WebDriver instance
+     * @return the alert message text, or null if no alert is open
+     */
+    public static String getActiveAlertText(final WebDriver driver)
+    {
+        if (driver == null)
+        {
+            return null;
+        }
+        try
+        {
+            return driver.switchTo().alert().getText();
+        }
+        catch (final Exception ignored)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Returns true if a native modal browser alert/confirm/prompt is currently open.
+     *
+     * @param driver the active WebDriver instance
+     * @return true if an alert is active, false otherwise
+     */
+    public static boolean isAlertPresent(final WebDriver driver)
+    {
+        return getActiveAlertText(driver) != null;
+    }
+
+    /**
      * Verifies that the WebDriver instance is currently focused on an active, open window.
      * If the active window was closed (e.g. via {@code window.close()} or a button click),
      * automatically refocuses to the first available window.
@@ -2576,7 +2615,7 @@ public final class BrowserToolProvider
      */
     public static void ensureValidWindowFocus(final WebDriver driver)
     {
-        if (driver == null)
+        if (driver == null || isAlertPresent(driver))
         {
             return;
         }
@@ -2610,7 +2649,7 @@ public final class BrowserToolProvider
      */
     public static String getSafeUrl(final WebDriver driver)
     {
-        if (driver == null)
+        if (driver == null || isAlertPresent(driver))
         {
             return "";
         }
@@ -2634,7 +2673,7 @@ public final class BrowserToolProvider
      */
     public static String getSafeTitle(final WebDriver driver)
     {
-        if (driver == null)
+        if (driver == null || isAlertPresent(driver))
         {
             return "";
         }
@@ -2723,6 +2762,103 @@ public final class BrowserToolProvider
                 {
                     LOGGER.warn("Failed executing browser_upload_file: {}", e.getMessage());
                     return ToolResult.error(call.callId(), errorNode("Failed uploading file: " + e.getMessage()).toString());
+                }
+            }
+        };
+    }
+
+    private static AiTool createHandleAlertTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("action").put("type", "string").put("description", "Action to perform on the dialog: 'accept' (OK/Confirm) or 'dismiss' (Cancel). Defaults to 'accept'.");
+        props.putObject("promptText").put("type", "string").put("description", "Optional text string to enter into a prompt() dialog before accepting.");
+
+        final ToolDefinition def = new ToolDefinition("browser_handle_alert", "Interacts with and resolves native browser modal dialogs (window.alert, window.confirm, window.prompt)", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                if (!WebDriverRunner.hasWebDriverStarted())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Browser/WebDriver is not started yet.").toString());
+                }
+
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final Alert alert;
+                try
+                {
+                    alert = driver.switchTo().alert();
+                }
+                catch (final NoAlertPresentException e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("No active browser alert or dialog found.").toString());
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Failed to inspect alert: " + e.getMessage()).toString());
+                }
+
+                try
+                {
+                    final String alertText = alert.getText();
+                    final JsonNode args = call.arguments();
+                    final String rawAction = args.hasNonNull("action") ? args.path("action").asText().trim()
+                            : (args.hasNonNull("value") && args.path("value").asText().trim().matches("(?i)^(accept|dismiss|ok|cancel)$"))
+                                    ? args.path("value").asText().trim()
+                                    : (args.hasNonNull("text") && args.path("text").asText().trim().matches("(?i)^(accept|dismiss|ok|cancel)$"))
+                                            ? args.path("text").asText().trim()
+                                            : "accept";
+                    final String action = ("dismiss".equalsIgnoreCase(rawAction) || "cancel".equalsIgnoreCase(rawAction)) ? "dismiss" : "accept";
+
+                    final String candidatePrompt = args.hasNonNull("promptText") ? args.path("promptText").asText()
+                            : (args.hasNonNull("prompt") ? args.path("prompt").asText()
+                                    : (args.hasNonNull("target") && !args.path("target").asText().trim().matches("(?i)^(accept|dismiss|ok|cancel|alert|confirm|prompt)$"))
+                                            ? args.path("target").asText()
+                                            : (args.hasNonNull("locator") && !args.path("locator").asText().trim().matches("(?i)^(accept|dismiss|ok|cancel|alert|confirm|prompt)$"))
+                                                    ? args.path("locator").asText()
+                                                    : (args.hasNonNull("text") && !args.path("text").asText().trim().matches("(?i)^(accept|dismiss|ok|cancel)$"))
+                                                            ? args.path("text").asText()
+                                                            : (args.hasNonNull("value") && !args.path("value").asText().trim().matches("(?i)^(accept|dismiss|ok|cancel)$"))
+                                                                    ? args.path("value").asText()
+                                                                    : null);
+                    final String promptText = (candidatePrompt != null && !candidatePrompt.isBlank()) ? candidatePrompt : null;
+
+                    if (promptText != null)
+                    {
+                        alert.sendKeys(promptText);
+                    }
+
+                    if ("dismiss".equals(action))
+                    {
+                        alert.dismiss();
+                    }
+                    else
+                    {
+                        alert.accept();
+                    }
+
+                    final ObjectNode res = successNode("handle_alert");
+                    res.put("alertText", alertText);
+                    res.put("action", action);
+                    if (promptText != null)
+                    {
+                        res.put("promptText", promptText);
+                    }
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Failed resolving native browser alert: {}", e.getMessage());
+                    return ToolResult.error(call.callId(), errorNode("Failed resolving browser dialog: " + e.getMessage()).toString());
                 }
             }
         };

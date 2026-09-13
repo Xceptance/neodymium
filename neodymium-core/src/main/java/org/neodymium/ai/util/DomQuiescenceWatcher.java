@@ -203,7 +203,7 @@ public final class DomQuiescenceWatcher
      */
     public static void installTracker()
     {
-        if (!WebDriverRunner.hasWebDriverStarted())
+        if (!WebDriverRunner.hasWebDriverStarted() || BrowserToolProvider.isAlertPresent(WebDriverRunner.getWebDriver()))
         {
             return;
         }
@@ -235,7 +235,7 @@ public final class DomQuiescenceWatcher
      */
     public static void waitForDomQuiet(final Duration maxTimeout, final Duration quietPeriod)
     {
-        if (!WebDriverRunner.hasWebDriverStarted())
+        if (!WebDriverRunner.hasWebDriverStarted() || BrowserToolProvider.isAlertPresent(WebDriverRunner.getWebDriver()))
         {
             return;
         }
