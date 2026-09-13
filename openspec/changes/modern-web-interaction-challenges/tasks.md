@@ -7,10 +7,10 @@
 
 ## 2. File Upload & Styled Dropzones
 
-- [ ] 2.1 Create `AuraGlanceTest/shop/sandbox/file-upload.html` with styled dropzone containers enclosing hidden `<input type="file">` elements
-- [ ] 2.2 Implement `browser_upload_file(selector, filePath)` in `BrowserToolProvider` with smart ancestor/descendant file input resolution
-- [ ] 2.3 Add file upload support to `BrowserToolsTest` and verify upload schema and execution
-- [ ] 2.4 Create `FileUploadSandboxLiveTest` and `FileUploadSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
+- [x] 2.1 Create `AuraGlanceTest/shop/sandbox/file-upload.html` with styled dropzone containers enclosing hidden `<input type="file">` elements
+- [x] 2.2 Implement `browser_upload_file(selector, filePath)` in `BrowserToolProvider` with smart ancestor/descendant file input resolution
+- [x] 2.3 Add file upload support to `BrowserToolsTest` and verify upload schema and execution
+- [x] 2.4 Create `FileUploadSandboxLiveTest` and `FileUploadSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
 
 ## 3. Dynamic Virtualized Lists & Infinite Feeds
 

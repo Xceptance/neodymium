@@ -1282,6 +1282,7 @@ public final class AgentToolLoopStep implements PipelineStep
     {
         return "browser_click".equals(name)
                 || "browser_type".equals(name)
+                || "browser_upload_file".equals(name)
                 || "browser_select".equals(name)
                 || "browser_clear".equals(name)
                 || "browser_clear_cookies".equals(name)
@@ -1406,6 +1407,18 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("url"))
                 {
                     obj.put("url", obj.path("value").asText());
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("filePath"))
+                {
+                    obj.put("filePath", obj.path("value").asText());
+                }
+                if (obj.hasNonNull("file") && !obj.hasNonNull("filePath"))
+                {
+                    obj.put("filePath", obj.path("file").asText());
+                }
+                if (obj.hasNonNull("path") && !obj.hasNonNull("filePath"))
+                {
+                    obj.put("filePath", obj.path("path").asText());
                 }
                 if ("browser_navigate".equals(toolName) || "navigate".equalsIgnoreCase(toolName))
                 {
@@ -1562,7 +1575,8 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String name = stripNamespacePrefix(rawName.trim()).toLowerCase();
         return name.startsWith("browser_") || "complete_step".equals(name) || "click".equals(name)
-                || "type".equals(name) || "navigate".equals(name) || "hover".equals(name)
+                || "type".equals(name) || "upload".equals(name) || "upload_file".equals(name)
+                || "navigate".equals(name) || "hover".equals(name)
                 || "scroll".equals(name) || "select".equals(name) || "clear".equals(name)
                 || "clear_cookies".equals(name) || "back".equals(name) || "forward".equals(name)
                 || "refresh".equals(name) || "wait".equals(name) || "assert".equals(name)
@@ -1584,6 +1598,7 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             case "click" -> "browser_click";
             case "type" -> "browser_type";
+            case "upload", "upload_file" -> "browser_upload_file";
             case "navigate" -> "browser_navigate";
             case "hover" -> "browser_hover";
             case "scroll" -> "browser_scroll";

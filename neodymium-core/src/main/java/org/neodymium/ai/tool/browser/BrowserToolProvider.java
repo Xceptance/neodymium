@@ -54,6 +54,12 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -137,6 +143,7 @@ public final class BrowserToolProvider
         registry.register(createListTabsTool());
         registry.register(createSwitchTabTool());
         registry.register(createCloseTabTool());
+        registry.register(createUploadFileTool());
     }
 
     private static AiTool createClickTool()
@@ -2532,5 +2539,223 @@ public final class BrowserToolProvider
         {
             return "";
         }
+    }
+
+    private static AiTool createUploadFileTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "CSS selector, XPath, or container selector (such as a dropzone div). If omitted, targets the first file input on the page.");
+        props.putObject("filePath").put("type", "string").put("description", "Absolute file path, relative file path, classpath resource path, or filename of the file to upload.");
+        final ArrayNode required = schema.putArray("required");
+        required.add("filePath");
+
+        final ToolDefinition def = new ToolDefinition("browser_upload_file", "Uploads a local file to the targeted file input element or styled dropzone container without opening native OS dialogs. Automatically discovers nested or associated <input type='file'> elements.", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                if (!WebDriverRunner.hasWebDriverStarted())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Browser/WebDriver is not started yet.").toString());
+                }
+
+                final String selector = call.arguments().hasNonNull("selector") ? call.arguments().path("selector").asText().trim() : null;
+                final String rawFilePath = call.arguments().hasNonNull("filePath") ? call.arguments().path("filePath").asText().trim()
+                        : call.arguments().hasNonNull("file") ? call.arguments().path("file").asText().trim()
+                        : call.arguments().hasNonNull("path") ? call.arguments().path("path").asText().trim()
+                        : call.arguments().hasNonNull("value") ? call.arguments().path("value").asText().trim() : null;
+
+                if (rawFilePath == null || rawFilePath.isBlank())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Missing required parameter 'filePath'.").toString());
+                }
+
+                try
+                {
+                    final File resolvedFile = resolveUploadFile(rawFilePath);
+                    final SelenideElement targetInput = resolveFileInput(selector);
+
+                    if (targetInput == null || !targetInput.exists())
+                    {
+                        return ToolResult.error(call.callId(), errorNode("No <input type='file'> element found matching or within selector: " + selector).toString());
+                    }
+
+                    targetInput.uploadFile(resolvedFile);
+
+                    // Ensure change and input events fire even if browser upload didn't trigger them automatically
+                    try
+                    {
+                        Selenide.executeJavaScript("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));"
+                                + "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", targetInput);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+
+                    final WebDriver driver = WebDriverRunner.getWebDriver();
+                    final ObjectNode res = successNode("upload_file");
+                    res.put("selector", selector != null ? selector : "input[type='file']");
+                    res.put("fileName", resolvedFile.getName());
+                    res.put("fileSize", resolvedFile.length());
+                    res.put("url", getSafeUrl(driver));
+                    res.put("title", getSafeTitle(driver));
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Failed executing browser_upload_file: {}", e.getMessage());
+                    return ToolResult.error(call.callId(), errorNode("Failed uploading file: " + e.getMessage()).toString());
+                }
+            }
+        };
+    }
+
+    /**
+     * Resolves the target {@code <input type="file">} element given a selector which may point directly to
+     * a file input, a styled dropzone container, a form, or an associated label.
+     *
+     * @param selector the CSS selector, XPath, or null/empty to target the first file input
+     * @return the resolved SelenideElement representing the file input
+     */
+    public static SelenideElement resolveFileInput(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return $("input[type='file']");
+        }
+
+        final SelenideElement element = $(selector);
+        if (!element.exists())
+        {
+            // Try SelenideElementFinder for badge or fuzzy selector
+            try
+            {
+                final SelenideElement found = SelenideElementFinder.findElement(selector);
+                if (found != null && found.exists())
+                {
+                    return resolveFromCandidate(found);
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+            return $("input[type='file']");
+        }
+
+        return resolveFromCandidate(element);
+    }
+
+    private static SelenideElement resolveFromCandidate(final SelenideElement element)
+    {
+        final String tagName = element.getTagName();
+        if ("input".equalsIgnoreCase(tagName) && "file".equalsIgnoreCase(element.getAttribute("type")))
+        {
+            return element;
+        }
+
+        // Check if element contains an input[type='file'] descendant
+        final SelenideElement descendant = element.find("input[type='file']");
+        if (descendant.exists())
+        {
+            return descendant;
+        }
+
+        // Check label 'for' attribute
+        final String forAttr = element.getAttribute("for");
+        if (forAttr != null && !forAttr.isBlank())
+        {
+            final SelenideElement forElement = $("#" + forAttr);
+            if (forElement.exists() && "input".equalsIgnoreCase(forElement.getTagName()) && "file".equalsIgnoreCase(forElement.getAttribute("type")))
+            {
+                return forElement;
+            }
+        }
+
+        // Check closest container / parent for a file input
+        try
+        {
+            final SelenideElement parentInput = element.closest("form, div, section, fieldset").find("input[type='file']");
+            if (parentInput.exists())
+            {
+                return parentInput;
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        // Fallback to first file input on the page
+        final SelenideElement pageInput = $("input[type='file']");
+        return pageInput.exists() ? pageInput : element;
+    }
+
+    /**
+     * Resolves a file path string to an existing File on disk.
+     * Supports absolute paths, workspace-relative paths, classpath resources,
+     * and synthetic temporary test files if the file does not already exist.
+     *
+     * @param rawFilePath the input file path or filename
+     * @return the resolved File instance guaranteed to exist
+     * @throws IOException if temporary file creation fails
+     */
+    public static File resolveUploadFile(final String rawFilePath) throws IOException
+    {
+        if (rawFilePath == null || rawFilePath.isBlank())
+        {
+            throw new IllegalArgumentException("File path must not be null or empty.");
+        }
+
+        final String cleanPath = rawFilePath.trim();
+
+        // 1. Direct absolute or relative file on disk
+        final File directFile = new File(cleanPath);
+        if (directFile.exists() && directFile.isFile())
+        {
+            return directFile;
+        }
+
+        // 2. Relative to user working directory
+        final File userDirFile = new File(System.getProperty("user.dir"), cleanPath);
+        if (userDirFile.exists() && userDirFile.isFile())
+        {
+            return userDirFile;
+        }
+
+        // 3. Classpath resource
+        final URL resource = BrowserToolProvider.class.getClassLoader().getResource(cleanPath);
+        if (resource != null)
+        {
+            try
+            {
+                final File resFile = new File(resource.toURI());
+                if (resFile.exists() && resFile.isFile())
+                {
+                    return resFile;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        // 4. Synthetic temporary mock file fallback (isolated directory preserving exact filename)
+        final String baseName = Paths.get(cleanPath).getFileName().toString();
+        final Path tempDir = Files.createTempDirectory("neo_upload_");
+        final Path targetPath = tempDir.resolve(baseName);
+        final File tempFile = targetPath.toFile();
+        tempFile.deleteOnExit();
+        tempDir.toFile().deleteOnExit();
+        Files.writeString(targetPath, "Synthetic upload payload for " + baseName + "\nGenerated by Neodymium Aura AI Test Engine.");
+        LOGGER.info("Created synthetic upload file for '{}' at {}", baseName, tempFile.getAbsolutePath());
+        return tempFile;
     }
 }

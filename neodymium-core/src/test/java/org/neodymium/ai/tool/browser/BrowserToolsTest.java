@@ -36,6 +36,8 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.List;
@@ -86,7 +88,8 @@ public class BrowserToolsTest
                 "browser_store",
                 "browser_list_tabs",
                 "browser_switch_tab",
-                "browser_close_tab"
+                "browser_close_tab",
+                "browser_upload_file"
         );
 
         for (final String toolName : expectedTools)
@@ -685,6 +688,42 @@ public class BrowserToolsTest
         Assertions.assertDoesNotThrow(() -> BrowserToolProvider.ensureValidWindowFocus(emptyDriver));
         Assertions.assertEquals("", BrowserToolProvider.getSafeUrl(emptyDriver));
         Assertions.assertEquals("", BrowserToolProvider.getSafeTitle(emptyDriver));
+    }
+
+    @Test
+    public void testBrowserUploadFileSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_upload_file").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_upload_file", def.name());
+        Assertions.assertTrue(def.description().contains("Uploads"));
+
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode props = schema.path("properties");
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("filePath"));
+
+        final JsonNode req = schema.path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals("filePath", req.get(0).asText());
+    }
+
+    @Test
+    public void testResolveUploadFile() throws IOException
+    {
+        // 1. Existing file on disk
+        final File pomFile = BrowserToolProvider.resolveUploadFile("pom.xml");
+        Assertions.assertNotNull(pomFile);
+        Assertions.assertTrue(pomFile.exists());
+        Assertions.assertTrue(pomFile.isFile());
+
+        // 2. Synthetic temporary test file
+        final File synthFile = BrowserToolProvider.resolveUploadFile("test-report.pdf");
+        Assertions.assertNotNull(synthFile);
+        Assertions.assertTrue(synthFile.exists());
+        Assertions.assertTrue(synthFile.length() > 0);
+        Assertions.assertTrue(synthFile.getName().contains("test-report"));
+        Assertions.assertTrue(synthFile.getName().endsWith(".pdf"));
     }
 }
 

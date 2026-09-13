@@ -70,6 +70,7 @@ import org.neodymium.ai.executor.selenide.plugins.ScrollAction;
 import org.neodymium.ai.executor.selenide.plugins.SelectAction;
 import org.neodymium.ai.executor.selenide.plugins.SwitchWindowAction;
 import org.neodymium.ai.executor.selenide.plugins.TypeAction;
+import org.neodymium.ai.executor.selenide.plugins.UploadAction;
 import org.neodymium.ai.executor.selenide.plugins.WaitAction;
 import org.neodymium.ai.executor.selenide.plugins.CheckAction;
 import org.neodymium.ai.executor.selenide.plugins.StoreAction;
@@ -116,6 +117,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("WAIT", new WaitAction());
         this.plugins.put("KEY_PRESS", new KeyPressAction());
         this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
+        this.plugins.put("UPLOAD", new UploadAction());
         final AssertAction assertPlugin = new AssertAction();
         this.plugins.put("ASSERT", assertPlugin);
         this.plugins.put("ASSERT_EXISTS", assertPlugin);
