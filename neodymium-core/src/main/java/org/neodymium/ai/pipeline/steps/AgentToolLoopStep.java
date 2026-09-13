@@ -234,7 +234,7 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             final String parentRaw = step.getParent().getInstruction();
             final String parentResolved = context.getSessionData() != null
-                ? context.getSessionData().resolveVariables(parentRaw)
+                ? context.getSessionData().resolveAvailableVariables(parentRaw)
                 : parentRaw;
             userPrompt.append("### Scoping Context:\n")
                 .append(parentResolved)
@@ -400,6 +400,7 @@ public final class AgentToolLoopStep implements PipelineStep
             systemPrompt.append("   - If the instruction asks you to click a button or link (e.g. 'Add to Cart', an accordion toggle, a dropdown button), click that button and immediately call 'complete_step'. Do NOT select options, sizes, or variants from menus, modals, or dropdowns that appear as a result of the click unless the instruction explicitly commands you to in this step.\n");
             systemPrompt.append("   - Subsequent test steps will perform any follow-up actions (such as choosing sizes, entering information, or checking out). Performing them prematurely will cause subsequent steps to fail!\n");
             systemPrompt.append("   - If the instruction explicitly asks for multiple inputs or milestones (e.g. 'Enter Mario as first name, Meier as last name, and email ...'), execute all requested milestone actions before calling 'complete_step'.\n");
+            systemPrompt.append("   - When typing with `browser_type`, do NOT set `pressEnter: true` unless the instruction explicitly commands you to press Enter or submit the form. Subsequent steps may verify live autocomplete suggestions, dropdowns, or click separate submit buttons.\n");
             systemPrompt.append("   - Use dedicated browser tools (`browser_type`, `browser_click`, `browser_select`) for interacting with forms and elements. Do NOT use `browser_execute_script` to fill forms or click buttons, as this bypasses validation and event tracking.\n");
         }
         systemPrompt.append("2. COMPLETION: As soon as the instruction's described goal or milestones are achieved, you MUST invoke 'complete_step'. Do not continue calling tools.\n");

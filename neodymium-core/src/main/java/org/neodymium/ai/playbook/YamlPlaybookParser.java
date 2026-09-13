@@ -170,7 +170,55 @@ public final class YamlPlaybookParser implements PlaybookParser
             for (final PlaybookStep step : steps)
             {
                 step.setParent(parent);
-                setParentReferences(step.getSubSteps(), step);
+                if (step.hasSubSteps())
+                {
+                    normalizeCompositeModifiers(step);
+                    setParentReferences(step.getSubSteps(), step);
+                }
+            }
+        }
+    }
+
+    private void normalizeCompositeModifiers(final PlaybookStep step)
+    {
+        if (step.hasSubSteps())
+        {
+            final List<PlaybookStep> children = step.getSubSteps();
+
+            final boolean hasBugChild = children.stream().anyMatch(PlaybookStep::isBug);
+            final boolean hasNonBugChild = children.stream().anyMatch(sub -> !sub.isBug());
+            if (hasBugChild && hasNonBugChild && step.isBug())
+            {
+                step.setBug(false);
+                step.setBugDetails(null);
+            }
+
+            final boolean hasNoReplayChild = children.stream().anyMatch(PlaybookStep::isNoReplay);
+            final boolean hasReplayChild = children.stream().anyMatch(sub -> !sub.isNoReplay());
+            if (hasNoReplayChild && hasReplayChild && step.isNoReplay())
+            {
+                step.setNoReplay(false);
+            }
+
+            final boolean hasOptionalChild = children.stream().anyMatch(PlaybookStep::isOptional);
+            final boolean hasNonOptionalChild = children.stream().anyMatch(sub -> !sub.isOptional());
+            if (hasOptionalChild && hasNonOptionalChild && step.isOptional())
+            {
+                step.setOptional(false);
+            }
+
+            final boolean hasContinueChild = children.stream().anyMatch(PlaybookStep::isContinueOnError);
+            final boolean hasNonContinueChild = children.stream().anyMatch(sub -> !sub.isContinueOnError());
+            if (hasContinueChild && hasNonContinueChild && step.isContinueOnError())
+            {
+                step.setContinueOnError(false);
+            }
+
+            final boolean hasNoHealingChild = children.stream().anyMatch(PlaybookStep::isNoHealing);
+            final boolean hasHealingChild = children.stream().anyMatch(sub -> !sub.isNoHealing());
+            if (hasNoHealingChild && hasHealingChild && step.isNoHealing())
+            {
+                step.setNoHealing(false);
             }
         }
     }
@@ -779,6 +827,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 try
                 {
                     final List<PlaybookStep> jsonSteps = mapper.readValue(content, new TypeReference<List<PlaybookStep>>(){});
+                    setParentReferences(jsonSteps, null);
                     return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons());
                 }
                 catch (final Exception e)

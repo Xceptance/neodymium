@@ -125,7 +125,7 @@ public final class VisualRcaStep implements PipelineStep
         final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
 
         final String rawInstruction = currentStep != null ? currentStep.getInstruction() : "Unknown step";
-        final String instruction = context.getSessionData() != null ? context.getSessionData().resolveVariables(rawInstruction) : rawInstruction;
+        final String instruction = context.getSessionData() != null ? context.getSessionData().resolveAvailableVariables(rawInstruction) : rawInstruction;
         final String err = this.errorMessage != null ? this.errorMessage : "Execution error occurred";
 
         // 3. Construct VisualRcaPrompt template with step instruction and error context

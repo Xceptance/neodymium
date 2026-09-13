@@ -100,17 +100,9 @@ public final class ExecuteActionsStep
                 final long parentStartTime = System.currentTimeMillis();
                 step.setStartTimeMs(parentStartTime);
                 final String rawInstruction = step.getInstruction();
-                String resolvedInstruction = rawInstruction;
-                if (contextState.getSessionData() != null && rawInstruction != null)
-                {
-                    try
-                    {
-                        resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
-                    }
-                    catch (final IllegalArgumentException ignored)
-                    {
-                    }
-                }
+                final String resolvedInstruction = (contextState.getSessionData() != null && rawInstruction != null)
+                    ? contextState.getSessionData().resolveAvailableVariables(rawInstruction)
+                    : rawInstruction;
                 contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
                 contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, rawInstruction);
 
@@ -407,7 +399,7 @@ public final class ExecuteActionsStep
                     if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite && !isRecordedCompletedStep)
                     {
                         final String resolvedStrictStep = c.getSessionData() != null
-                            ? c.getSessionData().resolveVariables(step.getInstruction())
+                            ? c.getSessionData().resolveAvailableVariables(step.getInstruction())
                             : step.getInstruction();
                         throw new ConclusiveFailureException(
                             "No recorded tool calls found for step '" + resolvedStrictStep + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
@@ -572,7 +564,7 @@ public final class ExecuteActionsStep
                     final String bugComment = step.getBugDetails();
                     final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
                     final String resolvedBugInstruction = c.getSessionData() != null
-                        ? c.getSessionData().resolveVariables(step.getInstruction())
+                        ? c.getSessionData().resolveAvailableVariables(step.getInstruction())
                         : step.getInstruction();
                     final String msg = String.format("Expected bug%s but step succeeded: %s:%d (%s)",
                         bugStr, step.getSourceFile(), step.getLineNumber(), resolvedBugInstruction);
@@ -627,7 +619,7 @@ public final class ExecuteActionsStep
         {
             final String raw = step.getInstruction();
             final String resolved = (contextState != null && contextState.getSessionData() != null)
-                ? contextState.getSessionData().resolveVariables(raw)
+                ? contextState.getSessionData().resolveAvailableVariables(raw)
                 : raw;
             stats = new StepStats(resolved, startTime);
             stats.setReplayed(replayed);

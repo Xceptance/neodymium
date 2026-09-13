@@ -282,4 +282,47 @@ public class PlaybookStepTest
         Assertions.assertFalse(cleanParent.isNoHealing());
         Assertions.assertFalse(cleanParent.isNoReplay());
     }
+
+    @Test
+    public void testCompositeStepModifierSerializationRoundTrip() throws Exception
+    {
+        final PlaybookStep parent = new PlaybookStep("Locate promo field:");
+        final PlaybookStep subAction = new PlaybookStep("type 'DISCOUNT' into field");
+        final PlaybookStep subBug = new PlaybookStep("Assert item 'Free Gift' is present (bug: PROMO-101)");
+        final PlaybookStep subOptional = new PlaybookStep("Check badge (optional)");
+        final PlaybookStep subNoReplay = new PlaybookStep("Generate OTP token (no-replay)");
+
+        parent.getSubSteps().addAll(List.of(subAction, subBug, subOptional, subNoReplay));
+        subAction.setParent(parent);
+        subBug.setParent(parent);
+        subOptional.setParent(parent);
+        subNoReplay.setParent(parent);
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final String json = mapper.writeValueAsString(parent);
+
+        Assertions.assertTrue(json.contains("\"bug\":false") || json.contains("\"bug\" : false"));
+        Assertions.assertTrue(json.contains("\"optional\":false") || json.contains("\"optional\" : false"));
+        Assertions.assertTrue(json.contains("\"noReplay\":false") || json.contains("\"noReplay\" : false"));
+
+        final PlaybookStep deserialized = mapper.readValue(json, PlaybookStep.class);
+        for (final PlaybookStep child : deserialized.getSubSteps())
+        {
+            child.setParent(deserialized);
+        }
+
+        Assertions.assertTrue(deserialized.isBug());
+        Assertions.assertEquals("PROMO-101", deserialized.getBugDetails());
+        Assertions.assertTrue(deserialized.isOptional());
+        Assertions.assertTrue(deserialized.isNoReplay());
+
+        final PlaybookStep deserializedSubAction = deserialized.getSubSteps().get(0);
+        Assertions.assertFalse(deserializedSubAction.isBug(), "subAction must not inherit bug from sibling");
+        Assertions.assertFalse(deserializedSubAction.isOptional(), "subAction must not inherit optional from sibling");
+        Assertions.assertFalse(deserializedSubAction.isNoReplay(), "subAction must not inherit noReplay from sibling");
+
+        final PlaybookStep deserializedSubBug = deserialized.getSubSteps().get(1);
+        Assertions.assertTrue(deserializedSubBug.isBug());
+        Assertions.assertEquals("PROMO-101", deserializedSubBug.getBugDetails());
+    }
 }

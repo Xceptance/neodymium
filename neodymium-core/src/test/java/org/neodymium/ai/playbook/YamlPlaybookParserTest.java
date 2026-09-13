@@ -561,4 +561,45 @@ public class YamlPlaybookParserTest
         assertTrue(secondOccurrence.isBug());
         assertFalse(firstOccurrence.isBug());
     }
+
+    @Test
+    public void testLegacyJsonRecordingNormalizationWithParentBugFlag() throws Exception
+    {
+        final String legacyJson = """
+            [
+              {
+                "instruction": "Locate the promo code input field",
+                "bug": true,
+                "subSteps": [
+                  {
+                    "instruction": "clear its content",
+                    "bug": false
+                  },
+                  {
+                    "instruction": "Assert promo line item is shown",
+                    "bug": true
+                  }
+                ]
+              }
+            ]
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("recording.json", legacyJson);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("recording.json", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+
+        final PlaybookStep parent = playbook.getSteps().get(0);
+        assertTrue(parent.isBug(), "Parent should still evaluate to true when queried dynamically");
+
+        final PlaybookStep sub0 = parent.getSubSteps().get(0);
+        assertFalse(sub0.isBug(), "sub0 must be normalized to false and not inherit bug from parent");
+
+        final PlaybookStep sub1 = parent.getSubSteps().get(1);
+        assertTrue(sub1.isBug(), "sub1 must preserve its own bug flag");
+    }
 }

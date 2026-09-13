@@ -189,7 +189,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                                     step.setFullPage(true);
                                 }
                                 final String resolvedInstr = context.getSessionData() != null
-                                    ? context.getSessionData().resolveVariables(step.getInstruction())
+                                    ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                                     : step.getInstruction();
                                 LOGGER.debug("📸 [Visual Hashing] Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
 
@@ -220,7 +220,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             catch (final Exception e)
             {
                 final String resolvedInstr = (step != null && context.getSessionData() != null)
-                    ? context.getSessionData().resolveVariables(step.getInstruction())
+                    ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                     : (step != null ? step.getInstruction() : "Unknown");
                 LOGGER.warn("⚠️ Failed to capture visual baseline hash for instruction: \"{}\": {}", resolvedInstr, e.getMessage());
             }
@@ -293,7 +293,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         LOGGER.debug("================================================================================");
         LOGGER.debug("🔍 [Optional AI Outcome Verification]");
         final String resolvedHeaderInstr = (step != null && context.getSessionData() != null)
-            ? context.getSessionData().resolveVariables(step.getInstruction())
+            ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
             : (step != null ? step.getInstruction() : "Unknown");
         LOGGER.debug("       Instruction: \"{}\"", resolvedHeaderInstr);
         LOGGER.debug("================================================================================");
@@ -451,7 +451,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                     final String stepLoc = step != null ? String.format("%s:%d", step.getSourceFile(), step.getLineNumber()) : "Unknown Location";
                     final String rawInstr = step != null ? step.getInstruction() : "";
                     final String instruction = (context.getSessionData() != null)
-                        ? context.getSessionData().resolveVariables(rawInstr)
+                        ? context.getSessionData().resolveAvailableVariables(rawInstr)
                         : rawInstr;
                     final String summary = result.getOverallVerdict() != null ? result.getOverallVerdict().summary() : "";
 
@@ -520,7 +520,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 final List<Object> warnings = (List<Object>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new ArrayList<Object>());
                 final String rawInstr = step != null ? step.getInstruction() : "";
                 final String resolvedInstr = (context.getSessionData() != null)
-                    ? context.getSessionData().resolveVariables(rawInstr)
+                    ? context.getSessionData().resolveAvailableVariables(rawInstr)
                     : rawInstr;
                 final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), resolvedInstr) : "Unknown Step";
                 warnings.add(String.format("Step: %s. Parse error: %s", stepStr, e.getMessage()));
@@ -546,7 +546,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 if (dHash != null)
                 {
                     final String resolvedInstr = context.getSessionData() != null
-                        ? context.getSessionData().resolveVariables(step.getInstruction())
+                        ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                         : step.getInstruction();
                     LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
                     step.setScreenshotHash(dHash);
@@ -579,7 +579,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 else
                 {
                     final String resolvedInstr = context.getSessionData() != null
-                        ? context.getSessionData().resolveVariables(step.getInstruction())
+                        ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                         : step.getInstruction();
                     LOGGER.warn("   ⚠️ No image attachment found or base64 data was empty to compute dHash for instruction: \"{}\"", resolvedInstr);
                 }
@@ -625,7 +625,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new ArrayList<String>());
             final String rawInstr = step != null ? step.getInstruction() : "";
             final String resolvedInstr = (context.getSessionData() != null)
-                ? context.getSessionData().resolveVariables(rawInstr)
+                ? context.getSessionData().resolveAvailableVariables(rawInstr)
                 : rawInstr;
             final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), resolvedInstr) : "Unknown Step";
             warnings.add(String.format("Step: %s. Execution error: %s", stepStr, e.getMessage()));

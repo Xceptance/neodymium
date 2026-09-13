@@ -366,7 +366,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "Selector of the input element");
         props.putObject("text").put("type", "string").put("description", "Text to type into the element");
         props.putObject("clearFirst").put("type", "boolean").put("description", "Whether to clear existing text first (default: true)");
-        props.putObject("pressEnter").put("type", "boolean").put("description", "Whether to press Enter key after typing (default: false)");
+        props.putObject("pressEnter").put("type", "boolean").put("description", "Whether to press Enter key after typing (default: false). MUST remain false unless the test instruction explicitly asks to press Enter, hit Enter, or submit the form.");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");

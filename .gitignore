@@ -68,3 +68,5 @@ chat-history/
 # Neodymium Aura Manager sandbox folders
 **/src/test/java/com/xceptance/neodymium/aura/sandbox/
 target/aura-sandbox/
+**/aura-report-manager/
+

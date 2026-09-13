@@ -122,6 +122,26 @@ public class BrowserToolsTest
     }
 
     @Test
+    public void testBrowserTypeToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_type").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("text"));
+        Assertions.assertTrue(props.has("clearFirst"));
+        Assertions.assertTrue(props.has("pressEnter"));
+
+        final String pressEnterDesc = props.path("pressEnter").path("description").asText();
+        Assertions.assertTrue(pressEnterDesc.contains("MUST remain false unless"),
+            "Description must clarify that pressEnter should remain false unless explicitly requested");
+
+        final JsonNode req = tool.getDefinition().parametersSchema().path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals(2, req.size());
+    }
+
+    @Test
     public void testBrowserQueryDomSchema()
     {
         final AiTool tool = this.registry.getTool("browser_query_dom").orElseThrow();

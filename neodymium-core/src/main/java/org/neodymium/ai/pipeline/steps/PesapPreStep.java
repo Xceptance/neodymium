@@ -103,7 +103,9 @@ public final class PesapPreStep implements PipelineStep
 
         final AiConfiguration config = AiConfiguration.getInstance();
         final String rawInstruction = this.step.hasSubSteps() ? this.step.getFullInstruction() : this.step.getInstruction();
-        final String resolvedInstruction = context.getSessionData().resolveVariables(rawInstruction);
+        final String resolvedInstruction = context.getSessionData() != null
+            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
+            : rawInstruction;
         final StepStats stats = (StepStats) context.getTransientData().get("KEY_CURRENT_STEP_STATS");
 
         @SuppressWarnings("unchecked")

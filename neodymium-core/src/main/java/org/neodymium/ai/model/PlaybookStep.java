@@ -51,31 +51,37 @@ public final class PlaybookStep
     /**
      * Flag indicating that this step should bypass the replay cache and execute live.
      */
+    @JsonProperty("noReplay")
     private boolean noReplay;
 
     /**
      * Flag indicating that this step is optional, meaning failures do not break the test.
      */
+    @JsonProperty("optional")
     private boolean optional;
 
     /**
      * Flag indicating that this step expects a bug (failing is expected, success is a failure).
      */
+    @JsonProperty("bug")
     private boolean bug;
 
     /**
      * Optional description or ID of the bug.
      */
+    @JsonProperty("bugDetails")
     private String bugDetails;
 
     /**
      * Flag indicating that test execution should continue even if this step fails or has unexpected success.
      */
+    @JsonProperty("continueOnError")
     private boolean continueOnError;
 
     /**
      * Flag indicating that self-healing is disabled for this step.
      */
+    @JsonProperty("noHealing")
     private boolean noHealing;
 
     /**
@@ -429,6 +435,7 @@ public final class PlaybookStep
      *
      * @return true if no-replay, false otherwise
      */
+    @JsonIgnore
     public boolean isNoReplay()
     {
         return hasNoReplayRecursive(true, true);
@@ -473,6 +480,7 @@ public final class PlaybookStep
      *
      * @return true if optional, false otherwise
      */
+    @JsonIgnore
     public boolean isOptional()
     {
         return hasOptionalRecursive(true, true);
@@ -517,6 +525,7 @@ public final class PlaybookStep
      *
      * @return true if bug expected, false otherwise
      */
+    @JsonIgnore
     public boolean isBug()
     {
         return hasBugRecursive(true, true);
@@ -561,6 +570,7 @@ public final class PlaybookStep
      *
      * @return the bug details, or null
      */
+    @JsonIgnore
     public String getBugDetails()
     {
         return getBugDetailsRecursive(true, true);
@@ -610,6 +620,7 @@ public final class PlaybookStep
      *
      * @return true if continue on error, false otherwise
      */
+    @JsonIgnore
     public boolean isContinueOnError()
     {
         return hasContinueOnErrorRecursive(true, true);
@@ -654,6 +665,7 @@ public final class PlaybookStep
      *
      * @return true if self-healing is disabled, false otherwise
      */
+    @JsonIgnore
     public boolean isNoHealing()
     {
         return hasNoHealingRecursive(true, true);

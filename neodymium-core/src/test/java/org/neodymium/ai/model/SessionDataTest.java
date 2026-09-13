@@ -21,6 +21,7 @@ package org.neodymium.ai.model;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
@@ -251,5 +252,56 @@ public final class SessionDataTest
         // Static lookup with differing casing
         assertEquals("secret-123", session.get("APIKEY"));
         assertEquals("Key: secret-123", session.resolveVariables("Key: ${apikey}"));
+    }
+
+    /**
+     * Verifies that resolveVariables throws UnresolvableVariableException with typed accessors.
+     */
+    @Test
+    public void testResolveVariablesThrowsUnresolvableVariableException()
+    {
+        final SessionData session = new SessionData();
+        final String template = "Open ${missingVar}/home";
+        final UnresolvableVariableException ex = assertThrows(
+            UnresolvableVariableException.class,
+            () -> session.resolveVariables(template)
+        );
+
+        assertEquals("missingVar", ex.getVariableName());
+        assertEquals(template, ex.getTemplate());
+        assertTrue(ex.getMessage().contains("Unresolvable variable placeholder '${missingVar}'"));
+    }
+
+    /**
+     * Verifies that resolveAvailableVariables partially resolves known variables and leaves unknown ones intact.
+     */
+    @Test
+    public void testResolveAvailableVariablesPartialResolution()
+    {
+        final SessionData session = new SessionData();
+        session.set("testId", "normal");
+        session.set("user", "alice");
+
+        final String template = "Verify test '${testId}' for user '${user}' has count > ${lineItemCount}.";
+        final String result = session.resolveAvailableVariables(template);
+
+        assertEquals("Verify test 'normal' for user 'alice' has count > ${lineItemCount}.", result);
+    }
+
+    /**
+     * Verifies that resolveAvailableVariables supports nested resolution of available variables.
+     */
+    @Test
+    public void testResolveAvailableVariablesNestedResolution()
+    {
+        final SessionData session = new SessionData();
+        session.set("baseUrl", "http://${host}:${port}");
+        session.set("host", "localhost");
+        session.set("port", "8080");
+
+        final String template = "Navigate to ${baseUrl}/checkout?token=${futureToken}";
+        final String result = session.resolveAvailableVariables(template);
+
+        assertEquals("Navigate to http://localhost:8080/checkout?token=${futureToken}", result);
     }
 }

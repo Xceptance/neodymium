@@ -85,7 +85,10 @@ public final class VisualBaselineGateStep implements PipelineStep
             return false;
         }
 
-        final String resolvedInstruction = context.getSessionData().resolveVariables(this.step.getInstruction());
+        final String rawInstruction = this.step.getInstruction();
+        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
+            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
+            : rawInstruction;
         final ExecutionMode mode = (ExecutionMode) context.getTransientData()
             .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 

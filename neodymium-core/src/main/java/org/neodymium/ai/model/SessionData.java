@@ -23,10 +23,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.aeonbits.owner.Accessible;
 
 /**
  * Layered data holder providing clean static/dynamic variables separation,
@@ -329,28 +331,43 @@ public final class SessionData
         return sensitiveMap;
     }
 
-    private static final java.util.regex.Pattern VARIABLE_PATTERN = java.util.regex.Pattern.compile("\\$\\{([^}]+)\\}");
+    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}");
 
     /**
      * Resolves variable placeholders in the format "${variableName}" in a template string
      * using the values stored in this SessionData container. Supports nested resolution.
+     * Throws {@link UnresolvableVariableException} if any placeholder cannot be resolved.
      *
      * @param template the template string containing placeholders
      * @return the resolved string with placeholders replaced by actual values
+     * @throws UnresolvableVariableException if any placeholder cannot be resolved
      */
     public String resolveVariables(final String template)
     {
-        return resolveVariables(template, 0);
+        return resolveVariables(template, 0, true);
     }
 
-    private String resolveVariables(final String template, final int depth)
+    /**
+     * Leniently resolves all currently available variable placeholders in the format "${variableName}"
+     * in a template string. Any unresolvable placeholders (e.g. dynamic variables to be captured later)
+     * are left intact without throwing an exception. Supports nested resolution of available variables.
+     *
+     * @param template the template string containing placeholders
+     * @return the partially resolved string with known placeholders replaced and unknown ones intact
+     */
+    public String resolveAvailableVariables(final String template)
+    {
+        return resolveVariables(template, 0, false);
+    }
+
+    private String resolveVariables(final String template, final int depth, final boolean strict)
     {
         if (depth > 10 || template == null || template.isEmpty())
         {
             return template;
         }
 
-        final java.util.regex.Matcher matcher = VARIABLE_PATTERN.matcher(template);
+        final Matcher matcher = VARIABLE_PATTERN.matcher(template);
         final StringBuilder sb = new StringBuilder();
         int lastEnd = 0;
         boolean replaced = false;
@@ -362,9 +379,14 @@ public final class SessionData
             final Object value = this.get(placeholderKey);
             if (value == null)
             {
-                throw new IllegalArgumentException(
-                    "Unresolvable variable placeholder '${" + placeholderKey + "}' in template: \"" + template + "\""
-                );
+                if (strict)
+                {
+                    throw new UnresolvableVariableException(placeholderKey, template);
+                }
+                else
+                {
+                    sb.append(matcher.group(0));
+                }
             }
             else
             {
@@ -378,7 +400,7 @@ public final class SessionData
         final String result = sb.toString();
         if (replaced && result.contains("${"))
         {
-            return resolveVariables(result, depth + 1);
+            return resolveVariables(result, depth + 1, strict);
         }
         return result;
     }
@@ -441,12 +463,12 @@ public final class SessionData
      */
     public Map<String, String> getAllVariables()
     {
-        final Map<String, String> varMap = new java.util.HashMap<>();
+        final Map<String, String> varMap = new HashMap<>();
         
         // 1. Neodymium configuration properties
         try
         {
-            if (org.neodymium.util.Neodymium.configuration() instanceof org.aeonbits.owner.Accessible acc)
+            if (org.neodymium.util.Neodymium.configuration() instanceof Accessible acc)
             {
                 for (final String propName : acc.propertyNames())
                 {
@@ -483,7 +505,7 @@ public final class SessionData
         // 3. System properties
         try
         {
-            final java.util.Properties sysProps = System.getProperties();
+            final Properties sysProps = System.getProperties();
             if (sysProps != null)
             {
                 for (final String key : sysProps.stringPropertyNames())
@@ -522,12 +544,12 @@ public final class SessionData
         for (int pass = 0; pass < 5; pass++)
         {
             boolean changed = false;
-            for (final Map.Entry<String, String> entry : new java.util.HashMap<>(varMap).entrySet())
+            for (final Map.Entry<String, String> entry : new HashMap<>(varMap).entrySet())
             {
                 final String val = entry.getValue();
                 if (val != null && val.contains("${"))
                 {
-                    final String resolved = resolveVariables(val);
+                    final String resolved = resolveAvailableVariables(val);
                     if (!val.equals(resolved))
                     {
                         varMap.put(entry.getKey(), resolved);
