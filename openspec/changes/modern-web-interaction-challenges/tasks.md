@@ -1,9 +1,9 @@
 ## 1. Multi-Tab & Window Popups
 
-- [ ] 1.1 Create `AuraGlanceTest/shop/sandbox/multi-window.html` and `popup.html` with `target="_blank"` links, `window.open` popups, and dynamic status updates
-- [ ] 1.2 Implement `browser_list_tabs`, `browser_switch_tab`, and `browser_close_tab` native tools in `BrowserToolProvider` and verify unit test passes in `BrowserToolsTest`
-- [ ] 1.3 Add active window handle synchronization in `AgentToolLoopStep` so subsequent DOM captures target the switched window
-- [ ] 1.4 Create `MultiWindowSandboxLiveTest` and `MultiWindowSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
+- [x] 1.1 Create `AuraGlanceTest/shop/sandbox/multi-window.html` and `popup.html` with `target="_blank"` links, `window.open` popups, and dynamic status updates
+- [x] 1.2 Implement `browser_list_tabs`, `browser_switch_tab`, and `browser_close_tab` native tools in `BrowserToolProvider` and verify unit test passes in `BrowserToolsTest`
+- [x] 1.3 Add active window handle synchronization in `AgentToolLoopStep` so subsequent DOM captures target the switched window
+- [x] 1.4 Create `MultiWindowSandboxLiveTest` and `MultiWindowSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
 
 ## 2. File Upload & Styled Dropzones
 

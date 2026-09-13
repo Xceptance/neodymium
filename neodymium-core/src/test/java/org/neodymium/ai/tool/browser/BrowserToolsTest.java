@@ -33,12 +33,17 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 
 import java.lang.reflect.Proxy;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 /**
@@ -78,7 +83,10 @@ public class BrowserToolsTest
                 "browser_inspect_visual",
                 "browser_press_key",
                 "browser_request_context",
-                "browser_store"
+                "browser_store",
+                "browser_list_tabs",
+                "browser_switch_tab",
+                "browser_close_tab"
         );
 
         for (final String toolName : expectedTools)
@@ -565,5 +573,119 @@ public class BrowserToolsTest
         Assertions.assertTrue(props.path("x").path("description").asText().contains("relative to selector"));
         Assertions.assertTrue(props.path("y").path("description").asText().contains("relative to selector"));
     }
+
+    @Test
+    public void testBrowserTabToolsSchema()
+    {
+        final AiTool listTool = this.registry.getTool("browser_list_tabs").orElseThrow();
+        Assertions.assertEquals("browser_list_tabs", listTool.getDefinition().name());
+        Assertions.assertTrue(listTool.getDefinition().description().contains("tabs"));
+
+        final AiTool switchTool = this.registry.getTool("browser_switch_tab").orElseThrow();
+        Assertions.assertEquals("browser_switch_tab", switchTool.getDefinition().name());
+        final JsonNode switchProps = switchTool.getDefinition().parametersSchema().path("properties");
+        Assertions.assertTrue(switchProps.has("target"));
+
+        final AiTool closeTool = this.registry.getTool("browser_close_tab").orElseThrow();
+        Assertions.assertEquals("browser_close_tab", closeTool.getDefinition().name());
+        Assertions.assertTrue(closeTool.getDefinition().description().contains("Closes"));
+    }
+
+    @Test
+    public void testEnsureValidWindowFocusAndSafeUrlOnClosedWindow()
+    {
+        final AtomicReference<String> activeHandle = new AtomicReference<>("closed-popup");
+        final AtomicBoolean switched = new AtomicBoolean(false);
+
+        final WebDriver.TargetLocator mockTargetLocator = (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{WebDriver.TargetLocator.class},
+                (locatorProxy, locatorMethod, locatorArgs) -> {
+                    if ("window".equals(locatorMethod.getName()) && locatorArgs != null && locatorArgs.length > 0)
+                    {
+                        activeHandle.set(String.valueOf(locatorArgs[0]));
+                        switched.set(true);
+                        return null;
+                    }
+                    return null;
+                }
+        );
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getWindowHandle".equals(name))
+                    {
+                        if ("closed-popup".equals(activeHandle.get()))
+                        {
+                            throw new NoSuchWindowException("target window already closed");
+                        }
+                        return activeHandle.get();
+                    }
+                    if ("getWindowHandles".equals(name))
+                    {
+                        return Set.of("window-main");
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return mockTargetLocator;
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        if ("closed-popup".equals(activeHandle.get()))
+                        {
+                            throw new NoSuchWindowException("target window already closed");
+                        }
+                        return "http://example.com/main";
+                    }
+                    if ("getTitle".equals(name))
+                    {
+                        if ("closed-popup".equals(activeHandle.get()))
+                        {
+                            throw new NoSuchWindowException("target window already closed");
+                        }
+                        return "Main Window Title";
+                    }
+                    return null;
+                }
+        );
+
+        // Verify safe URL and Title automatically recover from closed window
+        final String safeUrl = BrowserToolProvider.getSafeUrl(mockDriver);
+        Assertions.assertEquals("http://example.com/main", safeUrl);
+        Assertions.assertTrue(switched.get());
+        Assertions.assertEquals("window-main", activeHandle.get());
+
+        final String safeTitle = BrowserToolProvider.getSafeTitle(mockDriver);
+        Assertions.assertEquals("Main Window Title", safeTitle);
+
+        // Verify null driver
+        Assertions.assertEquals("", BrowserToolProvider.getSafeUrl(null));
+        Assertions.assertEquals("", BrowserToolProvider.getSafeTitle(null));
+
+        // Verify when all windows closed (empty window handles)
+        final WebDriver emptyDriver = (WebDriver) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (proxy, method, args) -> {
+                    if ("getWindowHandle".equals(method.getName()))
+                    {
+                        throw new NoSuchWindowException("closed");
+                    }
+                    if ("getWindowHandles".equals(method.getName()))
+                    {
+                        return Collections.emptySet();
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertDoesNotThrow(() -> BrowserToolProvider.ensureValidWindowFocus(emptyDriver));
+        Assertions.assertEquals("", BrowserToolProvider.getSafeUrl(emptyDriver));
+        Assertions.assertEquals("", BrowserToolProvider.getSafeTitle(emptyDriver));
+    }
 }
+
 

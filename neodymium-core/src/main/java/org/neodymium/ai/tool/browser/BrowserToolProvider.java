@@ -58,6 +58,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -133,6 +134,9 @@ public final class BrowserToolProvider
         registry.register(createPressKeyTool());
         registry.register(createRequestContextTool());
         registry.register(createStoreTool());
+        registry.register(createListTabsTool());
+        registry.register(createSwitchTabTool());
+        registry.register(createCloseTabTool());
     }
 
     private static AiTool createClickTool()
@@ -230,8 +234,8 @@ public final class BrowserToolProvider
                     }
                     if (driver != null)
                     {
-                        res.put("url", driver.getCurrentUrl());
-                        res.put("title", driver.getTitle());
+                        res.put("url", getSafeUrl(driver));
+                        res.put("title", getSafeTitle(driver));
                     }
                     builder.withContent(res.toString());
                     return builder.build();
@@ -269,8 +273,8 @@ public final class BrowserToolProvider
                         }
                         if (driver != null)
                         {
-                            res.put("url", driver.getCurrentUrl());
-                            res.put("title", driver.getTitle());
+                            res.put("url", getSafeUrl(driver));
+                            res.put("title", getSafeTitle(driver));
                         }
                         b.withContent(res.toString());
                         return b.build();
@@ -384,8 +388,8 @@ public final class BrowserToolProvider
                 res.put("target", actualTarget);
                 if (driver != null)
                 {
-                    res.put("url", driver.getCurrentUrl());
-                    res.put("title", driver.getTitle());
+                    res.put("url", getSafeUrl(driver));
+                    res.put("title", getSafeTitle(driver));
                 }
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -535,8 +539,8 @@ public final class BrowserToolProvider
                 DomQuiescenceWatcher.waitForDomQuiet();
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 final ObjectNode res = successNode("navigate");
-                res.put("url", driver != null ? driver.getCurrentUrl() : url);
-                res.put("title", driver != null ? driver.getTitle() : "");
+                res.put("url", driver != null ? getSafeUrl(driver) : url);
+                res.put("title", driver != null ? getSafeTitle(driver) : "");
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -718,8 +722,8 @@ public final class BrowserToolProvider
                 final ObjectNode res = successNode("back");
                 if (driver != null)
                 {
-                    res.put("url", driver.getCurrentUrl());
-                    res.put("title", driver.getTitle());
+                    res.put("url", getSafeUrl(driver));
+                    res.put("title", getSafeTitle(driver));
                 }
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -747,8 +751,8 @@ public final class BrowserToolProvider
                 final ObjectNode res = successNode("forward");
                 if (driver != null)
                 {
-                    res.put("url", driver.getCurrentUrl());
-                    res.put("title", driver.getTitle());
+                    res.put("url", getSafeUrl(driver));
+                    res.put("title", getSafeTitle(driver));
                 }
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -776,8 +780,8 @@ public final class BrowserToolProvider
                 final ObjectNode res = successNode("refresh");
                 if (driver != null)
                 {
-                    res.put("url", driver.getCurrentUrl());
-                    res.put("title", driver.getTitle());
+                    res.put("url", getSafeUrl(driver));
+                    res.put("title", getSafeTitle(driver));
                 }
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -2126,5 +2130,407 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), resultNode.toString());
             }
         };
+    }
+
+    /**
+     * Switches the active WebDriver window/tab focus to a target handle, index, or title/URL match.
+     *
+     * @param driver active WebDriver instance
+     * @param param target handle, index, or title/URL pattern (null/blank switches to newest window)
+     * @return the handle of the switched window
+     * @throws IllegalArgumentException if no matching window is found or index is out of bounds
+     */
+    public static String switchWindow(final WebDriver driver, final String param)
+    {
+        if (driver == null)
+        {
+            throw new IllegalArgumentException("WebDriver must not be null.");
+        }
+        final Set<String> handles = driver.getWindowHandles();
+        final List<String> handleList = new ArrayList<>(handles);
+        if (handleList.isEmpty())
+        {
+            throw new IllegalStateException("No open browser windows found.");
+        }
+
+        String currentHandle = null;
+        try
+        {
+            currentHandle = driver.getWindowHandle();
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        final String cleanParam = (param != null) ? param.trim() : "";
+
+        if (cleanParam.isEmpty())
+        {
+            // Switch to the newest window that is not the current active window
+            for (int i = handleList.size() - 1; i >= 0; i--)
+            {
+                final String handle = handleList.get(i);
+                if (!handle.equals(currentHandle))
+                {
+                    driver.switchTo().window(handle);
+                    return handle;
+                }
+            }
+            // If only one window exists, ensure driver is focused on it
+            driver.switchTo().window(handleList.get(0));
+            return handleList.get(0);
+        }
+
+        // Direct handle match
+        if (handles.contains(cleanParam))
+        {
+            driver.switchTo().window(cleanParam);
+            return cleanParam;
+        }
+
+        // Window index match (win_1, 1, win_0, 0)
+        Integer index = null;
+        if (cleanParam.startsWith("win_"))
+        {
+            try
+            {
+                index = Integer.parseInt(cleanParam.substring(4));
+            }
+            catch (final NumberFormatException ignored)
+            {
+            }
+        }
+        if (index == null)
+        {
+            try
+            {
+                index = Integer.parseInt(cleanParam);
+            }
+            catch (final NumberFormatException ignored)
+            {
+            }
+        }
+
+        if (index != null)
+        {
+            if (index >= 0 && index < handleList.size())
+            {
+                final String targetHandle = handleList.get(index);
+                driver.switchTo().window(targetHandle);
+                return targetHandle;
+            }
+            else
+            {
+                throw new IllegalArgumentException("Window index out of bounds: " + index);
+            }
+        }
+
+        // Treat parameter as window title or URL substring/regex
+        final String regexParam = cleanRegexPattern(cleanParam);
+        Pattern pattern = null;
+        try
+        {
+            pattern = Pattern.compile(regexParam, Pattern.DOTALL | Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+        }
+        catch (final PatternSyntaxException e)
+        {
+            pattern = Pattern.compile(Pattern.quote(regexParam), Pattern.DOTALL | Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+        }
+
+        for (final String handle : handleList)
+        {
+            driver.switchTo().window(handle);
+            final String title = driver.getTitle();
+            final String url = driver.getCurrentUrl();
+            if ((title != null && (pattern.matcher(title).find() || title.contains(cleanParam) || title.contains(regexParam))) ||
+                (url != null && (pattern.matcher(url).find() || url.contains(cleanParam) || url.contains(regexParam))))
+            {
+                return handle;
+            }
+        }
+
+        // Fallback back to original window handle if still valid
+        if (currentHandle != null && handles.contains(currentHandle))
+        {
+            driver.switchTo().window(currentHandle);
+        }
+        throw new IllegalArgumentException("No window found with title or URL matching: " + cleanParam);
+    }
+
+    private static AiTool createListTabsTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        schema.putObject("properties");
+
+        final ToolDefinition def = new ToolDefinition("browser_list_tabs", "Lists all open browser tabs/windows with their handle ID, index, title, URL, and whether it is currently active.", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                if (!WebDriverRunner.hasWebDriverStarted())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Browser/WebDriver is not started yet.").toString());
+                }
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final Set<String> handles = driver.getWindowHandles();
+                String currentHandle = null;
+                try
+                {
+                    currentHandle = driver.getWindowHandle();
+                }
+                catch (final Exception e)
+                {
+                    if (!handles.isEmpty())
+                    {
+                        currentHandle = handles.iterator().next();
+                        driver.switchTo().window(currentHandle);
+                    }
+                }
+
+                final ArrayNode tabsArray = MAPPER.createArrayNode();
+                int index = 0;
+                for (final String handle : handles)
+                {
+                    final ObjectNode tabNode = MAPPER.createObjectNode();
+                    tabNode.put("index", index);
+                    tabNode.put("handle", handle);
+                    tabNode.put("active", handle.equals(currentHandle));
+                    try
+                    {
+                        driver.switchTo().window(handle);
+                        tabNode.put("title", driver.getTitle() != null ? driver.getTitle() : "");
+                        tabNode.put("url", driver.getCurrentUrl() != null ? driver.getCurrentUrl() : "");
+                    }
+                    catch (final Exception e)
+                    {
+                        tabNode.put("title", "");
+                        tabNode.put("url", "");
+                    }
+                    tabsArray.add(tabNode);
+                    index++;
+                }
+
+                if (currentHandle != null && handles.contains(currentHandle))
+                {
+                    try
+                    {
+                        driver.switchTo().window(currentHandle);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
+                final ObjectNode res = successNode("list_tabs");
+                res.set("tabs", tabsArray);
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    private static AiTool createSwitchTabTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("target").put("type", "string").put("description", "Target window handle, index (e.g. '0', '1', 'win_1'), or title/URL substring. If omitted or empty, switches to the newest window.");
+
+        final ToolDefinition def = new ToolDefinition("browser_switch_tab", "Switches the active browser focus to another tab or window by handle, index, or title/URL substring. If target is omitted, switches to the newest window.", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                if (!WebDriverRunner.hasWebDriverStarted())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Browser/WebDriver is not started yet.").toString());
+                }
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final String target = call.arguments().hasNonNull("target") ? call.arguments().path("target").asText().trim() : null;
+                try
+                {
+                    final String switchedHandle = switchWindow(driver, target);
+                    final ObjectNode res = successNode("switch_tab");
+                    res.put("target", target != null ? target : "");
+                    res.put("activeHandle", switchedHandle);
+                    res.put("title", getSafeTitle(driver));
+                    res.put("url", getSafeUrl(driver));
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Failed to switch tab: " + e.getMessage()).toString());
+                }
+            }
+        };
+    }
+
+    private static AiTool createCloseTabTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        schema.putObject("properties");
+
+        final ToolDefinition def = new ToolDefinition("browser_close_tab", "Closes the current active browser tab or window, and automatically switches focus back to the parent/primary tab.", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                if (!WebDriverRunner.hasWebDriverStarted())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Browser/WebDriver is not started yet.").toString());
+                }
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final Set<String> handles = driver.getWindowHandles();
+                final List<String> handleList = new ArrayList<>(handles);
+                if (handleList.isEmpty())
+                {
+                    return ToolResult.error(call.callId(), errorNode("No open browser windows found.").toString());
+                }
+
+                String currentHandle = null;
+                try
+                {
+                    currentHandle = driver.getWindowHandle();
+                }
+                catch (final Exception ignored)
+                {
+                }
+
+                if (handleList.size() == 1)
+                {
+                    driver.close();
+                    final ObjectNode res = successNode("close_tab");
+                    res.put("message", "Closed the only open window; browser session ended.");
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+
+                String targetHandle = null;
+                for (final String h : handleList)
+                {
+                    if (!h.equals(currentHandle))
+                    {
+                        targetHandle = h;
+                        break;
+                    }
+                }
+
+                driver.close();
+                if (targetHandle != null)
+                {
+                    driver.switchTo().window(targetHandle);
+                }
+
+                final ObjectNode res = successNode("close_tab");
+                res.put("activeHandle", targetHandle != null ? targetHandle : "");
+                res.put("title", getSafeTitle(driver));
+                res.put("url", getSafeUrl(driver));
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    /**
+     * Verifies that the WebDriver instance is currently focused on an active, open window.
+     * If the active window was closed (e.g. via {@code window.close()} or a button click),
+     * automatically refocuses to the first available window.
+     *
+     * @param driver the active WebDriver instance
+     */
+    public static void ensureValidWindowFocus(final WebDriver driver)
+    {
+        if (driver == null)
+        {
+            return;
+        }
+        try
+        {
+            driver.getWindowHandle();
+        }
+        catch (final Exception e)
+        {
+            try
+            {
+                final Set<String> handles = driver.getWindowHandles();
+                if (handles != null && !handles.isEmpty())
+                {
+                    final String targetHandle = handles.iterator().next();
+                    driver.switchTo().window(targetHandle);
+                    LOGGER.debug("Active window was closed. Refocused WebDriver to window: {}", targetHandle);
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+    }
+
+    /**
+     * Safely retrieves the current URL from WebDriver, automatically refocusing if the active window was closed.
+     *
+     * @param driver the active WebDriver instance
+     * @return the current URL or empty string on failure
+     */
+    public static String getSafeUrl(final WebDriver driver)
+    {
+        if (driver == null)
+        {
+            return "";
+        }
+        ensureValidWindowFocus(driver);
+        try
+        {
+            final String url = driver.getCurrentUrl();
+            return url != null ? url : "";
+        }
+        catch (final Exception e)
+        {
+            return "";
+        }
+    }
+
+    /**
+     * Safely retrieves the current page title from WebDriver, automatically refocusing if the active window was closed.
+     *
+     * @param driver the active WebDriver instance
+     * @return the current title or empty string on failure
+     */
+    public static String getSafeTitle(final WebDriver driver)
+    {
+        if (driver == null)
+        {
+            return "";
+        }
+        ensureValidWindowFocus(driver);
+        try
+        {
+            final String title = driver.getTitle();
+            return title != null ? title : "";
+        }
+        catch (final Exception e)
+        {
+            return "";
+        }
     }
 }

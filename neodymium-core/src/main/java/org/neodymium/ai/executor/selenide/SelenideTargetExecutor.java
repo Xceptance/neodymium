@@ -22,6 +22,10 @@ import java.io.IOException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.awt.image.BufferedImage;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
 import javax.imageio.IIOImage;
@@ -45,6 +49,11 @@ import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.util.Neodymium;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.neodymium.ai.executor.selenide.plugins.BackAction;
 import org.neodymium.ai.executor.selenide.plugins.AssertAction;
 import org.neodymium.ai.executor.selenide.plugins.BrowserActionPlugin;
@@ -81,6 +90,8 @@ import org.openqa.selenium.WebDriver;
  */
 public final class SelenideTargetExecutor implements TargetExecutor
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SelenideTargetExecutor.class);
+
     /**
      * Map storing registered browser action plugins.
      */
@@ -104,6 +115,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("SELECT", new SelectAction());
         this.plugins.put("WAIT", new WaitAction());
         this.plugins.put("KEY_PRESS", new KeyPressAction());
+        this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
         final AssertAction assertPlugin = new AssertAction();
         this.plugins.put("ASSERT", assertPlugin);
         this.plugins.put("ASSERT_EXISTS", assertPlugin);
@@ -129,14 +141,14 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("NONE", action -> {});
     }
 
-    private org.neodymium.ai.pipeline.ExecutionContext context;
+    private ExecutionContext context;
 
     /**
      * Sets the execution context and registers context-dependent action plugins.
      *
      * @param context the execution context
      */
-    public void setExecutionContext(final org.neodymium.ai.pipeline.ExecutionContext context)
+    public void setExecutionContext(final ExecutionContext context)
     {
         this.context = context;
         this.plugins.put("JAVA_METHOD", new JavaMethodAction(context));
@@ -163,12 +175,25 @@ public final class SelenideTargetExecutor implements TargetExecutor
     {
         if (!WebDriverRunner.hasWebDriverStarted())
         {
-            org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).warn("⚠️ Browser/WebDriver has not started yet. No active page loaded.");
+            LOGGER.warn("⚠️ Browser/WebDriver has not started yet. No active page loaded.");
             return new BrowserSutState("⚠️ Browser/WebDriver is not started yet. No active DOM available.", Collections.emptyList(), "not-started");
         }
 
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+        BrowserToolProvider.ensureValidWindowFocus(driver);
+        try
+        {
+            if (driver.getWindowHandles().isEmpty())
+            {
+                return new BrowserSutState("No open browser windows remaining.", Collections.emptyList(), "no-windows");
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
         final ContextLevel activeLevel = level != null ? level : ContextLevel.STANDARD;
-        final String html = new PageAnalyzer(WebDriverRunner.getWebDriver()).captureSimplifiedDom(activeLevel);
+        final String html = new PageAnalyzer(driver).captureSimplifiedDom(activeLevel);
         final String hash = calculateHtmlHash(html);
 
         final List<SutAttachment> attachments = new ArrayList<>();
@@ -178,13 +203,12 @@ public final class SelenideTargetExecutor implements TargetExecutor
             try
             {
                 final boolean forceFullPage = isFullPage;
-                base64Data = new PageAnalyzer(WebDriverRunner.getWebDriver())
+                base64Data = new PageAnalyzer(driver)
                         .captureScreenshot("capture_" + System.currentTimeMillis(), activeLevel, forceFullPage, null);
             }
             catch (final Exception e)
             {
-                org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class)
-                        .debug("PageAnalyzer captureScreenshot failed, falling back to Selenide: {}", e.getMessage());
+                LOGGER.debug("PageAnalyzer captureScreenshot failed, falling back to Selenide: {}", e.getMessage());
             }
 
             if (base64Data != null)
@@ -199,16 +223,16 @@ public final class SelenideTargetExecutor implements TargetExecutor
                     String mediaType = "image/png";
                     try
                     {
-                        final java.nio.file.Path path;
+                        final Path path;
                         if (screenshotFile.startsWith("file:"))
                         {
-                            path = java.nio.file.Path.of(new java.net.URI(screenshotFile));
+                            path = Path.of(new URI(screenshotFile));
                         }
                         else
                         {
-                            path = java.nio.file.Path.of(screenshotFile);
+                            path = Path.of(screenshotFile);
                         }
-                        final byte[] bytes = java.nio.file.Files.readAllBytes(path);
+                        final byte[] bytes = Files.readAllBytes(path);
                     
                         byte[] compressedBytes = bytes;
                         try
@@ -240,11 +264,11 @@ public final class SelenideTargetExecutor implements TargetExecutor
                             // ignore and fallback to uncompressed png
                         }
                     
-                        base64Data = java.util.Base64.getEncoder().encodeToString(compressedBytes);
+                        base64Data = Base64.getEncoder().encodeToString(compressedBytes);
                     }
                     catch (final Exception e)
                     {
-                        org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).error("Failed to read screenshot file: " + screenshotFile, e);
+                        LOGGER.error("Failed to read screenshot file: " + screenshotFile, e);
                     }
                     attachments.add(new SutAttachment(mediaType, screenshotFile, base64Data));
                 }
@@ -276,7 +300,8 @@ public final class SelenideTargetExecutor implements TargetExecutor
             throw new IOException("Unsupported browser action type: " + type);
         }
 
-        final String beforeUrl = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver().getCurrentUrl() : null;
+        final WebDriver driverBefore = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        final String beforeUrl = driverBefore != null ? BrowserToolProvider.getSafeUrl(driverBefore) : null;
 
         try
         {
@@ -285,16 +310,17 @@ public final class SelenideTargetExecutor implements TargetExecutor
 
             if (WebDriverRunner.hasWebDriverStarted())
             {
-                final String afterUrl = WebDriverRunner.getWebDriver().getCurrentUrl();
+                final WebDriver driverAfter = WebDriverRunner.getWebDriver();
+                final String afterUrl = BrowserToolProvider.getSafeUrl(driverAfter);
                 if (beforeUrl == null || !beforeUrl.equals(afterUrl))
                 {
-                    // URL changed or browser just started, wait for document ready and a stabilization delay
-                    Selenide.Wait().until(d -> Selenide.executeJavaScript("return document.readyState").equals("complete"));
                     try
                     {
+                        // URL changed or browser just started, wait for document ready and a stabilization delay
+                        Selenide.Wait().until(d -> Selenide.executeJavaScript("return document.readyState").equals("complete"));
                         Thread.sleep(500);
                     }
-                    catch (final InterruptedException ignored)
+                    catch (final Exception ignored)
                     {
                     }
                 }
@@ -477,9 +503,9 @@ public final class SelenideTargetExecutor implements TargetExecutor
                     val = String.valueOf(valObj);
                 }
             }
-            if (val == null && org.neodymium.util.Neodymium.getData() != null && org.neodymium.util.Neodymium.getData().exists(varName))
+            if (val == null && Neodymium.getData() != null && Neodymium.getData().exists(varName))
             {
-                val = org.neodymium.util.Neodymium.getData().asString(varName);
+                val = Neodymium.getData().asString(varName);
             }
             if (val == null)
             {
@@ -515,9 +541,9 @@ public final class SelenideTargetExecutor implements TargetExecutor
                     }
                 }
             }
-            if (org.neodymium.util.Neodymium.getData() != null)
+            if (Neodymium.getData() != null)
             {
-                for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
+                for (final Map.Entry<String, String> entry : Neodymium.getData().entrySet())
                 {
                     if (entry.getValue() != null && entry.getValue().matches("https?://(localhost|127\\.0\\.0\\.1):\\d+.*"))
                     {
@@ -558,18 +584,18 @@ public final class SelenideTargetExecutor implements TargetExecutor
     @Override
     public void close() throws Exception
     {
-        if (!org.neodymium.util.Neodymium.hasDriver() && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+        if (!Neodymium.hasDriver() && WebDriverRunner.hasWebDriverStarted())
         {
-            final boolean keepOpen = org.neodymium.util.Neodymium.configuration().keepBrowserOpen();
+            final boolean keepOpen = Neodymium.configuration().keepBrowserOpen();
             if (!keepOpen)
             {
                 try
                 {
-                    com.codeborne.selenide.WebDriverRunner.closeWebDriver();
+                    WebDriverRunner.closeWebDriver();
                 }
                 catch (final Exception e)
                 {
-                    org.slf4j.LoggerFactory.getLogger(SelenideTargetExecutor.class).debug("Failed to close unmanaged Selenide WebDriver", e);
+                    LOGGER.debug("Failed to close unmanaged Selenide WebDriver", e);
                 }
             }
         }

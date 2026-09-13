@@ -21,6 +21,8 @@ package org.neodymium.ai.util;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import java.time.Duration;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,6 +110,13 @@ public final class DomQuiescenceWatcher
             } catch (e) {}
         }
 
+        // If the document is hidden/backgrounded, requestAnimationFrame is paused and DOM rendering is frozen.
+        // Complete immediately to avoid async script timeouts.
+        if (document.hidden) {
+            done(true);
+            return;
+        }
+
         var lastChange = performance.now();
         var observer = null;
         var checkInterval = null;
@@ -126,10 +135,25 @@ public final class DomQuiescenceWatcher
             if (finished) return;
             finished = true;
             cleanup();
+            if (document.hidden) {
+                done(true);
+                return;
+            }
             if (window.requestAnimationFrame) {
+                var rafFired = false;
+                var fallbackTimer = setTimeout(function() {
+                    if (!rafFired) {
+                        rafFired = true;
+                        done(true);
+                    }
+                }, 100);
                 window.requestAnimationFrame(function() {
                     window.requestAnimationFrame(function() {
-                        done(true);
+                        if (!rafFired) {
+                            rafFired = true;
+                            clearTimeout(fallbackTimer);
+                            done(true);
+                        }
                     });
                 });
             } else {
@@ -153,6 +177,10 @@ public final class DomQuiescenceWatcher
             maxTimer = setTimeout(finish, maxTimeoutMs);
 
             checkInterval = setInterval(function() {
+                if (document.hidden) {
+                    finish();
+                    return;
+                }
                 var now = performance.now();
                 var tracker = window.__neo_network_tracker;
                 var activeRequests = (tracker && typeof tracker.active === 'number') ? tracker.active : 0;
@@ -181,6 +209,7 @@ public final class DomQuiescenceWatcher
         }
         try
         {
+            BrowserToolProvider.ensureValidWindowFocus(WebDriverRunner.getWebDriver());
             Selenide.executeJavaScript(INSTALL_TRACKER_SCRIPT);
         }
         catch (final Exception e)
@@ -214,6 +243,19 @@ public final class DomQuiescenceWatcher
         final long quietMs = quietPeriod != null ? quietPeriod.toMillis() : DEFAULT_QUIET_PERIOD.toMillis();
         final long maxTimeoutMs = maxTimeout != null ? maxTimeout.toMillis() : DEFAULT_MAX_TIMEOUT.toMillis();
 
+        Duration prevTimeout = null;
+        WebDriver driver = null;
+        try
+        {
+            driver = WebDriverRunner.getWebDriver();
+            BrowserToolProvider.ensureValidWindowFocus(driver);
+            prevTimeout = driver.manage().timeouts().getScriptTimeout();
+            driver.manage().timeouts().scriptTimeout(Duration.ofMillis(maxTimeoutMs + 1000));
+        }
+        catch (final Exception ignored)
+        {
+        }
+
         try
         {
             Selenide.executeAsyncJavaScript(WAIT_FOR_QUIET_SCRIPT, quietMs, maxTimeoutMs);
@@ -221,6 +263,19 @@ public final class DomQuiescenceWatcher
         catch (final Exception e)
         {
             LOGGER.debug("DOM quiescence wait completed or bypassed: {}", e.getMessage());
+        }
+        finally
+        {
+            if (driver != null && prevTimeout != null)
+            {
+                try
+                {
+                    driver.manage().timeouts().scriptTimeout(prevTimeout);
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
         }
     }
 }

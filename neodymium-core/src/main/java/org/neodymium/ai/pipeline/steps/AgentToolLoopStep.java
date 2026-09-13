@@ -226,6 +226,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 : this.maxTurns;
         Set<String> previousElementSignatures = new HashSet<>();
         String lastSeenUrl = null;
+        String lastSeenWindowHandle = null;
 
         // Turn-Aware Dynamic Context Resolution for Turn 1: Zero DOM only when LLM classified NAVIGATE or ASSERT_METADATA
         final boolean isZeroDom = intent == SemanticIntent.NAVIGATE || intent == SemanticIntent.ASSERT_METADATA;
@@ -306,8 +307,8 @@ public final class AgentToolLoopStep implements PipelineStep
             {
                 try
                 {
-                    final String currentUrl = driver.getCurrentUrl();
-                    final String currentTitle = driver.getTitle();
+                    final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
+                    final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
                     userPrompt.append("### Current Page:\n")
                             .append("URL: ").append(currentUrl).append("\n")
                             .append("Title: ").append(currentTitle).append("\n\n");
@@ -371,7 +372,8 @@ public final class AgentToolLoopStep implements PipelineStep
             {
                 try
                 {
-                    lastSeenUrl = driver.getCurrentUrl();
+                    lastSeenUrl = BrowserToolProvider.getSafeUrl(driver);
+                    lastSeenWindowHandle = driver.getWindowHandle();
                 }
                 catch (final Exception ignored)
                 {
@@ -925,18 +927,27 @@ public final class AgentToolLoopStep implements PipelineStep
             conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
             logToolResult(effectiveCall.toolName(), toolContent);
 
+            // Submit fresh ground-truth DOM from SUT for the next turn
+            final boolean requireDomForNextTurn = !isZeroDom
+                    || (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
+                    || activeContextLevel != ContextLevel.MINIMAL
+                    || (pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty());
+
             // Update URL and Title in transient data without full DOM re-dump
             if (effectiveCall.toolName().startsWith("browser_")
                     && !effectiveCall.toolName().startsWith("browser_assert")
                     && !"browser_take_screenshot".equals(effectiveCall.toolName()))
             {
-                DomQuiescenceWatcher.waitForDomQuiet();
+                if (!requireDomForNextTurn)
+                {
+                    DomQuiescenceWatcher.waitForDomQuiet();
+                }
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 if (driver != null)
                 {
                     try
                     {
-                        final SutState updatedState = new BrowserSutState("URL: " + driver.getCurrentUrl() + "\nTitle: " + driver.getTitle(), Collections.emptyList(), "DOM_LIGHT");
+                        final SutState updatedState = new BrowserSutState("URL: " + BrowserToolProvider.getSafeUrl(driver) + "\nTitle: " + BrowserToolProvider.getSafeTitle(driver), Collections.emptyList(), "DOM_LIGHT");
                         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, updatedState);
                     }
                     catch (final Exception ignored)
@@ -965,14 +976,12 @@ public final class AgentToolLoopStep implements PipelineStep
             pruneExpiredDomFromConversation(conversation);
             attachments = Collections.emptyList();
 
-            // Submit fresh ground-truth DOM from SUT for the next turn
-            final boolean requireDomForNextTurn = !isZeroDom
-                    || (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
-                    || activeContextLevel != ContextLevel.MINIMAL
-                    || (pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty());
-
             if (requireDomForNextTurn)
             {
+                if (WebDriverRunner.hasWebDriverStarted())
+                {
+                    BrowserToolProvider.ensureValidWindowFocus(WebDriverRunner.getWebDriver());
+                }
                 DomQuiescenceWatcher.waitForDomQuiet();
                 if (executor != null)
                 {
@@ -981,14 +990,19 @@ public final class AgentToolLoopStep implements PipelineStep
                         final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                         if (currentDriver != null)
                         {
+                            BrowserToolProvider.ensureValidWindowFocus(currentDriver);
                             try
                             {
-                                final String currentUrl = currentDriver.getCurrentUrl();
-                                if (lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl))
+                                final String currentHandle = currentDriver.getWindowHandle();
+                                final String currentUrl = BrowserToolProvider.getSafeUrl(currentDriver);
+                                final boolean urlChanged = lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl);
+                                final boolean windowChanged = lastSeenWindowHandle != null && currentHandle != null && !currentHandle.equals(lastSeenWindowHandle);
+                                if (urlChanged || windowChanged)
                                 {
                                     previousElementSignatures.clear();
                                 }
                                 lastSeenUrl = currentUrl;
+                                lastSeenWindowHandle = currentHandle;
                             }
                             catch (final Exception ignored)
                             {
@@ -1060,8 +1074,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     try
                     {
-                        final String currentUrl = driver.getCurrentUrl();
-                        final String currentTitle = driver.getTitle();
+                        final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
+                        final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
                         final StringBuilder turnPrompt = new StringBuilder();
                         turnPrompt.append("### Current Page:\n")
                                 .append("URL: ").append(currentUrl).append("\n")
