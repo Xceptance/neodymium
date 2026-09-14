@@ -20,7 +20,7 @@ package org.neodymium.ai.executor.selenide.plugins;
 
 import org.neodymium.ai.action.Action;
 import com.codeborne.selenide.Selenide;
-
+import com.codeborne.selenide.SelenideElement;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 
 /**
@@ -49,7 +49,29 @@ public final class ClearAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            SelenideElementFinder.findElement(action).clear();
+            final SelenideElement element = SelenideElementFinder.findElement(action);
+            final boolean isContentEditable = Boolean.TRUE.equals(Selenide.executeJavaScript(
+                "return !!(arguments[0] && (arguments[0].isContentEditable === true || arguments[0].getAttribute('contenteditable') === 'true' || arguments[0].hasAttribute('contenteditable')));",
+                element));
+            if (isContentEditable)
+            {
+                Selenide.executeJavaScript(
+                    "var el = arguments[0];"
+                    + "el.focus();"
+                    + "el.innerHTML = '';"
+                    + "var range = document.createRange();"
+                    + "range.selectNodeContents(el);"
+                    + "range.collapse(false);"
+                    + "var sel = window.getSelection();"
+                    + "sel.removeAllRanges();"
+                    + "sel.addRange(range);"
+                    + "el.dispatchEvent(new Event('input', { bubbles: true }));",
+                    element);
+            }
+            else
+            {
+                element.clear();
+            }
         }
     }
 }

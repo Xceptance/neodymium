@@ -447,26 +447,60 @@ public final class BrowserToolProvider
 
                 final SelenideElement el = findElement(selector);
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                el.shouldBe(Condition.visible).shouldBe(Condition.editable);
-                if (clearFirst)
+                final boolean isContentEditable = Boolean.TRUE.equals(Selenide.executeJavaScript(
+                    "return !!(arguments[0] && (arguments[0].isContentEditable === true || arguments[0].getAttribute('contenteditable') === 'true' || arguments[0].hasAttribute('contenteditable')));",
+                    el));
+
+                if (isContentEditable)
                 {
-                    try
+                    el.shouldBe(Condition.visible);
+                    Selenide.executeJavaScript(
+                        "var el = arguments[0];"
+                        + "var clear = arguments[1];"
+                        + "el.focus();"
+                        + "if (clear) { el.innerHTML = ''; }"
+                        + "var range = document.createRange();"
+                        + "range.selectNodeContents(el);"
+                        + "range.collapse(false);"
+                        + "var sel = window.getSelection();"
+                        + "sel.removeAllRanges();"
+                        + "sel.addRange(range);",
+                        el, clearFirst);
+                    if (text != null && !text.isEmpty())
                     {
-                        el.val(text);
-                    }
-                    catch (final Exception e)
-                    {
-                        el.clear();
                         el.sendKeys(text);
+                    }
+                    Selenide.executeJavaScript(
+                        "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+                        el);
+                    if (pressEnter)
+                    {
+                        el.sendKeys(Keys.ENTER);
                     }
                 }
                 else
                 {
-                    el.sendKeys(text);
-                }
-                if (pressEnter)
-                {
-                    el.pressEnter();
+                    el.shouldBe(Condition.visible).shouldBe(Condition.editable);
+                    if (clearFirst)
+                    {
+                        try
+                        {
+                            el.val(text);
+                        }
+                        catch (final Exception e)
+                        {
+                            el.clear();
+                            el.sendKeys(text);
+                        }
+                    }
+                    else
+                    {
+                        el.sendKeys(text);
+                    }
+                    if (pressEnter)
+                    {
+                        el.pressEnter();
+                    }
                 }
                 final ObjectNode res = successNode("type");
                 res.put("target", selector);
@@ -737,7 +771,29 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
-                findElement(selector).shouldBe(Condition.visible).clear();
+                final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
+                final boolean isContentEditable = Boolean.TRUE.equals(Selenide.executeJavaScript(
+                    "return !!(arguments[0] && (arguments[0].isContentEditable === true || arguments[0].getAttribute('contenteditable') === 'true' || arguments[0].hasAttribute('contenteditable')));",
+                    el));
+                if (isContentEditable)
+                {
+                    Selenide.executeJavaScript(
+                        "var el = arguments[0];"
+                        + "el.focus();"
+                        + "el.innerHTML = '';"
+                        + "var range = document.createRange();"
+                        + "range.selectNodeContents(el);"
+                        + "range.collapse(false);"
+                        + "var sel = window.getSelection();"
+                        + "sel.removeAllRanges();"
+                        + "sel.addRange(range);"
+                        + "el.dispatchEvent(new Event('input', { bubbles: true }));",
+                        el);
+                }
+                else
+                {
+                    el.clear();
+                }
                 final ObjectNode res = successNode("clear");
                 res.put("target", selector);
                 return ToolResult.success(call.callId(), res.toString());

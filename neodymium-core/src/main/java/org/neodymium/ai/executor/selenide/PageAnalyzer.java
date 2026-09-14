@@ -487,7 +487,7 @@ public class PageAnalyzer
                     var tag = el.tagName.toLowerCase();
                     if (['a', 'button', 'input', 'select', 'textarea', 'option', 'label', 'summary'].indexOf(tag) !== -1) return true;
                     if (el.hasAttribute('onclick') || typeof el.onclick === 'function') return true;
-                    if (el.hasAttribute('tabindex') || el.hasAttribute('contenteditable')) return true;
+                    if (el.hasAttribute('tabindex') || el.hasAttribute('contenteditable') || el.isContentEditable) return true;
                     var role = (el.getAttribute('role') || '').toLowerCase();
                     if (['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'combobox', 'searchbox', 'textbox', 'spinbutton', 'slider', 'listbox', 'treeitem', 'menuitemcheckbox', 'menuitemradio'].indexOf(role) !== -1) return true;
                     if (el.hasAttribute('data-action') || el.hasAttribute('data-click') || el.hasAttribute('data-toggle') || el.hasAttribute('hx-get') || el.hasAttribute('hx-post')) return true;
@@ -509,7 +509,8 @@ public class PageAnalyzer
 
                     var vis = isVisible(el);
                     var inForm = !!(el.closest && el.closest('form'));
-                    var isFormContainer = inForm && ['fieldset','div','span','p','table','tbody','tr','td'].indexOf(tag) !== -1;
+                    var isContentEditable = (el.isContentEditable === true) || el.getAttribute('contenteditable') === 'true' || el.hasAttribute('contenteditable');
+                    var isFormContainer = (inForm && ['fieldset','div','span','p','table','tbody','tr','td'].indexOf(tag) !== -1) || isContentEditable;
                     var isFormInput = inForm && ['input','select','textarea','button'].indexOf(tag) !== -1;
                     if (!vis && !isFormInput && !isFormContainer) return null;
 
@@ -554,6 +555,7 @@ public class PageAnalyzer
                             href: truncate(el.getAttribute('href'), MAX_HREF),
                             type: el.getAttribute('type'),
                             role: el.getAttribute('role'),
+                            contenteditable: isContentEditable ? 'true' : null,
                             checked: isChecked(el) ? 'true' : null,
                             selected: (tag === 'option' ? (el.selected || el.hasAttribute('selected') ? 'true' : null) : null),
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
@@ -589,7 +591,7 @@ public class PageAnalyzer
                     // 2. Container node with extracted children
                     var elRole = (el.getAttribute('role') || '').toLowerCase();
                     var isPortalOrModal = tag === 'dialog' || ['dialog', 'listbox', 'menu', 'combobox'].indexOf(elRole) !== -1 || (el.id && el.id.indexOf('portal') !== -1) || (typeof el.className === 'string' && el.className.indexOf('portal') !== -1);
-                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup' || isCustomElement || isPortalOrModal;
+                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup' || isCustomElement || isPortalOrModal || isContentEditable;
                     var allowContainer = !isMinimal || isFormContainer;
                     if (allowContainer && (isContainerTag || isDivContainer) && children.length > 0) {
                         // Flatten single-child anonymous layout wrappers (but never custom elements)
@@ -605,6 +607,7 @@ public class PageAnalyzer
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
                             name: el.getAttribute('name'),
                             role: el.getAttribute('role'),
+                            contenteditable: isContentEditable ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
                             dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
                             parentText: el.getAttribute('data-parent-text') || null,
@@ -635,6 +638,7 @@ public class PageAnalyzer
                             name: el.getAttribute('name'),
                             type: el.getAttribute('type'),
                             role: el.getAttribute('role'),
+                            contenteditable: isContentEditable ? 'true' : null,
                             checked: isChecked(el) ? 'true' : null,
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
@@ -1223,6 +1227,7 @@ public class PageAnalyzer
             appendAttribute(dom, "class", node.get("className"));
             appendAttribute(dom, "name", node.get("name"));
             appendAttribute(dom, "role", node.get("role"));
+            appendAttribute(dom, "contenteditable", node.get("contenteditable"));
             appendAttribute(dom, "aria-label", node.get("ariaLabel"));
             appendAttribute(dom, "data-testid", node.get("dataTestId"));
             appendAttribute(dom, "data-ai", node.get("automationId"));
@@ -1271,6 +1276,7 @@ public class PageAnalyzer
         appendAttribute(dom, "name", el.get("name"));
         appendAttribute(dom, "type", el.get("type"));
         appendAttribute(dom, "role", el.get("role"));
+        appendAttribute(dom, "contenteditable", el.get("contenteditable"));
         appendAttribute(dom, "checked", el.get("checked"));
         appendAttribute(dom, "selected", el.get("selected"));
 
@@ -1409,7 +1415,7 @@ public class PageAnalyzer
                 var results = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;
@@ -1595,7 +1601,7 @@ public class PageAnalyzer
                 var vectorData = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;

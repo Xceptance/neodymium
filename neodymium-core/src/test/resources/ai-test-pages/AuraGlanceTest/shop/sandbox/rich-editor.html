@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rich Text &amp; Contenteditable Editors - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .editor-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.2s ease;
+        }
+        .editor-card:hover {
+            border-color: rgba(0, 255, 204, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .card-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .card-desc {
+            color: var(--text-secondary, #a0aec0);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .status-badge {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border-left: 3px solid #00ffcc;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+
+        /* Toolbar Styling */
+        .editor-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            border-bottom: none;
+        }
+        .toolbar-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e0;
+            padding: 0.35rem 0.65rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+        }
+        .toolbar-btn:hover {
+            background: rgba(0, 255, 204, 0.2);
+            color: #00ffcc;
+            border-color: #00ffcc;
+        }
+        .toolbar-btn.active {
+            background: #00ffcc;
+            color: #1a202c;
+            font-weight: 600;
+        }
+
+        /* Contenteditable Container */
+        .rich-editor {
+            min-height: 140px;
+            max-height: 320px;
+            overflow-y: auto;
+            background: #141822;
+            border: 1px solid #4a5568;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            padding: 1rem;
+            color: #e2e8f0;
+            font-size: 1rem;
+            line-height: 1.6;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .rich-editor:focus {
+            border-color: #00ffcc;
+            box-shadow: 0 0 0 2px rgba(0, 255, 204, 0.2);
+        }
+        .rich-editor p {
+            margin: 0 0 0.5rem 0;
+        }
+        .rich-editor h2 {
+            font-size: 1.25rem;
+            color: #00ffcc;
+            margin: 0.5rem 0;
+        }
+
+        /* Inline Contenteditable */
+        .rich-editor-inline {
+            min-height: 48px;
+            background: #141822;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            padding: 0.65rem 0.85rem;
+            color: #e2e8f0;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+            margin-top: 0.75rem;
+        }
+        .rich-editor-inline:focus {
+            border-color: #00ffcc;
+            box-shadow: 0 0 0 2px rgba(0, 255, 204, 0.2);
+        }
+
+        /* Editor Stats */
+        .editor-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary, #a0aec0);
+        }
+        .save-btn {
+            margin-top: 1rem;
+            background: linear-gradient(135deg, #00ffcc, #3b82f6);
+            color: #1a202c;
+            border: none;
+            padding: 0.65rem 1.25rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .save-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body class="aura-body">
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../../index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>AURA SANDBOX</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="../../index.html">Hub Home</a></li>
+                <li><a href="index.html">Playground</a></li>
+                <li><a href="#" class="active">Rich Text &amp; Editors</a></li>
+            </ul>
+        </div>
+    </header>
+
+    <main class="aura-container">
+        <div class="aura-hero">
+            <h1 class="glow-title">Rich Text &amp; Contenteditable Editors</h1>
+            <p class="subtitle">Tests browser typing, caret positioning, formatting, and event dispatch on non-input &lt;div contenteditable="true"&gt; editor surfaces without relying on .val().</p>
+        </div>
+
+        <!-- Primary Editor Card -->
+        <div class="editor-card">
+            <h2 class="card-title">Document Content Editor</h2>
+            <p class="card-desc">Type formatted text into this contenteditable editor. Tests typing emulation, clear-first caret resetting, and formatting commands.</p>
+
+            <div class="editor-toolbar">
+                <button type="button" id="bold-btn" class="toolbar-btn" onclick="formatDoc('bold')" title="Bold"><strong>B</strong></button>
+                <button type="button" id="italic-btn" class="toolbar-btn" onclick="formatDoc('italic')" title="Italic"><em>I</em></button>
+                <button type="button" id="underline-btn" class="toolbar-btn" onclick="formatDoc('underline')" title="Underline"><u>U</u></button>
+                <button type="button" id="h2-btn" class="toolbar-btn" onclick="formatDoc('formatBlock', 'h2')" title="Heading 2">H2</button>
+                <button type="button" id="clear-btn" class="toolbar-btn" onclick="clearEditor()" title="Clear Content">Clear</button>
+            </div>
+
+            <div id="rich-editor"
+                 class="rich-editor"
+                 contenteditable="true"
+                 role="textbox"
+                 aria-multiline="true"
+                 aria-label="Rich Text Editor"
+                 tabindex="0"><p>Initial draft notes for product release.</p></div>
+
+            <div class="editor-stats">
+                <div>Words: <span id="word-count">6</span> | Characters: <span id="char-count">40</span></div>
+                <div id="editor-status">Ready</div>
+            </div>
+
+            <button type="button" id="save-content-btn" class="save-btn" onclick="saveDocument()">Save Document</button>
+
+            <div id="saved-message" class="status-badge" style="display: none;">
+                Document saved: <span id="saved-content" style="font-weight: 600; color: #00ffcc;">None</span>
+            </div>
+        </div>
+
+        <!-- Secondary Inline Comment Card -->
+        <div class="editor-card">
+            <h2 class="card-title">Inline Review Feedback</h2>
+            <p class="card-desc">Secondary contenteditable container for testing multi-editor targeting and focus switching.</p>
+
+            <div id="comment-editor"
+                 class="rich-editor-inline"
+                 contenteditable="true"
+                 role="textbox"
+                 aria-label="Comment Editor"
+                 tabindex="0">Review notes pending approval.</div>
+
+            <button type="button" id="post-comment-btn" class="save-btn" style="margin-top: 0.75rem;" onclick="postComment()">Post Feedback</button>
+
+            <div id="comment-status" class="status-badge" style="display: none; border-left-color: #3b82f6;">
+                Feedback recorded: <span id="saved-comment" style="font-weight: 600; color: #3b82f6;">None</span>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const editor = document.getElementById('rich-editor');
+        const wordCount = document.getElementById('word-count');
+        const charCount = document.getElementById('char-count');
+        const editorStatus = document.getElementById('editor-status');
+        const savedMessage = document.getElementById('saved-message');
+        const savedContent = document.getElementById('saved-content');
+
+        const commentEditor = document.getElementById('comment-editor');
+        const commentStatus = document.getElementById('comment-status');
+        const savedComment = document.getElementById('saved-comment');
+
+        function updateStats() {
+            const text = (editor.innerText || '').trim();
+            charCount.textContent = text.length;
+            const words = text.length === 0 ? 0 : text.split(/\s+/).filter(Boolean).length;
+            wordCount.textContent = words;
+            editorStatus.textContent = 'Modified';
+        }
+
+        editor.addEventListener('input', updateStats);
+        editor.addEventListener('keyup', updateStats);
+
+        function formatDoc(cmd, val) {
+            document.execCommand(cmd, false, val || null);
+            editor.focus();
+            updateStats();
+        }
+
+        function clearEditor() {
+            editor.innerHTML = '';
+            editor.focus();
+            updateStats();
+        }
+
+        function saveDocument() {
+            const content = (editor.innerText || '').trim();
+            savedContent.textContent = content;
+            savedMessage.style.display = 'block';
+            editorStatus.textContent = 'Saved';
+        }
+
+        function postComment() {
+            const comment = (commentEditor.innerText || '').trim();
+            savedComment.textContent = comment;
+            commentStatus.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

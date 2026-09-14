@@ -39,6 +39,6 @@
 
 ## 7. Rich Text & Contenteditable Editors
 
-- [ ] 7.1 Create `AuraGlanceTest/shop/sandbox/rich-editor.html` containing formatted `<div contenteditable="true">` editors
-- [ ] 7.2 Update `BrowserToolProvider.browser_type` to detect `isContentEditable`, establish caret focus, and emulate typing without `.val()`
-- [ ] 7.3 Create `RichEditorSandboxLiveTest` and `RichEditorSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
+- [x] 7.1 Create `AuraGlanceTest/shop/sandbox/rich-editor.html` containing formatted `<div contenteditable="true">` editors
+- [x] 7.2 Update `BrowserToolProvider.browser_type` to detect `isContentEditable`, establish caret focus, and emulate typing without `.val()`
+- [x] 7.3 Create `RichEditorSandboxLiveTest` and `RichEditorSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
