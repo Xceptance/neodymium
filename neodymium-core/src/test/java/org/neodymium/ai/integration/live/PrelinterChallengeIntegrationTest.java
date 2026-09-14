@@ -160,7 +160,7 @@ public class PrelinterChallengeIntegrationTest extends BaseAiTest
     @Order(3)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiDataSet("prelinter-all-rules")
-    @AiPlaybook(recordingMethod = "testPrelinterEnabledChallengesAllRules")
+    @AiPlaybook(recordingMethod = "testPrelinterDisabledBypassesExecution")
     public void testPrelinterBypassedInReplayStrict(final AiSession session)
     {
         final ExecutionContext context = session.getExecutionContext();

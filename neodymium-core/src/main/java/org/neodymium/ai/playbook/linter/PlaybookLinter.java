@@ -137,6 +137,22 @@ public final class PlaybookLinter
             final double temperature = config.getTemperature("linter");
             final int timeoutSeconds = config.getTimeoutSeconds("linter");
 
+            ReasoningEffort reasoningEffort = config.getLinterReasoningEffort();
+            if (this.session != null && this.session.data() != null)
+            {
+                final Object dynamicEffort = this.session.data().get("neodymium.ai.linter.reasoningEffort");
+                if (dynamicEffort != null && !String.valueOf(dynamicEffort).isBlank())
+                {
+                    try
+                    {
+                        reasoningEffort = ReasoningEffort.valueOf(String.valueOf(dynamicEffort).trim().toUpperCase());
+                    }
+                    catch (final IllegalArgumentException ignored)
+                    {
+                    }
+                }
+            }
+
             final LlmRequest request = new LlmRequest(
                 sysMsg,
                 userMsg,
@@ -144,7 +160,7 @@ public final class PlaybookLinter
                 ResponseSchema.LINTER,
                 temperature,
                 timeoutSeconds,
-                ReasoningEffort.LOW
+                reasoningEffort
             );
 
             if (this.session != null && this.session.getEventBus() != null)

@@ -38,6 +38,7 @@ import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
@@ -85,6 +86,8 @@ public final class PlaybookLinterTest
         {
             System.clearProperty("neodymium.ai.linter.failOnFindings");
         }
+        System.clearProperty("neodymium.ai.linter.reasoningEffort");
+        System.clearProperty("neodymium.ai.reasoningEffort");
         AiConfiguration.resetInstance();
         ExecutionContext.setActiveContext(null);
     }
@@ -343,5 +346,24 @@ public final class PlaybookLinterTest
 
         final StateMachineRunner runner = new StateMachineRunner(session);
         assertDoesNotThrow(runner::run);
+    }
+
+    @Test
+    @DisplayName("Verify linter reasoning effort defaults to MEDIUM and honors configuration override")
+    public void testLinterReasoningEffortConfiguration()
+    {
+        System.clearProperty("neodymium.ai.linter.reasoningEffort");
+        System.clearProperty("neodymium.ai.reasoningEffort");
+        AiConfiguration.resetInstance();
+
+        assertEquals(ReasoningEffort.MEDIUM, AiConfiguration.getInstance().getLinterReasoningEffort());
+
+        System.setProperty("neodymium.ai.linter.reasoningEffort", "HIGH");
+        AiConfiguration.resetInstance();
+        assertEquals(ReasoningEffort.HIGH, AiConfiguration.getInstance().getLinterReasoningEffort());
+
+        System.setProperty("neodymium.ai.linter.reasoningEffort", "invalid");
+        AiConfiguration.resetInstance();
+        assertEquals(ReasoningEffort.MEDIUM, AiConfiguration.getInstance().getLinterReasoningEffort());
     }
 }

@@ -251,14 +251,24 @@ public final class AgentToolLoopStep implements PipelineStep
             final Map<String, Object> guardedData = activeSessionData.getGuardedDataMap();
             if (!guardedData.isEmpty())
             {
-                userPrompt.append("### Active Session Variables:\n");
-                final List<String> sortedKeys = new ArrayList<>(guardedData.keySet());
-                Collections.sort(sortedKeys);
-                for (final String key : sortedKeys)
+                final List<String> eligibleKeys = new ArrayList<>();
+                for (final String key : guardedData.keySet())
                 {
-                    userPrompt.append("- ").append(key).append(": \"").append(guardedData.get(key)).append("\"\n");
+                    if (key != null && !key.startsWith("_") && !key.startsWith("neodymium."))
+                    {
+                        eligibleKeys.add(key);
+                    }
                 }
-                userPrompt.append("\n");
+                if (!eligibleKeys.isEmpty())
+                {
+                    userPrompt.append("### Active Session Variables:\n");
+                    Collections.sort(eligibleKeys);
+                    for (final String key : eligibleKeys)
+                    {
+                        userPrompt.append("- ").append(key).append(": \"").append(guardedData.get(key)).append("\"\n");
+                    }
+                    userPrompt.append("\n");
+                }
             }
         }
 
@@ -968,10 +978,14 @@ public final class AgentToolLoopStep implements PipelineStep
             logToolResult(effectiveCall.toolName(), toolContent);
 
             // Submit fresh ground-truth DOM from SUT for the next turn
+            final boolean hasRemainingMilestones = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
+            final boolean lastToolFailed = result == null || result.status() != ToolResult.Status.SUCCESS;
+            final boolean hasPendingVisual = pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty();
             final boolean requireDomForNextTurn = !isZeroDom
-                    || (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
-                    || activeContextLevel != ContextLevel.MINIMAL
-                    || (pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty());
+                    && (hasRemainingMilestones
+                            || lastToolFailed
+                            || hasPendingVisual
+                            || (executedCalls.isEmpty() && activeContextLevel != ContextLevel.MINIMAL));
 
             // Update URL and Title in transient data without full DOM re-dump
             if (effectiveCall.toolName().startsWith("browser_")
@@ -1117,30 +1131,31 @@ public final class AgentToolLoopStep implements PipelineStep
             else
             {
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                if (driver != null)
+                try
                 {
-                    try
+                    final StringBuilder turnPrompt = new StringBuilder();
+                    if (driver != null)
                     {
                         final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
                         final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
-                        final StringBuilder turnPrompt = new StringBuilder();
                         turnPrompt.append("### Current Page:\n")
                                 .append("URL: ").append(currentUrl).append("\n")
                                 .append("Title: ").append(currentTitle).append("\n\n");
-                        if (pendingVisualNote != null)
-                        {
-                            turnPrompt.append("### Visual Inspection:\n").append(pendingVisualNote).append("\n\n");
-                            pendingVisualNote = null;
-                        }
-                        turnPrompt.append("What is your next tool call?");
-                        final List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : Collections.emptyList();
-                        pendingVisualAttachments = null;
-                        conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
-                        attachments = nextAttachments;
                     }
-                    catch (final Exception ignored)
+                    if (pendingVisualNote != null)
                     {
+                        turnPrompt.append("### Visual Inspection:\n").append(pendingVisualNote).append("\n\n");
+                        pendingVisualNote = null;
                     }
+                    turnPrompt.append("Note: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM, use tool 'browser_query_dom'.\n\n");
+                    turnPrompt.append("What is your next tool call?");
+                    final List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : Collections.emptyList();
+                    pendingVisualAttachments = null;
+                    conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
+                    attachments = nextAttachments;
+                }
+                catch (final Exception ignored)
+                {
                 }
             }
         }

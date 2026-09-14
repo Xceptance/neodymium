@@ -38,14 +38,17 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
    - Instruction asserts visual appearance, colors, badges, icons, styling, alignment, or spatial layouts without a visual modality tag.
    - Recommend `(visual)` for viewport-local visual checks.
    - Recommend `(visual: full)` for whole-page, page-spanning, or below-the-fold/footer checks.
+   - **Exemption**: If the instruction ALREADY contains a canonical visual tag like `(visual)`, `(visual: full)`, or `(layout)`, it is properly tagged. You MUST NEVER flag it as `MISSING_VISUAL_TAG`.
 
 3. **`AMBIGUOUS_AFFORDANCE`**:
-   - Phrasing passively describes what an element *can do* / enables rather than commanding what the test must do or explicitly asserting its presence.
-   - *Suggested Rewrite*: Clarify into an explicit imperative action or explicit assertion.
+   - Phrasing passively describes what an element *can do* / enables (e.g. "There is a settings card that allows updating account preferences", "The button allows users to checkout", "The link can be clicked to navigate") rather than commanding what the test must do ("Click the button", "Update account preferences") or asserting state.
+   - **Exemption for Declarative Assertions**: Natural language declarative presence, state, or content assertions (e.g. "The cart displays 0 items", "The table contains 5 rows", "The page contains a contact section") describe expected on-screen state and are valid assertions. Do NOT flag declarative state assertions as `AMBIGUOUS_AFFORDANCE` (though if they assert visual appearance, colors, or spatial positioning like "At the bottom" or "last row", Rule 2 `MISSING_VISUAL_TAG` still applies unless tagged).
+   - *Suggested Rewrite*: Clarify passive capability/permission language into an explicit imperative action or explicit assertion.
 
 4. **`VAGUE_TARGET`**:
-   - Target reference refers to a generic element type without container, section, label, or text context to disambiguate it (e.g. `Click the button`, `Click the link`, `Click the trash icon`).
-   - *Suggested Rewrite*: Scope the target with container, section, or label context.
+   - Target reference refers to a generic element type or generic action descriptor without container, section, label, or quoted text context to disambiguate it (e.g. `Click the button`, `Click the Action button`, `Click the link`, `Click the trash icon`).
+   - If an element is referred to only as "the button", "the action button", or "the link" without quotes or clarifying section/container context, flag it as `VAGUE_TARGET`.
+   - *Suggested Rewrite*: Scope the target with container, section, or label context (e.g. `Click the "Action" button`, `Click the trash icon in the header`).
 
 5. **`VAGUE_VERIFICATION`**:
    - Subjective, imprecise, or untestable verification oracle (e.g. `Make sure the page looks good`, `Check that everything works properly`).
@@ -78,6 +81,16 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
 12. **`EXPLICIT_SCRIPT_INTERACTION`**:
     - Instruction explicitly commands raw script or code execution to interact with elements or submit forms (e.g. `Run JavaScript to click the button`, `Execute script to fill out the form`), bypassing standard user events and validation.
     - *Suggested Rewrite*: Rephrase as a standard user action (e.g. `Click the button`, `Type "..." into the input field`).
+
+---
+
+## Evaluation Protocol
+
+Evaluate scenario instructions methodically step by step:
+1. **Identify Operational Purpose**: Determine whether the step is an Action (mutating interaction) or an Assertion (verifying state, text, existence, or layout).
+2. **Check Existing Modality Tags**: Inspect parenthetical tags first (e.g. `(visual)`, `(visual: full)`, `(layout)`). If a canonical tag is already present, do NOT flag `MISSING_VISUAL_TAG`.
+3. **Respect Declarative State Assertions**: Do not flag declarative presence or content statements (e.g. "The cart displays 0 items") as ambiguous affordances. However, if an assertion asserts spatial position or layout (e.g. "At the bottom", "last row"), it MUST be flagged under Rule 2 `MISSING_VISUAL_TAG` unless tagged with `(visual)` or `(visual: full)`.
+4. **Be Non-Intrusive on Well-Formed Steps**: Do not generate pedantic findings for steps that have clear explicit targets, concrete assertions, and proper scoping. Reserve findings for genuine ambiguities, missing tags, vague targets, or compound operations.
 
 ---
 

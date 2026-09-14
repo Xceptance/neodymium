@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import org.neodymium.ai.client.ReasoningEffort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.neodymium.util.Neodymium;
@@ -763,6 +764,41 @@ public final class AiConfiguration
             return explicit.trim();
         }
         return getModel("linter");
+    }
+
+    /**
+     * Resolves the configured reasoning effort tier for the pre-flight linter,
+     * checking {@code neodymium.ai.linter.reasoningEffort} before falling back
+     * to {@code neodymium.ai.reasoningEffort}, defaulting to {@link ReasoningEffort#MEDIUM}.
+     *
+     * @return the resolved linter reasoning effort tier
+     */
+    public ReasoningEffort getLinterReasoningEffort()
+    {
+        final String explicit = getProperty("neodymium.ai.linter.reasoningEffort", null);
+        if (explicit != null && !explicit.isBlank())
+        {
+            try
+            {
+                return ReasoningEffort.valueOf(explicit.trim().toUpperCase());
+            }
+            catch (final IllegalArgumentException e)
+            {
+                LOG.warn("⚠️ Invalid neodymium.ai.linter.reasoningEffort value '{}', falling back to default", explicit);
+            }
+        }
+        final String global = getProperty("neodymium.ai.reasoningEffort", null);
+        if (global != null && !global.isBlank())
+        {
+            try
+            {
+                return ReasoningEffort.valueOf(global.trim().toUpperCase());
+            }
+            catch (final IllegalArgumentException ignored)
+            {
+            }
+        }
+        return ReasoningEffort.MEDIUM;
     }
 
     /**
