@@ -271,6 +271,10 @@ public class PlaybookToolReplayTest
 
         this.context.setVariable("liveCandidates", List.of(liveIcon));
 
+        // Warm-up call to eliminate JVM cold class-loading jitter from micro-benchmark
+        PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+        this.executedCalls.clear();
+
         final long start = System.nanoTime();
         final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
         final long durationMs = (System.nanoTime() - start) / 1_000_000;
@@ -281,5 +285,94 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals("#favorite-heart", this.executedCalls.get(0).arguments().path("target").asText());
         // Sub-millisecond CPU execution
         Assertions.assertTrue(durationMs < 50, "Tier 2 offline matching should execute in milliseconds, took: " + durationMs + "ms");
+    }
+
+    @Test
+    public void testOfflineReplayPreservesTextQualificationWhenCandidateHasTextAndNoId() throws Exception
+    {
+        final PlaybookStep step = new PlaybookStep("Click country item");
+
+        // Recorded action with old class selector but containing text qualification
+        final ObjectNode clickArgs = MAPPER.createObjectNode().put("target", "li.old-country-item:has-text(\"Germany\")");
+        step.addToolCall(new ToolCall("call-40", "browser_click", clickArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "li",
+                "Germany",
+                Set.of("old-country-item"),
+                Map.of("role", "option"),
+                "li",
+                "Germany",
+                "ul",
+                0
+        );
+        final Action act = new Action("CLICK", "li.old-country-item:has-text(\"Germany\")", List.of(), "Germany", "");
+        act.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(act));
+
+        // Live page candidate: class shifted to country-item, but still has text "Germany" and no ID
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "li",
+                "Germany",
+                Set.of("country-item"),
+                Map.of("role", "option"),
+                "li",
+                "Germany",
+                "ul",
+                0
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        // Target was healed to the text-qualified selector li.country-item:has-text("Germany")!
+        Assertions.assertEquals("li.country-item:has-text(\"Germany\")", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testOfflineReplayDoesNotTriggerHealingWhenSelectorMatchesCandidate() throws Exception
+    {
+        final PlaybookStep step = new PlaybookStep("Click Germany");
+
+        final ObjectNode clickArgs = MAPPER.createObjectNode().put("target", "li.country-item:has-text(\"Germany\")");
+        step.addToolCall(new ToolCall("call-41", "browser_click", clickArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "li",
+                "Germany",
+                Set.of("country-item"),
+                Map.of(),
+                "li",
+                "Germany",
+                "ul",
+                0
+        );
+        final Action act = new Action("CLICK", "li.country-item:has-text(\"Germany\")", List.of(), "Germany", "");
+        act.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(act));
+
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "li",
+                "Germany",
+                Set.of("country-item"),
+                Map.of(),
+                "li",
+                "Germany",
+                "ul",
+                0
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("li.country-item:has-text(\"Germany\")", this.executedCalls.get(0).arguments().path("target").asText());
     }
 }

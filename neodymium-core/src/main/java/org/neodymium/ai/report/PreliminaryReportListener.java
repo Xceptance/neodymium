@@ -1157,8 +1157,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     final String capability = call.getCapability();
                     if (!"LINTER".equalsIgnoreCase(capability) && !"PESAP".equalsIgnoreCase(capability)
-                            && !"JUDGE".equalsIgnoreCase(capability) && !"VERIFICATION".equalsIgnoreCase(capability)
-                            && !"RCA".equalsIgnoreCase(capability))
+                            && !"JUDGE".equalsIgnoreCase(capability) && !"JUDGE_DISCUSSION".equalsIgnoreCase(capability)
+                            && !"VERIFICATION".equalsIgnoreCase(capability)
+                            && !"RCA".equalsIgnoreCase(capability) && !"VISUAL_RCA".equalsIgnoreCase(capability))
                     {
                         fallbackIn += call.getInputTokens();
                         fallbackOut += call.getOutputTokens();
@@ -1263,6 +1264,11 @@ public final class PreliminaryReportListener implements ExecutionListener
     private void recalculateFromDirectLlmCalls(final TestExecutionReport.ReportMetrics m)
     {
         final List<TestExecutionReport.ReportLlmCallEntry> calls = this.report.getLlmCalls();
+        if (calls == null)
+        {
+            return;
+        }
+
         m.setTotalLlmCalls(calls.size());
 
         long inTokens = 0;
@@ -1270,12 +1276,98 @@ public final class PreliminaryReportListener implements ExecutionListener
         long cachedTokens = 0;
         double cost = 0.0;
 
+        int actCalls = 0;
+        long actIn = 0;
+        long actOut = 0;
+        long actCached = 0;
+        double actCost = 0.0;
+
+        int pesapCalls = 0;
+        long pesapIn = 0;
+        long pesapOut = 0;
+        long pesapCached = 0;
+        double pesapCost = 0.0;
+
+        int judgeCalls = 0;
+        long judgeIn = 0;
+        long judgeOut = 0;
+        long judgeCached = 0;
+        double judgeCost = 0.0;
+
+        int verifCalls = 0;
+        long verifIn = 0;
+        long verifOut = 0;
+        long verifCached = 0;
+        double verifCost = 0.0;
+
+        int rcaCalls = 0;
+        long rcaIn = 0;
+        long rcaOut = 0;
+        long rcaCached = 0;
+        double rcaCost = 0.0;
+
+        int linterCalls = 0;
+        long linterIn = 0;
+        long linterOut = 0;
+        long linterCached = 0;
+        double linterCost = 0.0;
+
         for (final TestExecutionReport.ReportLlmCallEntry call : calls)
         {
             inTokens += call.getInputTokens();
             outTokens += call.getOutputTokens();
             cachedTokens += call.getCachedTokens();
             cost += call.getEstimatedCostUsd();
+
+            final String cap = call.getCapability();
+            if ("RCA".equalsIgnoreCase(cap) || "VISUAL_RCA".equalsIgnoreCase(cap))
+            {
+                rcaIn += call.getInputTokens();
+                rcaOut += call.getOutputTokens();
+                rcaCached += call.getCachedTokens();
+                rcaCost += call.getEstimatedCostUsd();
+                rcaCalls++;
+            }
+            else if ("PESAP".equalsIgnoreCase(cap))
+            {
+                pesapIn += call.getInputTokens();
+                pesapOut += call.getOutputTokens();
+                pesapCached += call.getCachedTokens();
+                pesapCost += call.getEstimatedCostUsd();
+                pesapCalls++;
+            }
+            else if ("JUDGE".equalsIgnoreCase(cap) || "JUDGE_DISCUSSION".equalsIgnoreCase(cap))
+            {
+                judgeIn += call.getInputTokens();
+                judgeOut += call.getOutputTokens();
+                judgeCached += call.getCachedTokens();
+                judgeCost += call.getEstimatedCostUsd();
+                judgeCalls++;
+            }
+            else if ("VERIFICATION".equalsIgnoreCase(cap))
+            {
+                verifIn += call.getInputTokens();
+                verifOut += call.getOutputTokens();
+                verifCached += call.getCachedTokens();
+                verifCost += call.getEstimatedCostUsd();
+                verifCalls++;
+            }
+            else if ("LINTER".equalsIgnoreCase(cap))
+            {
+                linterIn += call.getInputTokens();
+                linterOut += call.getOutputTokens();
+                linterCached += call.getCachedTokens();
+                linterCost += call.getEstimatedCostUsd();
+                linterCalls++;
+            }
+            else
+            {
+                actIn += call.getInputTokens();
+                actOut += call.getOutputTokens();
+                actCached += call.getCachedTokens();
+                actCost += call.getEstimatedCostUsd();
+                actCalls++;
+            }
         }
 
         m.setTokenUsageInput(inTokens);
@@ -1286,7 +1378,12 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         final TestExecutionReport.CategoryTokenUsage totCat = new TestExecutionReport.CategoryTokenUsage(calls.size(), inTokens, outTokens, cachedTokens, cost);
         m.setTotal(totCat);
-        m.setAction(totCat);
+        m.setAction(new TestExecutionReport.CategoryTokenUsage(actCalls, actIn, actOut, actCached, actCost));
+        m.setPesap(new TestExecutionReport.CategoryTokenUsage(pesapCalls, pesapIn, pesapOut, pesapCached, pesapCost));
+        m.setJudge(new TestExecutionReport.CategoryTokenUsage(judgeCalls, judgeIn, judgeOut, judgeCached, judgeCost));
+        m.setVerification(new TestExecutionReport.CategoryTokenUsage(verifCalls, verifIn, verifOut, verifCached, verifCost));
+        m.setVisualRca(new TestExecutionReport.CategoryTokenUsage(rcaCalls, rcaIn, rcaOut, rcaCached, rcaCost));
+        m.setLinter(new TestExecutionReport.CategoryTokenUsage(linterCalls, linterIn, linterOut, linterCached, linterCost));
     }
 
     private static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)

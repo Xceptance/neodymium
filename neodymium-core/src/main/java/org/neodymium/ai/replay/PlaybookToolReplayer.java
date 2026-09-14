@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
@@ -328,6 +329,19 @@ public final class PlaybookToolReplayer
             return null;
         }
 
+        final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
+        if (currentTarget.isBlank() || currentTarget.startsWith("coord:") || currentTarget.startsWith("badge:"))
+        {
+            return null;
+        }
+
+        // If the current target is already directly present and visible on the live page,
+        // no healing is needed. Never overwrite or corrupt an active, working locator.
+        if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+        {
+            return null;
+        }
+
         // Check if DomFeatureVector is recorded
         DomFeatureVector recordedVector = null;
         if (callIndex < step.getActions().size())
@@ -382,7 +396,6 @@ public final class PlaybookToolReplayer
             final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedVector, liveCandidates, 0.70);
             if (best != null)
             {
-                final String currentTarget = args.hasNonNull("target") ? args.path("target").asText() : args.path("selector").asText();
                 final String healedSelector = resolveSelectorForCandidate(best);
                 if (!currentTarget.equals(healedSelector))
                 {
@@ -410,9 +423,21 @@ public final class PlaybookToolReplayer
         {
             return "#" + candidate.getAttributes().get("id");
         }
+        if (candidate.getAttributes().containsKey("data-testid") && !candidate.getAttributes().get("data-testid").isBlank())
+        {
+            return candidate.getTag() + "[data-testid=\"" + candidate.getAttributes().get("data-testid") + "\"]";
+        }
         if (candidate.getAttributes().containsKey("name") && !candidate.getAttributes().get("name").isBlank())
         {
             return candidate.getTag() + "[name=\"" + candidate.getAttributes().get("name") + "\"]";
+        }
+        if (candidate.getText() != null && !candidate.getText().isBlank())
+        {
+            final String cleanText = candidate.getText().trim().replace("\"", "\\\"").replace("\n", " ");
+            final String base = !candidate.getClasses().isEmpty()
+                    ? candidate.getTag() + "." + String.join(".", candidate.getClasses())
+                    : candidate.getTag();
+            return base + ":has-text(\"" + cleanText + "\")";
         }
         if (!candidate.getClasses().isEmpty())
         {

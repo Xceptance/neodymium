@@ -546,6 +546,29 @@ public final class SelenideElementFinder
         return Selenide.$(resolveLocator(firstCandidate));
     }
 
+    /**
+     * Checks whether the given target locator is directly present and visible on the active page
+     * without blocking or waiting for timeouts.
+     *
+     * @param target the target locator (CSS, XPath, Playwright pseudo, etc.)
+     * @return true if the element is currently attached and visible in the DOM
+     */
+    public static boolean isDirectlyPresent(final String target)
+    {
+        if (target == null || target.isBlank() || !WebDriverRunner.hasWebDriverStarted())
+        {
+            return false;
+        }
+        try
+        {
+            return findDirect(target) != null;
+        }
+        catch (final Exception ignored)
+        {
+            return false;
+        }
+    }
+
     private static SelenideElement findDirect(final String rawCandidate)
     {
         if (rawCandidate == null || rawCandidate.isBlank())

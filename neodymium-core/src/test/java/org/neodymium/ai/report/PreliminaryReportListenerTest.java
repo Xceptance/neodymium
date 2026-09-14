@@ -1847,4 +1847,62 @@ public class PreliminaryReportListenerTest
         assertTrue(firstPos >= 0, "HTML must contain Visual RCA explanation text");
         assertEquals(firstPos, lastPos, "Visual RCA explanation text must appear exactly ONCE in HTML report");
     }
+
+    @Test
+    public void testVisualRcaTokensAreNotDoubleCountedAsStandardActionTokens(@TempDir final Path reportDir) throws Exception
+    {
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        final PreliminaryReportListener listener = new PreliminaryReportListener(
+            reportDir,
+            EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON),
+            true
+        );
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ctx.getTransientData().put(ExecutionContext.KEY_RCA_TOKEN_USAGE, new TokenUsage(517, 53, 570, 0));
+        ctx.getTransientData().put(ExecutionContext.KEY_RCA_CALL_COUNT, 1);
+        ctx.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, "Flag was US instead of DE");
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final PlaybookStep step = new PlaybookStep("Check flag");
+            bus.dispatch(new StepStartedEvent(step, 0));
+
+            // Only a single VISUAL_RCA LLM call is recorded
+            final LlmRequest rcaReq = new LlmRequest("Visual RCA", "Analyze screenshot", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse rcaResp = new LlmResponse("{\"explanation\":\"Flag was US instead of DE\"}", new TokenUsage(517, 53, 570, 0), "gemini-3.5-flash-lite");
+            bus.dispatch(new LlmRequestSentEvent(rcaReq, "VISUAL_RCA"));
+            bus.dispatch(new LlmResponseReceivedEvent(rcaReq, rcaResp, 300, "VISUAL_RCA"));
+
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.FAILED));
+            bus.dispatch(new SessionFinishedEvent(1000, false, List.of()));
+
+            final TestExecutionReport report = listener.getReport();
+            assertNotNull(report);
+            final TestExecutionReport.ReportMetrics metrics = report.getMetrics();
+            assertNotNull(metrics);
+
+            // Action usage must be 0 calls and 0 tokens!
+            assertNotNull(metrics.getAction());
+            assertEquals(0, metrics.getAction().getCalls(), "Action calls must be 0 when only VISUAL_RCA executed");
+            assertEquals(0, metrics.getAction().getInputTokens(), "Action input tokens must be 0");
+            assertEquals(0, metrics.getAction().getOutputTokens(), "Action output tokens must be 0");
+
+            // Visual RCA usage must be 1 call with 517 in and 53 out
+            assertNotNull(metrics.getVisualRca());
+            assertEquals(1, metrics.getVisualRca().getCalls(), "Visual RCA calls must be 1");
+            assertEquals(517, metrics.getVisualRca().getInputTokens());
+            assertEquals(53, metrics.getVisualRca().getOutputTokens());
+
+            // Total must be 1 call, 570 tokens (not 2 calls, 1140 tokens!)
+            assertEquals(1, metrics.getTotalLlmCalls(), "Total LLM calls must be exactly 1");
+            assertEquals(570, metrics.getTotalTokens(), "Total tokens must be exactly 570");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
 }
