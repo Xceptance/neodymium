@@ -57,7 +57,7 @@ public final class AuraTestQueueControllerTest
     {
         this.interactiveService = new AuraInteractiveService();
         this.fileService = Mockito.mock(AuraFileService.class);
-        this.queueService = new AuraQueueService(this.interactiveService);
+        this.queueService = new AuraQueueService(null, this.interactiveService);
         this.controller = new AuraTestQueueController(this.queueService, this.fileService, this.interactiveService);
     }
 

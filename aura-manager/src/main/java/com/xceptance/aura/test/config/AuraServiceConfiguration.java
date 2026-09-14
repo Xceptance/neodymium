@@ -24,6 +24,7 @@ import com.xceptance.neodymium.aura.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,17 +62,25 @@ public class AuraServiceConfiguration
         return new AuraChatSessionService();
     }
 
-    @Bean
+@Bean
     public AuraInteractiveService auraInteractiveService()
     {
         return new AuraInteractiveService();
     }
 
     @Bean
-    public AuraQueueService auraQueueService(final AuraInteractiveService interactiveService,
-                                             final RunStorageSyncService runStorageSyncService)
+    public AuraReportingService auraReportingService(final AuraInteractiveService interactiveService)
     {
-        final AuraQueueService queueService = new AuraQueueService(interactiveService);
+        final AuraReportingService reportingService = new AuraReportingService();
+        reportingService.setInteractiveService(interactiveService);
+        return reportingService;
+    }
+
+    @Bean
+    public AuraQueueService auraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService,
+                                              final RunStorageSyncService runStorageSyncService)
+    {
+        final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
         queueService.setOnRunCompletedListener(runId -> {
             try
             {

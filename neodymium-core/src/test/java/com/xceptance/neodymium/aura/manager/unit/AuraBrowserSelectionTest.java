@@ -51,7 +51,7 @@ public final class AuraBrowserSelectionTest
     public void setUp()
     {
         final AuraInteractiveService interactiveService = new AuraInteractiveService();
-        this.queueService = new AuraQueueService(interactiveService);
+        this.queueService = new AuraQueueService(null, interactiveService);
     }
 
     @Test
