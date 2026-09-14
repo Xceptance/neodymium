@@ -153,7 +153,8 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
         // 3. Only inspect browser actions that interact with elements
         final String toolName = call.toolName();
-        if (!toolName.startsWith("browser_") || "browser_take_screenshot".equals(toolName) || "browser_scroll".equals(toolName))
+        if (!toolName.startsWith("browser_") || "browser_take_screenshot".equals(toolName) || "browser_scroll".equals(toolName)
+                || "browser_assert_count".equals(toolName) || "browser_query_dom".equals(toolName))
         {
             return InterceptionVerdict.allow("Tool " + toolName + " is exempt from locator quality judging");
         }

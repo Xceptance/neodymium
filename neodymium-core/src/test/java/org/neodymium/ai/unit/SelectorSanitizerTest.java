@@ -94,4 +94,34 @@ public class SelectorSanitizerTest
         final By resolved = SelenideElementFinder.resolveLocator("button:has-text('Submit')");
         Assertions.assertTrue(resolved.toString().contains("Submit"));
     }
+
+    @Test
+    public void testCompoundAndDescendantPlaywrightPseudoSelectors()
+    {
+        final By compoundExact = LocatorResolver.resolveLocator(".quick-add-dropdown.active button:text-is(\"L\")");
+        final String xpathStr = compoundExact.toString();
+        Assertions.assertTrue(xpathStr.contains("quick-add-dropdown"), "Must contain quick-add-dropdown class check");
+        Assertions.assertTrue(xpathStr.contains("active"), "Must contain active class check");
+        Assertions.assertTrue(xpathStr.contains("//button"), "Must contain descendant button tag");
+        Assertions.assertTrue(xpathStr.contains("'L'"), "Must contain text match for L");
+        Assertions.assertFalse(xpathStr.contains("quick-add-dropdown.active button"), "Must not treat descendant selector as single class");
+
+        final By multiClass = LocatorResolver.resolveLocator("button.btn.btn-primary:has-text(\"Save\")");
+        final String multiClassStr = multiClass.toString();
+        Assertions.assertTrue(multiClassStr.contains("//button"), "Must contain button tag");
+        Assertions.assertTrue(multiClassStr.contains("btn"), "Must contain btn class");
+        Assertions.assertTrue(multiClassStr.contains("btn-primary"), "Must contain btn-primary class");
+        Assertions.assertTrue(multiClassStr.contains("'Save'"), "Must contain Save text");
+
+        final By childCombinator = LocatorResolver.resolveLocator("div.card > span:contains('Price')");
+        final String childStr = childCombinator.toString();
+        Assertions.assertTrue(childStr.contains("//div"), "Must contain parent div");
+        Assertions.assertTrue(childStr.contains("/span"), "Must contain child span combinator");
+        Assertions.assertTrue(childStr.contains("'Price'"), "Must contain Price text");
+
+        final By idTarget = LocatorResolver.resolveLocator("#confirmPassword:text-is(\"Password\")");
+        final String idStr = idTarget.toString();
+        Assertions.assertTrue(idStr.contains("@id='confirmPassword'"), "Must contain id check");
+        Assertions.assertTrue(idStr.contains("'Password'"), "Must contain Password text");
+    }
 }

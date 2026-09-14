@@ -1298,6 +1298,52 @@ public final class BrowserToolProvider
         {
         }
 
+        try
+        {
+            final String title = Selenide.title();
+            if (title != null && !title.isBlank())
+            {
+                if (regex)
+                {
+                    final String cleanPattern = cleanRegexPattern(expectedText);
+                    Pattern pattern;
+                    try
+                    {
+                        pattern = Pattern.compile(cleanPattern, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                    }
+                    catch (final PatternSyntaxException e)
+                    {
+                        pattern = Pattern.compile(Pattern.quote(cleanPattern), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                    }
+                    if (pattern.matcher(title).find())
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    final String unescaped = unescapeLiteralText(expectedText);
+                    if (exact)
+                    {
+                        if (title.trim().equalsIgnoreCase(unescaped.trim()))
+                        {
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        if (title.toLowerCase(Locale.ROOT).contains(unescaped.toLowerCase(Locale.ROOT)))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
         return false;
     }
 

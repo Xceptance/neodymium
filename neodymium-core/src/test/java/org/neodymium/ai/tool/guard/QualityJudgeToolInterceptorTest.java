@@ -606,4 +606,27 @@ public class QualityJudgeToolInterceptorTest
             System.clearProperty("neodymium.ai.judge.discussion.maxTurns");
         }
     }
+
+    @Test
+    public void testMultiElementToolsExemptFromJudging()
+    {
+        final ObjectNode countArgs = MAPPER.createObjectNode();
+        countArgs.put("selector", "form input");
+        countArgs.put("expectedCount", 3);
+        final ToolCall countCall = new ToolCall("call-count", "browser_assert_count", countArgs);
+        final InterceptionVerdict countVerdict = this.interceptor.intercept(countCall, this.context, SemanticIntent.ASSERT);
+
+        Assertions.assertTrue(countVerdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, countVerdict.decision());
+        Assertions.assertTrue(countVerdict.reason().contains("exempt from locator quality judging"));
+
+        final ObjectNode queryArgs = MAPPER.createObjectNode();
+        queryArgs.put("selector", "div.item");
+        final ToolCall queryCall = new ToolCall("call-query", "browser_query_dom", queryArgs);
+        final InterceptionVerdict queryVerdict = this.interceptor.intercept(queryCall, this.context, SemanticIntent.STORE);
+
+        Assertions.assertTrue(queryVerdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, queryVerdict.decision());
+        Assertions.assertTrue(queryVerdict.reason().contains("exempt from locator quality judging"));
+    }
 }

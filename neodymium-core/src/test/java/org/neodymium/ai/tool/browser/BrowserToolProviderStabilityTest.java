@@ -22,6 +22,8 @@ import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.Collections;
+import org.openqa.selenium.NoSuchElementException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -182,5 +184,47 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals("[Cart]", BrowserToolProvider.unescapeLiteralText("\\[Cart\\]"));
         Assertions.assertEquals("Plain Text", BrowserToolProvider.unescapeLiteralText("Plain Text"));
         Assertions.assertNull(BrowserToolProvider.unescapeLiteralText(null));
+    }
+
+    @Test
+    public void testAssertTextPageWideWithoutSelectorMatchesTitleFallback() throws Exception
+    {
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    if ("getTitle".equals(method.getName()))
+                    {
+                        return "VÉRLA - Modern Premium Apparel";
+                    }
+                    if ("getCurrentUrl".equals(method.getName()))
+                    {
+                        return "https://localhost:8543/verla-perfect/index.html";
+                    }
+                    if ("findElement".equals(method.getName()))
+                    {
+                        throw new NoSuchElementException("Not in body");
+                    }
+                    if ("findElements".equals(method.getName()))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("expectedText", "VÉRLA - Modern Premium Apparel");
+
+        final ToolCall call = new ToolCall("call-title-fallback", "browser_assert_text", args);
+        final ToolResult result = tool.execute(call, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        final JsonNode json = MAPPER.readTree(result.content());
+        Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        Assertions.assertEquals("assert_text", json.path("action").asText());
+        Assertions.assertEquals("page", json.path("target").asText());
     }
 }
