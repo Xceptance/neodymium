@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,6 +40,7 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.WrapsElement;
 import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1543,9 +1545,31 @@ public class PageAnalyzer
             })(arguments[0]);
             """;
 
+        WebElement targetEl = element;
+        if (targetEl instanceof SelenideElement se)
+        {
+            try
+            {
+                targetEl = se.toWebElement();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        if (targetEl instanceof WrapsElement we)
+        {
+            try
+            {
+                targetEl = we.getWrappedElement();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
         try
         {
-            final Object response = ((JavascriptExecutor) driver).executeScript(script, element);
+            final Object response = ((JavascriptExecutor) driver).executeScript(script, targetEl);
             if (response instanceof String jsonStr && !jsonStr.isBlank())
             {
                 return MAPPER.readValue(jsonStr, DomFeatureVector.class);

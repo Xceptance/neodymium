@@ -41,6 +41,7 @@ import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.AgentThrashingException;
@@ -604,13 +605,32 @@ public final class AgentToolLoopStep implements PipelineStep
                             }
                             throw new ConclusiveFailureException("Action execution failed: " + result.content());
                         }
-                        executedCalls.add(effectiveCall);
+                        ToolCall callToRecord = effectiveCall;
+                        if (result != null && result.content() != null && !result.content().isBlank())
+                        {
+                            try
+                            {
+                                final JsonNode resJson = MAPPER.readTree(result.content());
+                                if (resJson.hasNonNull("domFeatureVector"))
+                                {
+                                    final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
+                                            ? on.deepCopy()
+                                            : MAPPER.createObjectNode();
+                                    updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                                    callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                        executedCalls.add(callToRecord);
                         if (effectiveCall.toolName().startsWith("browser_") && !"browser_take_screenshot".equals(effectiveCall.toolName()))
                         {
                             final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                             if (session != null && session.getEventBus() != null)
                             {
-                                Action mappedAction = mapToolCallToAction(effectiveCall);
+                                Action mappedAction = mapToolCallToAction(callToRecord);
                                 if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
                                 {
                                     mappedAction = mappedAction.withReasoning(thought.trim());
@@ -839,7 +859,26 @@ public final class AgentToolLoopStep implements PipelineStep
 
             if (result != null && result.status() == ToolResult.Status.SUCCESS)
             {
-                executedCalls.add(effectiveCall);
+                ToolCall callToRecord = effectiveCall;
+                if (result.content() != null && !result.content().isBlank())
+                {
+                    try
+                    {
+                        final JsonNode resJson = MAPPER.readTree(result.content());
+                        if (resJson.hasNonNull("domFeatureVector"))
+                        {
+                            final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
+                                    ? on.deepCopy()
+                                    : MAPPER.createObjectNode();
+                            updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                            callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                executedCalls.add(callToRecord);
                 if ("browser_navigate".equals(effectiveCall.toolName()))
                 {
                     previousElementSignatures.clear();
@@ -849,7 +888,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                     if (session != null && session.getEventBus() != null)
                     {
-                        Action mappedAction = mapToolCallToAction(effectiveCall);
+                        Action mappedAction = mapToolCallToAction(callToRecord);
                         if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
                         {
                             mappedAction = mappedAction.withReasoning(thought.trim());
@@ -1177,6 +1216,10 @@ public final class AgentToolLoopStep implements PipelineStep
                     final Action mapped = mapToolCallToAction(call);
                     final Action sanitizedAction = sanitizer.sanitize(mapped, sessionData);
                     actions.add(sanitizedAction);
+                    if (currentStep.getDomFeatureVector() == null && sanitizedAction.getDomFeatureVector() != null)
+                    {
+                        currentStep.setDomFeatureVector(sanitizedAction.getDomFeatureVector());
+                    }
                 }
             }
             currentStep.setActions(actions);
@@ -1339,7 +1382,28 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         else if (candidate.hasNonNull("action"))
         {
-            toolName = normalizeToolName(candidate.path("action").asText());
+            final String rawAction = candidate.path("action").asText().trim();
+            final String rawLocator = candidate.hasNonNull("locator") ? candidate.path("locator").asText().trim()
+                    : (candidate.hasNonNull("target") ? candidate.path("target").asText().trim() : "");
+            if ("ASSERT".equalsIgnoreCase(rawAction))
+            {
+                if ("url".equalsIgnoreCase(rawLocator) || "currentUrl".equalsIgnoreCase(rawLocator) || "pageUrl".equalsIgnoreCase(rawLocator))
+                {
+                    toolName = "browser_assert_url";
+                }
+                else if ("title".equalsIgnoreCase(rawLocator) || "pageTitle".equalsIgnoreCase(rawLocator))
+                {
+                    toolName = "browser_assert_title";
+                }
+                else
+                {
+                    toolName = normalizeToolName(rawAction);
+                }
+            }
+            else
+            {
+                toolName = normalizeToolName(rawAction);
+            }
         }
         else if (candidate.isObject())
         {
@@ -1419,6 +1483,48 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("url"))
                 {
                     obj.put("url", obj.path("value").asText());
+                }
+                if ("browser_assert_url".equals(toolName))
+                {
+                    if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                    {
+                        obj.put("expectedUrl", obj.path("value").asText());
+                    }
+                    else if (obj.hasNonNull("text") && !obj.path("text").asText().isBlank())
+                    {
+                        obj.put("expectedUrl", obj.path("text").asText());
+                    }
+                    else if (obj.hasNonNull("url") && !obj.path("url").asText().isBlank() && !"url".equalsIgnoreCase(obj.path("url").asText()))
+                    {
+                        obj.put("expectedUrl", obj.path("url").asText());
+                    }
+                }
+                if ("browser_assert_title".equals(toolName))
+                {
+                    if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                    {
+                        obj.put("expectedTitle", obj.path("value").asText());
+                    }
+                    else if (obj.hasNonNull("text") && !obj.path("text").asText().isBlank())
+                    {
+                        obj.put("expectedTitle", obj.path("text").asText());
+                    }
+                    else if (obj.hasNonNull("title") && !obj.path("title").asText().isBlank())
+                    {
+                        obj.put("expectedTitle", obj.path("title").asText());
+                    }
+                }
+                final String targetStr = obj.hasNonNull("target") ? obj.path("target").asText()
+                        : (obj.hasNonNull("locator") ? obj.path("locator").asText() : "");
+                final ClickAction.CoordinateTarget coord = ClickAction.parseCoordinateTarget(targetStr);
+                if (coord != null)
+                {
+                    obj.put("x", coord.x());
+                    obj.put("y", coord.y());
+                    if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
+                    {
+                        obj.put("selector", coord.anchorSelector());
+                    }
                 }
                 if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("filePath"))
                 {

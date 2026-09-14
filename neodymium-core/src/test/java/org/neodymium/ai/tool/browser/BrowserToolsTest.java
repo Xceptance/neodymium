@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.tool.browser;
 
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -78,6 +79,8 @@ public class BrowserToolsTest
                 "browser_hover",
                 "browser_assert_text",
                 "browser_assert_count",
+                "browser_assert_url",
+                "browser_assert_title",
                 "browser_scroll",
                 "browser_execute_script",
                 "browser_query_dom",
@@ -823,6 +826,86 @@ public class BrowserToolsTest
         Assertions.assertEquals(Keys.DELETE, BrowserToolProvider.resolveKey("Delete"));
         Assertions.assertEquals(Keys.SPACE, BrowserToolProvider.resolveKey("Space"));
         Assertions.assertEquals("x", BrowserToolProvider.resolveKey("x"));
+    }
+
+    @Test
+    public void testBrowserAssertUrlExecutionAndSchema() throws Exception
+    {
+        WebDriverRunner.setWebDriver(createStandardMockDriver());
+        final AiTool tool = this.registry.getTool("browser_assert_url").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_assert_url", def.name());
+        Assertions.assertTrue(def.parametersSchema().path("required").isArray());
+        Assertions.assertEquals("expectedUrl", def.parametersSchema().path("required").get(0).asText());
+
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // 1. Substring contains match (happy path)
+        final ToolCall successCall = new ToolCall("call-url-1", "browser_assert_url",
+                mapper.createObjectNode().put("expectedUrl", "example.com/page"));
+        final ToolResult successResult = tool.execute(successCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, successResult.status());
+        Assertions.assertTrue(successResult.content().contains("https://example.com/page"));
+
+        // 2. Regex match (happy path)
+        final ToolCall regexCall = new ToolCall("call-url-2", "browser_assert_url",
+                mapper.createObjectNode().put("expectedUrl", ".*example\\.com.*").put("regex", true));
+        final ToolResult regexResult = tool.execute(regexCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, regexResult.status());
+
+        // 3. Exact match failure (with brief timeout)
+        final long originalTimeout = Configuration.timeout;
+        try
+        {
+            Configuration.timeout = 50;
+            final ToolCall failCall = new ToolCall("call-url-3", "browser_assert_url",
+                    mapper.createObjectNode().put("expectedUrl", "https://other-domain.com").put("exact", true));
+            Assertions.assertThrows(AssertionError.class, () -> tool.execute(failCall, null));
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testBrowserAssertTitleExecutionAndSchema() throws Exception
+    {
+        WebDriverRunner.setWebDriver(createStandardMockDriver());
+        final AiTool tool = this.registry.getTool("browser_assert_title").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_assert_title", def.name());
+        Assertions.assertTrue(def.parametersSchema().path("required").isArray());
+        Assertions.assertEquals("expectedTitle", def.parametersSchema().path("required").get(0).asText());
+
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // 1. Substring contains match (happy path)
+        final ToolCall successCall = new ToolCall("call-title-1", "browser_assert_title",
+                mapper.createObjectNode().put("expectedTitle", "Mock Page"));
+        final ToolResult successResult = tool.execute(successCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, successResult.status());
+        Assertions.assertTrue(successResult.content().contains("Mock Page Title"));
+
+        // 2. Regex match (happy path)
+        final ToolCall regexCall = new ToolCall("call-title-2", "browser_assert_title",
+                mapper.createObjectNode().put("expectedTitle", ".*Page Title.*").put("regex", true));
+        final ToolResult regexResult = tool.execute(regexCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, regexResult.status());
+
+        // 3. Mismatch failure (with brief timeout)
+        final long originalTimeout = Configuration.timeout;
+        try
+        {
+            Configuration.timeout = 50;
+            final ToolCall failCall = new ToolCall("call-title-3", "browser_assert_title",
+                    mapper.createObjectNode().put("expectedTitle", "Non-Existent Title"));
+            Assertions.assertThrows(AssertionError.class, () -> tool.execute(failCall, null));
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
     }
 }
 

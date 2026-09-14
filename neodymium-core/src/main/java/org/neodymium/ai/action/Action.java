@@ -32,6 +32,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.tool.ToolCall;
 
@@ -739,7 +740,20 @@ public class Action
             case "NAVIGATE", "OPEN" -> "browser_navigate";
             case "SELECT" -> "browser_select";
             case "HOVER" -> "browser_hover";
-            case "ASSERT_TEXT", "ASSERT" -> "browser_assert_text";
+            case "ASSERT_URL" -> "browser_assert_url";
+            case "ASSERT_TITLE" -> "browser_assert_title";
+            case "ASSERT_TEXT" -> "browser_assert_text";
+            case "ASSERT" -> {
+                if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
+                {
+                    yield "browser_assert_url";
+                }
+                if ("title".equalsIgnoreCase(this.target) || "pageTitle".equalsIgnoreCase(this.target))
+                {
+                    yield "browser_assert_title";
+                }
+                yield "browser_assert_text";
+            }
             case "ASSERT_COUNT" -> "browser_assert_count";
             case "EXECUTE_SCRIPT", "SCRIPT" -> "browser_execute_script";
             case "SCROLL" -> "browser_scroll";
@@ -756,10 +770,24 @@ public class Action
         {
             args.put("url", this.target != null ? this.target : "");
         }
+        else if ("browser_assert_url".equals(toolName))
+        {
+            final String urlVal = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
+            args.put("expectedUrl", urlVal != null ? urlVal : "");
+        }
+        else if ("browser_assert_title".equals(toolName))
+        {
+            final String titleVal = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
+            args.put("expectedTitle", titleVal != null ? titleVal : "");
+        }
         else if ("browser_assert_text".equals(toolName))
         {
             final String txt = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
             args.put("text", txt != null ? txt : "");
+            if (this.target != null && !this.target.isBlank() && !"url".equalsIgnoreCase(this.target) && !"title".equalsIgnoreCase(this.target))
+            {
+                args.put("selector", this.target);
+            }
         }
         else if ("browser_assert_count".equals(toolName))
         {
@@ -806,11 +834,31 @@ public class Action
         else
         {
             args.put("target", this.target != null ? this.target : "");
+            final ClickAction.CoordinateTarget coord = ClickAction.parseCoordinateTarget(this.target);
+            if (coord != null)
+            {
+                args.put("x", coord.x());
+                args.put("y", coord.y());
+                if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
+                {
+                    args.put("selector", coord.anchorSelector());
+                }
+            }
+            else if (this.target != null && !this.target.isBlank())
+            {
+                args.put("selector", this.target);
+            }
+
             if (this.value != null && !this.value.isEmpty())
             {
                 args.put("text", this.value.get(0));
                 args.put("value", this.value.get(0));
             }
+        }
+
+        if (this.domFeatureVector != null)
+        {
+            args.set("domFeatureVector", MAPPER.valueToTree(this.domFeatureVector));
         }
 
         return new ToolCall(UUID.randomUUID().toString(), toolName, args);
@@ -847,6 +895,8 @@ public class Action
             case "browser_wait" -> "WAIT";
             case "browser_assert_text" -> "ASSERT_TEXT";
             case "browser_assert_count" -> "ASSERT_COUNT";
+            case "browser_assert_url" -> "ASSERT_URL";
+            case "browser_assert_title" -> "ASSERT_TITLE";
             case "browser_press_key" -> "KEY_PRESS";
             case "browser_branch" -> "BRANCH";
             case "browser_store" -> "STORE";
@@ -923,6 +973,14 @@ public class Action
             {
                 target = "text:" + args.path("text").asText();
             }
+            else if ("browser_assert_url".equals(name))
+            {
+                target = "url";
+            }
+            else if ("browser_assert_title".equals(name))
+            {
+                target = "title";
+            }
         }
 
         Object value = null;
@@ -972,6 +1030,18 @@ public class Action
             else if (args.hasNonNull("expectedText") && !args.path("expectedText").asText().isBlank())
             {
                 value = args.path("expectedText").asText();
+            }
+            else if (args.hasNonNull("expectedUrl") && !args.path("expectedUrl").asText().isBlank())
+            {
+                value = args.path("expectedUrl").asText();
+            }
+            else if (args.hasNonNull("expectedTitle") && !args.path("expectedTitle").asText().isBlank())
+            {
+                value = args.path("expectedTitle").asText();
+            }
+            else if (args.hasNonNull("title") && !args.path("title").asText().isBlank())
+            {
+                value = args.path("title").asText();
             }
             else if (args.hasNonNull("expectedCount"))
             {
@@ -1025,6 +1095,8 @@ public class Action
                 case "CLICK" -> !target.isBlank() ? "Click " + target : "Click element";
                 case "TYPE" -> "Type '" + (value != null ? value : "") + "' into " + target;
                 case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
+                case "ASSERT_URL" -> "Assert URL '" + (value != null ? value : "") + "'";
+                case "ASSERT_TITLE" -> "Assert page title '" + (value != null ? value : "") + "'";
                 case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
                 case "HOVER" -> "Hover over " + target;
                 case "KEY_PRESS" -> "Press key '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
@@ -1062,6 +1134,19 @@ public class Action
         final Action action = new Action(type, target, value, description, reasoning, isRegex);
         action.setAdjust(adjust);
         action.setToolCall(call);
+
+        if (args != null && args.has("domFeatureVector") && !args.path("domFeatureVector").isNull())
+        {
+            try
+            {
+                final DomFeatureVector vector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
+                action.setDomFeatureVector(vector);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
         return action;
     }
 }

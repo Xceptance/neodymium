@@ -18,11 +18,13 @@
  */
 package org.neodymium.ai.replay;
 
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
@@ -353,14 +355,29 @@ public final class PlaybookToolReplayer
             return null;
         }
 
-        // Check for live candidate vectors provided via context variable
-        final Object candidateObj = context.getVariable("liveCandidates", Object.class).orElse(null);
+        // Check for live candidate vectors provided via context variable or dynamically extracted from active page
+        List<DomFeatureVector> liveCandidates = null;
+        final Object candidateObj = context != null ? context.getVariable("liveCandidates", Object.class).orElse(null) : null;
         if (candidateObj instanceof final List<?> candidateList && !candidateList.isEmpty()
                 && candidateList.get(0) instanceof DomFeatureVector)
         {
             @SuppressWarnings("unchecked")
-            final List<DomFeatureVector> liveCandidates = (List<DomFeatureVector>) candidateList;
+            final List<DomFeatureVector> cast = (List<DomFeatureVector>) candidateList;
+            liveCandidates = cast;
+        }
+        else if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                liveCandidates = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
 
+        if (liveCandidates != null && !liveCandidates.isEmpty())
+        {
             // Sub-millisecond similarity healing on CPU
             final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedVector, liveCandidates, 0.70);
             if (best != null)
@@ -389,9 +406,13 @@ public final class PlaybookToolReplayer
 
     private static String resolveSelectorForCandidate(final DomFeatureVector candidate)
     {
-        if (candidate.getAttributes().containsKey("id"))
+        if (candidate.getAttributes().containsKey("id") && !candidate.getAttributes().get("id").isBlank())
         {
             return "#" + candidate.getAttributes().get("id");
+        }
+        if (candidate.getAttributes().containsKey("name") && !candidate.getAttributes().get("name").isBlank())
+        {
+            return candidate.getTag() + "[name=\"" + candidate.getAttributes().get("name") + "\"]";
         }
         if (!candidate.getClasses().isEmpty())
         {

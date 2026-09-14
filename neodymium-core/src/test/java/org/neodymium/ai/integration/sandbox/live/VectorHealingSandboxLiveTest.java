@@ -77,7 +77,7 @@ public class VectorHealingSandboxLiveTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testVectorAttributeDriftHealingLive(final AiSession session) throws Exception
     {
-        session.execute( """
+        session.execute("""
             steps: |
               Open ${drift.live.url} in the browser
               Type "SAVE20" into the coupon input field
