@@ -477,12 +477,57 @@ public final class BrowserToolProvider
         };
     }
 
+    /**
+     * Resolves a key name or string to a Selenium {@link Keys} enum value or literal character sequence,
+     * supporting standard W3C DOM key names (e.g. "ArrowDown", "Backspace", "Escape").
+     *
+     * @param rawKey the raw key string passed by the caller
+     * @return the resolved {@link CharSequence}
+     */
+    public static CharSequence resolveKey(final String rawKey)
+    {
+        if (rawKey == null || rawKey.isBlank())
+        {
+            return Keys.ENTER;
+        }
+        final String trimmed = rawKey.trim();
+        final String normalized = trimmed.toUpperCase().replace("-", "_");
+        return switch (normalized)
+        {
+            case "ARROWDOWN", "ARROW_DOWN", "DOWN" -> Keys.ARROW_DOWN;
+            case "ARROWUP", "ARROW_UP", "UP" -> Keys.ARROW_UP;
+            case "ARROWLEFT", "ARROW_LEFT", "LEFT" -> Keys.ARROW_LEFT;
+            case "ARROWRIGHT", "ARROW_RIGHT", "RIGHT" -> Keys.ARROW_RIGHT;
+            case "BACKSPACE", "BACK_SPACE" -> Keys.BACK_SPACE;
+            case "PAGEUP", "PAGE_UP" -> Keys.PAGE_UP;
+            case "PAGEDOWN", "PAGE_DOWN" -> Keys.PAGE_DOWN;
+            case "ESC", "ESCAPE" -> Keys.ESCAPE;
+            case "ENTER", "RETURN" -> Keys.ENTER;
+            case "TAB" -> Keys.TAB;
+            case "SPACE", "SPACEBAR" -> Keys.SPACE;
+            case "DELETE", "DEL" -> Keys.DELETE;
+            case "HOME" -> Keys.HOME;
+            case "END" -> Keys.END;
+            case "INSERT", "INS" -> Keys.INSERT;
+            default -> {
+                try
+                {
+                    yield Keys.valueOf(normalized);
+                }
+                catch (final IllegalArgumentException e)
+                {
+                    yield trimmed;
+                }
+            }
+        };
+    }
+
     private static AiTool createPressKeyTool()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
-        props.putObject("key").put("type", "string").put("description", "Key to press, e.g. 'Enter', 'Escape', 'Tab', 'Backspace'");
+        props.putObject("key").put("type", "string").put("description", "Key to press, e.g. 'Enter', 'Escape', 'Tab', 'Backspace', 'ArrowDown', 'ArrowUp'");
         props.putObject("selector").put("type", "string").put("description", "Optional selector of the element to send the key to");
         schema.putArray("required").add("key");
 
@@ -499,18 +544,9 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 DomQuiescenceWatcher.installTracker();
-                final String keyName = call.arguments().path("key").asText("ENTER").toUpperCase();
+                final String rawKey = call.arguments().path("key").asText("Enter");
                 final String selector = resolveSelector(call.arguments());
-                CharSequence resolvedKey;
-                try
-                {
-                    resolvedKey = Keys.valueOf(keyName);
-                }
-                catch (final IllegalArgumentException e)
-                {
-                    resolvedKey = Keys.ENTER;
-                }
-                final CharSequence key = resolvedKey;
+                final CharSequence key = resolveKey(rawKey);
 
                 if (!selector.isBlank())
                 {
@@ -518,10 +554,26 @@ public final class BrowserToolProvider
                 }
                 else
                 {
-                    Selenide.actions().sendKeys(key).perform();
+                    try
+                    {
+                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (driver != null)
+                        {
+                            driver.switchTo().activeElement().sendKeys(key);
+                        }
+                        else
+                        {
+                            Selenide.actions().sendKeys(key).perform();
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        Selenide.actions().sendKeys(key).perform();
+                    }
                 }
+                DomQuiescenceWatcher.waitForDomQuiet();
                 final ObjectNode res = successNode("press_key");
-                res.put("key", keyName);
+                res.put("key", rawKey);
                 if (!selector.isBlank())
                 {
                     res.put("target", selector);

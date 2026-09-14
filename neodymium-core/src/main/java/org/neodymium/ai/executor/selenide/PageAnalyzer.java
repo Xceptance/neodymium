@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -106,6 +107,10 @@ public class PageAnalyzer
         if (this.providedDriver != null)
         {
             return this.providedDriver;
+        }
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            return WebDriverRunner.getWebDriver();
         }
         LOG.warn("No WebDriver provided to PageAnalyzer instance.");
         return null;
@@ -488,8 +493,8 @@ public class PageAnalyzer
                     if (el.hasAttribute('data-action') || el.hasAttribute('data-click') || el.hasAttribute('data-toggle') || el.hasAttribute('hx-get') || el.hasAttribute('hx-post')) return true;
                     var id = el.id ? el.id.toLowerCase() : '';
                     var cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-                    if (id.includes('btn') || id.includes('button') || id.includes('click') || id.includes('nav') || id.includes('cart') || id.includes('trigger') ||
-                        cls.includes('btn') || cls.includes('button') || cls.includes('click') || cls.includes('nav') || cls.includes('cart') || cls.includes('trigger')) return true;
+                    if (id.includes('btn') || id.includes('button') || id.includes('click') || id.includes('nav') || id.includes('cart') || id.includes('trigger') || id.includes('suggestion') ||
+                        cls.includes('btn') || cls.includes('button') || cls.includes('click') || cls.includes('nav') || cls.includes('cart') || cls.includes('trigger') || cls.includes('suggestion') || cls.includes('dropdown-item')) return true;
                     var style = window.getComputedStyle(el);
                     if (style.cursor === 'pointer' && !el.closest('a')) return true;
                     return false;
@@ -582,7 +587,9 @@ public class PageAnalyzer
                     }
 
                     // 2. Container node with extracted children
-                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup' || isCustomElement;
+                    var elRole = (el.getAttribute('role') || '').toLowerCase();
+                    var isPortalOrModal = tag === 'dialog' || ['dialog', 'listbox', 'menu', 'combobox'].indexOf(elRole) !== -1 || (el.id && el.id.indexOf('portal') !== -1) || (typeof el.className === 'string' && el.className.indexOf('portal') !== -1);
+                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup' || isCustomElement || isPortalOrModal;
                     var allowContainer = !isMinimal || isFormContainer;
                     if (allowContainer && (isContainerTag || isDivContainer) && children.length > 0) {
                         // Flatten single-child anonymous layout wrappers (but never custom elements)

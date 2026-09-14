@@ -117,7 +117,9 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("SCROLL", new ScrollAction());
         this.plugins.put("SELECT", new SelectAction());
         this.plugins.put("WAIT", new WaitAction());
-        this.plugins.put("KEY_PRESS", new KeyPressAction());
+        final KeyPressAction keyPressPlugin = new KeyPressAction();
+        this.plugins.put("KEY_PRESS", keyPressPlugin);
+        this.plugins.put("PRESS_KEY", keyPressPlugin);
         this.plugins.put("SWITCH_WINDOW", new SwitchWindowAction());
         this.plugins.put("UPLOAD", new UploadAction());
         final AlertAction alertPlugin = new AlertAction();

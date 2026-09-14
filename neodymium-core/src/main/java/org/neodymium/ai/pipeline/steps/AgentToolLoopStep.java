@@ -1440,6 +1440,21 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     obj.put("container", obj.path("scrollContainer").asText());
                 }
+                if ("browser_press_key".equals(toolName) || "press_key".equalsIgnoreCase(toolName) || "key_press".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("value") && !obj.hasNonNull("key"))
+                    {
+                        obj.put("key", obj.path("value").asText());
+                    }
+                    if (obj.hasNonNull("keyName") && !obj.hasNonNull("key"))
+                    {
+                        obj.put("key", obj.path("keyName").asText());
+                    }
+                    if (obj.hasNonNull("key_name") && !obj.hasNonNull("key"))
+                    {
+                        obj.put("key", obj.path("key_name").asText());
+                    }
+                }
                 if ("browser_handle_alert".equals(toolName) || "handle_alert".equalsIgnoreCase(toolName) || "alert".equalsIgnoreCase(toolName))
                 {
                     if (obj.hasNonNull("target") && !obj.hasNonNull("promptText"))

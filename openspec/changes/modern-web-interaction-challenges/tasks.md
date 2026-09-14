@@ -33,9 +33,9 @@
 
 ## 6. Autocomplete & Debounced Typeahead with Floating Portals
 
-- [ ] 6.1 Create `AuraGlanceTest/shop/sandbox/autocomplete.html` with debounced search-as-you-type rendering into detached `<body>` portals
-- [ ] 6.2 Ensure `PageAnalyzer` captures floating portal containers in DOM snapshots and verify keyboard navigation in `BrowserToolProvider`
-- [ ] 6.3 Create `AutocompleteSandboxLiveTest` and `AutocompleteSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
+- [x] 6.1 Create `AuraGlanceTest/shop/sandbox/autocomplete.html` with debounced search-as-you-type rendering into detached `<body>` portals
+- [x] 6.2 Ensure `PageAnalyzer` captures floating portal containers in DOM snapshots and verify keyboard navigation in `BrowserToolProvider`
+- [x] 6.3 Create `AutocompleteSandboxLiveTest` and `AutocompleteSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
 
 ## 7. Rich Text & Contenteditable Editors
 

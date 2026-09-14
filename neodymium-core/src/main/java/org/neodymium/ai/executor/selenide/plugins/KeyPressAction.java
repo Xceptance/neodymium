@@ -18,9 +18,14 @@
  */
 package org.neodymium.ai.executor.selenide.plugins;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.openqa.selenium.Keys;
+import org.openqa.selenium.WebElement;
 
 /**
  * Concrete action plugin executing KEY_PRESS commands.
@@ -53,34 +58,24 @@ public final class KeyPressAction implements BrowserActionPlugin
         }
 
         final String target = action.getTarget();
-        final String value = action.getValue().toUpperCase().trim();
+        final CharSequence resolvedKey = BrowserToolProvider.resolveKey(action.getValue());
 
-        Keys keyToPress = null;
-        try
-        {
-            keyToPress = Keys.valueOf(value);
-        }
-        catch (final IllegalArgumentException e)
-        {
-            // Ignore, not a standard Keys enum
-        }
-
-        com.codeborne.selenide.SelenideElement element = SelenideElementFinder.findElement(action);
+        SelenideElement element = SelenideElementFinder.findElement(action);
         if ("body".equalsIgnoreCase(target.trim()) || "html".equalsIgnoreCase(target.trim()))
         {
             try
             {
-                final org.openqa.selenium.WebElement active = com.codeborne.selenide.WebDriverRunner.getWebDriver().switchTo().activeElement();
+                final WebElement active = WebDriverRunner.getWebDriver().switchTo().activeElement();
                 if (active != null)
                 {
-                    element = com.codeborne.selenide.Selenide.$(active);
+                    element = Selenide.$(active);
                 }
             }
             catch (final Exception ignored)
             {
             }
         }
-        if (keyToPress != null)
+        if (resolvedKey instanceof final Keys keyToPress)
         {
             if (keyToPress == Keys.ENTER || keyToPress == Keys.RETURN)
             {
@@ -93,7 +88,7 @@ public final class KeyPressAction implements BrowserActionPlugin
         }
         else
         {
-            element.sendKeys(action.getValue());
+            element.sendKeys(resolvedKey);
         }
     }
 }

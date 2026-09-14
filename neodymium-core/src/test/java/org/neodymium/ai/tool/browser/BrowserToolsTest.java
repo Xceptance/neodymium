@@ -33,6 +33,7 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 
@@ -783,6 +784,45 @@ public class BrowserToolsTest
         final JsonNode props = schema.path("properties");
         Assertions.assertTrue(props.has("source"));
         Assertions.assertTrue(props.has("target"));
+    }
+
+    @Test
+    public void testBrowserPressKeySchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_press_key").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_press_key", def.name());
+
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode props = schema.path("properties");
+        Assertions.assertTrue(props.has("key"));
+        Assertions.assertTrue(props.has("selector"));
+
+        final JsonNode req = schema.path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals("key", req.get(0).asText());
+    }
+
+    @Test
+    public void testResolveKeyMappings()
+    {
+        Assertions.assertEquals(Keys.ARROW_DOWN, BrowserToolProvider.resolveKey("ArrowDown"));
+        Assertions.assertEquals(Keys.ARROW_DOWN, BrowserToolProvider.resolveKey("arrow_down"));
+        Assertions.assertEquals(Keys.ARROW_DOWN, BrowserToolProvider.resolveKey("down"));
+        Assertions.assertEquals(Keys.ARROW_UP, BrowserToolProvider.resolveKey("ArrowUp"));
+        Assertions.assertEquals(Keys.ARROW_UP, BrowserToolProvider.resolveKey("up"));
+        Assertions.assertEquals(Keys.BACK_SPACE, BrowserToolProvider.resolveKey("Backspace"));
+        Assertions.assertEquals(Keys.BACK_SPACE, BrowserToolProvider.resolveKey("back_space"));
+        Assertions.assertEquals(Keys.ESCAPE, BrowserToolProvider.resolveKey("Escape"));
+        Assertions.assertEquals(Keys.ESCAPE, BrowserToolProvider.resolveKey("esc"));
+        Assertions.assertEquals(Keys.ENTER, BrowserToolProvider.resolveKey("Enter"));
+        Assertions.assertEquals(Keys.ENTER, BrowserToolProvider.resolveKey("return"));
+        Assertions.assertEquals(Keys.TAB, BrowserToolProvider.resolveKey("Tab"));
+        Assertions.assertEquals(Keys.PAGE_DOWN, BrowserToolProvider.resolveKey("PageDown"));
+        Assertions.assertEquals(Keys.PAGE_UP, BrowserToolProvider.resolveKey("PageUp"));
+        Assertions.assertEquals(Keys.DELETE, BrowserToolProvider.resolveKey("Delete"));
+        Assertions.assertEquals(Keys.SPACE, BrowserToolProvider.resolveKey("Space"));
+        Assertions.assertEquals("x", BrowserToolProvider.resolveKey("x"));
     }
 }
 
