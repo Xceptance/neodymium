@@ -72,6 +72,7 @@ import org.neodymium.ai.executor.selenide.plugins.SwitchWindowAction;
 import org.neodymium.ai.executor.selenide.plugins.TypeAction;
 import org.neodymium.ai.executor.selenide.plugins.UploadAction;
 import org.neodymium.ai.executor.selenide.plugins.AlertAction;
+import org.neodymium.ai.executor.selenide.plugins.DragAction;
 import org.neodymium.ai.executor.selenide.plugins.WaitAction;
 import org.neodymium.ai.executor.selenide.plugins.CheckAction;
 import org.neodymium.ai.executor.selenide.plugins.StoreAction;
@@ -122,6 +123,10 @@ public final class SelenideTargetExecutor implements TargetExecutor
         final AlertAction alertPlugin = new AlertAction();
         this.plugins.put("HANDLE_ALERT", alertPlugin);
         this.plugins.put("ALERT", alertPlugin);
+        final DragAction dragPlugin = new DragAction();
+        this.plugins.put("DRAG", dragPlugin);
+        this.plugins.put("DRAG_AND_DROP", dragPlugin);
+        this.plugins.put("DRAG_TO", dragPlugin);
         final AssertAction assertPlugin = new AssertAction();
         this.plugins.put("ASSERT", assertPlugin);
         this.plugins.put("ASSERT_EXISTS", assertPlugin);
@@ -391,6 +396,8 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("KEY_PRESS", "Send key press events", Collections.emptyMap()),
             new ActionDefinition("SWITCH_WINDOW", "Switch WebDriver focus to another window or tab", Collections.emptyMap()),
             new ActionDefinition("HANDLE_ALERT", "Handle or dismiss native browser alert/confirm/prompt", Collections.emptyMap()),
+            new ActionDefinition("DRAG", "Drag element by pixel offset or to target dropzone", Collections.emptyMap()),
+            new ActionDefinition("DRAG_TO", "Drag source element to target element", Collections.emptyMap()),
             new ActionDefinition("ASSERT", "Assert state or value (legacy)", Collections.emptyMap()),
             new ActionDefinition("ASSERT_EXISTS", "Assert element presence and visibility", Collections.emptyMap()),
             new ActionDefinition("ASSERT_VISIBLE", "Assert element visibility", Collections.emptyMap()),

@@ -90,7 +90,9 @@ public class BrowserToolsTest
                 "browser_switch_tab",
                 "browser_close_tab",
                 "browser_upload_file",
-                "browser_handle_alert"
+                "browser_handle_alert",
+                "browser_drag",
+                "browser_drag_to"
         );
 
         for (final String toolName : expectedTools)
@@ -754,6 +756,33 @@ public class BrowserToolsTest
         final JsonNode props = schema.path("properties");
         Assertions.assertTrue(props.has("action"));
         Assertions.assertTrue(props.has("promptText"));
+    }
+
+    @Test
+    public void testBrowserDragSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_drag").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_drag", def.name());
+
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode props = schema.path("properties");
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("xOffset"));
+        Assertions.assertTrue(props.has("yOffset"));
+    }
+
+    @Test
+    public void testBrowserDragToSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_drag_to").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        Assertions.assertEquals("browser_drag_to", def.name());
+
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode props = schema.path("properties");
+        Assertions.assertTrue(props.has("source"));
+        Assertions.assertTrue(props.has("target"));
     }
 }
 

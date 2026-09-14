@@ -27,9 +27,9 @@
 
 ## 5. Dual-Thumb Range Sliders & Drag Gestures
 
-- [ ] 5.1 Create `AuraGlanceTest/shop/sandbox/range-slider.html` featuring a custom dual-thumb price slider and reorderable drag list
-- [ ] 5.2 Implement `browser_drag(selector, xOffset, yOffset)` and `browser_drag_to(source, target)` in `BrowserToolProvider` using Selenium `Actions`
-- [ ] 5.3 Create `RangeSliderSandboxLiveTest` and `RangeSliderSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
+- [x] 5.1 Create `AuraGlanceTest/shop/sandbox/range-slider.html` featuring a custom dual-thumb price slider and reorderable drag list
+- [x] 5.2 Implement `browser_drag(selector, xOffset, yOffset)` and `browser_drag_to(source, target)` in `BrowserToolProvider` using Selenium `Actions`
+- [x] 5.3 Create `RangeSliderSandboxLiveTest` and `RangeSliderSandboxMockTest` and verify `mvn test-compile -pl neodymium-core` passes
 
 ## 6. Autocomplete & Debounced Typeahead with Floating Portals
 

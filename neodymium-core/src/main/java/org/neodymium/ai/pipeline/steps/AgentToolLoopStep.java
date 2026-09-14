@@ -1301,6 +1301,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "browser_refresh".equals(name)
                 || "browser_press_key".equals(name)
                 || "browser_execute_script".equals(name)
+                || "browser_drag".equals(name)
+                || "browser_drag_to".equals(name)
                 || "browser_navigate".equals(name);
     }
 
@@ -1526,6 +1528,90 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                     }
                 }
+                if ("browser_drag".equals(toolName) || "drag".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("target") && !obj.hasNonNull("selector"))
+                    {
+                        obj.put("selector", obj.path("target").asText());
+                    }
+                    if (obj.hasNonNull("source") && !obj.hasNonNull("selector"))
+                    {
+                        obj.put("selector", obj.path("source").asText());
+                    }
+                    if (obj.hasNonNull("offsetX") && !obj.hasNonNull("xOffset"))
+                    {
+                        obj.put("xOffset", obj.path("offsetX").asInt());
+                    }
+                    if (obj.hasNonNull("deltaX") && !obj.hasNonNull("xOffset"))
+                    {
+                        obj.put("xOffset", obj.path("deltaX").asInt());
+                    }
+                    if (obj.hasNonNull("offsetY") && !obj.hasNonNull("yOffset"))
+                    {
+                        obj.put("yOffset", obj.path("offsetY").asInt());
+                    }
+                    if (obj.hasNonNull("deltaY") && !obj.hasNonNull("yOffset"))
+                    {
+                        obj.put("yOffset", obj.path("deltaY").asInt());
+                    }
+                    if (obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if (val.contains(","))
+                        {
+                            final String[] parts = val.split(",");
+                            try
+                            {
+                                if (!obj.hasNonNull("xOffset"))
+                                {
+                                    obj.put("xOffset", Integer.parseInt(parts[0].trim()));
+                                }
+                                if (!obj.hasNonNull("yOffset"))
+                                {
+                                    obj.put("yOffset", Integer.parseInt(parts[1].trim()));
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                    }
+                }
+                if ("browser_drag_to".equals(toolName) || "drag_to".equalsIgnoreCase(toolName) || "drag_and_drop".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("sourceSelector") && !obj.hasNonNull("source"))
+                    {
+                        obj.put("source", obj.path("sourceSelector").asText());
+                    }
+                    if (obj.hasNonNull("from") && !obj.hasNonNull("source"))
+                    {
+                        obj.put("source", obj.path("from").asText());
+                    }
+                    if (obj.hasNonNull("selector") && !obj.hasNonNull("source"))
+                    {
+                        obj.put("source", obj.path("selector").asText());
+                    }
+                    if (obj.hasNonNull("targetSelector") && !obj.hasNonNull("target"))
+                    {
+                        obj.put("target", obj.path("targetSelector").asText());
+                    }
+                    if (obj.hasNonNull("to") && !obj.hasNonNull("target"))
+                    {
+                        obj.put("target", obj.path("to").asText());
+                    }
+                    if (obj.hasNonNull("destination") && !obj.hasNonNull("target"))
+                    {
+                        obj.put("target", obj.path("destination").asText());
+                    }
+                    if (obj.hasNonNull("value") && !obj.hasNonNull("target"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if (!val.isBlank())
+                        {
+                            obj.put("target", val);
+                        }
+                    }
+                }
                 if ("browser_navigate".equals(toolName) || "navigate".equalsIgnoreCase(toolName))
                 {
                     if (!obj.hasNonNull("url") || obj.path("url").asText().isBlank())
@@ -1688,6 +1774,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "clear_cookies".equals(name) || "back".equals(name) || "forward".equals(name)
                 || "refresh".equals(name) || "wait".equals(name) || "assert".equals(name)
                 || "assert_text".equals(name) || "assert_title".equals(name) || "key_press".equals(name)
+                || "drag".equals(name) || "drag_to".equals(name) || "drag_and_drop".equals(name)
                 || "check".equals(name) || "store".equals(name) || "branch".equals(name)
                 || "include".equals(name) || "java_method".equals(name)
                 || this.toolRegistry.hasTool(name) || this.toolRegistry.hasTool(rawName.trim());
@@ -1722,6 +1809,8 @@ public final class AgentToolLoopStep implements PipelineStep
             case "assert_text" -> "browser_assert_text";
             case "assert_title" -> "browser_assert_text";
             case "assert_count" -> "browser_assert_count";
+            case "drag" -> "browser_drag";
+            case "drag_to", "drag_and_drop" -> "browser_drag_to";
             case "key_press" -> "browser_press_key";
             case "none" -> "complete_step";
             case "check" -> "browser_click";
