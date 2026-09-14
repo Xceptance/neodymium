@@ -322,12 +322,15 @@ public final class AuraQueueService
                         final List<String> profiles = getEffectiveBrowserProfiles(selection, req.globalBrowserProfiles);
 
                         ExecutionBatch match = null;
-                        for (final ExecutionBatch b : batches)
+                        if (!req.interactive)
                         {
-                            if (selection.file.equals(b.file) && profiles.equals(b.targetProfiles))
+                            for (final ExecutionBatch b : batches)
                             {
-                                match = b;
-                                break;
+                                if (selection.file.equals(b.file) && profiles.equals(b.targetProfiles))
+                                {
+                                    match = b;
+                                    break;
+                                }
                             }
                         }
                         if (match == null)

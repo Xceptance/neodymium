@@ -9,14 +9,16 @@ var lastLogIndex = 0;
 var lastEventIndex = 0;
 var currentPollSession = 0;
 var serverSessionId = null;
+var userAborted = false;
 
 window.wasInLiveRunView = wasInLiveRunView;
 window.lastKnownRunning = lastKnownRunning;
+window.userAborted = userAborted;
 
 function openInteractiveConsoleViewLive(url) {
     let targetUrl = url;
     if (url && url.includes('interactive_console.html') && !url.includes('dataUrl=')) {
-        const buster = (typeof activeRunStats !== 'undefined' && (activeRunStats.activeTestId || activeRunStats.activeFile)) || Date.now();
+        const buster = Date.now();
         targetUrl = url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(buster);
     }
     if (typeof openInteractiveConsoleView === 'function') {
@@ -175,6 +177,8 @@ function updateRunButtons() {
 window.updateRunButtons = updateRunButtons;
 
 function stopQueue() {
+    userAborted = true;
+    window.userAborted = true;
     fetch('/api/stop', { method: 'POST' }).catch(e => console.error('Failed to stop queue', e));
     isRunning = false;
     window.isRunning = false;
@@ -183,6 +187,8 @@ function stopQueue() {
 window.stopQueue = stopQueue;
 
 function prepareClientForExecution() {
+    userAborted = false;
+    window.userAborted = false;
     isRunning = true;
     consoleOpened = true;
     window.isRunning = true;
@@ -476,8 +482,11 @@ async function pollStatus() {
                 data.events.forEach(event => {
                     if (event.type === 'reportReady') {
                         const reportUrl = `/run-report?runId=${encodeURIComponent(event.reportId)}`;
-                        if (typeof showToast === 'function') {
-                            showToast(`Execution finished! <a href="${reportUrl}" style="color: var(--accent); text-decoration: underline; margin-left: 6px;">View Report</a>`, 'success');
+                        if (!userAborted) {
+                            window.location.href = reportUrl;
+                            return;
+                        } else if (typeof showToast === 'function') {
+                            showToast(`Execution finished! <a href="${reportUrl}" style="color: var(--accent); text-decoration: underline; margin-left: 6px;">View Report</a>`, 'info');
                         }
                     }
                     if (event.type === 'interactiveConsoleReady') {

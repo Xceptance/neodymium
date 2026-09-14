@@ -20,7 +20,10 @@ package com.xceptance.neodymium.aura.manager.unit;
 
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.dto.DatasetSelection;
+import com.xceptance.neodymium.aura.dto.RunRequest;
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,5 +94,74 @@ public final class AuraQueueServiceTest
         Assertions.assertFalse(runningQueue.get());
         runningQueue.set(true);
         Assertions.assertTrue(runningQueue.get());
+    }
+
+    @Test
+    public void testExecuteQueueInteractiveSeparateBatches() throws Exception
+    {
+        System.setProperty("neodymium.aura.test", "true");
+        try
+        {
+            final RunRequest req = new RunRequest();
+            req.interactive = true;
+            final DatasetSelection ds1 = new DatasetSelection();
+            ds1.file = "TestFile.yaml";
+            ds1.id = "Dataset 1";
+            final DatasetSelection ds2 = new DatasetSelection();
+            ds2.file = "TestFile.yaml";
+            ds2.id = "Dataset 2";
+            req.datasets = List.of(ds1, ds2);
+
+            queueService.executeQueue(req, 8080);
+
+            final long deadline = System.currentTimeMillis() + 5000;
+            while (queueService.isRunningQueue() && System.currentTimeMillis() < deadline)
+            {
+                Thread.sleep(50);
+            }
+
+            Assertions.assertFalse(queueService.isRunningQueue());
+            Assertions.assertEquals(2, queueService.getGlobalTestsRun());
+            Assertions.assertEquals(2, queueService.getCompletedFiles().size());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.aura.test");
+        }
+    }
+
+    @Test
+    public void testExecuteQueueNonInteractiveBatched() throws Exception
+    {
+        System.setProperty("neodymium.aura.test", "true");
+        try
+        {
+            final RunRequest req = new RunRequest();
+            req.interactive = false;
+            final DatasetSelection ds1 = new DatasetSelection();
+            ds1.file = "TestFile.yaml";
+            ds1.id = "Dataset 1";
+            final DatasetSelection ds2 = new DatasetSelection();
+            ds2.file = "TestFile.yaml";
+            ds2.id = "Dataset 2";
+            req.datasets = List.of(ds1, ds2);
+
+            queueService.executeQueue(req, 8080);
+
+            final long deadline = System.currentTimeMillis() + 5000;
+            while (queueService.isRunningQueue() && System.currentTimeMillis() < deadline)
+            {
+                Thread.sleep(50);
+            }
+
+            Assertions.assertFalse(queueService.isRunningQueue());
+            Assertions.assertEquals(2, queueService.getGlobalTestsRun());
+            // In non-interactive mode, the 2 datasets are batched together so completedFiles has 1 entry
+            Assertions.assertEquals(1, queueService.getCompletedFiles().size());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.aura.test");
+        }
     }
 }

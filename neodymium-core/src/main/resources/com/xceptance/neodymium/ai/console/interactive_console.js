@@ -337,8 +337,16 @@ function applyState(state) {
     window.currentEditText = activeEditText;
 
     const isFirstLoad = currentState === null;
+    const isNewTest = !isFirstLoad && (
+        (state.runId && currentState.runId && state.runId !== currentState.runId) ||
+        (state.testName && currentState.testName && state.testName !== currentState.testName) ||
+        (state.testId && currentState.testId && state.testId !== currentState.testId)
+    );
 
-    if (isFirstLoad) {
+    if (isFirstLoad || isNewTest) {
+        selectedStepIndexForDetails = null;
+        userEditedFailedStep = false;
+        lastFailedStepIndex = null;
         const overlay = document.getElementById('initialLoadingOverlay');
         if (overlay) {
             overlay.style.opacity = '0';
@@ -357,13 +365,8 @@ function applyState(state) {
         window.currentPauseId = null;
     }
 
-    // On a new test run, clear the selected step to fall back to default behavior
-    if (currentState && currentState.runId !== state.runId) {
-        selectedStepIndexForDetails = null;
-    }
-
-    // Preserve local temporary steps (isTempAdd) when applying a new state from the server
-    if (currentState && currentState.blocks && state && state.blocks) {
+    // Preserve local temporary steps (isTempAdd) when applying a new state from the server for the same test
+    if (!isNewTest && currentState && currentState.blocks && state && state.blocks) {
         for (const blockName of ['before', 'steps', 'after']) {
             const oldList = currentState.blocks[blockName] || [];
             const newList = state.blocks[blockName] || [];
@@ -1340,7 +1343,20 @@ function toggleTextExpand(event, id) {
 function sendAction(action, extra) {
     if (!currentPauseId || !currentRunId) return;
     const finalSaveOverlay = document.getElementById('finalSaveOverlay');
+    const isFinalSessionAction = currentPauseId && currentPauseId.startsWith('pause-final-');
     if (finalSaveOverlay) finalSaveOverlay.classList.remove('active');
+    if (isFinalSessionAction) {
+        const overlay = document.getElementById('initialLoadingOverlay');
+        if (overlay) {
+            const h2 = overlay.querySelector('h2');
+            const p = overlay.querySelector('p');
+            if (h2) h2.textContent = 'Test Completed';
+            if (p) p.textContent = 'Advancing queue or preparing report...';
+            overlay.style.display = 'flex';
+            overlay.style.visibility = 'visible';
+            overlay.style.opacity = '1';
+        }
+    }
     const payload = { runId: currentRunId, pauseId: currentPauseId, action, ...extra };
     setButtonsEnabled(false);
     fetch('/api/console/action', {
