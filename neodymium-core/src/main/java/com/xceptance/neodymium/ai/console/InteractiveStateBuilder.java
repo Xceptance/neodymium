@@ -863,6 +863,10 @@ public final class InteractiveStateBuilder
                 {
                     final JsonObject callObj = new JsonObject();
                     callObj.addProperty("stepIndex", call.getStepIndex());
+                    if (call.getSubStepIndex() >= 0)
+                    {
+                        callObj.addProperty("subStepIndex", call.getSubStepIndex());
+                    }
                     callObj.addProperty("capability", call.getCapability());
                     callObj.addProperty("modelName", call.getModelName());
                     callObj.addProperty("durationMs", call.getDurationMs());
@@ -903,6 +907,10 @@ public final class InteractiveStateBuilder
                     scObj.addProperty("label", screenshot.getName());
                     scObj.addProperty("name", screenshot.getName());
                     scObj.addProperty("stepIndex", screenshot.getStepIndex());
+                    if (screenshot.getSubStepIndex() >= 0)
+                    {
+                        scObj.addProperty("subStepIndex", screenshot.getSubStepIndex());
+                    }
                     scObj.addProperty("mediaType", screenshot.getMediaType());
                     scObj.addProperty("base64Data", screenshot.getBase64Data());
                     scObj.addProperty("timestamp", screenshot.getTimestamp());

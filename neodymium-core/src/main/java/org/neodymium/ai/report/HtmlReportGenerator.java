@@ -428,7 +428,7 @@ public final class HtmlReportGenerator
                     }
 
                     final String stepLabel = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Pre-Flight / Setup";
-                    final String onclick = stepIdx >= 0 ? " onclick=\"openAndSelectStep(" + stepIdx + ")\"" : "";
+                    final String onclick = stepIdx >= 0 ? " onclick=\"openAndSelectStep(" + stepIdx + ", -1, 'llm')\"" : "";
 
                     sb.append("          <tr class=\"step-group-row\">\n");
                     sb.append("            <td colspan=\"9\">\n");
@@ -454,16 +454,21 @@ public final class HtmlReportGenerator
                 sb.append("          <tr class=\"").append(clusterRowClass).append(rowFirstClass).append("\">\n");
                 sb.append("            <td>").append(i + 1).append("</td>\n");
 
-                final String stepDisplay = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Pre-Flight";
+                final int subIdx = call.getSubStepIndex();
+                final String stepDisplay = stepIdx >= 0
+                    ? (subIdx >= 0
+                        ? "Step #" + (stepIdx + 1) + "." + (subIdx + 1)
+                        : "Step #" + (stepIdx + 1))
+                    : "Pre-Flight";
                 if (stepIdx >= 0)
                 {
                     if (isNewStep)
                     {
-                        sb.append("            <td><span class=\"step-ref\" onclick=\"openAndSelectStep(").append(stepIdx).append(")\">").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                        sb.append("            <td><span class=\"step-ref\" onclick=\"openAndSelectStep(").append(stepIdx).append(", ").append(subIdx).append(", 'llm')\">").append(escapeHtml(stepDisplay)).append("</span></td>\n");
                     }
                     else
                     {
-                        sb.append("            <td><span class=\"step-ref subcall\" onclick=\"openAndSelectStep(").append(stepIdx).append(")\"><span class=\"step-tree-indicator\">↳</span> ").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                        sb.append("            <td><span class=\"step-ref subcall\" onclick=\"openAndSelectStep(").append(stepIdx).append(", ").append(subIdx).append(", 'llm')\"><span class=\"step-tree-indicator\">↳</span> ").append(escapeHtml(stepDisplay)).append("</span></td>\n");
                     }
                 }
                 else

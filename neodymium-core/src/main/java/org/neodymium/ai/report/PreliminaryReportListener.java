@@ -85,6 +85,7 @@ public final class PreliminaryReportListener implements ExecutionListener
     private final HtmlIndexReportGenerator indexGenerator = new HtmlIndexReportGenerator();
 
     private TestExecutionReport.ReportStepEntry currentStep;
+    private TestExecutionReport.ReportStepEntry currentParentStep;
     private final AtomicBoolean reportFlushed = new AtomicBoolean(false);
     private String lastBaseFileName;
 
@@ -312,11 +313,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     existingSub.setStatus("RUNNING");
                     existingSub.setStartTimeMs(System.currentTimeMillis());
+                    this.currentParentStep = parentEntry;
                     this.currentStep = existingSub;
                     return;
                 }
 
                 parentEntry.addSubStep(stepEntry);
+                this.currentParentStep = parentEntry;
                 this.currentStep = stepEntry;
                 return;
             }
@@ -354,6 +357,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
 
             this.report.addStep(stepEntry);
+            this.currentParentStep = null;
             this.currentStep = stepEntry;
         }
         else if (event instanceof StepFinishedEvent stepFinished)
@@ -559,6 +563,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     }
                 }
                 this.currentStep = targetStep;
+                if (pbStep == null || pbStep.getParent() == null || targetStep == this.currentParentStep)
+                {
+                    this.currentParentStep = null;
+                }
             }
         }
         else if (event instanceof ActionExecutedEvent actionExecuted)
@@ -590,9 +598,32 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else if (event instanceof LlmResponseReceivedEvent llmReceived)
         {
-            final int stepIdx = this.currentStep != null ? this.currentStep.getStepIndex() : -1;
+            final int stepIdx;
+            final int subStepIdx;
+            if (this.currentParentStep != null)
+            {
+                stepIdx = this.currentParentStep.getStepIndex();
+                int sIdx = this.currentParentStep.getSubSteps().indexOf(this.currentStep);
+                if (sIdx < 0 && this.currentStep != null)
+                {
+                    sIdx = this.currentStep.getStepIndex();
+                }
+                subStepIdx = sIdx;
+            }
+            else if (this.currentStep != null)
+            {
+                stepIdx = this.currentStep.getStepIndex();
+                subStepIdx = -1;
+            }
+            else
+            {
+                stepIdx = -1;
+                subStepIdx = -1;
+            }
+
             final TestExecutionReport.ReportLlmCallEntry callEntry = new TestExecutionReport.ReportLlmCallEntry();
             callEntry.setStepIndex(stepIdx);
+            callEntry.setSubStepIndex(subStepIdx);
             callEntry.setCapability(llmReceived.getCapability());
             callEntry.setDurationMs(llmReceived.getDurationMs());
 
@@ -668,9 +699,34 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             if (stateCaptured.getState() != null && stateCaptured.getState().getAttachments() != null)
             {
-                final int stepIdx = this.currentStep != null ? this.currentStep.getStepIndex() : 0;
+                final int stepIdx;
+                final int subStepIdx;
+                if (this.currentParentStep != null)
+                {
+                    stepIdx = this.currentParentStep.getStepIndex();
+                    int sIdx = this.currentParentStep.getSubSteps().indexOf(this.currentStep);
+                    if (sIdx < 0 && this.currentStep != null)
+                    {
+                        sIdx = this.currentStep.getStepIndex();
+                    }
+                    subStepIdx = sIdx;
+                }
+                else if (this.currentStep != null)
+                {
+                    stepIdx = this.currentStep.getStepIndex();
+                    subStepIdx = -1;
+                }
+                else
+                {
+                    stepIdx = 0;
+                    subStepIdx = -1;
+                }
+
                 final boolean isVisual = this.currentStep != null && this.currentStep.isVisual();
-                final String label = "Step #" + (stepIdx + 1) + (isVisual ? " (Visual Verification)" : " Capture");
+                final String stepLabel = (stepIdx >= 0)
+                    ? (subStepIdx >= 0 ? "Step #" + (stepIdx + 1) + "." + (subStepIdx + 1) : "Step #" + (stepIdx + 1))
+                    : "Step";
+                final String label = stepLabel + (isVisual ? " (Visual Verification)" : " Capture");
 
                 for (final SutAttachment attachment : stateCaptured.getState().getAttachments())
                 {
@@ -693,13 +749,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                             attachment.base64Data(),
                             System.currentTimeMillis()
                         );
+                        screenshot.setSubStepIndex(subStepIdx);
                         this.report.addScreenshot(screenshot);
                         if (this.currentStep != null)
                         {
                             this.currentStep.addScreenshot(screenshot);
                         }
-                        LOGGER.debug("   📸 Recorded screenshot for step #{}: \"{}\" | Dimensions: {}",
-                            stepIdx + 1, label, screenshot.getDimensions() != null ? screenshot.getDimensions() : "unknown");
+                        LOGGER.debug("   📸 Recorded screenshot for {}: \"{}\" | Dimensions: {}",
+                            stepLabel, label, screenshot.getDimensions() != null ? screenshot.getDimensions() : "unknown");
                     }
                 }
             }

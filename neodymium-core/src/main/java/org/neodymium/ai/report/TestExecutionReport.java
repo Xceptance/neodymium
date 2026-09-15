@@ -1043,6 +1043,7 @@ public final class TestExecutionReport
     public static final class ReportLlmCallEntry
     {
         private int stepIndex;
+        private int subStepIndex = -1;
         private String capability;
         private String modelName;
         private long durationMs;
@@ -1068,6 +1069,16 @@ public final class TestExecutionReport
         public void setStepIndex(final int stepIndex)
         {
             this.stepIndex = stepIndex;
+        }
+
+        public int getSubStepIndex()
+        {
+            return this.subStepIndex;
+        }
+
+        public void setSubStepIndex(final int subStepIndex)
+        {
+            this.subStepIndex = subStepIndex;
         }
 
         public String getCapability()
@@ -1199,6 +1210,7 @@ public final class TestExecutionReport
     {
         private String name;
         private int stepIndex;
+        private int subStepIndex = -1;
         private String mediaType;
         private String base64Data;
         private long timestamp;
@@ -1262,6 +1274,16 @@ public final class TestExecutionReport
         public void setStepIndex(final int stepIndex)
         {
             this.stepIndex = stepIndex;
+        }
+
+        public int getSubStepIndex()
+        {
+            return this.subStepIndex;
+        }
+
+        public void setSubStepIndex(final int subStepIndex)
+        {
+            this.subStepIndex = subStepIndex;
         }
 
         public String getMediaType()

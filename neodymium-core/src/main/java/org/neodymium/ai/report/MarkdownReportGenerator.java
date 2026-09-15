@@ -255,9 +255,13 @@ public final class MarkdownReportGenerator
                     turnInStep = 0;
                 }
 
-                final String stepDisplay = stepIdx >= 0
-                    ? (isNewStep ? "Step #" + (stepIdx + 1) : "↳ Step #" + (stepIdx + 1))
+                final int subIdx = call.getSubStepIndex();
+                final String stepNum = (stepIdx >= 0)
+                    ? (subIdx >= 0
+                        ? "Step #" + (stepIdx + 1) + "." + (subIdx + 1)
+                        : "Step #" + (stepIdx + 1))
                     : "Pre-Flight";
+                final String stepDisplay = isNewStep ? stepNum : "↳ " + stepNum;
 
                 final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
                 final String phaseRole;
@@ -311,10 +315,16 @@ public final class MarkdownReportGenerator
             for (int i = 0; i < screenshots.size(); i++)
             {
                 final TestExecutionReport.ReportScreenshotEntry sc = screenshots.get(i);
+                final int scSubIdx = sc.getSubStepIndex();
+                final String stepLabel = sc.getStepIndex() >= 0
+                    ? (scSubIdx >= 0
+                        ? "Step #" + (sc.getStepIndex() + 1) + "." + (scSubIdx + 1)
+                        : "Step #" + (sc.getStepIndex() + 1))
+                    : "Pre-Flight";
                 final String widthStr = sc.getWidth() != null ? sc.getWidth() + " px" : "-";
                 final String heightStr = sc.getHeight() != null ? sc.getHeight() + " px" : "-";
                 final String dims = sc.getDimensions() != null ? sc.getDimensions() : "-";
-                sb.append("| ").append(i + 1).append(" | Step #").append(sc.getStepIndex() + 1).append(" | `")
+                sb.append("| ").append(i + 1).append(" | ").append(stepLabel).append(" | `")
                     .append(escapeMarkdown(sc.getName() != null ? sc.getName() : "-")).append("` | `")
                     .append(sc.getMediaType() != null ? sc.getMediaType() : "image/png").append("` | `")
                     .append(widthStr).append("` | `")
