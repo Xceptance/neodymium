@@ -1076,7 +1076,7 @@ public class AgentToolLoopStepTest
     }
 
     @Test
-    public void testTurn2ReceivesFreshDomFromTargetExecutor() throws Exception
+    public void testTurn2ReceivesLightweightObservationAndAttachmentFromTargetExecutor() throws Exception
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
@@ -1139,18 +1139,20 @@ public class AgentToolLoopStepTest
             }
             if (t == 2)
             {
-                // Turn 2 receives fresh SUT DOM and fresh attachment, and Turn 1 DOM is pruned
+                // Turn 2 receives lightweight observation note and fresh attachment, and Turn 1 DOM is pruned
                 final String turn1MsgContent = req.messages().get(1).content();
                 Assertions.assertFalse(turn1MsgContent.contains("<button id='btn'>Submit</button>"),
                         "Turn 1 DOM must be pruned from conversation context on Turn 2!");
                 Assertions.assertTrue(turn1MsgContent.contains("[Initial page state omitted after Turn 1 — use browser tools for current page state]"));
 
-                // The conversation must have the new user message containing fresh SUT DOM
+                // The conversation must have the new user message containing lightweight observation without full DOM dump
                 final List<ChatMessage> messages = req.messages();
                 final ChatMessage latestUserMsg = messages.get(messages.size() - 1);
                 Assertions.assertEquals(Role.USER, latestUserMsg.role());
-                Assertions.assertTrue(latestUserMsg.content().contains("Shipping Zip Code: 12345"),
-                        "Turn 2 user message must contain fresh DOM from SUT executor!");
+                Assertions.assertTrue(latestUserMsg.content().contains("Note: The requested action has been executed"),
+                        "Turn 2 user message must contain lightweight post-action observation prompt!");
+                Assertions.assertFalse(latestUserMsg.content().contains("Shipping Zip Code: 12345"),
+                        "Turn 2 should omit expensive structural DOM in favor of lightweight observation!");
 
                 Assertions.assertFalse(req.attachments().isEmpty());
                 Assertions.assertEquals("turn2Base64", req.attachments().get(0).base64Data(),

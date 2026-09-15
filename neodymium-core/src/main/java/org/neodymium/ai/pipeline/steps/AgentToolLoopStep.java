@@ -981,15 +981,12 @@ public final class AgentToolLoopStep implements PipelineStep
             // Submit fresh ground-truth DOM from SUT for the next turn
             final boolean hasRemainingMilestones = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
             final boolean lastToolFailed = result == null || result.status() != ToolResult.Status.SUCCESS;
-            final boolean hasPendingVisual = pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty();
             final boolean requestedContextEscalation = result != null && result.variables().containsKey("requestedContextLevel");
             final boolean isPureZeroDom = isZeroDom && !hasRemainingMilestones;
             final boolean requireDomForNextTurn = !isPureZeroDom
                     && (hasRemainingMilestones
                             || lastToolFailed
-                            || hasPendingVisual
-                            || requestedContextEscalation
-                            || (!executedCalls.isEmpty() && activeContextLevel != ContextLevel.MINIMAL));
+                            || requestedContextEscalation);
 
             // Update URL and Title in transient data without full DOM re-dump
             if (isMutatingTool(effectiveCall.toolName()))
@@ -1133,7 +1130,7 @@ public final class AgentToolLoopStep implements PipelineStep
             else if (!isPureZeroDom)
             {
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                if (driver != null || pendingVisualNote != null)
+                if (driver != null || executor != null || pendingVisualNote != null)
                 {
                     try
                     {
@@ -1142,6 +1139,22 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
                             final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
+                            try
+                            {
+                                final String currentHandle = driver.getWindowHandle();
+                                final boolean urlChanged = lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl);
+                                final boolean windowChanged = lastSeenWindowHandle != null && currentHandle != null && !currentHandle.equals(lastSeenWindowHandle);
+                                if (urlChanged || windowChanged)
+                                {
+                                    previousElementSignatures.clear();
+                                }
+                                lastSeenUrl = currentUrl;
+                                lastSeenWindowHandle = currentHandle;
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+
                             turnPrompt.append("### Current Page:\n")
                                     .append("URL: ").append(currentUrl).append("\n")
                                     .append("Title: ").append(currentTitle).append("\n\n");
@@ -1151,10 +1164,40 @@ public final class AgentToolLoopStep implements PipelineStep
                             turnPrompt.append("### Visual Inspection:\n").append(pendingVisualNote).append("\n\n");
                             pendingVisualNote = null;
                         }
-                        turnPrompt.append("Note: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM, use tool 'query_dom'.\n\n");
-                        turnPrompt.append("What is your next tool call?");
-                        final List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : Collections.emptyList();
+
+                        List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : null;
                         pendingVisualAttachments = null;
+
+                        if ((nextAttachments == null || nextAttachments.isEmpty()) && executor != null)
+                        {
+                            try
+                            {
+                                final SutState visualState = executor.captureState(ContextLevel.VISUAL, false);
+                                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, visualState);
+                                final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                                if (statsObj instanceof final StepStats stats)
+                                {
+                                    stats.addContextLevel(ContextLevel.VISUAL.name());
+                                }
+                                if (visualState != null && visualState.getAttachments() != null && !visualState.getAttachments().isEmpty())
+                                {
+                                    nextAttachments = visualState.getAttachments();
+                                }
+                            }
+                            catch (final Exception e)
+                            {
+                                LOGGER.debug("Could not capture visual state for next turn observation: {}", e.getMessage());
+                            }
+                        }
+
+                        if (nextAttachments == null)
+                        {
+                            nextAttachments = Collections.emptyList();
+                        }
+
+                        turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If the step's goal is achieved and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM to verify or continue, use tool 'query_dom' or 'request_context'.\n\n");
+                        turnPrompt.append("What is your next tool call?");
+
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
                         attachments = nextAttachments;
                     }
