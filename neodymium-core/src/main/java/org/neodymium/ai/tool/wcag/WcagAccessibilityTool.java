@@ -96,7 +96,7 @@ public final class WcagAccessibilityTool implements AiTool
         }
 
         // 1. Check if Axe-core is loaded in the browser context
-        final ToolResult checkResult = context.invokeTool("browser_execute_script", Map.of("script", "return typeof window.axe !== 'undefined';"));
+        final ToolResult checkResult = context.invokeTool("execute_script", Map.of("script", "return typeof window.axe !== 'undefined';"));
         final boolean axeLoaded = checkResult != null && "true".equalsIgnoreCase(checkResult.content().trim());
 
         if (!axeLoaded)
@@ -105,7 +105,7 @@ public final class WcagAccessibilityTool implements AiTool
             if (axeScript != null && !axeScript.isBlank())
             {
                 LOGGER.info("Injecting Axe-core engine into active browser session");
-                context.invokeTool("browser_execute_script", Map.of("script", axeScript));
+                context.invokeTool("execute_script", Map.of("script", axeScript));
             }
             else
             {
@@ -134,7 +134,7 @@ public final class WcagAccessibilityTool implements AiTool
             );
         }
 
-        final ToolResult scriptResult = context.invokeTool("browser_execute_script", Map.of("script", executionScript));
+        final ToolResult scriptResult = context.invokeTool("execute_script", Map.of("script", executionScript));
         final String rawResultJson = scriptResult != null ? scriptResult.content() : "{}";
 
         // 3. Parse violations

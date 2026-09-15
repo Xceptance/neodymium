@@ -735,52 +735,52 @@ public class Action
         final String actionType = this.type != null ? this.type.toUpperCase(Locale.ROOT) : "";
         final String toolName = switch (actionType)
         {
-            case "CLICK" -> "browser_click";
-            case "TYPE" -> "browser_type";
-            case "NAVIGATE", "OPEN" -> "browser_navigate";
-            case "SELECT" -> "browser_select";
-            case "HOVER" -> "browser_hover";
-            case "ASSERT_URL" -> "browser_assert_url";
-            case "ASSERT_TITLE" -> "browser_assert_title";
-            case "ASSERT_TEXT" -> "browser_assert_text";
+            case "CLICK" -> "click";
+            case "FILL", "TYPE" -> "fill";
+            case "NAVIGATE", "OPEN" -> "navigate";
+            case "SELECT" -> "select";
+            case "HOVER" -> "hover";
+            case "ASSERT_URL" -> "assert_url";
+            case "ASSERT_TITLE" -> "assert_title";
+            case "ASSERT_TEXT" -> "assert_text";
             case "ASSERT" -> {
                 if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
                 {
-                    yield "browser_assert_url";
+                    yield "assert_url";
                 }
                 if ("title".equalsIgnoreCase(this.target) || "pageTitle".equalsIgnoreCase(this.target))
                 {
-                    yield "browser_assert_title";
+                    yield "assert_title";
                 }
-                yield "browser_assert_text";
+                yield "assert_text";
             }
-            case "ASSERT_COUNT" -> "browser_assert_count";
-            case "EXECUTE_SCRIPT", "SCRIPT" -> "browser_execute_script";
-            case "SCROLL" -> "browser_scroll";
+            case "ASSERT_COUNT" -> "assert_count";
+            case "EXECUTE_SCRIPT", "SCRIPT" -> "execute_script";
+            case "SCROLL" -> "scroll";
             default -> {
                 if (this.type != null && this.type.startsWith("browser_"))
                 {
-                    yield this.type;
+                    yield this.type.substring("browser_".length());
                 }
-                yield "browser_click";
+                yield this.type != null && !this.type.isBlank() ? this.type.toLowerCase(Locale.ROOT) : "click";
             }
         };
 
-        if ("browser_navigate".equals(toolName))
+        if ("navigate".equals(toolName) || "browser_navigate".equals(toolName))
         {
             args.put("url", this.target != null ? this.target : "");
         }
-        else if ("browser_assert_url".equals(toolName))
+        else if ("assert_url".equals(toolName) || "browser_assert_url".equals(toolName))
         {
             final String urlVal = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
             args.put("expectedUrl", urlVal != null ? urlVal : "");
         }
-        else if ("browser_assert_title".equals(toolName))
+        else if ("assert_title".equals(toolName) || "browser_assert_title".equals(toolName))
         {
             final String titleVal = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
             args.put("expectedTitle", titleVal != null ? titleVal : "");
         }
-        else if ("browser_assert_text".equals(toolName))
+        else if ("assert_text".equals(toolName) || "browser_assert_text".equals(toolName))
         {
             final String txt = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
             args.put("text", txt != null ? txt : "");
@@ -789,7 +789,7 @@ public class Action
                 args.put("selector", this.target);
             }
         }
-        else if ("browser_assert_count".equals(toolName))
+        else if ("assert_count".equals(toolName) || "browser_assert_count".equals(toolName))
         {
             args.put("selector", this.target != null ? this.target : "");
             if (this.value != null && !this.value.isEmpty())
@@ -799,7 +799,10 @@ public class Action
                 {
                     try
                     {
-                        args.put("minCount", Integer.parseInt(v.substring(2).trim()));
+                        final int parsedMin = Integer.parseInt(v.substring(2).trim());
+                        args.put("count", parsedMin);
+                        args.put("operator", "MIN");
+                        args.put("minCount", parsedMin);
                     }
                     catch (final NumberFormatException ignored)
                     {
@@ -809,7 +812,10 @@ public class Action
                 {
                     try
                     {
-                        args.put("maxCount", Integer.parseInt(v.substring(2).trim()));
+                        final int parsedMax = Integer.parseInt(v.substring(2).trim());
+                        args.put("count", parsedMax);
+                        args.put("operator", "MAX");
+                        args.put("maxCount", parsedMax);
                     }
                     catch (final NumberFormatException ignored)
                     {
@@ -819,7 +825,10 @@ public class Action
                 {
                     try
                     {
-                        args.put("expectedCount", Integer.parseInt(v));
+                        final int parsedExact = Integer.parseInt(v);
+                        args.put("count", parsedExact);
+                        args.put("operator", "EXACT");
+                        args.put("expectedCount", parsedExact);
                     }
                     catch (final NumberFormatException ignored)
                     {
@@ -827,7 +836,7 @@ public class Action
                 }
             }
         }
-        else if ("browser_execute_script".equals(toolName))
+        else if ("execute_script".equals(toolName) || "browser_execute_script".equals(toolName))
         {
             args.put("script", this.target != null ? this.target : "");
         }
@@ -877,31 +886,32 @@ public class Action
             return null;
         }
 
-        final String name = call.toolName() != null ? call.toolName() : "";
+        final String rawName = call.toolName() != null ? call.toolName() : "";
+        final String name = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
         final JsonNode args = call.arguments();
         final String type = switch (name)
         {
-            case "browser_navigate" -> "NAVIGATE";
-            case "browser_click" -> "CLICK";
-            case "browser_type" -> "TYPE";
-            case "browser_hover" -> "HOVER";
-            case "browser_scroll" -> "SCROLL";
-            case "browser_select" -> "SELECT";
-            case "browser_clear" -> "CLEAR";
-            case "browser_clear_cookies" -> "CLEAR_COOKIES";
-            case "browser_back" -> "BACK";
-            case "browser_forward" -> "FORWARD";
-            case "browser_refresh" -> "REFRESH";
-            case "browser_wait" -> "WAIT";
-            case "browser_assert_text" -> "ASSERT_TEXT";
-            case "browser_assert_count" -> "ASSERT_COUNT";
-            case "browser_assert_url" -> "ASSERT_URL";
-            case "browser_assert_title" -> "ASSERT_TITLE";
-            case "browser_press_key" -> "KEY_PRESS";
-            case "browser_branch" -> "BRANCH";
-            case "browser_store" -> "STORE";
-            case "browser_include" -> "INCLUDE";
-            case "browser_execute_script" -> "EXECUTE_SCRIPT";
+            case "navigate" -> "NAVIGATE";
+            case "click" -> "CLICK";
+            case "fill", "type" -> "TYPE";
+            case "hover" -> "HOVER";
+            case "scroll" -> "SCROLL";
+            case "select" -> "SELECT";
+            case "clear" -> "CLEAR";
+            case "clear_cookies" -> "CLEAR_COOKIES";
+            case "back" -> "BACK";
+            case "forward" -> "FORWARD";
+            case "refresh" -> "REFRESH";
+            case "wait" -> "WAIT";
+            case "assert_text" -> "ASSERT_TEXT";
+            case "assert_count" -> "ASSERT_COUNT";
+            case "assert_url" -> "ASSERT_URL";
+            case "assert_title" -> "ASSERT_TITLE";
+            case "press_key", "key_press" -> "KEY_PRESS";
+            case "branch" -> "BRANCH";
+            case "store" -> "STORE";
+            case "include" -> "INCLUDE";
+            case "execute_script" -> "EXECUTE_SCRIPT";
             default -> {
                 if (args != null && args.hasNonNull("action") && !args.path("action").asText().isBlank())
                 {
@@ -911,14 +921,14 @@ public class Action
                 {
                     yield args.path("type").asText().toUpperCase(Locale.ROOT);
                 }
-                yield name.startsWith("browser_") ? name.substring("browser_".length()).toUpperCase(Locale.ROOT) : name.toUpperCase(Locale.ROOT);
+                yield name.toUpperCase(Locale.ROOT);
             }
         };
 
         String target = "";
         if (args != null && args.isObject())
         {
-            if ("browser_navigate".equals(name))
+            if ("navigate".equals(name))
             {
                 if (args.hasNonNull("url") && !args.path("url").asText().isBlank())
                 {
@@ -937,7 +947,7 @@ public class Action
                     target = args.path("value").asText();
                 }
             }
-            else if ("browser_execute_script".equals(name))
+            else if ("execute_script".equals(name))
             {
                 if (args.hasNonNull("script") && !args.path("script").asText().isBlank())
                 {
@@ -969,15 +979,15 @@ public class Action
                 target = "coord: " + args.path("x").asInt() + "," + args.path("y").asInt();
             }
             else if (args.hasNonNull("text") && !args.path("text").asText().isBlank()
-                    && ("browser_click".equals(name) || "browser_hover".equals(name)))
+                    && ("click".equals(name) || "hover".equals(name)))
             {
                 target = "text:" + args.path("text").asText();
             }
-            else if ("browser_assert_url".equals(name))
+            else if ("assert_url".equals(name))
             {
                 target = "url";
             }
-            else if ("browser_assert_title".equals(name))
+            else if ("assert_title".equals(name))
             {
                 target = "title";
             }
@@ -986,7 +996,7 @@ public class Action
         Object value = null;
         if (args != null && args.isObject())
         {
-            if ("browser_store".equals(name))
+            if ("store".equals(name))
             {
                 final String varName;
                 if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
@@ -1046,6 +1056,23 @@ public class Action
             else if (args.hasNonNull("expectedCount"))
             {
                 value = String.valueOf(args.path("expectedCount").asInt());
+            }
+            else if (args.hasNonNull("count"))
+            {
+                final int c = args.path("count").asInt();
+                final String op = args.path("operator").asText("EXACT").toUpperCase(Locale.ROOT);
+                if ("MIN".equals(op))
+                {
+                    value = ">=" + c;
+                }
+                else if ("MAX".equals(op))
+                {
+                    value = "<=" + c;
+                }
+                else
+                {
+                    value = String.valueOf(c);
+                }
             }
             else if (args.hasNonNull("minCount"))
             {

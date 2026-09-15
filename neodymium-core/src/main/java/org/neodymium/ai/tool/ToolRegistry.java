@@ -81,11 +81,7 @@ public class ToolRegistry
      */
     public boolean hasTool(final String toolName)
     {
-        if (toolName == null || toolName.isBlank())
-        {
-            return false;
-        }
-        return this.tools.containsKey(toolName);
+        return getTool(toolName).isPresent();
     }
 
     /**
@@ -100,7 +96,32 @@ public class ToolRegistry
         {
             return Optional.empty();
         }
-        return Optional.ofNullable(this.tools.get(toolName));
+        AiTool tool = this.tools.get(toolName);
+        if (tool == null && toolName.startsWith("browser_"))
+        {
+            tool = this.tools.get(toolName.substring("browser_".length()));
+        }
+        if (tool == null && !toolName.startsWith("browser_"))
+        {
+            tool = this.tools.get("browser_" + toolName);
+        }
+        if (tool == null && ("type".equals(toolName) || "browser_type".equals(toolName)))
+        {
+            tool = this.tools.get("fill");
+            if (tool == null)
+            {
+                tool = this.tools.get("browser_fill");
+            }
+        }
+        if (tool == null && ("browser_take_screenshot".equals(toolName) || "take_screenshot".equals(toolName)))
+        {
+            tool = this.tools.get("screenshot");
+            if (tool == null)
+            {
+                tool = this.tools.get("browser_screenshot");
+            }
+        }
+        return Optional.ofNullable(tool);
     }
 
     /**

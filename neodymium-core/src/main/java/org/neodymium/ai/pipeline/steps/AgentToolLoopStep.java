@@ -83,6 +83,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -394,7 +395,7 @@ public final class AgentToolLoopStep implements PipelineStep
 
         userPrompt.append("What is your next tool call?");
 
-        // Compile available tools (Intent-Based Scoping: exclude browser_navigate for interactive steps)
+        // Compile available tools (Intent-Based Scoping: exclude navigate for interactive steps)
         final List<ToolDefinition> availableTools = filterToolsForIntent(intent, isVisual, context);
 
         final boolean hasInteractive = hasInteractiveMilestones(context);
@@ -407,26 +408,26 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("1. ATOMIC STEP SCOPE: Execute ONLY the action or assertion explicitly described in the Test Instruction or required by the Compound Instruction Milestones. Do NOT anticipate or perform subsequent workflow steps.\n");
         if (isAssertion)
         {
-            systemPrompt.append("   - This is an assertion/verification step. Interactive mutating tools (such as clicking or typing) are strictly PROHIBITED. Use assertion tools (`browser_assert_text`, `browser_assert_count`) or inspection tools (`browser_inspect`, `browser_query_dom`) to verify page state, then call 'complete_step'.\n");
+            systemPrompt.append("   - This is an assertion/verification step. Interactive mutating tools (such as clicking or typing) are strictly PROHIBITED. Use assertion tools (`assert_text`, `assert_count`) or inspection tools (`inspect`, `query_dom`) to verify page state, then call 'complete_step'.\n");
         }
         else
         {
             systemPrompt.append("   - If the instruction asks you to click a button or link (e.g. 'Add to Cart', an accordion toggle, a dropdown button), click that button and immediately call 'complete_step'. Do NOT select options, sizes, or variants from menus, modals, or dropdowns that appear as a result of the click unless the instruction explicitly commands you to in this step.\n");
             systemPrompt.append("   - Subsequent test steps will perform any follow-up actions (such as choosing sizes, entering information, or checking out). Performing them prematurely will cause subsequent steps to fail!\n");
             systemPrompt.append("   - If the instruction explicitly asks for multiple inputs or milestones (e.g. 'Enter Mario as first name, Meier as last name, and email ...'), execute all requested milestone actions before calling 'complete_step'.\n");
-            systemPrompt.append("   - When typing with `browser_type`, do NOT set `pressEnter: true` unless the instruction explicitly commands you to press Enter or submit the form. Subsequent steps may verify live autocomplete suggestions, dropdowns, or click separate submit buttons.\n");
-            systemPrompt.append("   - Use dedicated browser tools (`browser_type`, `browser_click`, `browser_select`) for interacting with forms and elements. Do NOT use `browser_execute_script` to fill forms or click buttons, as this bypasses validation and event tracking.\n");
+            systemPrompt.append("   - When filling forms, prefer `fill` over `type` because `fill` automatically clears existing default or placeholder text before entering the new value. Use `type` only when intentionally appending without clearing. Do NOT set `pressEnter: true` unless the instruction explicitly commands you to press Enter or submit the form. Subsequent steps may verify live autocomplete suggestions, dropdowns, or click separate submit buttons.\n");
+            systemPrompt.append("   - Use dedicated browser tools (`fill`, `type`, `click`, `select`) for interacting with forms and elements. Do NOT use `execute_script` to fill forms or click buttons, as this bypasses validation and event tracking.\n");
         }
         systemPrompt.append("2. COMPLETION: As soon as the instruction's described goal or milestones are achieved, you MUST invoke 'complete_step'. Do not continue calling tools.\n");
         systemPrompt.append("3. NO IDENTICAL REPEATS: Never propose the exact same tool call with the same arguments if the page state did not change. If an element was not found, inspect the DOM or Page State rather than repeating the call.\n");
-        systemPrompt.append("4. DYNAMIC REGEX PATTERNS: When asserting dynamic values (such as order numbers, confirmation codes, dates, or IDs) where the instruction specifies a pattern or format (e.g. 'in the form 'V-[0-9]+-US'' or contains a regular expression in quotes), you MUST pass that pattern to `browser_assert_text` as `expectedText` and set \"regex\": true. Do NOT assert the volatile literal value seen on screen, because dynamic IDs change on subsequent test runs!\n");
+        systemPrompt.append("4. DYNAMIC REGEX PATTERNS: When asserting dynamic values (such as order numbers, confirmation codes, dates, or IDs) where the instruction specifies a pattern or format (e.g. 'in the form 'V-[0-9]+-US'' or contains a regular expression in quotes), you MUST pass that pattern to `assert_text` as `expectedText` and set \"regex\": true. Do NOT assert the volatile literal value seen on screen, because dynamic IDs change on subsequent test runs!\n");
         systemPrompt.append("5. VISUAL VERIFICATIONS & CHECKS: When an instruction is marked (visual) or is a visual/layout assertion (and a screenshot is provided):\n");
         systemPrompt.append("   - Inspect the attached page screenshot visually to verify whether the condition (appearance, layout, colors, elements, icons, checkmarks, badges) is satisfied on screen.\n");
         systemPrompt.append("   - If the visual condition is satisfied in the screenshot, call tool 'complete_step' immediately with a concise summary of your visual verification.\n");
         systemPrompt.append("   - Do NOT attempt to query DOM elements or execute DOM text assertions for visual checks when the visual condition is visible on the screen.\n");
         systemPrompt.append("6. SINGLE TOOL PER TURN: Propose exactly ONE tool call per response. Do NOT call multiple tools in parallel or batch multiple actions in a single turn. After each tool execution, you will receive the updated page state to decide your next action.\n");
-        systemPrompt.append("7. COUNT & COLLECTION ASSERTIONS: When an instruction asserts the number of items, rows, entries, or suggestions (e.g. 'contains at least 6 entries', '3 items in cart', '10 results'), you MUST invoke `browser_assert_count` with the target `selector` and `expectedCount`, `minCount`, or `maxCount`.\n");
-        systemPrompt.append("8. SCROLLABLE CONTAINERS & VIRTUALIZED FEEDS: In infinite feeds, dynamic virtual lists, or scrollable tables, offscreen items may not be present in the DOM snapshot yet. If the targeted element, item, or text described in the instruction is not found in the current DOM snapshot, invoke `browser_scroll` (e.g. direction 'down', or targeting the scrollable container selector like `container: \"#virtual-list-container\"` or `yOffset: 400`) to scroll the container, receive newly mounted elements in the next turn's DOM snapshot, and locate the target.\n");
+        systemPrompt.append("7. COUNT & COLLECTION ASSERTIONS: When an instruction asserts the number of items, rows, entries, or suggestions (e.g. 'contains at least 6 entries', '3 items in cart', '10 results'), you MUST invoke `assert_count` with the target `selector`, `count`, and optional `operator` ('EXACT', 'MIN', 'MAX').\n");
+        systemPrompt.append("8. SCROLLABLE CONTAINERS & VIRTUALIZED FEEDS: In infinite feeds, dynamic virtual lists, or scrollable tables, offscreen items may not be present in the DOM snapshot yet. If the targeted element, item, or text described in the instruction is not found in the current DOM snapshot, invoke `scroll` (e.g. direction 'down', or targeting the scrollable container selector like `container: \"#virtual-list-container\"` or `yOffset: 400`) to scroll the container, receive newly mounted elements in the next turn's DOM snapshot, and locate the target.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -635,7 +636,7 @@ public final class AgentToolLoopStep implements PipelineStep
                             }
                         }
                         executedCalls.add(callToRecord);
-                        if (effectiveCall.toolName().startsWith("browser_") && !"browser_take_screenshot".equals(effectiveCall.toolName()))
+                        if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()))
                         {
                             final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                             if (session != null && session.getEventBus() != null)
@@ -746,7 +747,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             lastProposedToolWasCompleteStep = true;
                             final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
-                                    + "). You must execute an assertion tool (such as 'browser_assert_text' or 'browser_assert_count') to verify the expected condition before calling complete_step. "
+                                    + "). You must execute an assertion tool (such as 'assert_text' or 'assert_count') to verify the expected condition before calling complete_step. "
                                     + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
                             LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
                             conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), rejectMsg));
@@ -889,11 +890,11 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                 }
                 executedCalls.add(callToRecord);
-                if ("browser_navigate".equals(effectiveCall.toolName()))
+                if ("navigate".equals(effectiveCall.toolName()) || "browser_navigate".equals(effectiveCall.toolName()))
                 {
                     previousElementSignatures.clear();
                 }
-                if (effectiveCall.toolName().startsWith("browser_") && !"browser_take_screenshot".equals(effectiveCall.toolName()))
+                if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()))
                 {
                     final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                     if (session != null && session.getEventBus() != null)
@@ -909,7 +910,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
                     }
                 }
-                if ("browser_take_screenshot".equals(effectiveCall.toolName()))
+                if ("screenshot".equals(effectiveCall.toolName()) || "browser_take_screenshot".equals(effectiveCall.toolName()))
                 {
                     final Object base64Obj = result.variables().get("screenshotBase64");
                     if (base64Obj != null)
@@ -929,7 +930,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                     }
                 }
-                else if ("browser_inspect_visual".equals(effectiveCall.toolName()))
+                else if ("inspect_visual".equals(effectiveCall.toolName()) || "browser_inspect_visual".equals(effectiveCall.toolName()))
                 {
                     final Object base64Obj = result.variables().get("cropBase64");
                     if (base64Obj != null)
@@ -951,7 +952,7 @@ public final class AgentToolLoopStep implements PipelineStep
                             note.append(" (dimensions: ").append(widthObj).append("x").append(heightObj).append("px)");
                         }
                         note.append(" is attached to this turn. Inspect the visual content to determine target coordinates or verify visual state. ");
-                        note.append("To click inside this element, use `browser_click` with `selector`: \"")
+                        note.append("To click inside this element, use `click` with `selector`: \"")
                                 .append(selector)
                                 .append("\" and relative `x`, `y` coordinates within the element.");
                         pendingVisualNote = note.toString();
@@ -981,16 +982,17 @@ public final class AgentToolLoopStep implements PipelineStep
             final boolean hasRemainingMilestones = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
             final boolean lastToolFailed = result == null || result.status() != ToolResult.Status.SUCCESS;
             final boolean hasPendingVisual = pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty();
-            final boolean requireDomForNextTurn = !isZeroDom
+            final boolean requestedContextEscalation = result != null && result.variables().containsKey("requestedContextLevel");
+            final boolean isPureZeroDom = isZeroDom && !hasRemainingMilestones;
+            final boolean requireDomForNextTurn = !isPureZeroDom
                     && (hasRemainingMilestones
                             || lastToolFailed
                             || hasPendingVisual
-                            || (executedCalls.isEmpty() && activeContextLevel != ContextLevel.MINIMAL));
+                            || requestedContextEscalation
+                            || (!executedCalls.isEmpty() && activeContextLevel != ContextLevel.MINIMAL));
 
             // Update URL and Title in transient data without full DOM re-dump
-            if (effectiveCall.toolName().startsWith("browser_")
-                    && !effectiveCall.toolName().startsWith("browser_assert")
-                    && !"browser_take_screenshot".equals(effectiveCall.toolName()))
+            if (isMutatingTool(effectiveCall.toolName()))
             {
                 if (!requireDomForNextTurn)
                 {
@@ -1128,34 +1130,37 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                 }
             }
-            else
+            else if (!isPureZeroDom)
             {
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                try
+                if (driver != null || pendingVisualNote != null)
                 {
-                    final StringBuilder turnPrompt = new StringBuilder();
-                    if (driver != null)
+                    try
                     {
-                        final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
-                        final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
-                        turnPrompt.append("### Current Page:\n")
-                                .append("URL: ").append(currentUrl).append("\n")
-                                .append("Title: ").append(currentTitle).append("\n\n");
+                        final StringBuilder turnPrompt = new StringBuilder();
+                        if (driver != null)
+                        {
+                            final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
+                            final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
+                            turnPrompt.append("### Current Page:\n")
+                                    .append("URL: ").append(currentUrl).append("\n")
+                                    .append("Title: ").append(currentTitle).append("\n\n");
+                        }
+                        if (pendingVisualNote != null)
+                        {
+                            turnPrompt.append("### Visual Inspection:\n").append(pendingVisualNote).append("\n\n");
+                            pendingVisualNote = null;
+                        }
+                        turnPrompt.append("Note: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM, use tool 'query_dom'.\n\n");
+                        turnPrompt.append("What is your next tool call?");
+                        final List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : Collections.emptyList();
+                        pendingVisualAttachments = null;
+                        conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
+                        attachments = nextAttachments;
                     }
-                    if (pendingVisualNote != null)
+                    catch (final Exception ignored)
                     {
-                        turnPrompt.append("### Visual Inspection:\n").append(pendingVisualNote).append("\n\n");
-                        pendingVisualNote = null;
                     }
-                    turnPrompt.append("Note: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM, use tool 'browser_query_dom'.\n\n");
-                    turnPrompt.append("What is your next tool call?");
-                    final List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : Collections.emptyList();
-                    pendingVisualAttachments = null;
-                    conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
-                    attachments = nextAttachments;
-                }
-                catch (final Exception ignored)
-                {
                 }
             }
         }
@@ -1226,7 +1231,7 @@ public final class AgentToolLoopStep implements PipelineStep
             final List<Action> actions = new ArrayList<>();
             for (final ToolCall call : executedCalls)
             {
-                if (!"complete_step".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()))
+                if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()))
                 {
                     final Action mapped = mapToolCallToAction(call);
                     final Action sanitizedAction = sanitizer.sanitize(mapped, sessionData);
@@ -1295,8 +1300,8 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             final String name = def.name();
 
-            // Journey Fidelity dynamic scoping: omit browser_navigate for interactive steps
-            if (intent != null && intent.isInteraction() && "browser_navigate".equals(name))
+            // Journey Fidelity dynamic scoping: omit navigate for interactive steps
+            if (intent != null && intent.isInteraction() && ("navigate".equals(name) || "browser_navigate".equals(name)))
             {
                 continue;
             }
@@ -1346,30 +1351,43 @@ public final class AgentToolLoopStep implements PipelineStep
 
     private static boolean isMutatingTool(final String name)
     {
-        return "browser_click".equals(name)
-                || "browser_type".equals(name)
-                || "browser_upload_file".equals(name)
-                || "browser_handle_alert".equals(name)
-                || "browser_switch_window".equals(name)
-                || "browser_select".equals(name)
-                || "browser_clear".equals(name)
-                || "browser_clear_cookies".equals(name)
-                || "browser_back".equals(name)
-                || "browser_forward".equals(name)
-                || "browser_refresh".equals(name)
-                || "browser_press_key".equals(name)
-                || "browser_execute_script".equals(name)
-                || "browser_drag".equals(name)
-                || "browser_drag_to".equals(name)
-                || "browser_navigate".equals(name);
+        if (name == null)
+        {
+            return false;
+        }
+        final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        return "click".equals(clean)
+                || "fill".equals(clean)
+                || "type".equals(clean)
+                || "upload_file".equals(clean)
+                || "handle_alert".equals(clean)
+                || "switch_window".equals(clean)
+                || "switch_tab".equals(clean)
+                || "close_tab".equals(clean)
+                || "select".equals(clean)
+                || "clear".equals(clean)
+                || "clear_cookies".equals(clean)
+                || "back".equals(clean)
+                || "forward".equals(clean)
+                || "refresh".equals(clean)
+                || "press_key".equals(clean)
+                || "execute_script".equals(clean)
+                || "drag".equals(clean)
+                || "drag_to".equals(clean)
+                || "navigate".equals(clean);
     }
 
     private static boolean isDomMatchingTool(final String name)
     {
-        return "browser_query_dom".equals(name)
-                || "browser_assert_text".equals(name)
-                || "browser_assert_count".equals(name)
-                || "browser_inspect".equals(name);
+        if (name == null)
+        {
+            return false;
+        }
+        final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        return "query_dom".equals(clean)
+                || "assert_text".equals(clean)
+                || "assert_count".equals(clean)
+                || "inspect".equals(clean);
     }
 
     private record ParsedCallsResult(List<ToolCall> calls, boolean isSingleShotAction) {}
@@ -1404,11 +1422,11 @@ public final class AgentToolLoopStep implements PipelineStep
             {
                 if ("url".equalsIgnoreCase(rawLocator) || "currentUrl".equalsIgnoreCase(rawLocator) || "pageUrl".equalsIgnoreCase(rawLocator))
                 {
-                    toolName = "browser_assert_url";
+                    toolName = "assert_url";
                 }
                 else if ("title".equalsIgnoreCase(rawLocator) || "pageTitle".equalsIgnoreCase(rawLocator))
                 {
-                    toolName = "browser_assert_title";
+                    toolName = "assert_title";
                 }
                 else
                 {
@@ -1499,7 +1517,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     obj.put("url", obj.path("value").asText());
                 }
-                if ("browser_assert_url".equals(toolName))
+                if ("assert_url".equals(toolName) || "browser_assert_url".equals(toolName))
                 {
                     if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
                     {
@@ -1514,7 +1532,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         obj.put("expectedUrl", obj.path("url").asText());
                     }
                 }
-                if ("browser_assert_title".equals(toolName))
+                if ("assert_title".equals(toolName) || "browser_assert_title".equals(toolName))
                 {
                     if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
                     {
@@ -1901,19 +1919,29 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             return false;
         }
-        final String name = stripNamespacePrefix(rawName.trim()).toLowerCase();
-        return name.startsWith("browser_") || "complete_step".equals(name) || "click".equals(name)
-                || "type".equals(name) || "upload".equals(name) || "upload_file".equals(name)
-                || "handle_alert".equals(name) || "alert".equals(name) || "switch_window".equals(name)
-                || "navigate".equals(name) || "hover".equals(name)
-                || "scroll".equals(name) || "select".equals(name) || "clear".equals(name)
-                || "clear_cookies".equals(name) || "back".equals(name) || "forward".equals(name)
-                || "refresh".equals(name) || "wait".equals(name) || "assert".equals(name)
-                || "assert_text".equals(name) || "assert_title".equals(name) || "key_press".equals(name)
-                || "drag".equals(name) || "drag_to".equals(name) || "drag_and_drop".equals(name)
-                || "check".equals(name) || "store".equals(name) || "branch".equals(name)
-                || "include".equals(name) || "java_method".equals(name)
-                || this.toolRegistry.hasTool(name) || this.toolRegistry.hasTool(rawName.trim());
+        final String name = stripNamespacePrefix(rawName.trim()).toLowerCase(Locale.ROOT);
+        final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        return "complete_step".equals(clean) || "click".equals(clean)
+                || "fill".equals(clean) || "type".equals(clean)
+                || "upload".equals(clean) || "upload_file".equals(clean)
+                || "handle_alert".equals(clean) || "alert".equals(clean)
+                || "switch_window".equals(clean) || "switch_tab".equals(clean)
+                || "close_window".equals(clean) || "close_tab".equals(clean)
+                || "list_tabs".equals(clean) || "tabs".equals(clean)
+                || "navigate".equals(clean) || "hover".equals(clean)
+                || "scroll".equals(clean) || "select".equals(clean) || "clear".equals(clean)
+                || "clear_cookies".equals(clean) || "back".equals(clean) || "forward".equals(clean)
+                || "refresh".equals(clean) || "wait".equals(clean) || "assert".equals(clean)
+                || "assert_text".equals(clean) || "assert_title".equals(clean) || "assert_url".equals(clean)
+                || "assert_count".equals(clean) || "key_press".equals(clean) || "press_key".equals(clean)
+                || "drag".equals(clean) || "drag_to".equals(clean) || "drag_and_drop".equals(clean)
+                || "check".equals(clean) || "store".equals(clean) || "branch".equals(clean)
+                || "include".equals(clean) || "java_method".equals(clean)
+                || "screenshot".equals(clean) || "take_screenshot".equals(clean)
+                || "inspect_visual".equals(clean) || "request_context".equals(clean)
+                || "query_dom".equals(clean) || "inspect".equals(clean) || "execute_script".equals(clean)
+                || this.toolRegistry.hasTool(name) || this.toolRegistry.hasTool(rawName.trim())
+                || this.toolRegistry.hasTool(clean);
     }
 
     private static String normalizeToolName(final String rawName)
@@ -1923,34 +1951,44 @@ public final class AgentToolLoopStep implements PipelineStep
             return null;
         }
         final String name = stripNamespacePrefix(rawName.trim());
-        final String lower = name.toLowerCase();
-        return switch (lower)
+        final String lower = name.toLowerCase(Locale.ROOT);
+        final String clean = lower.startsWith("browser_") ? lower.substring("browser_".length()) : lower;
+        return switch (clean)
         {
-            case "click" -> "browser_click";
-            case "type" -> "browser_type";
-            case "upload", "upload_file" -> "browser_upload_file";
-            case "handle_alert", "alert" -> "browser_handle_alert";
-            case "switch_window" -> "browser_switch_window";
-            case "navigate" -> "browser_navigate";
-            case "hover" -> "browser_hover";
-            case "scroll" -> "browser_scroll";
-            case "select" -> "browser_select";
-            case "clear" -> "browser_clear";
-            case "clear_cookies" -> "browser_clear_cookies";
-            case "back" -> "browser_back";
-            case "forward" -> "browser_forward";
-            case "refresh" -> "browser_refresh";
-            case "wait" -> "browser_wait";
-            case "assert" -> "browser_assert_text";
-            case "assert_text" -> "browser_assert_text";
-            case "assert_title" -> "browser_assert_text";
-            case "assert_count" -> "browser_assert_count";
-            case "drag" -> "browser_drag";
-            case "drag_to", "drag_and_drop" -> "browser_drag_to";
-            case "key_press" -> "browser_press_key";
+            case "click", "check" -> "click";
+            case "fill" -> "fill";
+            case "type" -> "type";
+            case "upload", "upload_file" -> "upload_file";
+            case "handle_alert", "alert" -> "handle_alert";
+            case "switch_window", "switch_tab" -> "switch_tab";
+            case "close_window", "close_tab" -> "close_tab";
+            case "list_tabs", "tabs" -> "list_tabs";
+            case "navigate", "open", "goto" -> "navigate";
+            case "hover" -> "hover";
+            case "scroll" -> "scroll";
+            case "select" -> "select";
+            case "clear" -> "clear";
+            case "clear_cookies" -> "clear_cookies";
+            case "back" -> "back";
+            case "forward" -> "forward";
+            case "refresh" -> "refresh";
+            case "wait", "sleep" -> "wait";
+            case "assert", "assert_text" -> "assert_text";
+            case "assert_title" -> "assert_title";
+            case "assert_url" -> "assert_url";
+            case "assert_count" -> "assert_count";
+            case "drag" -> "drag";
+            case "drag_to", "drag_and_drop" -> "drag_to";
+            case "key_press", "press_key" -> "press_key";
+            case "take_screenshot", "screenshot" -> "screenshot";
+            case "inspect_visual" -> "inspect_visual";
+            case "request_context" -> "request_context";
+            case "query_dom" -> "query_dom";
+            case "inspect" -> "inspect";
+            case "execute_script" -> "execute_script";
+            case "store" -> "store";
             case "none" -> "complete_step";
-            case "check" -> "browser_click";
-            default -> lower.startsWith("browser_") ? lower : name;
+            default -> clean;
         };
     }
 

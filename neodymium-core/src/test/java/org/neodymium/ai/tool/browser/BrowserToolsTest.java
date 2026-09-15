@@ -72,31 +72,38 @@ public class BrowserToolsTest
     public void testAllBrowserToolsRegistered()
     {
         final List<String> expectedTools = List.of(
-                "browser_click",
-                "browser_type",
-                "browser_navigate",
-                "browser_select",
-                "browser_hover",
-                "browser_assert_text",
-                "browser_assert_count",
-                "browser_assert_url",
-                "browser_assert_title",
-                "browser_scroll",
-                "browser_execute_script",
-                "browser_query_dom",
-                "browser_inspect",
-                "browser_take_screenshot",
-                "browser_inspect_visual",
-                "browser_press_key",
-                "browser_request_context",
-                "browser_store",
-                "browser_list_tabs",
-                "browser_switch_tab",
-                "browser_close_tab",
-                "browser_upload_file",
-                "browser_handle_alert",
-                "browser_drag",
-                "browser_drag_to"
+                "click",
+                "fill",
+                "type",
+                "navigate",
+                "select",
+                "hover",
+                "clear",
+                "clear_cookies",
+                "back",
+                "forward",
+                "refresh",
+                "wait",
+                "press_key",
+                "upload_file",
+                "handle_alert",
+                "drag",
+                "drag_to",
+                "assert_text",
+                "assert_count",
+                "assert_url",
+                "assert_title",
+                "scroll",
+                "execute_script",
+                "query_dom",
+                "inspect",
+                "screenshot",
+                "inspect_visual",
+                "request_context",
+                "store",
+                "list_tabs",
+                "switch_tab",
+                "close_tab"
         );
 
         for (final String toolName : expectedTools)
@@ -109,13 +116,17 @@ public class BrowserToolsTest
             Assertions.assertFalse(def.description().isBlank());
             Assertions.assertNotNull(def.parametersSchema());
             Assertions.assertEquals("object", def.parametersSchema().path("type").asText());
+
+            // Backward compatibility lookup via ToolRegistry fallback
+            Assertions.assertTrue(this.registry.hasTool("browser_" + toolName), "Missing legacy fallback: browser_" + toolName);
+            Assertions.assertTrue(this.registry.getTool("browser_" + toolName).isPresent());
         }
     }
 
     @Test
     public void testBrowserStoreToolSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_store").orElseThrow();
+        final AiTool tool = this.registry.getTool("store").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("variableName"));
@@ -131,7 +142,7 @@ public class BrowserToolsTest
     @Test
     public void testBrowserClickToolSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final AiTool tool = this.registry.getTool("click").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("selector") || props.has("target"));
@@ -142,12 +153,32 @@ public class BrowserToolsTest
     @Test
     public void testBrowserTypeToolSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_type").orElseThrow();
+        final AiTool tool = this.registry.getTool("type").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("selector"));
         Assertions.assertTrue(props.has("text"));
-        Assertions.assertTrue(props.has("clearFirst"));
+        Assertions.assertFalse(props.has("clearFirst"));
+        Assertions.assertTrue(props.has("pressEnter"));
+
+        final String pressEnterDesc = props.path("pressEnter").path("description").asText();
+        Assertions.assertTrue(pressEnterDesc.contains("MUST remain false unless"),
+            "Description must clarify that pressEnter should remain false unless explicitly requested");
+
+        final JsonNode req = tool.getDefinition().parametersSchema().path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals(2, req.size());
+    }
+
+    @Test
+    public void testBrowserFillToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("fill").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("text"));
+        Assertions.assertFalse(props.has("clearFirst"));
         Assertions.assertTrue(props.has("pressEnter"));
 
         final String pressEnterDesc = props.path("pressEnter").path("description").asText();
@@ -162,7 +193,7 @@ public class BrowserToolsTest
     @Test
     public void testBrowserQueryDomSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_query_dom").orElseThrow();
+        final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("selector"));
@@ -174,7 +205,7 @@ public class BrowserToolsTest
     @Test
     public void testBrowserInspectVisualSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_inspect_visual").orElseThrow();
+        final AiTool tool = this.registry.getTool("inspect_visual").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("selector"));
@@ -186,7 +217,7 @@ public class BrowserToolsTest
     @Test
     public void testBrowserTakeScreenshotSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_take_screenshot").orElseThrow();
+        final AiTool tool = this.registry.getTool("screenshot").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("fullPage"));
@@ -345,9 +376,9 @@ public class BrowserToolsTest
     public void testBrowserExecuteScriptReturnsStructuredJson() throws Exception
     {
         WebDriverRunner.setWebDriver(createStandardMockDriver());
-        final AiTool tool = this.registry.getTool("browser_execute_script").orElseThrow();
+        final AiTool tool = this.registry.getTool("execute_script").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
-        final ToolCall call = new ToolCall("call-script-1", "browser_execute_script", mapper.createObjectNode().put("script", "return 'mock_result';"));
+        final ToolCall call = new ToolCall("call-script-1", "execute_script", mapper.createObjectNode().put("script", "return 'mock_result';"));
 
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
@@ -373,9 +404,9 @@ public class BrowserToolsTest
                 }
         );
         WebDriverRunner.setWebDriver(mockDriver);
-        final AiTool tool = this.registry.getTool("browser_execute_script").orElseThrow();
+        final AiTool tool = this.registry.getTool("execute_script").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
-        final ToolCall call = new ToolCall("call-err-1", "browser_execute_script", mapper.createObjectNode().put("script", "bad script"));
+        final ToolCall call = new ToolCall("call-err-1", "execute_script", mapper.createObjectNode().put("script", "bad script"));
 
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
@@ -390,9 +421,9 @@ public class BrowserToolsTest
     public void testBrowserNavigateReturnsStructuredJson() throws Exception
     {
         WebDriverRunner.setWebDriver(createStandardMockDriver());
-        final AiTool tool = this.registry.getTool("browser_navigate").orElseThrow();
+        final AiTool tool = this.registry.getTool("navigate").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
-        final ToolCall call = new ToolCall("call-nav-1", "browser_navigate", mapper.createObjectNode().put("url", "https://example.com/page"));
+        final ToolCall call = new ToolCall("call-nav-1", "navigate", mapper.createObjectNode().put("url", "https://example.com/page"));
 
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
@@ -408,9 +439,9 @@ public class BrowserToolsTest
     public void testBrowserScrollReturnsStructuredJson() throws Exception
     {
         WebDriverRunner.setWebDriver(createStandardMockDriver());
-        final AiTool tool = this.registry.getTool("browser_scroll").orElseThrow();
+        final AiTool tool = this.registry.getTool("scroll").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
-        final ToolCall call = new ToolCall("call-scroll-1", "browser_scroll", mapper.createObjectNode().put("direction", "down"));
+        final ToolCall call = new ToolCall("call-scroll-1", "scroll", mapper.createObjectNode().put("direction", "down"));
 
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
@@ -425,9 +456,9 @@ public class BrowserToolsTest
     public void testBrowserQueryDomReturnsStructuredJson() throws Exception
     {
         WebDriverRunner.setWebDriver(createStandardMockDriver());
-        final AiTool tool = this.registry.getTool("browser_query_dom").orElseThrow();
+        final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
-        final ToolCall call = new ToolCall("call-query-1", "browser_query_dom", mapper.createObjectNode().put("selector", "#btn"));
+        final ToolCall call = new ToolCall("call-query-1", "query_dom", mapper.createObjectNode().put("selector", "#btn"));
 
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
@@ -466,12 +497,12 @@ public class BrowserToolsTest
     @Test
     public void testAssertTextTitleWithoutDriverThrowsAssertionError()
     {
-        final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+        final AiTool tool = this.registry.getTool("assert_text").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
         final ObjectNode args = mapper.createObjectNode();
         args.put("selector", "title");
         args.put("expectedText", "Home Page");
-        final ToolCall call = new ToolCall("call-title-1", "browser_assert_text", args);
+        final ToolCall call = new ToolCall("call-title-1", "assert_text", args);
 
         final AssertionError err = Assertions.assertThrows(AssertionError.class, () -> tool.execute(call, null));
         Assertions.assertTrue(err.getMessage().contains("No active browser window found to assert page title"));
@@ -480,7 +511,7 @@ public class BrowserToolsTest
     @Test
     public void testBrowserRequestContextToolSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_request_context").orElseThrow();
+        final AiTool tool = this.registry.getTool("request_context").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("level"));
@@ -490,9 +521,9 @@ public class BrowserToolsTest
     @Test
     public void testBrowserRequestContextExecutionWithoutDriver() throws Exception
     {
-        final AiTool tool = this.registry.getTool("browser_request_context").orElseThrow();
+        final AiTool tool = this.registry.getTool("request_context").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
-        final ToolCall call = new ToolCall("call-ctx-1", "browser_request_context", mapper.createObjectNode().put("level", "RICH"));
+        final ToolCall call = new ToolCall("call-ctx-1", "request_context", mapper.createObjectNode().put("level", "RICH"));
 
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
@@ -506,43 +537,44 @@ public class BrowserToolsTest
     @Test
     public void testBrowserAssertCountToolSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_assert_count").orElseThrow();
+        final AiTool tool = this.registry.getTool("assert_count").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
 
         Assertions.assertTrue(props.has("selector"));
-        Assertions.assertTrue(props.has("expectedCount"));
-        Assertions.assertTrue(props.has("minCount"));
-        Assertions.assertTrue(props.has("maxCount"));
+        Assertions.assertTrue(props.has("count"));
+        Assertions.assertTrue(props.has("operator"));
         Assertions.assertTrue(props.has("visibleOnly"));
 
         final JsonNode req = tool.getDefinition().parametersSchema().path("required");
         Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals(2, req.size());
         Assertions.assertEquals("selector", req.get(0).asText());
+        Assertions.assertEquals("count", req.get(1).asText());
     }
 
     @Test
     public void testBrowserAssertCountThrowsWhenNoConstraints() throws Exception
     {
-        final AiTool tool = this.registry.getTool("browser_assert_count").orElseThrow();
+        final AiTool tool = this.registry.getTool("assert_count").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
         final ObjectNode args = mapper.createObjectNode();
         args.put("selector", ".item");
-        final ToolCall call = new ToolCall("call-cnt-1", "browser_assert_count", args);
+        final ToolCall call = new ToolCall("call-cnt-1", "assert_count", args);
 
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
-        Assertions.assertTrue(result.content().contains("At least one count constraint"));
+        Assertions.assertTrue(result.content().contains("A count constraint"));
     }
 
     @Test
     public void testBrowserAssertCountWithoutDriverThrowsAssertionError() throws Exception
     {
-        final AiTool tool = this.registry.getTool("browser_assert_count").orElseThrow();
+        final AiTool tool = this.registry.getTool("assert_count").orElseThrow();
         final ObjectMapper mapper = new ObjectMapper();
         final ObjectNode args = mapper.createObjectNode();
         args.put("selector", ".item");
-        args.put("minCount", 3);
-        final ToolCall call = new ToolCall("call-cnt-2", "browser_assert_count", args);
+        args.put("count", 3);
+        final ToolCall call = new ToolCall("call-cnt-2", "assert_count", args);
 
         final AssertionError err = Assertions.assertThrows(AssertionError.class, () -> tool.execute(call, null));
         Assertions.assertTrue(err.getMessage().contains("No active browser window found to assert element count"));
@@ -551,7 +583,7 @@ public class BrowserToolsTest
     @Test
     public void testBrowserRequestContextSupportsVisualLean() throws Exception
     {
-        final AiTool tool = this.registry.getTool("browser_request_context").orElseThrow();
+        final AiTool tool = this.registry.getTool("request_context").orElseThrow();
         final JsonNode enumValues = tool.getDefinition().parametersSchema().path("properties").path("level").path("enum");
         Assertions.assertTrue(enumValues.isArray());
 
@@ -564,10 +596,10 @@ public class BrowserToolsTest
                 break;
             }
         }
-        Assertions.assertTrue(hasVisualLean, "browser_request_context enum must contain VISUAL_LEAN");
+        Assertions.assertTrue(hasVisualLean, "request_context enum must contain VISUAL_LEAN");
 
         final ObjectMapper mapper = new ObjectMapper();
-        final ToolCall call = new ToolCall("call-ctx-vl", "browser_request_context", mapper.createObjectNode().put("level", "VISUAL_LEAN"));
+        final ToolCall call = new ToolCall("call-ctx-vl", "request_context", mapper.createObjectNode().put("level", "VISUAL_LEAN"));
         final ToolResult result = tool.execute(call, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
         Assertions.assertEquals("VISUAL_LEAN", result.variables().get("requestedContextLevel"));
@@ -576,7 +608,7 @@ public class BrowserToolsTest
     @Test
     public void testBrowserClickSchemaCoordinates()
     {
-        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final AiTool tool = this.registry.getTool("click").orElseThrow();
         final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
         Assertions.assertTrue(props.has("x"));
         Assertions.assertTrue(props.has("y"));
@@ -587,17 +619,17 @@ public class BrowserToolsTest
     @Test
     public void testBrowserTabToolsSchema()
     {
-        final AiTool listTool = this.registry.getTool("browser_list_tabs").orElseThrow();
-        Assertions.assertEquals("browser_list_tabs", listTool.getDefinition().name());
+        final AiTool listTool = this.registry.getTool("list_tabs").orElseThrow();
+        Assertions.assertEquals("list_tabs", listTool.getDefinition().name());
         Assertions.assertTrue(listTool.getDefinition().description().contains("tabs"));
 
-        final AiTool switchTool = this.registry.getTool("browser_switch_tab").orElseThrow();
-        Assertions.assertEquals("browser_switch_tab", switchTool.getDefinition().name());
+        final AiTool switchTool = this.registry.getTool("switch_tab").orElseThrow();
+        Assertions.assertEquals("switch_tab", switchTool.getDefinition().name());
         final JsonNode switchProps = switchTool.getDefinition().parametersSchema().path("properties");
         Assertions.assertTrue(switchProps.has("target"));
 
-        final AiTool closeTool = this.registry.getTool("browser_close_tab").orElseThrow();
-        Assertions.assertEquals("browser_close_tab", closeTool.getDefinition().name());
+        final AiTool closeTool = this.registry.getTool("close_tab").orElseThrow();
+        Assertions.assertEquals("close_tab", closeTool.getDefinition().name());
         Assertions.assertTrue(closeTool.getDefinition().description().contains("Closes"));
     }
 
@@ -700,9 +732,9 @@ public class BrowserToolsTest
     @Test
     public void testBrowserUploadFileSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_upload_file").orElseThrow();
+        final AiTool tool = this.registry.getTool("upload_file").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_upload_file", def.name());
+        Assertions.assertEquals("upload_file", def.name());
         Assertions.assertTrue(def.description().contains("Uploads"));
 
         final JsonNode schema = def.parametersSchema();
@@ -736,9 +768,9 @@ public class BrowserToolsTest
     @Test
     public void testBrowserScrollSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_scroll").orElseThrow();
+        final AiTool tool = this.registry.getTool("scroll").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_scroll", def.name());
+        Assertions.assertEquals("scroll", def.name());
 
         final JsonNode schema = def.parametersSchema();
         final JsonNode props = schema.path("properties");
@@ -752,9 +784,9 @@ public class BrowserToolsTest
     @Test
     public void testBrowserHandleAlertSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_handle_alert").orElseThrow();
+        final AiTool tool = this.registry.getTool("handle_alert").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_handle_alert", def.name());
+        Assertions.assertEquals("handle_alert", def.name());
 
         final JsonNode schema = def.parametersSchema();
         final JsonNode props = schema.path("properties");
@@ -765,9 +797,9 @@ public class BrowserToolsTest
     @Test
     public void testBrowserDragSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_drag").orElseThrow();
+        final AiTool tool = this.registry.getTool("drag").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_drag", def.name());
+        Assertions.assertEquals("drag", def.name());
 
         final JsonNode schema = def.parametersSchema();
         final JsonNode props = schema.path("properties");
@@ -779,9 +811,9 @@ public class BrowserToolsTest
     @Test
     public void testBrowserDragToSchema()
     {
-        final AiTool tool = this.registry.getTool("browser_drag_to").orElseThrow();
+        final AiTool tool = this.registry.getTool("drag_to").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_drag_to", def.name());
+        Assertions.assertEquals("drag_to", def.name());
 
         final JsonNode schema = def.parametersSchema();
         final JsonNode props = schema.path("properties");
@@ -792,9 +824,9 @@ public class BrowserToolsTest
     @Test
     public void testBrowserPressKeySchema()
     {
-        final AiTool tool = this.registry.getTool("browser_press_key").orElseThrow();
+        final AiTool tool = this.registry.getTool("press_key").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_press_key", def.name());
+        Assertions.assertEquals("press_key", def.name());
 
         final JsonNode schema = def.parametersSchema();
         final JsonNode props = schema.path("properties");
@@ -832,23 +864,23 @@ public class BrowserToolsTest
     public void testBrowserAssertUrlExecutionAndSchema() throws Exception
     {
         WebDriverRunner.setWebDriver(createStandardMockDriver());
-        final AiTool tool = this.registry.getTool("browser_assert_url").orElseThrow();
+        final AiTool tool = this.registry.getTool("assert_url").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_assert_url", def.name());
+        Assertions.assertEquals("assert_url", def.name());
         Assertions.assertTrue(def.parametersSchema().path("required").isArray());
         Assertions.assertEquals("expectedUrl", def.parametersSchema().path("required").get(0).asText());
 
         final ObjectMapper mapper = new ObjectMapper();
 
         // 1. Substring contains match (happy path)
-        final ToolCall successCall = new ToolCall("call-url-1", "browser_assert_url",
+        final ToolCall successCall = new ToolCall("call-url-1", "assert_url",
                 mapper.createObjectNode().put("expectedUrl", "example.com/page"));
         final ToolResult successResult = tool.execute(successCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, successResult.status());
         Assertions.assertTrue(successResult.content().contains("https://example.com/page"));
 
         // 2. Regex match (happy path)
-        final ToolCall regexCall = new ToolCall("call-url-2", "browser_assert_url",
+        final ToolCall regexCall = new ToolCall("call-url-2", "assert_url",
                 mapper.createObjectNode().put("expectedUrl", ".*example\\.com.*").put("regex", true));
         final ToolResult regexResult = tool.execute(regexCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, regexResult.status());
@@ -858,7 +890,7 @@ public class BrowserToolsTest
         try
         {
             Configuration.timeout = 50;
-            final ToolCall failCall = new ToolCall("call-url-3", "browser_assert_url",
+            final ToolCall failCall = new ToolCall("call-url-3", "assert_url",
                     mapper.createObjectNode().put("expectedUrl", "https://other-domain.com").put("exact", true));
             Assertions.assertThrows(AssertionError.class, () -> tool.execute(failCall, null));
         }
@@ -872,23 +904,23 @@ public class BrowserToolsTest
     public void testBrowserAssertTitleExecutionAndSchema() throws Exception
     {
         WebDriverRunner.setWebDriver(createStandardMockDriver());
-        final AiTool tool = this.registry.getTool("browser_assert_title").orElseThrow();
+        final AiTool tool = this.registry.getTool("assert_title").orElseThrow();
         final ToolDefinition def = tool.getDefinition();
-        Assertions.assertEquals("browser_assert_title", def.name());
+        Assertions.assertEquals("assert_title", def.name());
         Assertions.assertTrue(def.parametersSchema().path("required").isArray());
         Assertions.assertEquals("expectedTitle", def.parametersSchema().path("required").get(0).asText());
 
         final ObjectMapper mapper = new ObjectMapper();
 
         // 1. Substring contains match (happy path)
-        final ToolCall successCall = new ToolCall("call-title-1", "browser_assert_title",
+        final ToolCall successCall = new ToolCall("call-title-1", "assert_title",
                 mapper.createObjectNode().put("expectedTitle", "Mock Page"));
         final ToolResult successResult = tool.execute(successCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, successResult.status());
         Assertions.assertTrue(successResult.content().contains("Mock Page Title"));
 
         // 2. Regex match (happy path)
-        final ToolCall regexCall = new ToolCall("call-title-2", "browser_assert_title",
+        final ToolCall regexCall = new ToolCall("call-title-2", "assert_title",
                 mapper.createObjectNode().put("expectedTitle", ".*Page Title.*").put("regex", true));
         final ToolResult regexResult = tool.execute(regexCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, regexResult.status());
@@ -898,7 +930,7 @@ public class BrowserToolsTest
         try
         {
             Configuration.timeout = 50;
-            final ToolCall failCall = new ToolCall("call-title-3", "browser_assert_title",
+            final ToolCall failCall = new ToolCall("call-title-3", "assert_title",
                     mapper.createObjectNode().put("expectedTitle", "Non-Existent Title"));
             Assertions.assertThrows(AssertionError.class, () -> tool.execute(failCall, null));
         }

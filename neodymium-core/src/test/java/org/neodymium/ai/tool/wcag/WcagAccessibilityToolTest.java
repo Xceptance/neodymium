@@ -230,7 +230,7 @@ public class WcagAccessibilityToolTest
         schema.put("type", "object");
         this.registry.register(new AiTool()
         {
-            private final ToolDefinition def = new ToolDefinition("browser_execute_script", "Executes script", schema);
+            private final ToolDefinition def = new ToolDefinition("execute_script", "Executes script", schema);
 
             @Override
             public ToolDefinition getDefinition()

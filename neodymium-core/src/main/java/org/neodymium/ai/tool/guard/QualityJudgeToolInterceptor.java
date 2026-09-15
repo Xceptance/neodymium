@@ -152,11 +152,18 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         }
 
         // 3. Only inspect browser actions that interact with elements
-        final String toolName = call.toolName();
-        if (!toolName.startsWith("browser_") || "browser_take_screenshot".equals(toolName) || "browser_scroll".equals(toolName)
-                || "browser_assert_count".equals(toolName) || "browser_query_dom".equals(toolName))
+        final String rawName = call.toolName();
+        final String toolName = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
+        if ("screenshot".equals(toolName) || "scroll".equals(toolName)
+                || "assert_count".equals(toolName) || "query_dom".equals(toolName)
+                || "complete_step".equals(toolName) || "wait".equals(toolName)
+                || "clear_cookies".equals(toolName) || "back".equals(toolName)
+                || "forward".equals(toolName) || "refresh".equals(toolName)
+                || "list_tabs".equals(toolName) || "switch_tab".equals(toolName)
+                || "close_tab".equals(toolName) || "store".equals(toolName)
+                || "request_context".equals(toolName))
         {
-            return InterceptionVerdict.allow("Tool " + toolName + " is exempt from locator quality judging");
+            return InterceptionVerdict.allow("Tool " + rawName + " is exempt from locator quality judging");
         }
 
         // 4. Extract target selector from call arguments
@@ -224,11 +231,13 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         final ExecutionContext activeContext
     )
     {
+        final String rawName = call.toolName();
+        final String name = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
         if (intent != null && intent.isAssertion())
         {
-            final String name = call.toolName();
-            if ("browser_click".equals(name) || "browser_type".equals(name) || "browser_select".equals(name)
-                    || "browser_press_key".equals(name) || "browser_navigate".equals(name))
+            if ("click".equals(name) || "fill".equals(name) || "type".equals(name) || "select".equals(name)
+                    || "press_key".equals(name) || "navigate".equals(name) || "upload_file".equals(name)
+                    || "drag".equals(name) || "drag_to".equals(name))
             {
                 if (hasInteractiveMilestones(activeContext))
                 {
@@ -240,12 +249,12 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
         if (intent != null && intent.isInteraction())
         {
-            if ("browser_navigate".equals(call.toolName()))
+            if ("navigate".equals(name))
             {
                 return InterceptionVerdict.reject(call.callId(), JOURNEY_FIDELITY_NAVIGATE_VIOLATION);
             }
 
-            if ("browser_execute_script".equals(call.toolName()))
+            if ("execute_script".equals(name))
             {
                 final String script = call.arguments().path("script").asText("");
                 if (URL_MUTATION_PATTERN.matcher(script).find())

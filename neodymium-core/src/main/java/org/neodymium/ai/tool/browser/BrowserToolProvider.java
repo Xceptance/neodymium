@@ -127,6 +127,7 @@ public final class BrowserToolProvider
         }
 
         registry.register(createClickTool());
+        registry.register(createFillTool());
         registry.register(createTypeTool());
         registry.register(createNavigateTool());
         registry.register(createSelectTool());
@@ -170,7 +171,7 @@ public final class BrowserToolProvider
         props.putObject("x").put("type", "integer").put("description", "X coordinate for pixel/visual click (relative to selector if selector is provided, or viewport X if omitted)");
         props.putObject("y").put("type", "integer").put("description", "Y coordinate for pixel/visual click (relative to selector if selector is provided, or viewport Y if omitted)");
 
-        final ToolDefinition def = new ToolDefinition("browser_click", "Clicks an interactive element or viewport coordinate in the browser", schema);
+        final ToolDefinition def = new ToolDefinition("click", "Clicks an interactive element or viewport coordinate in the browser", schema);
         return new AiTool()
         {
             @Override
@@ -320,7 +321,7 @@ public final class BrowserToolProvider
 
                 if (selector.isBlank() && text.isBlank())
                 {
-                    return ToolResult.error(call.callId(), errorNode("browser_click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
+                    return ToolResult.error(call.callId(), errorNode("click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
                 }
 
                 final String targetDesc = !selector.isBlank() ? selector : text;
@@ -458,21 +459,42 @@ public final class BrowserToolProvider
         };
     }
 
-    private static AiTool createTypeTool()
+    private static AiTool createFillTool()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "Selector of the input element");
-        props.putObject("text").put("type", "string").put("description", "Text to type into the element");
-        props.putObject("clearFirst").put("type", "boolean").put("description", "Whether to clear existing text first (default: true)");
+        props.putObject("text").put("type", "string").put("description", "Text to enter into the element");
         props.putObject("pressEnter").put("type", "boolean").put("description", "Whether to press Enter key after typing (default: false). MUST remain false unless the test instruction explicitly asks to press Enter, hit Enter, or submit the form.");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("text");
 
-        final ToolDefinition def = new ToolDefinition("browser_type", "Types text into an input or textarea element", schema);
+        final ToolDefinition def = new ToolDefinition("fill", "Clears existing text and enters new text into an input or textarea element", schema);
+        return createBaseInputTool(def, true);
+    }
+
+    private static AiTool createTypeTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "Selector of the input element");
+        props.putObject("text").put("type", "string").put("description", "Text to type into the element without clearing existing text (appends text)");
+        props.putObject("pressEnter").put("type", "boolean").put("description", "Whether to press Enter key after typing (default: false). MUST remain false unless the test instruction explicitly asks to press Enter, hit Enter, or submit the form.");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("selector");
+        req.add("text");
+
+        final ToolDefinition def = new ToolDefinition("type", "Types text into an input or textarea element without clearing existing text (appends text)", schema);
+        return createBaseInputTool(def, false);
+    }
+
+    private static AiTool createBaseInputTool(final ToolDefinition def, final boolean defaultClearFirst)
+    {
         return new AiTool()
         {
             @Override
@@ -488,7 +510,9 @@ public final class BrowserToolProvider
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 final String selector = resolveSelector(call.arguments());
                 final String text = call.arguments().path("text").asText();
-                final boolean clearFirst = !call.arguments().has("clearFirst") || call.arguments().path("clearFirst").asBoolean(true);
+                final boolean clearFirst = call.arguments().has("clearFirst")
+                        ? call.arguments().path("clearFirst").asBoolean(defaultClearFirst)
+                        : defaultClearFirst;
                 final boolean pressEnter = call.arguments().path("pressEnter").asBoolean(false);
 
                 final SelenideElement el = findElement(selector);
@@ -560,7 +584,7 @@ public final class BrowserToolProvider
                     }
                 }
 
-                final ObjectNode res = successNode("type");
+                final ObjectNode res = successNode(def.name());
                 res.put("target", selector);
                 res.put("value", text);
                 res.put("pressedEnter", pressEnter);
@@ -627,7 +651,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "Optional selector of the element to send the key to");
         schema.putArray("required").add("key");
 
-        final ToolDefinition def = new ToolDefinition("browser_press_key", "Presses a keyboard key on the active element or specified element", schema);
+        final ToolDefinition def = new ToolDefinition("press_key", "Presses a keyboard key on the active element or specified element", schema);
         return new AiTool()
         {
             @Override
@@ -686,7 +710,7 @@ public final class BrowserToolProvider
         schema.putObject("properties").putObject("url").put("type", "string").put("description", "Target URL to navigate to");
         schema.putArray("required").add("url");
 
-        final ToolDefinition def = new ToolDefinition("browser_navigate", "Navigates the browser to the specified URL", schema);
+        final ToolDefinition def = new ToolDefinition("navigate", "Navigates the browser to the specified URL", schema);
         return new AiTool()
         {
             @Override
@@ -721,7 +745,7 @@ public final class BrowserToolProvider
         props.putObject("text").put("type", "string").put("description", "Option visible text to select");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("browser_select", "Selects an option from a dropdown element by value or text", schema);
+        final ToolDefinition def = new ToolDefinition("select", "Selects an option from a dropdown element by value or text", schema);
         return new AiTool()
         {
             @Override
@@ -807,7 +831,7 @@ public final class BrowserToolProvider
         schema.putObject("properties").putObject("selector").put("type", "string").put("description", "Selector of the element to hover over");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("browser_hover", "Hovers the mouse cursor over an element", schema);
+        final ToolDefinition def = new ToolDefinition("hover", "Hovers the mouse cursor over an element", schema);
         return new AiTool()
         {
             @Override
@@ -836,7 +860,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "Selector of the input element to clear");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("browser_clear", "Clears text in an input or textarea element", schema);
+        final ToolDefinition def = new ToolDefinition("clear", "Clears text in an input or textarea element", schema);
         return new AiTool()
         {
             @Override
@@ -883,7 +907,7 @@ public final class BrowserToolProvider
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
-        final ToolDefinition def = new ToolDefinition("browser_clear_cookies", "Clears all browser cookies", schema);
+        final ToolDefinition def = new ToolDefinition("clear_cookies", "Clears all browser cookies", schema);
         return new AiTool()
         {
             @Override
@@ -908,7 +932,7 @@ public final class BrowserToolProvider
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
-        final ToolDefinition def = new ToolDefinition("browser_back", "Navigates back in browser history", schema);
+        final ToolDefinition def = new ToolDefinition("back", "Navigates back in browser history", schema);
         return new AiTool()
         {
             @Override
@@ -937,7 +961,7 @@ public final class BrowserToolProvider
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
-        final ToolDefinition def = new ToolDefinition("browser_forward", "Navigates forward in browser history", schema);
+        final ToolDefinition def = new ToolDefinition("forward", "Navigates forward in browser history", schema);
         return new AiTool()
         {
             @Override
@@ -966,7 +990,7 @@ public final class BrowserToolProvider
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
-        final ToolDefinition def = new ToolDefinition("browser_refresh", "Refreshes the current browser page", schema);
+        final ToolDefinition def = new ToolDefinition("refresh", "Refreshes the current browser page", schema);
         return new AiTool()
         {
             @Override
@@ -997,9 +1021,8 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("durationMs").put("type", "integer").put("description", "Duration to wait in milliseconds");
-        props.putObject("time").put("type", "string").put("description", "Duration to wait (e.g. '1000' or '1s')");
 
-        final ToolDefinition def = new ToolDefinition("browser_wait", "Pauses execution for a specified duration", schema);
+        final ToolDefinition def = new ToolDefinition("wait", "Pauses execution for a specified duration", schema);
         return new AiTool()
         {
             @Override
@@ -1360,7 +1383,7 @@ public final class BrowserToolProvider
         final ArrayNode req = schema.putArray("required");
         req.add("expectedText");
 
-        final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts that an element contains or matches the expected text or pattern", schema);
+        final ToolDefinition def = new ToolDefinition("assert_text", "Asserts that an element contains or matches the expected text or pattern", schema);
         return new AiTool()
         {
             @Override
@@ -1538,15 +1561,21 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the elements to count");
-        props.putObject("expectedCount").put("type", "integer").put("description", "Exact expected count of matching elements");
-        props.putObject("minCount").put("type", "integer").put("description", "Minimum expected count of matching elements (inclusive, count >= minCount)");
-        props.putObject("maxCount").put("type", "integer").put("description", "Maximum expected count of matching elements (inclusive, count <= maxCount)");
-        props.putObject("visibleOnly").put("type", "boolean").put("description", "Whether to count only visible elements (default true)");
+        props.putObject("count").put("type", "integer").put("description", "Expected count of matching elements");
+        final ArrayNode operatorEnum = props.putObject("operator")
+                .put("type", "string")
+                .put("description", "Comparison operator ('EXACT', 'MIN', 'MAX', default: 'EXACT')")
+                .putArray("enum");
+        operatorEnum.add("EXACT");
+        operatorEnum.add("MIN");
+        operatorEnum.add("MAX");
+        props.putObject("visibleOnly").put("type", "boolean").put("description", "Whether to count only visible elements (default: true)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
+        req.add("count");
 
-        final ToolDefinition def = new ToolDefinition("browser_assert_count", "Asserts that the count of elements matching a selector satisfies expected criteria (exact, min, or max)", schema);
+        final ToolDefinition def = new ToolDefinition("assert_count", "Asserts that the count of elements matching a selector satisfies expected criteria (exact, min, or max)", schema);
         return new AiTool()
         {
             @Override
@@ -1561,16 +1590,18 @@ public final class BrowserToolProvider
                 final String selector = resolveSelector(call.arguments());
                 if (selector == null || selector.isBlank())
                 {
-                    return ToolResult.error(call.callId(), errorNode("A valid 'selector' is required for browser_assert_count").toString());
+                    return ToolResult.error(call.callId(), errorNode("A valid 'selector' is required for assert_count").toString());
                 }
 
-                final boolean hasExpected = call.arguments().hasNonNull("expectedCount");
-                final boolean hasMin = call.arguments().hasNonNull("minCount");
-                final boolean hasMax = call.arguments().hasNonNull("maxCount");
+                final JsonNode args = call.arguments();
+                final boolean hasCount = args.hasNonNull("count");
+                final boolean hasExpected = hasCount || args.hasNonNull("expectedCount");
+                final boolean hasMin = args.hasNonNull("minCount");
+                final boolean hasMax = args.hasNonNull("maxCount");
 
                 if (!hasExpected && !hasMin && !hasMax)
                 {
-                    return ToolResult.error(call.callId(), errorNode("At least one count constraint ('expectedCount', 'minCount', or 'maxCount') must be specified for browser_assert_count.").toString());
+                    return ToolResult.error(call.callId(), errorNode("A count constraint ('count', 'expectedCount', 'minCount', or 'maxCount') must be specified for assert_count.").toString());
                 }
 
                 if (!WebDriverRunner.hasWebDriverStarted())
@@ -1613,19 +1644,10 @@ public final class BrowserToolProvider
                     LOGGER.warn("Failed retrieving element collection for selector '{}': {}", selector, e.getMessage());
                 }
 
-                if (hasExpected)
+                final String operator = args.path("operator").asText("EXACT").toUpperCase(Locale.ROOT);
+                if (hasCount && "MIN".equals(operator))
                 {
-                    final int expected = call.arguments().path("expectedCount").asInt();
-                    if (actualCount != expected)
-                    {
-                        throw new AssertionError(String.format(
-                                "Element count assertion failed for '%s': expected exactly %d elements, but found %d (visible: %d, total in DOM: %d)",
-                                selector, expected, actualCount, actualCount, totalElements));
-                    }
-                }
-                if (hasMin)
-                {
-                    final int min = call.arguments().path("minCount").asInt();
+                    final int min = args.path("count").asInt();
                     if (actualCount < min)
                     {
                         throw new AssertionError(String.format(
@@ -1633,9 +1655,49 @@ public final class BrowserToolProvider
                                 selector, min, actualCount, actualCount, totalElements));
                     }
                 }
-                if (hasMax)
+                else if (hasCount && "MAX".equals(operator))
                 {
-                    final int max = call.arguments().path("maxCount").asInt();
+                    final int max = args.path("count").asInt();
+                    if (actualCount > max)
+                    {
+                        throw new AssertionError(String.format(
+                                "Element count assertion failed for '%s': expected at most %d elements, but found %d (visible: %d, total in DOM: %d)",
+                                selector, max, actualCount, actualCount, totalElements));
+                    }
+                }
+                else if (hasCount)
+                {
+                    final int expected = args.path("count").asInt();
+                    if (actualCount != expected)
+                    {
+                        throw new AssertionError(String.format(
+                                "Element count assertion failed for '%s': expected exactly %d elements, but found %d (visible: %d, total in DOM: %d)",
+                                selector, expected, actualCount, actualCount, totalElements));
+                    }
+                }
+                else if (hasExpected)
+                {
+                    final int expected = args.path("expectedCount").asInt();
+                    if (actualCount != expected)
+                    {
+                        throw new AssertionError(String.format(
+                                "Element count assertion failed for '%s': expected exactly %d elements, but found %d (visible: %d, total in DOM: %d)",
+                                selector, expected, actualCount, actualCount, totalElements));
+                    }
+                }
+                if (!hasCount && hasMin)
+                {
+                    final int min = args.path("minCount").asInt();
+                    if (actualCount < min)
+                    {
+                        throw new AssertionError(String.format(
+                                "Element count assertion failed for '%s': expected at least %d elements, but found %d (visible: %d, total in DOM: %d)",
+                                selector, min, actualCount, actualCount, totalElements));
+                    }
+                }
+                if (!hasCount && hasMax)
+                {
+                    final int max = args.path("maxCount").asInt();
                     if (actualCount > max)
                     {
                         throw new AssertionError(String.format(
@@ -1766,14 +1828,13 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("expectedUrl").put("type", "string").put("description", "Expected URL substring, full URL, or regex pattern");
-        props.putObject("url").put("type", "string").put("description", "Alias for expectedUrl");
         props.putObject("exact").put("type", "boolean").put("description", "Whether URL match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedUrl is a regular expression pattern (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedUrl");
 
-        final ToolDefinition def = new ToolDefinition("browser_assert_url", "Asserts that the current browser page URL contains or matches the expected URL or pattern", schema);
+        final ToolDefinition def = new ToolDefinition("assert_url", "Asserts that the current browser page URL contains or matches the expected URL or pattern", schema);
         return new AiTool()
         {
             @Override
@@ -1796,7 +1857,7 @@ public final class BrowserToolProvider
                                                 : null)));
                 if (rawExpectedUrl == null || rawExpectedUrl.isBlank())
                 {
-                    throw new AssertionError("browser_assert_url requires an 'expectedUrl' argument");
+                    throw new AssertionError("assert_url requires an 'expectedUrl' argument");
                 }
 
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
@@ -1862,14 +1923,13 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("expectedTitle").put("type", "string").put("description", "Expected page title substring, full title, or regex pattern");
-        props.putObject("title").put("type", "string").put("description", "Alias for expectedTitle");
         props.putObject("exact").put("type", "boolean").put("description", "Whether title match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedTitle is a regular expression pattern (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedTitle");
 
-        final ToolDefinition def = new ToolDefinition("browser_assert_title", "Asserts that the current browser page title contains or matches the expected title or pattern", schema);
+        final ToolDefinition def = new ToolDefinition("assert_title", "Asserts that the current browser page title contains or matches the expected title or pattern", schema);
         return new AiTool()
         {
             @Override
@@ -1892,7 +1952,7 @@ public final class BrowserToolProvider
                                                 : null)));
                 if (rawExpectedTitle == null || rawExpectedTitle.isBlank())
                 {
-                    throw new AssertionError("browser_assert_title requires an 'expectedTitle' argument");
+                    throw new AssertionError("assert_title requires an 'expectedTitle' argument");
                 }
 
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
@@ -1958,12 +2018,12 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         final ObjectNode props = schema.putObject("properties");
         props.putObject("direction").put("type", "string").put("description", "Direction to scroll ('down', 'up', 'top', 'bottom', 'left', 'right')");
-        props.putObject("selector").put("type", "string").put("description", "Optional element selector to scroll into view, or target container element");
+        props.putObject("selector").put("type", "string").put("description", "Element selector to scroll into view");
         props.putObject("container").put("type", "string").put("description", "Optional selector for the scrollable container element (defaults to window/document)");
         props.putObject("yOffset").put("type", "integer").put("description", "Optional pixel distance to scroll vertically");
         props.putObject("xOffset").put("type", "integer").put("description", "Optional pixel distance to scroll horizontally");
 
-        final ToolDefinition def = new ToolDefinition("browser_scroll", "Scrolls the page viewport, scrolls a specific element into view, or scrolls inside a container element", schema);
+        final ToolDefinition def = new ToolDefinition("scroll", "Scrolls the page viewport, scrolls a specific element into view, or scrolls inside a container element", schema);
         return new AiTool()
         {
             @Override
@@ -2121,7 +2181,7 @@ public final class BrowserToolProvider
         props.putObject("args").put("type", "array").put("description", "Optional arguments passed to the script").putObject("items").put("type", "string");
         schema.putArray("required").add("script");
 
-        final ToolDefinition def = new ToolDefinition("browser_execute_script", "Executes JavaScript in the browser context and returns result", schema);
+        final ToolDefinition def = new ToolDefinition("execute_script", "Executes JavaScript in the browser context and returns result", schema);
         return new AiTool()
         {
             @Override
@@ -2168,7 +2228,7 @@ public final class BrowserToolProvider
         props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 1)");
         props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 10)");
 
-        final ToolDefinition def = new ToolDefinition("browser_query_dom", "Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility", schema);
+        final ToolDefinition def = new ToolDefinition("query_dom", "Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility", schema);
         return new AiTool()
         {
             @Override
@@ -2280,7 +2340,7 @@ public final class BrowserToolProvider
         schema.putObject("properties").putObject("selector").put("type", "string").put("description", "Selector of the element to inspect");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("browser_inspect", "Inspects a specific DOM element, returning its full outerHTML, attributes, and visibility", schema);
+        final ToolDefinition def = new ToolDefinition("inspect", "Inspects a specific DOM element, returning its full outerHTML, attributes, and visibility", schema);
         return new AiTool()
         {
             @Override
@@ -2338,7 +2398,7 @@ public final class BrowserToolProvider
         props.putObject("fullPage").put("type", "boolean").put("description", "Whether to capture full scrollable page or viewport only (default: false)");
         props.putObject("markInteractive").put("type", "boolean").put("description", "Whether to inject temporary Set-of-Marks numeric visual badges (default: false)");
 
-        final ToolDefinition def = new ToolDefinition("browser_take_screenshot", "Captures a screenshot of the browser viewport with optional Set-of-Marks visual badges", schema);
+        final ToolDefinition def = new ToolDefinition("screenshot", "Captures a screenshot of the browser viewport with optional Set-of-Marks visual badges", schema);
         return new AiTool()
         {
             @Override
@@ -2378,7 +2438,7 @@ public final class BrowserToolProvider
                 }
 
                 final String base64 = Base64.getEncoder().encodeToString(screenshotBytes);
-                final ObjectNode res = successNode("take_screenshot");
+                final ObjectNode res = successNode("screenshot");
                 res.put("bytes", screenshotBytes.length);
                 if (badges != null && !badges.isEmpty())
                 {
@@ -2409,7 +2469,7 @@ public final class BrowserToolProvider
         props.putObject("prompt").put("type", "string").put("description", "Visual prompt or question about the element");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("browser_inspect_visual", "Captures a targeted visual crop of a specific element or container for multimodal inspection", schema);
+        final ToolDefinition def = new ToolDefinition("inspect_visual", "Captures a targeted visual crop of a specific element or container for multimodal inspection", schema);
         return new AiTool()
         {
             @Override
@@ -2499,7 +2559,7 @@ public final class BrowserToolProvider
                 .put("description", "Whether screenshot capture should be full scrollable page (default: false)");
 
         final ToolDefinition def = new ToolDefinition(
-                "browser_request_context",
+                "request_context",
                 "Requests a fresh page DOM snapshot at a specified depth and scope (e.g. 'STANDARD' to include static text leaves, 'RICH' for all attributes and deep hierarchy, or 'VISUAL' for screenshots).",
                 schema);
 
@@ -2586,7 +2646,7 @@ public final class BrowserToolProvider
         final ArrayNode req = schema.putArray("required");
         req.add("variableName");
 
-        final ToolDefinition def = new ToolDefinition("browser_store", "Captures text from a DOM element or stores a specified value into an execution session variable for later use", schema);
+        final ToolDefinition def = new ToolDefinition("store", "Captures text from a DOM element or stores a specified value into an execution session variable for later use", schema);
         return new AiTool()
         {
             @Override
@@ -2623,7 +2683,7 @@ public final class BrowserToolProvider
 
                 if (variableName.isEmpty())
                 {
-                    return ToolResult.error(call.callId(), errorNode("browser_store requires a non-empty 'variableName'").toString());
+                    return ToolResult.error(call.callId(), errorNode("store requires a non-empty 'variableName'").toString());
                 }
 
                 final boolean adjust = args.path("adjust").asBoolean(false);
@@ -2639,7 +2699,7 @@ public final class BrowserToolProvider
                     final String selector = resolveSelector(args);
                     if (selector == null || selector.isBlank())
                     {
-                        return ToolResult.error(call.callId(), errorNode("browser_store requires either a 'selector' to capture text from or a literal 'value'").toString());
+                        return ToolResult.error(call.callId(), errorNode("store requires either a 'selector' to capture text from or a literal 'value'").toString());
                     }
 
                     try
@@ -2813,7 +2873,7 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         schema.putObject("properties");
 
-        final ToolDefinition def = new ToolDefinition("browser_list_tabs", "Lists all open browser tabs/windows with their handle ID, index, title, URL, and whether it is currently active.", schema);
+        final ToolDefinition def = new ToolDefinition("list_tabs", "Lists all open browser tabs/windows with their handle ID, index, title, URL, and whether it is currently active.", schema);
         return new AiTool()
         {
             @Override
@@ -2893,7 +2953,7 @@ public final class BrowserToolProvider
         final ObjectNode props = schema.putObject("properties");
         props.putObject("target").put("type", "string").put("description", "Target window handle, index (e.g. '0', '1', 'win_1'), or title/URL substring. If omitted or empty, switches to the newest window.");
 
-        final ToolDefinition def = new ToolDefinition("browser_switch_tab", "Switches the active browser focus to another tab or window by handle, index, or title/URL substring. If target is omitted, switches to the newest window.", schema);
+        final ToolDefinition def = new ToolDefinition("switch_tab", "Switches the active browser focus to another tab or window by handle, index, or title/URL substring. If target is omitted, switches to the newest window.", schema);
         return new AiTool()
         {
             @Override
@@ -2935,7 +2995,7 @@ public final class BrowserToolProvider
         schema.put("type", "object");
         schema.putObject("properties");
 
-        final ToolDefinition def = new ToolDefinition("browser_close_tab", "Closes the current active browser tab or window, and automatically switches focus back to the parent/primary tab.", schema);
+        final ToolDefinition def = new ToolDefinition("close_tab", "Closes the current active browser tab or window, and automatically switches focus back to the parent/primary tab.", schema);
         return new AiTool()
         {
             @Override
@@ -3127,7 +3187,7 @@ public final class BrowserToolProvider
         final ArrayNode required = schema.putArray("required");
         required.add("filePath");
 
-        final ToolDefinition def = new ToolDefinition("browser_upload_file", "Uploads a local file to the targeted file input element or styled dropzone container without opening native OS dialogs. Automatically discovers nested or associated <input type='file'> elements.", schema);
+        final ToolDefinition def = new ToolDefinition("upload_file", "Uploads a local file to the targeted file input element or styled dropzone container without opening native OS dialogs. Automatically discovers nested or associated <input type='file'> elements.", schema);
         return new AiTool()
         {
             @Override
@@ -3203,7 +3263,7 @@ public final class BrowserToolProvider
         props.putObject("action").put("type", "string").put("description", "Action to perform on the dialog: 'accept' (OK/Confirm) or 'dismiss' (Cancel). Defaults to 'accept'.");
         props.putObject("promptText").put("type", "string").put("description", "Optional text string to enter into a prompt() dialog before accepting.");
 
-        final ToolDefinition def = new ToolDefinition("browser_handle_alert", "Interacts with and resolves native browser modal dialogs (window.alert, window.confirm, window.prompt)", schema);
+        final ToolDefinition def = new ToolDefinition("handle_alert", "Interacts with and resolves native browser modal dialogs (window.alert, window.confirm, window.prompt)", schema);
         return new AiTool()
         {
             @Override
@@ -3442,7 +3502,7 @@ public final class BrowserToolProvider
         props.putObject("yOffset").put("type", "integer").put("description", "Vertical pixel offset to drag (positive for down, negative for up)");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("browser_drag", "Drags an interactive element by horizontal and vertical pixel offsets", schema);
+        final ToolDefinition def = new ToolDefinition("drag", "Drags an interactive element by horizontal and vertical pixel offsets", schema);
         return new AiTool()
         {
             @Override
@@ -3484,7 +3544,7 @@ public final class BrowserToolProvider
                             .release()
                             .perform();
 
-                    final ObjectNode res = successNode("browser_drag");
+                    final ObjectNode res = successNode("drag");
                     res.put("selector", selector);
                     res.put("xOffset", xOffset);
                     res.put("yOffset", yOffset);
@@ -3508,7 +3568,7 @@ public final class BrowserToolProvider
         props.putObject("target").put("type", "string").put("description", "CSS or XPath selector of the target element to drop onto");
         schema.putArray("required").add("source").add("target");
 
-        final ToolDefinition def = new ToolDefinition("browser_drag_to", "Drags a source element and drops it onto a target element", schema);
+        final ToolDefinition def = new ToolDefinition("drag_to", "Drags a source element and drops it onto a target element", schema);
         return new AiTool()
         {
             @Override
@@ -3559,7 +3619,7 @@ public final class BrowserToolProvider
                         simulateHtml5DragAndDrop(driver, sourceEl.getWrappedElement(), targetEl.getWrappedElement());
                     }
 
-                    final ObjectNode res = successNode("browser_drag_to");
+                    final ObjectNode res = successNode("drag_to");
                     res.put("source", source);
                     res.put("target", target);
                     return ToolResult.success(call.callId(), res.toString());

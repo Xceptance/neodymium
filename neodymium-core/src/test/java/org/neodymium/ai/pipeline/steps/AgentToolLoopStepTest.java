@@ -964,22 +964,23 @@ public class AgentToolLoopStepTest
         final AgentLoopLlmCaller caller = (req, ctx) -> {
             final List<String> toolNames = req.tools().stream().map(ToolDefinition::name).toList();
             Assertions.assertTrue(toolNames.contains("complete_step"));
-            Assertions.assertTrue(toolNames.contains("browser_take_screenshot"));
-            Assertions.assertTrue(toolNames.contains("browser_inspect_visual"));
-            Assertions.assertTrue(toolNames.contains("browser_scroll"));
-            Assertions.assertTrue(toolNames.contains("browser_request_context"));
+            Assertions.assertTrue(toolNames.contains("screenshot"));
+            Assertions.assertTrue(toolNames.contains("inspect_visual"));
+            Assertions.assertTrue(toolNames.contains("scroll"));
+            Assertions.assertTrue(toolNames.contains("request_context"));
 
             // Must NOT contain mutating tools
-            Assertions.assertFalse(toolNames.contains("browser_click"));
-            Assertions.assertFalse(toolNames.contains("browser_type"));
-            Assertions.assertFalse(toolNames.contains("browser_select"));
-            Assertions.assertFalse(toolNames.contains("browser_press_key"));
-            Assertions.assertFalse(toolNames.contains("browser_navigate"));
+            Assertions.assertFalse(toolNames.contains("click"));
+            Assertions.assertFalse(toolNames.contains("fill"));
+            Assertions.assertFalse(toolNames.contains("type"));
+            Assertions.assertFalse(toolNames.contains("select"));
+            Assertions.assertFalse(toolNames.contains("press_key"));
+            Assertions.assertFalse(toolNames.contains("navigate"));
 
             // Must NOT contain DOM query / text matching tools
-            Assertions.assertFalse(toolNames.contains("browser_query_dom"));
-            Assertions.assertFalse(toolNames.contains("browser_assert_text"));
-            Assertions.assertFalse(toolNames.contains("browser_inspect"));
+            Assertions.assertFalse(toolNames.contains("query_dom"));
+            Assertions.assertFalse(toolNames.contains("assert_text"));
+            Assertions.assertFalse(toolNames.contains("inspect"));
 
             final String userContent = req.messages().get(1).content();
             Assertions.assertTrue(userContent.contains("There is a green checkmark in the middle of the screen . (visual)"));
@@ -2033,7 +2034,7 @@ public class AgentToolLoopStepTest
                 final String userPrompt = req.messages().get(req.messages().size() - 1).content();
                 Assertions.assertTrue(userPrompt.contains("Visual crop of element `#myCanvas`"));
                 Assertions.assertTrue(userPrompt.contains("400x150px"));
-                Assertions.assertTrue(userPrompt.contains("use `browser_click` with `selector`: \"#myCanvas\""));
+                Assertions.assertTrue(userPrompt.contains("use `click` with `selector`: \"#myCanvas\""));
                 Assertions.assertEquals(ContextLevel.VISUAL_LEAN, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
                 return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
                         List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Canvas clicked"))));
