@@ -198,7 +198,10 @@
                                 <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
                             </div>
                         </td>
-                        <td><span class="badge-status badge-pass" th:text="${run.passRate + '% Pass'}">37.5% Pass</span></td>
+                        <td>
+                            <span th:if="${run.status == 'IN_PROGRESS'}" class="badge-status badge-running"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
+                            <span th:unless="${run.status == 'IN_PROGRESS'}" class="badge-status badge-pass" th:text="${run.passRate + '% Pass'}">37.5% Pass</span>
+                        </td>
                         <td>
                             <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;"
                                     th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" onclick="event.stopPropagation();">

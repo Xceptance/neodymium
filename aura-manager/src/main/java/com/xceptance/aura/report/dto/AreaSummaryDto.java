@@ -36,7 +36,34 @@ public final class AreaSummaryDto
     private final int knownCount;
     private final int unknownCount;
     private final int ignoredCount;
+    private final int runningCount;
     private final List<TestClassSummaryDto> testClasses;
+
+    public AreaSummaryDto(
+        final String areaName,
+        final String areaGroup,
+        final String folder,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestClassSummaryDto> testClasses)
+    {
+        this.areaName = areaName;
+        this.areaGroup = areaGroup;
+        this.folder = folder;
+        this.totalCount = totalCount;
+        this.passCount = passCount;
+        this.fixedCount = fixedCount;
+        this.knownCount = knownCount;
+        this.unknownCount = unknownCount;
+        this.ignoredCount = ignoredCount;
+        this.runningCount = runningCount;
+        this.testClasses = testClasses;
+    }
 
     public AreaSummaryDto(
         final String areaName,
@@ -50,16 +77,7 @@ public final class AreaSummaryDto
         final int ignoredCount,
         final List<TestClassSummaryDto> testClasses)
     {
-        this.areaName = areaName;
-        this.areaGroup = areaGroup;
-        this.folder = folder;
-        this.totalCount = totalCount;
-        this.passCount = passCount;
-        this.fixedCount = fixedCount;
-        this.knownCount = knownCount;
-        this.unknownCount = unknownCount;
-        this.ignoredCount = ignoredCount;
-        this.testClasses = testClasses;
+        this(areaName, areaGroup, folder, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, testClasses);
     }
 
     public AreaSummaryDto(
@@ -72,7 +90,7 @@ public final class AreaSummaryDto
         final int unknownCount,
         final int ignoredCount)
     {
-        this(areaName, areaGroup, "Browsing (default)", passCount + fixedCount + knownCount + unknownCount + ignoredCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, testClasses);
+        this(areaName, areaGroup, "Browsing (default)", passCount + fixedCount + knownCount + unknownCount + ignoredCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, testClasses);
     }
 
     public String getAreaName()
@@ -118,6 +136,11 @@ public final class AreaSummaryDto
     public int getIgnoredCount()
     {
         return ignoredCount;
+    }
+
+    public int getRunningCount()
+    {
+        return runningCount;
     }
 
     public List<TestClassSummaryDto> getTestClasses()

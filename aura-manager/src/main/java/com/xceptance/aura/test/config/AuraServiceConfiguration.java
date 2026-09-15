@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.test.config;
 
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
 import com.xceptance.neodymium.aura.AuraChatService;
 import com.xceptance.neodymium.aura.AuraChatSessionService;
@@ -26,6 +27,8 @@ import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.QueueRunProgressListener;
+import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -62,7 +65,7 @@ public class AuraServiceConfiguration
         return new AuraChatSessionService();
     }
 
-@Bean
+    @Bean
     public AuraInteractiveService auraInteractiveService()
     {
         return new AuraInteractiveService();
@@ -78,9 +81,29 @@ public class AuraServiceConfiguration
 
     @Bean
     public AuraQueueService auraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService,
-                                              final RunStorageSyncService runStorageSyncService)
+                                              final RunStorageSyncService runStorageSyncService, final AuraReportDataService reportDataService)
     {
         final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
+        queueService.setQueueRunProgressListener(new QueueRunProgressListener()
+        {
+            @Override
+            public void onRunStarted(final String runId, final String batchName, final String environment)
+            {
+                reportDataService.startRun(runId, batchName, environment, "queue");
+            }
+
+            @Override
+            public void onTestExecutionCompleted(final String runId, final Map<String, Object> executionData)
+            {
+                reportDataService.ingestExecution(runId, executionData);
+            }
+
+            @Override
+            public void onRunFinished(final String runId)
+            {
+                reportDataService.finishRun(runId);
+            }
+        });
         queueService.setOnRunCompletedListener(runId -> {
             try
             {

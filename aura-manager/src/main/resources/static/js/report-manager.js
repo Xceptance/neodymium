@@ -528,15 +528,35 @@ function renderDynamicAreaTrendCharts() {
     });
 }
 
-function switchRunReportSubTab(subTabId, btn) {
+function switchRunReportSubTab(subTabId, btn, skipClosePanel) {
     document.querySelectorAll('#runReportSubTabOverview, #runReportSubTabAllTests, #runReportSubTabTimeline').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.sub-tab-btn').forEach(el => el.classList.remove('active'));
 
     const target = document.getElementById(subTabId);
     if (target) target.classList.add('active');
+
+    if (!btn && subTabId) {
+        if (subTabId === 'runReportSubTabAllTests') btn = document.getElementById('runReportTabBtnAllTests');
+        else if (subTabId === 'runReportSubTabTimeline') btn = document.getElementById('runReportTabBtnTimeline');
+        else if (subTabId === 'runReportSubTabOverview') btn = document.getElementById('runReportTabBtnOverview');
+    }
     if (btn) btn.classList.add('active');
 
-    closeSidePanelInspector();
+    try {
+        sessionStorage.setItem('activeRunReportSubTab', subTabId);
+    } catch (e) {}
+
+    if (window.history && window.history.replaceState) {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('subTab', subTabId);
+            window.history.replaceState({}, '', url.toString());
+        } catch (e) {}
+    }
+
+    if (!skipClosePanel && subTabId !== 'runReportSubTabAllTests') {
+        closeSidePanelInspector();
+    }
 }
 
 function switchTestBaseAreaTab(paneId, btn) {
@@ -972,6 +992,9 @@ function getRowStatusCategory(r) {
     const bugs = (r.getAttribute('data-bugs') || '').trim();
     const hasBugs = bugs !== '' && bugs.toUpperCase() !== 'NONE';
 
+    if (st === 'RUNNING' || stRaw === 'running' || stRaw === 'in_progress' || stRaw === 'executing' || stRaw === 'pending') {
+        return 'RUNNING';
+    }
     if (st === 'SUCCEEDED_FIXED' || st === 'HEALED' || stRaw === 'succeeded-fixed' || stRaw === 'fixed' || stRaw === 'healed') {
         return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
     }
@@ -994,7 +1017,7 @@ function recalculateRunReportMetrics() {
     const rows = document.querySelectorAll('#runReportSubTabAllTests .test-row, tr.execution-row');
     if (rows.length === 0) return;
 
-    let pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0;
+    let pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
     let totalLlmCalls = 0;
     let totalLlmTokens = 0;
     let totalLlmCost = 0.0;
@@ -1006,6 +1029,7 @@ function recalculateRunReportMetrics() {
         else if (cat === 'FAILED_KNOWN') known++;
         else if (cat === 'FAILED_UNKNOWN') unknown++;
         else if (cat === 'SKIPPED') ignored++;
+        else if (cat === 'RUNNING') running++;
 
         const ai = syncRowAiUsage(r);
         if (ai) {
@@ -1020,7 +1044,7 @@ function recalculateRunReportMetrics() {
         }
     });
 
-    const totalExecutions = pass + fixed + known + unknown + ignored;
+    const totalExecutions = pass + fixed + known + unknown + ignored + running;
     const wholeTotalChip = document.getElementById('wholeExecutionTotalCountChip');
     if (wholeTotalChip) {
         wholeTotalChip.innerText = `${totalExecutions} Executions`;
@@ -1044,6 +1068,7 @@ function recalculateRunReportMetrics() {
     const elOvKnown = document.getElementById('overviewKpiKnown');
     const elOvUnknown = document.getElementById('overviewKpiUnknown');
     const elOvIgnored = document.getElementById('overviewKpiIgnored');
+    const elOvRunning = document.getElementById('overviewKpiRunning');
     const elOvLlmCost = document.getElementById('overviewKpiTotalLlmCost');
     const elOvLlmSub = document.getElementById('overviewKpiTotalLlmSub');
 
@@ -1053,6 +1078,7 @@ function recalculateRunReportMetrics() {
     if (elOvKnown) elOvKnown.innerText = known;
     if (elOvUnknown) elOvUnknown.innerText = unknown;
     if (elOvIgnored) elOvIgnored.innerText = ignored;
+    if (elOvRunning) elOvRunning.innerText = running;
 
     if (elOvLlmCost) {
         elOvLlmCost.innerText = '$' + (Math.ceil(totalLlmCost * 10000) / 10000).toFixed(4);
@@ -1070,6 +1096,7 @@ function recalculateRunReportMetrics() {
         const isKnownActive = currentGlobalStatusBadgeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : '';
         const isUnknownActive = currentGlobalStatusBadgeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : '';
         const isSkippedActive = (currentGlobalStatusBadgeFilter === 'SKIPPED' || currentGlobalStatusBadgeFilter === 'IGNORED') ? ' active-filter-badge' : '';
+        const isRunningActive = currentGlobalStatusBadgeFilter === 'RUNNING' ? ' active-filter-badge' : '';
 
         wholeBadges.innerHTML = `
             <span class="badge-status badge-pass clickable-badge js-filter-badge${isPassActive}" onclick="filterByGlobalStatusBadge('PASSED', this)" data-status-key="PASSED" title="Filter Passed">Passed: ${pass}</span>
@@ -1077,6 +1104,7 @@ function recalculateRunReportMetrics() {
             <span class="badge-status badge-known-fail clickable-badge js-filter-badge${isKnownActive}" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" data-status-key="FAILED_KNOWN" title="Filter Known Fail">Known Fail: ${known}</span>
             <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge${isUnknownActive}" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" data-status-key="FAILED_UNKNOWN" title="Filter Unknown Fail">Unknown Fail: ${unknown}</span>
             <span class="badge-status badge-ignored clickable-badge js-filter-badge${isSkippedActive}" onclick="filterByGlobalStatusBadge('SKIPPED', this)" data-status-key="SKIPPED" title="Filter Ignored/Skipped">Ignored: ${ignored}</span>
+            ${running > 0 ? `<span class="badge-status badge-running clickable-badge js-filter-badge${isRunningActive}" onclick="filterByGlobalStatusBadge('RUNNING', this)" data-status-key="RUNNING" title="Filter Running">Running: ${running}</span>` : ''}
         `;
     }
 
@@ -1085,7 +1113,7 @@ function recalculateRunReportMetrics() {
         const areaName = areaGroup.getAttribute('data-area') || '';
         const areaRows = areaGroup.querySelectorAll('.test-row, tr.execution-row');
 
-        let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0;
+        let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0, aRunning = 0;
         areaRows.forEach(r => {
             const cat = getRowStatusCategory(r);
             if (cat === 'PASSED') aPass++;
@@ -1093,9 +1121,10 @@ function recalculateRunReportMetrics() {
             else if (cat === 'FAILED_KNOWN') aKnown++;
             else if (cat === 'FAILED_UNKNOWN') aUnknown++;
             else if (cat === 'SKIPPED') aIgnored++;
+            else if (cat === 'RUNNING') aRunning++;
         });
 
-        const totalArea = aPass + aFixed + aKnown + aUnknown + aIgnored;
+        const totalArea = aPass + aFixed + aKnown + aUnknown + aIgnored + aRunning;
 
         const areaExecChip = areaGroup.querySelector('.area-exec-count-chip');
         if (areaExecChip) {
@@ -1111,6 +1140,7 @@ function recalculateRunReportMetrics() {
             if (aKnown > 0) badgesHtml += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Area">Known: ${aKnown}</span>`;
             if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Area">Unknown: ${aUnknown}</span>`;
             if (aIgnored > 0) badgesHtml += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Area">Ignored: ${aIgnored}</span>`;
+            if (aRunning > 0) badgesHtml += `<span class="badge-status badge-running clickable-badge${activeFilter === 'RUNNING' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'RUNNING');" title="Filter Running in Area">Running: ${aRunning}</span>`;
             areaBadgesContainer.innerHTML = badgesHtml;
         }
 
@@ -1121,12 +1151,14 @@ function recalculateRunReportMetrics() {
             const valKnown = pieCard.querySelector('.val-known');
             const valUnknown = pieCard.querySelector('.val-unknown');
             const valIgnored = pieCard.querySelector('.val-ignored');
+            const valRunning = pieCard.querySelector('.val-running');
 
             if (valPass) valPass.innerText = aPass;
             if (valFixed) valFixed.innerText = aFixed;
             if (valKnown) valKnown.innerText = aKnown;
             if (valUnknown) valUnknown.innerText = aUnknown;
             if (valIgnored) valIgnored.innerText = aIgnored;
+            if (valRunning) valRunning.innerText = aRunning;
 
             const svgWrapper = pieCard.querySelector('.pie-chart-wrapper');
             if (svgWrapper && totalArea > 0) {
@@ -1135,12 +1167,14 @@ function recalculateRunReportMetrics() {
                 const pKnown = (aKnown / totalArea) * 100;
                 const pUnknown = (aUnknown / totalArea) * 100;
                 const pIgnored = (aIgnored / totalArea) * 100;
+                const pRunning = (aRunning / totalArea) * 100;
 
                 const cPass = `${pPass} ${100 - pPass}`;
                 const cFixed = `${pFixed} ${100 - pFixed}`;
                 const cKnown = `${pKnown} ${100 - pKnown}`;
                 const cUnknown = `${pUnknown} ${100 - pUnknown}`;
                 const cIgnored = `${pIgnored} ${100 - pIgnored}`;
+                const cRunning = `${pRunning} ${100 - pRunning}`;
 
                 svgWrapper.innerHTML = `
                     <svg width="100%" height="100%" viewBox="0 0 36 36">
@@ -1150,6 +1184,7 @@ function recalculateRunReportMetrics() {
                         <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ea580c" stroke-width="5" stroke-dasharray="${cKnown}" stroke-dashoffset="${25 - pPass - pFixed}"/>
                         <circle cx="18" cy="18" r="15.915" fill="none" stroke="#dc2626" stroke-width="5" stroke-dasharray="${cUnknown}" stroke-dashoffset="${25 - pPass - pFixed - pKnown}"/>
                         <circle cx="18" cy="18" r="15.915" fill="none" stroke="#64748b" stroke-width="5" stroke-dasharray="${cIgnored}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown}"/>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#94a3b8" stroke-width="5" stroke-dasharray="${cRunning}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown - pIgnored}"/>
                     </svg>
                 `;
             }
@@ -1159,7 +1194,7 @@ function recalculateRunReportMetrics() {
     // Recalculate Test Class Summary Badges
     document.querySelectorAll('#runReportSubTabAllTests .test-class-container, .test-class-container').forEach(classBox => {
         const classRows = classBox.querySelectorAll('.test-row, tr.execution-row');
-        let cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0;
+        let cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;
         classRows.forEach(r => {
             const cat = getRowStatusCategory(r);
             if (cat === 'PASSED') cPass++;
@@ -1167,6 +1202,7 @@ function recalculateRunReportMetrics() {
             else if (cat === 'FAILED_KNOWN') cKnown++;
             else if (cat === 'FAILED_UNKNOWN') cUnknown++;
             else if (cat === 'SKIPPED') cIgnored++;
+            else if (cat === 'RUNNING') cRunning++;
         });
 
         const classBadgeContainer = classBox.querySelector('.test-class-header .flex-gap-2');
@@ -1178,6 +1214,7 @@ function recalculateRunReportMetrics() {
             if (cKnown > 0) html += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Class">Known: ${cKnown}</span>`;
             if (cUnknown > 0) html += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Class">Unknown: ${cUnknown}</span>`;
             if (cIgnored > 0) html += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Class">Ignored: ${cIgnored}</span>`;
+            if (cRunning > 0) html += `<span class="badge-status badge-running clickable-badge${activeFilter === 'RUNNING' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'RUNNING');" title="Filter Running in Class">Running: ${cRunning}</span>`;
             classBadgeContainer.innerHTML = html;
         }
     });
@@ -1557,6 +1594,134 @@ function syncAllRowsAiUsage() {
     document.querySelectorAll('.execution-row').forEach(row => syncRowAiUsage(row));
 }
 
+let liveStepRefreshTimer = null;
+
+function stopLiveStepRefreshTimer() {
+    if (liveStepRefreshTimer) {
+        clearInterval(liveStepRefreshTimer);
+        liveStepRefreshTimer = null;
+    }
+}
+
+function extractBlocksJson(execDto) {
+    if (!execDto) return null;
+    if (typeof execDto.blocksJson === 'string' && execDto.blocksJson !== '{}' && execDto.blocksJson !== 'null' && execDto.blocksJson.trim().length > 0) {
+        return execDto.blocksJson;
+    }
+    if (execDto.blocks) {
+        try {
+            const str = typeof execDto.blocks === 'string' ? execDto.blocks : JSON.stringify(execDto.blocks);
+            if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
+        } catch (e) {}
+    }
+    return null;
+}
+
+function extractStepsJson(execDto) {
+    if (!execDto) return null;
+    if (typeof execDto.stepsJson === 'string' && execDto.stepsJson !== '{}' && execDto.stepsJson !== 'null' && execDto.stepsJson.trim().length > 0) {
+        return execDto.stepsJson;
+    }
+    if (execDto.steps) {
+        try {
+            const str = typeof execDto.steps === 'string' ? execDto.steps : JSON.stringify(execDto.steps);
+            if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
+        } catch (e) {}
+    }
+    return null;
+}
+
+function startLiveStepRefreshTimer(activeRow) {
+    stopLiveStepRefreshTimer();
+    if (!activeRow) return;
+
+    const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
+    const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
+
+    if (!runId || !rowId) return;
+
+    liveStepRefreshTimer = setInterval(() => {
+        let currentActiveEl = activeRow;
+        if (!document.body.contains(currentActiveEl)) {
+            const safeRowId = (rowId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            currentActiveEl = document.querySelector(`[data-row-id="${safeRowId}"]`) ||
+                              (activeRow.id ? document.getElementById(activeRow.id) : null);
+        }
+
+        const stepListEl = document.getElementById('sidePageStepList');
+        if (!currentActiveEl || !stepListEl) {
+            stopLiveStepRefreshTimer();
+            return;
+        }
+
+        fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`)
+            .then(res => {
+                if (!res.ok) return null;
+                return res.json();
+            })
+            .then(execDto => {
+                if (execDto) {
+                    let changed = false;
+                    const prevBlocks = currentActiveEl.getAttribute('data-blocks');
+                    const prevSteps = currentActiveEl.getAttribute('data-steps');
+                    const prevFailure = currentActiveEl.getAttribute('data-failure-reason');
+                    const prevStatus = currentActiveEl.getAttribute('data-status') || '';
+
+                    const newBlocks = extractBlocksJson(execDto);
+                    const newSteps = extractStepsJson(execDto);
+
+                    if (execDto.status && execDto.status !== prevStatus) {
+                        currentActiveEl.setAttribute('data-status', execDto.status);
+                        currentActiveEl.setAttribute('data-status-raw', execDto.status);
+                        changed = true;
+                    }
+                    if (newBlocks && newBlocks !== prevBlocks) {
+                        currentActiveEl.setAttribute('data-blocks', newBlocks);
+                        changed = true;
+                    }
+                    if (newSteps && newSteps !== prevSteps) {
+                        currentActiveEl.setAttribute('data-steps', newSteps);
+                        changed = true;
+                    }
+                    if (execDto.localDataBindingsJson) currentActiveEl.setAttribute('data-local-bindings', execDto.localDataBindingsJson);
+                    if (execDto.playbookFile) currentActiveEl.setAttribute('data-playbook-file', execDto.playbookFile);
+                    if (execDto.testMethod) currentActiveEl.setAttribute('data-test-method', execDto.testMethod);
+                    if (execDto.failure) currentActiveEl.setAttribute('data-failure', execDto.failure);
+                    if (execDto.failureReason && execDto.failureReason !== prevFailure) {
+                        currentActiveEl.setAttribute('data-failure-reason', execDto.failureReason);
+                        changed = true;
+                    }
+                    if (execDto.failureStackTrace) currentActiveEl.setAttribute('data-failure-stack-trace', execDto.failureStackTrace);
+                    if (execDto.visualRcaExplanation) currentActiveEl.setAttribute('data-visual-rca-explanation', execDto.visualRcaExplanation);
+                    if (execDto.durationMs) currentActiveEl.setAttribute('data-duration-ms', execDto.durationMs);
+                    if (execDto.durationFormatted) currentActiveEl.setAttribute('data-duration-formatted', execDto.durationFormatted);
+                    if (execDto.startTime) currentActiveEl.setAttribute('data-start-time', execDto.startTime);
+                    if (execDto.dateFormatted) currentActiveEl.setAttribute('data-date-formatted', execDto.dateFormatted);
+                    if (execDto.timeFormatted) currentActiveEl.setAttribute('data-time-formatted', execDto.timeFormatted);
+                    if (execDto.llmResponsibilityJson) currentActiveEl.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
+                    if (execDto.contextLevelCountsJson) currentActiveEl.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+
+                    if (changed) {
+                        const savedScrollTop = stepListEl ? stepListEl.scrollTop : 0;
+                        renderStepsForExecution(currentActiveEl);
+                        if (stepListEl && savedScrollTop > 0) {
+                            stepListEl.scrollTop = savedScrollTop;
+                        }
+                    }
+
+                    const updatedSt = (currentActiveEl.getAttribute('data-status') || execDto.status || '').toUpperCase();
+                    const updatedStRaw = (currentActiveEl.getAttribute('data-status-raw') || execDto.status || '').toLowerCase();
+                    const isTerminal = updatedSt === 'PASSED' || updatedSt === 'FAILED' || updatedSt === 'IGNORED' || updatedSt === 'SKIPPED' || updatedStRaw === 'passed' || updatedStRaw === 'failed' || updatedStRaw === 'ignored';
+
+                    if (isTerminal && !changed) {
+                        stopLiveStepRefreshTimer();
+                    }
+                }
+            })
+            .catch(() => {});
+    }, 1000);
+}
+
 function renderStepsForExecution(activeRow) {
     const stepListEl = document.getElementById('sidePageStepList');
     if (!stepListEl) return;
@@ -1566,10 +1731,14 @@ function renderStepsForExecution(activeRow) {
         return;
     }
 
+    startLiveStepRefreshTimer(activeRow);
+
     const blocksAttr = activeRow.getAttribute('data-blocks');
     const stepsAttr = activeRow.getAttribute('data-steps');
+    const stepsFetched = activeRow.hasAttribute('data-steps-fetched');
 
-    if ((!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
+    if (!stepsFetched && (!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
+        activeRow.setAttribute('data-steps-fetched', 'true');
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
         const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
 
@@ -1583,8 +1752,10 @@ function renderStepsForExecution(activeRow) {
                 })
                 .then(execDto => {
                     if (execDto) {
-                        if (execDto.blocksJson) activeRow.setAttribute('data-blocks', execDto.blocksJson);
-                        if (execDto.stepsJson) activeRow.setAttribute('data-steps', execDto.stepsJson);
+                        const newBlocks = extractBlocksJson(execDto);
+                        const newSteps = extractStepsJson(execDto);
+                        if (newBlocks) activeRow.setAttribute('data-blocks', newBlocks);
+                        if (newSteps) activeRow.setAttribute('data-steps', newSteps);
                         if (execDto.localDataBindingsJson) activeRow.setAttribute('data-local-bindings', execDto.localDataBindingsJson);
                         if (execDto.playbookFile) activeRow.setAttribute('data-playbook-file', execDto.playbookFile);
                         if (execDto.testMethod) activeRow.setAttribute('data-test-method', execDto.testMethod);
@@ -1610,6 +1781,8 @@ function renderStepsForExecution(activeRow) {
                             }
                         }
 
+                        renderStepsForExecution(activeRow);
+                    } else {
                         renderStepsForExecution(activeRow);
                     }
                 })
@@ -1712,7 +1885,7 @@ function renderStepsForExecution(activeRow) {
         }
         sideDurEl.innerHTML = `${durFormatted}`;
     }
-    if (sideStatusEl) sideStatusEl.innerHTML = `Status: <strong class="${statusVal === 'PASSED' ? 'status-pass' : (statusVal === 'HEALED' ? 'status-fixed' : 'status-fail')}">${statusVal}</strong>`;
+    if (sideStatusEl) sideStatusEl.innerHTML = `Status: <strong class="${statusVal === 'PASSED' ? 'status-pass' : (statusVal === 'HEALED' ? 'status-fixed' : (statusVal === 'RUNNING' ? 'status-running' : 'status-fail'))}">${statusVal}</strong>`;
     if (sideStepsEl) sideStepsEl.innerText = stepsTotal;
     if (sideStepHealthEl) sideStepHealthEl.innerText = `✨ Healed: ${healedCount} | ❌ Failed: ${failedCount}`;
     if (sideLlmCallsEl) sideLlmCallsEl.innerText = llmCalls;
@@ -1747,7 +1920,7 @@ function renderStepsForExecution(activeRow) {
     const ctxBadgesEl = document.getElementById('sidePageContextLevelBadges');
     if (ctxBadgesEl) {
         const countsAttr = activeRow.getAttribute('data-context-level-counts');
-        renderContextLevelBadges(ctxBadgesEl, countsAttr, Number(stepsTotal) || 0);
+        renderContextLevelBadges(ctxBadgesEl, countsAttr, Number(stepsTotal) || 0, activeRow);
     }
 
     // Extract Blocks
@@ -1775,14 +1948,33 @@ function renderStepsForExecution(activeRow) {
         }
     }
 
-    if (!blocksObj) {
-        stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">No step execution data recorded for this run.</div>';
-        return;
-    }
+    const beforeSteps = blocksObj ? (blocksObj.before || []) : [];
+    const coreSteps = blocksObj ? (blocksObj.steps || []) : [];
+    const afterSteps = blocksObj ? (blocksObj.after || []) : [];
 
-    const beforeSteps = blocksObj.before || [];
-    const coreSteps = blocksObj.steps || [];
-    const afterSteps = blocksObj.after || [];
+    const stVal = (activeRow.getAttribute('data-status') || '').toUpperCase();
+    const stRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
+    const isRunningState = stVal === 'RUNNING' || stRawVal === 'running' || stRawVal === 'in_progress' || stRawVal === 'executing' || stRawVal === 'pending';
+
+    if (!blocksObj || (beforeSteps.length === 0 && coreSteps.length === 0 && afterSteps.length === 0)) {
+        const hasExistingRenderedSteps = stepListEl.querySelector('.step-item') !== null;
+        if (hasExistingRenderedSteps) {
+            return;
+        }
+        if (isRunningState) {
+            stepListEl.innerHTML = `
+                <div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-color); margin-top: 0.5rem;">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 1.8rem; vertical-align: middle; animation: spin 1.2s linear infinite; margin-bottom: 0.5rem; display: block;">sync</span>
+                    <strong style="color: var(--text-main);">Test execution in progress...</strong>
+                    <div style="font-size: 0.8rem; margin-top: 0.35rem; color: var(--text-muted);">Waiting for initial step logs and screenshots from SUT.</div>
+                </div>
+            `;
+            return;
+        } else {
+            stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">No step execution data recorded for this run.</div>';
+            return;
+        }
+    }
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -1860,8 +2052,9 @@ function renderStepsForExecution(activeRow) {
             
             const stepClass = isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored');
             const stepId = `stepCard_${sectionClass}_${idx}`;
-			console.log(s.stats);
-            const contextLevel = s.stats.contextLevels || (idx % 2 === 0 ? 'MINIMAL' : 'LEAN');
+            const rawContextLevel = s.contextLevels || s.stats?.contextLevels || 'PENDING';
+            const isUnexecutedOrSkipped = !isPassed && !isFailed && status !== 'running';
+            const contextLevel = isUnexecutedOrSkipped ? 'PENDING' : rawContextLevel;
 
             // Format Timing
             const rawStart = s.startTimestamp || s.startTime || s.startTimeMs;
@@ -2314,22 +2507,93 @@ function renderStepsForExecution(activeRow) {
     stepListEl.innerHTML = html;
 }
 
-function renderContextLevelBadges(ctxBadgesEl, countsJson, stepsTotal) {
-    const counts = parseContextLevelCounts(countsJson);
-    if (counts) {
-        ctxBadgesEl.innerHTML = Object.keys(counts).map(key => {
-            const cls = contextLevelClass(key);
-            const count = Number(counts[key]) || 0;
-            return `<span class="context-badge ${cls}">${key}: <strong>${count}</strong></span>`;
-        }).join('');
-    } else {
-        ctxBadgesEl.innerHTML = `
-            <span class="context-badge level-minimal">MINIMAL: <strong>${Math.max(1, Math.floor(stepsTotal * 0.6))}</strong></span>
-            <span class="context-badge level-lean">LEAN: <strong>${Math.max(0, Math.floor(stepsTotal * 0.2))}</strong></span>
-            <span class="context-badge level-standard">STANDARD: <strong>${Math.max(0, Math.floor(stepsTotal * 0.1))}</strong></span>
-            <span class="context-badge level-visual">VISUAL: <strong>${Math.max(0, Math.floor(stepsTotal * 0.1))}</strong></span>
-        `;
+function extractStepContextLevelCounts(activeRow) {
+    if (!activeRow) return null;
+    const blocksAttr = activeRow.getAttribute('data-blocks');
+    const stepsAttr = activeRow.getAttribute('data-steps');
+    let stepsList = [];
+
+    try {
+        if (blocksAttr && blocksAttr !== '{}') {
+            const blocks = JSON.parse(blocksAttr);
+            const before = blocks.before || [];
+            const steps = blocks.steps || [];
+            const after = blocks.after || [];
+            stepsList = [...before, ...steps, ...after];
+        }
+    } catch (e) {}
+
+    if (stepsList.length === 0) {
+        try {
+            if (stepsAttr && stepsAttr !== '{}') {
+                const stepsObj = JSON.parse(stepsAttr);
+                if (stepsObj && stepsObj.tries) {
+                    const try1 = stepsObj.tries['1'] || Object.values(stepsObj.tries)[0];
+                    if (Array.isArray(try1)) stepsList = try1;
+                } else if (Array.isArray(stepsObj)) {
+                    stepsList = stepsObj;
+                }
+            }
+        } catch (e) {}
     }
+
+    if (stepsList.length === 0) return null;
+
+    const counts = {};
+    stepsList.forEach(s => {
+        if (!s) return;
+        const st = (s.status || '').toUpperCase();
+        if (st === 'SKIPPED' || st === 'PENDING' || st === 'UNEXECUTED') return;
+
+        const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels;
+        if (!rawContextLevel) return;
+
+        let highestLevel = null;
+        if (Array.isArray(rawContextLevel)) {
+            const validLevels = rawContextLevel.filter(lvl => lvl && typeof lvl === 'string' && lvl.trim().toUpperCase() !== 'PENDING');
+            if (validLevels.length > 0) {
+                highestLevel = validLevels[validLevels.length - 1].trim().toUpperCase();
+            }
+        } else if (typeof rawContextLevel === 'string') {
+            const parts = rawContextLevel.split('→').map(p => p.trim().toUpperCase()).filter(p => p && p !== 'PENDING');
+            if (parts.length > 0) {
+                highestLevel = parts[parts.length - 1];
+            }
+        }
+
+        if (highestLevel) {
+            counts[highestLevel] = (counts[highestLevel] || 0) + 1;
+        }
+    });
+
+    return Object.keys(counts).length > 0 ? counts : null;
+}
+
+function renderContextLevelBadges(ctxBadgesEl, countsJson, stepsTotal, activeRow) {
+    let counts = parseContextLevelCounts(countsJson);
+    if (!counts && activeRow) {
+        counts = extractStepContextLevelCounts(activeRow);
+    }
+
+    const defaultLevels = ['MINIMAL', 'LEAN', 'STANDARD', 'VISUAL'];
+    const mergedCounts = {};
+
+    defaultLevels.forEach(lvl => {
+        mergedCounts[lvl] = 0;
+    });
+
+    if (counts) {
+        Object.keys(counts).forEach(key => {
+            const normalizedKey = key.toUpperCase();
+            mergedCounts[normalizedKey] = Number(counts[key]) || 0;
+        });
+    }
+
+    ctxBadgesEl.innerHTML = Object.keys(mergedCounts).map(key => {
+        const cls = contextLevelClass(key);
+        const count = mergedCounts[key];
+        return `<span class="context-badge ${cls}">${key}: <strong>${count}</strong></span>`;
+    }).join('');
 }
 
 function parseContextLevelCounts(json) {
@@ -2490,6 +2754,7 @@ function toggleStepActionInspector(stepCardEl) {
 }
 
 function closeTestSidePagePanel() {
+    stopLiveStepRefreshTimer();
     const panel = document.getElementById('testSidePagePanel');
     const resizer = document.getElementById('allurePanelResizer') || document.getElementById('panelResizer');
     const varDrawer = document.getElementById('variationHistoryDrawer');
@@ -2684,7 +2949,13 @@ let lastHandledTargetExecutionId = null;
 document.body.addEventListener('htmx:afterSwap', (evt) => {
     const target = evt.detail && evt.detail.target;
     if (target && target.id === 'mainViewContainer') {
-        closeTestSidePagePanel();
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetExecId = document.querySelector('[data-target-execution-id]')?.getAttribute('data-target-execution-id')
+            || urlParams.get('executionId')
+            || urlParams.get('testExecutionId');
+        if (!targetExecId) {
+            closeTestSidePagePanel();
+        }
         lastHandledTargetExecutionId = null;
     }
 
@@ -2763,9 +3034,28 @@ function bindGlobalListeners() {
 
         recalculateRunReportMetrics();
 
+        const urlParams = new URLSearchParams(window.location.search);
+        let storedSubTab = urlParams.get('subTab');
+        if (!storedSubTab) {
+            try {
+                storedSubTab = sessionStorage.getItem('activeRunReportSubTab');
+            } catch (e) {}
+        }
+        if (storedSubTab) {
+            let normalizedSubTab = storedSubTab;
+            if (storedSubTab === 'AllTests' || storedSubTab === 'all-tests') normalizedSubTab = 'runReportSubTabAllTests';
+            else if (storedSubTab === 'Timeline' || storedSubTab === 'timeline') normalizedSubTab = 'runReportSubTabTimeline';
+            else if (storedSubTab === 'Overview') normalizedSubTab = 'runReportSubTabOverview';
+
+            const subTabEl = document.getElementById(normalizedSubTab);
+            if (subTabEl && !subTabEl.classList.contains('active')) {
+                switchRunReportSubTab(normalizedSubTab, null, true);
+            }
+        }
+
         const targetExecId = document.querySelector('[data-target-execution-id]')?.getAttribute('data-target-execution-id')
-            || new URLSearchParams(window.location.search).get('executionId')
-            || new URLSearchParams(window.location.search).get('testExecutionId');
+            || urlParams.get('executionId')
+            || urlParams.get('testExecutionId');
 
         if (targetExecId && lastHandledTargetExecutionId !== targetExecId) {
             focusAndInspectExecution(targetExecId);

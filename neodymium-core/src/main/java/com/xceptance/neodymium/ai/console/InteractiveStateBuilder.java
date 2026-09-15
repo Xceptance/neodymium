@@ -31,6 +31,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
 import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
@@ -541,7 +542,21 @@ public final class InteractiveStateBuilder
         final JsonObject obj = new JsonObject();
         obj.addProperty("id", source + "_" + stepIndex);
         obj.addProperty("index", stepIndex + 1);
-        obj.addProperty("instruction", step.getInstruction() != null ?ExecutionContext.getActiveContext().getSessionData().resolveVariables(step.getInstruction()) : "");
+        final ExecutionContext activeCtx = context != null ? context : ExecutionContext.getActiveContext();
+        final String rawInstruction = step.getInstruction() != null ? step.getInstruction() : "";
+        String resolvedInstruction = rawInstruction;
+        if (activeCtx != null && activeCtx.getSessionData() != null && !rawInstruction.isEmpty())
+        {
+            try
+            {
+                resolvedInstruction = activeCtx.getSessionData().resolveVariables(rawInstruction);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        final String finalInstruction = resolvedInstruction;
+        obj.addProperty("instruction", finalInstruction);
         obj.addProperty("line", step.getLineNumber());
         obj.addProperty("file", step.getSourceFile() != null ? step.getSourceFile() : "");
 
@@ -740,6 +755,50 @@ public final class InteractiveStateBuilder
         else
         {
             obj.add("actions", actionsArray);
+        }
+
+        String resolvedContextLevels = null;
+        if (reportStep != null && reportStep.getContextLevels() != null && !reportStep.getContextLevels().isBlank())
+        {
+            resolvedContextLevels = reportStep.getContextLevels();
+        }
+        else if (context != null)
+        {
+            @SuppressWarnings("unchecked")
+            final Map<PlaybookStep, StepStats> stepStatsMap =
+                (Map<PlaybookStep, StepStats>) context.getTransientData().get("execution.stepStatsMap");
+            StepStats liveStats = stepStatsMap != null ? stepStatsMap.get(step) : null;
+            if (liveStats == null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<StepStats> stepStatsList =
+                    (List<StepStats>) context.getTransientData().get("execution.stepStatsList");
+                if (stepStatsList != null && stepIndex >= 0 && stepIndex < stepStatsList.size())
+                {
+                    liveStats = stepStatsList.get(stepIndex);
+                }
+            }
+            if (liveStats != null && liveStats.getContextLevels() != null && !liveStats.getContextLevels().isEmpty())
+            {
+                resolvedContextLevels = String.join(" → ", liveStats.getContextLevels());
+            }
+        }
+
+        if (resolvedContextLevels == null || resolvedContextLevels.isBlank())
+        {
+            resolvedContextLevels = "PENDING";
+        }
+
+        obj.addProperty("contextLevels", resolvedContextLevels);
+        if (!obj.has("stats"))
+        {
+            final JsonObject statsObj = new JsonObject();
+            statsObj.addProperty("contextLevels", resolvedContextLevels);
+            obj.add("stats", statsObj);
+        }
+        else if (obj.get("stats").isJsonObject())
+        {
+            obj.getAsJsonObject("stats").addProperty("contextLevels", resolvedContextLevels);
         }
 
         if (step.getReasoning() != null && !step.getReasoning().isBlank())

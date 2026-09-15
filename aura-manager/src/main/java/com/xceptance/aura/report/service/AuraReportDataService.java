@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,7 +61,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,12 +83,12 @@ public class AuraReportDataService
     private final TestBaseBugRepository bugRepository;
     private final LocalRunJsonStorageService localRunJsonStorageService;
     private final AttachmentStorageService attachmentStorageService;
+    private final AuraInteractiveService interactiveService;
     private final ObjectMapper objectMapper;
 
     private final Map<String, List<TestExecutionDto>> liveRunBuffer = new ConcurrentHashMap<>();
     private final Map<String, RunReportDto> runReportCache = new ConcurrentHashMap<>();
 
-    @Autowired
     public AuraReportDataService(
         final TestRunRepository runRepository,
         final TestBatchRepository batchRepository,
@@ -96,13 +97,35 @@ public class AuraReportDataService
         final LocalRunJsonStorageService localRunJsonStorageService,
         final AttachmentStorageService attachmentStorageService)
     {
+        this(runRepository, batchRepository, variationRepository, bugRepository, localRunJsonStorageService, attachmentStorageService, null);
+    }
+
+    @Autowired
+    public AuraReportDataService(
+        final TestRunRepository runRepository,
+        final TestBatchRepository batchRepository,
+        final TestBaseVariationRepository variationRepository,
+        final TestBaseBugRepository bugRepository,
+        final LocalRunJsonStorageService localRunJsonStorageService,
+        final AttachmentStorageService attachmentStorageService,
+        @Autowired(required = false) final AuraInteractiveService interactiveService)
+    {
         this.runRepository = runRepository;
         this.batchRepository = batchRepository;
         this.variationRepository = variationRepository;
         this.bugRepository = bugRepository;
         this.localRunJsonStorageService = localRunJsonStorageService;
         this.attachmentStorageService = attachmentStorageService;
+        this.interactiveService = interactiveService;
         this.objectMapper = new ObjectMapper();
+    }
+
+    public void evictRunReportCache(final String runId)
+    {
+        if (runId != null)
+        {
+            runReportCache.remove(runId);
+        }
     }
 
     public void clearCache()
@@ -212,8 +235,8 @@ public class AuraReportDataService
                 lastExecutedText,
                 passRateText,
                 activeBugsText,
-                List.of(b.getLocalesCsv() != null ? b.getLocalesCsv().split(", ") : new String[0]),
-                List.of(b.getBrowsersCsv() != null ? b.getBrowsersCsv().split(", ") : new String[0]),
+                List.of(b.getLocalesCsv() != null ? b.getLocalesCsv().split(",\\s*") : new String[0]),
+                List.of(b.getBrowsersCsv() != null ? b.getBrowsersCsv().split(",\\s*") : new String[0]),
                 latestRunId,
                 latestPassed,
                 latestFixed,
@@ -501,7 +524,11 @@ public class AuraReportDataService
             );
         }
 
-        if (runReportCache.containsKey(effectiveRunId))
+        final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
+        final boolean isInProgress = (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
+                || liveRunBuffer.containsKey(effectiveRunId);
+
+        if (!isInProgress && runReportCache.containsKey(effectiveRunId))
         {
             LOG.debug("[PERF] getRunReport cache HIT for runId={}", effectiveRunId);
             return runReportCache.get(effectiveRunId);
@@ -509,7 +536,7 @@ public class AuraReportDataService
 
         synchronized (effectiveRunId.intern())
         {
-            if (runReportCache.containsKey(effectiveRunId))
+            if (!isInProgress && runReportCache.containsKey(effectiveRunId))
             {
                 LOG.debug("[PERF] getRunReport cache HIT (after sync lock) for runId={}", effectiveRunId);
                 return runReportCache.get(effectiveRunId);
@@ -517,7 +544,15 @@ public class AuraReportDataService
 
             final long getReportStartMs = System.currentTimeMillis();
 
-            final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
+            if (isInProgress)
+            {
+                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+                if (Files.exists(runDir) && Files.isDirectory(runDir))
+                {
+                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true);
+                }
+            }
+
             final TestRunEntity runEntity = runOpt.orElseGet(() -> new TestRunEntity(
                 effectiveRunId,
                 "Unknown",
@@ -664,7 +699,45 @@ public class AuraReportDataService
             }
 
             final RunReportDto report = buildRunReportDto(runEntity, executions);
-            runReportCache.put(effectiveRunId, report);
+            if (!isInProgress)
+            {
+                runReportCache.put(effectiveRunId, report);
+            }
+            else if (runOpt.isPresent())
+            {
+                final TestRunEntity liveRun = runOpt.get();
+                liveRun.setTotalTests(report.getTotalCount());
+                liveRun.setPassedCount(report.getPassCount());
+                liveRun.setSucceededFixedCount(report.getFixedCount());
+                liveRun.setFailedKnownCount(report.getKnownCount());
+                liveRun.setFailedUnknownCount(report.getUnknownCount());
+                liveRun.setIgnoredCount(report.getIgnoredCount());
+                if (report.getExecutions() != null && !report.getExecutions().isEmpty())
+                {
+                    final String bCsv = report.getExecutions().stream()
+                        .map(TestExecutionDto::getBrowser)
+                        .filter(b -> b != null && !b.isBlank() && !"Unknown".equalsIgnoreCase(b))
+                        .distinct()
+                        .sorted()
+                        .collect(Collectors.joining(", "));
+                    if (!bCsv.isBlank())
+                    {
+                        liveRun.setBrowsersCsv(bCsv);
+                    }
+                    final String lCsv = report.getExecutions().stream()
+                        .map(TestExecutionDto::getLocation)
+                        .filter(l -> l != null && !l.isBlank() && !"Unknown".equalsIgnoreCase(l))
+                        .distinct()
+                        .sorted()
+                        .collect(Collectors.joining(", "));
+                    if (!lCsv.isBlank())
+                    {
+                        liveRun.setLocalesCsv(lCsv);
+                    }
+                }
+                liveRun.recalculatePassRate();
+                runRepository.save(liveRun);
+            }
 
             final long getReportMs = System.currentTimeMillis() - getReportStartMs;
             LOG.info("[PERF] getRunReport cache MISS built report for runId={} with {} executions in {} ms",
@@ -688,44 +761,74 @@ public class AuraReportDataService
             localRunJsonStorageService.scanForTestExecJsonFiles(runDir.toFile(), files);
             for (final File f : files)
             {
-                try
+                JsonNode node = null;
+                for (int attempt = 0; attempt < 3; attempt++)
                 {
-                    final JsonNode node = objectMapper.readTree(f);
-                    final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
-                    final String testClass = node.path("testClass").asText("DefaultClass");
-                    final String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
-                    final String title = node.path("title").asText("Default");
-                    final String browser = node.path("browser").asText("Chrome");
-
-                    final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
-                    final String fullKey = testClass + "#" + id + "#" + browser;
-                    final String execKeyWithId = execKey + "#" + id;
-                    final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
-                    final String fileName = f.getName();
-                    final String fileNameNoExt = fileName.replaceAll("\\.json$", "");
-
-                    if (executionId.equalsIgnoreCase(id)
-                            || executionId.equalsIgnoreCase(fullKey)
-                            || executionId.equalsIgnoreCase(execKey)
-                            || executionId.equalsIgnoreCase(execKeyWithId)
-                            || executionId.equalsIgnoreCase(classMethodBrowser)
-                            || executionId.equalsIgnoreCase(fileNameNoExt)
-                            || executionId.equalsIgnoreCase(fileName))
+                    try
                     {
-                        final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                        if (dto.getId() == null || dto.getId().isBlank()
-                                || "bad".equalsIgnoreCase(dto.getId())
-                                || "perfect".equalsIgnoreCase(dto.getId())
-                                || "default".equalsIgnoreCase(dto.getId()))
+                        node = objectMapper.readTree(f);
+                        if (node != null && !node.isEmpty())
                         {
-                            dto.setId(executionId);
+                            break;
                         }
-                        resolveBugsForExecution(runId, dto);
-                        return dto;
+                    }
+                    catch (final Exception e)
+                    {
+                        if (attempt < 2)
+                        {
+                            try
+                            {
+                                Thread.sleep(20L * (attempt + 1));
+                            }
+                            catch (final InterruptedException ignored)
+                            {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        }
                     }
                 }
-                catch (final Exception ignored)
+
+                if (node != null)
                 {
+                    try
+                    {
+                        final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
+                        final String testClass = node.path("testClass").asText("DefaultClass");
+                        final String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
+                        final String title = node.path("title").asText("Default");
+                        final String browser = node.path("browser").asText("Chrome");
+
+                        final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
+                        final String fullKey = testClass + "#" + id + "#" + browser;
+                        final String execKeyWithId = execKey + "#" + id;
+                        final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
+                        final String fileName = f.getName();
+                        final String fileNameNoExt = fileName.replaceAll("\\.json$", "");
+
+                        if (executionId.equalsIgnoreCase(id)
+                                || executionId.equalsIgnoreCase(fullKey)
+                                || executionId.equalsIgnoreCase(execKey)
+                                || executionId.equalsIgnoreCase(execKeyWithId)
+                                || executionId.equalsIgnoreCase(classMethodBrowser)
+                                || executionId.equalsIgnoreCase(fileNameNoExt)
+                                || executionId.equalsIgnoreCase(fileName))
+                        {
+                            final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
+                            if (dto.getId() == null || dto.getId().isBlank()
+                                    || "bad".equalsIgnoreCase(dto.getId())
+                                    || "perfect".equalsIgnoreCase(dto.getId())
+                                    || "default".equalsIgnoreCase(dto.getId()))
+                            {
+                                dto.setId(executionId);
+                            }
+                            resolveBugsForExecution(runId, dto);
+                            return dto;
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
                 }
             }
         }
@@ -771,7 +874,94 @@ public class AuraReportDataService
             }
         }
 
+        if (interactiveService != null && interactiveService.getCurrentConsoleEngine() != null)
+        {
+            final String liveJson = interactiveService.getCurrentConsoleEngine().getCurrentStateJson();
+            if (liveJson != null && !liveJson.isBlank())
+            {
+                try
+                {
+                    final JsonNode node = objectMapper.readTree(liveJson);
+                    final String liveRunId = node.path("runId").asText("");
+                    if (runId.equalsIgnoreCase(liveRunId) || liveRunId.isEmpty())
+                    {
+                        final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
+                        if (dto != null)
+                        {
+                            if (dto.getId() == null || dto.getId().isBlank()
+                                    || "bad".equalsIgnoreCase(dto.getId())
+                                    || "perfect".equalsIgnoreCase(dto.getId())
+                                    || "default".equalsIgnoreCase(dto.getId()))
+                            {
+                                dto.setId(executionId);
+                            }
+                            resolveBugsForExecution(runId, dto);
+                            return dto;
+                        }
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
+        final RunReportDto cachedReport = runReportCache.get(runId);
+        if (cachedReport != null && cachedReport.getExecutions() != null)
+        {
+            for (final TestExecutionDto dto : cachedReport.getExecutions())
+            {
+                if (matchesExecution(dto, executionId))
+                {
+                    resolveBugsForExecution(runId, dto);
+                    return dto;
+                }
+            }
+        }
+
+        final List<TestExecutionDto> liveList = liveRunBuffer.get(runId);
+        if (liveList != null)
+        {
+            for (final TestExecutionDto dto : liveList)
+            {
+                if (matchesExecution(dto, executionId))
+                {
+                    resolveBugsForExecution(runId, dto);
+                    return dto;
+                }
+            }
+        }
+
         return null;
+    }
+
+    private boolean matchesExecution(final TestExecutionDto dto, final String targetId)
+    {
+        if (dto == null || targetId == null || targetId.isBlank())
+        {
+            return false;
+        }
+
+        final String id = dto.getId() != null ? dto.getId() : "";
+        if (targetId.equalsIgnoreCase(id))
+        {
+            return true;
+        }
+
+        final String testClass = dto.getTestClass() != null ? dto.getTestClass() : "DefaultClass";
+        final String testMethod = dto.getTestMethod() != null ? dto.getTestMethod() : "test";
+        final String title = dto.getTitle() != null ? dto.getTitle() : "Default";
+        final String browser = dto.getBrowser() != null ? dto.getBrowser() : "Chrome";
+
+        final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
+        final String fullKey = testClass + "#" + id + "#" + browser;
+        final String execKeyWithId = execKey + "#" + id;
+        final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
+
+        return targetId.equalsIgnoreCase(fullKey)
+            || targetId.equalsIgnoreCase(execKey)
+            || targetId.equalsIgnoreCase(execKeyWithId)
+            || targetId.equalsIgnoreCase(classMethodBrowser);
     }
 
     private void resolveBugsForExecution(final String runId, final TestExecutionDto dto)
@@ -865,7 +1055,7 @@ public class AuraReportDataService
                 Collectors.mapping(b -> normalizeTicket(b.getBugTicket()), Collectors.toSet())
             ));
 
-        int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0;
+        int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
         final List<TestExecutionDto> updatedExecutions = new ArrayList<>();
 
         for (final TestExecutionDto exec : cachedReport.getExecutions())
@@ -893,8 +1083,12 @@ public class AuraReportDataService
             exec.setBugs(bugTickets);
 
             final boolean hasBugs = !bugTickets.isEmpty();
-            final String raw = exec.getStatus() != null ? exec.getStatus() : "passed";
-            if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw))
+            final String raw = exec.getStatus() != null ? exec.getStatus() : "running";
+            if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
+            {
+                exec.setStatus("running");
+            }
+            else if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw))
             {
                 exec.setStatus(hasBugs ? "failed-known" : "failed-unknown");
             }
@@ -912,6 +1106,7 @@ public class AuraReportDataService
             else if ("succeeded-fixed".equalsIgnoreCase(st)) fixed++;
             else if ("failed-known".equalsIgnoreCase(st)) known++;
             else if ("failed-unknown".equalsIgnoreCase(st) || "failed".equalsIgnoreCase(st)) unknown++;
+            else if ("running".equalsIgnoreCase(st)) running++;
             else ignored++;
 
             updatedExecutions.add(exec);
@@ -930,6 +1125,7 @@ public class AuraReportDataService
             known,
             unknown,
             ignored,
+            running,
             updatedExecutions,
             updatedAreas
         );
@@ -1012,13 +1208,13 @@ public class AuraReportDataService
     }
 
     @Transactional
-    public String startRun(final String batchName, final String environment, final String triggerSource)
+    public String startRun(final String runId, final String batchName, final String environment, final String triggerSource)
     {
-        final String runId = String.valueOf(System.currentTimeMillis() / 1000);
+        final String effectiveRunId = (runId != null && !runId.isBlank()) ? runId : String.valueOf(System.currentTimeMillis() / 1000);
         final String timestampLabel = "Just Now";
 
         final TestRunEntity newRun = new TestRunEntity(
-            runId,
+            effectiveRunId,
             batchName != null ? batchName : "Unknown",
             "IN_PROGRESS",
             triggerSource != null ? triggerSource : "Unknown",
@@ -1030,10 +1226,17 @@ public class AuraReportDataService
         );
 
         runRepository.save(newRun);
-        liveRunBuffer.put(runId, new ArrayList<>());
+        liveRunBuffer.put(effectiveRunId, new ArrayList<>());
+        runReportCache.remove(effectiveRunId);
 
-        LOG.info("Started new test run: runId={}, batch={}", runId, batchName);
-        return runId;
+        LOG.info("Started new test run: runId={}, batch={}", effectiveRunId, batchName);
+        return effectiveRunId;
+    }
+
+    @Transactional
+    public String startRun(final String batchName, final String environment, final String triggerSource)
+    {
+        return startRun(null, batchName, environment, triggerSource);
     }
 
     @Transactional
@@ -1043,7 +1246,25 @@ public class AuraReportDataService
         {
             final TestExecutionDto dto = objectMapper.convertValue(payload, TestExecutionDto.class);
             final List<TestExecutionDto> list = liveRunBuffer.computeIfAbsent(runId, k -> new ArrayList<>());
-            list.add(dto);
+
+            boolean replaced = false;
+            final String execId = dto.getId();
+            if (execId != null && !execId.isBlank())
+            {
+                for (int i = 0; i < list.size(); i++)
+                {
+                    if (execId.equalsIgnoreCase(list.get(i).getId()))
+                    {
+                        list.set(i, dto);
+                        replaced = true;
+                        break;
+                    }
+                }
+            }
+            if (!replaced)
+            {
+                list.add(dto);
+            }
 
             if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
             {
@@ -1088,7 +1309,7 @@ public class AuraReportDataService
                             .distinct()
                             .collect(Collectors.toList());
 
-                        final java.util.Set<String> combined = new java.util.LinkedHashSet<>();
+                        final Set<String> combined = new LinkedHashSet<>();
                         if (dto.getBugs() != null)
                         {
                             combined.addAll(dto.getBugs());
@@ -1127,15 +1348,53 @@ public class AuraReportDataService
                     }
                 }
 
-                run.setTotalTests(run.getTotalTests() + 1);
-                switch (effectiveStatus)
+                final int totalCount = list.size();
+                int passCount = 0;
+                int fixedCount = 0;
+                int knownCount = 0;
+                int unknownCount = 0;
+                int ignoredCount = 0;
+                final Set<String> browsersSet = new LinkedHashSet<>();
+                final Set<String> localesSet = new LinkedHashSet<>();
+
+                for (final TestExecutionDto item : list)
                 {
-                    case "passed-clean" -> run.setPassedCount(run.getPassedCount() + 1);
-                    case "succeeded-fixed" -> run.setSucceededFixedCount(run.getSucceededFixedCount() + 1);
-                    case "failed-known" -> run.setFailedKnownCount(run.getFailedKnownCount() + 1);
-                    case "failed-unknown" -> run.setFailedUnknownCount(run.getFailedUnknownCount() + 1);
-                    case "ignored" -> run.setIgnoredCount(run.getIgnoredCount() + 1);
+                    final String st = item.getStatus() != null ? item.getStatus() : "passed-clean";
+                    switch (st)
+                    {
+                        case "passed-clean", "passed" -> passCount++;
+                        case "succeeded-fixed", "fixed", "healed" -> fixedCount++;
+                        case "failed-known" -> knownCount++;
+                        case "failed-unknown", "failed", "error" -> unknownCount++;
+                        case "ignored", "skipped" -> ignoredCount++;
+                        default -> passCount++;
+                    }
+                    if (item.getBrowser() != null && !item.getBrowser().isBlank() && !"Unknown".equalsIgnoreCase(item.getBrowser()))
+                    {
+                        browsersSet.add(item.getBrowser().trim());
+                    }
+                    if (item.getLocation() != null && !item.getLocation().isBlank() && !"Unknown".equalsIgnoreCase(item.getLocation()))
+                    {
+                        localesSet.add(item.getLocation().trim());
+                    }
                 }
+
+                run.setTotalTests(totalCount);
+                run.setPassedCount(passCount);
+                run.setSucceededFixedCount(fixedCount);
+                run.setFailedKnownCount(knownCount);
+                run.setFailedUnknownCount(unknownCount);
+                run.setIgnoredCount(ignoredCount);
+
+                if (!browsersSet.isEmpty())
+                {
+                    run.setBrowsersCsv(String.join(", ", browsersSet));
+                }
+                if (!localesSet.isEmpty())
+                {
+                    run.setLocalesCsv(String.join(", ", localesSet));
+                }
+
                 run.recalculatePassRate();
                 runRepository.save(run);
             }
@@ -1619,25 +1878,28 @@ public class AuraReportDataService
             final String testClass = entry.getKey();
             final List<TestExecutionDto> classExecs = entry.getValue();
 
-            int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0;
+            int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;
             for (final TestExecutionDto ce : classExecs)
             {
                 final String status = ce.getStatus() != null ? ce.getStatus() : "passed-clean";
                 switch (status)
                 {
-                    case "passed-clean" -> cPass++;
-                    case "succeeded-fixed" -> cFixed++;
-                    case "failed-known" -> cKnown++;
-                    case "failed-unknown" -> cUnknown++;
-                    case "ignored" -> cIgnored++;
+                    case "passed-clean", "passed", "succeeded" -> cPass++;
+                    case "succeeded-fixed", "fixed", "healed" -> cFixed++;
+                    case "failed-known", "known" -> cKnown++;
+                    case "failed-unknown", "failed", "error", "unknown" -> cUnknown++;
+                    case "ignored", "skipped" -> cIgnored++;
+                    case "running", "in_progress", "executing", "pending" -> cRunning++;
+                    default -> cPass++;
                 }
             }
 
             testClasses.add(new TestClassSummaryDto(
                 testClass,
                 "classContainer" + testClass.replace(".", ""),
+                "Browsing (default)",
                 classExecs.size(),
-                cPass, cFixed, cKnown, cUnknown, cIgnored,
+                cPass, cFixed, cKnown, cUnknown, cIgnored, cRunning,
                 classExecs
             ));
         }
@@ -1661,7 +1923,7 @@ public class AuraReportDataService
             final String areaName = areaEntry.getKey();
             final List<TestClassSummaryDto> areaClasses = areaEntry.getValue();
 
-            int aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0;
+            int aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0, aRunning = 0;
             for (final TestClassSummaryDto tc : areaClasses)
             {
                 aPass += tc.getPassCount();
@@ -1669,13 +1931,16 @@ public class AuraReportDataService
                 aKnown += tc.getFailedKnownCount();
                 aUnknown += tc.getFailedUnknownCount();
                 aIgnored += tc.getIgnoredCount();
+                aRunning += tc.getRunningCount();
             }
 
             areas.add(new AreaSummaryDto(
                 areaName,
                 "areaGroup" + areaName.replace(" ", "").replace("@", ""),
-                areaClasses,
-                aPass, aFixed, aKnown, aUnknown, aIgnored
+                "Browsing (default)",
+                aPass + aFixed + aKnown + aUnknown + aIgnored + aRunning,
+                aPass, aFixed, aKnown, aUnknown, aIgnored, aRunning,
+                areaClasses
             ));
         }
         return areas;
@@ -1692,19 +1957,19 @@ public class AuraReportDataService
             );
         }
 
-
-
-        int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0;
+        int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
         for (final TestExecutionDto e : executions)
         {
             final String status = e.getStatus() != null ? e.getStatus() : "passed-clean";
             switch (status)
             {
-                case "passed-clean" -> pass++;
-                case "succeeded-fixed" -> fixed++;
-                case "failed-known" -> known++;
-                case "failed-unknown" -> unknown++;
-                case "ignored" -> ignored++;
+                case "passed-clean", "passed", "succeeded" -> pass++;
+                case "succeeded-fixed", "fixed", "healed" -> fixed++;
+                case "failed-known", "known" -> known++;
+                case "failed-unknown", "failed", "error", "unknown" -> unknown++;
+                case "ignored", "skipped" -> ignored++;
+                case "running", "in_progress", "executing", "pending" -> running++;
+                default -> pass++;
             }
         }
 
@@ -1723,6 +1988,7 @@ public class AuraReportDataService
             !executions.isEmpty() ? known : (runEntity.getFailedKnownCount() != null ? runEntity.getFailedKnownCount() : known),
             !executions.isEmpty() ? unknown : (runEntity.getFailedUnknownCount() != null ? runEntity.getFailedUnknownCount() : unknown),
             !executions.isEmpty() ? ignored : (runEntity.getIgnoredCount() != null ? runEntity.getIgnoredCount() : ignored),
+            running,
             executions, areas,
             runEntity.getTotalLlmCalls(),
             runEntity.getTotalLlmTokens(),
@@ -1894,7 +2160,11 @@ public class AuraReportDataService
                             final boolean hasBugs = !bugsList.isEmpty();
 
                             final String effectiveStatus;
-                            if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus))
+                            if ("running".equalsIgnoreCase(rawStatus) || "in_progress".equalsIgnoreCase(rawStatus) || "executing".equalsIgnoreCase(rawStatus) || "pending".equalsIgnoreCase(rawStatus))
+                            {
+                                effectiveStatus = "running";
+                            }
+                            else if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus))
                             {
                                 effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
                             }
@@ -1941,6 +2211,7 @@ public class AuraReportDataService
                                 execId != null ? execId : "",
                                 batchName,
                                 legacyMode,
+                                engine,
                                 timestamp,
                                 effectiveStatus,
                                 badgeInfo[0],
@@ -2027,6 +2298,7 @@ public class AuraReportDataService
                                         matchedExec.getId(),
                                         run.getBatchName(),
                                         curMode,
+                                        curEngine,
                                         curTs,
                                         execRawStatus,
                                         badgeInfo[0],
@@ -2148,6 +2420,7 @@ public class AuraReportDataService
                     exec.getId(),
                     run.getBatchName(),
                     mode,
+                    engine,
                     timestamp,
                     rawStatus,
                     badgeInfo[0],
@@ -2202,6 +2475,11 @@ public class AuraReportDataService
 
         switch (status.toLowerCase())
         {
+            case "running", "in_progress", "executing", "pending" ->
+            {
+                statusClass = "badge-running";
+                statusLabel = "RUNNING";
+            }
             case "succeeded-fixed", "healed", "fixed" ->
             {
                 statusClass = "badge-healed";

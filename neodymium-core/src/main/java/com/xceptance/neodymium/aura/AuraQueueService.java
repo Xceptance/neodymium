@@ -21,6 +21,7 @@ package com.xceptance.neodymium.aura;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import org.neodymium.ai.util.AtomicFileUtils;
 import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
@@ -767,7 +768,7 @@ public final class AuraQueueService
                             );
                             try
                             {
-                                Files.writeString(execJson.toPath(), fallbackJson, StandardCharsets.UTF_8);
+                                AtomicFileUtils.writeStringAtomic(execJson.toPath(), fallbackJson);
                             }
                             catch (final Exception e)
                             {

@@ -281,7 +281,10 @@ public class TestBaseVariationHistoryTest
 
         Assertions.assertNotNull(historyTest7);
         Assertions.assertEquals(1, historyTest7.size());
+        Assertions.assertEquals("RUN_1", historyTest7.get(0).getRunId());
         Assertions.assertEquals("e7", historyTest7.get(0).getExecutionId());
+        Assertions.assertEquals("Batch A", historyTest7.get(0).getBatchName());
+        Assertions.assertEquals("Java", historyTest7.get(0).getEngine());
     }
 }
 

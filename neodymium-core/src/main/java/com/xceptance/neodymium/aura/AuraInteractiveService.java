@@ -32,7 +32,9 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.util.AtomicFileUtils;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,9 +55,15 @@ public final class AuraInteractiveService
     private final AtomicReference<String> activeTheme = new AtomicReference<>("system");
     private final Map<String, Integer> executionIndexMap = new ConcurrentHashMap<>();
     private final AtomicInteger executionIndexCounter = new AtomicInteger(0);
+    private volatile Consumer<String> statePushListener;
 
     public AuraInteractiveService()
     {
+    }
+
+    public void setStatePushListener(final Consumer<String> listener)
+    {
+        this.statePushListener = listener;
     }
 
     public AtomicReference<InteractiveConsoleEngine> getCurrentConsoleEngineReference()
@@ -183,7 +191,7 @@ public final class AuraInteractiveService
                         structuredDir.mkdirs();
                     }
                     final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                    Files.writeString(structuredJson.toPath(), body, StandardCharsets.UTF_8);
+                    AtomicFileUtils.writeStringAtomic(structuredJson.toPath(), body);
 
                     final File runLevelDir = new File(baseDir, runFolder);
                     if (!structuredDir.getCanonicalPath().equals(runLevelDir.getCanonicalPath()))
@@ -204,6 +212,17 @@ public final class AuraInteractiveService
         catch (final Exception e)
         {
             LOGGER.warn("[InteractiveService] Failed to save console execution snapshot: {}", e.getMessage());
+        }
+
+        if (statePushListener != null && json != null && json.has("runId") && !json.get("runId").isJsonNull())
+        {
+            try
+            {
+                statePushListener.accept(json.get("runId").getAsString());
+            }
+            catch (final Exception ignored)
+            {
+            }
         }
 
         return isStopped ? "stopped" : "ok";

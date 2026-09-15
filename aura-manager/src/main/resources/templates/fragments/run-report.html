@@ -8,15 +8,15 @@
 
     <!-- PAGE HEADER / SUB-TABS BAR -->
     <div class="sub-tab-bar">
-        <button class="sub-tab-btn active" id="runReportTabBtnOverview" onclick="switchRunReportSubTab('runReportSubTabOverview', this)">
+        <button class="sub-tab-btn" th:classappend="${activeSubTab == null or activeSubTab == 'runReportSubTabOverview' or activeSubTab == 'Overview' ? 'active' : ''}" id="runReportTabBtnOverview" onclick="switchRunReportSubTab('runReportSubTabOverview', this)">
             <span class="material-symbols-outlined">pie_chart</span> Overview
         </button>
 
-        <button class="sub-tab-btn" id="runReportTabBtnAllTests" onclick="switchRunReportSubTab('runReportSubTabAllTests', this)">
+        <button class="sub-tab-btn" th:classappend="${activeSubTab == 'runReportSubTabAllTests' or activeSubTab == 'AllTests' or activeSubTab == 'all-tests' ? 'active' : ''}" id="runReportTabBtnAllTests" onclick="switchRunReportSubTab('runReportSubTabAllTests', this)">
             <span class="material-symbols-outlined">fact_check</span> All Tests
         </button>
 
-        <button class="sub-tab-btn" id="runReportTabBtnTimeline" onclick="switchRunReportSubTab('runReportSubTabTimeline', this)">
+        <button class="sub-tab-btn" th:classappend="${activeSubTab == 'runReportSubTabTimeline' or activeSubTab == 'Timeline' or activeSubTab == 'timeline' ? 'active' : ''}" id="runReportTabBtnTimeline" onclick="switchRunReportSubTab('runReportSubTabTimeline', this)">
             <span class="material-symbols-outlined">timeline</span> Timeline
         </button>
     </div>
@@ -28,7 +28,7 @@
         <div class="allure-main-pane">
             
             <!-- SUB-TAB 1: RUN REPORT OVERVIEW -->
-            <div id="runReportSubTabOverview" class="view-state active">
+            <div id="runReportSubTabOverview" class="view-state" th:classappend="${activeSubTab == null or activeSubTab == 'runReportSubTabOverview' or activeSubTab == 'Overview' ? 'active' : ''}">
                 <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">
                     <span class="material-symbols-outlined text-accent">touch_app</span> Click any status metric card below to filter and open <strong>All Tests</strong> grouped by areas for that specific status.
                 </div>
@@ -63,6 +63,11 @@
                         <div class="kpi-label">Ignored</div>
                         <div class="kpi-value" id="overviewKpiIgnored" style="color: var(--status-ignored);" th:text="${report?.ignoredCount ?: 0}">0</div>
                         <div class="kpi-sub">Skipped Executions</div>
+                    </div>
+                    <div class="kpi-card card-running" th:if="${(report?.runningCount ?: 0) > 0}" onclick="filterAllTestsByStatus('RUNNING')">
+                        <div class="kpi-label">Running</div>
+                        <div class="kpi-value" id="overviewKpiRunning" style="color: var(--status-running, #64748b);" th:text="${report?.runningCount ?: 0}">0</div>
+                        <div class="kpi-sub">Executions In Progress</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Total Duration</div>
@@ -110,6 +115,7 @@
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Failed</div><div class="val val-known" style="color: var(--status-known-fail);" th:text="${area.knownCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div><div class="val val-unknown" style="color: var(--status-unknown-fail);" th:text="${area.unknownCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored / Skipped</div><div class="val val-ignored" style="color: var(--status-ignored);" th:text="${area.ignoredCount}">0</div></div>
+                                    <div class="pie-breakdown-item" th:if="${area.runningCount > 0}"><div class="label"><div class="dot" style="background: var(--status-running, #64748b);"></div> Running</div><div class="val val-running" style="color: var(--status-running, #64748b);" th:text="${area.runningCount}">0</div></div>
                                 </div>
                             </div>
                         </div>
@@ -118,7 +124,7 @@
             </div>
 
             <!-- SUB-TAB 2: ALL TESTS -->
-            <div id="runReportSubTabAllTests" th:fragment="allTestsContent" class="view-state">
+            <div id="runReportSubTabAllTests" th:fragment="allTestsContent" class="view-state" th:classappend="${activeSubTab == 'runReportSubTabAllTests' or activeSubTab == 'AllTests' or activeSubTab == 'all-tests' ? 'active' : ''}">
                 
                 <!-- GLOBAL EXECUTION FILTERS TOOLBAR -->
                 <div class="test-filters-toolbar" id="runReportFiltersToolbar">
@@ -177,6 +183,7 @@
                             <span class="badge-status badge-known-fail clickable-badge js-filter-badge" data-status-key="FAILED_KNOWN" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" title="Filter Known Fail">Known Fail: <span th:text="${report?.knownCount}">0</span></span>
                             <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="FAILED_UNKNOWN" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" title="Filter Unknown Fail">Unknown Fail: <span th:text="${report?.unknownCount}">0</span></span>
                             <span class="badge-status badge-ignored clickable-badge js-filter-badge" data-status-key="SKIPPED" onclick="filterByGlobalStatusBadge('SKIPPED', this)" title="Filter Ignored/Skipped">Ignored: <span th:text="${report?.ignoredCount ?: 0}">0</span></span>
+                            <span class="badge-status badge-running clickable-badge js-filter-badge" th:if="${(report?.runningCount ?: 0) > 0}" data-status-key="RUNNING" onclick="filterByGlobalStatusBadge('RUNNING', this)" title="Filter Running">Running: <span th:text="${report?.runningCount}">0</span></span>
                         </div>
                     </div>
 
@@ -196,6 +203,7 @@
                                 <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Area" th:text="${'Known: ' + area.knownCount}">Known: 1</span>
                                 <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Area" th:text="${'Unknown: ' + area.unknownCount}">Unknown: 1</span>
                                 <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" onclick="filterAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Area" th:text="${'Ignored: ' + area.ignoredCount}">Ignored: 1</span>
+                                <span class="badge-status badge-running clickable-badge" th:if="${area.runningCount > 0}" onclick="filterAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Area" th:text="${'Running: ' + area.runningCount}">Running: 1</span>
                             </div>
                         </div>
 
@@ -215,6 +223,7 @@
                                         <span class="badge-status badge-known-fail clickable-badge" th:if="${cls.knownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Class" th:text="${'Known: ' + cls.knownCount}">Known: 1</span>
                                         <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Class" th:text="${'Unknown: ' + cls.unknownCount}">Unknown: 1</span>
                                         <span class="badge-status badge-ignored clickable-badge" th:if="${cls.ignoredCount > 0}" onclick="filterClassByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Class" th:text="${'Ignored: ' + cls.ignoredCount}">Ignored: 1</span>
+                                        <span class="badge-status badge-running clickable-badge" th:if="${cls.runningCount > 0}" onclick="filterClassByStatusBadge(this, 'RUNNING')" title="Filter Running in Class" th:text="${'Running: ' + cls.runningCount}">Running: 1</span>
                                     </div>
                                 </div>
 
@@ -239,21 +248,21 @@
                                                     th:data-row-id="${exec.id}" 
                                                     th:data-test-name="${exec.testClass}" 
                                                     th:data-dataset="${exec.title}" 
-                                                    th:data-status="${(exec.status == 'succeeded-fixed' or exec.status == 'fixed' or exec.status == 'healed' or ((exec.status == 'passed-clean' or exec.status == 'passed' or exec.status == 'succeeded') and exec.bugs != null and !exec.bugs.isEmpty())) ? 'SUCCEEDED_FIXED' : ((exec.status == 'passed-clean' or exec.status == 'passed' or exec.status == 'succeeded') ? 'PASSED' : ((exec.bugs != null and !exec.bugs.isEmpty()) ? 'FAILED_KNOWN' : ((exec.status == 'ignored' or exec.status == 'skipped') ? 'SKIPPED' : 'FAILED_UNKNOWN')))}"
+                                                    th:data-status="${exec.displayStatusKey}"
                                                     th:data-status-raw="${exec.status}" 
                                                     th:data-mode="${exec.executionMode ?: 'FORCE_RECORDING'}"
                                                     th:data-test-method="${exec.testMethod ?: ''}"
                                                     th:data-search="${(exec.testClass ?: '') + ' ' + (exec.testMethod ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.executionMode ?: '')}"
                                                     th:data-location="${exec.location}" 
                                                     th:data-browser="${exec.browser}" 
-                                                    th:data-bugs="${exec.bugs != null && !exec.bugs.isEmpty() ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
+                                                    th:data-bugs="${exec.bugs != null and not #lists.isEmpty(exec.bugs) ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
                                                     th:data-failure="${exec.failure}"
                                                     th:data-steps-total="${exec.totalStepsCount}"
                                                     th:data-healed-count="${exec.healedStepsCount}"
                                                     th:data-failed-count="${exec.failedStepsCount}"
                                                     th:data-duration-ms="${exec.durationMs}"
                                                     th:data-duration-formatted="${exec.durationFormatted}"
-                                                    th:data-start-time="${exec.startTime != null && !exec.startTime.isEmpty() ? exec.startTime : ((exec.dateFormatted != null ? exec.dateFormatted : '') + ' ' + (exec.timeFormatted != null ? exec.timeFormatted : ''))}"
+                                                    th:data-start-time="${exec.startTime != null and not #strings.isEmpty(exec.startTime) ? exec.startTime : ((exec.dateFormatted != null ? exec.dateFormatted : '') + ' ' + (exec.timeFormatted != null ? exec.timeFormatted : ''))}"
                                                     th:data-date-formatted="${exec.dateFormatted}"
                                                     th:data-time-formatted="${exec.timeFormatted}"
                                                     th:data-timestamp-ms="${exec.timestampMs}"
@@ -265,25 +274,26 @@
                                                     th:data-log-path="${exec.logPath ?: ''}">
                                                     
                                                     <td th:attr="data-sort=${exec.timestampMs}">
-                                                        <span class="text-mono js-format-timestamp" style="font-weight: 600;" th:data-timestamp-ms="${exec.timestampMs}" th:text="${exec.formattedTime != null && !exec.formattedTime.isBlank() ? exec.formattedTime : ((exec.dateFormatted != null && !exec.dateFormatted.isEmpty() ? exec.dateFormatted : '2026-08-20') + ' ' + (exec.timeFormatted != null && !exec.timeFormatted.isEmpty() ? exec.timeFormatted : '12:31:21'))}">2026-08-20 12:31:21</span>
+                                                        <span class="text-mono js-format-timestamp" style="font-weight: 600;" th:data-timestamp-ms="${exec.timestampMs}" th:text="${exec.formattedTime != null and not #strings.isEmpty(exec.formattedTime) ? exec.formattedTime : ((exec.dateFormatted != null and not #strings.isEmpty(exec.dateFormatted) ? exec.dateFormatted : '2026-08-20') + ' ' + (exec.timeFormatted != null and not #strings.isEmpty(exec.timeFormatted) ? exec.timeFormatted : '12:31:21'))}">2026-08-20 12:31:21</span>
                                                     </td>
 
                                                     <td class="col-status-badge">
-                                                        <span class="badge-status badge-pass" th:if="${(exec.status == 'passed-clean' || exec.status == 'passed' || exec.status == 'succeeded') && (exec.bugs == null || exec.bugs.isEmpty())}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>
-                                                        <span class="badge-status badge-healed" th:if="${exec.status == 'succeeded-fixed' || exec.status == 'fixed' || exec.status == 'healed' || ((exec.status == 'passed-clean' || exec.status == 'passed' || exec.status == 'succeeded') && exec.bugs != null && !exec.bugs.isEmpty())}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED</span>
-                                                        <span class="badge-status badge-known-fail" th:if="${(exec.status == 'failed-known' || exec.status == 'known' || ((exec.status == 'failed' || exec.status == 'error') && exec.bugs != null && !exec.bugs.isEmpty())) && exec.status != 'succeeded-fixed' && exec.status != 'fixed' && exec.status != 'healed'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>
-                                                        <span class="badge-status badge-unknown-fail" th:if="${(exec.status == 'failed-unknown' || exec.status == 'unknown' || ((exec.status == 'failed' || exec.status == 'error') && (exec.bugs == null || exec.bugs.isEmpty()))) && exec.status != 'succeeded-fixed' && exec.status != 'fixed' && exec.status != 'healed'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>
-                                                        <span class="badge-status badge-ignored" th:if="${exec.status == 'ignored' || exec.status == 'skipped'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>
+                                                        <span class="badge-status badge-running" th:if="${exec.displayStatusKey == 'RUNNING'}"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
+                                                        <span class="badge-status badge-pass" th:if="${exec.displayStatusKey == 'PASSED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>
+                                                        <span class="badge-status badge-healed" th:if="${exec.displayStatusKey == 'SUCCEEDED_FIXED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED</span>
+                                                        <span class="badge-status badge-known-fail" th:if="${exec.displayStatusKey == 'FAILED_KNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>
+                                                        <span class="badge-status badge-unknown-fail" th:if="${exec.displayStatusKey == 'FAILED_UNKNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>
+                                                        <span class="badge-status badge-ignored" th:if="${exec.displayStatusKey == 'SKIPPED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>
                                                     </td>
 
                                                     <td>
                                                         <div class="test-name-line">
-                                                            <a href="javascript:void(0)" class="test-title-link" th:text="${exec.testMethod != null && !exec.testMethod.isEmpty() ? (exec.testMethod + ' [' + (exec.title != null && !exec.title.isEmpty() ? exec.title : 'default') + ']') : (exec.title != null && !exec.title.isEmpty() ? exec.title : exec.testClass)}">CheckoutProcessTest</a>
+                                                            <a href="javascript:void(0)" class="test-title-link" th:text="${exec.testMethod != null and not #strings.isEmpty(exec.testMethod) ? (exec.testMethod + ' [' + (exec.title != null and not #strings.isEmpty(exec.title) ? exec.title : 'default') + ']') : (exec.title != null and not #strings.isEmpty(exec.title) ? exec.title : exec.testClass)}">CheckoutProcessTest</a>
                                                             <span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${exec.location}">US</span></span>
                                                             <span class="badge-status badge-mode-java" style="font-size: 0.7rem;"><span class="material-symbols-outlined">language</span> <span th:text="${exec.browser}">Chrome</span></span>
                                                         </div>
-                                                        <div class="test-meta-line" th:text="${exec.testClass + (exec.testMethod != null && !exec.testMethod.isEmpty() ? (' :: ' + exec.testMethod) : '')}">com.xceptance.aura.CheckoutProcessTest</div>
-                                                        <div class="failure-reason-snip" th:if="${exec.failureSnippet != null && !exec.failureSnippet.isEmpty()}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: #ef4444;">warning</span> <span th:text="${exec.failureSnippet}">Element not found</span></div>
+                                                        <div class="test-meta-line" th:text="${exec.testClass + (exec.testMethod != null and not #strings.isEmpty(exec.testMethod) ? (' :: ' + exec.testMethod) : '')}">com.xceptance.aura.CheckoutProcessTest</div>
+                                                        <div class="failure-reason-snip" th:if="${exec.failureSnippet != null and not #strings.isEmpty(exec.failureSnippet)}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: #ef4444;">warning</span> <span th:text="${exec.failureSnippet}">Element not found</span></div>
                                                     </td>
 
                                                     <td>
@@ -318,7 +328,7 @@
             </div>
 
             <!-- SUB-TAB 3: ALLURE MULTI-THREAD TIMELINE -->
-            <div id="runReportSubTabTimeline" class="view-state">
+            <div id="runReportSubTabTimeline" class="view-state" th:classappend="${activeSubTab == 'runReportSubTabTimeline' or activeSubTab == 'Timeline' or activeSubTab == 'timeline' ? 'active' : ''}">
                 <div class="panel">
                     <div class="panel-header">
                         <div>

@@ -34,6 +34,8 @@ import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -117,10 +119,65 @@ public class AuraReportViewController
     @PostMapping("/runs/refresh")
     public String refreshAndResyncRuns(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model)
     {
         runStorageSyncService.syncLocalRunStorage();
+        dataService.clearCache();
+
+        final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
+        if (targetUrl != null)
+        {
+            if (targetUrl.contains("/run-report"))
+            {
+                final String runId = extractQueryParam(targetUrl, "runId");
+                final String executionId = extractQueryParam(targetUrl, "executionId");
+                final String testExecutionId = extractQueryParam(targetUrl, "testExecutionId");
+                final String subTab = extractQueryParam(targetUrl, "subTab");
+                return runReport(runId, executionId, testExecutionId, subTab, hxRequest, model);
+            }
+            else if (targetUrl.contains("/batch-history"))
+            {
+                final String batchName = extractQueryParam(targetUrl, "batchName");
+                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Unknown", hxRequest, model);
+            }
+            else if (targetUrl.contains("/test-base"))
+            {
+                final String testName = extractQueryParam(targetUrl, "testName");
+                final String dataSet = extractQueryParam(targetUrl, "dataSet");
+                final String location = extractQueryParam(targetUrl, "location");
+                final String browser = extractQueryParam(targetUrl, "browser");
+                return testBase(testName, dataSet, location, browser, hxRequest, model);
+            }
+        }
+
         return batchOverview(hxRequest, model);
+    }
+
+    private String extractQueryParam(final String url, final String paramName)
+    {
+        if (url == null)
+        {
+            return null;
+        }
+        final int hashIdx = url.indexOf('#');
+        final String cleanUrl = hashIdx != -1 ? url.substring(0, hashIdx) : url;
+        if (!cleanUrl.contains("?"))
+        {
+            return null;
+        }
+        final String queryString = cleanUrl.substring(cleanUrl.indexOf('?') + 1);
+        final String[] pairs = queryString.split("&");
+        for (final String pair : pairs)
+        {
+            final String[] keyValue = pair.split("=", 2);
+            if (keyValue.length == 2 && keyValue[0].equalsIgnoreCase(paramName))
+            {
+                return URLDecoder.decode(keyValue[1], StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 
     @GetMapping({"/batch-history", "/fragments/batch-history"})
@@ -245,13 +302,16 @@ public class AuraReportViewController
         @RequestParam(name = "runId", required = false) final String runId,
         @RequestParam(name = "executionId", required = false) final String executionId,
         @RequestParam(name = "testExecutionId", required = false) final String testExecutionId,
+        @RequestParam(name = "subTab", required = false) final String subTab,
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
     {
         final String targetExecutionId = executionId != null && !executionId.isEmpty() ? executionId : testExecutionId;
         final RunReportDto report = dataService.getRunReport(runId);
+        final String activeSubTab = subTab != null && !subTab.isBlank() ? subTab : "runReportSubTabOverview";
         model.addAttribute("runId", report.getRunId());
         model.addAttribute("targetExecutionId", targetExecutionId);
+        model.addAttribute("activeSubTab", activeSubTab);
         model.addAttribute("report", report);
         model.addAttribute("pageTitle", "Run Report #" + report.getRunId());
         model.addAttribute("activeTab", "RunReport");
@@ -340,11 +400,20 @@ public class AuraReportViewController
     {
         final RunReportDto report = dataService.getRunReport(runId);
         TestExecutionDto currentExec = null;
-        for (final TestExecutionDto e : report.getExecutions()) {
-            if (e.getId().equals(rowId)) {
-                currentExec = e;
-                break;
+        if (report != null && report.getExecutions() != null)
+        {
+            for (final TestExecutionDto e : report.getExecutions())
+            {
+                if (e.getId() != null && e.getId().equalsIgnoreCase(rowId))
+                {
+                    currentExec = e;
+                    break;
+                }
             }
+        }
+        if (currentExec == null)
+        {
+            currentExec = dataService.getExecutionDetails(runId, rowId);
         }
 
         model.addAttribute("runId", runId);
@@ -378,11 +447,20 @@ public class AuraReportViewController
     {
         final RunReportDto report = dataService.getRunReport(runId);
         TestExecutionDto currentExec = null;
-        for (final TestExecutionDto e : report.getExecutions()) {
-            if (e.getId().equalsIgnoreCase(rowId)) {
-                currentExec = e;
-                break;
+        if (report != null && report.getExecutions() != null)
+        {
+            for (final TestExecutionDto e : report.getExecutions())
+            {
+                if (e.getId() != null && e.getId().equalsIgnoreCase(rowId))
+                {
+                    currentExec = e;
+                    break;
+                }
             }
+        }
+        if (currentExec == null)
+        {
+            currentExec = dataService.getExecutionDetails(runId, rowId);
         }
         model.addAttribute("runId", runId);
         model.addAttribute("rowId", rowId);

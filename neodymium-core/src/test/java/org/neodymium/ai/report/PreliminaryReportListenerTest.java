@@ -21,6 +21,7 @@ package org.neodymium.ai.report;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -1137,8 +1138,8 @@ public class PreliminaryReportListenerTest
             bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
             bus.dispatch(new SessionFinishedEvent(100, true));
 
-            final Path rootJsonPath = Path.of("target/ai-results").resolve(listener.getLastBaseFileName() + ".json");
-            assertTrue(Files.exists(rootJsonPath), "Root report file must always land in target/ai-results directory");
+            final Path rootJsonPath = customDir.resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(rootJsonPath), "Root report file must land in configured disk report directory");
 
             final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
             final Path structuredJsonPath = customDir.resolve(runFolder).resolve("CustomReportDirTest").resolve(listener.getLastBaseFileName() + ".json");
@@ -1594,6 +1595,56 @@ public class PreliminaryReportListenerTest
         finally
         {
             ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify only highest context level per step is counted in statistics")
+    public void testHighestContextLevelOnlyInStatistics() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-highest-level");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final StepStats stats1 = new StepStats("Escalating Step", 1000);
+            stats1.addContextLevel("MINIMAL");
+            stats1.addContextLevel("LEAN");
+            stats1.addContextLevel("STANDARD");
+
+            ctx.getTransientData().put("execution.stepStatsList", List.of(stats1));
+
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            listener.getReport().setTestClass("com.example.EscalationTest");
+            listener.getReport().setTestMethod("testHighestLevel");
+
+            final PlaybookStep pbStep = new PlaybookStep("Escalating Step");
+            bus.dispatch(new StepStartedEvent(pbStep, 0));
+            bus.dispatch(new StepFinishedEvent(pbStep, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(1000, true));
+
+            final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(jsonPath));
+
+            final String json = Files.readString(jsonPath);
+            final JsonNode root = new ObjectMapper().readTree(json);
+            final JsonNode counts = root.get("metrics").get("contextLevelCounts");
+
+            assertNotNull(counts);
+            assertEquals(1, counts.get("STANDARD").asInt(), "STANDARD (highest level) must have count 1");
+            assertNull(counts.get("MINIMAL"));
+            assertNull(counts.get("LEAN"));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.report.disk.directory");
+            AiConfiguration.resetInstance();
         }
     }
 }

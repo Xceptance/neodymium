@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.neodymium.ai.util.AtomicFileUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -87,8 +88,12 @@ public class LocalRunJsonStorageService
     public void writeRunJson(final String runId, final String jsonContent) throws IOException
     {
         final Path path = getRunJsonPath(runId);
-        Files.createDirectories(path.getParent());
-        Files.writeString(path, jsonContent, StandardCharsets.UTF_8);
+        final Path parent = path.getParent();
+        if (parent != null)
+        {
+            Files.createDirectories(parent);
+        }
+        AtomicFileUtils.writeStringAtomic(path, jsonContent);
         LOG.info("Saved run JSON to disk: {}", path.toAbsolutePath());
     }
 
@@ -665,7 +670,7 @@ public class LocalRunJsonStorageService
             {
                 try
                 {
-                    java.nio.file.Files.writeString(runJsonFile.toPath(), jsonString, StandardCharsets.UTF_8);
+                    AtomicFileUtils.writeStringAtomic(runJsonFile.toPath(), jsonString);
                     LOG.info("Saved run.json for runId {} at {}", runId, runJsonFile.getAbsolutePath());
                 }
                 catch (final Exception e)

@@ -485,6 +485,37 @@ public final class TestExecutionDto
         this.status = status;
     }
 
+    /**
+     * Computes normalized status key for UI filtering and badge styling.
+     *
+     * @return normalized status key (RUNNING, PASSED, SUCCEEDED_FIXED, FAILED_KNOWN, FAILED_UNKNOWN, SKIPPED)
+     */
+    public String getDisplayStatusKey()
+    {
+        final String st = status != null ? status.toLowerCase() : "running";
+        if ("running".equals(st) || "in_progress".equals(st) || "executing".equals(st) || "pending".equals(st))
+        {
+            return "RUNNING";
+        }
+        if ("succeeded-fixed".equals(st) || "fixed".equals(st) || "healed".equals(st) || (("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st)) && bugs != null && !bugs.isEmpty()))
+        {
+            return "SUCCEEDED_FIXED";
+        }
+        if ("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st))
+        {
+            return "PASSED";
+        }
+        if ("failed-known".equals(st) || "known".equals(st) || (("failed".equals(st) || "error".equals(st)) && bugs != null && !bugs.isEmpty()))
+        {
+            return "FAILED_KNOWN";
+        }
+        if ("ignored".equals(st) || "skipped".equals(st))
+        {
+            return "SKIPPED";
+        }
+        return "FAILED_UNKNOWN";
+    }
+
     public String getEngine()
     {
         return engine;

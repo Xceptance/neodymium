@@ -580,13 +580,11 @@ public abstract class AiSession implements AutoCloseable
         if (levels != null && !levels.isEmpty())
         {
             escalations += Math.max(0, levels.size() - 1);
-            for (final String lvl : levels)
+            final String lastLvl = levels.get(levels.size() - 1);
+            if (lastLvl != null && !lastLvl.isBlank())
             {
-                if (lvl != null && !lvl.isBlank())
-                {
-                    final String normalized = lvl.trim().toUpperCase();
-                    contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
-                }
+                final String normalized = lastLvl.trim().toUpperCase();
+                contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
             }
         }
         for (final StepStats child : stats.getSubStats())
