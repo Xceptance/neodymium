@@ -25,9 +25,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.testing.BaseAiTest;
@@ -35,11 +35,8 @@ import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
 /**
- * Unified Multi-Locale Guest Checkout Integration Test.
- * Drives a single English playbook across all 9 international storefront locales.
- *
- * Runs FORCE_RECORDING and REPLAY_STRICT across Quality Judge modes (false and true)
- * and Outcome Verification modes (false and true) for each country individually.
+ * English Language Guest Checkout Integration Test targeting the Canada English storefront (-CA_EN).
+ * Drives the English multi-locale playbook for Canada (EN).
  *
  * Schema: Feature_TargetStore_ScriptLanguage
  *
@@ -55,12 +52,13 @@ import org.neodymium.util.Neodymium;
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Multi_English.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @AiOutcomeVerification(value = {false, true}, failOnError = false)
-public class VerlaGuestCheckout_Multi_English extends BaseAiTest
+@AiDataSet("canada-en")
+public class VerlaGuestCheckout_CaEn_English extends BaseAiTest
 {
     /**
-     * Constructs a default VerlaGuestCheckout_Multi_English instance.
+     * Constructs a default VerlaGuestCheckout_CaEn_English instance.
      */
-    public VerlaGuestCheckout_Multi_English()
+    public VerlaGuestCheckout_CaEn_English()
     {
     }
 
@@ -70,70 +68,16 @@ public class VerlaGuestCheckout_Multi_English extends BaseAiTest
     @BeforeEach
     public void setup()
     {
-        server.resetInventory();
+        if (server != null)
+        {
+            server.resetInventory();
+        }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
     }
 
     @Order(1)
-    @AiDataSet("germany")
-    @AiPlaybook
-    public void testCheckoutGermany()
-    {
-    }
-
-    @Order(2)
-    @AiDataSet("united-states")
-    @AiPlaybook
-    public void testCheckoutUnitedStates()
-    {
-    }
-
-    @Order(3)
-    @AiDataSet("united-kingdom")
-    @AiPlaybook
-    public void testCheckoutUnitedKingdom()
-    {
-    }
-
-    @Order(4)
-    @AiDataSet("canada-en")
     @AiPlaybook
     public void testCheckoutCanadaEn()
-    {
-    }
-
-    @Order(5)
-    @AiDataSet("canada-fr")
-    @AiPlaybook
-    public void testCheckoutCanadaFr()
-    {
-    }
-
-    @Order(6)
-    @AiDataSet("poland")
-    @AiPlaybook
-    public void testCheckoutPoland()
-    {
-    }
-
-    @Order(7)
-    @AiDataSet("sweden")
-    @AiPlaybook
-    public void testCheckoutSweden()
-    {
-    }
-
-    @Order(8)
-    @AiDataSet("finland")
-    @AiPlaybook
-    public void testCheckoutFinland()
-    {
-    }
-
-    @Order(9)
-    @AiDataSet("japan")
-    @AiPlaybook
-    public void testCheckoutJapan()
     {
     }
 }

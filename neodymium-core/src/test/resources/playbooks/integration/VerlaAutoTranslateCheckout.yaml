@@ -27,7 +27,10 @@ steps: |
   Card number is '4111 1111 1111 1111', expiration date '12/29', and CVV is '111'.
   Click translate('Purchase').
   Wait until the confirmation text is displayed.
-  An order number matching '${orderFormat}' is displayed, postal code is '${postalCode}', and translate('Thank you for your purchase!') is shown.
+  # Auto translation of the expected text is hard because the text on the website might not be
+  # an exact translation.
+  An order number matching '${orderFormat}' is displayed, postal code is '${postalCode}', and '${confirmationMessage}' is shown.
+  A confirmation message in the language for ${targetLocale} is shown that reflects a typical commerce thank you message. (visual: full)
   There is a green checkmark in the center of the screen (visual: full).
 
 data:
@@ -44,6 +47,7 @@ data:
     state: "QC"
     postalCode: "H2X 3K4"
     orderFormat: "V-[0-9]+-CA_FR"
+    confirmationMessage: "Merci pour votre achat !"
   - testId: "de"
     quality: "normal"
     regionModalName: "Germany"
@@ -57,3 +61,4 @@ data:
     state: ""
     postalCode: "37308"
     orderFormat: "V-[0-9]+-DE"
+    confirmationMessage: "Vielen Dank für Ihren Einkauf!"
