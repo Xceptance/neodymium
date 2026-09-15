@@ -1203,6 +1203,18 @@ public final class BrowserToolProvider
 
         try
         {
+            final String innerText = el.getAttribute("innerText");
+            if (innerText != null && !innerText.isBlank() && !candidates.contains(innerText))
+            {
+                candidates.add(innerText);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        try
+        {
             final String textContent = el.getAttribute("textContent");
             if (textContent != null && !textContent.isBlank() && !candidates.contains(textContent))
             {
@@ -1232,7 +1244,8 @@ public final class BrowserToolProvider
             }
             for (final String candidate : candidates)
             {
-                if (pattern.matcher(candidate).find())
+                if (pattern.matcher(candidate).find()
+                        || pattern.matcher(candidate.replaceAll("\\s+", " ")).find())
                 {
                     return true;
                 }
@@ -1241,18 +1254,21 @@ public final class BrowserToolProvider
         }
 
         final String unescaped = unescapeLiteralText(expectedText);
+        final String normExpected = unescaped.replaceAll("\\s+", " ").trim();
         for (final String candidate : candidates)
         {
             if (exact)
             {
-                if (candidate.trim().equalsIgnoreCase(unescaped.trim()))
+                if (candidate.trim().equalsIgnoreCase(unescaped.trim())
+                        || candidate.replaceAll("\\s+", " ").trim().equalsIgnoreCase(normExpected))
                 {
                     return true;
                 }
             }
             else
             {
-                if (candidate.toLowerCase().contains(unescaped.toLowerCase()))
+                if (candidate.toLowerCase().contains(unescaped.toLowerCase())
+                        || candidate.replaceAll("\\s+", " ").toLowerCase().contains(normExpected.toLowerCase()))
                 {
                     return true;
                 }

@@ -19,6 +19,7 @@
 package org.neodymium.ai.tool.browser;
 
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +41,7 @@ import org.openqa.selenium.WebDriver;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.List;
@@ -938,6 +940,91 @@ public class BrowserToolsTest
         {
             Configuration.timeout = originalTimeout;
         }
+    }
+
+    @Test
+    public void testMatchesElementTextWithWhitespaceAndNewlines()
+    {
+        final SelenideElement mockElement = (SelenideElement) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{SelenideElement.class},
+                (final Object proxy, final Method method, final Object[] args) -> {
+                    if ("exists".equals(method.getName()))
+                    {
+                        return true;
+                    }
+                    if ("getText".equals(method.getName()))
+                    {
+                        return "CART\n1";
+                    }
+                    return null;
+                }
+        );
+
+        // Should match when expectedText has a space instead of newline
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "CART 1", false, false));
+        // Should match case-insensitively
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "cart 1", false, false));
+        // Should match exact mode with normalized whitespace
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "CART 1", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "cart 1", false, true));
+        // Should also match regex
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "CART 1", true, false));
+        // Should not match completely different text
+        Assertions.assertFalse(BrowserToolProvider.matchesElementText(mockElement, "CART 2", false, false));
+    }
+
+    @Test
+    public void testMatchesElementTextWithInnerTextFallback()
+    {
+        final SelenideElement mockElement = (SelenideElement) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{SelenideElement.class},
+                (final Object proxy, final Method method, final Object[] args) -> {
+                    if ("exists".equals(method.getName()))
+                    {
+                        return true;
+                    }
+                    if ("getText".equals(method.getName()))
+                    {
+                        return "";
+                    }
+                    if ("getAttribute".equals(method.getName()) && args != null && args.length > 0)
+                    {
+                        if ("innerText".equals(args[0]))
+                        {
+                            return "CART 1";
+                        }
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "CART 1", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "cart 1", false, false));
+    }
+
+    @Test
+    public void testMatchesElementTextMultiSpaceNormalization()
+    {
+        final SelenideElement mockElement = (SelenideElement) Proxy.newProxyInstance(
+                BrowserToolsTest.class.getClassLoader(),
+                new Class<?>[]{SelenideElement.class},
+                (final Object proxy, final Method method, final Object[] args) -> {
+                    if ("exists".equals(method.getName()))
+                    {
+                        return true;
+                    }
+                    if ("getText".equals(method.getName()))
+                    {
+                        return "Items   in   Cart: \t 5";
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "Items in Cart: 5", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "Items in Cart: 5", false, true));
     }
 }
 
