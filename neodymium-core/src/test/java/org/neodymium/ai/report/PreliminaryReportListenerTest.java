@@ -1595,6 +1595,83 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
+    @DisplayName("Verify that empirical post-flight playbook findings are rendered in HTML, Markdown, and JSON")
+    public void testEmpiricalPostFlightLinterReporting() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("postflight-linter-reports");
+        Files.createDirectories(reportDir);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+                1,
+                18,
+                "cart.yaml",
+                "Hover over mini cart and checkout",
+                "Hover over mini cart and checkout",
+                LinterCategory.EMPIRICAL_MULTI_ACTION,
+                LinterSeverity.WARNING,
+                "Step executed 2 mutating actions in a single flat step.",
+                "Hover over the mini cart\nClick the 'View Cart & Checkout' button",
+                null
+            );
+            ctx.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS, List.of(finding));
+            ctx.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_CALL_COUNT, 1);
+            ctx.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_TOKEN_USAGE, new TokenUsage(120, 60, 180, 0));
+
+            final PreliminaryReportListener listener = new PreliminaryReportListener(
+                reportDir,
+                EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON)
+            );
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            final PlaybookStep step = new PlaybookStep("Hover over mini cart and checkout");
+            bus.dispatch(new StepStartedEvent(step, 0));
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+
+            final LlmRequest postReq = new LlmRequest("linter sys", "linter user", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse postRes = new LlmResponse("{}", new TokenUsage(120, 60, 180, 0), "mock-linter-model");
+            bus.dispatch(new LlmResponseReceivedEvent(postReq, postRes, 200L, "POST_FLIGHT_LINTER"));
+
+            bus.dispatch(new SessionFinishedEvent(1200, true));
+
+            assertEquals(1, listener.getReport().getMetrics().getPostFlightLinter().getCalls());
+            assertEquals(120, listener.getReport().getMetrics().getPostFlightLinter().getInputTokens());
+            assertEquals(60, listener.getReport().getMetrics().getPostFlightLinter().getOutputTokens());
+
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+            final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+
+            assertTrue(Files.exists(htmlPath), "HTML report must be generated");
+            assertTrue(Files.exists(mdPath), "Markdown report must be generated");
+
+            final String html = Files.readString(htmlPath);
+            assertTrue(html.contains("Empirical Playbook Findings (Post-Flight Telemetry)"), "HTML must contain post-flight findings section");
+            assertTrue(html.contains("EMPIRICAL_MULTI_ACTION"), "HTML must show category");
+            assertTrue(html.contains("Hover over the mini cart"), "HTML must show suggested rewrite");
+            assertTrue(html.contains("Playbook Post-Flight Linter"), "HTML metrics table must include post-flight linter row");
+            assertTrue(html.contains("Post-Flight Linter"), "HTML LLM log must show Post-Flight Linter badge");
+            assertTrue(html.contains("Post-Flight"), "HTML LLM log must show Post-Flight step reference");
+
+            final String md = Files.readString(mdPath);
+            assertTrue(md.contains("## 🔍 Empirical Playbook Findings (Post-Flight Telemetry)"), "Markdown must contain post-flight findings section");
+            assertTrue(md.contains("EMPIRICAL_MULTI_ACTION"), "Markdown must show category");
+            assertTrue(md.contains("Hover over the mini cart"), "Markdown must show suggested rewrite");
+            assertTrue(md.contains("├─ Linter (Post-Flight)"), "Markdown metrics table must include post-flight linter row");
+            assertTrue(md.contains("Post-Flight Linter"), "Markdown LLM log must show Post-Flight Linter badge");
+            assertTrue(md.contains("Post-Flight"), "Markdown LLM log must show Post-Flight step reference");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
     @DisplayName("Verify that multi-stage continuation actions and step badges are reported in HTML, Markdown, and JSON")
     public void testMultiStageContinuationReporting() throws Exception
     {

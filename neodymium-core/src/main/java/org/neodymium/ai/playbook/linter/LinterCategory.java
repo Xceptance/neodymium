@@ -84,7 +84,32 @@ public enum LinterCategory
     /**
      * Instructions explicitly commanding raw script or code execution (e.g. "Run JS to click...") instead of standard user interactions.
      */
-    EXPLICIT_SCRIPT_INTERACTION;
+    EXPLICIT_SCRIPT_INTERACTION,
+
+    /**
+     * Empirical runtime detection of a flat step executing multiple interactive mutating actions.
+     */
+    EMPIRICAL_MULTI_ACTION,
+
+    /**
+     * Empirical runtime divergence where instruction text did not match the clicked element's accessible name or DOM text.
+     */
+    LABEL_DIVERGENCE,
+
+    /**
+     * Empirical agent execution thrashing requiring excessive turns or retries.
+     */
+    HIGH_AGENT_FRICTION,
+
+    /**
+     * Empirical step resolution that required visual perception at runtime but lacks the (visual) tag.
+     */
+    UNTAGGED_VISUAL_DEPENDENCY,
+
+    /**
+     * Empirical step resolution that was tagged (visual) but was fully resolved via standard DOM elements without visual comparison.
+     */
+    REDUNDANT_VISUAL_TAG;
 
     /**
      * Resolves an enum constant from a string code safely, case-insensitively.

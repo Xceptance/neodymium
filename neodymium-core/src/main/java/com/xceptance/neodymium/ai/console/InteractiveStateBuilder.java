@@ -829,6 +829,14 @@ public final class InteractiveStateBuilder
         {
             categories.add("visualRca", serializeCategoryUsage(metrics.getVisualRca()));
         }
+        if (metrics.getLinter() != null)
+        {
+            categories.add("linter", serializeCategoryUsage(metrics.getLinter()));
+        }
+        if (metrics.getPostFlightLinter() != null)
+        {
+            categories.add("postFlightLinter", serializeCategoryUsage(metrics.getPostFlightLinter()));
+        }
         if (metrics.getTotal() != null)
         {
             categories.add("total", serializeCategoryUsage(metrics.getTotal()));

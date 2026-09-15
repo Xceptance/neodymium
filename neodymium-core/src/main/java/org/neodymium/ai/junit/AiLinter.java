@@ -50,4 +50,12 @@ public @interface AiLinter
      * @return boolean flag indicating if findings trigger test failure
      */
     boolean failOnFindings() default false;
+
+    /**
+     * Whether the empirical post-flight Playbook Linter is enabled for the test execution.
+     * Defaults to {@code false}.
+     *
+     * @return boolean flag indicating if post-flight linter is active
+     */
+    boolean postFlight() default false;
 }

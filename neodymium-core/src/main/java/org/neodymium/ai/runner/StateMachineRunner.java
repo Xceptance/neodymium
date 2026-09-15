@@ -53,6 +53,7 @@ import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterException;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.playbook.linter.PostFlightPlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.util.Neodymium;
@@ -520,8 +521,25 @@ public final class StateMachineRunner
                 }
             }
 
+            // Empirical Post-Flight Playbook Linting
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+                if (sessionSteps != null && !sessionSteps.isEmpty())
+                {
+                    final PostFlightPlaybookLinter postLinter = new PostFlightPlaybookLinter(this.session);
+                    postLinter.lint(sessionSteps, context);
+                }
+            }
+            catch (final Throwable t)
+            {
+                LOGGER.warn("⚠️ Post-flight empirical linter encountered an unexpected error: {}", t.getMessage(), t);
+            }
+
             @SuppressWarnings("unchecked")
             final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+
             try
             {
                 context.getTransientData().put("sessionFinishedHandled", true);

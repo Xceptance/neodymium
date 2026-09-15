@@ -59,6 +59,7 @@ public final class TestExecutionReport
 
     private final List<String> warnings = new ArrayList<>();
     private final List<PlaybookLinterFinding> linterFindings = new ArrayList<>();
+    private final List<PlaybookLinterFinding> postFlightFindings = new ArrayList<>();
     private final List<ReportStepEntry> steps = new ArrayList<>();
     private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
     private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
@@ -1517,6 +1518,7 @@ public final class TestExecutionReport
         private CategoryTokenUsage verification = new CategoryTokenUsage();
         private CategoryTokenUsage visualRca = new CategoryTokenUsage();
         private CategoryTokenUsage linter = new CategoryTokenUsage();
+        private CategoryTokenUsage postFlightLinter = new CategoryTokenUsage();
 
         public ReportMetrics()
         {
@@ -1737,6 +1739,16 @@ public final class TestExecutionReport
         {
             this.linter = linter != null ? linter : new CategoryTokenUsage();
         }
+
+        public CategoryTokenUsage getPostFlightLinter()
+        {
+            return this.postFlightLinter;
+        }
+
+        public void setPostFlightLinter(final CategoryTokenUsage postFlightLinter)
+        {
+            this.postFlightLinter = postFlightLinter != null ? postFlightLinter : new CategoryTokenUsage();
+        }
     }
 
     public List<PlaybookLinterFinding> getLinterFindings()
@@ -1757,6 +1769,27 @@ public final class TestExecutionReport
         if (findings != null)
         {
             this.linterFindings.addAll(findings);
+        }
+    }
+
+    public List<PlaybookLinterFinding> getPostFlightFindings()
+    {
+        return Collections.unmodifiableList(this.postFlightFindings);
+    }
+
+    public void addPostFlightFinding(final PlaybookLinterFinding finding)
+    {
+        if (finding != null)
+        {
+            this.postFlightFindings.add(finding);
+        }
+    }
+
+    public void addPostFlightFindings(final List<PlaybookLinterFinding> findings)
+    {
+        if (findings != null)
+        {
+            this.postFlightFindings.addAll(findings);
         }
     }
 }

@@ -19,6 +19,7 @@
 package org.neodymium.ai.report;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -130,9 +131,9 @@ public final class SubStepReportingAndScopingTest
             // Parent step should show 4 LLM calls (1 PESAP + 1 Standard) * 2 = 4 (or 2 pesap + 2 standard)
             assertTrue(html.contains("4 LLM call(s)"), "Parent card footer should display 4 LLM calls aggregated from sub-steps");
 
-            // Sub-steps should have scope badges
-            assertTrue(html.contains("scope-badge"), "HTML report should contain scope-badge for sub-steps");
-            assertTrue(html.contains("📍 Locate the first product card"), "Sub-steps should display parent scoping header");
+            // Sub-steps should not repeat parent step as a badge in the card header,
+            // while the modal inspector preserves scoping context
+            assertFalse(html.contains("span class=\"badge-flag scope-badge\""), "Sub-steps card header should not repeat parent step as a scope badge");
             assertTrue(html.contains("inspScopeContext"), "Inspector header should contain scoping context element");
         }
         finally
@@ -177,8 +178,8 @@ public final class SubStepReportingAndScopingTest
 
         // Verify parent footer displays 6 LLM calls
         assertTrue(html.contains("6 LLM call(s)"), "Parent step card should display 6 LLM calls");
-        // Verify scope badge is present
-        assertTrue(html.contains("📍 Locate product card"), "Sub-step should display parent scope chip");
+        // Verify scope badge is not present in sub-step card header
+        assertFalse(html.contains("span class=\"badge-flag scope-badge\""), "Sub-step should not display parent scope badge");
     }
 
     /**

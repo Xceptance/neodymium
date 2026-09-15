@@ -156,6 +156,7 @@ public final class HtmlReportGenerator
 
         appendHtmlCategoryRow(sb, "<strong>Total</strong>", m.getTotal(), "row-total");
         appendHtmlCategoryRow(sb, "Playbook Pre-Flight Linter", m.getLinter(), "");
+        appendHtmlCategoryRow(sb, "Playbook Post-Flight Linter", m.getPostFlightLinter(), "");
         appendHtmlCategoryRow(sb, "PESAP (Pre-Execution Semantic Anchor)", m.getPesap(), "");
         appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
         appendHtmlCategoryRow(sb, "Self-Judging Validation", m.getJudge(), "");
@@ -281,6 +282,69 @@ public final class HtmlReportGenerator
                     sb.append("            <div style=\"margin-top:6px;font-size:0.85rem;background:rgba(99,102,241,0.06);padding:6px 10px;border-radius:4px;border-left:3px solid #6366f1;\">\n");
                     sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">💡 Suggested Rewrite:</div>\n");
                     sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#312e81;\">").append(escapeHtml(f.suggestedRewrite())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                sb.append("          </td>\n");
+                sb.append("        </tr>\n");
+            }
+            sb.append("          </tbody>\n");
+            sb.append("        </table>\n");
+            sb.append("      </div>\n");
+            sb.append("    </div>\n");
+            sb.append("  </details>\n");
+        }
+
+        // Post-Flight Empirical Findings Box (if any)
+        final List<PlaybookLinterFinding> postFlightFindings = report.getPostFlightFindings();
+        if (!postFlightFindings.isEmpty())
+        {
+            sb.append("  <details open class=\"diagnostic-box postflight-linter-box\" style=\"border-left: 4px solid #8b5cf6; background: var(--card-bg, #ffffff); margin-bottom: 24px; padding: 18px 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);\">\n");
+            sb.append("    <summary class=\"box-header\" style=\"font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #1e293b); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; justify-content: space-between;\">\n");
+            sb.append("      <div style=\"display: flex; align-items: center; gap: 8px;\"><span>🔍 Empirical Playbook Findings (Post-Flight Telemetry) (").append(postFlightFindings.size()).append(")</span></div>\n");
+            sb.append("      <span class=\"linter-toggle-icon\" style=\"font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s ease;\">▼</span>\n");
+            sb.append("    </summary>\n");
+            sb.append("    <div class=\"linter-content\" style=\"margin-top: 14px;\">\n");
+            sb.append("      <div class=\"table-container\">\n");
+            sb.append("        <table class=\"data-table\">\n");
+            sb.append("          <thead><tr><th>Line / Step</th><th>Category</th><th>Severity</th><th>Telemetry & Suggested Rewrite</th></tr></thead>\n");
+            sb.append("          <tbody>\n");
+            for (final PlaybookLinterFinding f : postFlightFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevBadge = f.severity() == LinterSeverity.ERROR
+                    ? "<span class=\"badge badge-error\" style=\"background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">ERROR</span>"
+                    : f.severity() == LinterSeverity.WARNING
+                    ? "<span class=\"badge badge-warning\" style=\"background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">WARNING</span>"
+                    : "<span class=\"badge badge-info\" style=\"background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">INFO</span>";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("        <tr>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><code>").append(escapeHtml(lineLabel)).append("</code></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><span style=\"font-weight:600;font-size:0.85rem;\">").append(escapeHtml(cat)).append("</span></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\">").append(sevBadge).append("</td>\n");
+                sb.append("          <td>\n");
+                sb.append("            <div style=\"font-weight:600;margin-bottom:6px;color:var(--text-primary,#1e293b);\">").append(escapeHtml(f.message())).append("</div>\n");
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Template Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;margin-bottom:2px;\">Resolved Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.resolvedInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Original Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("            <div style=\"margin-top:6px;font-size:0.85rem;background:rgba(139,92,246,0.06);padding:6px 10px;border-radius:4px;border-left:3px solid #8b5cf6;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">💡 Suggested Rewrite:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#4c1d95;\">").append(escapeHtml(f.suggestedRewrite())).append("</code>\n");
                     sb.append("            </div>\n");
                 }
                 sb.append("          </td>\n");
@@ -459,7 +523,7 @@ public final class HtmlReportGenerator
                     ? (subIdx >= 0
                         ? "Step #" + (stepIdx + 1) + "." + (subIdx + 1)
                         : "Step #" + (stepIdx + 1))
-                    : "Pre-Flight";
+                    : ("POST_FLIGHT_LINTER".equalsIgnoreCase(call.getCapability()) ? "Post-Flight" : "Pre-Flight");
                 if (stepIdx >= 0)
                 {
                     if (isNewStep)
@@ -497,6 +561,10 @@ public final class HtmlReportGenerator
                 else if ("LINTER".equalsIgnoreCase(cap))
                 {
                     phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Pre-Flight Playbook Static & Semantic Linter\">Playbook Linter</span>";
+                }
+                else if ("POST_FLIGHT_LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Post-Flight Playbook Execution Linter\">Post-Flight Linter</span>";
                 }
                 else
                 {
@@ -848,10 +916,6 @@ public final class HtmlReportGenerator
                 sb.append("                  <span class=\"sub-step-number\">#").append(index + 1).append(".").append(s + 1).append("</span>\n");
                 sb.append("                  <span class=\"step-status-pill ").append(subPillClass).append("\">").append(subStatus).append("</span>\n");
                 appendStepBadges(sb, sub);
-                if (step.getInstruction() != null && !step.getInstruction().isBlank())
-                {
-                    sb.append("                  <span class=\"badge-flag scope-badge\" title=\"Scoping Context: ").append(escapeHtml(step.getInstruction())).append("\">📍 ").append(escapeHtml(step.getInstruction())).append("</span>\n");
-                }
                 sb.append("                  <span class=\"sub-step-instruction\" onclick=\"openAndSelectStep(").append(index).append(", ").append(s).append(")\">").append(escapeHtml(sub.getInstruction())).append("</span>\n");
                 sb.append("                </div>\n");
                 sb.append("                <div class=\"sub-step-header-right\">\n");
@@ -1305,6 +1369,8 @@ public final class HtmlReportGenerator
                             callTitle = '<span class="badge-phase prelude">Visual RCA</span>';
                         } else if (cap === 'LINTER') {
                             callTitle = '<span class="badge-phase prelude">Playbook Linter</span>';
+                        } else if (cap === 'POST_FLIGHT_LINTER') {
+                            callTitle = '<span class="badge-phase prelude">Post-Flight Linter</span>';
                         } else if (cap === 'VISION') {
                             callTitle = '<span class="badge-role">Call #' + (ci + 1) + '</span><span class="badge-modality vision">Vision 📸</span>';
                         } else {

@@ -1174,11 +1174,6 @@ public final class AgentToolLoopStep implements PipelineStep
                             {
                                 final SutState visualState = executor.captureState(ContextLevel.VISUAL, false);
                                 context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, visualState);
-                                final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
-                                if (statsObj instanceof final StepStats stats)
-                                {
-                                    stats.addContextLevel(ContextLevel.VISUAL.name());
-                                }
                                 if (visualState != null && visualState.getAttachments() != null && !visualState.getAttachments().isEmpty())
                                 {
                                     nextAttachments = visualState.getAttachments();

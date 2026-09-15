@@ -29,6 +29,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [3.7 Ranked Candidate Locators, Automatic Locator Improver & LLM Quality Judge](#37-ranked-candidate-locators-automatic-locator-improver--llm-quality-judge)
 4. [Context Escalation Ladder, Pre-Flight Linting & Pre-Step Analysis (PESAP)](#4-context-escalation-ladder-pre-flight-linting--pre-step-analysis-pesap)
    - [4.1 Upfront Playbook Pre-Flight Linter (`PlaybookLinter` & `@AiLinter`)](#41-upfront-playbook-pre-flight-linter-playbooklinter--ailinter)
+   - [4.1.1 Empirical Post-Flight Playbook Linter (`PostFlightPlaybookLinter` & `@AiLinter(postFlight = true)`)](#411-empirical-post-flight-playbook-linter-postflightplaybooklinter--ailinterpostflight--true)
    - [4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting](#42-pre-step-split-analysis-pesap--upfront-splitting)
    - [4.3 Tiered Context Escalation Ladder & Payload Modes](#43-tiered-context-escalation-ladder--payload-modes)
    - [4.4 Dynamic Step Escalation Budget Model](#44-dynamic-step-escalation-budget-model)
@@ -873,6 +874,45 @@ To detect linguistic defects, atomic step violations, and ambiguous assertions b
 
 ---
 
+### 4.1.1 Empirical Post-Flight Playbook Linter (`PostFlightPlaybookLinter` & `@AiLinter(postFlight = true)`)
+
+While the Upfront Pre-Flight Linter (Section 4.1) evaluates playbook grammar and semantics synthetically before execution, it cannot observe how the System Under Test (SUT) actually behaves in the browser. To bridge this gap, the pipeline features an **Empirical Post-Flight Playbook Linter** (`PostFlightPlaybookLinter.java`):
+
+* **Ground-Truth Telemetry vs. Upfront Guesswork**: Instead of guessing whether an instruction is ambiguous or compound, the post-flight linter audits the **ground-truth telemetry** recorded during actual test execution—including runtime sub-step splitting, DOM label matches, context escalation levels, retry counts, and visual fallback triggers.
+* **Two-Tier Engine**:
+  1. **Tier 1 (Deterministic Telemetry Auditing)**: Analyzes runtime events and execution step entries with zero network overhead to detect empirical friction patterns.
+  2. **Tier 2 (Targeted LLM Rewrite Synthesis)**: When empirical findings exist, leverages `LlmCapability.LINTER` to synthesize concrete, actionable playbook step rewrites based on the actual observed DOM state and agent interaction telemetry.
+* **Activation & Gating**:
+  - Disabled by default to conserve tokens on routine CI runs.
+  - Can be activated at test class or method level via `@AiLinter(postFlight = true)`:
+    ```java
+    @AiLinter(postFlight = true) // Run empirical post-flight analysis after test execution completes
+    public void testCheckoutScenario() { ... }
+    ```
+  - Can be activated globally via configuration property:
+    ```properties
+    neodymium.ai.linter.postFlight.enabled=true
+    # Alias: neodymium.ai.postflight.linter.enabled=true
+    ```
+* **Automatic Replay Mode Bypass**: In recorded deterministic replay modes (`ExecutionMode.REPLAY_STRICT`, `ExecutionMode.REPLAY_WITH_HEALING`), post-flight linting is automatically bypassed to maintain zero-network playback fidelity.
+* **Reporting & Visibility**:
+  - **HTML Report**: Displays an interactive, collapsible violet diagnostic box (`#8b5cf6`) detailing all empirical findings, observed friction telemetry, and LLM-synthesized step rewrites.
+  - **Markdown Summary**: Outputs a clean markdown findings table in preliminary and final test reports.
+  - **LLM Responsibility & Token Accounting**: Tracked under `Playbook Post-Flight Linter` in HTML and Markdown responsibility breakdown tables, accounting for calls, input/output/cached tokens, and estimated cost.
+  - **JSON Telemetry**: Embedded within `TestExecutionReport` for automated tooling and CI quality dashboards.
+
+#### The 5 Empirical Detection Categories
+
+| Category | Telemetry Trigger | Description | Suggested Remediation |
+| :--- | :--- | :--- | :--- |
+| **`EMPIRICAL_MULTI_ACTION`** | Runtime sub-step count $\ge 3$ or multiple discrete actions executed | An instruction written as a single step required multiple actions or sub-steps to complete in the live browser. | Decompose the parent step into discrete atomic playbook steps. |
+| **`LABEL_DIVERGENCE`** | Playbook target label differs from clicked DOM element text / accessible name | The author's phrasing diverges from actual live UI labels, forcing fuzzy semantic matching. | Align the instruction with the real button/link text observed in the DOM. |
+| **`HIGH_AGENT_FRICTION`** | Escalation to high context tiers (`DOM_ALL`, `SCREENSHOT`, `VISUAL_DIFF`) or $\ge 2$ retries | The agent struggled to find or interact with the target element under standard context. | Add explicit container anchors, unique IDs, or clearer action verbs. |
+| **`UNTAGGED_VISUAL_DEPENDENCY`** | Untagged visual assertion required visual perception / screenshot analysis | A visual verification or assertion step (e.g. checking colors, icons, badge styling, or visual alignment) lacked annotations. Interactive action steps (clicks, inputs, selections) are strictly excluded. | Append `(visual)` to the visual verification instruction. |
+| **`REDUNDANT_VISUAL_TAG`** | Step tagged `(visual)` was an interactive action or resolvable via deterministic DOM locators | An action step (clicks, typing, dropdowns) or assertion was tagged `(visual)` despite standard DOM element inspection being completely sufficient. | Remove `(visual)` tag to save latency, token usage, and visual diff overhead. |
+
+---
+
 ### 4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting
 
 To handle complex, compound, or ambiguous instructions, the pipeline executes a **Pre-Step Split Analysis (PESAP)** using the `LlmCapability.PESAP` capability:
@@ -1367,6 +1407,7 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 
 ### 8.3 Sub-System Toggles
 * `neodymium.ai.linter.enabled` - (Boolean) Upfront Playbook Pre-Flight Linter. Aliases: `neodymium.ai.prelinter.enabled`, `neodymium.ai.prelint.enabled`. (Default: `true`)
+* `neodymium.ai.linter.postFlight.enabled` - (Boolean) Empirical Post-Flight Playbook Linter. Aliases: `neodymium.ai.postflight.linter.enabled`, `neodymium.ai.postflight.enabled`. (Default: `false`)
 * `neodymium.ai.pesap.enabled` - (Boolean) Pre-Execution Structural Analysis & Prediction. (Default: `true`)
 * `neodymium.ai.semanticVerification.enabled` - (Boolean) SSIM and Visual Anchor validation gates. (Default: `true`)
 * `neodymium.ai.semanticVerification.failOnError` - (Boolean) Whether outcome verification failure throws `VerificationFailureException` to fail the step, or logs soft diagnostic warnings. (Default: `true`)

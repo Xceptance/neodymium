@@ -352,6 +352,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             linterFailOnFindings = false;
         }
 
+        final Boolean linterPostFlight;
+        if (methodLinter != null && methodLinter.postFlight())
+        {
+            linterPostFlight = true;
+        }
+        else if (classLinter != null && classLinter.postFlight())
+        {
+            linterPostFlight = true;
+        }
+        else
+        {
+            linterPostFlight = null;
+        }
+
         // 2d. Resolve Outcome Verification variations
         final List<Boolean> outcomeVariants = new ArrayList<>();
         final AiOutcomeVerification methodOutcome = method.getAnnotation(AiOutcomeVerification.class);
@@ -610,7 +624,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                                             {
                                                 extensions.add(new BrowserExecutionCallback(browser, method.getName()));
                                             }
-                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, linterFailOnFindings, outcomeEnabled, outcomeFailOnError));
+                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, linterFailOnFindings, linterPostFlight, outcomeEnabled, outcomeFailOnError));
                                             return extensions;
                                         }
                                     });
@@ -712,6 +726,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final Boolean judgeEnabled;
         private final Boolean linterEnabled;
         private final Boolean linterFailOnFindings;
+        private final Boolean linterPostFlight;
         private final Boolean outcomeEnabled;
         private final Boolean outcomeFailOnError;
         private AiSession session;
@@ -728,6 +743,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final Boolean judgeEnabled,
             final Boolean linterEnabled,
             final Boolean linterFailOnFindings,
+            final Boolean linterPostFlight,
             final Boolean outcomeEnabled,
             final Boolean outcomeFailOnError
         )
@@ -740,6 +756,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.judgeEnabled = judgeEnabled;
             this.linterEnabled = linterEnabled;
             this.linterFailOnFindings = linterFailOnFindings;
+            this.linterPostFlight = linterPostFlight;
             this.outcomeEnabled = outcomeEnabled;
             this.outcomeFailOnError = outcomeFailOnError;
         }
@@ -825,6 +842,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 Neodymium.getData().put("neodymium.ai.linter.failOnFindings", String.valueOf(this.linterFailOnFindings));
             }
 
+            if (this.linterPostFlight != null)
+            {
+                Neodymium.getData().put("neodymium.ai.linter.postFlight.enabled", String.valueOf(this.linterPostFlight));
+            }
+
             if (this.outcomeEnabled != null)
             {
                 Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled));
@@ -858,6 +880,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 this.session.data().putDynamic("neodymium.ai.linter.failOnFindings", String.valueOf(this.linterFailOnFindings), false);
             }
+            if (this.linterPostFlight != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.linter.postFlight.enabled", String.valueOf(this.linterPostFlight), false);
+            }
             if (this.outcomeEnabled != null)
             {
                 this.session.data().putDynamic("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled), false);
@@ -870,6 +896,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.linterFailOnFindings != null)
             {
                 executionContext.getTransientData().put("neodymium.ai.linter.failOnFindings", this.linterFailOnFindings);
+            }
+            if (this.linterPostFlight != null)
+            {
+                executionContext.getTransientData().put("neodymium.ai.linter.postFlight.enabled", this.linterPostFlight);
             }
             if (this.outcomeFailOnError != null)
             {

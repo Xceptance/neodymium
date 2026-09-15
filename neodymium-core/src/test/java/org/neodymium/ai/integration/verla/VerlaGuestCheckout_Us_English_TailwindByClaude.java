@@ -26,6 +26,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiJudge;
+import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -76,6 +77,7 @@ public class VerlaGuestCheckout_Us_English_TailwindByClaude extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiDataSet("tailwind-by-claude")
     @AiPlaybook
+    @AiLinter(postFlight = true)
     public void testCheckoutLive()
     {
     }

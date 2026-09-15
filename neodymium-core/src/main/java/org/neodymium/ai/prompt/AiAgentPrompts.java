@@ -140,4 +140,14 @@ public final class AiAgentPrompts
     {
         return getPrompt("playbook-linter-prompt.md");
     }
+
+    /**
+     * Loads the empirical post-flight playbook linter system prompt template.
+     *
+     * @return the post-flight playbook linter system prompt
+     */
+    public static String getPostFlightLinterPrompt()
+    {
+        return getPrompt("post-flight-linter-prompt.md");
+    }
 }

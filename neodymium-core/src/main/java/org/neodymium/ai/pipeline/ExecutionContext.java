@@ -113,6 +113,9 @@ public final class ExecutionContext
     public static final String KEY_PLAYBOOK_LINTER_FINDINGS = "playbookLinterFindings";
     public static final String KEY_LINTER_TOKEN_USAGE = "linterTokenUsage";
     public static final String KEY_LINTER_CALL_COUNT = "linterCallCount";
+    public static final String KEY_POST_FLIGHT_LINTER_FINDINGS = "postFlightLinterFindings";
+    public static final String KEY_POST_FLIGHT_LINTER_TOKEN_USAGE = "postFlightLinterTokenUsage";
+    public static final String KEY_POST_FLIGHT_LINTER_CALL_COUNT = "postFlightLinterCallCount";
     public static final String KEY_SCENARIO_DESCRIPTION = "scenarioDescription";
     public static final String KEY_INTERNAL_MILESTONES = "internalMilestones";
 

@@ -1097,6 +1097,13 @@ public final class PreliminaryReportListener implements ExecutionListener
             {
                 this.report.addLinterFindings(linterFindings);
             }
+
+            @SuppressWarnings("unchecked")
+            final List<PlaybookLinterFinding> postFlightFindings = (List<PlaybookLinterFinding>) ctx.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS);
+            if (postFlightFindings != null && !postFlightFindings.isEmpty())
+            {
+                this.report.addPostFlightFindings(postFlightFindings);
+            }
         }
 
         if (this.report.getFailureReason() == null && !this.report.isSuccess())
@@ -1193,6 +1200,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             final Integer pesapCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
             final Integer rcaCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
             final Integer linterCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_CALL_COUNT);
+            final Integer postFlightCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_CALL_COUNT);
 
             final TokenUsage standardUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
             final TokenUsage judgeUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
@@ -1200,6 +1208,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TokenUsage pesapUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
             final TokenUsage rcaUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
             final TokenUsage linterUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_TOKEN_USAGE);
+            final TokenUsage postFlightUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_TOKEN_USAGE);
 
             TokenUsage effectiveStandardUsage = standardUsage;
             int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
@@ -1213,7 +1222,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                 for (final TestExecutionReport.ReportLlmCallEntry call : this.report.getLlmCalls())
                 {
                     final String capability = call.getCapability();
-                    if (!"LINTER".equalsIgnoreCase(capability) && !"PESAP".equalsIgnoreCase(capability)
+                    if (!"LINTER".equalsIgnoreCase(capability) && !"POST_FLIGHT_LINTER".equalsIgnoreCase(capability)
+                            && !"PESAP".equalsIgnoreCase(capability)
                             && !"JUDGE".equalsIgnoreCase(capability) && !"JUDGE_DISCUSSION".equalsIgnoreCase(capability)
                             && !"VERIFICATION".equalsIgnoreCase(capability)
                             && !"RCA".equalsIgnoreCase(capability) && !"VISUAL_RCA".equalsIgnoreCase(capability))
@@ -1240,6 +1250,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
             final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
             final int linterCalls = linterCallsObj != null ? linterCallsObj : (linterUsage != null ? 1 : 0);
+            final int postFlightCalls = postFlightCallsObj != null ? postFlightCallsObj : (postFlightUsage != null ? 1 : 0);
 
             final String activeModel = (String) ctx.getTransientData().getOrDefault(ExecutionContext.KEY_ACTIVE_MODEL, "default");
 
@@ -1249,6 +1260,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TestExecutionReport.CategoryTokenUsage verifCat = buildCategoryUsage(verificationCalls, verificationUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage rcaCat = buildCategoryUsage(rcaCalls, rcaUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage linterCat = buildCategoryUsage(linterCalls, linterUsage, activeModel);
+            final TestExecutionReport.CategoryTokenUsage postFlightCat = buildCategoryUsage(postFlightCalls, postFlightUsage, activeModel);
 
             m.setAction(actCat);
             m.setPesap(pesapCat);
@@ -1256,12 +1268,13 @@ public final class PreliminaryReportListener implements ExecutionListener
             m.setVerification(verifCat);
             m.setVisualRca(rcaCat);
             m.setLinter(linterCat);
+            m.setPostFlightLinter(postFlightCat);
 
-            final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls + linterCalls;
-            final long totalIn = actCat.getInputTokens() + pesapCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens() + linterCat.getInputTokens();
-            final long totalOut = actCat.getOutputTokens() + pesapCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens() + linterCat.getOutputTokens();
-            final long totalCached = actCat.getCachedTokens() + pesapCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens() + linterCat.getCachedTokens();
-            final double totalCost = actCat.getEstimatedCostUsd() + pesapCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd() + linterCat.getEstimatedCostUsd();
+            final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls + linterCalls + postFlightCalls;
+            final long totalIn = actCat.getInputTokens() + pesapCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens() + linterCat.getInputTokens() + postFlightCat.getInputTokens();
+            final long totalOut = actCat.getOutputTokens() + pesapCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens() + linterCat.getOutputTokens() + postFlightCat.getOutputTokens();
+            final long totalCached = actCat.getCachedTokens() + pesapCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens() + linterCat.getCachedTokens() + postFlightCat.getCachedTokens();
+            final double totalCost = actCat.getEstimatedCostUsd() + pesapCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd() + linterCat.getEstimatedCostUsd() + postFlightCat.getEstimatedCostUsd();
 
             if (totalCalls > 0 || totalIn > 0)
             {
@@ -1369,6 +1382,12 @@ public final class PreliminaryReportListener implements ExecutionListener
         long linterCached = 0;
         double linterCost = 0.0;
 
+        int postFlightCalls = 0;
+        long postFlightIn = 0;
+        long postFlightOut = 0;
+        long postFlightCached = 0;
+        double postFlightCost = 0.0;
+
         for (final TestExecutionReport.ReportLlmCallEntry call : calls)
         {
             inTokens += call.getInputTokens();
@@ -1417,6 +1436,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                 linterCost += call.getEstimatedCostUsd();
                 linterCalls++;
             }
+            else if ("POST_FLIGHT_LINTER".equalsIgnoreCase(cap))
+            {
+                postFlightIn += call.getInputTokens();
+                postFlightOut += call.getOutputTokens();
+                postFlightCached += call.getCachedTokens();
+                postFlightCost += call.getEstimatedCostUsd();
+                postFlightCalls++;
+            }
             else
             {
                 actIn += call.getInputTokens();
@@ -1441,6 +1468,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         m.setVerification(new TestExecutionReport.CategoryTokenUsage(verifCalls, verifIn, verifOut, verifCached, verifCost));
         m.setVisualRca(new TestExecutionReport.CategoryTokenUsage(rcaCalls, rcaIn, rcaOut, rcaCached, rcaCost));
         m.setLinter(new TestExecutionReport.CategoryTokenUsage(linterCalls, linterIn, linterOut, linterCached, linterCost));
+        m.setPostFlightLinter(new TestExecutionReport.CategoryTokenUsage(postFlightCalls, postFlightIn, postFlightOut, postFlightCached, postFlightCost));
     }
 
     private static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)

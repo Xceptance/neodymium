@@ -33,6 +33,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.report.TestExecutionReport;
+import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
+import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleEngine} console execution logging.
@@ -313,11 +316,27 @@ public class InteractiveConsoleEngineTest
     @Test
     public void testBuildStateJsonSerializesLocale()
     {
-        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+        final ExecutionContext context = new ExecutionContext(null);
         context.getTransientData().put("datasetLabel", "homepage test DE");
 
         final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-locale", 0, "running");
 
         assertTrue(stateJson.contains("\"locale\":\"DE\""), "Top-level state JSON should contain guessed locale 'DE'");
+    }
+
+    @Test
+    public void testBuildStateJsonSerializesLinterCategories()
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportMetrics metrics = report.getMetrics();
+        metrics.setLinter(new CategoryTokenUsage(1, 100, 50, 0, 0.001));
+        metrics.setPostFlightLinter(new CategoryTokenUsage(2, 200, 80, 0, 0.002));
+        context.getTransientData().put("testExecutionReport", report);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-linter-cats", 0, "running");
+
+        assertTrue(stateJson.contains("\"linter\":{"), "State JSON should contain linter category");
+        assertTrue(stateJson.contains("\"postFlightLinter\":{"), "State JSON should contain postFlightLinter category");
     }
 }

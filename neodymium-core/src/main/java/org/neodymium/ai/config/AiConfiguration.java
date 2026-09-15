@@ -733,6 +733,26 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if the empirical post-flight playbook linter is enabled.
+     *
+     * @return true if post-flight linter is enabled (default: false), false otherwise
+     */
+    public boolean isPostFlightLinterEnabled()
+    {
+        final String val = getProperty("neodymium.ai.linter.postFlight.enabled", null);
+        if (val != null)
+        {
+            return Boolean.parseBoolean(val.trim());
+        }
+        final String postVal = getProperty("neodymium.ai.postflight.linter.enabled", null);
+        if (postVal != null)
+        {
+            return Boolean.parseBoolean(postVal.trim());
+        }
+        return false;
+    }
+
+    /**
      * Resolves the configured provider identifier for the pre-flight linter,
      * checking {@code neodymium.ai.llm.linter.provider} then {@code neodymium.ai.linter.provider}
      * before falling back to the global default provider.
