@@ -20,6 +20,7 @@ package org.neodymium.ai.pipeline.steps;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,6 +44,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.util.ScreenshotHasher;
 
@@ -275,6 +277,175 @@ public class VisualBaselineGateStepTest
 
         assertNotNull(step.getSsimScore());
         assertEquals(1.0, step.getSsimScore(), 0.001);
+    }
+
+    @Test
+    public void testReplayWithMutatingAction_preActionGateDoesNotThrowDivergence() throws IOException
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state2 = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        executor.enqueueState(state2);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String hash1 = ScreenshotHasher.computeSsimMatrix(base64Png1);
+        final PlaybookStep step = new PlaybookStep("Scroll and verify filter (visual)");
+        step.setScreenshotHash(hash1);
+        final Action scrollAction = new Action("SCROLL", "", "down");
+        step.getActions().add(scrollAction);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertFalse(gateStep.isPureVerification());
+        final boolean bypassed = assertDoesNotThrow(() -> gateStep.executeGate(context));
+        assertFalse(bypassed);
+    }
+
+    @Test
+    public void testReplayWithMutatingAction_postActionCheckWithMatchingBaseline_succeeds() throws IOException
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.BLUE);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState postState = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png)),
+            "content_hash");
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+
+        final String hash = ScreenshotHasher.computeSsimMatrix(base64Png);
+        final PlaybookStep step = new PlaybookStep("Scroll and verify filter (visual)");
+        step.setScreenshotHash(hash);
+        final Action scrollAction = new Action("SCROLL", "", "down");
+        step.getActions().add(scrollAction);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertDoesNotThrow(() -> gateStep.executePostActionCheck(context));
+
+        assertNotNull(step.getSsimScore());
+        assertEquals(1.0, step.getSsimScore(), 0.001);
+        assertNotNull(step.getBaselineMatrixPng());
+        assertNotNull(step.getReplayMatrixPng());
+    }
+
+    @Test
+    public void testReplayWithMutatingAction_postActionCheckWithDivergentBaseline_throwsDivergenceException() throws IOException
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState postState = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+
+        final String hash1 = ScreenshotHasher.computeSsimMatrix(base64Png1);
+        final PlaybookStep step = new PlaybookStep("Scroll and verify filter (visual)");
+        step.setScreenshotHash(hash1);
+        final Action scrollAction = new Action("SCROLL", "", "down");
+        step.getActions().add(scrollAction);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertThrows(DivergenceException.class, () -> gateStep.executePostActionCheck(context));
+
+        assertNotNull(step.getSsimScore());
+        assertTrue(step.getSsimScore() < 0.99);
+    }
+
+    @Test
+    public void testReplayWithMutatingAction_postActionCheck_supportsHealing_throwsHealingRequiredException() throws IOException
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState postState = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+
+        final String hash1 = ScreenshotHasher.computeSsimMatrix(base64Png1);
+        final PlaybookStep step = new PlaybookStep("Scroll and verify filter (visual)");
+        step.setScreenshotHash(hash1);
+        final Action scrollAction = new Action("SCROLL", "", "down");
+        step.getActions().add(scrollAction);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertThrows(HealingRequiredException.class, () -> gateStep.executePostActionCheck(context));
+
+        assertNotNull(step.getSsimScore());
+        assertTrue(step.getSsimScore() < 0.99);
     }
 
     private static String encodeToBase64(final BufferedImage image) throws IOException

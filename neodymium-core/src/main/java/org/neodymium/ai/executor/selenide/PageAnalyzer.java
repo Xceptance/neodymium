@@ -1073,7 +1073,7 @@ public class PageAnalyzer
                     dom.append("=== Structural DOM Tree ===\n");
                 }
                 for (final Map<String, Object> node : tree) {
-                    elementCount += formatElementNode(dom, node, 0, showFrameId, frameId);
+                    elementCount += formatElementNode(dom, node, 0, showFrameId, frameId, level);
                 }
             }
             LOG.debug("   ⚡ [Stage 2: JS Execution] Frame '{}' extracted {} nodes in {} ms", frameId, elementCount, scriptMs);
@@ -1205,7 +1205,7 @@ public class PageAnalyzer
      * maintaining 2-space indentation depth and container tags (<header>, <main>, <article>, etc.).
      */
     @SuppressWarnings("unchecked")
-    private int formatElementNode(final StringBuilder dom, final Map<String, Object> node, final int depth, final boolean showFrameId, final String frameId)
+    private int formatElementNode(final StringBuilder dom, final Map<String, Object> node, final int depth, final boolean showFrameId, final String frameId, final ContextLevel level)
     {
         if (node == null)
         {
@@ -1222,17 +1222,29 @@ public class PageAnalyzer
             final String tag = (String) node.get("tagName");
             dom.append(indent).append("<").append(tag);
             final Object rawId = node.get("id");
-            if (rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString()))
+            final boolean hasId = rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString());
+            if (hasId)
             {
                 appendAttribute(dom, "id", rawId);
             }
-            appendAttribute(dom, "class", node.get("className"));
-            appendAttribute(dom, "name", node.get("name"));
-            appendAttribute(dom, "role", node.get("role"));
+            final Object name = node.get("name");
+            final Object role = node.get("role");
+            final Object dataTestId = node.get("dataTestId");
+            final Object autoId = node.get("automationId");
+            final Object ariaLabel = node.get("ariaLabel");
+
+            // Omit class on containers if semantic locators exist (unless in RICH mode)
+            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || role != null;
+            if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
+            {
+                appendSanitizedClassAttribute(dom, node.get("className"));
+            }
+            appendAttribute(dom, "name", name);
+            appendAttribute(dom, "role", role);
             appendAttribute(dom, "contenteditable", node.get("contenteditable"));
-            appendAttribute(dom, "aria-label", node.get("ariaLabel"));
-            appendAttribute(dom, "data-testid", node.get("dataTestId"));
-            appendAttribute(dom, "data-ai", node.get("automationId"));
+            appendAttribute(dom, "aria-label", ariaLabel);
+            appendAttribute(dom, "data-testid", dataTestId);
+            appendAttribute(dom, "data-ai", autoId);
             dom.append(">\n");
 
             final List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("children");
@@ -1240,7 +1252,7 @@ public class PageAnalyzer
             {
                 for (final Map<String, Object> child : children)
                 {
-                    count += formatElementNode(dom, child, depth + 1, showFrameId, frameId);
+                    count += formatElementNode(dom, child, depth + 1, showFrameId, frameId, level);
                 }
             }
 
@@ -1254,7 +1266,7 @@ public class PageAnalyzer
                 node.put("frameId", frameId);
             }
             dom.append(indent);
-            formatElement(dom, node);
+            formatElement(dom, node, level);
         }
         return count;
     }
@@ -1264,25 +1276,38 @@ public class PageAnalyzer
      * same text format as the original
      * per-element approach.
      */
-    private void formatElement(final StringBuilder dom, final Map<String, Object> el) {
+    private void formatElement(final StringBuilder dom, final Map<String, Object> el, final ContextLevel level) {
         final Object tagObj = el.get("tagName");
         final String label = (tagObj != null && !tagObj.toString().isEmpty()) ? tagObj.toString() : (el.get("label") != null ? el.get("label").toString() : "element");
         dom.append("<").append(label);
 
         final Object rawId = el.get("id");
-        if (rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString()))
+        final boolean hasId = rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString());
+        if (hasId)
         {
             appendAttribute(dom, "id", rawId);
         }
-        appendAttribute(dom, "class", el.get("className"));
-        appendAttribute(dom, "name", el.get("name"));
+        final Object name = el.get("name");
+        final Object dataTestId = el.get("dataTestId");
+        final Object autoId = el.get("automationId");
+        final Object ariaLabel = el.get("ariaLabel");
+        final Object placeholder = el.get("placeholder");
+        final Object role = el.get("role");
+        final String text = (String) el.get("text");
+        final boolean hasDistinctText = text != null && !text.isBlank() && text.length() <= 80;
+
+        // Omit presentation class in MINIMAL/LEAN if element already has strong semantic identification
+        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || placeholder != null || hasDistinctText;
+        if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
+        {
+            appendSanitizedClassAttribute(dom, el.get("className"));
+        }
+        appendAttribute(dom, "name", name);
         appendAttribute(dom, "type", el.get("type"));
-        appendAttribute(dom, "role", el.get("role"));
+        appendAttribute(dom, "role", role);
         appendAttribute(dom, "contenteditable", el.get("contenteditable"));
         appendAttribute(dom, "checked", el.get("checked"));
         appendAttribute(dom, "selected", el.get("selected"));
-
-        final String text = (String) el.get("text");
 
         appendAttribute(dom, "href", el.get("href"));
         appendAttribute(dom, "placeholder", el.get("placeholder"));
@@ -1322,6 +1347,21 @@ public class PageAnalyzer
     private void appendAttribute(final StringBuilder dom, final String key, final Object value) {
         if (value != null && !value.toString().isEmpty()) {
             dom.append(" ").append(key).append("=\"").append(escapeAttributeValue(value.toString())).append("\"");
+        }
+    }
+
+    /**
+     * Appends a class attribute with normalized whitespace, ensuring empty classes are omitted.
+     */
+    private void appendSanitizedClassAttribute(final StringBuilder dom, final Object value)
+    {
+        if (value != null)
+        {
+            final String raw = value.toString().trim().replaceAll("\\s+", " ");
+            if (!raw.isEmpty())
+            {
+                appendAttribute(dom, "class", raw);
+            }
         }
     }
 

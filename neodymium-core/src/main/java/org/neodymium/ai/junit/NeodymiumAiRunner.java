@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.extension.AfterAllCallback;
@@ -950,6 +951,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 executionContext.getTransientData().put("testMethod", method.getName());
             }
+            final Set<String> tags = context.getTags();
+            if (tags != null && !tags.isEmpty())
+            {
+                final List<String> sortedTags = new ArrayList<>(tags);
+                Collections.sort(sortedTags);
+                executionContext.getTransientData().put("testTags", sortedTags);
+            }
             if (playbookPath != null)
             {
                 executionContext.getTransientData().put("playbookFile", playbookPath);
@@ -1572,6 +1580,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (method != null)
                 {
                     execCtx.getTransientData().put("testMethod", method.getName());
+                }
+                final Set<String> tags = context.getTags();
+                if (tags != null && !tags.isEmpty())
+                {
+                    final List<String> sortedTags = new ArrayList<>(tags);
+                    Collections.sort(sortedTags);
+                    execCtx.getTransientData().put("testTags", sortedTags);
                 }
                 if (this.playbookPath != null)
                 {

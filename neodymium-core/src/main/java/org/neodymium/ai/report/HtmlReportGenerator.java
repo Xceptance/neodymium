@@ -111,6 +111,13 @@ public final class HtmlReportGenerator
         {
             sb.append("<span class=\"meta-badge\">").append(TIME_FORMATTER.format(Instant.ofEpochMilli(report.getStartTimeMs()))).append("</span>");
         }
+        if (report.getTags() != null && !report.getTags().isEmpty())
+        {
+            for (final String tag : report.getTags())
+            {
+                sb.append("<span class=\"meta-badge tag\">🏷️ ").append(escapeHtml(tag)).append("</span>");
+            }
+        }
         sb.append("        </div>\n");
         sb.append("      </div>\n");
         sb.append("    </div>\n");
@@ -1993,6 +2000,12 @@ public final class HtmlReportGenerator
                 color: var(--accent-primary);
                 border-color: var(--accent-primary);
                 background: var(--accent-primary-light);
+                font-weight: 600;
+            }
+            .meta-badge.tag {
+                color: var(--accent-purple);
+                border-color: #d8b4fe;
+                background: var(--accent-purple-light);
                 font-weight: 600;
             }
             .status-pill {

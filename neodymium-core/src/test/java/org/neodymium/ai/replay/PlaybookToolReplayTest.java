@@ -152,9 +152,9 @@ public class PlaybookToolReplayTest
         // Transparent synthesis into ToolCalls
         final List<ToolCall> synthesized = step.getToolCalls();
         Assertions.assertEquals(2, synthesized.size());
-        Assertions.assertEquals("browser_click", synthesized.get(0).toolName());
+        Assertions.assertEquals("click", synthesized.get(0).toolName());
         Assertions.assertEquals("#old-button", synthesized.get(0).arguments().path("target").asText());
-        Assertions.assertEquals("browser_type", synthesized.get(1).toolName());
+        Assertions.assertEquals("fill", synthesized.get(1).toolName());
         Assertions.assertEquals("#query", synthesized.get(1).arguments().path("target").asText());
         Assertions.assertEquals("search term", synthesized.get(1).arguments().path("text").asText());
     }
@@ -374,5 +374,40 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
         Assertions.assertEquals(1, this.executedCalls.size());
         Assertions.assertEquals("li.country-item:has-text(\"Germany\")", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testReadOnlyQueryDomToolBypassesSelfHealing() throws Exception
+    {
+        final PlaybookStep step = new PlaybookStep("Search for Poland");
+        final ObjectNode queryArgs = MAPPER.createObjectNode();
+        queryArgs.put("selector", "#country-list-container *");
+        queryArgs.put("text", "Poland");
+        step.addToolCall(new ToolCall("call-query", "query_dom", queryArgs));
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("query_dom", "Searches DOM", queryArgs);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "[]");
+            }
+        });
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("query_dom", this.executedCalls.get(0).toolName());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
     }
 }

@@ -414,4 +414,47 @@ public final class PostFlightPlaybookLinterTest
         assertEquals(LinterCategory.REDUNDANT_VISUAL_TAG, f.category());
         assertEquals("Click 'Purchase'.", f.suggestedRewrite());
     }
+
+    @Test
+    @DisplayName("Verify REDUNDANT_VISUAL_TAG does not trigger when step has (visual) and executed in VISUAL context")
+    public void testVisualAssertionWithVisualContextNotFlaggedAsRedundant()
+    {
+        System.setProperty("neodymium.ai.linter.postFlight.enabled", "true");
+        AiConfiguration.resetInstance();
+
+        final AiSession session = AiSession.mock(new SessionData(), new LlmRegistry(), new ExecutionEventBus(), null);
+        final ExecutionContext context = session.getExecutionContext();
+        ExecutionContext.setActiveContext(context);
+
+        final StepStats stats = new StepStats("We have a single lineitem on the left, and an order summary box on the right (visual).", System.currentTimeMillis());
+        stats.getContextLevels().add("VISUAL");
+        context.getTransientData().put("execution.stepStatsList", List.of(stats));
+
+        final PostFlightPlaybookLinter linter = new PostFlightPlaybookLinter(session);
+        final PlaybookStep s = new PlaybookStep("We have a single lineitem on the left, and an order summary box on the right (visual).");
+        s.setActions(List.of());
+
+        final List<PlaybookLinterFinding> findings = linter.lint(List.of(s), context);
+        assertTrue(findings.isEmpty(), "Visual assertion executed with VISUAL context level must not be flagged as REDUNDANT_VISUAL_TAG");
+    }
+
+    @Test
+    @DisplayName("Verify REDUNDANT_VISUAL_TAG does not trigger when step has (visual) and recorded screenshot hash")
+    public void testVisualAssertionWithScreenshotHashNotFlaggedAsRedundant()
+    {
+        System.setProperty("neodymium.ai.linter.postFlight.enabled", "true");
+        AiConfiguration.resetInstance();
+
+        final AiSession session = AiSession.mock(new SessionData(), new LlmRegistry(), new ExecutionEventBus(), null);
+        final ExecutionContext context = session.getExecutionContext();
+        ExecutionContext.setActiveContext(context);
+
+        final PostFlightPlaybookLinter linter = new PostFlightPlaybookLinter(session);
+        final PlaybookStep s = new PlaybookStep("We have a single lineitem on the left, and an order summary box on the right (visual).");
+        s.setScreenshotHash("dummy_ssim_hash");
+        s.setActions(List.of());
+
+        final List<PlaybookLinterFinding> findings = linter.lint(List.of(s), context);
+        assertTrue(findings.isEmpty(), "Visual assertion with recorded screenshot hash must not be flagged as REDUNDANT_VISUAL_TAG");
+    }
 }

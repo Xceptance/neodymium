@@ -20,6 +20,8 @@ package org.neodymium.ai.executor.selenide;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.action.LocatorCandidate;
 
 import java.util.List;
 
@@ -34,11 +36,11 @@ public class SelenideElementFinderTest
     @Test
     public void testCandidateSetPreservation()
     {
-        final org.neodymium.ai.action.Action action = new org.neodymium.ai.action.Action("CLICK", "#primary-btn", "Click button");
+        final Action action = new Action("CLICK", "#primary-btn", "Click button");
         action.setCandidateLocators(List.of(
-            new org.neodymium.ai.action.LocatorCandidate(".btn-primary", 0.9),
-            new org.neodymium.ai.action.LocatorCandidate("button[type='submit']", 0.8),
-            new org.neodymium.ai.action.LocatorCandidate("text=Submit", 0.7)
+            new LocatorCandidate(".btn-primary", 0.9),
+            new LocatorCandidate("button[type='submit']", 0.8),
+            new LocatorCandidate("text=Submit", 0.7)
         ));
 
         final List<String> candidates = action.getAllCandidateLocators();
@@ -54,19 +56,33 @@ public class SelenideElementFinderTest
     {
         Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement((String) null));
         Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement("   "));
-        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement((org.neodymium.ai.action.Action) null));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement((Action) null));
         Assertions.assertThrows(IllegalArgumentException.class, () -> SelenideElementFinder.findElement("", List.of()));
     }
 
     @Test
     public void testActionCandidateFallbackResolution()
     {
-        final org.neodymium.ai.action.Action action = new org.neodymium.ai.action.Action("CLICK", "", "Click button");
-        action.setCandidateLocators(List.of(new org.neodymium.ai.action.LocatorCandidate("#valid-fallback-button", 0.9)));
+        final Action action = new Action("CLICK", "", "Click button");
+        action.setCandidateLocators(List.of(new LocatorCandidate("#valid-fallback-button", 0.9)));
 
         // Even though target is empty, candidate locator is extracted and attempt does not throw IllegalArgumentException for empty target
         // (will attempt resolution on fallback candidate)
         final String firstCandidate = action.getAllCandidateLocators().get(0);
         Assertions.assertEquals("#valid-fallback-button", firstCandidate);
+    }
+
+    @Test
+    public void testIsDirectlyPresentSafelyReturnsFalseOnNullOrBlank()
+    {
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent(null));
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("   "));
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("#some-missing-element"));
+    }
+
+    @Test
+    public void testFindFirstVisibleHandlesNullGracefully()
+    {
+        Assertions.assertNull(SelenideElementFinder.findFirstVisible(null, "someTarget"));
     }
 }

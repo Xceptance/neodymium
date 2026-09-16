@@ -387,7 +387,7 @@ public final class SelenideElementFinder
                         return visible;
                     }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
@@ -506,7 +506,7 @@ public final class SelenideElementFinder
                         return Selenide.$(matchedWebElement);
                     }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
@@ -563,7 +563,7 @@ public final class SelenideElementFinder
         {
             return findDirect(target) != null;
         }
-        catch (final Exception ignored)
+        catch (final AssertionError | Exception ignored)
         {
             return false;
         }
@@ -626,7 +626,7 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
@@ -642,7 +642,7 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
@@ -658,7 +658,7 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
@@ -679,7 +679,7 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
@@ -695,7 +695,7 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
@@ -747,12 +747,12 @@ public final class SelenideElementFinder
                         return visible;
                     }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
         }
-        catch (final Exception ignored)
+        catch (final AssertionError | Exception ignored)
         {
         }
         return null;
@@ -788,7 +788,7 @@ public final class SelenideElementFinder
                         return visible;
                     }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
@@ -815,7 +815,7 @@ public final class SelenideElementFinder
                         return visible;
                     }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
@@ -826,77 +826,51 @@ public final class SelenideElementFinder
 
     public static SelenideElement findFirstVisible(final ElementsCollection els, final String originalTarget)
     {
-        if (els == null || els.isEmpty())
+        if (els == null)
         {
             return null;
         }
 
-        final List<SelenideElement> visibleEls = new ArrayList<>();
-        for (final SelenideElement el : els)
+        try
         {
-            try
+            final ElementsCollection visibleEls = els.filter(Condition.visible);
+            if (visibleEls.isEmpty())
             {
-                if (el.isDisplayed())
+                return null;
+            }
+
+            if (visibleEls.size() == 1)
+            {
+                final SelenideElement single = visibleEls.first();
+                return single.is(Condition.visible) ? single : null;
+            }
+
+            final String cleanTarget = originalTarget != null ? originalTarget.trim() : "";
+            if (!cleanTarget.isBlank())
+            {
+                final SelenideElement matched = visibleEls.find(Condition.or("target match",
+                    Condition.exactText(cleanTarget),
+                    Condition.value(cleanTarget),
+                    Condition.attribute("aria-label", cleanTarget)));
+                if (matched.is(Condition.visible))
                 {
-                    visibleEls.add(el);
+                    return matched;
                 }
             }
-            catch (final Exception ignored)
-            {
-            }
-        }
 
-        if (visibleEls.isEmpty())
+            final SelenideElement focused = visibleEls.find(Condition.focused);
+            if (focused.is(Condition.visible))
+            {
+                return focused;
+            }
+
+            final SelenideElement first = visibleEls.first();
+            return first.is(Condition.visible) ? first : null;
+        }
+        catch (final AssertionError | Exception ignored)
         {
             return null;
         }
-
-        if (visibleEls.size() == 1)
-        {
-            return visibleEls.get(0);
-        }
-
-        final String cleanTarget = originalTarget != null ? originalTarget.trim().toLowerCase() : "";
-        for (final SelenideElement el : visibleEls)
-        {
-            try
-            {
-                final String text = el.getText();
-                if (text != null && text.trim().equalsIgnoreCase(cleanTarget))
-                {
-                    return el;
-                }
-                final String val = el.getValue();
-                if (val != null && val.trim().equalsIgnoreCase(cleanTarget))
-                {
-                    return el;
-                }
-                final String aria = el.getAttribute("aria-label");
-                if (aria != null && aria.trim().equalsIgnoreCase(cleanTarget))
-                {
-                    return el;
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
-        for (final SelenideElement el : visibleEls)
-        {
-            try
-            {
-                if (el.is(Condition.focused))
-                {
-                    return el;
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
-        return visibleEls.get(0);
     }
 
     private static SelenideElement findInShadowRoots(final String rawCandidate)
@@ -915,7 +889,7 @@ public final class SelenideElementFinder
                 return Selenide.$(webElement);
             }
         }
-        catch (final Exception e)
+        catch (final AssertionError | Exception e)
         {
             LOG.trace("Shadow DOM element lookup failed for '{}': {}", rawCandidate, e.getMessage());
         }
@@ -946,7 +920,7 @@ public final class SelenideElementFinder
                 return Selenide.$$(elements);
             }
         }
-        catch (final Exception e)
+        catch (final AssertionError | Exception e)
         {
             LOG.trace("Shadow DOM elements lookup failed for '{}': {}", rawCandidate, e.getMessage());
         }

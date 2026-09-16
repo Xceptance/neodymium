@@ -238,11 +238,17 @@ public final class BrowserToolProvider
                             var r = el.getBoundingClientRect();
                             return { x: Math.round(r.left), y: Math.round(r.top) };
                             """;
-                        final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, sel);
-                        if (rectObj instanceof Map<?, ?> map)
+                        try
                         {
-                            x = ((Number) map.get("x")).intValue() + rawX;
-                            y = ((Number) map.get("y")).intValue() + rawY;
+                            final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, sel);
+                            if (rectObj instanceof Map<?, ?> map)
+                            {
+                                x = ((Number) map.get("x")).intValue() + rawX;
+                                y = ((Number) map.get("y")).intValue() + rawY;
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
                         }
                     }
 

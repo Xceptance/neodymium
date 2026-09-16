@@ -115,6 +115,10 @@ public final class HtmlIndexReportGenerator
             entry.setDatasetId(report.getDatasetId());
             entry.setStatus(report.getStatus() != null ? report.getStatus() : "UNKNOWN");
             entry.setExecutionMode(report.getExecutionMode());
+            if (report.getTags() != null)
+            {
+                entry.setTags(new ArrayList<>(report.getTags()));
+            }
             final long timestamp = report.getStartTimeMs() > 0 ? report.getStartTimeMs() : System.currentTimeMillis();
             entry.setTimestamp(timestamp);
             entry.setDurationMs(report.getDurationMs());
@@ -247,6 +251,22 @@ public final class HtmlIndexReportGenerator
         public void setStatus(final String status)
         {
             this.status = status;
+        }
+
+        private final List<String> tags = new ArrayList<>();
+
+        public List<String> getTags()
+        {
+            return Collections.unmodifiableList(this.tags);
+        }
+
+        public void setTags(final List<String> tags)
+        {
+            this.tags.clear();
+            if (tags != null)
+            {
+                this.tags.addAll(tags);
+            }
         }
 
         public String getExecutionMode()
@@ -768,10 +788,11 @@ public final class HtmlIndexReportGenerator
                 final String testTitle = entry.getTestName() != null ? entry.getTestName()
                     : (entry.getTestClass() != null ? extractSimpleClassName(entry.getTestClass()) + "." + (entry.getTestMethod() != null ? entry.getTestMethod() : "test") : entry.getBaseFileName());
                 final String modeStr = entry.getExecutionMode() != null ? entry.getExecutionMode().trim() : "";
+                final String tagsSearch = String.join(" ", entry.getTags());
 
                 sb.append("          <tr class=\"execution-row\" data-status=\"").append(statusCategory)
                   .append("\" data-mode=\"").append(escapeAttr(modeStr))
-                  .append("\" data-search=\"").append(escapeAttr((testTitle + " " + entry.getTestClass() + " " + entry.getTestMethod() + " " + entry.getDatasetId() + " " + modeStr + " " + entry.getFailureReason()).toLowerCase()))
+                  .append("\" data-search=\"").append(escapeAttr((testTitle + " " + entry.getTestClass() + " " + entry.getTestMethod() + " " + entry.getDatasetId() + " " + modeStr + " " + tagsSearch + " " + entry.getFailureReason()).toLowerCase()))
                   .append("\">\n");
 
                 // 0. Timestamp (Compact 2-line layout)
@@ -799,11 +820,11 @@ public final class HtmlIndexReportGenerator
                 sb.append("              </div>\n");
                 if (entry.getTestClass() != null)
                 {
-                    final String simpleClass = extractSimpleClassName(entry.getTestClass());
+                    final String packagePath = extractPackageName(entry.getTestClass());
                     final String methodPart = entry.getTestMethod() != null ? "#" + entry.getTestMethod() : "";
-                    final String simpleMeta = simpleClass + methodPart;
                     final String fullMeta = entry.getTestClass() + methodPart;
-                    sb.append("              <div class=\"test-meta-line\" title=\"").append(escapeAttr(fullMeta)).append("\">").append(escapeHtml(simpleMeta)).append("</div>\n");
+                    final String displayMeta = !packagePath.isBlank() ? packagePath : entry.getTestClass();
+                    sb.append("              <div class=\"test-meta-line\" title=\"").append(escapeAttr(fullMeta)).append("\">").append(escapeHtml(displayMeta)).append("</div>\n");
                 }
                 if (entry.getFailureReason() != null && !entry.getFailureReason().isBlank())
                 {
@@ -909,6 +930,16 @@ public final class HtmlIndexReportGenerator
         if (fqcn == null) return "TestClass";
         final int lastDot = fqcn.lastIndexOf('.');
         return lastDot >= 0 ? fqcn.substring(lastDot + 1) : fqcn;
+    }
+
+    private static String extractPackageName(final String fqcn)
+    {
+        if (fqcn == null)
+        {
+            return "";
+        }
+        final int lastDot = Math.max(fqcn.lastIndexOf('.'), fqcn.lastIndexOf('/'));
+        return lastDot > 0 ? fqcn.substring(0, lastDot) : "";
     }
 
     private static String escapeHtml(final String text)

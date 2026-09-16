@@ -475,11 +475,18 @@ public final class ExecuteActionsStep
                 {
                     try
                     {
-                        final boolean hasMutatingAction = step != null && step.getActions() != null && step.getActions().stream()
-                            .anyMatch(a -> a != null && a.getType() != null
-                                && !a.getType().toUpperCase().startsWith("ASSERT")
-                                && !"NONE".equalsIgnoreCase(a.getType())
-                                && !"VERIFY".equalsIgnoreCase(a.getType()));
+                        final boolean hasMutatingAction = step != null && (
+                            (step.getActions() != null && step.getActions().stream()
+                                .anyMatch(a -> a != null && a.getType() != null
+                                    && !a.getType().toUpperCase().startsWith("ASSERT")
+                                    && !"NONE".equalsIgnoreCase(a.getType())
+                                    && !"VERIFY".equalsIgnoreCase(a.getType())))
+                            || (step.getToolCalls() != null && step.getToolCalls().stream()
+                                .anyMatch(tc -> tc != null && tc.toolName() != null
+                                    && !tc.toolName().toLowerCase().startsWith("assert")
+                                    && !"none".equalsIgnoreCase(tc.toolName())
+                                    && !"verify".equalsIgnoreCase(tc.toolName())))
+                        );
 
                         final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
                         if (settleMs > 0 && hasMutatingAction)
@@ -511,7 +518,13 @@ public final class ExecuteActionsStep
                 }
             });
 
-            if (AiConfiguration.getInstance().isSemanticVerificationEnabled())
+            if (isReplay && step != null && step.isVisualStep() && !visualBaselineGateStep.isPureVerification())
+            {
+                standardFlow.add(visualBaselineGateStep::executePostActionCheck);
+            }
+
+            if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                || (step != null && step.isVisualStep()))
             {
                 standardFlow.add(verifyStep);
             }

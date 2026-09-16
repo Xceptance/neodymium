@@ -19,6 +19,7 @@
 package org.neodymium.ai.pipeline.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,8 +45,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.SutAttachment;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
@@ -56,6 +59,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
@@ -388,5 +392,220 @@ public final class ExecuteActionsStepTest
         assertTrue(html.contains("substep-item-0-0"), "HTML report must contain sub-step 1 card");
         assertTrue(html.contains("substep-item-0-1"), "HTML report must contain sub-step 2 card");
         assertTrue(html.contains("2 sub-step(s)"), "Parent card must display sub-steps count");
+    }
+
+    @Test
+    public void testLiveVisualStepRecordsScreenshotHashEvenWhenSemanticVerificationDisabled() throws Exception
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.BLUE);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", base64Png);
+        final MockSutState visualState = new MockSutState("<html><body>Order summary</body></html>", List.of(screenshot), "hash-vis-live");
+        executor.enqueueState(visualState);
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final ObjectNode pesapArgs = JsonNodeFactory.instance.objectNode();
+        pesapArgs.put("intent", "ASSERT");
+        pesapArgs.put("contextLevel", "VISUAL");
+        final ToolCall pesapCall = new ToolCall("pesap-1", "classify_step", pesapArgs);
+        mockProvider.addResponse(new LlmResponse("", new TokenUsage(50, 10, 60, 0), "mock-model", List.of(pesapCall)));
+
+        final ObjectNode args = JsonNodeFactory.instance.objectNode();
+        args.put("summary", "Visual check passed");
+        final ToolCall completeCall = new ToolCall("call-1", "complete_step", args);
+        mockProvider.addResponse(new LlmResponse("", new TokenUsage(100, 20, 120, 0), "mock-model", List.of(completeCall)));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.FORCE_RECORDING);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final PlaybookStep visualStep = new PlaybookStep("Order summary box is on the right (visual)");
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, visualStep.getStatus());
+        assertNotNull(visualStep.getScreenshotHash(), "Screenshot hash must be recorded during live execution even when semantic verification is disabled");
+        assertFalse(visualStep.getActions().isEmpty(), "Visual baseline Action('NONE') must be recorded");
+        assertEquals("NONE", visualStep.getActions().get(0).getType());
+    }
+
+    @Test
+    public void testReplayVisualStepWithActionExecutesActionThenVerifiesPostActionVisualBaseline() throws Exception
+    {
+        final BufferedImage whiteImg = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = whiteImg.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage blueImg = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = blueImg.createGraphics();
+        g2.setColor(Color.BLUE);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String whiteBase64 = encodeToBase64(whiteImg);
+        final String blueBase64 = encodeToBase64(blueImg);
+
+        // Recorded baseline hash is blue image (post-action)
+        final String baselineHash = ScreenshotHasher.computeSsimMatrix(blueBase64);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        // 1. State captured during action replay (white)
+        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "pre.png", whiteBase64)), "hash-pre"));
+        // 2. Post-action state capture (blue)
+        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "post.png", blueBase64)), "hash-post"));
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final AtomicBoolean toolExecuted = new AtomicBoolean(false);
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("scroll", "scrolls page", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                toolExecuted.set(true);
+                return ToolResult.success(call.callId(), "scrolled");
+            }
+        });
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final PlaybookStep visualStep = new PlaybookStep("Scroll down to view filter box (visual)");
+        visualStep.setScreenshotHash(baselineHash);
+        final ObjectNode scrollArgs = JsonNodeFactory.instance.objectNode();
+        scrollArgs.put("direction", "down");
+        visualStep.setToolCalls(List.of(new ToolCall("call-scroll-1", "scroll", scrollArgs)));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertTrue(toolExecuted.get(), "Recorded scroll action must be executed during replay");
+        assertEquals(PlaybookStepStatus.SUCCESS, visualStep.getStatus());
+        assertNotNull(visualStep.getSsimScore());
+        assertEquals(1.0, visualStep.getSsimScore(), 0.001);
+    }
+
+    @Test
+    public void testReplayVisualStepWithActionThrowsDivergenceWhenPostActionVisualBaselineDiffers() throws Exception
+    {
+        final BufferedImage whiteImg = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = whiteImg.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage blueImg = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = blueImg.createGraphics();
+        g2.setColor(Color.BLUE);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final BufferedImage redImg = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g3 = redImg.createGraphics();
+        g3.setColor(Color.RED);
+        g3.fillRect(0, 0, 200, 200);
+        g3.dispose();
+
+        final String whiteBase64 = encodeToBase64(whiteImg);
+        final String blueBase64 = encodeToBase64(blueImg);
+        final String redBase64 = encodeToBase64(redImg);
+
+        // Recorded baseline hash is blue image
+        final String baselineHash = ScreenshotHasher.computeSsimMatrix(blueBase64);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        // 1. State captured during action replay (white)
+        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "pre.png", whiteBase64)), "hash-pre"));
+        // 2. Post-action state capture (red != blue)
+        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "post.png", redBase64)), "hash-post"));
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final AtomicBoolean toolExecuted = new AtomicBoolean(false);
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("scroll", "scrolls page", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                toolExecuted.set(true);
+                return ToolResult.success(call.callId(), "scrolled");
+            }
+        });
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final PlaybookStep visualStep = new PlaybookStep("Scroll down to view filter box (visual)");
+        visualStep.setScreenshotHash(baselineHash);
+        final ObjectNode scrollArgs = JsonNodeFactory.instance.objectNode();
+        scrollArgs.put("direction", "down");
+        visualStep.setToolCalls(List.of(new ToolCall("call-scroll-1", "scroll", scrollArgs)));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+        pipelineStep.execute(context);
+
+        assertThrows(DivergenceException.class, () ->
+        {
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(toolExecuted.get(), "Recorded scroll action must have executed before post-action visual check");
+        assertNotNull(visualStep.getSsimScore());
+        assertTrue(visualStep.getSsimScore() < 0.99);
     }
 }

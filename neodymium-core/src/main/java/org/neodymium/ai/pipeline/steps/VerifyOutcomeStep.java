@@ -116,6 +116,10 @@ public final class VerifyOutcomeStep implements PipelineStep
                 {
                     capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
                 }
+                else if (isFullPageReq && context.getTransientData().containsKey(ExecutionContext.KEY_POST_ACTION_STATE))
+                {
+                    capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                }
                 else
                 {
                     context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);

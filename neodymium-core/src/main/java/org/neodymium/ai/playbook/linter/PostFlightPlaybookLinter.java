@@ -342,8 +342,13 @@ public final class PostFlightPlaybookLinter
                 }
 
                 // Rule 5: REDUNDANT_VISUAL_TAG (Tagged visual but is an action or resolved cleanly without visual check)
-                if (isVisualTagged && (isAction || (stats != null && stats.getVerificationCalls() == 0
-                    && !stats.getContextLevels().contains("VISUAL_RICH"))))
+                final boolean hasVisualContext = stats != null && stats.getContextLevels().stream()
+                    .anyMatch(level -> level != null && level.startsWith("VISUAL"));
+                final boolean hasVisualHash = (pbStep.getScreenshotHash() != null && !pbStep.getScreenshotHash().isBlank())
+                    || (actions != null && actions.stream().anyMatch(a -> a != null && a.getStepScreenshotHash() != null && !a.getStepScreenshotHash().isBlank()));
+                final boolean hadVisualVerification = hadVerificationCall || hasVisualContext || hasVisualHash;
+
+                if (isVisualTagged && (isAction || !hadVisualVerification))
                 {
                     final String reason = isAction
                         ? "Step is an interactive action and does not perform visual verification; (visual) tag is redundant."

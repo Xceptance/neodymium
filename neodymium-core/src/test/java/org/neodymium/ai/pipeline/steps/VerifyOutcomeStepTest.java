@@ -427,4 +427,68 @@ public class VerifyOutcomeStepTest
         Assertions.assertEquals(preBase64, mockLlmProvider.getLastRequest().attachments().get(0).base64Data());
         Assertions.assertEquals(postBase64, mockLlmProvider.getLastRequest().attachments().get(1).base64Data());
     }
+
+    /**
+     * Verifies that for a visual step with full-page requirements (visual: full) and empty actions,
+     * KEY_POST_ACTION_STATE is preserved and used to compute the baseline hash rather than being
+     * discarded in favor of an active viewport KEY_LAST_STATE.
+     */
+    @Test
+    public void testVisualStepWithFullPagePreservesPostActionState() throws Exception
+    {
+        final BufferedImage fullPageImg = new BufferedImage(1500, 2117, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = fullPageImg.createGraphics();
+        g1.setColor(Color.RED);
+        g1.fillRect(0, 0, 1500, 2117);
+        g1.dispose();
+
+        final BufferedImage viewportImg = new BufferedImage(1500, 857, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = viewportImg.createGraphics();
+        g2.setColor(Color.GREEN);
+        g2.fillRect(0, 0, 1500, 857);
+        g2.dispose();
+
+        final String fullPageBase64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(fullPageImg, "png", baos);
+            fullPageBase64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final String viewportBase64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(viewportImg, "png", baos);
+            viewportBase64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final MockSutState postActionState = new MockSutState(
+            "<html>fullpage</html>",
+            List.of(new SutAttachment("image/png", "fullpage.png", fullPageBase64)),
+            "fullpage_hash");
+
+        final MockSutState lastState = new MockSutState(
+            "<html>viewport</html>",
+            List.of(new SutAttachment("image/png", "viewport.png", viewportBase64)),
+            "viewport_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postActionState);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, lastState);
+
+        final PlaybookStep fullPageVisualStep = new PlaybookStep("Verify checkmark on page (visual: full)");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, fullPageVisualStep);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        final String expectedFullPageHash = ScreenshotHasher.computeSsimMatrix(fullPageBase64);
+        final String expectedViewportHash = ScreenshotHasher.computeSsimMatrix(viewportBase64);
+
+        Assertions.assertNotNull(fullPageVisualStep.getScreenshotHash(), "Screenshot hash should be recorded.");
+        Assertions.assertEquals(expectedFullPageHash, fullPageVisualStep.getScreenshotHash(), "Baseline hash MUST match full-page state from KEY_POST_ACTION_STATE.");
+        Assertions.assertNotEquals(expectedViewportHash, fullPageVisualStep.getScreenshotHash(), "Baseline hash must NOT match viewport state.");
+        Assertions.assertTrue(fullPageVisualStep.isFullPage(), "Step must be marked as fullPage.");
+    }
 }

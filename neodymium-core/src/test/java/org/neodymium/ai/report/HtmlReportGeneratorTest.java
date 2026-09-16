@@ -333,6 +333,29 @@ public class HtmlReportGeneratorTest
         verifyScriptWithNodeIfAvailable(matcher.group(1));
     }
 
+    @Test
+    @DisplayName("Verify report header renders test tags as styled badges")
+    public void testReportHeaderRendersTags()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest");
+        report.setTestMethod("liveAllDataSets");
+        report.addTag("integration");
+        report.addTag("verla");
+        report.addTag("mode:judge");
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+
+        Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("<span class=\"meta-badge tag\">🏷️ integration</span>"),
+            "Header must contain badge for integration tag");
+        Assertions.assertTrue(html.contains("<span class=\"meta-badge tag\">🏷️ verla</span>"),
+            "Header must contain badge for verla tag");
+        Assertions.assertTrue(html.contains("<span class=\"meta-badge tag\">🏷️ mode:judge</span>"),
+            "Header must contain badge for mode:judge tag");
+    }
+
     private static void verifyScriptWithNodeIfAvailable(final String script)
     {
         try

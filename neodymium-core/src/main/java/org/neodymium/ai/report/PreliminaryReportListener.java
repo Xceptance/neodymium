@@ -27,6 +27,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -1062,6 +1063,20 @@ public final class PreliminaryReportListener implements ExecutionListener
                 if (pb != null)
                 {
                     this.report.setPlaybookFile(pb);
+                }
+            }
+            if (this.report.getTags().isEmpty())
+            {
+                final Object tagsObj = ctx.getTransientData().get("testTags");
+                if (tagsObj instanceof Collection<?> col)
+                {
+                    for (final Object item : col)
+                    {
+                        if (item != null)
+                        {
+                            this.report.addTag(item.toString());
+                        }
+                    }
                 }
             }
             if (this.report.getVisualRcaExplanation() == null)

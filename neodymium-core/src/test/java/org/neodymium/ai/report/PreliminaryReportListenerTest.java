@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -1981,5 +1982,65 @@ public class PreliminaryReportListenerTest
         {
             ExecutionContext.setActiveContext(null);
         }
+    }
+
+    @Test
+    @DisplayName("Verify PreliminaryReportListener populates test tags from execution context transient data")
+    public void testPopulateContextMetadataExtractsTestTags(@TempDir final Path tempDir)
+    {
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ctx.getTransientData().put("testClass", "org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest");
+        ctx.getTransientData().put("testMethod", "liveAllDataSets");
+        ctx.getTransientData().put("testTags", List.of("integration", "verla", "mode:judge"));
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+            bus.registerListener(listener);
+
+            bus.dispatch(new SessionFinishedEvent(500, true, Collections.emptyList()));
+
+            final TestExecutionReport report = listener.getReport();
+            assertNotNull(report);
+            assertEquals("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest", report.getTestClass());
+            assertEquals("liveAllDataSets", report.getTestMethod());
+            assertEquals(List.of("integration", "verla", "mode:judge"), report.getTags());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify HtmlIndexReportGenerator omits tag pills from table rows for compact layout while keeping them in search attribute")
+    public void testHtmlIndexReportGeneratorRendersTags(@TempDir final Path testDir) throws Exception
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest");
+        report.setTestMethod("liveAllDataSets");
+        report.setTestName("Search Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+        report.setStartTimeMs(System.currentTimeMillis());
+        report.addTag("integration");
+        report.addTag("mode:judge");
+
+        final HtmlIndexReportGenerator generator = new HtmlIndexReportGenerator();
+        generator.updateIndex(testDir, report, "SearchJudgeTest_liveAllDataSets_20260916-184607");
+
+        final Path indexPath = testDir.resolve("index.html");
+        assertTrue(Files.exists(indexPath), "index.html must be generated");
+        final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
+        assertFalse(indexHtml.contains("tag-pill"),
+            "Index must not contain visible tag pills in table row for compact overview");
+        assertTrue(indexHtml.contains("data-search=\"") && indexHtml.contains("mode:judge"),
+            "Index table row data-search attribute must include tags for client filtering");
+        assertTrue(indexHtml.contains("<div class=\"test-meta-line\" title=\"org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest#liveAllDataSets\">org.neodymium.ai.integration.verla.search.judge</div>"),
+            "Index table row subtitle must display package path instead of duplicate simple class/method");
+        assertFalse(indexHtml.contains(">SearchJudgeTest#liveAllDataSets<"),
+            "Index table row subtitle must not redundantly duplicate simple class name and method");
     }
 }
