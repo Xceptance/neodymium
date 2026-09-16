@@ -511,7 +511,8 @@ public final class ExecuteActionsStep
                 }
             });
 
-            if (AiConfiguration.getInstance().isSemanticVerificationEnabled())
+            if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                || (step != null && step.isVisualStep()))
             {
                 standardFlow.add(verifyStep);
             }

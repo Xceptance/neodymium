@@ -71,6 +71,7 @@ import org.neodymium.ai.tool.guard.InterceptionVerdict;
 import org.neodymium.ai.tool.guard.QualityJudgeToolInterceptor;
 import org.neodymium.ai.tool.guard.ToolInterceptor;
 import org.neodymium.ai.util.DomQuiescenceWatcher;
+import org.openqa.selenium.InvalidElementStateException;
 import org.openqa.selenium.InvalidSelectorException;
 import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.WebDriver;
@@ -402,32 +403,20 @@ public final class AgentToolLoopStep implements PipelineStep
         final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
 
         final StringBuilder systemPrompt = new StringBuilder();
-        systemPrompt.append("You are an autonomous web testing agent. Execute the test goal by invoking the available tools directly.\n");
-        systemPrompt.append("When the goal is fully achieved and verified, call tool 'complete_step' with a summary.\n\n");
-        systemPrompt.append("### CRITICAL OPERATING RULES:\n");
-        systemPrompt.append("1. ATOMIC STEP SCOPE: Execute ONLY the action or assertion explicitly described in the Test Instruction or required by the Compound Instruction Milestones. Do NOT anticipate or perform subsequent workflow steps.\n");
+        systemPrompt.append("You are an autonomous web testing agent. Execute the test goal by invoking available tools directly.\n\n");
+        systemPrompt.append("### OPERATING RULES:\n");
+        systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps. For forms, prefer 'fill' over 'type' (clears prior text). Do not press Enter unless commanded.\n");
         if (isAssertion)
         {
-            systemPrompt.append("   - This is an assertion/verification step. Interactive mutating tools (such as clicking or typing) are strictly PROHIBITED. Use assertion tools (`assert_text`, `assert_count`) or inspection tools (`inspect`, `query_dom`) to verify page state, then call 'complete_step'.\n");
+            systemPrompt.append("2. ASSERTION STEP: Do not mutate page state. Use 'assert_text' or 'assert_count' to verify state. For dynamic patterns (IDs/dates), set regex: true.\n");
         }
         else
         {
-            systemPrompt.append("   - If the instruction asks you to click a button or link (e.g. 'Add to Cart', an accordion toggle, a dropdown button), click that button and immediately call 'complete_step'. Do NOT select options, sizes, or variants from menus, modals, or dropdowns that appear as a result of the click unless the instruction explicitly commands you to in this step.\n");
-            systemPrompt.append("   - Subsequent test steps will perform any follow-up actions (such as choosing sizes, entering information, or checking out). Performing them prematurely will cause subsequent steps to fail!\n");
-            systemPrompt.append("   - If the instruction explicitly asks for multiple inputs or milestones (e.g. 'Enter Mario as first name, Meier as last name, and email ...'), execute all requested milestone actions before calling 'complete_step'.\n");
-            systemPrompt.append("   - When filling forms, prefer `fill` over `type` because `fill` automatically clears existing default or placeholder text before entering the new value. Use `type` only when intentionally appending without clearing. Do NOT set `pressEnter: true` unless the instruction explicitly commands you to press Enter or submit the form. Subsequent steps may verify live autocomplete suggestions, dropdowns, or click separate submit buttons.\n");
-            systemPrompt.append("   - Use dedicated browser tools (`fill`, `type`, `click`, `select`) for interacting with forms and elements. Do NOT use `execute_script` to fill forms or click buttons, as this bypasses validation and event tracking.\n");
+            systemPrompt.append("2. COMPLETION: Once the instruction's described goal or milestones are achieved, call 'complete_step'. For single atomic actions, you may propose 'complete_step' together with your action.\n");
         }
-        systemPrompt.append("2. COMPLETION: As soon as the instruction's described goal or milestones are achieved, you MUST invoke 'complete_step'. Do not continue calling tools.\n");
-        systemPrompt.append("3. NO IDENTICAL REPEATS: Never propose the exact same tool call with the same arguments if the page state did not change. If an element was not found, inspect the DOM or Page State rather than repeating the call.\n");
-        systemPrompt.append("4. DYNAMIC REGEX PATTERNS: When asserting dynamic values (such as order numbers, confirmation codes, dates, or IDs) where the instruction specifies a pattern or format (e.g. 'in the form 'V-[0-9]+-US'' or contains a regular expression in quotes), you MUST pass that pattern to `assert_text` as `expectedText` and set \"regex\": true. Do NOT assert the volatile literal value seen on screen, because dynamic IDs change on subsequent test runs!\n");
-        systemPrompt.append("5. VISUAL VERIFICATIONS & CHECKS: When an instruction is marked (visual) or is a visual/layout assertion (and a screenshot is provided):\n");
-        systemPrompt.append("   - Inspect the attached page screenshot visually to verify whether the condition (appearance, layout, colors, elements, icons, checkmarks, badges) is satisfied on screen.\n");
-        systemPrompt.append("   - If the visual condition is satisfied in the screenshot, call tool 'complete_step' immediately with a concise summary of your visual verification.\n");
-        systemPrompt.append("   - Do NOT attempt to query DOM elements or execute DOM text assertions for visual checks when the visual condition is visible on the screen.\n");
-        systemPrompt.append("6. SINGLE TOOL PER TURN: Propose exactly ONE tool call per response. Do NOT call multiple tools in parallel or batch multiple actions in a single turn. After each tool execution, you will receive the updated page state to decide your next action.\n");
-        systemPrompt.append("7. COUNT & COLLECTION ASSERTIONS: When an instruction asserts the number of items, rows, entries, or suggestions (e.g. 'contains at least 6 entries', '3 items in cart', '10 results'), you MUST invoke `assert_count` with the target `selector`, `count`, and optional `operator` ('EXACT', 'MIN', 'MAX').\n");
-        systemPrompt.append("8. SCROLLABLE CONTAINERS & VIRTUALIZED FEEDS: In infinite feeds, dynamic virtual lists, or scrollable tables, offscreen items may not be present in the DOM snapshot yet. If the targeted element, item, or text described in the instruction is not found in the current DOM snapshot, invoke `scroll` (e.g. direction 'down', or targeting the scrollable container selector like `container: \"#virtual-list-container\"` or `yOffset: 400`) to scroll the container, receive newly mounted elements in the next turn's DOM snapshot, and locate the target.\n");
+        systemPrompt.append("3. STABILITY: Never propose the exact same failing tool call without state change. To find offscreen items, use 'scroll'. To inspect DOM, use 'query_dom'.\n");
+        systemPrompt.append("4. SCROLL: For offscreen elements, invoke 'scroll' to locate the target.\n");
+        systemPrompt.append("5. VISUAL VERIFICATIONS & CHECKS: When an instruction is marked (visual) or a screenshot is provided, inspect the attached screenshot visually to verify whether the condition is satisfied on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -695,9 +684,12 @@ public final class AgentToolLoopStep implements PipelineStep
                 break;
             }
 
-            // Strict 1 tool call per turn for browser automation: execute first, ignore rest to prevent stale DOM errors
+            // Co-proposed completion check: model proposed action + complete_step in single response
             final ToolCall proposedCall = proposedCalls.get(0);
-            if (proposedCalls.size() > 1)
+            final ToolCall coProposedComplete = (proposedCalls.size() > 1 && "complete_step".equals(proposedCalls.get(1).toolName()))
+                    ? proposedCalls.get(1)
+                    : null;
+            if (proposedCalls.size() > 1 && coProposedComplete == null)
             {
                 LOGGER.warn("⚠️ Model proposed {} tool calls in turn #{}. Executing first call '{}' and discarding remaining {} calls to prevent stale DOM errors.",
                         proposedCalls.size(), turn, proposedCall.toolName(), proposedCalls.size() - 1);
@@ -830,7 +822,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
                 }
             }
-            catch (final JavascriptException | InvalidSelectorException e)
+            catch (final JavascriptException | InvalidSelectorException | InvalidElementStateException e)
             {
                 LOGGER.warn("Tool syntax error in '{}': {}", effectiveCall.toolName(), e.getMessage());
                 result = ToolResult.error(effectiveCall.callId(), "Tool failed with syntax error: " + e.getMessage());
@@ -977,6 +969,31 @@ public final class AgentToolLoopStep implements PipelineStep
             final String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
             conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
             logToolResult(effectiveCall.toolName(), toolContent);
+
+            // 1-Turn Atomic Step Completion
+            if (result != null && result.status() == ToolResult.Status.SUCCESS)
+            {
+                // Case 1: Co-proposed complete_step alongside an action/assertion that succeeded
+                if (coProposedComplete != null)
+                {
+                    final boolean hasRemaining = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
+                    if (!hasRemaining)
+                    {
+                        final String summary = coProposedComplete.arguments().path("summary").asText("Goal completed");
+                        context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                        finishLoop(context, executedCalls, summary);
+                        LOGGER.info("🎯 Goal Accomplished via co-proposed complete_step: {} (Turn: #{}, Executed Calls: {})", summary, turn, executedCalls.size());
+                        if (response != null && response.tokenUsage() != null)
+                        {
+                            final TokenUsage tu = response.tokenUsage();
+                            LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                                    tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+                        }
+                        LOGGER.info(TURN_DIVIDER);
+                        break;
+                    }
+                }
+            }
 
             // Submit fresh ground-truth DOM from SUT for the next turn
             final boolean hasRemainingMilestones = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
@@ -1334,12 +1351,34 @@ public final class AgentToolLoopStep implements PipelineStep
         final boolean isVisualAssertion = isVisual && (intent == null || intent.isAssertion());
         final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
 
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        final boolean hasMultipleTabs;
+        boolean alertPresent = false;
+        if (driver != null)
+        {
+            Set<String> handles = null;
+            try
+            {
+                handles = driver.getWindowHandles();
+            }
+            catch (final Exception ignored)
+            {
+            }
+            hasMultipleTabs = handles != null && handles.size() > 1;
+            alertPresent = BrowserToolProvider.isAlertPresent(driver);
+        }
+        else
+        {
+            hasMultipleTabs = false;
+        }
+
         for (final ToolDefinition def : this.toolRegistry.getDefinitions())
         {
             final String name = def.name();
+            final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
 
-            // Journey Fidelity dynamic scoping: omit navigate for interactive steps
-            if (intent != null && intent.isInteraction() && ("navigate".equals(name) || "browser_navigate".equals(name)))
+            // Journey Fidelity dynamic scoping: omit navigate and history for interactive steps
+            if (intent != null && intent.isInteraction() && ("navigate".equals(clean) || "back".equals(clean) || "forward".equals(clean) || "refresh".equals(clean)))
             {
                 continue;
             }
@@ -1356,9 +1395,45 @@ public final class AgentToolLoopStep implements PipelineStep
                 continue;
             }
 
+            // Omit tab/window tools if only 1 tab exists
+            if (!hasMultipleTabs && isTabOrWindowTool(clean))
+            {
+                continue;
+            }
+
+            // Omit alert tools if no alert is open
+            if (!alertPresent && "handle_alert".equals(clean))
+            {
+                continue;
+            }
+
+            // Omit exotic specialized tools on standard steps
+            if (isExoticTool(clean))
+            {
+                continue;
+            }
+
             defs.add(def);
         }
         return Collections.unmodifiableList(defs);
+    }
+
+    private static boolean isTabOrWindowTool(final String clean)
+    {
+        return "list_tabs".equals(clean)
+                || "switch_tab".equals(clean)
+                || "close_tab".equals(clean)
+                || "switch_window".equals(clean);
+    }
+
+    private static boolean isExoticTool(final String clean)
+    {
+        return "upload_file".equals(clean)
+                || "drag".equals(clean)
+                || "drag_to".equals(clean)
+                || "clear_cookies".equals(clean)
+                || "clear".equals(clean)
+                || "execute_script".equals(clean);
     }
 
     private static boolean hasInteractiveMilestones(final ExecutionContext context)

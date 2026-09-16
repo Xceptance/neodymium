@@ -19,6 +19,7 @@
 package org.neodymium.ai.pipeline.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,8 +45,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.SutAttachment;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
@@ -388,5 +391,60 @@ public final class ExecuteActionsStepTest
         assertTrue(html.contains("substep-item-0-0"), "HTML report must contain sub-step 1 card");
         assertTrue(html.contains("substep-item-0-1"), "HTML report must contain sub-step 2 card");
         assertTrue(html.contains("2 sub-step(s)"), "Parent card must display sub-steps count");
+    }
+
+    @Test
+    public void testLiveVisualStepRecordsScreenshotHashEvenWhenSemanticVerificationDisabled() throws Exception
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.BLUE);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SutAttachment screenshot = new SutAttachment("image/png", "shot.png", base64Png);
+        final MockSutState visualState = new MockSutState("<html><body>Order summary</body></html>", List.of(screenshot), "hash-vis-live");
+        executor.enqueueState(visualState);
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final ObjectNode pesapArgs = JsonNodeFactory.instance.objectNode();
+        pesapArgs.put("intent", "ASSERT");
+        pesapArgs.put("contextLevel", "VISUAL");
+        final ToolCall pesapCall = new ToolCall("pesap-1", "classify_step", pesapArgs);
+        mockProvider.addResponse(new LlmResponse("", new TokenUsage(50, 10, 60, 0), "mock-model", List.of(pesapCall)));
+
+        final ObjectNode args = JsonNodeFactory.instance.objectNode();
+        args.put("summary", "Visual check passed");
+        final ToolCall completeCall = new ToolCall("call-1", "complete_step", args);
+        mockProvider.addResponse(new LlmResponse("", new TokenUsage(100, 20, 120, 0), "mock-model", List.of(completeCall)));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, registry, eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.FORCE_RECORDING);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final PlaybookStep visualStep = new PlaybookStep("Order summary box is on the right (visual)");
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, visualStep.getStatus());
+        assertNotNull(visualStep.getScreenshotHash(), "Screenshot hash must be recorded during live execution even when semantic verification is disabled");
+        assertFalse(visualStep.getActions().isEmpty(), "Visual baseline Action('NONE') must be recorded");
+        assertEquals("NONE", visualStep.getActions().get(0).getType());
     }
 }

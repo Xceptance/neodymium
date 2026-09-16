@@ -120,6 +120,28 @@ public final class PesapPreStep implements PipelineStep
                     || (this.step.getToolCalls() != null && !this.step.getToolCalls().isEmpty())
                     || this.step.getScreenshotHash() != null));
 
+        // Universal Fast-path 1: RFC 3986 pure URL or URI path is unconditionally NAVIGATE
+        final String trimmedInstruction = resolvedInstruction != null ? resolvedInstruction.trim() : "";
+        if (trimmedInstruction.matches("^https?://\\S+$|^/[a-zA-Z0-9_.~!$&'()*+,;=:@%/-]+$"))
+        {
+            final SemanticIntent urlIntent = SemanticIntent.NAVIGATE;
+            this.step.setSemanticIntent(urlIntent);
+            context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, urlIntent);
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.MINIMAL);
+            if (stats != null)
+            {
+                stats.setSemanticIntent(urlIntent.name());
+            }
+            return false;
+        }
+
+        // Universal Fast-path 2: Sub-steps that already inherited a classified intent bypass re-querying
+        if (this.step.getParent() != null && this.step.getSemanticIntent() != null)
+        {
+            context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, this.step.getSemanticIntent());
+            return false;
+        }
+
         if (!isReplay && config.isPesapEnabled() && !alreadySplitSteps.contains(this.step))
         {
             alreadySplitSteps.add(this.step);
