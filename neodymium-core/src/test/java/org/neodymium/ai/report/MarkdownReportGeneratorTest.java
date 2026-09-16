@@ -114,4 +114,22 @@ public class MarkdownReportGeneratorTest
         Assertions.assertTrue(md.contains("Step #2"));
         Assertions.assertTrue(md.contains("Turn 1 (Vision 📸)"));
     }
+
+    @Test
+    @DisplayName("Verify Markdown report Overview table omits tags for compact layout")
+    public void testMarkdownReportOmitsTagsFromOverview()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest");
+        report.setTestMethod("liveAllDataSets");
+        report.addTag("integration");
+        report.addTag("mode:judge");
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertNotNull(md);
+        Assertions.assertFalse(md.contains("| **Tags** |"),
+            "Markdown Overview table must omit tags for compact overview layout");
+    }
 }

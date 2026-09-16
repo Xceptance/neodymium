@@ -22,6 +22,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,6 +58,7 @@ public final class TestExecutionReport
     private String failureStackTrace;
     private String visualRcaExplanation;
 
+    private final List<String> tags = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
     private final List<PlaybookLinterFinding> linterFindings = new ArrayList<>();
     private final List<PlaybookLinterFinding> postFlightFindings = new ArrayList<>();
@@ -233,6 +235,39 @@ public final class TestExecutionReport
             {
                 addWarning(w);
             }
+        }
+    }
+
+    public List<String> getTags()
+    {
+        return Collections.unmodifiableList(this.tags);
+    }
+
+    public void addTag(final String tag)
+    {
+        if (tag != null && !tag.isBlank() && !this.tags.contains(tag.trim()))
+        {
+            this.tags.add(tag.trim());
+        }
+    }
+
+    public void addTags(final Collection<String> tags)
+    {
+        if (tags != null)
+        {
+            for (final String t : tags)
+            {
+                addTag(t);
+            }
+        }
+    }
+
+    public void setTags(final List<String> tags)
+    {
+        this.tags.clear();
+        if (tags != null)
+        {
+            addTags(tags);
         }
     }
 
