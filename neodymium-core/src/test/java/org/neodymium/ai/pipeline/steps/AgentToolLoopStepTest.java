@@ -2050,6 +2050,71 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals("Canvas clicked", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
         Assertions.assertEquals(2, turn.get());
     }
+
+    /**
+     * Verifies that when a playbook step requires a full-page visual capture (e.g. via isFullPageVisualStep),
+     * intermediate state refreshes across multi-turn tool loops invoke executor.captureState with isFullPage=true.
+     */
+    @Test
+    public void testMultiTurnFullPageVisualStepPreservesFullPageCapture() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_inspect", "Inspects page", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Inspected");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>initial</div>", Collections.emptyList(), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<div>after tool</div>", Collections.emptyList(), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        final PlaybookStep playbookStep = new PlaybookStep("Verify checkmark on page (visual: full)");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "mock_inspect", MAPPER.createObjectNode())));
+            }
+            if (t == 2)
+            {
+                return new LlmResponse("Verified", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Checkmark confirmed"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(2, turn.get());
+        final List<Boolean> fullPageCaptures = executor.getCapturedFullPageFlags();
+        Assertions.assertFalse(fullPageCaptures.isEmpty(), "captureState should have been called at least once between turns.");
+        for (final boolean isFullPage : fullPageCaptures)
+        {
+            Assertions.assertTrue(isFullPage, "Every captured state in a full-page visual step turn must be full-page.");
+        }
+    }
 }
 
 

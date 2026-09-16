@@ -354,7 +354,9 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
 
                     context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                    final boolean isFullPage = (step != null && step.isFullPageVisualStep()) || activeContextLevel.isFullPageScreenshot();
+                    final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                            || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                            || activeContextLevel.isFullPageScreenshot();
                     final SutState initialState = executor.captureState(activeContextLevel, isFullPage);
                     context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, initialState);
                     final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
@@ -1083,7 +1085,10 @@ public final class AgentToolLoopStep implements PipelineStep
                             }
                         }
 
-                        final SutState freshState = executor.captureState(activeContextLevel, activeContextLevel.isFullPageScreenshot());
+                        final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                                || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                || activeContextLevel.isFullPageScreenshot();
+                        final SutState freshState = executor.captureState(activeContextLevel, isFullPage);
                         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
                         final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
                         if (statsObj instanceof final StepStats stats)
@@ -1189,7 +1194,10 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             try
                             {
-                                final SutState visualState = executor.captureState(ContextLevel.VISUAL, false);
+                                final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                                        || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                        || (activeContextLevel != null && activeContextLevel.isFullPageScreenshot());
+                                final SutState visualState = executor.captureState(ContextLevel.VISUAL, isFullPage);
                                 context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, visualState);
                                 if (visualState != null && visualState.getAttachments() != null && !visualState.getAttachments().isEmpty())
                                 {

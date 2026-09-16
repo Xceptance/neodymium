@@ -53,6 +53,11 @@ public final class MockTargetExecutor implements TargetExecutor
     private final Queue<SutState> stateQueue = new ConcurrentLinkedQueue<>();
 
     /**
+     * The thread-safe list of full-page flags passed into captureState.
+     */
+    private final List<Boolean> capturedFullPageFlags = new CopyOnWriteArrayList<>();
+
+    /**
      * Canned locator probe results for headless testing.
      */
     private final Map<String, LocatorProbeResult> cannedProbeResults = new ConcurrentHashMap<>();
@@ -182,6 +187,31 @@ public final class MockTargetExecutor implements TargetExecutor
             return next;
         }
         return new MockSutState("<html>default</html>", "default-hash");
+    }
+
+    /**
+     * Dequeues the next canned state, recording the requested full-page flag.
+     *
+     * @param level the active context level to capture
+     * @param isFullPage true to force full-page screenshot capture
+     * @return the captured SUT state
+     * @throws IOException if state capture fails
+     */
+    @Override
+    public SutState captureState(final ContextLevel level, final boolean isFullPage) throws IOException
+    {
+        this.capturedFullPageFlags.add(isFullPage);
+        return captureState(level);
+    }
+
+    /**
+     * Retrieves the list of fullPage flags recorded by captureState calls.
+     *
+     * @return the list of captured fullPage flags
+     */
+    public List<Boolean> getCapturedFullPageFlags()
+    {
+        return new ArrayList<>(this.capturedFullPageFlags);
     }
 
     /**
