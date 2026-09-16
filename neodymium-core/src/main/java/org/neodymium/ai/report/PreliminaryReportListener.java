@@ -174,6 +174,27 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
     }
 
+    /**
+     * Finds an existing top-level {@link TestExecutionReport.ReportStepEntry} whose
+     * {@code stepIndex} matches the given value, or {@code null} if none is present.
+     * This is used to detect whether a step is being re-executed (e.g., after an interactive
+     * EDIT action) so the entry can be reset in-place instead of duplicated.
+     *
+     * @param stepIndex the step index to look up
+     * @return the matching entry, or {@code null} if not found
+     */
+    private TestExecutionReport.ReportStepEntry findExistingTopLevelStepEntry(final int stepIndex)
+    {
+        for (final TestExecutionReport.ReportStepEntry entry : this.report.getSteps())
+        {
+            if (entry != null && entry.getStepIndex() == stepIndex)
+            {
+                return entry;
+            }
+        }
+        return null;
+    }
+
     private void handleEvent(final ExecutionEvent event)
     {
         final ExecutionContext activeCtx = ExecutionContext.getActiveContext();
@@ -195,10 +216,33 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
             }
 
-            final TestExecutionReport.ReportStepEntry stepEntry = new TestExecutionReport.ReportStepEntry(stepStarted.getStepIndex(), resolvedInstruction);
-            stepEntry.setRawInstruction(rawInstruction);
-            stepEntry.setStartTimeMs(System.currentTimeMillis());
-            stepEntry.setStatus("RUNNING");
+            // Check whether a top-level entry already exists for this stepIndex.
+            // If it does, the step is being re-executed (e.g., after an interactive EDIT action).
+            // Reset it in-place to discard stale LLM calls, actions, and status from the prior
+            // attempt — this ensures serializeStep() always finds exactly one entry per stepIndex.
+            final TestExecutionReport.ReportStepEntry existingEntry = pbStep == null || pbStep.getParent() == null
+                ? findExistingTopLevelStepEntry(stepStarted.getStepIndex())
+                : null;
+
+            final boolean isReExecution = existingEntry != null;
+            final TestExecutionReport.ReportStepEntry stepEntry;
+
+            if (isReExecution)
+            {
+                // Re-execution path: reset the existing entry rather than appending a duplicate.
+                LOGGER.debug("[PreliminaryReportListener] Re-execution detected for stepIndex={}; resetting existing report entry",
+                    stepStarted.getStepIndex());
+                existingEntry.reset(resolvedInstruction, rawInstruction);
+                stepEntry = existingEntry;
+            }
+            else
+            {
+                // First execution path: create a fresh entry and register it.
+                stepEntry = new TestExecutionReport.ReportStepEntry(stepStarted.getStepIndex(), resolvedInstruction);
+                stepEntry.setRawInstruction(rawInstruction);
+                stepEntry.setStartTimeMs(System.currentTimeMillis());
+                stepEntry.setStatus("RUNNING");
+            }
 
             if (pbStep != null)
             {
@@ -292,8 +336,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                 return;
             }
 
-            this.report.addStep(stepEntry);
+            // Register the entry in the report only on first execution; re-executed entries are
+            // already present and have been reset in-place, so addStep() must not be called again.
+            if (!isReExecution)
+            {
+                this.report.addStep(stepEntry);
+            }
             this.currentStep = stepEntry;
+
         }
         else if (event instanceof StepFinishedEvent stepFinished)
         {

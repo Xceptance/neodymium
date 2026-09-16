@@ -29,6 +29,9 @@ import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.QueueRunProgressListener;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -41,6 +44,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AuraServiceConfiguration
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuraServiceConfiguration.class);
+
     @Bean
     public AuraFileService auraFileService()
     {
@@ -81,7 +86,8 @@ public class AuraServiceConfiguration
 
     @Bean
     public AuraQueueService auraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService,
-                                              final RunStorageSyncService runStorageSyncService, final AuraReportDataService reportDataService)
+                                              final RunStorageSyncService runStorageSyncService, final AuraReportDataService reportDataService,
+                                              final ConfigurableApplicationContext applicationContext)
     {
         final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
         queueService.setQueueRunProgressListener(new QueueRunProgressListener()
@@ -89,29 +95,62 @@ public class AuraServiceConfiguration
             @Override
             public void onRunStarted(final String runId, final String batchName, final String environment)
             {
-                reportDataService.startRun(runId, batchName, environment, "queue");
+                if (applicationContext != null && applicationContext.isActive())
+                {
+                    try
+                    {
+                        reportDataService.startRun(runId, batchName, environment, "queue");
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Error in onRunStarted for runId {}: {}", runId, e.getMessage());
+                    }
+                }
             }
 
             @Override
             public void onTestExecutionCompleted(final String runId, final Map<String, Object> executionData)
             {
-                reportDataService.ingestExecution(runId, executionData);
+                if (applicationContext != null && applicationContext.isActive())
+                {
+                    try
+                    {
+                        reportDataService.ingestExecution(runId, executionData);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Error in onTestExecutionCompleted for runId {}: {}", runId, e.getMessage());
+                    }
+                }
             }
 
             @Override
             public void onRunFinished(final String runId)
             {
-                reportDataService.finishRun(runId);
+                if (applicationContext != null && applicationContext.isActive())
+                {
+                    try
+                    {
+                        reportDataService.finishRun(runId);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Error in onRunFinished for runId {}: {}", runId, e.getMessage());
+                    }
+                }
             }
         });
         queueService.setOnRunCompletedListener(runId -> {
-            try
+            if (applicationContext != null && applicationContext.isActive())
             {
-                runStorageSyncService.importOrUpdateRunReport(runId);
-            }
-            catch (final Exception e)
-            {
-                runStorageSyncService.syncLocalRunStorage();
+                try
+                {
+                    runStorageSyncService.importOrUpdateRunReport(runId);
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("[Aura Server] Could not import run report for runId {}: {}", runId, e.getMessage());
+                }
             }
         });
         return queueService;

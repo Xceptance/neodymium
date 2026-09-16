@@ -156,6 +156,10 @@ public final class ExecuteActionsStep implements PipelineStep
         if (!isReplayingStep && currentStep != null && !isContinuationLoop)
         {
             currentStep.getActions().clear();
+            if (actions != null && !actions.isEmpty())
+            {
+                currentStep.getActions().addAll(actions);
+            }
         }
 
         // Check if InteractiveConsoleListener is attached to the session

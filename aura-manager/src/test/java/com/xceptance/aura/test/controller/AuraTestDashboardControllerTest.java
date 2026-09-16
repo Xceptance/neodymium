@@ -95,4 +95,32 @@ public class AuraTestDashboardControllerTest
         Assertions.assertEquals("light", model.getAttribute("theme"));
         Mockito.verify(interactiveService).setActiveTheme("light");
     }
+
+    @Test
+    public void testRenderDashboardPopulatesInteractiveAndRunningState()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(queueController.isInteractive()).thenReturn(true);
+        Mockito.when(queueController.isRunning()).thenReturn(false);
+
+        final String view = controller.renderDashboard("true", model);
+
+        Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", view);
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("interactive"));
+        Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"));
+    }
+
+    @Test
+    public void testRenderDashboardPopulatesInteractiveAndRunningStateTrue()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(queueController.isInteractive()).thenReturn(true);
+        Mockito.when(queueController.isRunning()).thenReturn(true);
+
+        final String view = controller.renderDashboard("false", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("interactive"));
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("running"));
+    }
 }

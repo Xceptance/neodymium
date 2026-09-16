@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.aura.manager.unit;
 
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraReportingService;
@@ -65,6 +66,21 @@ public final class AuraQueueServiceTest
             queueService.stopProcess();
         });
         Assertions.assertTrue(queueService.isManuallyStopped());
+    }
+
+    @Test
+    public void testStopCurrentTestBroadcastsCancellationAndDoesNotHaltQueue()
+    {
+        final InteractiveConsoleEngine engine = interactiveService.getOrCreateConsoleEngine();
+        Assertions.assertDoesNotThrow(() -> {
+            queueService.stopCurrentTest();
+        });
+
+        Assertions.assertFalse(queueService.isManuallyStopped(), "stopCurrentTest must not halt the whole queue");
+        Assertions.assertTrue(queueService.getCurrentRunLogs().stream()
+            .anyMatch(log -> log.contains("Test execution cancelled by user")), "Cancellation log should be broadcast");
+        Assertions.assertTrue(engine.getCurrentStateJson().contains("cancelled") || engine.getCurrentStateJson().contains("skipped"),
+            "Engine state must reflect cancelled/skipped status");
     }
 
     @Test
@@ -192,6 +208,56 @@ public final class AuraQueueServiceTest
             "ingestBatchExecutionFiles", QueueRunProgressListener.class, String.class, String.class, List.class, boolean.class);
         method.setAccessible(true);
         method.invoke(queueService, listener, runId, "SomeClass", List.of(baseDir), onlyFinalStatus);
+    }
+
+    @Test
+    public void testMultipleDatasetSelectionsCreateDistinctBatches() throws Exception
+    {
+        final com.xceptance.neodymium.aura.dto.RunRequest req = new com.xceptance.neodymium.aura.dto.RunRequest();
+        final com.xceptance.neodymium.aura.dto.DatasetSelection sel1 = new com.xceptance.neodymium.aura.dto.DatasetSelection();
+        sel1.file = "wikipedia_search.yml";
+        sel1.id = "1";
+
+        final com.xceptance.neodymium.aura.dto.DatasetSelection sel2 = new com.xceptance.neodymium.aura.dto.DatasetSelection();
+        sel2.file = "wikipedia_search.yml";
+        sel2.id = "2";
+
+        req.datasets = List.of(sel1, sel2);
+        req.globalBrowserProfiles = List.of("Chrome_1024x768");
+
+        final Method getProfilesMethod = AuraQueueService.class.getDeclaredMethod(
+            "getEffectiveBrowserProfiles", com.xceptance.neodymium.aura.dto.DatasetSelection.class, List.class);
+        getProfilesMethod.setAccessible(true);
+
+        final List<Object> batches = new ArrayList<>();
+        final Class<?> batchClass = Class.forName("com.xceptance.neodymium.aura.AuraQueueService$ExecutionBatch");
+        final Field datasetIdsField = batchClass.getDeclaredField("datasetIds");
+        datasetIdsField.setAccessible(true);
+
+        for (final com.xceptance.neodymium.aura.dto.DatasetSelection selection : req.datasets)
+        {
+            @SuppressWarnings("unchecked")
+            final List<String> profiles = (List<String>) getProfilesMethod.invoke(queueService, selection, req.globalBrowserProfiles);
+
+            final java.lang.reflect.Constructor<?> batchConst = batchClass.getDeclaredConstructor(String.class, List.class);
+            batchConst.setAccessible(true);
+            final Object batch = batchConst.newInstance(selection.file, profiles);
+            if (selection.id != null && !selection.id.isBlank())
+            {
+                @SuppressWarnings("unchecked")
+                final List<String> ids = (List<String>) datasetIdsField.get(batch);
+                ids.add(selection.id);
+            }
+            batches.add(batch);
+        }
+
+        Assertions.assertEquals(2, batches.size(), "Each dataset selection entry must produce a distinct execution batch");
+        @SuppressWarnings("unchecked")
+        final List<String> ids1 = (List<String>) datasetIdsField.get(batches.get(0));
+        @SuppressWarnings("unchecked")
+        final List<String> ids2 = (List<String>) datasetIdsField.get(batches.get(1));
+        Assertions.assertEquals(List.of("1"), ids1);
+        Assertions.assertEquals(List.of("2"), ids2);
     }
 
     /**

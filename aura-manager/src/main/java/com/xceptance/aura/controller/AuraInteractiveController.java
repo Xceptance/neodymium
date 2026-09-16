@@ -79,10 +79,17 @@ public class AuraInteractiveController
     @PostMapping("/api/interactive/stop")
     public ResponseEntity<Map<String, Object>> stopEngine(@RequestParam(value = "sessionId", required = false) final String sessionId)
     {
-        final InteractiveConsoleEngine engine = interactiveService.getCurrentConsoleEngine();
-        if (engine != null)
+        if (queueService != null)
         {
-            engine.abort();
+            queueService.stopCurrentTest();
+        }
+        else
+        {
+            final InteractiveConsoleEngine engine = interactiveService.getCurrentConsoleEngine();
+            if (engine != null)
+            {
+                engine.abort();
+            }
         }
         return ResponseEntity.ok(Map.of("status", "SUCCESS"));
     }
@@ -217,6 +224,10 @@ public class AuraInteractiveController
     @PostMapping("/api/console/action")
     public ResponseEntity<String> handleAction(@RequestBody final String body)
     {
+        if (body != null && (body.contains("\"ABORT\"") || body.contains("\"STOP\"")) && queueService != null)
+        {
+            queueService.stopCurrentTest();
+        }
         final ActionResult result = interactiveService.submitAction(body);
         return ResponseEntity.status(result.statusCode())
                 .contentType(MediaType.APPLICATION_JSON)

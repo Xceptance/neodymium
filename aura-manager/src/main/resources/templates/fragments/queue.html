@@ -238,6 +238,16 @@
             th:classappend="${running ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">stop</span> Stop Execution
     </button>
+
+    <!-- Switch to Interactive Console Button -->
+    <button class="btn-edit btn-secondary" 
+            id="runInteractiveConsoleBtn" 
+            onclick="openInteractiveConsoleViewLive('/interactive_console.html')"
+            title="Switch to Interactive Console"
+            style="margin-top: 6px; padding: 6px 12px; font-size: 12px; align-items: center; justify-content: center; gap: 6px; width: 100%; font-weight: 600;"
+            th:classappend="${running and (interactive != null and interactive) ? 'd-flex' : 'd-none'}">
+        <span class="material-symbols-outlined" style="font-size: 16px; color: var(--accent);">terminal</span> Switch to Interactive Mode
+    </button>
 </th:block>
 
 <th:block th:fragment="statsPanelContent">

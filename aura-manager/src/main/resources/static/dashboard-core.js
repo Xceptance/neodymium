@@ -184,7 +184,49 @@ window.changeTheme = changeTheme;
 let isResizingH = false;
 let isResizingV = false;
 
+function restoreActiveRunContextUI() {
+    const sidebarCard = document.getElementById('sidebarContextCard');
+    if (!sidebarCard) return;
+
+    const savedRunId = localStorage.getItem('aura_active_run_id');
+    const savedStatus = localStorage.getItem('aura_active_run_status') || 'finished';
+    const savedReportUrl = localStorage.getItem('aura_active_run_report_url') || (savedRunId ? `/run-report?runId=${encodeURIComponent(savedRunId)}` : '');
+
+    const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
+    const currentRunIdText = sidebarRunIdEl ? sidebarRunIdEl.textContent.trim() : '';
+    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #';
+
+    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^Run\s*#/, '').trim() : savedRunId;
+
+    if (effectiveRunId) {
+        activeRunStats.runId = effectiveRunId;
+        const reportUrl = savedReportUrl || `/run-report?runId=${encodeURIComponent(effectiveRunId)}`;
+
+        sidebarCard.setAttribute('href', reportUrl);
+        sidebarCard.style.display = 'flex';
+
+        if (sidebarRunIdEl) {
+            sidebarRunIdEl.textContent = `Run #${effectiveRunId}`;
+        }
+
+        const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
+        if (sidebarStatusEl && (sidebarStatusEl.textContent === 'Unknown' || !sidebarStatusEl.textContent)) {
+            sidebarStatusEl.textContent = savedStatus;
+        }
+
+        const pulseDot = document.getElementById('sidebarContextPulseDot');
+        if (pulseDot) {
+            const isRunningState = (sidebarStatusEl && sidebarStatusEl.textContent === 'running') || savedStatus === 'running';
+            pulseDot.style.display = isRunningState ? 'inline-block' : 'none';
+        }
+    } else {
+        sidebarCard.style.display = 'none';
+    }
+}
+window.restoreActiveRunContextUI = restoreActiveRunContextUI;
+
 document.addEventListener('DOMContentLoaded', function() {
+    restoreActiveRunContextUI();
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'history' || window.location.pathname.endsWith('/history')) {
         showView('reportViewContainer');
@@ -274,18 +316,26 @@ window.showView = showView;
 function openInteractiveConsoleView(url) {
     const iframe = document.getElementById('interactiveConsoleIframe');
     if (iframe) {
-        iframe.src = url || '/interactive_console.html';
+        const targetUrl = url || '/interactive_console.html';
+        const currentSrc = iframe.src || '';
+        if (!currentSrc || currentSrc === 'about:blank' || currentSrc.includes('about:blank') || (url && currentSrc !== targetUrl)) {
+            iframe.src = targetUrl;
+        }
     }
     showView('interactiveConsoleView');
 }
 window.openInteractiveConsoleView = openInteractiveConsoleView;
 
 function closeInteractiveConsoleView() {
+    showView('dashboardView');
     const iframe = document.getElementById('interactiveConsoleIframe');
     if (iframe) {
         iframe.src = 'about:blank';
     }
-    showView('dashboardView');
+    if (typeof wasInLiveRunView !== 'undefined') {
+        wasInLiveRunView = false;
+        window.wasInLiveRunView = false;
+    }
 }
 window.closeInteractiveConsoleView = closeInteractiveConsoleView;
 

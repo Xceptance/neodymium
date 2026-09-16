@@ -109,6 +109,11 @@ public class AuraTestDashboardController
         model.addAttribute("skipped", queueController.getGlobalSkipped());
         model.addAttribute("activeEditingFile", fileService.getActiveEditingFile());
 
+        final String activeRunId = queueController.getCurrentRunId();
+        model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
+        model.addAttribute("activeRunStatus", running ? "running" : "finished");
+        model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/report");
+
         if (running)
         {
             final LocalDateTime ldt = LocalDateTime.now();

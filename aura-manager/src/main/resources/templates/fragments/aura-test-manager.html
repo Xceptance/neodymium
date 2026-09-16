@@ -55,6 +55,10 @@
                             <label for="aiOnlyCb">AI Only</label>
                             <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
                             <label for="errorsOnlyCb">Errors Only</label>
+                            <button id="terminalInteractiveBtn" class="btn-edit" onclick="openInteractiveConsoleViewLive('/interactive_console.html')" title="Switch to Interactive Console" style="display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;" th:style="${running and (interactive != null and interactive) ? 'display: inline-flex; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;' : 'display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;'}">
+                                <span class="material-symbols-outlined" style="font-size: 14px; color: var(--accent);">terminal</span>
+                                <span>Interactive Console</span>
+                            </button>
                             <button id="copyTerminalBtn" class="btn-edit" onclick="copyTerminalOutput()" title="Copy terminal output" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
                                 <span class="material-symbols-outlined" id="copyTerminalIcon">content_copy</span>
                                 <span id="copyTerminalText">Copy</span>

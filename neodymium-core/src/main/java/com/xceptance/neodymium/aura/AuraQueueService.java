@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -80,6 +81,7 @@ public final class AuraQueueService
     private final AtomicInteger globalSkipped = new AtomicInteger(0);
     private final AtomicBoolean runningQueue = new AtomicBoolean(false);
     private final AtomicBoolean manuallyStopped = new AtomicBoolean(false);
+    private final AtomicBoolean cancelledCurrentTest = new AtomicBoolean(false);
     private final AtomicReference<String> activeFile = new AtomicReference<>("");
     private final AtomicReference<String> currentRunId = new AtomicReference<>("");
     private volatile Consumer<String> onRunCompletedListener;
@@ -210,6 +212,44 @@ public final class AuraQueueService
         return lastRunRequest.get();
     }
 
+    public void stopCurrentTest()
+    {
+        LOGGER.info("[Aura Server] Aborting active test subprocess...");
+        cancelledCurrentTest.set(true);
+        final InteractiveConsoleEngine engine = interactiveService.getCurrentConsoleEngine();
+        if (engine != null)
+        {
+            engine.abort();
+            final String activeRunId = currentRunId.get() != null ? currentRunId.get() : engine.getRunId();
+            final String activeFileStr = activeFile.get() != null ? activeFile.get() : "";
+            final String cancelStateJson = String.format(
+                "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testName\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
+                activeRunId != null ? activeRunId : "",
+                activeFileStr
+            );
+            engine.pushState(cancelStateJson);
+        }
+        broadcastLog("[WARN] Test execution cancelled by user.");
+        final Process p = activeProcess.getAndSet(null);
+        if (p != null && p.isAlive())
+        {
+            p.destroy();
+            try
+            {
+                if (!p.waitFor(3, TimeUnit.SECONDS))
+                {
+                    LOGGER.warn("[Aura Server] Subprocess did not stop on destroy, forcing termination...");
+                    p.destroyForcibly();
+                }
+            }
+            catch (final InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+            }
+            LOGGER.info("[Aura Server] Active test subprocess terminated.");
+        }
+    }
+
     public void stopProcess()
     {
         LOGGER.info("[Aura Server] Setting manuallyStopped=true.");
@@ -225,7 +265,7 @@ public final class AuraQueueService
             p.destroy();
             try
             {
-                if (!p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS))
+                if (!p.waitFor(3, TimeUnit.SECONDS))
                 {
                     LOGGER.warn("[Aura Server] Subprocess did not stop on destroy, forcing termination...");
                     p.destroyForcibly();
@@ -331,24 +371,12 @@ public final class AuraQueueService
                         uniqueFiles.add(selection.file);
                         final List<String> profiles = getEffectiveBrowserProfiles(selection, req.globalBrowserProfiles);
 
-                        ExecutionBatch match = null;
-                        for (final ExecutionBatch b : batches)
+                        final ExecutionBatch batch = new ExecutionBatch(selection.file, profiles);
+                        if (selection.id != null && !selection.id.isBlank())
                         {
-                            if (selection.file.equals(b.file) && profiles.equals(b.targetProfiles))
-                            {
-                                match = b;
-                                break;
-                            }
+                            batch.datasetIds.add(selection.id);
                         }
-                        if (match == null)
-                        {
-                            match = new ExecutionBatch(selection.file, profiles);
-                            batches.add(match);
-                        }
-                        if (selection.id != null)
-                        {
-                            match.datasetIds.add(selection.id);
-                        }
+                        batches.add(batch);
                     }
                 }
 
@@ -725,6 +753,8 @@ public final class AuraQueueService
                         }
                     }
 
+                    final boolean testWasCancelled = cancelledCurrentTest.getAndSet(false);
+
                     if (manuallyStopped.get())
                     {
                         broadcastLog("[WARN] Process execution aborted by user.");
@@ -735,7 +765,12 @@ public final class AuraQueueService
                     if (fileTestsRun.get() == 0)
                     {
                         globalTestsRun.incrementAndGet();
-                        if (exitCode != 0)
+                        if (testWasCancelled)
+                        {
+                            globalSkipped.incrementAndGet();
+                            broadcastLog("[WARN] Test execution cancelled by user. Marked as skipped.");
+                        }
+                        else if (exitCode != 0)
                         {
                             globalFailed.incrementAndGet();
                             broadcastLog("[ERROR] Process exited with code " + exitCode + " and no tests were run.");
@@ -745,12 +780,17 @@ public final class AuraQueueService
                             globalPassed.incrementAndGet();
                         }
                     }
+                    else if (testWasCancelled)
+                    {
+                        globalSkipped.incrementAndGet();
+                        broadcastLog("[WARN] Test execution cancelled by user. Marked as skipped.");
+                    }
 
                     completedFiles.add(file);
                     activeProcess.set(null);
 
                     final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
-                    final String statusStr = (exitCode == 0) ? "passed" : "failed";
+                    final String statusStr = testWasCancelled ? "skipped" : ((exitCode == 0) ? "passed" : "failed");
 
                     for (final File baseDir : runStorageDirs)
                     {

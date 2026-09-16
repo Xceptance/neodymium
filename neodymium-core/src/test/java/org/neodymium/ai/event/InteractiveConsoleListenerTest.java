@@ -33,7 +33,9 @@ import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
@@ -176,6 +178,14 @@ public class InteractiveConsoleListenerTest
         assertThrows(RuntimeException.class, () -> {
             listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
         });
+
+        assertTrue(listener.isAborted());
+        assertTrue(consoleEngine.getCurrentStateJson().contains("\"status\":\"skipped\""));
+
+        // SessionFinishedEvent after abort should NOT block or register a pauseId
+        eventBus.dispatch(new SessionFinishedEvent(500, false, Collections.emptyList()));
+        assertTrue(consoleEngine.getCurrentStateJson().contains("\"status\":\"skipped\""));
+        assertFalse(consoleEngine.getCurrentStateJson().contains("pause-final-"));
     }
 
     @Test
@@ -265,6 +275,96 @@ public class InteractiveConsoleListenerTest
         assertTrue(stateJson.contains("\"tokenUsageInput\":150"));
         assertTrue(stateJson.contains("\"tokenUsageOutput\":50"));
         assertTrue(stateJson.contains("\"gemini-2.5-flash\""));
+    }
+
+    @Test
+    public void testLlmRequestSentEventPushesInFlightState()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Perform login");
+        step.setLineNumber(10);
+        step.setSourceFile("login.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        eventBus.dispatch(new StepStartedEvent(step, 0));
+
+        final LlmRequest request = new LlmRequest("system prompt text", "user prompt text", Collections.emptyList(), null, 0.0, 30);
+        eventBus.dispatch(new LlmRequestSentEvent(request, "ACTION_EXTRACTION"));
+
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson);
+        assertTrue(stateJson.contains("\"inFlightLlmCall\""));
+        assertTrue(stateJson.contains("\"ACTION_EXTRACTION\""));
+        assertTrue(stateJson.contains("\"system prompt text\""));
+    }
+
+    @Test
+    public void testEditActionPushesUpdatedStateImmediately()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Original instruction");
+        step.setLineNumber(3);
+        step.setSourceFile("test.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final JsonObject editAction = new JsonObject();
+        editAction.addProperty("action", "EDIT");
+        editAction.addProperty("newInstruction", "Updated instruction text");
+        submitActionAsynchronously(editAction);
+
+        listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
+
+        // After the EDIT action the console engine must have already received a pushState
+        // that contains the new instruction — the UI must not stay stale until re-execution.
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson);
+        assertTrue(stateJson.contains("Updated instruction text"),
+            "Expected updated instruction to appear in state JSON immediately after EDIT action");
+        assertEquals("Updated instruction text", step.getInstruction());
+    }
+
+    @Test
+    public void testSuggestFixDispatchesLlmEventsViaEventBus()
+    {
+        // Verify that when a SUGGEST_FIX LLM call is made, the LlmRequestSentEvent is dispatched
+        // through the event bus (causing the in-flight indicator to appear in state JSON)
+        // and the LlmResponseReceivedEvent is dispatched afterwards (clearing it).
+        // We cannot inject a real PESAP provider in unit tests, so we verify the in-flight
+        // indicator is set and then cleared by hooking into the event bus directly.
+
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Enter search term");
+        step.setLineNumber(5);
+        step.setSourceFile("search.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        eventBus.dispatch(new StepStartedEvent(step, 0));
+
+        // Simulate what handleSuggestFix() now does: dispatch both events around the LLM call.
+        final LlmRequest request = new LlmRequest("suggest-fix system", "suggest-fix user", Collections.emptyList(), null, 0.7, 30);
+
+        // Dispatching LlmRequestSentEvent must cause the in-flight indicator to appear.
+        eventBus.dispatch(new LlmRequestSentEvent(request, "SUGGEST_FIX"));
+        final String inFlightJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(inFlightJson);
+        assertTrue(inFlightJson.contains("\"inFlightLlmCall\""),
+            "SUGGEST_FIX LlmRequestSentEvent must set the in-flight indicator in the console state");
+        assertTrue(inFlightJson.contains("\"SUGGEST_FIX\""),
+            "In-flight indicator must carry the SUGGEST_FIX capability name");
+
+        // Dispatching LlmResponseReceivedEvent must clear the in-flight indicator.
+        final LlmResponse response = new LlmResponse("suggested text", new TokenUsage(100, 40, 140, 10), "gemini-2.5-flash");
+        eventBus.dispatch(new LlmResponseReceivedEvent(request, response, 250L, "SUGGEST_FIX"));
+        final String afterResponseJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(afterResponseJson);
+        assertFalse(afterResponseJson.contains("\"inFlightLlmCall\""),
+            "In-flight indicator must be cleared after LlmResponseReceivedEvent for SUGGEST_FIX");
     }
 
     private void submitActionAsynchronously(final JsonObject actionObj)

@@ -19,10 +19,11 @@
 package com.xceptance.aura.test.controller;
 
 import com.xceptance.neodymium.aura.AuraFileService;
-import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -40,6 +41,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Controller
 public class AuraTestEditorController
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestEditorController.class);
+
     private final AuraFileService fileService;
 
     public AuraTestEditorController(final AuraFileService fileService)
@@ -128,6 +131,41 @@ public class AuraTestEditorController
         response.put("status", success ? "SUCCESS" : "ERROR");
         response.put("file", file);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Creates a new YAML test playbook file with the given name.
+     *
+     * <p>Accepts a JSON body containing a {@code name} field. The {@code .yaml} extension
+     * is appended automatically if not already present. Returns the relative filename
+     * of the created file so the UI can open it in the editor immediately.</p>
+     *
+     * @param body JSON object with a {@code name} key
+     * @return JSON response with {@code file} on success, or {@code error} on failure
+     */
+    @PostMapping("/api/create")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> createFile(@RequestParam(value = "name", required = false) final String name)
+    {
+        final Map<String, Object> response = new HashMap<>();
+        if (name == null || name.isBlank())
+        {
+            response.put("error", "Test name must not be empty.");
+            return ResponseEntity.badRequest().body(response);
+        }
+        try
+        {
+            final String sanitizedName = name.endsWith(".yaml") ? name : name + ".yaml";
+            fileService.createYamlFile(name);
+            response.put("file", sanitizedName);
+            return ResponseEntity.ok(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to create test file '{}'", name, e);
+            response.put("error", "Failed to create test: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
     }
 
     @PostMapping("/api/delete")

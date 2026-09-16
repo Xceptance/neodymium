@@ -20,6 +20,7 @@ package org.neodymium.ai.event;
 
 import java.nio.file.Paths;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import org.neodymium.ai.client.LlmCapability;
@@ -28,6 +29,8 @@ import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
@@ -65,6 +68,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
     private final boolean interactive;
     private final PreliminaryReportListener reportListener;
     private volatile boolean autoRun;
+    private volatile boolean aborted;
 
     /**
      * Constructs an InteractiveConsoleListener.
@@ -83,6 +87,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.session = session;
         this.interactive = interactive;
         this.autoRun = false;
+        this.aborted = false;
         final AiConfiguration config = AiConfiguration.getInstance();
         this.reportListener = new PreliminaryReportListener(
             Paths.get(config.getDiskReportDirectory()),
@@ -119,6 +124,16 @@ public final class InteractiveConsoleListener implements ExecutionListener
     public boolean isInteractive()
     {
         return this.interactive;
+    }
+
+    /**
+     * Returns whether execution was aborted by user.
+     *
+     * @return true if run was aborted
+     */
+    public boolean isAborted()
+    {
+        return this.aborted;
     }
 
     /**
@@ -176,6 +191,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
             if (context != null)
             {
+                context.getTransientData().remove(ExecutionContext.KEY_LAST_LLM_RESULT);
                 try
                 {
                     if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
@@ -230,9 +246,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
-            final String overallStatus = sessionFinished.isSuccess() ? "passed" : "failed";
+            final String overallStatus = sessionFinished.isSuccess() ? "passed" : (this.aborted ? "skipped" : "failed");
 
-            if (this.interactive)
+            if (this.interactive && !this.aborted)
             {
                 final String pauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
                 this.consoleEngine.registerPauseId(pauseId);
@@ -270,6 +286,52 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             LOG.warn("[InteractiveConsoleListener] Execution diagnostic error reported: {}", errorEvent.getMessage());
         }
+        else if (event instanceof LlmRequestSentEvent sent)
+        {
+            if (context != null)
+            {
+                final JsonObject inFlight = new JsonObject();
+                inFlight.addProperty("capability", sent.getCapability() != null ? sent.getCapability() : "LLM");
+                inFlight.addProperty("startTimeMs", System.currentTimeMillis());
+                if (sent.getRequest() != null)
+                {
+                    inFlight.addProperty("systemPrompt", sent.getRequest().systemMessage());
+                    inFlight.addProperty("userPrompt", sent.getRequest().userMessage());
+                }
+                context.getTransientData().put("KEY_IN_FLIGHT_LLM_CALL", inFlight);
+            }
+            final String stateJson = InteractiveStateBuilder.buildStateJson(
+                this.session, context, this.consoleEngine.getRunId(), getCurrentStepIndex(context), "running", null, getReport());
+            this.consoleEngine.pushState(stateJson);
+        }
+        else if (event instanceof LlmResponseReceivedEvent received)
+        {
+            if (context != null)
+            {
+                context.getTransientData().remove("KEY_IN_FLIGHT_LLM_CALL");
+            }
+            final String stateJson = InteractiveStateBuilder.buildStateJson(
+                this.session, context, this.consoleEngine.getRunId(), getCurrentStepIndex(context), "running", null, getReport());
+            this.consoleEngine.pushState(stateJson);
+        }
+    }
+
+    private int getCurrentStepIndex(final ExecutionContext context)
+    {
+        if (context != null)
+        {
+            final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            if (step != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+                if (flatSteps != null && flatSteps.contains(step))
+                {
+                    return flatSteps.indexOf(step);
+                }
+            }
+        }
+        return 0;
     }
 
     /**
@@ -443,6 +505,16 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             context.getTransientData().put("KEY_STEP_EDITED", true);
                         }
                         LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
+
+                        // Immediately push the updated state so the UI reflects the new instruction
+                        // before the re-execution pipeline starts (fixes stale UI after EDIT action).
+                        if (this.consoleEngine != null && context != null)
+                        {
+                            final String updatedStateJson = InteractiveStateBuilder.buildStateJson(
+                                this.session, context, this.consoleEngine.getRunId(),
+                                getCurrentStepIndex(context), "paused", null, getReport());
+                            this.consoleEngine.pushState(updatedStateJson);
+                        }
                     }
                 }
                 break;
@@ -466,6 +538,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
             case "ABORT":
             case "STOP":
+                this.aborted = true;
+                if (this.consoleEngine != null && context != null)
+                {
+                    final String abortedStateJson = InteractiveStateBuilder.buildStateJson(
+                        this.session, context, this.consoleEngine.getRunId(),
+                        getCurrentStepIndex(context), "skipped", null, getReport());
+                    this.consoleEngine.pushState(abortedStateJson);
+                }
                 throw new RuntimeException(new ConclusiveFailureException("Interactive test execution aborted by user via Aura Manager"));
 
             case "SAVE_EXIT":
@@ -512,7 +592,13 @@ public final class InteractiveConsoleListener implements ExecutionListener
                         timeoutSeconds
                     );
 
+                    // Dispatch LLM events so the in-flight UI spinner is shown and the call
+                    // is recorded by PreliminaryReportListener in the on-disk execution report.
+                    this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "SUGGEST_FIX"));
+                    final long suggestStartMs = System.currentTimeMillis();
                     final LlmResponse response = provider.chat(request);
+                    final long suggestDurationMs = System.currentTimeMillis() - suggestStartMs;
+                    this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, suggestDurationMs, "SUGGEST_FIX"));
                     if (response != null && response.content() != null)
                     {
                         final PesapPrompt.PesapResult result = pesapPrompt.parseResponse(response.content(), context);

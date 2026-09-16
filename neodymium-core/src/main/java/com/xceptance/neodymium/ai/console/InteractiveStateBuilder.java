@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -476,9 +477,31 @@ public final class InteractiveStateBuilder
             if (flatSteps != null && activeStepIndex >= 0 && activeStepIndex < flatSteps.size())
             {
                 final PlaybookStep activeStep = flatSteps.get(activeStepIndex);
-                if (activeStep != null && activeStep.getReasoning() != null && !activeStep.getReasoning().isBlank())
+                if (activeStep != null)
                 {
-                    topReasoning = activeStep.getReasoning();
+                    if (activeStep.getReasoning() != null && !activeStep.getReasoning().isBlank())
+                    {
+                        topReasoning = activeStep.getReasoning();
+                    }
+                    else if (activeStep.getActions() != null && !activeStep.getActions().isEmpty())
+                    {
+                        final StringBuilder sb = new StringBuilder();
+                        for (final Action action : activeStep.getActions())
+                        {
+                            if (action != null && action.getReasoning() != null && !action.getReasoning().isBlank())
+                            {
+                                if (!sb.isEmpty())
+                                {
+                                    sb.append(" ");
+                                }
+                                sb.append(action.getReasoning().trim());
+                            }
+                        }
+                        if (!sb.isEmpty())
+                        {
+                            topReasoning = sb.toString();
+                        }
+                    }
                 }
             }
         }
@@ -682,9 +705,25 @@ public final class InteractiveStateBuilder
         }
 
         final JsonArray actionsArray = new JsonArray();
-        if (step.getActions() != null)
+        List<Action> actionsToSerialize = step.getActions();
+        if ((actionsToSerialize == null || actionsToSerialize.isEmpty()) && isCurrentSection && stepIndex == activeStepIndex && context != null)
         {
-            for (final Action action : step.getActions())
+            final Object lastLlmResult = context.getTransientData().get(ExecutionContext.KEY_LAST_LLM_RESULT);
+            if (lastLlmResult instanceof final List<?> list)
+            {
+                actionsToSerialize = new ArrayList<>();
+                for (final Object item : list)
+                {
+                    if (item instanceof final Action a)
+                    {
+                        actionsToSerialize.add(a);
+                    }
+                }
+            }
+        }
+        if (actionsToSerialize != null)
+        {
+            for (final Action action : actionsToSerialize)
             {
                 if (action != null)
                 {
@@ -755,6 +794,34 @@ public final class InteractiveStateBuilder
         else
         {
             obj.add("actions", actionsArray);
+        }
+
+        if (!obj.has("llmCalls"))
+        {
+            final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
+            if (report != null && report.getLlmCalls() != null)
+            {
+                for (final ReportLlmCallEntry call : report.getLlmCalls())
+                {
+                    if (call != null && call.getStepIndex() == stepIndex)
+                    {
+                        matchingCalls.add(call);
+                    }
+                }
+            }
+            if (!matchingCalls.isEmpty())
+            {
+                obj.add("llmCalls", serializeLlmCalls(matchingCalls));
+            }
+        }
+
+        if (isCurrentSection && stepIndex == activeStepIndex && context != null)
+        {
+            final Object inFlightObj = context.getTransientData().get("KEY_IN_FLIGHT_LLM_CALL");
+            if (inFlightObj instanceof JsonObject inFlightJson)
+            {
+                obj.add("inFlightLlmCall", inFlightJson);
+            }
         }
 
         String resolvedContextLevels = null;

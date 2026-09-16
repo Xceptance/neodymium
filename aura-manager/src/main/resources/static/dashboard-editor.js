@@ -210,8 +210,7 @@ async function submitCreateTest() {
     try {
         const res = await fetch('/api/create', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: new URLSearchParams({ name })
         });
         const data = await res.json();
         if (data.error) {

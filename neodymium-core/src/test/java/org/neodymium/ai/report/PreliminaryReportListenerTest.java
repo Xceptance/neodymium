@@ -1647,5 +1647,50 @@ public class PreliminaryReportListenerTest
             AiConfiguration.resetInstance();
         }
     }
+
+    @Test
+    @DisplayName("Verify that step re-execution resets existing step entry in-place instead of appending duplicate entry")
+    public void testStepReExecutionResetsExistingEntryInPlace()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-reexecution");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step0Initial = new PlaybookStep("Initial instruction");
+        bus.dispatch(new StepStartedEvent(step0Initial, 0));
+
+        final LlmRequest req1 = new LlmRequest("system prompt 1", "user prompt 1", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse resp1 = new LlmResponse("response text 1", new TokenUsage(10, 20, 30, 0), "mock-model");
+        bus.dispatch(new LlmRequestSentEvent(req1, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req1, resp1, 100, "ACTION"));
+
+        assertEquals(1, listener.getReport().getSteps().size(), "First execution should create 1 step entry");
+        assertEquals("Initial instruction", listener.getReport().getSteps().get(0).getInstruction());
+        assertEquals(1, listener.getReport().getSteps().get(0).getLlmCalls().size(), "Should have 1 LLM call from initial execution");
+
+        // Re-execute step 0 (e.g. after interactive edit) with updated instruction
+        final PlaybookStep step0Edited = new PlaybookStep("Updated instruction after edit");
+        bus.dispatch(new StepStartedEvent(step0Edited, 0));
+
+        final LlmRequest req2 = new LlmRequest("system prompt 2", "user prompt 2", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse resp2 = new LlmResponse("response text 2", new TokenUsage(15, 25, 40, 0), "mock-model");
+        bus.dispatch(new LlmRequestSentEvent(req2, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req2, resp2, 150, "ACTION"));
+
+        bus.dispatch(new StepFinishedEvent(step0Edited, PlaybookStepStatus.SUCCESS));
+
+        final List<TestExecutionReport.ReportStepEntry> steps = listener.getReport().getSteps();
+        assertEquals(1, steps.size(), "Re-execution must NOT create a duplicate step entry in report");
+
+        final TestExecutionReport.ReportStepEntry stepEntry = steps.get(0);
+        assertEquals(0, stepEntry.getStepIndex());
+        assertEquals("Updated instruction after edit", stepEntry.getInstruction());
+        assertEquals("SUCCESS", stepEntry.getStatus());
+        assertEquals(2, stepEntry.getLlmCalls().size(), "Should preserve both pre-edit and post-edit LLM calls");
+        assertEquals("user prompt 1", stepEntry.getLlmCalls().get(0).getUserPrompt());
+        assertEquals("user prompt 2", stepEntry.getLlmCalls().get(1).getUserPrompt());
+    }
 }
 
