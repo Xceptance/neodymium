@@ -160,7 +160,15 @@ public final class PlaybookToolReplayer
             final ToolCall variableResolvedCall = resolveVariables(rawCall, sessionData);
 
             // Attempt locator self-healing if candidates or DomFeatureVector are available
-            final ToolCall healedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+            ToolCall healedCall = null;
+            try
+            {
+                healedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+            }
+            catch (final AssertionError | Exception e)
+            {
+                LOGGER.debug("Self-healing evaluation skipped due to exception: {}", e.getMessage());
+            }
             final ToolCall intermediateCall;
             if (healedCall != null)
             {
@@ -329,15 +337,18 @@ public final class PlaybookToolReplayer
             return null;
         }
 
-        final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
-        if (currentTarget.isBlank() || currentTarget.startsWith("coord:") || currentTarget.startsWith("badge:"))
+        // Only interactive / actionable tools targeting an element can be healed.
+        // Read-only inspection / navigation tools must never trigger locator healing.
+        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
+        if ("query_dom".equals(toolName) || "inspect_element".equals(toolName) || "execute_script".equals(toolName)
+                || "take_screenshot".equals(toolName) || "screenshot".equals(toolName) || "navigate".equals(toolName)
+                || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName))
         {
             return null;
         }
 
-        // If the current target is already directly present and visible on the live page,
-        // no healing is needed. Never overwrite or corrupt an active, working locator.
-        if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+        final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
+        if (currentTarget.isBlank() || currentTarget.startsWith("coord:") || currentTarget.startsWith("badge:"))
         {
             return null;
         }
@@ -367,6 +378,19 @@ public final class PlaybookToolReplayer
         if (recordedVector == null)
         {
             return null;
+        }
+
+        // If the current target is already directly present and visible on the live page,
+        // no healing is needed. Never overwrite or corrupt an active, working locator.
+        try
+        {
+            if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+            {
+                return null;
+            }
+        }
+        catch (final AssertionError | Exception ignored)
+        {
         }
 
         // Check for live candidate vectors provided via context variable or dynamically extracted from active page
