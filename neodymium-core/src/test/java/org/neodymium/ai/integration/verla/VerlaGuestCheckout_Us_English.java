@@ -47,12 +47,9 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
-@AiJudge({false, true})
-@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Multi_English.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@AiOutcomeVerification(value = {false, true}, failOnError = false)
-@AiDataSet("united-states")
+@AiOutcomeVerification(failOnError = false)
 public class VerlaGuestCheckout_Us_English extends BaseAiTest
 {
     /**
@@ -76,8 +73,82 @@ public class VerlaGuestCheckout_Us_English extends BaseAiTest
     }
 
     @Order(1)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("united-states")
     @AiPlaybook
-    public void testCheckoutUnitedStates()
+    public void testCheckoutLiveUnitedStates()
+    {
+    }
+
+    @Order(2)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("united-states")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveUnitedStates")
+    public void testCheckoutReplayUnitedStates()
+    {
+    }
+
+    @Order(3)
+    @AiJudge(true)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("united-states")
+    @AiPlaybook
+    public void testCheckoutLiveUnitedStatesWithJudge()
+    {
+    }
+
+    @Order(4)
+    @AiJudge(true)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("united-states")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveUnitedStatesWithJudge")
+    public void testCheckoutReplayUnitedStatesWithJudge()
+    {
+    }
+
+    @Order(5)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("united-states")
+    @AiPlaybook
+    public void testCheckoutLiveUnitedStatesWithOutcome()
+    {
+    }
+
+    @Order(6)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("united-states")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveUnitedStatesWithOutcome")
+    public void testCheckoutReplayUnitedStatesWithOutcome()
+    {
+    }
+
+    @Order(7)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("united-states")
+    @AiPlaybook
+    public void testCheckoutLiveUnitedStatesWithJudgeAndOutcome()
+    {
+    }
+
+    @Order(8)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("united-states")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveUnitedStatesWithJudgeAndOutcome")
+    public void testCheckoutReplayUnitedStatesWithJudgeAndOutcome()
     {
     }
 }

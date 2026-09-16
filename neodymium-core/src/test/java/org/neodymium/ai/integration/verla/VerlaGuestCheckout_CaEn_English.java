@@ -47,12 +47,9 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
-@AiJudge({false, true})
-@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Multi_English.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@AiOutcomeVerification(value = {false, true}, failOnError = false)
-@AiDataSet("canada-en")
+@AiOutcomeVerification(failOnError = false)
 public class VerlaGuestCheckout_CaEn_English extends BaseAiTest
 {
     /**
@@ -76,8 +73,82 @@ public class VerlaGuestCheckout_CaEn_English extends BaseAiTest
     }
 
     @Order(1)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("canada-en")
     @AiPlaybook
-    public void testCheckoutCanadaEn()
+    public void testCheckoutLiveCanadaEn()
+    {
+    }
+
+    @Order(2)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("canada-en")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveCanadaEn")
+    public void testCheckoutReplayCanadaEn()
+    {
+    }
+
+    @Order(3)
+    @AiJudge(true)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("canada-en")
+    @AiPlaybook
+    public void testCheckoutLiveCanadaEnWithJudge()
+    {
+    }
+
+    @Order(4)
+    @AiJudge(true)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("canada-en")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveCanadaEnWithJudge")
+    public void testCheckoutReplayCanadaEnWithJudge()
+    {
+    }
+
+    @Order(5)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("canada-en")
+    @AiPlaybook
+    public void testCheckoutLiveCanadaEnWithOutcome()
+    {
+    }
+
+    @Order(6)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("canada-en")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveCanadaEnWithOutcome")
+    public void testCheckoutReplayCanadaEnWithOutcome()
+    {
+    }
+
+    @Order(7)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("canada-en")
+    @AiPlaybook
+    public void testCheckoutLiveCanadaEnWithJudgeAndOutcome()
+    {
+    }
+
+    @Order(8)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("canada-en")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveCanadaEnWithJudgeAndOutcome")
+    public void testCheckoutReplayCanadaEnWithJudgeAndOutcome()
     {
     }
 }

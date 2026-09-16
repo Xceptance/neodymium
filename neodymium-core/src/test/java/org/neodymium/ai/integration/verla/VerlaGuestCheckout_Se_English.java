@@ -47,12 +47,9 @@ import org.neodymium.util.Neodymium;
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
-@AiJudge({false, true})
-@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
 @AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Multi_English.yaml", recordingDirectory = "target/playbooks/integration")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@AiOutcomeVerification(value = {false, true}, failOnError = false)
-@AiDataSet("sweden")
+@AiOutcomeVerification(failOnError = false)
 public class VerlaGuestCheckout_Se_English extends BaseAiTest
 {
     /**
@@ -76,8 +73,82 @@ public class VerlaGuestCheckout_Se_English extends BaseAiTest
     }
 
     @Order(1)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("sweden")
     @AiPlaybook
-    public void testCheckoutSweden()
+    public void testCheckoutLiveSweden()
+    {
+    }
+
+    @Order(2)
+    @AiJudge(false)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("sweden")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveSweden")
+    public void testCheckoutReplaySweden()
+    {
+    }
+
+    @Order(3)
+    @AiJudge(true)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("sweden")
+    @AiPlaybook
+    public void testCheckoutLiveSwedenWithJudge()
+    {
+    }
+
+    @Order(4)
+    @AiJudge(true)
+    @AiOutcomeVerification(false)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("sweden")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveSwedenWithJudge")
+    public void testCheckoutReplaySwedenWithJudge()
+    {
+    }
+
+    @Order(5)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("sweden")
+    @AiPlaybook
+    public void testCheckoutLiveSwedenWithOutcome()
+    {
+    }
+
+    @Order(6)
+    @AiJudge(false)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("sweden")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveSwedenWithOutcome")
+    public void testCheckoutReplaySwedenWithOutcome()
+    {
+    }
+
+    @Order(7)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiDataSet("sweden")
+    @AiPlaybook
+    public void testCheckoutLiveSwedenWithJudgeAndOutcome()
+    {
+    }
+
+    @Order(8)
+    @AiJudge(true)
+    @AiOutcomeVerification(true)
+    @AiMode(ExecutionMode.REPLAY_STRICT)
+    @AiDataSet("sweden")
+    @AiPlaybook(recordingMethod = "testCheckoutLiveSwedenWithJudgeAndOutcome")
+    public void testCheckoutReplaySwedenWithJudgeAndOutcome()
     {
     }
 }

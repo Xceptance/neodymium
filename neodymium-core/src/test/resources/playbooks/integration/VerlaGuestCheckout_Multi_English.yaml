@@ -8,9 +8,10 @@ steps: |
   Verify country flag '${countryFlag}' is displayed.
   Verify that most of the text visible is displayed in language of '${countryCode}' (visual).
 
-  Locate the first product card and click 'Add to Cart'
+  Locate the first product card, hover over it and click 'Add to Cart'
   Click size button 'L'
   Verify mini cart quantity is 1.
+  
   Navigate to cart page.
   Click checkout button.
 
