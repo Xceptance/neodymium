@@ -1026,6 +1026,18 @@ public class BrowserToolsTest
         Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "Items in Cart: 5", false, false));
         Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "Items in Cart: 5", false, true));
     }
+
+    @Test
+    public void testToCaseInsensitiveAttributeSelector()
+    {
+        final String input = "input[name*=\"exp\"], input[name*='cvv']";
+        final String expected = "input[name*=\"exp\" i], input[name*='cvv' i]";
+        Assertions.assertEquals(expected, BrowserToolProvider.toCaseInsensitiveAttributeSelector(input));
+
+        Assertions.assertEquals("#cardNumber", BrowserToolProvider.toCaseInsensitiveAttributeSelector("#cardNumber"));
+        Assertions.assertNull(BrowserToolProvider.toCaseInsensitiveAttributeSelector(null));
+        Assertions.assertEquals("", BrowserToolProvider.toCaseInsensitiveAttributeSelector(""));
+    }
 }
 
 

@@ -2270,6 +2270,14 @@ public final class BrowserToolProvider
                             try {
                                 candidates = Array.from(document.querySelectorAll(sel));
                             } catch(e) {}
+                            if (candidates.length === 0) {
+                                try {
+                                    var caseInsensitiveSel = sel.replace(/\\[([a-zA-Z0-9_:-]+[~|^$*]?=(?:"[^"]*"|'[^']*'|[^\\]\\s]+))\\]/g, '[$1 i]');
+                                    if (caseInsensitiveSel !== sel) {
+                                        candidates = Array.from(document.querySelectorAll(caseInsensitiveSel));
+                                    }
+                                } catch(e) {}
+                            }
                         } else {
                             candidates = Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], label, h1, h2, h3, h4, p, span, div'));
                         }
@@ -2349,6 +2357,22 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), rootNode.toString());
             }
         };
+    }
+
+    /**
+     * Converts CSS attribute selectors (e.g. {@code [name*="exp"]}) into case-insensitive
+     * selectors (e.g. {@code [name*="exp" i]}) per CSS Selectors Level 4.
+     *
+     * @param selector the input CSS selector
+     * @return the case-insensitive selector if attribute selectors are present, or original selector
+     */
+    public static String toCaseInsensitiveAttributeSelector(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return selector;
+        }
+        return selector.replaceAll("\\[([a-zA-Z0-9_:-]+[~|^$*]?=(?:\"[^\"]*\"|'[^']*'|[^\\]\\s]+))\\]", "[$1 i]");
     }
 
     private static AiTool createInspectTool()

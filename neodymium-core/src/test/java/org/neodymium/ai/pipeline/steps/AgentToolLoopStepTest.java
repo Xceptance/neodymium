@@ -2121,6 +2121,290 @@ public class AgentToolLoopStepTest
             Assertions.assertTrue(isFullPage, "Every captured state in a full-page visual step turn must be full-page.");
         }
     }
+
+    @Test
+    public void testMultiFieldActionInstructionReceivesRefinedTurnPromptAndAllowsSequentialExecution() throws Exception
+    {
+        final ObjectNode fillSchema = MAPPER.createObjectNode();
+        fillSchema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input field", fillSchema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Filled " + call.arguments().get("selector").asText());
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber'/><input id='cardExpiry'/><input id='cardCvv'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn1Base64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber' value='4111 1111 1111 1111'/><input id='cardExpiry'/><input id='cardCvv'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn2Base64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber' value='4111 1111 1111 1111'/><input id='cardExpiry' value='12/29'/><input id='cardCvv'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn3Base64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber' value='4111 1111 1111 1111'/><input id='cardExpiry' value='12/29'/><input id='cardCvv' value='111'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn4Base64")), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.TYPE);
+        final String instruction = "Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.";
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, instruction);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Verify operating rule 4 in system prompt mentions completing all explicitly requested actions/fields
+                final String systemPrompt = req.messages().get(0).content();
+                Assertions.assertTrue(systemPrompt.contains("once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied"));
+
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "fill", MAPPER.createObjectNode()
+                                .put("selector", "#cardNumber")
+                                .put("text", "4111 1111 1111 1111"))));
+            }
+            if (t == 2)
+            {
+                // Verify turn 2 prompt contains the refined continuation guidance for multi-field instructions
+                final List<ChatMessage> messages = req.messages();
+                final ChatMessage latestUserMsg = messages.get(messages.size() - 1);
+                Assertions.assertTrue(latestUserMsg.content().contains("If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now"));
+                Assertions.assertTrue(latestUserMsg.content().contains("If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions."));
+
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-2", "fill", MAPPER.createObjectNode()
+                                .put("selector", "#cardExpiry")
+                                .put("text", "12/29"))));
+            }
+            if (t == 3)
+            {
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-3", "fill", MAPPER.createObjectNode()
+                                .put("selector", "#cardCvv")
+                                .put("text", "111"))));
+            }
+            if (t == 4)
+            {
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-4", "complete_step", MAPPER.createObjectNode().put("summary", "Payment details entered"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(4, turn.get(), "Multi-field action instruction must be allowed to complete across turns without premature abort.");
+        Assertions.assertEquals("Payment details entered", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    @Test
+    public void testCohesiveFormInputBatchExecutesAllInputsInSingleTurn() throws Exception
+    {
+        final List<String> filledFields = new ArrayList<>();
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                final String selector = call.arguments().path("selector").asText();
+                final String text = call.arguments().path("text").asText();
+                filledFields.add(selector + "=" + text);
+                return ToolResult.success(call.callId(), "Filled " + selector);
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Enter card details");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.TYPE);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION,
+                "Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Model proposes all 3 form fields + complete_step in Turn 1
+                return new LlmResponse("Entering payment details", new TokenUsage(100, 20, 120), "mock",
+                        List.of(
+                                new ToolCall("call-1", "fill", MAPPER.createObjectNode()
+                                        .put("selector", "#cardNumber")
+                                        .put("text", "4111 1111 1111 1111")),
+                                new ToolCall("call-2", "fill", MAPPER.createObjectNode()
+                                        .put("selector", "#cardExpiry")
+                                        .put("text", "12/29")),
+                                new ToolCall("call-3", "fill", MAPPER.createObjectNode()
+                                        .put("selector", "#cardCvv")
+                                        .put("text", "111")),
+                                new ToolCall("call-4", "complete_step", MAPPER.createObjectNode()
+                                        .put("summary", "Payment details entered cohesively"))
+                        ));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(1, turn.get(), "Cohesive form input batch must complete in exactly 1 turn!");
+        Assertions.assertEquals(List.of(
+                "#cardNumber=4111 1111 1111 1111",
+                "#cardExpiry=12/29",
+                "#cardCvv=111"
+        ), filledFields);
+        Assertions.assertEquals("Payment details entered cohesively",
+                this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+
+        // PlaybookStep should record all 3 form actions and tool calls (excluding complete_step)
+        Assertions.assertEquals(3, playbookStep.getActions().size());
+        Assertions.assertEquals(3, playbookStep.getToolCalls().size());
+        Assertions.assertEquals("TYPE", playbookStep.getActions().get(0).getType());
+        Assertions.assertEquals("TYPE", playbookStep.getActions().get(1).getType());
+        Assertions.assertEquals("TYPE", playbookStep.getActions().get(2).getType());
+    }
+
+    @Test
+    public void testDiscoveryToolsExcludedFromPlaybookActionsAndToolCalls() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_query_dom", "Queries DOM", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"matches\": [\"#btn\"]}");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_inspect", "Inspects element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"outerHtml\": \"<button id='btn'>Submit</button>\"}");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_click", "Clicks element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Find and click button");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Find and click button");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Discovering button", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-1", "browser_query_dom", MAPPER.createObjectNode().put("text", "Submit"))));
+            }
+            if (t == 2)
+            {
+                return new LlmResponse("Inspecting button", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-2", "browser_inspect", MAPPER.createObjectNode().put("selector", "#btn"))));
+            }
+            if (t == 3)
+            {
+                return new LlmResponse("Clicking button", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-3", "browser_click", MAPPER.createObjectNode().put("selector", "#btn")),
+                                new ToolCall("call-4", "complete_step", MAPPER.createObjectNode().put("summary", "Button clicked"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        // Discovery tools (query_dom, inspect) must NOT pollute playbook actions or toolCalls
+        Assertions.assertEquals(1, playbookStep.getActions().size(), "Only the click action should be recorded!");
+        Assertions.assertEquals("CLICK", playbookStep.getActions().get(0).getType());
+        Assertions.assertEquals(1, playbookStep.getToolCalls().size(), "Only the browser_click tool call should be recorded!");
+        Assertions.assertEquals("browser_click", playbookStep.getToolCalls().get(0).toolName());
+    }
 }
 
 
