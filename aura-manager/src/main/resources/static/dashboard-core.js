@@ -17,6 +17,7 @@ var currentFilesListCached = [];
 
 var isRunning = false;
 var consoleOpened = false;
+var consoleCollapsed = true;
 
 var logFilterAiOnly = true;
 var logFilterErrorsOnly = false;
@@ -55,6 +56,7 @@ window.selectedDatasets = selectedDatasets;
 window.currentFilesListCached = currentFilesListCached;
 window.isRunning = isRunning;
 window.consoleOpened = consoleOpened;
+window.consoleCollapsed = consoleCollapsed;
 window.logFilterAiOnly = logFilterAiOnly;
 window.logFilterErrorsOnly = logFilterErrorsOnly;
 window.activeRunStats = activeRunStats;
@@ -351,9 +353,22 @@ function onEditorPanelSwapped() {
     if (filename && filename !== '' && filename !== 'test.yaml') {
         activeEditingFile = filename;
         window.activeEditingFile = activeEditingFile;
+        if (window.history && window.history.pushState) {
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.get('file') !== filename) {
+                const targetUrl = window.location.pathname + '?file=' + encodeURIComponent(filename);
+                window.history.pushState({ file: filename }, '', targetUrl);
+            }
+        }
     } else {
         activeEditingFile = null;
         window.activeEditingFile = null;
+        if (window.history && window.history.pushState) {
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.has('file')) {
+                window.history.pushState({}, '', window.location.pathname);
+            }
+        }
     }
     if (typeof updateCenterLayout === 'function') updateCenterLayout();
 }

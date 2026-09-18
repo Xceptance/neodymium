@@ -244,12 +244,18 @@ function toggleConsoleSize() {
 }
 window.toggleConsoleSize = toggleConsoleSize;
 
+function toggleConsoleCollapse() {
+    consoleCollapsed = !consoleCollapsed;
+    window.consoleCollapsed = consoleCollapsed;
+    updateCenterLayout();
+}
+window.toggleConsoleCollapse = toggleConsoleCollapse;
+
 function updateCenterLayout() {
     const container = document.getElementById('auraTestManagerWorkspace') || document.getElementById('dashboardView');
     if (!container) return;
 
     const hasEdit = (activeEditingFile !== null);
-    const hasConsole = consoleOpened || isRunning;
 
     const runCurrentBtn = document.getElementById('runCurrentTestBtn');
     if (runCurrentBtn) {
@@ -267,34 +273,38 @@ function updateCenterLayout() {
     const consolePanel = document.getElementById('consolePanel');
     const consoleResizer = document.getElementById('consoleResizer');
     const closeConsoleBtn = document.getElementById('closeConsoleBtn');
+    const collapseIcon = document.getElementById('consoleCollapseIcon');
+    const collapseText = document.getElementById('consoleCollapseText');
 
     if (closeConsoleBtn) {
         closeConsoleBtn.style.display = isRunning ? 'none' : 'inline-block';
     }
 
-    if (!consolePanel || !consoleResizer) return;
+    if (!consolePanel) return;
 
-    if (hasEdit) {
-        if (hasConsole) {
-            consoleResizer.style.display = 'block';
-            consolePanel.style.display = 'flex';
-            consolePanel.style.flexGrow = '0';
+    // Console panel is persistent (always present at bottom of workspace)
+    consolePanel.style.display = 'flex';
+    consolePanel.style.flexGrow = '0';
+
+    // If execution is running, automatically expand
+    const effectiveCollapsed = isRunning ? false : consoleCollapsed;
+
+    if (effectiveCollapsed) {
+        consolePanel.classList.add('console-collapsed');
+        consolePanel.style.height = '38px';
+        if (consoleResizer) consoleResizer.style.display = 'none';
+        if (collapseIcon) collapseIcon.textContent = 'keyboard_arrow_up';
+        if (collapseText) collapseText.textContent = 'Expand';
+    } else {
+        consolePanel.classList.remove('console-collapsed');
+        if (consoleResizer) consoleResizer.style.display = 'block';
+        if (collapseIcon) collapseIcon.textContent = 'keyboard_arrow_down';
+        if (collapseText) collapseText.textContent = 'Collapse';
+
+        if (hasEdit) {
             consolePanel.style.height = consoleExpanded ? '400px' : '200px';
         } else {
-            consoleResizer.style.display = 'none';
-            consolePanel.style.height = '0px';
-            setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
-        }
-    } else {
-        if (hasConsole) {
-            consoleResizer.style.display = 'block';
-            consolePanel.style.display = 'flex';
-            consolePanel.style.flexGrow = '0';
             consolePanel.style.height = consoleExpanded ? '550px' : '280px';
-        } else {
-            consoleResizer.style.display = 'none';
-            consolePanel.style.height = '0px';
-            setTimeout(() => { if (!consoleOpened && !isRunning) consolePanel.style.display = 'none'; }, 300);
         }
     }
 }
@@ -304,12 +314,21 @@ document.addEventListener('DOMContentLoaded', updateCenterLayout);
 
 function closeConsole() {
     consoleOpened = false;
+    consoleCollapsed = true;
     window.consoleOpened = false;
+    window.consoleCollapsed = true;
     updateCenterLayout();
 }
 window.closeConsole = closeConsole;
 
 function openYamlEditor(filename) {
+    if (filename && window.history && window.history.pushState) {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('file') !== filename) {
+            const targetUrl = window.location.pathname + '?file=' + encodeURIComponent(filename);
+            window.history.pushState({ file: filename }, '', targetUrl);
+        }
+    }
     return new Promise((resolve) => {
         let resolved = false;
         const done = () => {
@@ -378,9 +397,9 @@ window.saveYamlFile = saveYamlFile;
 
 async function deleteYamlFile() {
     if (!activeEditingFile) return;
-    const nameDisplay = document.getElementById('deleteFileNameDisplay');
+    const nameDisplay = document.getElementById('deleteTestNameDisplay');
+    const input = document.getElementById('deleteTestFileInput');
     if (nameDisplay) nameDisplay.textContent = activeEditingFile;
-    const input = document.getElementById('deleteFileNameInput');
     if (input) input.value = activeEditingFile;
     const modal = document.getElementById('deleteTestModal');
     if (modal) modal.style.display = 'flex';
@@ -389,8 +408,6 @@ window.deleteYamlFile = deleteYamlFile;
 
 async function submitDeleteTest() {
     if (!activeEditingFile) return;
-    const modal = document.getElementById('deleteTestModal');
-    if (modal) modal.style.display = 'none';
     try {
         const res = await fetch('/api/delete', {
             method: 'POST',
@@ -398,10 +415,10 @@ async function submitDeleteTest() {
             body: JSON.stringify({ file: activeEditingFile })
         });
         const data = await res.json();
-        if (data.success) {
+        if (data.status === 'SUCCESS') {
             selectedDatasets = selectedDatasets.filter(d => d.file !== activeEditingFile);
-            window.selectedDatasets = selectedDatasets;
-            closeEditor();
+            closeEditor(true);
+            showToast(`🗑️ ${activeEditingFile} deleted successfully`, "success");
             await loadFiles();
         } else {
             showToast("Error deleting: " + data.error, "error");
@@ -417,6 +434,12 @@ function closeEditor(force = false) {
         const confirmClose = confirm(`The file '${activeEditingFile || 'playbook'}' has unsaved changes. Are you sure you want to close without saving?`);
         if (!confirmClose) {
             return;
+        }
+    }
+    if (window.history && window.history.pushState) {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.has('file')) {
+            window.history.pushState({}, '', window.location.pathname);
         }
     }
     activeEditingFile = null;
@@ -437,6 +460,40 @@ function closeEditor(force = false) {
     }
 }
 window.closeEditor = closeEditor;
+
+window.addEventListener('popstate', function(evt) {
+    const params = new URLSearchParams(window.location.search);
+    const fileParam = params.get('file');
+    if (fileParam) {
+        if (activeEditingFile !== fileParam) {
+            openYamlEditor(fileParam);
+        }
+    } else {
+        if (activeEditingFile !== null) {
+            closeEditor(true);
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const fileSpan = document.getElementById('editorFileName');
+    if (fileSpan) {
+        const dataFile = fileSpan.getAttribute('data-file');
+        if (dataFile && dataFile.trim() !== '') {
+            activeEditingFile = dataFile.trim();
+            window.activeEditingFile = activeEditingFile;
+            if (typeof compilePlaybookToYaml === 'function') {
+                initialEditorContent = compilePlaybookToYaml();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+            if (typeof updateCenterLayout === 'function') {
+                updateCenterLayout();
+            }
+        }
+    }
+});
 
 function syncStateFromQueueContainer() {
     const container = document.getElementById('queueListContainer');

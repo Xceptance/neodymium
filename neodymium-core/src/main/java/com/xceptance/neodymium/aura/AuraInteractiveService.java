@@ -360,29 +360,46 @@ public final class AuraInteractiveService
             return "default";
         }
         String key = "";
-        if (json.has("testName") && !json.get("testName").isJsonNull())
+        if (json.has("testFile") && !json.get("testFile").isJsonNull())
+        {
+            key += json.get("testFile").getAsString();
+        }
+        else if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
+        {
+            key += json.get("playbookFile").getAsString();
+        }
+        else if (json.has("testName") && !json.get("testName").isJsonNull())
         {
             final String testName = json.get("testName").getAsString();
             if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
             {
-                key = testName;
+                key += testName;
             }
         }
-        if (key.isEmpty())
+
+        String datasetKey = "";
+        if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
         {
-            if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
-            {
-                key += json.get("playbookFile").getAsString();
-            }
-            else if (json.has("testFile") && !json.get("testFile").isJsonNull())
-            {
-                key += json.get("testFile").getAsString();
-            }
-            if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
-            {
-                key += "::" + json.get("datasetId").getAsString();
-            }
+            datasetKey = json.get("datasetId").getAsString();
         }
+        else if (json.has("testId") && !json.get("testId").isJsonNull())
+        {
+            datasetKey = json.get("testId").getAsString();
+        }
+        else if (json.has("title") && !json.get("title").isJsonNull())
+        {
+            datasetKey = json.get("title").getAsString();
+        }
+
+        if (datasetKey != null && !datasetKey.isBlank())
+        {
+            if (!key.isEmpty())
+            {
+                key += "::";
+            }
+            key += datasetKey;
+        }
+
         if (json.has("browser") && !json.get("browser").isJsonNull())
         {
             final String browser = json.get("browser").getAsString();

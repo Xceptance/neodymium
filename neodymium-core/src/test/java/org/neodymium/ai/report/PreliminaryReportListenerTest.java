@@ -57,6 +57,9 @@ import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -64,6 +67,8 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.runner.StateMachineRunner;
+import org.neodymium.ai.session.AiSession;
 
 /**
  * Unit test suite for {@link PreliminaryReportListener}, {@link HtmlReportGenerator},
@@ -1691,6 +1696,112 @@ public class PreliminaryReportListenerTest
         assertEquals(2, stepEntry.getLlmCalls().size(), "Should preserve both pre-edit and post-edit LLM calls");
         assertEquals("user prompt 1", stepEntry.getLlmCalls().get(0).getUserPrompt());
         assertEquals("user prompt 2", stepEntry.getLlmCalls().get(1).getUserPrompt());
+    }
+
+    @Test
+    @DisplayName("Verify that report status is FAILED when transient execution error is present even if SessionFinishedEvent carries success true")
+    public void testReportStatusFailedWhenExecutionErrorPresent()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-early-error");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final Throwable missingKeyError = new IllegalArgumentException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, missingKeyError);
+        ExecutionContext.setActiveContext(context);
+
+        try
+        {
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            bus.dispatch(new SessionFinishedEvent(100, true));
+
+            final TestExecutionReport report = listener.getReport();
+            assertFalse(report.isSuccess(), "Report must be marked as failed when execution error is present");
+            assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
+            assertNotNull(report.getFailureReason(), "Failure reason must be set from the execution error");
+            assertTrue(report.getFailureReason().contains("Gemini API key is missing"), "Failure reason must contain missing API key details");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify that report status is FAILED when StateMachineRunner fails due to missing API key error")
+    public void testReportStatusFailedWhenStateMachineRunnerFailsWithExecutionError()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-runner-error");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final SessionData sessionData = new SessionData();
+        final LlmRegistry registry = new LlmRegistry();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, registry, bus, executor);
+
+        final ExecutionContext context = session.getExecutionContext();
+        final Throwable missingKeyError = new IllegalStateException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, missingKeyError);
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        try
+        {
+            runner.run();
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        final TestExecutionReport report = listener.getReport();
+        assertFalse(report.isSuccess(), "Report must be marked as failed when StateMachineRunner fails");
+        assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
+        assertNotNull(report.getFailureReason(), "Failure reason must be set from the execution error");
+        assertTrue(report.getFailureReason().contains("Gemini API key is missing"), "Failure reason must state missing API key error");
+    }
+
+    @Test
+    @DisplayName("Verify that early pre-step failures (e.g. invalid browser settings) result in FAILED report status and index entry")
+    public void testReportStatusFailedForPreStepBrowserSetupFailure()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-browser-error");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final Throwable browserError = new IllegalArgumentException("Unknown browser tag: InvalidBrowserTag_12345");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, browserError);
+        context.getTransientData().put("browser", "InvalidBrowserTag_12345");
+        ExecutionContext.setActiveContext(context);
+
+        try
+        {
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            // Session finishes early before step 1 due to browser setup failure
+            bus.dispatch(new SessionFinishedEvent(0, false));
+
+            final TestExecutionReport report = listener.getReport();
+            assertFalse(report.isSuccess(), "Report must be marked as failed when browser setup fails before step 1");
+            assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
+            assertNotNull(report.getFailureReason(), "Failure reason must be set from the browser setup exception");
+            assertTrue(report.getFailureReason().contains("Unknown browser tag"), "Failure reason must describe the browser error");
+
+            // Verify index.html generation reflects FAILED status
+            final HtmlIndexReportGenerator indexGen = new HtmlIndexReportGenerator();
+            final String indexHtml = indexGen.generateIndexHtml(List.of(HtmlIndexReportGenerator.IndexEntry.fromReport(report, "test_run")));
+            assertTrue(indexHtml.contains("FAILED"), "Index HTML must record status as FAILED");
+            assertTrue(indexHtml.contains("pill-fail"), "Index HTML must contain failing status pill");
+            assertFalse(indexHtml.contains("pill-pass\">"), "Index HTML must not render passing status pill for test row");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 }
 

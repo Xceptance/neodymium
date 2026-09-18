@@ -18,6 +18,8 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -525,26 +527,63 @@ public final class InteractiveStateBuilder
         if ("failed".equalsIgnoreCase(runnerStatus) && !state.has("error"))
         {
             String failureMessage = null;
+            String failureStackTrace = null;
+
             if (context != null)
             {
-                @SuppressWarnings("unchecked")
-                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-                if (flatSteps != null)
+                Object lastErr = context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                if (lastErr == null)
                 {
-                    for (final PlaybookStep s : flatSteps)
+                    lastErr = context.getTransientData().get("executionError");
+                }
+                if (lastErr instanceof Throwable t)
+                {
+                    String msg = t.getMessage() != null ? t.getMessage() : t.toString();
+                    Throwable cause = t.getCause();
+                    while (cause != null)
                     {
-                        if (s != null && s.getFailureReason() != null && !s.getFailureReason().isBlank())
+                        if (cause.getMessage() != null && !msg.contains(cause.getMessage()))
                         {
-                            failureMessage = s.getFailureReason();
-                            break;
+                            msg += ": " + cause.getMessage();
+                        }
+                        cause = cause.getCause();
+                    }
+                    failureMessage = msg;
+                    final StringWriter sw = new StringWriter();
+                    t.printStackTrace(new PrintWriter(sw));
+                    failureStackTrace = sw.toString();
+                }
+                else if (lastErr != null)
+                {
+                    failureMessage = lastErr.toString();
+                }
+
+                if (failureMessage == null)
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+                    if (flatSteps != null)
+                    {
+                        for (final PlaybookStep s : flatSteps)
+                        {
+                            if (s != null && s.getFailureReason() != null && !s.getFailureReason().isBlank())
+                            {
+                                failureMessage = s.getFailureReason();
+                                break;
+                            }
                         }
                     }
                 }
             }
+
             if (failureMessage != null)
             {
                 state.addProperty("error", failureMessage);
                 state.addProperty("failureReason", failureMessage);
+            }
+            if (failureStackTrace != null && !state.has("failureStackTrace"))
+            {
+                state.addProperty("failureStackTrace", failureStackTrace);
             }
         }
 

@@ -547,11 +547,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                                     public List<Extension> getAdditionalExtensions()
                                     {
                                         final List<Extension> extensions = new ArrayList<>();
+                                        extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled));
                                         if (browser != null)
                                         {
                                             extensions.add(new BrowserExecutionCallback(browser, method.getName()));
                                         }
-                                        extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled));
                                         return extensions;
                                     }
                                 });
@@ -753,13 +753,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
             
-            final LlmRegistry registry = new LlmRegistry();
-            final AiConfiguration config = AiConfiguration.getInstance();
-            LlmRegistry.bootstrap(registry, config);
-            LlmCacheHelper.wrapRegistryIfActive(registry);
-
             final ExecutionEventBus eventBus = new ExecutionEventBus();
             final SelenideTargetExecutor executor = new SelenideTargetExecutor();
+            final LlmRegistry registry = new LlmRegistry();
+            final AiConfiguration config = AiConfiguration.getInstance();
 
             this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
             if (this.judgeEnabled != null)
@@ -779,7 +776,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
             {
-                final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
+                final String runId = config.getProperty("neodymium.managerRunId", InteractiveConsoleEngine.getRunFolder());
                 final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
 
                 if (isInteractive && !isManagerActive)
@@ -799,6 +796,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
                 eventBus.registerListener(interactiveListener);
             }
+
+            LlmRegistry.bootstrap(registry, config);
+            LlmCacheHelper.wrapRegistryIfActive(registry);
             
             final PlaybookParser parser = new YamlPlaybookParser();
             final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
@@ -1448,8 +1448,31 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     execCtx.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
                 }
+                if (this.browser != null && this.browser.getBrowserTag() != null)
+                {
+                    execCtx.getTransientData().put("browser", this.browser.getBrowserTag());
+                }
                 execCtx.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.mode);
                 execCtx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+
+                final AiConfiguration config = AiConfiguration.getInstance();
+                final boolean isInteractive = config.isInteractive();
+                final boolean isManagerActive = config.isManagerActive();
+                final boolean isConsoleExecutionLogsEnabled = config.isConsoleExecutionLogsEnabled();
+
+                if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
+                {
+                    final boolean hasInteractiveListener = this.session.getEventBus().getListeners().stream()
+                        .anyMatch(l -> l instanceof InteractiveConsoleListener);
+
+                    if (!hasInteractiveListener)
+                    {
+                        final String runId = config.getProperty("neodymium.managerRunId", InteractiveConsoleEngine.getRunFolder());
+                        final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
+                        final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
+                        this.session.getEventBus().registerListener(interactiveListener);
+                    }
+                }
 
                 final ExecutionContext prev = ExecutionContext.getActiveContext();
                 try

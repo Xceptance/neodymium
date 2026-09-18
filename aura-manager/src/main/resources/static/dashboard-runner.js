@@ -205,19 +205,24 @@ window.updateRunButtons = updateRunButtons;
 function stopQueue() {
     fetch('/api/stop', { method: 'POST' }).catch(e => console.error('Failed to stop queue', e));
     isRunning = false;
+    consoleCollapsed = true;
     window.isRunning = false;
+    window.consoleCollapsed = true;
     if (typeof closeInteractiveConsoleView === 'function') {
         closeInteractiveConsoleView();
     }
     updateRunButtons();
+    if (typeof updateCenterLayout === 'function') updateCenterLayout();
 }
 window.stopQueue = stopQueue;
 
 function prepareClientForExecution() {
     isRunning = true;
     consoleOpened = true;
+    consoleCollapsed = false;
     window.isRunning = true;
     window.consoleOpened = true;
+    window.consoleCollapsed = false;
     currentPollSession++;
     lastLogIndex = 0;
     lastEventIndex = 0;
@@ -415,8 +420,29 @@ function appendLog(line) {
 
     terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
     terminalConsole.scrollTop = terminalConsole.scrollHeight;
+
+    try {
+        localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML);
+    } catch (e) {
+        // ignore
+    }
 }
 window.appendLog = appendLog;
+
+function restorePreviousConsoleLogs() {
+    const terminalConsole = document.getElementById('terminalConsole');
+    if (!terminalConsole) return;
+    try {
+        const storedLogs = localStorage.getItem('aura_previous_console_logs');
+        if (storedLogs && (terminalConsole.innerHTML.includes('Console idle.') || !terminalConsole.innerHTML.trim())) {
+            terminalConsole.innerHTML = storedLogs;
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+window.restorePreviousConsoleLogs = restorePreviousConsoleLogs;
+document.addEventListener('DOMContentLoaded', restorePreviousConsoleLogs);
 
 function copyTerminalOutput() {
     const terminalConsole = document.getElementById('terminalConsole');

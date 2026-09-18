@@ -241,6 +241,30 @@ def extract_execution_metrics(exec_data, test_class_name):
     else:
         key = f"{test_class_name}#{title}#{browser}"
 
+    raw_status = str(exec_data.get("status") or "").strip().lower()
+    has_bugs = bool(exec_data.get("bugs"))
+    has_error = bool(exec_data.get("error") or exec_data.get("failure") or exec_data.get("exception") or exec_data.get("errorMessage"))
+
+    if raw_status in ("failed", "error", "failure", "failed-unknown"):
+        effective_status = "failed-known" if has_bugs else "failed-unknown"
+    elif raw_status == "failed-known":
+        effective_status = "failed-known"
+    elif raw_status in ("passed", "passed-clean", "succeeded"):
+        effective_status = "succeeded-fixed" if has_bugs else "passed-clean"
+    elif raw_status in ("succeeded-fixed", "fixed", "healed"):
+        effective_status = "succeeded-fixed"
+    elif raw_status in ("ignored", "skipped", "cancelled"):
+        effective_status = "ignored"
+    elif raw_status in ("running", "in_progress", "executing", "pending", ""):
+        if has_error or (isinstance(failed_steps, int) and failed_steps > 0) or exec_data.get("exitCode", 0) != 0:
+            effective_status = "failed-known" if has_bugs else "failed-unknown"
+        elif raw_status == "":
+            effective_status = "failed-known" if has_bugs else "failed-unknown"
+        else:
+            effective_status = "running"
+    else:
+        effective_status = "failed-known" if has_bugs else "failed-unknown"
+
     return key, {
         "id": exec_id,
         "testClass": test_class_name,
@@ -248,7 +272,7 @@ def extract_execution_metrics(exec_data, test_class_name):
         "title": title,
         "location": exec_data.get("location") or exec_data.get("locale") or "Unknown",
         "browser": browser,
-        "status": exec_data.get("status") or "passed-clean",
+        "status": effective_status,
         "areaName": exec_data.get("areaName") or "Browsing (default)",
         "executionMode": exec_data.get("executionMode") or exec_data.get("mode") or "FORCE_RECORDING",
         "startTime": time_str or "",
@@ -367,7 +391,8 @@ def analyze_and_generate_run_json(run_dir_path):
         elif time_str is not None and earliest_time_str is None:
             earliest_time_str = time_str
 
-        status = exec_data.get("status", "passed-clean")
+        _, metric_data = extract_execution_metrics(exec_data, "")
+        status = metric_data["status"]
         found_locales = extract_locales_from_execution(exec_data)
         for loc in found_locales:
             locales_set.add(loc)
@@ -389,7 +414,7 @@ def analyze_and_generate_run_json(run_dir_path):
         elif status == "ignored":
             summary_counts["ignored"] += 1
         else:
-            summary_counts["pass"] += 1
+            summary_counts["unknown"] += 1
 
         # Determine area/category and test class
         test_class_name = exec_data.get("testClass")

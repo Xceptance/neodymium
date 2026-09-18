@@ -109,7 +109,7 @@ public final class AuraReportingService
                 Arrays.sort(dirs, (a, b) -> b.getName().compareTo(a.getName()));
                 for (final File dir : dirs)
                 {
-                    String status = "Passed";
+                    String status = "Failed";
                     String timestamp = "";
                     String total = "-";
                     String passed = "-";
@@ -431,7 +431,8 @@ public final class AuraReportingService
             // Write metadata.json
             final File metadataFile = new File(destDir, "metadata.json");
             final String status = manuallyStoppedVal ? "Aborted"
-                    : (failed == 0 && passed == 0 && skipped > 0 ? "Aborted" : (failed == 0 ? "Passed" : "Failed"));
+                    : (failed == 0 && passed == 0 && skipped > 0 ? "Aborted"
+                    : (failed > 0 || (passed == 0 && testsRun > 0) ? "Failed" : (passed > 0 ? "Passed" : "Failed")));
             final long durationMs = System.currentTimeMillis() - runStartTimeMs;
             final boolean headless = req != null && req.headless;
             final boolean allureEnabled = req != null && req.allure;
@@ -526,6 +527,7 @@ public final class AuraReportingService
                             }
                         }
                         
+                        final String execStatus = manuallyStoppedVal ? "skipped" : status;
                         if (!datasets.isEmpty())
                         {
                             for (final String ds : datasets)
@@ -534,7 +536,7 @@ public final class AuraReportingService
                                 testData.put("testName", yamlLabel + " (" + ds + ")");
                                 testData.put("testId", ds);
                                 testData.put("playbookFile", file);
-                                testData.put("status", status);
+                                testData.put("status", execStatus);
                                 testData.put("steps", Collections.emptyList());
                                 
                                 final String json = GSON.toJson(testData);
@@ -546,7 +548,7 @@ public final class AuraReportingService
                             final Map<String, Object> testData = new HashMap<>();
                             testData.put("testName", yamlLabel);
                             testData.put("playbookFile", file);
-                            testData.put("status", status);
+                            testData.put("status", execStatus);
                             testData.put("steps", Collections.emptyList());
                             
                             final String json = GSON.toJson(testData);

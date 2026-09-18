@@ -22,6 +22,7 @@ import com.xceptance.neodymium.aura.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,7 @@ import org.springframework.ui.Model;
 /**
  * Unit tests for AuraTestDashboardController.
  *
- * @author AI-generated: Gemini 3.8 Flash
+ * @author AI-generated: Antigravity
  * @author Xceptance GmbH 2026
  */
 public class AuraTestDashboardControllerTest
@@ -66,7 +67,7 @@ public class AuraTestDashboardControllerTest
     public void testRenderDashboardFullPage()
     {
         final Model model = new ConcurrentModel();
-        final String view = controller.renderDashboard("false", model);
+        final String view = controller.renderDashboard("false", null, model);
 
         Assertions.assertEquals("index", view);
         Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
@@ -78,7 +79,7 @@ public class AuraTestDashboardControllerTest
     public void testRenderDashboardHtmx()
     {
         final Model model = new ConcurrentModel();
-        final String view = controller.renderDashboard("true", model);
+        final String view = controller.renderDashboard("true", null, model);
 
         Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", view);
         Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
@@ -103,7 +104,7 @@ public class AuraTestDashboardControllerTest
         Mockito.when(queueController.isInteractive()).thenReturn(true);
         Mockito.when(queueController.isRunning()).thenReturn(false);
 
-        final String view = controller.renderDashboard("true", model);
+        final String view = controller.renderDashboard("true", null, model);
 
         Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", view);
         Assertions.assertEquals(Boolean.TRUE, model.getAttribute("interactive"));
@@ -117,10 +118,26 @@ public class AuraTestDashboardControllerTest
         Mockito.when(queueController.isInteractive()).thenReturn(true);
         Mockito.when(queueController.isRunning()).thenReturn(true);
 
-        final String view = controller.renderDashboard("false", model);
+        final String view = controller.renderDashboard("false", null, model);
 
         Assertions.assertEquals("index", view);
         Assertions.assertEquals(Boolean.TRUE, model.getAttribute("interactive"));
         Assertions.assertEquals(Boolean.TRUE, model.getAttribute("running"));
+    }
+
+    @Test
+    public void testRenderDashboardWithFileParameter() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.readYamlFileContent("Freiwohl.yaml")).thenReturn("steps:\n  - Open url");
+        Mockito.when(fileService.parsePlaybookSections("steps:\n  - Open url")).thenReturn(Map.of("mainSteps", List.of("Open url")));
+
+        final String view = controller.renderDashboard("false", "Freiwohl.yaml", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("Freiwohl.yaml", model.getAttribute("activeEditingFile"));
+        Assertions.assertEquals("Freiwohl.yaml", model.getAttribute("currentTestFile"));
+        Assertions.assertEquals("steps:\n  - Open url", model.getAttribute("editingFileContent"));
+        Mockito.verify(fileService).setActiveEditingFile("Freiwohl.yaml");
     }
 }

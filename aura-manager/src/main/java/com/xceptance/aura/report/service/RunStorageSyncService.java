@@ -192,7 +192,7 @@ public class RunStorageSyncService
                                             if (eId == null || eId.isEmpty() || eId.equals(curExecId))
                                             {
                                                 final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
-                                                final String rawStatus = exec.path("status").asText("passed-clean");
+                                                final String rawStatus = exec.path("status").asText("failed-unknown");
                                                 final List<String> bugList = new ArrayList<>();
                                                 if (exec.has("bugs") && exec.path("bugs").isArray())
                                                 {
@@ -488,9 +488,10 @@ public class RunStorageSyncService
                         rawTitle = exec.path("testId").asText("").trim();
                     }
                     final String dataSet = !rawTitle.isEmpty() ? rawTitle : "Default";
-                    final String location = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
+                    final String rawLoc = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
+                    final String location = AuraReportDataService.normalizeLocation(rawLoc);
                     final String browser = AuraReportDataService.normalizeBrowser(exec.path("browser").asText("Chrome"));
-                    final String rawStatus = exec.path("status").asText("passed-clean");
+                    final String rawStatus = exec.path("status").asText("failed-unknown");
 
                     final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
                     final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
@@ -517,7 +518,7 @@ public class RunStorageSyncService
                     final String bugsStr = hasBugs ? String.join(";", bugList) : "";
 
                     final String effectiveStatus;
-                    if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus))
+                    if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
                     {
                         if (hasBugs)
                         {
@@ -550,74 +551,85 @@ public class RunStorageSyncService
                     }
                     else
                     {
-                        effectiveStatus = rawStatus;
-                        calcPass++;
-                    }
-
-                    final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
-                    final TestBaseVariationEntity varEntity;
-                    if (varOpt.isPresent())
-                    {
-                        varEntity = varOpt.get();
-                        if (dataSet != null && !dataSet.isBlank() && ("Default".equals(varEntity.getDataSetLabel()) || varEntity.getDataSetLabel() == null || varEntity.getDataSetLabel().isBlank()))
+                        if (hasBugs)
                         {
-                            varEntity.setDataSetLabel(dataSet);
+                            effectiveStatus = "failed-known";
+                            calcKnown++;
                         }
-                        if (testMethod != null && !testMethod.isBlank() && (varEntity.getTestMethodName() == null || varEntity.getTestMethodName().isBlank()))
+                        else
                         {
-                            varEntity.setTestMethodName(testMethod);
+                            effectiveStatus = "failed-unknown";
+                            calcUnknown++;
                         }
                     }
-                    else
+
+                    if (testMethod != null && !testMethod.isBlank())
                     {
-                        varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
-                    }
-
-                    varEntity.setTotalExecutionsCount(varEntity.getTotalExecutionsCount() + 1);
-                    varEntity.setLastStatus(effectiveStatus);
-                    varEntity.setLastExecutedAt(System.currentTimeMillis());
-
-                    final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
-
-                    final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, java.nio.charset.StandardCharsets.UTF_8)
-                        + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
-                        + "&batch=" + java.net.URLEncoder.encode(batchName, java.nio.charset.StandardCharsets.UTF_8)
-                        + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
-                        + "&ts=" + java.net.URLEncoder.encode(timestamp, java.nio.charset.StandardCharsets.UTF_8)
-                        + "&status=" + java.net.URLEncoder.encode(effectiveStatus, java.nio.charset.StandardCharsets.UTF_8)
-                        + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
-
-                    final String currentHistory = varEntity.getHistoryLinks();
-                    if (currentHistory == null || currentHistory.trim().isEmpty())
-                    {
-                        varEntity.setHistoryLinks(relUrl);
-                    }
-                    else
-                    {
-                        final List<String> linksList = new ArrayList<>(List.of(currentHistory.split(",")));
-                        boolean replaced = false;
-                        for (int i = 0; i < linksList.size(); i++)
+                        final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
+                        final TestBaseVariationEntity varEntity;
+                        if (varOpt.isPresent())
                         {
-                            final String existing = linksList.get(i).trim();
-                            final Map<String, String> existingParams = AuraReportDataService.parseQueryParams(existing);
-                            final String existingRunId = existingParams.get("runId");
-                            final String existingExecId = existingParams.get("executionId");
-
-                            if (runId.equals(existingRunId) && java.util.Objects.equals(execId, existingExecId))
+                            varEntity = varOpt.get();
+                            if (dataSet != null && !dataSet.isBlank() && ("Default".equals(varEntity.getDataSetLabel()) || varEntity.getDataSetLabel() == null || varEntity.getDataSetLabel().isBlank()))
                             {
-                                linksList.set(i, relUrl);
-                                replaced = true;
-                                break;
+                                varEntity.setDataSetLabel(dataSet);
+                            }
+                            if (varEntity.getTestMethodName() == null || varEntity.getTestMethodName().isBlank())
+                            {
+                                varEntity.setTestMethodName(testMethod);
                             }
                         }
-                        if (!replaced && !linksList.contains(relUrl))
+                        else
                         {
-                            linksList.add(relUrl);
+                            varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
                         }
-                        varEntity.setHistoryLinks(String.join(",", linksList));
-                    }
 
-                    variationRepository.save(varEntity);
+                        varEntity.setLastStatus(effectiveStatus);
+                        varEntity.setLastExecutedAt(System.currentTimeMillis());
+
+                        final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
+
+                        final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, java.nio.charset.StandardCharsets.UTF_8)
+                            + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
+                            + "&batch=" + java.net.URLEncoder.encode(batchName, java.nio.charset.StandardCharsets.UTF_8)
+                            + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
+                            + "&ts=" + java.net.URLEncoder.encode(timestamp, java.nio.charset.StandardCharsets.UTF_8)
+                            + "&status=" + java.net.URLEncoder.encode(effectiveStatus, java.nio.charset.StandardCharsets.UTF_8)
+                            + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
+
+                        final String currentHistory = varEntity.getHistoryLinks();
+                        if (currentHistory == null || currentHistory.trim().isEmpty())
+                        {
+                            varEntity.setHistoryLinks(relUrl);
+                        }
+                        else
+                        {
+                            final List<String> linksList = new ArrayList<>(List.of(currentHistory.split(",")));
+                            boolean replaced = false;
+                            for (int i = 0; i < linksList.size(); i++)
+                            {
+                                final String existing = linksList.get(i).trim();
+                                final Map<String, String> existingParams = AuraReportDataService.parseQueryParams(existing);
+                                final String existingRunId = existingParams.get("runId");
+                                final String existingExecId = existingParams.get("executionId");
+
+                                if (runId.equals(existingRunId) && java.util.Objects.equals(execId, existingExecId))
+                                {
+                                    linksList.set(i, relUrl);
+                                    replaced = true;
+                                    break;
+                                }
+                            }
+                            if (!replaced && !linksList.contains(relUrl))
+                            {
+                                linksList.add(relUrl);
+                            }
+                            varEntity.setHistoryLinks(String.join(",", linksList));
+                        }
+
+                        varEntity.setTotalExecutionsCount(AuraReportDataService.countHistoryLinks(varEntity.getHistoryLinks()));
+                        variationRepository.save(varEntity);
+                    }
                 }
             }
 

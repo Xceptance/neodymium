@@ -211,7 +211,7 @@ public final class AuraQueueServiceTest
     }
 
     @Test
-    public void testMultipleDatasetSelectionsCreateDistinctBatches() throws Exception
+    public void testMultipleDatasetSelectionsGroupIntoSingleBatch() throws Exception
     {
         final com.xceptance.neodymium.aura.dto.RunRequest req = new com.xceptance.neodymium.aura.dto.RunRequest();
         final com.xceptance.neodymium.aura.dto.DatasetSelection sel1 = new com.xceptance.neodymium.aura.dto.DatasetSelection();
@@ -233,31 +233,60 @@ public final class AuraQueueServiceTest
         final Class<?> batchClass = Class.forName("com.xceptance.neodymium.aura.AuraQueueService$ExecutionBatch");
         final Field datasetIdsField = batchClass.getDeclaredField("datasetIds");
         datasetIdsField.setAccessible(true);
+        final Field targetProfilesField = batchClass.getDeclaredField("targetProfiles");
+        targetProfilesField.setAccessible(true);
+        final Field fileField = batchClass.getDeclaredField("file");
+        fileField.setAccessible(true);
 
         for (final com.xceptance.neodymium.aura.dto.DatasetSelection selection : req.datasets)
         {
             @SuppressWarnings("unchecked")
             final List<String> profiles = (List<String>) getProfilesMethod.invoke(queueService, selection, req.globalBrowserProfiles);
 
-            final java.lang.reflect.Constructor<?> batchConst = batchClass.getDeclaredConstructor(String.class, List.class);
-            batchConst.setAccessible(true);
-            final Object batch = batchConst.newInstance(selection.file, profiles);
-            if (selection.id != null && !selection.id.isBlank())
+            Object existingBatch = null;
+            for (final Object b : batches)
             {
+                final String fileVal = (String) fileField.get(b);
                 @SuppressWarnings("unchecked")
-                final List<String> ids = (List<String>) datasetIdsField.get(batch);
-                ids.add(selection.id);
+                final List<String> profVal = (List<String>) targetProfilesField.get(b);
+                if (fileVal.equals(selection.file) && profVal.equals(profiles))
+                {
+                    existingBatch = b;
+                    break;
+                }
             }
-            batches.add(batch);
+
+            if (existingBatch != null)
+            {
+                if (selection.id != null && !selection.id.isBlank())
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<String> ids = (List<String>) datasetIdsField.get(existingBatch);
+                    if (!ids.contains(selection.id))
+                    {
+                        ids.add(selection.id);
+                    }
+                }
+            }
+            else
+            {
+                final java.lang.reflect.Constructor<?> batchConst = batchClass.getDeclaredConstructor(String.class, List.class);
+                batchConst.setAccessible(true);
+                final Object batch = batchConst.newInstance(selection.file, profiles);
+                if (selection.id != null && !selection.id.isBlank())
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<String> ids = (List<String>) datasetIdsField.get(batch);
+                    ids.add(selection.id);
+                }
+                batches.add(batch);
+            }
         }
 
-        Assertions.assertEquals(2, batches.size(), "Each dataset selection entry must produce a distinct execution batch");
+        Assertions.assertEquals(1, batches.size(), "Multiple dataset selections for the same file and profiles must be grouped into a single batch");
         @SuppressWarnings("unchecked")
-        final List<String> ids1 = (List<String>) datasetIdsField.get(batches.get(0));
-        @SuppressWarnings("unchecked")
-        final List<String> ids2 = (List<String>) datasetIdsField.get(batches.get(1));
-        Assertions.assertEquals(List.of("1"), ids1);
-        Assertions.assertEquals(List.of("2"), ids2);
+        final List<String> ids = (List<String>) datasetIdsField.get(batches.get(0));
+        Assertions.assertEquals(List.of("1", "2"), ids, "Combined batch must contain all selected dataset IDs");
     }
 
     /**

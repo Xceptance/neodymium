@@ -580,17 +580,29 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             this.report.setEndTimeMs(System.currentTimeMillis());
             this.report.setDurationMs(sessionFinished.getDurationMs());
-            this.report.setSuccess(sessionFinished.isSuccess());
-            this.report.setStatus(sessionFinished.isSuccess() ? "PASSED" : "FAILED");
             this.report.addWarnings(sessionFinished.getWarnings());
 
-            if (sessionFinished.isSuccess())
+            populateContextMetadata();
+
+            final ExecutionContext currentCtx = activeCtx != null ? activeCtx : ExecutionContext.getActiveContext();
+            final boolean hasContextError = currentCtx != null && (
+                currentCtx.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR)
+                || currentCtx.getTransientData().containsKey("executionError")
+            );
+            final boolean hasFailedReportStep = this.report.getSteps().stream()
+                .anyMatch(s -> "FAILED".equalsIgnoreCase(s.getStatus()) || (s.getFailureReason() != null && !s.getFailureReason().isBlank()));
+
+            final boolean isSuccess = sessionFinished.isSuccess() && !hasContextError && !hasFailedReportStep;
+
+            this.report.setSuccess(isSuccess);
+            this.report.setStatus(isSuccess ? "PASSED" : "FAILED");
+
+            if (isSuccess)
             {
                 this.report.setFailureReason(null);
                 this.report.setFailureStackTrace(null);
             }
 
-            populateContextMetadata();
             resolveUnfinishedSteps();
             recalculateMetrics();
             flushReport();
@@ -733,10 +745,24 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
             if (this.report.getFailureReason() == null)
             {
-                final Object lastErr = ctx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                Object lastErr = ctx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                if (lastErr == null)
+                {
+                    lastErr = ctx.getTransientData().get("executionError");
+                }
                 if (lastErr instanceof Throwable t)
                 {
-                    this.report.setFailureReason(t.getMessage() != null ? t.getMessage() : t.toString());
+                    String msg = t.getMessage() != null ? t.getMessage() : t.toString();
+                    Throwable cause = t.getCause();
+                    while (cause != null)
+                    {
+                        if (cause.getMessage() != null && !msg.contains(cause.getMessage()))
+                        {
+                            msg += ": " + cause.getMessage();
+                        }
+                        cause = cause.getCause();
+                    }
+                    this.report.setFailureReason(msg);
                     if (this.report.getFailureStackTrace() == null)
                     {
                         final StringWriter sw = new StringWriter();

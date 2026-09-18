@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -121,8 +122,8 @@ public final class TestExecutionDto
         @JsonProperty("llmTotalTokens") final Long llmTotalTokens,
         @JsonProperty("llmCost") final Double llmCost,
         @JsonProperty("failureSnippet") final String failureSnippet,
-        @JsonProperty("failureReason") final String failureReason,
-        @JsonProperty("failureStackTrace") final String failureStackTrace,
+        @JsonProperty("failureReason") @JsonAlias({"error", "errorMessage", "failure"}) final String failureReason,
+        @JsonProperty("failureStackTrace") @JsonAlias({"failureStacktrace", "stackTrace", "stacktrace", "trace"}) final String failureStackTrace,
         @JsonProperty("visualRcaExplanation") final String visualRcaExplanation,
         @JsonProperty("llmResponsibility") final JsonNode llmResponsibility,
         @JsonProperty("metrics") final JsonNode metrics)

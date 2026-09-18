@@ -1956,26 +1956,6 @@ function renderStepsForExecution(activeRow) {
     const stRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
     const isRunningState = stVal === 'RUNNING' || stRawVal === 'running' || stRawVal === 'in_progress' || stRawVal === 'executing' || stRawVal === 'pending';
 
-    if (!blocksObj || (beforeSteps.length === 0 && coreSteps.length === 0 && afterSteps.length === 0)) {
-        const hasExistingRenderedSteps = stepListEl.querySelector('.step-item') !== null;
-        if (hasExistingRenderedSteps) {
-            return;
-        }
-        if (isRunningState) {
-            stepListEl.innerHTML = `
-                <div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-color); margin-top: 0.5rem;">
-                    <span class="material-symbols-outlined text-accent" style="font-size: 1.8rem; vertical-align: middle; animation: spin 1.2s linear infinite; margin-bottom: 0.5rem; display: block;">sync</span>
-                    <strong style="color: var(--text-main);">Test execution in progress...</strong>
-                    <div style="font-size: 0.8rem; margin-top: 0.35rem; color: var(--text-muted);">Waiting for initial step logs and screenshots from SUT.</div>
-                </div>
-            `;
-            return;
-        } else {
-            stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">No step execution data recorded for this run.</div>';
-            return;
-        }
-    }
-
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -2023,6 +2003,26 @@ function renderStepsForExecution(activeRow) {
             errorCard.style.display = 'flex';
         } else {
             errorCard.style.display = 'none';
+        }
+    }
+
+    if (!blocksObj || (beforeSteps.length === 0 && coreSteps.length === 0 && afterSteps.length === 0)) {
+        const hasExistingRenderedSteps = stepListEl.querySelector('.step-item') !== null;
+        if (hasExistingRenderedSteps) {
+            return;
+        }
+        if (isRunningState) {
+            stepListEl.innerHTML = `
+                <div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-color); margin-top: 0.5rem;">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 1.8rem; vertical-align: middle; animation: spin 1.2s linear infinite; margin-bottom: 0.5rem; display: block;">sync</span>
+                    <strong style="color: var(--text-main);">Test execution in progress...</strong>
+                    <div style="font-size: 0.8rem; margin-top: 0.35rem; color: var(--text-muted);">Waiting for initial step logs and screenshots from SUT.</div>
+                </div>
+            `;
+            return;
+        } else {
+            stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">No step execution data recorded for this run.</div>';
+            return;
         }
     }
 

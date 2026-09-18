@@ -113,7 +113,11 @@ public final class HtmlIndexReportGenerator
             entry.setTestMethod(report.getTestMethod());
             entry.setTestName(report.getTestName());
             entry.setDatasetId(report.getDatasetId());
-            entry.setStatus(report.getStatus() != null ? report.getStatus() : "UNKNOWN");
+            final boolean isFailed = !report.isSuccess()
+                || (report.getStatus() != null && report.getStatus().toUpperCase().contains("FAIL"))
+                || (report.getFailureReason() != null && !report.getFailureReason().isBlank());
+            final String resolvedStatus = isFailed ? "FAILED" : (report.getStatus() != null ? report.getStatus() : "UNKNOWN");
+            entry.setStatus(resolvedStatus);
             entry.setExecutionMode(report.getExecutionMode());
             final long timestamp = report.getStartTimeMs() > 0 ? report.getStartTimeMs() : System.currentTimeMillis();
             entry.setTimestamp(timestamp);
@@ -747,11 +751,12 @@ public final class HtmlIndexReportGenerator
         {
             for (final IndexEntry entry : safeEntries)
             {
-                final String st = entry.getStatus() != null ? entry.getStatus().toUpperCase() : "UNKNOWN";
-                final String statusCategory = (st.contains("FAIL")) ? "FAILED"
+                final String st = entry.getStatus() != null ? entry.getStatus().toUpperCase() : "FAILED";
+                final boolean entryFailed = st.contains("FAIL") || (entry.getFailureReason() != null && !entry.getFailureReason().isBlank());
+                final String statusCategory = entryFailed ? "FAILED"
                     : (st.contains("HEAL") || (entry.getHealedSteps() > 0 && (st.contains("PASS") || st.contains("SUCC")))) ? "HEALED"
                     : (st.contains("PASS") || st.contains("SUCC")) ? "PASSED"
-                    : (st.contains("SKIP")) ? "SKIPPED" : "OTHER";
+                    : (st.contains("SKIP")) ? "SKIPPED" : "FAILED";
 
                 final String pillClass = "PASSED".equals(statusCategory) ? "pill-pass"
                     : "HEALED".equals(statusCategory) ? "pill-heal"
