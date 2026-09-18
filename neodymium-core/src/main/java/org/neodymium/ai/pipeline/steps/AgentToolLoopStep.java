@@ -211,8 +211,17 @@ public final class AgentToolLoopStep implements PipelineStep
         final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
         final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_STEP_INTENT);
-        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : (step != null ? step.getSemanticIntent() : null);
         final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
+        final SemanticIntent rawIntent = intentObj instanceof SemanticIntent si ? si : (step != null ? step.getSemanticIntent() : null);
+        final SemanticIntent intent = rawIntent != null ? rawIntent : SemanticIntent.inferFromInstruction(instruction);
+        if (intent != null)
+        {
+            context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, intent);
+            if (step != null && step.getSemanticIntent() == null)
+            {
+                step.setSemanticIntent(intent);
+            }
+        }
         final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
         final boolean isVisual = (step != null && step.isVisualStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
@@ -366,12 +375,15 @@ public final class AgentToolLoopStep implements PipelineStep
         final List<ToolDefinition> availableTools = filterToolsForIntent(intent, isVisual, context);
 
         final StringBuilder systemPrompt = new StringBuilder();
-        systemPrompt.append("You are an autonomous web testing agent. Execute the test goal by invoking available tools directly.\n\n");
+        systemPrompt.append("You are an autonomous web testing agent. Execute the test instruction using available tools.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
-        systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps. For forms, prefer 'fill' over 'type' (clears prior text). Do not press Enter unless commanded.\n");
-        systemPrompt.append("2. COMPLETION: Once the instruction's described goal or milestones are achieved, call 'complete_step'. For single atomic actions, you may propose 'complete_step' together with your action.\n");
-        systemPrompt.append("3. STABILITY: Never propose the exact same failing tool call without state change. To find offscreen items, use 'scroll'. To inspect DOM, use 'query_dom'.\n");
-        systemPrompt.append("4. SCROLL: For offscreen elements, invoke 'scroll' to locate the target.\n");
+        systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
+        systemPrompt.append("2. INPUTS: For text fields, use 'fill' (clears existing text first). Use 'type' only when intentionally appending text. Never set 'pressEnter: true' unless explicitly commanded to press Enter or submit.\n");
+        systemPrompt.append("3. DISCOVERY & RECOVERY: Ground all selectors in the provided page elements. Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
+        systemPrompt.append("4. ACTION & VERIFICATION COMPLETION:\n");
+        systemPrompt.append("   - Action steps: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, or navigating), the step goal is completely satisfied once the action executes. Propose [action, complete_step] in the same turn or call 'complete_step' immediately after the action succeeds. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps.\n");
+        systemPrompt.append("   - Verification steps: For verification or check instructions (such as asserting text, checking counts, validating values, or confirming expected state), you MUST invoke an assertion tool ('assert_text', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
+        systemPrompt.append("   - Single atomic operations: For single atomic actions or assertions, you may call [action/assertion, complete_step] in the same turn to finish immediately. Do not batch multiple actions together.\n");
         if (isVisual)
         {
             systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
@@ -1169,7 +1181,7 @@ public final class AgentToolLoopStep implements PipelineStep
                             nextAttachments = Collections.emptyList();
                         }
 
-                        turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If the step's goal is achieved and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM to verify or continue, use tool 'query_dom' or 'request_context'.\n\n");
+                        turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If this was an action instruction, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the step explicitly requires verification or you need to inspect the updated page DOM to continue, use tool 'query_dom' or 'request_context'.");
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
                         attachments = nextAttachments;

@@ -134,4 +134,40 @@ public class SemanticIntentTest
         assertNull(SemanticIntent.fromCode("unknown_intent_xyz"));
         assertEquals(SemanticIntent.CLICK, SemanticIntent.fromString("unknown_intent_xyz", SemanticIntent.CLICK));
     }
+
+    @Test
+    public void testInferFromInstruction()
+    {
+        assertEquals(SemanticIntent.NAVIGATE, SemanticIntent.inferFromInstruction("Open https://localhost:8543/verla/index.html"));
+        assertEquals(SemanticIntent.NAVIGATE, SemanticIntent.inferFromInstruction("Navigate to the login page"));
+        assertEquals(SemanticIntent.NAVIGATE, SemanticIntent.inferFromInstruction("Browse to product catalog"));
+
+        assertEquals(SemanticIntent.CLICK, SemanticIntent.inferFromInstruction("Locate the first product card and click its 'Add to Cart' or 'Add' button."));
+        assertEquals(SemanticIntent.CLICK, SemanticIntent.inferFromInstruction("Click 'Checkout'"));
+        assertEquals(SemanticIntent.CLICK, SemanticIntent.inferFromInstruction("Press the submit button"));
+
+        assertEquals(SemanticIntent.TYPE, SemanticIntent.inferFromInstruction("Enter 'Mario' as first name"));
+        assertEquals(SemanticIntent.TYPE, SemanticIntent.inferFromInstruction("Type 'secret123' into the password field"));
+        assertEquals(SemanticIntent.TYPE, SemanticIntent.inferFromInstruction("Fill in the email input"));
+
+        assertEquals(SemanticIntent.SELECT, SemanticIntent.inferFromInstruction("Select 'United States' as country."));
+        assertEquals(SemanticIntent.SELECT, SemanticIntent.inferFromInstruction("Choose size 'M' from the dropdown"));
+
+        assertEquals(SemanticIntent.HOVER_SCROLL, SemanticIntent.inferFromInstruction("Scroll up as much as possible to reveal the full order confirmation."));
+        assertEquals(SemanticIntent.HOVER_SCROLL, SemanticIntent.inferFromInstruction("Hover over the navigation menu"));
+
+        assertEquals(SemanticIntent.WAIT, SemanticIntent.inferFromInstruction("Wait for spinner to disappear"));
+        assertEquals(SemanticIntent.WAIT, SemanticIntent.inferFromInstruction("Pause for 2 seconds"));
+
+        assertEquals(SemanticIntent.ASSERT, SemanticIntent.inferFromInstruction("The mini cart quantity is now 1."));
+        assertEquals(SemanticIntent.ASSERT, SemanticIntent.inferFromInstruction("Validate that United States as country is selected."));
+        assertEquals(SemanticIntent.ASSERT, SemanticIntent.inferFromInstruction("Verify that the error message is shown"));
+        assertEquals(SemanticIntent.ASSERT, SemanticIntent.inferFromInstruction("The headline says now 'Checkout'"));
+        assertEquals(SemanticIntent.ASSERT, SemanticIntent.inferFromInstruction("An order number is shown in the form 'V-[0-9]+-US'."));
+        assertEquals(SemanticIntent.ASSERT, SemanticIntent.inferFromInstruction("The total is mentioned and in USD."));
+
+        assertNull(SemanticIntent.inferFromInstruction(null));
+        assertNull(SemanticIntent.inferFromInstruction("   "));
+        assertNull(SemanticIntent.inferFromInstruction("Something completely ambiguous and unusual"));
+    }
 }

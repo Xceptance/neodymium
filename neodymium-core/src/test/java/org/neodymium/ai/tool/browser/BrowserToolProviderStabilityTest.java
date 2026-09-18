@@ -23,7 +23,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.WebElement;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -226,5 +229,139 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals("SUCCESS", json.path("status").asText());
         Assertions.assertEquals("assert_text", json.path("action").asText());
         Assertions.assertEquals("page", json.path("target").asText());
+    }
+
+    @Test
+    public void testAssertTextWaitsForAsyncTargetElementUpdateEvenIfTextIsPresentElsewhereOnPage() throws Exception
+    {
+        final AtomicInteger pollCount = new AtomicInteger(0);
+
+        final WebElement targetElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getText".equals(name))
+                    {
+                        // First 2 polls return "CART 0", 3rd poll returns "CART 1"
+                        return pollCount.incrementAndGet() >= 3 ? "CART 1" : "CART 0";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("isEnabled".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("id".equals(attr))
+                        {
+                            return "cart-btn-anchor";
+                        }
+                        if ("value".equals(attr))
+                        {
+                            return "";
+                        }
+                        return null;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "a";
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final WebElement bodyElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getText".equals(name))
+                    {
+                        // Body already contains "CART 1" elsewhere on the page
+                        return "Some other section has CART 1";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "body";
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        return null;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTitle".equals(name))
+                    {
+                        return "Store Page";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "https://localhost:8543/verla/index.html";
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        final Object by = args[0];
+                        if (by != null && by.toString().contains("body"))
+                        {
+                            return bodyElement;
+                        }
+                        return targetElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        final Object by = args[0];
+                        if (by != null && by.toString().contains("body"))
+                        {
+                            return List.of(bodyElement);
+                        }
+                        if (by != null && by.toString().contains("cart-btn-anchor"))
+                        {
+                            return List.of(targetElement);
+                        }
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", "#cart-btn-anchor");
+        args.put("expectedText", "CART 1");
+
+        final ToolCall call = new ToolCall("call-async-poll", "browser_assert_text", args);
+        final ToolResult result = tool.execute(call, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        final JsonNode json = MAPPER.readTree(result.content());
+        Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        Assertions.assertEquals("assert_text", json.path("action").asText());
+        Assertions.assertTrue(json.path("matched").asBoolean());
+        Assertions.assertTrue(pollCount.get() >= 3, "Should have polled at least 3 times until element updated instead of aborting");
     }
 }

@@ -1547,10 +1547,6 @@ public final class BrowserToolProvider
 
                         if (!matched)
                         {
-                            if (isTextPresentOnPage(expectedText, regex, exact))
-                            {
-                                break;
-                            }
                             Selenide.sleep(100);
                         }
                     }
