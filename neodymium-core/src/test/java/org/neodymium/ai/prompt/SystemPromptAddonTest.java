@@ -61,7 +61,7 @@ public final class SystemPromptAddonTest
     {
         final String yamlContent = """
             promptAddon: "Default general prompt addon"
-            promptAddon.pesap: "Specific pesap addon"
+            promptAddon.verification: "Specific verification addon"
             promptAddon.general: "Specific general addon"
             steps: |
               Step 1
@@ -77,7 +77,7 @@ public final class SystemPromptAddonTest
         final Map<String, String> addons = playbook.getPromptAddons();
         assertNotNull(addons);
         assertEquals("Default general prompt addon", addons.get("default"));
-        assertEquals("Specific pesap addon", addons.get("pesap"));
+        assertEquals("Specific verification addon", addons.get("verification"));
         assertEquals("Specific general addon", addons.get("general"));
     }
 
@@ -91,7 +91,7 @@ public final class SystemPromptAddonTest
     {
         final String yamlContent = """
             promptAddon:
-              pesap: "Nested pesap rule"
+              verification: "Nested verification rule"
               general: "Nested general rule"
             steps: |
               Step 1
@@ -106,7 +106,7 @@ public final class SystemPromptAddonTest
 
         final Map<String, String> addons = playbook.getPromptAddons();
         assertNotNull(addons);
-        assertEquals("Nested pesap rule", addons.get("pesap"));
+        assertEquals("Nested verification rule", addons.get("verification"));
         assertEquals("Nested general rule", addons.get("general"));
     }
 
@@ -119,21 +119,21 @@ public final class SystemPromptAddonTest
         // 1. Setup ExecutionContext with SessionData (Dataset layer)
         final Map<String, SessionData.DataEntry> staticData = new HashMap<>();
         staticData.put("promptAddon", new SessionData.DataEntry("Dataset general rule", false));
-        staticData.put("promptAddon.pesap", new SessionData.DataEntry("Dataset pesap rule", false));
+        staticData.put("promptAddon.verification", new SessionData.DataEntry("Dataset verification rule", false));
         final SessionData sessionData = new SessionData(staticData);
         final ExecutionContext context = new ExecutionContext(sessionData);
 
         // 2. Setup Playbook layer in transient data
         final Map<String, String> yamlAddons = new HashMap<>();
         yamlAddons.put("default", "Playbook general rule");
-        yamlAddons.put("pesap", "Playbook pesap rule");
+        yamlAddons.put("verification", "Playbook verification rule");
         context.getTransientData().put("playbook.promptAddons", yamlAddons);
 
-        // For pesap query: Playbook general + Playbook pesap + Dataset general + Dataset pesap
-        final String pesapAddon = SystemPromptAddonHelper.getAddon("pesap", context);
-        assertNotNull(pesapAddon);
-        final String expectedPesap = "Playbook general rule\n\nPlaybook pesap rule\n\nDataset general rule\n\nDataset pesap rule";
-        assertEquals(expectedPesap, pesapAddon);
+        // For verification query: Playbook general + Playbook verification + Dataset general + Dataset verification
+        final String verificationAddon = SystemPromptAddonHelper.getAddon("verification", context);
+        assertNotNull(verificationAddon);
+        final String expectedVerification = "Playbook general rule\n\nPlaybook verification rule\n\nDataset general rule\n\nDataset verification rule";
+        assertEquals(expectedVerification, verificationAddon);
 
         // For general query: Playbook general + Dataset general
         final String generalAddon = SystemPromptAddonHelper.getAddon("general", context);

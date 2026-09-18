@@ -36,9 +36,6 @@ public enum LlmCapability
     /** Primary step execution loop and structured action extraction. */
     EXECUTION,
 
-    /** Pre-execution static analysis phase and instruction splitting. */
-    PESAP,
-
     /** Specialized validation of step execution outcomes and assertions. */
     VERIFICATION,
 

@@ -71,7 +71,6 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
     public static void configureMockLlm()
     {
         Neodymium.getData().put("neodymium.ai.global.provider", "mock");
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         setupCount = 0;
         testCount = 0;
         teardownCount = 0;
@@ -81,7 +80,6 @@ public class BeforeAfterEachPlaybookIntegrationTest extends BaseAiTest
     public static void clearMockLlm()
     {
         Neodymium.getData().remove("neodymium.ai.global.provider");
-        Neodymium.getData().remove("neodymium.ai.pesap.enabled");
     }
 
     public void initMock(final AiSession session)

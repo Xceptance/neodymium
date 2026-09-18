@@ -314,7 +314,6 @@ public abstract class AiSession implements AutoCloseable
 
         final Integer stdCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
         final Integer verifCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
-        final Integer pesapCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
         final Integer judgeCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
         final Integer rcaCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
 
@@ -335,7 +334,6 @@ public abstract class AiSession implements AutoCloseable
             getTotalLlmCalls(),
             stdCalls != null ? stdCalls : 0,
             verifCalls != null ? verifCalls : 0,
-            pesapCalls != null ? pesapCalls : 0,
             judgeCalls != null ? judgeCalls : 0,
             rcaCalls != null ? rcaCalls : 0,
             stepCount,
@@ -560,7 +558,6 @@ public abstract class AiSession implements AutoCloseable
         recordingMetadata.put("totalLlmCalls", getTotalLlmCalls());
         recordingMetadata.put("standardCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_STANDARD_CALL_COUNT, 0));
         recordingMetadata.put("verificationCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 0));
-        recordingMetadata.put("pesapCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_PESAP_CALL_COUNT, 0));
         recordingMetadata.put("judgeCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0));
         recordingMetadata.put("rcaCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_RCA_CALL_COUNT, 0));
         recordingMetadata.put("totalReplays", getTotalReplays());

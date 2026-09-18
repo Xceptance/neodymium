@@ -215,7 +215,6 @@ public final class MistralLlmProvider implements LlmProvider
         return EnumSet.of(
             LlmCapability.TEXT_ONLY,
             LlmCapability.EXECUTION,
-            LlmCapability.PESAP,
             LlmCapability.VERIFICATION,
             LlmCapability.LINTER
         );

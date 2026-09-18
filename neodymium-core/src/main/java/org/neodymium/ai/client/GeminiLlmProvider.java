@@ -614,7 +614,6 @@ public final class GeminiLlmProvider implements LlmProvider
             LlmCapability.TEXT_ONLY,
             LlmCapability.VISION,
             LlmCapability.EXECUTION,
-            LlmCapability.PESAP,
             LlmCapability.VERIFICATION,
             LlmCapability.LINTER
         );

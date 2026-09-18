@@ -393,7 +393,7 @@ public final class AiConfiguration
     /**
      * Resolves model name for a specific role, falling back to global default.
      *
-     * @param role the execution role (e.g., "pesap", "execution", "vision", "audit")
+     * @param role the execution role (e.g., "execution", "vision", "audit")
      * @return the resolved model name
      */
     public String getModel(final String role)
@@ -680,16 +680,6 @@ public final class AiConfiguration
     public boolean isLocatorImproverEnabled()
     {
         return getBoolean("neodymium.ai.locatorImprover.enabled", true);
-    }
-
-    /**
-     * Checks if PESAP (Pre-Execution Step Analysis & Partitioning) is enabled.
-     *
-     * @return true if PESAP is enabled (default: true), false otherwise
-     */
-    public boolean isPesapEnabled()
-    {
-        return getBoolean("neodymium.ai.pesap.enabled", true);
     }
 
     /**

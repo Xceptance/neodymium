@@ -410,12 +410,6 @@ public final class ExecuteActionsStepTest
         executor.enqueueState(visualState);
 
         final MockLlmProvider mockProvider = new MockLlmProvider();
-        final ObjectNode pesapArgs = JsonNodeFactory.instance.objectNode();
-        pesapArgs.put("intent", "ASSERT");
-        pesapArgs.put("contextLevel", "VISUAL");
-        final ToolCall pesapCall = new ToolCall("pesap-1", "classify_step", pesapArgs);
-        mockProvider.addResponse(new LlmResponse("", new TokenUsage(50, 10, 60, 0), "mock-model", List.of(pesapCall)));
-
         final ObjectNode args = JsonNodeFactory.instance.objectNode();
         args.put("summary", "Visual check passed");
         final ToolCall completeCall = new ToolCall("call-1", "complete_step", args);

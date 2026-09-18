@@ -75,7 +75,7 @@ public class LlmRegistryTest
         registry.setDefaultProvider(defaultProvider);
 
         assertSame(defaultProvider, registry.getDefaultProvider(), "Default provider should match.");
-        final LlmProvider fallbackProvider = registry.getProvider(LlmCapability.PESAP);
+        final LlmProvider fallbackProvider = registry.getProvider(LlmCapability.LINTER);
         assertSame(defaultProvider, fallbackProvider, "Fallback provider should be used when specific capability is unmapped.");
     }
 

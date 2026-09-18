@@ -302,7 +302,6 @@ function isAiLogLine(line) {
 
     const aiKeywords = [
         'aura',
-        'pesap',
         'playbook',
         'llmclient',
         'aiagent',

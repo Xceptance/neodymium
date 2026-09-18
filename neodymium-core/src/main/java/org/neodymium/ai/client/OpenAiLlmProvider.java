@@ -351,7 +351,6 @@ public final class OpenAiLlmProvider implements LlmProvider
             LlmCapability.TEXT_ONLY,
             LlmCapability.VISION,
             LlmCapability.EXECUTION,
-            LlmCapability.PESAP,
             LlmCapability.VERIFICATION,
             LlmCapability.LINTER
         );

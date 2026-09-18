@@ -147,7 +147,7 @@ public class TokenBudgetGuardTest
         final TokenUsage usage = new TokenUsage(1000, 200, 1200, 300);
         final ExecutionMetrics metrics = new ExecutionMetrics(
             ExecutionMode.LLM_ONLY,
-            1, 1, 0, 0, 0,
+            1, 1, 0, 0,
             1, 0, 0, 0, 0,
             0, null, usage
         );

@@ -619,19 +619,16 @@ public final class StateMachineRunner
         final Integer stdCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
         final Integer judgeCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
         final Integer verifCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
-        final Integer pesapCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
         final Integer rcaCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
 
         final TokenUsage standardUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
         final TokenUsage judgeUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
         final TokenUsage verificationUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
-        final TokenUsage pesapUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
         final TokenUsage rcaUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
 
         final int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
         final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
         final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
-        final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
         final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
 
         final long standardIn = standardUsage != null ? standardUsage.inputTokenCount() : 0;
@@ -649,20 +646,15 @@ public final class StateMachineRunner
         final long verificationCached = verificationUsage != null ? verificationUsage.cachedTokenCount() : 0;
         final long verificationTotal = verificationIn + verificationOut;
 
-        final long pesapIn = pesapUsage != null ? pesapUsage.inputTokenCount() : 0;
-        final long pesapOut = pesapUsage != null ? pesapUsage.outputTokenCount() : 0;
-        final long pesapCached = pesapUsage != null ? pesapUsage.cachedTokenCount() : 0;
-        final long pesapTotal = pesapIn + pesapOut;
-
         final long rcaIn = rcaUsage != null ? rcaUsage.inputTokenCount() : 0;
         final long rcaOut = rcaUsage != null ? rcaUsage.outputTokenCount() : 0;
         final long rcaCached = rcaUsage != null ? rcaUsage.cachedTokenCount() : 0;
         final long rcaTotal = rcaIn + rcaOut;
 
-        final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls;
-        final long totalIn = standardIn + judgeIn + verificationIn + pesapIn + rcaIn;
-        final long totalOut = standardOut + judgeOut + verificationOut + pesapOut + rcaOut;
-        final long totalCached = standardCached + judgeCached + verificationCached + pesapCached + rcaCached;
+        final int totalCalls = standardCalls + judgeCalls + verificationCalls + rcaCalls;
+        final long totalIn = standardIn + judgeIn + verificationIn + rcaIn;
+        final long totalOut = standardOut + judgeOut + verificationOut + rcaOut;
+        final long totalCached = standardCached + judgeCached + verificationCached + rcaCached;
         final long totalTokens = totalIn + totalOut;
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
@@ -689,8 +681,6 @@ public final class StateMachineRunner
                 String.format("%,d", totalIn),
                 String.format("%,d", totalOut),
                 String.format("%,d", totalCached));
-        LOGGER.debug("║   ├─ PESAP:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
-                String.format("%,d", pesapCalls), String.format("%,d", pesapTotal), String.format("%,d", pesapIn), String.format("%,d", pesapOut), String.format("%,d", pesapCached));
         LOGGER.debug("║   ├─ Action:            {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", standardCalls), String.format("%,d", standardTotal), String.format("%,d", standardIn), String.format("%,d", standardOut), String.format("%,d", standardCached));
         LOGGER.debug("║   ├─ Judge:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
@@ -953,15 +943,6 @@ public final class StateMachineRunner
             LOGGER.debug("{}Actions:        0", indent);
         }
 
-        if (stats.getPesapCalls() > 0)
-        {
-            LOGGER.debug("{}PESAP Calls:        {} (Tokens: {} in ({} cached) → {} out)",
-                indent,
-                stats.getPesapCalls(),
-                stats.getPesapInputTokens(),
-                stats.getPesapCachedTokens(),
-                stats.getPesapOutputTokens());
-        }
         if (stats.getStandardCalls() > 0)
         {
             LOGGER.debug("{}Standard Calls:     {} (Tokens: {} in ({} cached) → {} out)",

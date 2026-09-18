@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
@@ -338,10 +339,6 @@ public final class TestExecutionReport
         private String failureReason;
         private int escalations;
         private String contextLevels;
-        private int pesapCalls;
-        private long pesapInputTokens;
-        private long pesapOutputTokens;
-        private long pesapCachedTokens;
         private int standardCalls;
         private long standardInputTokens;
         private long standardOutputTokens;
@@ -514,46 +511,6 @@ public final class TestExecutionReport
         public void setContextLevels(final String contextLevels)
         {
             this.contextLevels = contextLevels;
-        }
-
-        public int getPesapCalls()
-        {
-            return this.pesapCalls;
-        }
-
-        public void setPesapCalls(final int pesapCalls)
-        {
-            this.pesapCalls = pesapCalls;
-        }
-
-        public long getPesapInputTokens()
-        {
-            return this.pesapInputTokens;
-        }
-
-        public void setPesapInputTokens(final long pesapInputTokens)
-        {
-            this.pesapInputTokens = pesapInputTokens;
-        }
-
-        public long getPesapOutputTokens()
-        {
-            return this.pesapOutputTokens;
-        }
-
-        public void setPesapOutputTokens(final long pesapOutputTokens)
-        {
-            this.pesapOutputTokens = pesapOutputTokens;
-        }
-
-        public long getPesapCachedTokens()
-        {
-            return this.pesapCachedTokens;
-        }
-
-        public void setPesapCachedTokens(final long pesapCachedTokens)
-        {
-            this.pesapCachedTokens = pesapCachedTokens;
         }
 
         public int getStandardCalls()
@@ -1548,7 +1505,6 @@ public final class TestExecutionReport
 
         private CategoryTokenUsage total = new CategoryTokenUsage();
         private CategoryTokenUsage action = new CategoryTokenUsage();
-        private CategoryTokenUsage pesap = new CategoryTokenUsage();
         private CategoryTokenUsage judge = new CategoryTokenUsage();
         private CategoryTokenUsage verification = new CategoryTokenUsage();
         private CategoryTokenUsage visualRca = new CategoryTokenUsage();
@@ -1723,16 +1679,6 @@ public final class TestExecutionReport
         public void setAction(final CategoryTokenUsage action)
         {
             this.action = action != null ? action : new CategoryTokenUsage();
-        }
-
-        public CategoryTokenUsage getPesap()
-        {
-            return this.pesap;
-        }
-
-        public void setPesap(final CategoryTokenUsage pesap)
-        {
-            this.pesap = pesap != null ? pesap : new CategoryTokenUsage();
         }
 
         public CategoryTokenUsage getJudge()

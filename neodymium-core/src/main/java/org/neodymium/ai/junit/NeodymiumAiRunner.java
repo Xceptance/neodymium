@@ -32,7 +32,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
@@ -559,14 +561,65 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (allDataSets.isEmpty())
             {
+                if (!datasetFilters.isEmpty())
+                {
+                    final List<String> filterValues = new ArrayList<>();
+                    for (final AiDataSet ads : datasetFilters)
+                    {
+                        Collections.addAll(filterValues, ads.value());
+                        Collections.addAll(filterValues, ads.include());
+                        if (ads.exclude().length > 0)
+                        {
+                            filterValues.add("exclude=" + Arrays.toString(ads.exclude()));
+                        }
+                    }
+                    throw new IllegalArgumentException(String.format(
+                            "No datasets defined in playbook '%s', but @AiDataSet filter %s was specified.",
+                            playbookPath, filterValues));
+                }
                 // Run once with empty dataset
                 filteredDataSets.add(Collections.emptyMap());
             }
             else
             {
-                final String globalTestIdFilter = com.xceptance.neodymium.util.Neodymium.configuration().getTestIdFilter();
-                final java.util.regex.Pattern globalTestIdPattern = org.apache.commons.lang3.StringUtils.isNotBlank(globalTestIdFilter)
-                        ? java.util.regex.Pattern.compile(globalTestIdFilter)
+                if (!datasetFilters.isEmpty())
+                {
+                    boolean anyMatched = false;
+                    int checkIndex = 1;
+                    final List<String> availableIds = new ArrayList<>();
+                    for (final Map<String, SessionData.DataEntry> ds : allDataSets)
+                    {
+                        final String dsId = getDataSetId(ds);
+                        final String indexStr = String.valueOf(checkIndex);
+                        availableIds.add(dsId != null ? dsId : indexStr);
+                        if (shouldIncludeDataSet(dsId, datasetFilters) || shouldIncludeDataSet(indexStr, datasetFilters))
+                        {
+                            anyMatched = true;
+                        }
+                        checkIndex++;
+                    }
+
+                    if (!anyMatched)
+                    {
+                        final List<String> filterValues = new ArrayList<>();
+                        for (final AiDataSet ads : datasetFilters)
+                        {
+                            Collections.addAll(filterValues, ads.value());
+                            Collections.addAll(filterValues, ads.include());
+                            if (ads.exclude().length > 0)
+                            {
+                                filterValues.add("exclude=" + Arrays.toString(ads.exclude()));
+                            }
+                        }
+                        throw new IllegalArgumentException(String.format(
+                                "No datasets in playbook '%s' matched @AiDataSet filter %s. Available dataset IDs: %s",
+                                playbookPath, filterValues, availableIds));
+                    }
+                }
+
+                final String globalTestIdFilter = Neodymium.configuration().getTestIdFilter();
+                final Pattern globalTestIdPattern = StringUtils.isNotBlank(globalTestIdFilter)
+                        ? Pattern.compile(globalTestIdFilter)
                         : null;
 
                 int dsIndex = 1;
@@ -811,7 +864,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock."))
                 {
                     Neodymium.getData().put("neodymium.ai.global.provider", "mock");
-                    Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
                 }
             }
 

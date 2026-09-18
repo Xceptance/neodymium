@@ -38,7 +38,7 @@ public class MetricsAsserterTest
     public void testOption3ConditionalLambdasStrictReplay()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.REPLAY_STRICT, 0, 0, 0, 0, 0, 3, 0, 0, 3, 0, new TokenUsage(0, 0, 0)
+            ExecutionMode.REPLAY_STRICT, 0, 0, 0, 0, 3, 0, 0, 3, 0, new TokenUsage(0, 0, 0)
         );
 
         final MetricsAsserter asserter = new MetricsAsserter(metrics);
@@ -69,7 +69,7 @@ public class MetricsAsserterTest
     public void testOption3ConditionalLambdasLiveRecording()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.FORCE_RECORDING, 2, 2, 0, 0, 0, 2, 0, 0, 0, 0, new TokenUsage(300, 50, 0)
+            ExecutionMode.FORCE_RECORDING, 2, 2, 0, 0, 2, 0, 0, 0, 0, new TokenUsage(300, 50, 0)
         );
 
         final MetricsAsserter asserter = new MetricsAsserter(metrics);
@@ -94,7 +94,7 @@ public class MetricsAsserterTest
     public void testMatchesModeExpectations()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.REPLAY_STRICT, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, new TokenUsage(0, 0, 0)
+            ExecutionMode.REPLAY_STRICT, 0, 0, 0, 0, 4, 0, 0, 4, 0, new TokenUsage(0, 0, 0)
         );
 
         new MetricsAsserter(metrics).matchesModeExpectations();
@@ -105,7 +105,7 @@ public class MetricsAsserterTest
     public void testBooleanHelpersAndOverloadedRangeAssertions()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.FORCE_RECORDING, 15, 12, 0, 3, 0, 12, 0, 0, 0, 2, new TokenUsage(1000, 200, 100)
+            ExecutionMode.FORCE_RECORDING, 12, 12, 0, 0, 12, 0, 0, 0, 2, new TokenUsage(1000, 200, 100)
         );
 
         final MetricsAsserter asserter = new MetricsAsserter(metrics);
@@ -123,8 +123,6 @@ public class MetricsAsserterTest
             .hasActionCalls(10, 14)
             .hasStandardCalls(12)
             .hasStandardCalls(10, 14)
-            .hasPesapCalls(3)
-            .hasPesapCalls(1, 5)
             .hasLlmCalls(12, 20)
             .hasVerificationCalls(0)
             .hasJudgeCalls(0);
@@ -140,7 +138,7 @@ public class MetricsAsserterTest
 
         final ExecutionMetrics metrics = new ExecutionMetrics(
             ExecutionMode.FORCE_RECORDING,
-            14, 12, 0, 2, 0, 12, 0, 0, 0, 0,
+            12, 12, 0, 0, 12, 0, 0, 0, 0,
             2, levelCounts, new TokenUsage(500, 100, 0)
         );
 
@@ -167,7 +165,7 @@ public class MetricsAsserterTest
     {
         final ExecutionMetrics metricsWithJudge = new ExecutionMetrics(
             ExecutionMode.FORCE_RECORDING,
-            15, 10, 0, 0, 5, 10, 0, 0, 0, 0,
+            15, 10, 0, 5, 10, 0, 0, 0, 0,
             null
         );
         final MetricsAsserter asserterWithJudge = new MetricsAsserter(metricsWithJudge);
@@ -189,7 +187,7 @@ public class MetricsAsserterTest
 
         final ExecutionMetrics metricsNoJudge = new ExecutionMetrics(
             ExecutionMode.FORCE_RECORDING,
-            10, 10, 0, 0, 0, 10, 0, 0, 0, 0,
+            10, 10, 0, 0, 10, 0, 0, 0, 0,
             null
         );
         final MetricsAsserter asserterNoJudge = new MetricsAsserter(metricsNoJudge);

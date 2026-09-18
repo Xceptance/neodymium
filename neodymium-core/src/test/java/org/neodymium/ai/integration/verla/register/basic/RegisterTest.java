@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiOutcomeVerification;
@@ -79,75 +78,9 @@ public class RegisterTest extends BaseAiTest
     }
 
     /**
-     * Live recording mode execution for dataset 'perfect'.
-     */
-    @Order(1)
-    @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("perfect")
-    @AiPlaybook("verla/RegisterTest.yaml")
-    public void livePerfect()
-    {
-    }
-
-    /**
-     * Strict replay mode execution using recorded playbook for dataset 'perfect'.
-     */
-    @Order(2)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("perfect")
-    @AiPlaybook(value = "verla/RegisterTest.yaml", recordingMethod = "livePerfect")
-    public void replayPerfect()
-    {
-    }
-
-    /**
-     * Live recording mode execution for dataset 'normal'.
-     */
-    @Order(3)
-    @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("normal")
-    @AiPlaybook("verla/RegisterTest.yaml")
-    public void liveNormal()
-    {
-    }
-
-    /**
-     * Strict replay mode execution using recorded playbook for dataset 'normal'.
-     */
-    @Order(4)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("normal")
-    @AiPlaybook(value = "verla/RegisterTest.yaml", recordingMethod = "liveNormal")
-    public void replayNormal()
-    {
-    }
-
-    /**
-     * Live recording mode execution for dataset 'bad'.
-     */
-    @Order(5)
-    @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("bad")
-    @AiPlaybook("verla/RegisterTest.yaml")
-    public void liveBad()
-    {
-    }
-
-    /**
-     * Strict replay mode execution using recorded playbook for dataset 'bad'.
-     */
-    @Order(6)
-    @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("bad")
-    @AiPlaybook(value = "verla/RegisterTest.yaml", recordingMethod = "liveBad")
-    public void replayBad()
-    {
-    }
-
-    /**
      * Live recording mode execution across all datasets in the playbook.
      */
-    @Order(7)
+    @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
     @AiPlaybook("verla/RegisterTest.yaml")
     public void liveAllDataSets()
@@ -157,7 +90,7 @@ public class RegisterTest extends BaseAiTest
     /**
      * Strict replay mode execution across all datasets in the playbook.
      */
-    @Order(8)
+    @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
     @AiPlaybook(value = "verla/RegisterTest.yaml", recordingMethod = "liveAllDataSets")
     public void replayAllDataSets()

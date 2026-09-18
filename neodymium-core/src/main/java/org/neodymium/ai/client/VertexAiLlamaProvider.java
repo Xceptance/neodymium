@@ -241,7 +241,6 @@ public final class VertexAiLlamaProvider implements LlmProvider
         return EnumSet.of(
             LlmCapability.TEXT_ONLY,
             LlmCapability.EXECUTION,
-            LlmCapability.PESAP,
             LlmCapability.VERIFICATION,
             LlmCapability.LINTER
         );

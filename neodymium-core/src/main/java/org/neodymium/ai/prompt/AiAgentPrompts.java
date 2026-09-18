@@ -71,15 +71,6 @@ public final class AiAgentPrompts
         }
     }
 
-    /**
-     * Loads the JIT pre-step PESAP prompt template.
-     *
-     * @return the fully prepared pre-step PESAP system prompt
-     */
-    public static String getPesapPreStepPrompt()
-    {
-        return getPrompt("pesap-pre-step-prompt.md");
-    }
 
     /**
      * Loads the verification system prompt template.

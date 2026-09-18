@@ -126,7 +126,7 @@ public class QualityJudgeToolInterceptorTest
     }
 
     @Test
-    public void testJourneyFidelityRejectsMutationOnPureAssertionStep()
+    public void testJourneyFidelityAllowsInteractionOnAssertionStep()
     {
         final ObjectNode args = MAPPER.createObjectNode();
         args.put("selector", "#couponCode");
@@ -134,9 +134,8 @@ public class QualityJudgeToolInterceptorTest
 
         final InterceptionVerdict verdict = this.interceptor.intercept(clickCall, this.context, SemanticIntent.ASSERT);
 
-        Assertions.assertFalse(verdict.isAllowed());
-        Assertions.assertEquals(InterceptionVerdict.Decision.REJECT, verdict.decision());
-        Assertions.assertEquals(QualityJudgeToolInterceptor.ASSERTION_MUTATION_VIOLATION, verdict.reason());
+        Assertions.assertTrue(verdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
     }
 
     @Test

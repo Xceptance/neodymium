@@ -102,13 +102,13 @@ public final class SubStepReportingAndScopingTest
         // Sub-stats
         final StepStats parentStats = new StepStats("Locate the first product card", System.currentTimeMillis());
         final StepStats subStats1 = new StepStats("Capture line count in 'cnt'", System.currentTimeMillis());
-        subStats1.addPesapCall(100, 20, 0);
+        subStats1.addStandardCall(100, 20, 0);
         subStats1.addStandardCall(200, 40, 0);
         subStats1.setDurationMs(1200);
 
         // SubStats 2 has runtime resolved instruction
         final StepStats subStats2 = new StepStats("Verify count is higher than 5", System.currentTimeMillis());
-        subStats2.addPesapCall(100, 20, 0);
+        subStats2.addStandardCall(100, 20, 0);
         subStats2.addStandardCall(200, 40, 0);
         subStats2.setDurationMs(1500);
 
@@ -128,7 +128,7 @@ public final class SubStepReportingAndScopingTest
 
             final String html = Files.readString(htmlPath);
 
-            // Parent step should show 4 LLM calls (1 PESAP + 1 Standard) * 2 = 4 (or 2 pesap + 2 standard)
+            // Parent step should show 4 LLM calls aggregated from sub-steps
             assertTrue(html.contains("4 LLM call(s)"), "Parent card footer should display 4 LLM calls aggregated from sub-steps");
 
             // Sub-steps should not repeat parent step as a badge in the card header,
@@ -156,19 +156,16 @@ public final class SubStepReportingAndScopingTest
         final TestExecutionReport.ReportStepEntry parent = new TestExecutionReport.ReportStepEntry(0, "Locate product card");
 
         final TestExecutionReport.ReportStepEntry sub1 = new TestExecutionReport.ReportStepEntry(0, "Hover over it");
-        sub1.setPesapCalls(1);
-        sub1.setStandardCalls(2);
+        sub1.setStandardCalls(3);
 
         final TestExecutionReport.ReportStepEntry sub2 = new TestExecutionReport.ReportStepEntry(1, "Click its add button");
-        sub2.setPesapCalls(1);
-        sub2.setStandardCalls(2);
+        sub2.setStandardCalls(3);
 
         parent.addSubStep(sub1);
         parent.addSubStep(sub2);
 
-        // Parent pesap/standard calls aggregated
-        parent.setPesapCalls(2);
-        parent.setStandardCalls(4);
+        // Parent standard calls aggregated
+        parent.setStandardCalls(6);
 
         report.addStep(parent);
 
@@ -222,7 +219,7 @@ public final class SubStepReportingAndScopingTest
         bus.dispatch(new StepStartedEvent(subStep21, 0));
         final LlmRequest req21 = new LlmRequest("System", "Add to Cart", Collections.emptyList(), null, 0.0, 30);
         final LlmResponse resp21 = new LlmResponse("{\"action\":\"CLICK\"}", new TokenUsage(200, 30, 230, 0), "gemini-flash");
-        bus.dispatch(new LlmResponseReceivedEvent(req21, resp21, 150, "PESAP"));
+        bus.dispatch(new LlmResponseReceivedEvent(req21, resp21, 150, "TEXT"));
         bus.dispatch(new StepFinishedEvent(subStep21, PlaybookStepStatus.SUCCESS));
 
         // Sub-step 2.2 starts (index 1)

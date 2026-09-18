@@ -149,25 +149,20 @@ public class AiConfigurationTest
     }
 
     @Test
-    public void testPesapEnabledAndMaxRetriesAtMaxLevel()
+    public void testMaxRetriesAtMaxLevel()
     {
-        System.clearProperty("neodymium.ai.pesap.enabled");
         System.clearProperty("neodymium.ai.maxRetriesAtMaxLevel");
         AiConfiguration.resetInstance();
 
         final AiConfiguration defaultConfig = AiConfiguration.getInstance();
-        assertTrue(defaultConfig.isPesapEnabled(), "PESAP should be enabled by default.");
         assertEquals(1, defaultConfig.getMaxRetriesAtMaxLevel(), "Max retries at max level should default to 1.");
 
-        System.setProperty("neodymium.ai.pesap.enabled", "false");
         System.setProperty("neodymium.ai.maxRetriesAtMaxLevel", "3");
         AiConfiguration.resetInstance();
 
         final AiConfiguration customConfig = AiConfiguration.getInstance();
-        assertFalse(customConfig.isPesapEnabled(), "PESAP should be false when set to false.");
         assertEquals(3, customConfig.getMaxRetriesAtMaxLevel(), "Max retries at max level should resolve custom value.");
 
-        System.clearProperty("neodymium.ai.pesap.enabled");
         System.clearProperty("neodymium.ai.maxRetriesAtMaxLevel");
     }
 

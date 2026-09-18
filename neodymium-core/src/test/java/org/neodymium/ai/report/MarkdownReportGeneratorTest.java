@@ -58,10 +58,10 @@ public class MarkdownReportGeneratorTest
         linterCall.setOutputTokens(200);
         report.addLlmCall(linterCall);
 
-        // Step 0 Call 1: PESAP
+        // Step 0 Call 1: Quality Judge
         final TestExecutionReport.ReportLlmCallEntry call1 = new TestExecutionReport.ReportLlmCallEntry();
         call1.setStepIndex(0);
-        call1.setCapability("PESAP");
+        call1.setCapability("JUDGE");
         call1.setModelName("gemini-2.5-flash");
         call1.setDurationMs(200);
         call1.setInputTokens(1000);
@@ -108,7 +108,7 @@ public class MarkdownReportGeneratorTest
         Assertions.assertTrue(md.contains("Playbook Linter"));
         Assertions.assertTrue(md.contains("Step #1"));
         Assertions.assertTrue(md.contains("↳ Step #1"));
-        Assertions.assertTrue(md.contains("Intent (PESAP)"));
+        Assertions.assertTrue(md.contains("Quality Judge"));
         Assertions.assertTrue(md.contains("Turn 1 (Text)"));
         Assertions.assertTrue(md.contains("Turn 2 (Text)"));
         Assertions.assertTrue(md.contains("Step #2"));

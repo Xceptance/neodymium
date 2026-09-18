@@ -1212,7 +1212,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             final Integer stdCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
             final Integer judgeCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
             final Integer verifCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
-            final Integer pesapCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
             final Integer rcaCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
             final Integer linterCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_CALL_COUNT);
             final Integer postFlightCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_CALL_COUNT);
@@ -1220,7 +1219,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TokenUsage standardUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
             final TokenUsage judgeUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
             final TokenUsage verificationUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
-            final TokenUsage pesapUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
             final TokenUsage rcaUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
             final TokenUsage linterUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_TOKEN_USAGE);
             final TokenUsage postFlightUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_TOKEN_USAGE);
@@ -1238,7 +1236,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     final String capability = call.getCapability();
                     if (!"LINTER".equalsIgnoreCase(capability) && !"POST_FLIGHT_LINTER".equalsIgnoreCase(capability)
-                            && !"PESAP".equalsIgnoreCase(capability)
                             && !"JUDGE".equalsIgnoreCase(capability) && !"JUDGE_DISCUSSION".equalsIgnoreCase(capability)
                             && !"VERIFICATION".equalsIgnoreCase(capability)
                             && !"RCA".equalsIgnoreCase(capability) && !"VISUAL_RCA".equalsIgnoreCase(capability))
@@ -1262,7 +1259,6 @@ public final class PreliminaryReportListener implements ExecutionListener
 
             final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
             final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
-            final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
             final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
             final int linterCalls = linterCallsObj != null ? linterCallsObj : (linterUsage != null ? 1 : 0);
             final int postFlightCalls = postFlightCallsObj != null ? postFlightCallsObj : (postFlightUsage != null ? 1 : 0);
@@ -1270,7 +1266,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             final String activeModel = (String) ctx.getTransientData().getOrDefault(ExecutionContext.KEY_ACTIVE_MODEL, "default");
 
             final TestExecutionReport.CategoryTokenUsage actCat = buildCategoryUsage(standardCalls, effectiveStandardUsage, activeModel);
-            final TestExecutionReport.CategoryTokenUsage pesapCat = buildCategoryUsage(pesapCalls, pesapUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage judgeCat = buildCategoryUsage(judgeCalls, judgeUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage verifCat = buildCategoryUsage(verificationCalls, verificationUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage rcaCat = buildCategoryUsage(rcaCalls, rcaUsage, activeModel);
@@ -1278,18 +1273,17 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TestExecutionReport.CategoryTokenUsage postFlightCat = buildCategoryUsage(postFlightCalls, postFlightUsage, activeModel);
 
             m.setAction(actCat);
-            m.setPesap(pesapCat);
             m.setJudge(judgeCat);
             m.setVerification(verifCat);
             m.setVisualRca(rcaCat);
             m.setLinter(linterCat);
             m.setPostFlightLinter(postFlightCat);
 
-            final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls + linterCalls + postFlightCalls;
-            final long totalIn = actCat.getInputTokens() + pesapCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens() + linterCat.getInputTokens() + postFlightCat.getInputTokens();
-            final long totalOut = actCat.getOutputTokens() + pesapCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens() + linterCat.getOutputTokens() + postFlightCat.getOutputTokens();
-            final long totalCached = actCat.getCachedTokens() + pesapCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens() + linterCat.getCachedTokens() + postFlightCat.getCachedTokens();
-            final double totalCost = actCat.getEstimatedCostUsd() + pesapCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd() + linterCat.getEstimatedCostUsd() + postFlightCat.getEstimatedCostUsd();
+            final int totalCalls = standardCalls + judgeCalls + verificationCalls + rcaCalls + linterCalls + postFlightCalls;
+            final long totalIn = actCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens() + linterCat.getInputTokens() + postFlightCat.getInputTokens();
+            final long totalOut = actCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens() + linterCat.getOutputTokens() + postFlightCat.getOutputTokens();
+            final long totalCached = actCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens() + linterCat.getCachedTokens() + postFlightCat.getCachedTokens();
+            final double totalCost = actCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd() + linterCat.getEstimatedCostUsd() + postFlightCat.getEstimatedCostUsd();
 
             if (totalCalls > 0 || totalIn > 0)
             {
@@ -1367,12 +1361,6 @@ public final class PreliminaryReportListener implements ExecutionListener
         long actCached = 0;
         double actCost = 0.0;
 
-        int pesapCalls = 0;
-        long pesapIn = 0;
-        long pesapOut = 0;
-        long pesapCached = 0;
-        double pesapCost = 0.0;
-
         int judgeCalls = 0;
         long judgeIn = 0;
         long judgeOut = 0;
@@ -1418,14 +1406,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                 rcaCached += call.getCachedTokens();
                 rcaCost += call.getEstimatedCostUsd();
                 rcaCalls++;
-            }
-            else if ("PESAP".equalsIgnoreCase(cap))
-            {
-                pesapIn += call.getInputTokens();
-                pesapOut += call.getOutputTokens();
-                pesapCached += call.getCachedTokens();
-                pesapCost += call.getEstimatedCostUsd();
-                pesapCalls++;
             }
             else if ("JUDGE".equalsIgnoreCase(cap) || "JUDGE_DISCUSSION".equalsIgnoreCase(cap))
             {
@@ -1478,7 +1458,6 @@ public final class PreliminaryReportListener implements ExecutionListener
         final TestExecutionReport.CategoryTokenUsage totCat = new TestExecutionReport.CategoryTokenUsage(calls.size(), inTokens, outTokens, cachedTokens, cost);
         m.setTotal(totCat);
         m.setAction(new TestExecutionReport.CategoryTokenUsage(actCalls, actIn, actOut, actCached, actCost));
-        m.setPesap(new TestExecutionReport.CategoryTokenUsage(pesapCalls, pesapIn, pesapOut, pesapCached, pesapCost));
         m.setJudge(new TestExecutionReport.CategoryTokenUsage(judgeCalls, judgeIn, judgeOut, judgeCached, judgeCost));
         m.setVerification(new TestExecutionReport.CategoryTokenUsage(verifCalls, verifIn, verifOut, verifCached, verifCost));
         m.setVisualRca(new TestExecutionReport.CategoryTokenUsage(rcaCalls, rcaIn, rcaOut, rcaCached, rcaCost));
@@ -1529,10 +1508,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             entry.setEscalations(Math.max(0, levels.size() - 1));
             entry.setContextLevels(String.join(" → ", levels));
         }
-        entry.setPesapCalls(stats.getPesapCalls());
-        entry.setPesapInputTokens(stats.getPesapInputTokens());
-        entry.setPesapOutputTokens(stats.getPesapOutputTokens());
-        entry.setPesapCachedTokens(stats.getPesapCachedTokens());
 
         entry.setStandardCalls(stats.getStandardCalls());
         entry.setStandardInputTokens(stats.getStandardInputTokens());
@@ -1608,14 +1583,10 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         if (!entry.getSubSteps().isEmpty())
         {
-            if (entry.getPesapCalls() == 0 && entry.getStandardCalls() == 0 && entry.getVerificationCalls() == 0 && entry.getRcaCalls() == 0)
+            if (entry.getStandardCalls() == 0 && entry.getVerificationCalls() == 0 && entry.getRcaCalls() == 0)
             {
                 for (final TestExecutionReport.ReportStepEntry child : entry.getSubSteps())
                 {
-                    entry.setPesapCalls(entry.getPesapCalls() + child.getPesapCalls());
-                    entry.setPesapInputTokens(entry.getPesapInputTokens() + child.getPesapInputTokens());
-                    entry.setPesapOutputTokens(entry.getPesapOutputTokens() + child.getPesapOutputTokens());
-                    entry.setPesapCachedTokens(entry.getPesapCachedTokens() + child.getPesapCachedTokens());
 
                     entry.setStandardCalls(entry.getStandardCalls() + child.getStandardCalls());
                     entry.setStandardInputTokens(entry.getStandardInputTokens() + child.getStandardInputTokens());

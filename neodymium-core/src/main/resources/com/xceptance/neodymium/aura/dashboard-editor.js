@@ -1882,7 +1882,7 @@ document.addEventListener('paste', function(evt) {
     }
 });
 
-/* PESAP AI Step Review Integration */
+/* Aura AI Step Review Integration */
 function runReviewSteps() {
     const reviewBtn = document.getElementById('reviewStepsBtn');
     if (reviewBtn) {
@@ -1924,7 +1924,7 @@ function runReviewSteps() {
                     card.innerHTML = `
                         <div class="suggestion-left">
                             <span class="material-symbols-outlined" style="font-size: 16px;">${sugg.icon || 'auto_awesome'}</span>
-                            <span><b>PESAP AI Review:</b> ${sugg.message}</span>
+                            <span><b>Aura AI Review:</b> ${sugg.message}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             ${sugg.hintText ? `<button class="btn-apply-suggestion" onclick="applySuggestionHint(${sugg.targetLine}, '${sugg.hintText.replace(/'/g, "\\'")}')">Apply Hint</button>` : ''}
@@ -1934,13 +1934,13 @@ function runReviewSteps() {
                     targetRow.after(card);
                 }
             });
-            showToast(`✨ PESAP Review complete: ${data.suggestions.length} suggestion(s) found`, "info");
+            showToast(`✨ Aura AI Review complete: ${data.suggestions.length} suggestion(s) found`, "info");
         } else {
-            showToast("✅ PESAP Review complete: All steps look great! No suggestions needed.", "success");
+            showToast("✅ Aura AI Review complete: All steps look great! No suggestions needed.", "success");
         }
     })
     .catch(err => {
-        console.error('Failed to run PESAP review:', err);
+        console.error('Failed to run Aura AI review:', err);
         if (reviewBtn) {
             reviewBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> Review Steps';
             reviewBtn.disabled = false;

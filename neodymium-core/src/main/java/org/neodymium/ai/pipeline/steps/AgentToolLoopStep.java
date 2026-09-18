@@ -208,12 +208,11 @@ public final class AgentToolLoopStep implements PipelineStep
         final ToolContext toolContext = new SimpleToolContext(this.toolRegistry);
         final List<ToolCall> executedCalls = new ArrayList<>();
 
-        final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT);
-        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : null;
-        final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
-
         final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
+        final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_STEP_INTENT);
+        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : (step != null ? step.getSemanticIntent() : null);
+        final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
         final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
         final boolean isVisual = (step != null && step.isVisualStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
@@ -230,9 +229,6 @@ public final class AgentToolLoopStep implements PipelineStep
         Set<String> previousElementSignatures = new HashSet<>();
         String lastSeenUrl = null;
         String lastSeenWindowHandle = null;
-
-        // Turn-Aware Dynamic Context Resolution for Turn 1: Zero DOM only when LLM classified NAVIGATE or ASSERT_METADATA
-        final boolean isZeroDom = intent == SemanticIntent.NAVIGATE || intent == SemanticIntent.ASSERT_METADATA;
 
         final StringBuilder userPrompt = new StringBuilder();
         if (step != null && step.getParent() != null && step.getParent().getInstruction() != null)
@@ -304,121 +300,82 @@ public final class AgentToolLoopStep implements PipelineStep
 
         ContextLevel activeContextLevel = ContextLevel.LEAN;
 
-        if (isZeroDom)
+        // Interactive Turn 1: Supply pierced DOM Light (LEAN) or configured context level
+        if (executor != null)
         {
-            activeContextLevel = ContextLevel.MINIMAL;
-            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-            final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
-            if (statsObj instanceof final StepStats stats)
+            try
             {
-                stats.addContextLevel(activeContextLevel.name());
-            }
+                final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
+                        ? cl
+                        : (intent != null && intent.isAssertion() ? ContextLevel.STANDARD : ContextLevel.LEAN);
+                activeContextLevel = ContextLevel.clean(baseLevel, intent);
 
-            // Zero DOM nodes: Provide only page URL and Title
-            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-            if (driver != null)
-            {
-                try
+                // Visual tag check
+                if (isVisual)
                 {
-                    final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
-                    final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
-                    userPrompt.append("### Current Page:\n")
-                            .append("URL: ").append(currentUrl).append("\n")
-                            .append("Title: ").append(currentTitle).append("\n\n");
-                }
-                catch (final Exception ignored)
-                {
-                }
-            }
-        }
-        else
-        {
-            // Interactive Turn 1: Supply pierced DOM Light (LEAN) or predicted context level
-            if (executor != null)
-            {
-                try
-                {
-                    final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                    final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
-                            ? cl
-                            : (intent != null && intent.isAssertion() ? ContextLevel.STANDARD : ContextLevel.LEAN);
-                    activeContextLevel = ContextLevel.clean(baseLevel, intent);
-
-                    // Visual tag check
-                    if (isVisual)
+                    if (!activeContextLevel.includesScreenshot())
                     {
-                        if (!activeContextLevel.includesScreenshot())
-                        {
-                            activeContextLevel = (intent != null && intent.isAssertion()) ? ContextLevel.VISUAL : ContextLevel.VISUAL_LEAN;
-                        }
-                    }
-
-                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                    final boolean isFullPage = (step != null && step.isFullPageVisualStep())
-                            || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                            || activeContextLevel.isFullPageScreenshot();
-                    final SutState initialState = executor.captureState(activeContextLevel, isFullPage);
-                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, initialState);
-                    final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
-                    if (statsObj instanceof final StepStats stats)
-                    {
-                        stats.addContextLevel(activeContextLevel.name());
-                    }
-                    if (initialState.getTextContent() != null && !initialState.getTextContent().isBlank())
-                    {
-                        previousElementSignatures = extractElementSignatures(initialState.getTextContent());
-                        userPrompt.append("### Current Page State & Interactive Elements:\n")
-                                .append(initialState.getTextContent())
-                                .append("\n\n");
-                    }
-                    if (initialState.getAttachments() != null)
-                    {
-                        attachments = initialState.getAttachments();
+                        activeContextLevel = (intent != null && intent.isAssertion()) ? ContextLevel.VISUAL : ContextLevel.VISUAL_LEAN;
                     }
                 }
-                catch (final Exception e)
+
+                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                        || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                        || activeContextLevel.isFullPageScreenshot();
+                final SutState initialState = executor.captureState(activeContextLevel, isFullPage);
+                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, initialState);
+                final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                if (statsObj instanceof final StepStats stats)
                 {
-                    LOGGER.debug("Could not capture initial SUT state for AgentToolLoopStep: {}", e.getMessage());
+                    stats.addContextLevel(activeContextLevel.name());
+                }
+                if (initialState.getTextContent() != null && !initialState.getTextContent().isBlank())
+                {
+                    previousElementSignatures = extractElementSignatures(initialState.getTextContent());
+                    userPrompt.append("### Current Page State & Interactive Elements:\n")
+                            .append(initialState.getTextContent())
+                            .append("\n\n");
+                }
+                if (initialState.getAttachments() != null)
+                {
+                    attachments = initialState.getAttachments();
                 }
             }
-
-            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-            if (driver != null)
+            catch (final Exception e)
             {
-                try
-                {
-                    lastSeenUrl = BrowserToolProvider.getSafeUrl(driver);
-                    lastSeenWindowHandle = driver.getWindowHandle();
-                }
-                catch (final Exception ignored)
-                {
-                }
+                LOGGER.debug("Could not capture initial SUT state for AgentToolLoopStep: {}", e.getMessage());
             }
         }
 
-        userPrompt.append("What is your next tool call?");
+        final WebDriver initialDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (initialDriver != null)
+        {
+            try
+            {
+                lastSeenUrl = BrowserToolProvider.getSafeUrl(initialDriver);
+                lastSeenWindowHandle = initialDriver.getWindowHandle();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
 
         // Compile available tools (Intent-Based Scoping: exclude navigate for interactive steps)
         final List<ToolDefinition> availableTools = filterToolsForIntent(intent, isVisual, context);
-
-        final boolean hasInteractive = hasInteractiveMilestones(context);
-        final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
 
         final StringBuilder systemPrompt = new StringBuilder();
         systemPrompt.append("You are an autonomous web testing agent. Execute the test goal by invoking available tools directly.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps. For forms, prefer 'fill' over 'type' (clears prior text). Do not press Enter unless commanded.\n");
-        if (isAssertion)
-        {
-            systemPrompt.append("2. ASSERTION STEP: Do not mutate page state. Use 'assert_text' or 'assert_count' to verify state. For dynamic patterns (IDs/dates), set regex: true.\n");
-        }
-        else
-        {
-            systemPrompt.append("2. COMPLETION: Once the instruction's described goal or milestones are achieved, call 'complete_step'. For single atomic actions, you may propose 'complete_step' together with your action.\n");
-        }
+        systemPrompt.append("2. COMPLETION: Once the instruction's described goal or milestones are achieved, call 'complete_step'. For single atomic actions, you may propose 'complete_step' together with your action.\n");
         systemPrompt.append("3. STABILITY: Never propose the exact same failing tool call without state change. To find offscreen items, use 'scroll'. To inspect DOM, use 'query_dom'.\n");
         systemPrompt.append("4. SCROLL: For offscreen elements, invoke 'scroll' to locate the target.\n");
-        systemPrompt.append("5. VISUAL VERIFICATIONS & CHECKS: When an instruction is marked (visual) or a screenshot is provided, inspect the attached screenshot visually to verify whether the condition is satisfied on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
+        if (isVisual)
+        {
+            systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
+        }
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -1001,11 +958,9 @@ public final class AgentToolLoopStep implements PipelineStep
             final boolean hasRemainingMilestones = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
             final boolean lastToolFailed = result == null || result.status() != ToolResult.Status.SUCCESS;
             final boolean requestedContextEscalation = result != null && result.variables().containsKey("requestedContextLevel");
-            final boolean isPureZeroDom = isZeroDom && !hasRemainingMilestones;
-            final boolean requireDomForNextTurn = !isPureZeroDom
-                    && (hasRemainingMilestones
-                            || lastToolFailed
-                            || requestedContextEscalation);
+            final boolean requireDomForNextTurn = hasRemainingMilestones
+                    || lastToolFailed
+                    || requestedContextEscalation;
 
             // Update URL and Title in transient data without full DOM re-dump
             if (isMutatingTool(effectiveCall.toolName()))
@@ -1138,7 +1093,6 @@ public final class AgentToolLoopStep implements PipelineStep
                             {
                                 turnPrompt.append("\n\nNote: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step' rather than repeating interactions.");
                             }
-                            turnPrompt.append("\n\nWhat is your next tool call?");
                             conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
                             attachments = freshAttachments;
                         }
@@ -1149,21 +1103,21 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                 }
             }
-            else if (!isPureZeroDom)
+            else
             {
-                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                if (driver != null || executor != null || pendingVisualNote != null)
+                final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (currentDriver != null || executor != null || pendingVisualNote != null)
                 {
                     try
                     {
                         final StringBuilder turnPrompt = new StringBuilder();
-                        if (driver != null)
+                        if (currentDriver != null)
                         {
-                            final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
-                            final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
+                            final String currentUrl = BrowserToolProvider.getSafeUrl(currentDriver);
+                            final String currentTitle = BrowserToolProvider.getSafeTitle(currentDriver);
                             try
                             {
-                                final String currentHandle = driver.getWindowHandle();
+                                final String currentHandle = currentDriver.getWindowHandle();
                                 final boolean urlChanged = lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl);
                                 final boolean windowChanged = lastSeenWindowHandle != null && currentHandle != null && !currentHandle.equals(lastSeenWindowHandle);
                                 if (urlChanged || windowChanged)
@@ -1216,7 +1170,6 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
 
                         turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If the step's goal is achieved and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM to verify or continue, use tool 'query_dom' or 'request_context'.\n\n");
-                        turnPrompt.append("What is your next tool call?");
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
                         attachments = nextAttachments;
@@ -1243,7 +1196,6 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         final String domSectionHeader = "### Current Page State & Interactive Elements:\n";
-        final String nextPromptHeader = "What is your next tool call?";
         final String replacement = "### Current Page State & Interactive Elements:\n"
                 + "[Initial page state omitted after Turn 1 — use browser tools for current page state]\n\n";
 
@@ -1259,9 +1211,9 @@ public final class AgentToolLoopStep implements PipelineStep
             final int domIdx = content.indexOf(domSectionHeader);
             if (domIdx != -1 && !content.contains("[Initial page state omitted"))
             {
-                final int nextPromptIdx = content.indexOf(nextPromptHeader, domIdx);
+                final int nextSectionIdx = content.indexOf("\n\n### ", domIdx + domSectionHeader.length());
                 final String prefix = content.substring(0, domIdx);
-                final String suffix = (nextPromptIdx != -1) ? content.substring(nextPromptIdx) : nextPromptHeader;
+                final String suffix = (nextSectionIdx != -1) ? content.substring(nextSectionIdx) : "";
                 final String prunedContent = prefix + replacement + suffix;
                 final int prunedChars = content.length() - prunedContent.length();
 
@@ -1357,7 +1309,6 @@ public final class AgentToolLoopStep implements PipelineStep
         final List<ToolDefinition> defs = new ArrayList<>();
         final boolean hasInteractive = hasInteractiveMilestones(context);
         final boolean isVisualAssertion = isVisual && (intent == null || intent.isAssertion());
-        final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
 
         final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
         final boolean hasMultipleTabs;
@@ -1391,8 +1342,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 continue;
             }
 
-            // Assertion steps must never mutate page state (unless step has compound interactive milestones)
-            if ((isAssertion || (isVisualAssertion && !hasInteractive)) && isMutatingTool(name))
+            // Pure visual assertions omit mutating tools
+            if (isVisualAssertion && !hasInteractive && isMutatingTool(name))
             {
                 continue;
             }

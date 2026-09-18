@@ -258,7 +258,7 @@ public final class Playbook
         /**
          * Adds a custom prompt add-on for a specific capability type.
          *
-         * @param type the prompt capability type (e.g. general, pesap, verification)
+         * @param type the prompt capability type (e.g. general, verification)
          * @param addon the custom prompt add-on text
          * @return this builder instance
          */

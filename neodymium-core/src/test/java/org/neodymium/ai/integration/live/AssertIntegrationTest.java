@@ -99,7 +99,6 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasNoSoftFailures()
             .hasNoEscalations()
             .onLive(m -> m.hasActionCalls(9)
-              .hasPesapCalls(9)
               .hasContextLevelCount(ContextLevel.MINIMAL, 1)
               .hasContextLevelCount(ContextLevel.STANDARD, 8))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed())
@@ -239,7 +238,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#username").shouldHave(value("JohnDoe"));
@@ -267,7 +266,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#username").shouldBe(focused);
@@ -355,7 +354,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(3)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
+            .onLive(m -> m.hasActionCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#disabled-input").shouldBe(disabled);
@@ -383,7 +382,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onLive(m -> m.hasActionCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-user").shouldBe(selected);
@@ -410,7 +409,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onLive(m -> m.hasActionCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#readonly-input").shouldBe(readonly);
@@ -437,7 +436,7 @@ public class AssertIntegrationTest extends BaseAiTest
             .hasStepCount(2)
             .hasNoSoftFailures()
             .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
+            .onLive(m -> m.hasActionCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
             .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#enabled-input").shouldBe(editable);

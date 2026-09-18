@@ -42,7 +42,6 @@ import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.executor.selenide.SelenideLocatorProber;
-import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.QualityJudgePrompt;
@@ -75,9 +74,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
     public static final String JOURNEY_FIDELITY_SCRIPT_VIOLATION =
             "Journey Fidelity Violation: Direct URL mutation via script is prohibited. Target must be reached via on-screen UI elements";
-
-    public static final String ASSERTION_MUTATION_VIOLATION =
-            "Assertion Violation: Interactive mutating action is prohibited during assertion steps";
 
     private static final Pattern URL_MUTATION_PATTERN = Pattern.compile(
             "(?i)((window\\.)?location(\\.href|\\.assign|\\.replace)?\\s*=|history\\.(pushState|replaceState))");
@@ -137,8 +133,8 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
         final ExecutionContext activeContext = ExecutionContext.getActiveContext();
 
-        // 1. Enforce Journey Fidelity Policy (hard constraint, always evaluated)
-        final InterceptionVerdict journeyVerdict = checkJourneyFidelity(call, intent, activeContext);
+        // 4. Journey Fidelity guard: Prohibit navigating away or mutating URL when interacting
+        final InterceptionVerdict journeyVerdict = checkJourneyFidelity(call, intent);
         if (!journeyVerdict.isAllowed())
         {
             LOGGER.warn("🚨 Journey Fidelity Violation detected: {}", journeyVerdict.reason());
@@ -227,25 +223,11 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
     private InterceptionVerdict checkJourneyFidelity(
         final ToolCall call,
-        final SemanticIntent intent,
-        final ExecutionContext activeContext
+        final SemanticIntent intent
     )
     {
         final String rawName = call.toolName();
         final String name = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
-        if (intent != null && intent.isAssertion())
-        {
-            if ("click".equals(name) || "fill".equals(name) || "type".equals(name) || "select".equals(name)
-                    || "press_key".equals(name) || "navigate".equals(name) || "upload_file".equals(name)
-                    || "drag".equals(name) || "drag_to".equals(name))
-            {
-                if (hasInteractiveMilestones(activeContext))
-                {
-                    return InterceptionVerdict.allow("Permitting interactive tool for compound step with interactive milestones");
-                }
-                return InterceptionVerdict.reject(call.callId(), ASSERTION_MUTATION_VIOLATION);
-            }
-        }
 
         if (intent != null && intent.isInteraction())
         {
@@ -264,32 +246,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             }
         }
         return InterceptionVerdict.allow("Journey fidelity checks passed");
-    }
-
-    private static boolean hasInteractiveMilestones(final ExecutionContext context)
-    {
-        if (context == null)
-        {
-            return false;
-        }
-        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-        if (stepObj instanceof final PlaybookStep step && step.hasInteractiveSubSteps())
-        {
-            return true;
-        }
-        @SuppressWarnings("unchecked")
-        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
-        if (milestones != null)
-        {
-            for (final String ms : milestones)
-            {
-                if (ms != null && PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(ms).find())
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private List<LocatorCandidate> extractCandidates(final ToolCall call, final ToolContext context)

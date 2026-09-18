@@ -126,7 +126,6 @@ public final class MarkdownReportGenerator
         appendCategoryRow(sb, "**Total**", m.getTotal());
         appendCategoryRow(sb, "├─ Linter (Pre-Flight)", m.getLinter());
         appendCategoryRow(sb, "├─ Linter (Post-Flight)", m.getPostFlightLinter());
-        appendCategoryRow(sb, "├─ PESAP", m.getPesap());
         appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
         appendCategoryRow(sb, "├─ Judge", m.getJudge());
         appendCategoryRow(sb, "├─ Verification", m.getVerification());
@@ -303,11 +302,7 @@ public final class MarkdownReportGenerator
 
                 final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
                 final String phaseRole;
-                if ("PESAP".equalsIgnoreCase(cap))
-                {
-                    phaseRole = "Intent (PESAP)";
-                }
-                else if ("VERIFICATION".equalsIgnoreCase(cap))
+                if ("VERIFICATION".equalsIgnoreCase(cap))
                 {
                     phaseRole = "Verification";
                 }
@@ -474,14 +469,10 @@ public final class MarkdownReportGenerator
             }
             sb.append("\n");
         }
-        if (step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0)
+        if (step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0)
         {
             sb.append("- **LLM Invocations:** ");
             final List<String> callSummaries = new ArrayList<>();
-            if (step.getPesapCalls() > 0)
-            {
-                callSummaries.add("PESAP: " + step.getPesapCalls() + " calls (" + NUMBER_FORMAT.format(step.getPesapInputTokens() + step.getPesapOutputTokens()) + " tokens)");
-            }
             if (step.getStandardCalls() > 0)
             {
                 callSummaries.add("Action: " + step.getStandardCalls() + " calls (" + NUMBER_FORMAT.format(step.getStandardInputTokens() + step.getStandardOutputTokens()) + " tokens)");

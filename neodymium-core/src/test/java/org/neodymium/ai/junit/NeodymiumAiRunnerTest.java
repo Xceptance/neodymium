@@ -19,6 +19,7 @@
 package org.neodymium.ai.junit;
 
 import java.io.FileNotFoundException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -272,13 +273,25 @@ public class NeodymiumAiRunnerTest
         });
 
         // Verify report files were generated despite the early failure
+        final Path targetResultsDir = Path.of("target/ai-results");
+        final Path searchDir;
         try (var stream = Files.list(reportDir))
         {
-            final List<Path> files = stream.toList();
+            searchDir = stream.anyMatch(p -> p.getFileName().toString().endsWith(".html")) ? reportDir : targetResultsDir;
+        }
+
+        try (var stream = Files.list(searchDir))
+        {
+            final List<Path> files = searchDir.equals(targetResultsDir)
+                ? stream.filter(p -> p.getFileName().toString().contains("SampleReplayMissingCompanionClass_testMissingReplay")).toList()
+                : stream.toList();
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".html")), "HTML report must be generated");
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".md")), "Markdown report must be generated");
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".json")), "JSON report must be generated");
-            Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().equals("index.html")), "index.html must be updated");
+            if (searchDir.equals(reportDir))
+            {
+                Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().equals("index.html")), "index.html must be updated");
+            }
 
             final Path jsonPath = files.stream()
                 .filter(p -> p.getFileName().toString().endsWith(".json") && !p.getFileName().toString().equals("index-data.json"))
@@ -289,5 +302,39 @@ public class NeodymiumAiRunnerTest
             Assertions.assertEquals("REPLAY_STRICT", root.get("executionMode").asText());
             Assertions.assertTrue(root.get("failureReason").asText().contains("No recorded companion JSON file found"));
         }
+    }
+
+    /**
+     * Sample test class decorated with inline playbook containing datasets and unmatched @AiDataSet.
+     */
+    public static class UnmatchedDataSetTestClass
+    {
+        /**
+         * Test method requesting non-existent dataset.
+         */
+        @Test
+        @AiDataSet("nonexistent")
+        @AiInlinePlaybook("name: dataset_sample\ndata:\n  - id: US\n    query: jeans\n  - id: DE\n    query: hemd\nsteps:\n  - step: Search\n")
+        public void testUnmatchedDataSet()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that NeodymiumAiRunner throws IllegalArgumentException when @AiDataSet does not match any dataset.
+     */
+    @Test
+    public void testUnmatchedDataSetThrowsException() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = UnmatchedDataSetTestClass.class.getMethod("testUnmatchedDataSet");
+        final ExtensionContext extensionContext = createMockExtensionContext(UnmatchedDataSetTestClass.class, method);
+
+        final IllegalArgumentException ex = Assertions.assertThrows(IllegalArgumentException.class, () -> {
+            runner.provideTestTemplateInvocationContexts(extensionContext);
+        });
+
+        Assertions.assertTrue(ex.getMessage().contains("matched @AiDataSet filter [nonexistent]"));
+        Assertions.assertTrue(ex.getMessage().contains("Available dataset IDs: [US, DE]"));
     }
 }

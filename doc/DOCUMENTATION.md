@@ -27,10 +27,10 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [3.5 Centralized Locator Translation (`LocatorResolver`)](#35-centralized-locator-translation-locatorresolver)
    - [3.6 Target Safeguarding & Early Volatile ID Rejection](#36-target-safeguarding--early-volatile-id-rejection)
    - [3.7 Ranked Candidate Locators, Automatic Locator Improver & LLM Quality Judge](#37-ranked-candidate-locators-automatic-locator-improver--llm-quality-judge)
-4. [Context Escalation Ladder, Pre-Flight Linting & Pre-Step Analysis (PESAP)](#4-context-escalation-ladder-pre-flight-linting--pre-step-analysis-pesap)
+4. [Context Escalation Ladder & Playbook Quality Linting](#4-context-escalation-ladder--playbook-quality-linting)
    - [4.1 Upfront Playbook Pre-Flight Linter (`PlaybookLinter` & `@AiLinter`)](#41-upfront-playbook-pre-flight-linter-playbooklinter--ailinter)
    - [4.1.1 Empirical Post-Flight Playbook Linter (`PostFlightPlaybookLinter` & `@AiLinter(postFlight = true)`)](#411-empirical-post-flight-playbook-linter-postflightplaybooklinter--ailinterpostflight--true)
-   - [4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting](#42-pre-step-split-analysis-pesap--upfront-splitting)
+   - [4.2 YAML Step Grouping & Turn Groups (Compound Milestones)](#42-yaml-step-grouping--turn-groups-compound-milestones)
    - [4.3 Tiered Context Escalation Ladder & Payload Modes](#43-tiered-context-escalation-ladder--payload-modes)
    - [4.4 Dynamic Step Escalation Budget Model](#44-dynamic-step-escalation-budget-model)
    - [4.5 The 360° LLM Taming & Safety Lifecycle](#45-the-360-llm-taming--safety-lifecycle)
@@ -70,7 +70,6 @@ Neodymium AI orchestrates test execution through a decoupled, state-machine pipe
 ```mermaid
 flowchart LR
     Session["AiSession<br/>(Thread-Isolated Lifecycle)"] --> Runner["StateMachineRunner<br/>(Pipeline Engine)"]
-    Runner --> PESAP["PESAP Analysis<br/>(JIT Step Splitting & Prediction)"]
     Runner --> Analyzer["PageAnalyzer<br/>(UPM & DomFeatureVector)"]
     Runner --> Cascade["LocatorCascadeResolver<br/>(5-Tier Element Resolution)"]
     Runner --> LLM["LlmRegistry<br/>(Capability-Based Routing)"]
@@ -83,7 +82,7 @@ All key interfaces are cleanly decoupled:
 * **`TargetExecutor`**: Abstract driver interface separating pipeline execution logic from browser drivers (`SelenideTargetExecutor`) and REST clients (`RestTargetExecutor`).
 * **`PlaybookResourceManager`**: Decouples playbook loading/writing from specific file systems, serving as the interface for reading/saving playbooks (YAML & JSON) across local, classpath, or virtualized directories.
 * **`PlaybookParser`**: Standard interface for parsing structured or nested playbooks and modular inclusions (`_include:`).
-* **`LlmRegistry`**: Hosts registered providers for LLM capabilities (e.g., `TEXT_ONLY`, `EXECUTION`, `VISION`, `PESAP`, `VERIFICATION`), routing prompts to the appropriate model based on payload context.
+* **`LlmRegistry`**: Hosts registered providers for LLM capabilities (e.g., `TEXT_ONLY`, `EXECUTION`, `VISION`, `VERIFICATION`), routing prompts to the appropriate model based on payload context.
 
 ### 1.2 Session-Centric Architecture, Thread Isolation & Lifecycle Hooks
 To support robust parallel execution (e.g., executing multiple tests concurrently in separate threads):
@@ -561,7 +560,7 @@ Triggers visual execution mode with a page screenshot payload.
 * **`(visual: full)`**: Triggers visual execution starting at ultra-lean `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes) while forcing full-page screenshot capture (full scrollable document height beyond the fold with a visual viewport border overlay) immediately on the initial attempt (~5,000–8,000 tokens).
 * **`(layout)`**: Triggers maximum multimodal execution starting directly at `ContextLevel.VISUAL_RICH` (full DOM tree context) while forcing full-page screenshot capture on the initial attempt.
 * **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. If visual evaluation fails or requires element interaction, escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**. It will **never** revert to a small viewport screenshot during escalations.
-* **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are protected from being overwritten or downgraded by PESAP pre-step predictions.
+* **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are protected from being overwritten or downgraded.
 
 #### Runtime Instruction Preparation
 Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips most explicit control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(visual)`, `(visual: full)`), preventing internal test configurations from polluting the natural language prompts sent to the LLM.
@@ -832,7 +831,7 @@ neodymium.ai.judge.mode=ON_AMBIGUITY
 
 ---
 
-## 4. Context Escalation Ladder, Pre-Flight Linting & Pre-Step Analysis (PESAP)
+## 4. Context Escalation Ladder & Playbook Quality Linting
 
 ### 4.1 Upfront Playbook Pre-Flight Linter (`PlaybookLinter` & `@AiLinter`)
 
@@ -913,17 +912,7 @@ While the Upfront Pre-Flight Linter (Section 4.1) evaluates playbook grammar and
 
 ---
 
-### 4.2 Pre-Step Split Analysis (PESAP) & Upfront Splitting
-
-To handle complex, compound, or ambiguous instructions, the pipeline executes a **Pre-Step Split Analysis (PESAP)** using the `LlmCapability.PESAP` capability:
-* **Contextual Inputs**: The analysis receives the current step, the previously executed step's instruction (for flow context), and up to two subsequent steps' instructions.
-* **JIT Upfront Step Splitting**: If a compound step (e.g. `"Search for shirt, select size L, and click Checkout"`) is identified, the LLM splits the instruction into distinct leaf sub-steps. These are instantiated dynamically as child `PlaybookStep` instances and pushed onto the execution stack.
-* **Conservative Non-Splitting Invariants**: Single-target instructions with multiple descriptive clauses (e.g. `"Select standard shipping option (5-7 business days) for $5.00"`) or referential verification instructions (e.g. `"Verify order total matches previous summary"`) are strictly preserved as single steps.
-* **JIT Context-Level Detection**: Rather than relying on static defaults, PESAP dynamically determines the optimal initial interaction mode across the 8-tier context escalation ladder.
-
----
-
-### 4.2.1 YAML Step Grouping & Turn Groups (Compound Milestones)
+### 4.2 YAML Step Grouping & Turn Groups (Compound Milestones)
 
 To resolve cross-step pronoun dependencies (e.g. *"Click its 'Add to Cart' button"*) and sequential UI interactions (e.g. *"Hover over card"* $\rightarrow$ *"Click Add to Cart"* $\rightarrow$ *"Select size 'S'"*) without losing context, playbooks support **YAML Step Grouping**:
 
@@ -965,7 +954,7 @@ $$\textbf{Track B (Visual Track): } \mathbf{VISUAL} \longrightarrow \mathbf{VISU
 | **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. Strictly preserves all DOM text and attributes. | Triggered by `(layout)` checks or cross-track escalation from `RICH`; uses full-page screenshot. |
 
 #### Dynamic Escalation Flow
-1. **Initial Step**: Starts at **`MINIMAL`** (or `LEAN` / `VISUAL` based on PESAP prediction or explicit tags).
+1. **Initial Step**: Starts at **`MINIMAL`** (or `LEAN` / `VISUAL` based on explicit tags).
 2. **Escalation 1 (`MINIMAL` $\rightarrow$ `LEAN`)**: Expands to all interactive elements, navigation links, and section headings.
 3. **Escalation 2 (`LEAN` $\rightarrow$ `STANDARD`)**: Expands to static text, paragraphs, and order summary totals.
 4. **Escalation 3 (`STANDARD` $\rightarrow$ `RICH`)**: Expands to all `data-*` attributes, ARIA descriptions, tables, and deep parent ancestry.
@@ -1002,7 +991,7 @@ To prevent LLM hallucination, destructive mutations, locator drift, and erroneou
 │ 1. PRE-EXECUTION     │ 2. IN-FLIGHT INVARIANTS   │ 3. POST-EXECUTION VERIFY      │
 │ (Guardrails & Budget)│ (Deterministic Java Rules)│ (Judges & Quality Audit)      │
 ├──────────────────────┼───────────────────────────┼───────────────────────────────┤
-│ • PESAP Intent       │ • Assertion Mutation      │ • Second-Opinion Quality      │
+│ • Semantic Intent    │ • Assertion Mutation      │ • Second-Opinion Quality      │
 │   Routing & Clamping │   Defense (Discard Mutating Judge (Locators vs DOM)      │
 │ • Volatile ID Early  │   Actions on Assertions)  │ • Semantic Outcome            │
 │   Stripping          │ • Structural Inconsistency│   Verification (Visual Delta  │
@@ -1013,7 +1002,7 @@ To prevent LLM hallucination, destructive mutations, locator drift, and erroneou
 ```
 
 #### 1. Pre-Execution Guardrails (Upstream Containment)
-* **Semantic Intent Routing (`SemanticIntent`)**: PESAP analyzes incoming instructions to classify step intent (`ASSERT`, `ASSERT_METADATA`, `CLICK`, `TYPE`, `SELECT`, `HOVER_SCROLL`, `NAVIGATE`, `WAIT`, `STORE`, `BRANCH`). Metadata assertions (`ASSERT_METADATA`) are locked to `MINIMAL` context, eliminating unnecessary DOM serialization and visual token costs.
+* **Semantic Intent Routing (`SemanticIntent`)**: The agent analyzes incoming instructions to classify step intent (`ASSERT`, `ASSERT_METADATA`, `CLICK`, `TYPE`, `SELECT`, `HOVER_SCROLL`, `NAVIGATE`, `WAIT`, `STORE`, `BRANCH`). Metadata assertions (`ASSERT_METADATA`) are locked to `MINIMAL` context, eliminating unnecessary DOM serialization and visual token costs.
 * **Early Volatile ID Rejection**: Fast algorithmic filters (`VolatileIdDetector`) strip dynamic framework IDs (GUIDs, UUIDs, timestamp hashes) from DOM feature vectors before they can pollute LLM prompt inputs.
 * **Escalation Budget & Circuit Breaker**: Mathematical attempt budgets prevent runaway retries and infinite loops.
 * **Dynamic Parameter Masking**: In-flight regex masks intercept outbound credentials, API keys, and sensitive environment secrets.
@@ -1040,7 +1029,6 @@ To prevent LLM hallucination, destructive mutations, locator drift, and erroneou
 
 | Prompt Class | Pipeline Step / Context | LLM Capability | Inputs | Purpose & Output |
 | :--- | :--- | :--- | :--- | :--- |
-| **`PesapPrompt`** | `BeforeStep` / pre-step analysis | `PESAP` | Current instruction, previous instruction, next instructions. | Analyzes instruction flow to predict interaction `ContextLevel` and split compound instructions. |
 | **`ActionExtractionPrompt`** | `CallLlmStep` / live action generation | `EXECUTION` | Current SUT DOM state, natural language instruction, step history. | Identifies the correct sequence of web automation actions (`CLICK`, `TYPE`, etc.). |
 | **`QualityJudgePrompt`** | `QualityJudgeStep` / second-opinion evaluator | `EXECUTION` | Instruction, proposed primary action, candidate locators list, full DOM context. | Evaluates proposed locator and alternative candidates against full DOM tree. |
 | **`VerificationPrompt`** | `VerifyOutcomeStep` / post-action validation | `VERIFICATION` | Natural language instruction, executed actions, pre/post screenshots. | Scores outcome on rubrics (`intentMatch`, `visualDelta`, `absenceOfErrors`). |
@@ -1087,7 +1075,6 @@ promptAddon: "Always look for button text first and wait for spinners."
 # Nested Map (Capability-Targeted)
 promptAddon:
   general: "Always look for button text first"
-  pesap: "Predict shorter execution timeouts"
   verification: "Be extremely strict about price format changes"
   rca: "Check if modal dialogs obscured the click target"
 ```
@@ -1283,11 +1270,11 @@ public void testWithStrictTokenLimits()
 Test completion stats report an exact breakdown across all pipeline call types:
 
 ```text
-🤖 LLM Calls & Tokens: 45 calls | 100,784 tokens (In: 95,584, Out: 5,200, Cached: 0)
-  ├─ PESAP:             16 calls | 6,457 tokens (In: 6,269, Out: 188, Cached: 0)
+🤖 LLM Calls & Tokens: 29 calls | 94,327 tokens (In: 89,315, Out: 5,012, Cached: 0)
   ├─ Action:            15 calls | 56,911 tokens (In: 53,194, Out: 3,717, Cached: 0)
   ├─ Judge:             14 calls | 37,416 tokens (In: 36,121, Out: 1,295, Cached: 0)
-  └─ Verification:      0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
+  ├─ Verification:      0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
+  └─ Visual RCA:        0 calls | 0 tokens (In: 0, Out: 0, Cached: 0)
 ```
 
 ---
@@ -1322,7 +1309,6 @@ asserter
     .hasStepCount(10, 15)            // range [10, 15]
     .hasLlmCalls(12, 24)             // total LLM calls between 12 and 24
     .hasActionCalls(12)            // exact standard action extraction calls
-    .hasPesapCalls(0, 12)            // PESAP pre-step analysis calls
     .hasVerificationCalls(0)         // post-action verification calls
     .hasJudgeCalls(0)                // quality judge calls
     .hasInputTokens(1000, 5000)      // input tokens between 1000 and 5000
@@ -1408,7 +1394,6 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 ### 8.3 Sub-System Toggles
 * `neodymium.ai.linter.enabled` - (Boolean) Upfront Playbook Pre-Flight Linter. Aliases: `neodymium.ai.prelinter.enabled`, `neodymium.ai.prelint.enabled`. (Default: `true`)
 * `neodymium.ai.linter.postFlight.enabled` - (Boolean) Empirical Post-Flight Playbook Linter. Aliases: `neodymium.ai.postflight.linter.enabled`, `neodymium.ai.postflight.enabled`. (Default: `false`)
-* `neodymium.ai.pesap.enabled` - (Boolean) Pre-Execution Structural Analysis & Prediction. (Default: `true`)
 * `neodymium.ai.semanticVerification.enabled` - (Boolean) SSIM and Visual Anchor validation gates. (Default: `true`)
 * `neodymium.ai.semanticVerification.failOnError` - (Boolean) Whether outcome verification failure throws `VerificationFailureException` to fail the step, or logs soft diagnostic warnings. (Default: `true`)
 * `neodymium.ai.visualRca.enabled` - (Boolean) Visual Root Cause Analysis on failure. (Default: `true`)

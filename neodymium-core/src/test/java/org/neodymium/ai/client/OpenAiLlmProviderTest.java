@@ -69,7 +69,6 @@ public class OpenAiLlmProviderTest
         assertTrue(capabilities.contains(LlmCapability.TEXT_ONLY), "Should support TEXT_ONLY.");
         assertTrue(capabilities.contains(LlmCapability.VISION), "Should support VISION.");
         assertTrue(capabilities.contains(LlmCapability.EXECUTION), "Should support EXECUTION.");
-        assertTrue(capabilities.contains(LlmCapability.PESAP), "Should support PESAP.");
         assertTrue(capabilities.contains(LlmCapability.VERIFICATION), "Should support VERIFICATION.");
     }
 

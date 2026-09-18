@@ -69,7 +69,7 @@ public final class ExecuteActionsStep
 
     /**
      * Maps a parsed {@link PlaybookStep} to an executable {@link PipelineStep} tree wired with
-     * unified tooling execution, JIT PESAP pre-step analysis, baseline gating, outcome verification,
+     * unified tooling execution, baseline gating, outcome verification,
      * and self-healing.
      *
      * @param step the parsed playbook step
@@ -233,7 +233,7 @@ public final class ExecuteActionsStep
             final StepStats stats = getOrCreateStatsForStep(step, stepStartTime, isReplayStats, stepStatsMap, allStats, contextState);
             contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
 
-            ContextLevel initialLevel = ContextLevel.MINIMAL;
+            ContextLevel initialLevel = ContextLevel.LEAN;
             if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
             {
                 try
@@ -327,13 +327,6 @@ public final class ExecuteActionsStep
                 || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING);
             final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
 
-            final PesapPreStep pesapPreStep = new PesapPreStep(step, session);
-            pesapPreStep.executePreStep(contextState);
-
-            if (!contextState.getTransientData().containsKey(ExecutionContext.KEY_PESAP_INTENT))
-            {
-                step.setSemanticIntent(null);
-            }
 
             final ContextLevel effectiveLevel = (ContextLevel) contextState.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
             stats.addContextLevel(effectiveLevel != null ? effectiveLevel.name() : initialLevel.name());

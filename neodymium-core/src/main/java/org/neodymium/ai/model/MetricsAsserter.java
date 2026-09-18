@@ -234,35 +234,6 @@ public final class MetricsAsserter
     }
 
     /**
-     * Asserts that PESAP pre-step analysis LLM calls equal the expected value.
-     *
-     * @param expected expected PESAP call count
-     * @return this asserter instance for chaining
-     */
-    public MetricsAsserter hasPesapCalls(final int expected)
-    {
-        Assertions.assertEquals(expected, this.metrics.getPesapCallCount(), "Unexpected PESAP LLM call count.");
-        return this;
-    }
-
-    /**
-     * Asserts that PESAP pre-step analysis LLM calls fall within the expected inclusive range [min, max].
-     *
-     * @param min minimum expected PESAP call count
-     * @param max maximum expected PESAP call count
-     * @return this asserter instance for chaining
-     */
-    public MetricsAsserter hasPesapCalls(final int min, final int max)
-    {
-        final int actual = this.metrics.getPesapCallCount();
-        Assertions.assertTrue(
-            actual >= min && actual <= max,
-            String.format("Expected PESAP LLM call count between %d and %d, but was %d.", min, max, actual)
-        );
-        return this;
-    }
-
-    /**
      * Asserts that post-action verification LLM calls equal the expected value.
      *
      * @param expected expected verification call count
