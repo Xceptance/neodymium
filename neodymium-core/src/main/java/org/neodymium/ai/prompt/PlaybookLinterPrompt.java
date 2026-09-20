@@ -88,7 +88,7 @@ public final class PlaybookLinterPrompt implements AiPrompt<List<PlaybookLinterF
                 {
                     try
                     {
-                        resolved = context.getSessionData().resolveVariables(raw);
+                        resolved = context.getSessionData().resolveAvailableVariables(raw);
                     }
                     catch (final Exception ignored)
                     {

@@ -337,4 +337,67 @@ public class NeodymiumAiRunnerTest
         Assertions.assertTrue(ex.getMessage().contains("matched @AiDataSet filter [nonexistent]"));
         Assertions.assertTrue(ex.getMessage().contains("Available dataset IDs: [US, DE]"));
     }
+
+    /**
+     * Sample test class decorated with class-level and method-level @AiVisual annotations.
+     */
+    @AiVisual(0.95)
+    @AiMode(ExecutionMode.LLM_ONLY)
+    public static class VisualAnnotationTestClass
+    {
+        @Test
+        @AiInlinePlaybook("name: visual_sample\nsteps:\n  - step: Check logo\n")
+        public void testClassLevelVisual()
+        {
+        }
+
+        @Test
+        @AiVisual(threshold = 0.92)
+        @AiInlinePlaybook("name: visual_sample\nsteps:\n  - step: Check logo\n")
+        public void testMethodLevelVisual()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that @AiVisual on class and method levels configures neodymium.ai.ssim.minScore.
+     */
+    @Test
+    public void testAiVisualAnnotationHandling() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+
+        // 1. Class-level annotation (0.95)
+        final Method classMethod = VisualAnnotationTestClass.class.getMethod("testClassLevelVisual");
+        final ExtensionContext classContext = createMockExtensionContext(VisualAnnotationTestClass.class, classMethod);
+        final List<TestTemplateInvocationContext> classInvocations =
+            runner.provideTestTemplateInvocationContexts(classContext).toList();
+        Assertions.assertFalse(classInvocations.isEmpty());
+
+        final List<Extension> classExtensions = classInvocations.get(0).getAdditionalExtensions();
+        final BeforeEachCallback classBeforeEach = (BeforeEachCallback) classExtensions.stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+        classBeforeEach.beforeEach(classContext);
+        Assertions.assertEquals("0.95", Neodymium.getData().get("neodymium.ai.ssim.minScore"));
+
+        // 2. Method-level override (0.92)
+        final Method methodMethod = VisualAnnotationTestClass.class.getMethod("testMethodLevelVisual");
+        final ExtensionContext methodContext = createMockExtensionContext(VisualAnnotationTestClass.class, methodMethod);
+        final List<TestTemplateInvocationContext> methodInvocations =
+            runner.provideTestTemplateInvocationContexts(methodContext).toList();
+        Assertions.assertFalse(methodInvocations.isEmpty());
+
+        final List<Extension> methodExtensions = methodInvocations.get(0).getAdditionalExtensions();
+        final BeforeEachCallback methodBeforeEach = (BeforeEachCallback) methodExtensions.stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+        methodBeforeEach.beforeEach(methodContext);
+        Assertions.assertEquals("0.92", Neodymium.getData().get("neodymium.ai.ssim.minScore"));
+
+        // Cleanup
+        Neodymium.getData().remove("neodymium.ai.ssim.minScore");
+    }
 }

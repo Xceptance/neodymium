@@ -21,7 +21,6 @@ package org.neodymium.ai.tool.guard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -627,5 +626,84 @@ public class QualityJudgeToolInterceptorTest
         Assertions.assertTrue(queryVerdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, queryVerdict.decision());
         Assertions.assertTrue(queryVerdict.reason().contains("exempt from locator quality judging"));
+    }
+
+    @Test
+    public void testIsContainerHijackDirectDetection()
+    {
+        // 1. Syntactic parent container detection for interactive click tool
+        Assertions.assertTrue(this.interceptor.isContainerHijack("article[data-ai='xcboo7um'] button", "article[data-ai='xcboo7um']", "click"));
+        Assertions.assertTrue(this.interceptor.isContainerHijack("div.card > button.btn-add", "div.card", "browser_click"));
+        Assertions.assertTrue(this.interceptor.isContainerHijack("#prod-info [data-ai='xcffyzll']", "#prod-info", "click"));
+
+        // 2. Non-interactive tools should not trigger container hijack rejection
+        Assertions.assertFalse(this.interceptor.isContainerHijack("article[data-ai='xcboo7um'] button", "article[data-ai='xcboo7um']", "browser_assert_count"));
+        Assertions.assertFalse(this.interceptor.isContainerHijack("article[data-ai='xcboo7um'] button", "article[data-ai='xcboo7um']", "browser_query_dom"));
+
+        // 3. Same locator should return false
+        Assertions.assertFalse(this.interceptor.isContainerHijack("#btn", "#btn", "click"));
+
+        // 4. Null or empty locators should return false
+        Assertions.assertFalse(this.interceptor.isContainerHijack(null, "div.card", "click"));
+        Assertions.assertFalse(this.interceptor.isContainerHijack("button", "", "click"));
+
+        // 5. Unrelated locators without active WebDriver return false
+        Assertions.assertFalse(this.interceptor.isContainerHijack("[data-ai='btn']", "div.unrelated", "click"));
+    }
+
+    @Test
+    public void testDiscussionRejectsContainerHijackInConsensus()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        System.setProperty("neodymium.ai.judge.discussion.maxTurns", "2");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String hijackResponse = """
+                {
+                  "status": "APPROVED",
+                  "chosenLocator": "article[data-ai='card']",
+                  "reasoning": "Product card container is cleaner than child button"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(hijackResponse, new TokenUsage(30, 15, 45), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Locate first product: Click Add to Cart");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "article[data-ai='card'] button[data-ai='btn-add']");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "article[data-ai='card'] button[data-ai='btn-add']");
+            c1.put("strategy", "DATA_AI");
+            c1.put("score", 0.70);
+
+            final ToolCall call = new ToolCall("call-hijack", "browser_click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+
+            // The container hijack must be rejected and the original selector retained
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals("Container hijack rejected; retaining original locator: article[data-ai='card'] button[data-ai='btn-add']", verdict.reason());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+            System.clearProperty("neodymium.ai.judge.discussion.maxTurns");
+        }
     }
 }

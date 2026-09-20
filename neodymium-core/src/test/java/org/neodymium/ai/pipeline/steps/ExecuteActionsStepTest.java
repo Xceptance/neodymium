@@ -38,6 +38,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -602,4 +603,307 @@ public final class ExecuteActionsStepTest
         assertNotNull(visualStep.getSsimScore());
         assertTrue(visualStep.getSsimScore() < 0.99);
     }
+
+    @Test
+    public void testCompoundTurnGroupMapsToSingleStepWithMilestonesInLiveMode() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+        final PlaybookStep parent = new PlaybookStep("Locate the promo code input field:");
+        final PlaybookStep sub1 = new PlaybookStep("type '10p-off' into it");
+        final PlaybookStep sub2 = new PlaybookStep("Submit the form");
+        final PlaybookStep sub3 = new PlaybookStep("Verify that the order summary now shows a 'Discount' line item");
+        parent.getSubSteps().addAll(List.of(sub1, sub2, sub3));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(parent, session, context);
+        pipelineStep.execute(context);
+
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        assertNotNull(milestones, "Compound turn group must populate internal milestones");
+        assertEquals(3, milestones.size());
+        assertEquals("type '10p-off' into it", milestones.get(0));
+        assertEquals("Submit the form", milestones.get(1));
+        assertEquals("Verify that the order summary now shows a 'Discount' line item", milestones.get(2));
+
+        final String activeInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        assertNotNull(activeInstruction);
+        assertTrue(activeInstruction.contains("Locate the promo code input field:"));
+        assertTrue(activeInstruction.contains("type '10p-off' into it"));
+        assertTrue(activeInstruction.contains("Submit the form"));
+    }
+
+    @Test
+    public void testIncludeStepUnrollsSubSteps() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+        final PlaybookStep includeStep = new PlaybookStep("_include: login.yaml");
+        final PlaybookStep child1 = new PlaybookStep("Enter username");
+        final PlaybookStep child2 = new PlaybookStep("Enter password");
+        includeStep.getSubSteps().addAll(List.of(child1, child2));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(includeStep, session, context);
+        pipelineStep.execute(context);
+
+        // Include step schedules children + finishParent on the context stack (3 items)
+        assertTrue(context.hasSteps());
+        assertNull(context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES),
+            "Include steps must unroll into sequential pipeline steps rather than compound milestones");
+    }
+
+    /**
+     * Verifies that compound turn groups resolve currently available variables (e.g. testId from dataset)
+     * while preserving uncaptured runtime variables (e.g. lineItemCount) without throwing UnresolvableVariableException.
+     */
+    @Test
+    public void testCompoundTurnGroupWithRuntimeVariablesPreservesPlaceholdersWithoutFailing() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        sessionData.set("testId", "bad");
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+        final PlaybookStep parent = new PlaybookStep("Locate the first product card:");
+        final PlaybookStep sub1 = new PlaybookStep("Capture the cart line item count in 'lineItemCount'");
+        final PlaybookStep sub2 = new PlaybookStep("When this string '${testId}' is not equal 'bad', click the size 'S'");
+        final PlaybookStep sub3 = new PlaybookStep("Verify that the cart item count is higher than ${lineItemCount}.");
+        parent.getSubSteps().addAll(List.of(sub1, sub2, sub3));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(parent, session, context);
+        pipelineStep.execute(context);
+
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        assertNotNull(milestones, "Compound turn group must populate internal milestones");
+        assertEquals(3, milestones.size());
+        assertEquals("Capture the cart line item count in 'lineItemCount'", milestones.get(0));
+        assertEquals("When this string 'bad' is not equal 'bad', click the size 'S'", milestones.get(1));
+        assertEquals("Verify that the cart item count is higher than ${lineItemCount}.", milestones.get(2));
+
+        final String activeInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        assertNotNull(activeInstruction);
+        assertTrue(activeInstruction.contains("Locate the first product card:"));
+        assertTrue(activeInstruction.contains("When this string 'bad' is not equal 'bad'"));
+        assertTrue(activeInstruction.contains("${lineItemCount}"));
+    }
+
+    /**
+     * Verifies that single leaf steps resolve available variables and preserve uncaptured runtime variables
+     * without throwing UnresolvableVariableException.
+     */
+    @Test
+    public void testLeafStepWithRuntimeVariablesPreservesPlaceholdersWithoutFailing() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        sessionData.set("scope", "cart");
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+        final PlaybookStep leaf = new PlaybookStep("Verify that the ${scope} item count is higher than ${lineItemCount}.");
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(leaf, session, context);
+        pipelineStep.execute(context);
+
+        final String activeInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        assertNotNull(activeInstruction);
+        assertEquals("Verify that the cart item count is higher than ${lineItemCount}.", activeInstruction);
+    }
+
+    @Test
+    public void testCompoundTurnGroupUnrollsSubStepsInReplayMode() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep parent = new PlaybookStep("Locate the first product card:");
+        parent.setToolCalls(List.of(
+            new ToolCall("c1", "hover", JsonNodeFactory.instance.objectNode()),
+            new ToolCall("c2", "click", JsonNodeFactory.instance.objectNode())
+        ));
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        sub1.setToolCalls(List.of(new ToolCall("c1", "hover", JsonNodeFactory.instance.objectNode())));
+        final PlaybookStep sub2 = new PlaybookStep("Click it");
+        sub2.setToolCalls(List.of(new ToolCall("c2", "click", JsonNodeFactory.instance.objectNode())));
+        parent.getSubSteps().addAll(List.of(sub1, sub2));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(parent, session, context);
+        pipelineStep.execute(context);
+
+        assertTrue(context.hasSteps());
+    }
+
+    /**
+     * Verifies that partitionToolCallsAndActions maps calls sequentially to matching sub-steps
+     * without cloning the entire call list to each child when the tool count is asymmetric
+     * (e.g. when conditional branches are skipped).
+     */
+    @Test
+    public void testPartitionToolCallsAndActionsAsymmetricMatching()
+    {
+        final PlaybookStep sub1 = new PlaybookStep("Capture the cart line item count in 'lineItemCount'");
+        final PlaybookStep sub2 = new PlaybookStep("Hover over the product card");
+        final PlaybookStep sub3 = new PlaybookStep("Click the 'Add to Cart' button");
+        final PlaybookStep sub4 = new PlaybookStep("When this string 'bad' is not equal 'bad', click the size 'S'");
+        final PlaybookStep sub5 = new PlaybookStep("Verify that the cart item count is higher than ${lineItemCount}.");
+
+        final List<PlaybookStep> subSteps = List.of(sub1, sub2, sub3, sub4, sub5);
+
+        final ToolCall call1 = new ToolCall("1", "browser_store", JsonNodeFactory.instance.objectNode());
+        final ToolCall call2 = new ToolCall("2", "browser_hover", JsonNodeFactory.instance.objectNode());
+        final ToolCall call3 = new ToolCall("3", "browser_click", JsonNodeFactory.instance.objectNode());
+        final ToolCall call4 = new ToolCall("4", "browser_assert_text", JsonNodeFactory.instance.objectNode());
+
+        final Action act1 = new Action("STORE", "#badge", List.of("lineItemCount"), "Store count", "", false);
+        final Action act2 = new Action("HOVER", "#card", List.of(), "Hover card", "", false);
+        final Action act3 = new Action("CLICK", "#add-btn", List.of(), "Click Add", "", false);
+        final Action act4 = new Action("ASSERT_TEXT", "#badge", List.of("1"), "Assert text", "", false);
+
+        AgentToolLoopStep.partitionToolCallsAndActions(subSteps, List.of(call1, call2, call3, call4), List.of(act1, act2, act3, act4));
+
+        assertEquals(1, sub1.getToolCalls().size());
+        assertEquals("browser_store", sub1.getToolCalls().get(0).toolName());
+        assertEquals(1, sub1.getActions().size());
+
+        assertEquals(1, sub2.getToolCalls().size());
+        assertEquals("browser_hover", sub2.getToolCalls().get(0).toolName());
+        assertEquals(1, sub2.getActions().size());
+
+        assertEquals(1, sub3.getToolCalls().size());
+        assertEquals("browser_click", sub3.getToolCalls().get(0).toolName());
+        assertEquals(1, sub3.getActions().size());
+
+        // Substep 4 was skipped (conditional 'bad' != 'bad' is false)
+        assertTrue(sub4.getToolCalls().isEmpty(), "Skipped conditional sub-step must not receive tool calls");
+        assertTrue(sub4.getActions().isEmpty(), "Skipped conditional sub-step must not receive actions");
+
+        assertEquals(1, sub5.getToolCalls().size());
+        assertEquals("browser_assert_text", sub5.getToolCalls().get(0).toolName());
+        assertEquals(1, sub5.getActions().size());
+    }
+
+    /**
+     * Verifies that ExecuteActionsStep auto-heals corrupted legacy recordings during replay
+     * where every sub-step received a cloned copy of all parent tool calls.
+     */
+    @Test
+    public void testAutoHealsCorruptedClonedToolCallsInReplayMode() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep parent = new PlaybookStep("Locate the first product card:");
+        final ToolCall callHover = new ToolCall("c1", "hover", JsonNodeFactory.instance.objectNode());
+        final ToolCall callClick = new ToolCall("c2", "click", JsonNodeFactory.instance.objectNode());
+        parent.setToolCalls(List.of(callHover, callClick));
+
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        // Corrupted recording: sub1 has both parent tool calls cloned
+        sub1.setToolCalls(new ArrayList<>(List.of(callHover, callClick)));
+
+        final PlaybookStep sub2 = new PlaybookStep("Click it");
+        // Corrupted recording: sub2 also has both parent tool calls cloned
+        sub2.setToolCalls(new ArrayList<>(List.of(callHover, callClick)));
+
+        parent.getSubSteps().addAll(List.of(sub1, sub2));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(parent, session, context);
+        pipelineStep.execute(context);
+
+        // Auto-healing should have partitioned tool calls across sub-steps so each has only 1 call
+        assertEquals(1, sub1.getToolCalls().size());
+        assertEquals("hover", sub1.getToolCalls().get(0).toolName());
+        assertEquals(1, sub2.getToolCalls().size());
+        assertEquals("click", sub2.getToolCalls().get(0).toolName());
+    }
+
+    /**
+     * Verifies that in REPLAY_STRICT mode, unrolled child sub-steps of a compound parent
+     * that have 0 tool calls (due to action coalescing into sibling sub-steps) complete
+     * cleanly as coalesced steps without throwing ConclusiveFailureException.
+     */
+    @Test
+    public void testReplayStrictAllowsCoalescedSubStepsWithZeroToolCalls() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final ToolRegistry registry = new ToolRegistry();
+        registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_action", "Mock action", JsonNodeFactory.instance.objectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "OK");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", registry);
+
+        final PlaybookStep parent = new PlaybookStep("Locate promo input:");
+        final ToolCall mockCall = new ToolCall("c1", "mock_action", JsonNodeFactory.instance.objectNode().put("param", "val"));
+        parent.setToolCalls(List.of(mockCall));
+
+        final PlaybookStep sub1 = new PlaybookStep("Clear and type code");
+        sub1.setParent(parent);
+        sub1.setToolCalls(List.of(mockCall));
+        sub1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep sub2 = new PlaybookStep("Verify input filled");
+        sub2.setParent(parent);
+        // Coalesced sub-step: 0 tool calls recorded
+        sub2.setToolCalls(Collections.emptyList());
+
+        parent.getSubSteps().addAll(List.of(sub1, sub2));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(parent, session, context);
+        pipelineStep.execute(context);
+
+        // Drain pushed child pipeline steps and finishParent
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        // Sub-step 2 had 0 tool calls, but since it is a child of a compound parent, it should not fail in REPLAY_STRICT!
+        assertEquals(PlaybookStepStatus.SUCCESS, sub1.getStatus());
+        assertEquals(PlaybookStepStatus.SUCCESS, sub2.getStatus());
+        assertEquals(PlaybookStepStatus.SUCCESS, parent.getStatus());
+    }
 }
+

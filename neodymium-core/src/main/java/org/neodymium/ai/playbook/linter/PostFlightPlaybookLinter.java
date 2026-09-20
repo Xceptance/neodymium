@@ -164,7 +164,7 @@ public final class PostFlightPlaybookLinter
                 {
                     try
                     {
-                        resolvedInstruction = context.getSessionData().resolveVariables(rawInstruction);
+                        resolvedInstruction = context.getSessionData().resolveAvailableVariables(rawInstruction);
                     }
                     catch (final Exception ignored)
                     {
@@ -362,7 +362,7 @@ public final class PostFlightPlaybookLinter
                         LinterCategory.REDUNDANT_VISUAL_TAG,
                         LinterSeverity.INFO,
                         reason,
-                        rawInstruction.replaceAll("\\s*\\(visual(:\\s*full)?\\)", "").trim(),
+                        rawInstruction.replaceAll("(?i)\\s*\\(visual(:\\s*[^)]+)?\\)", "").trim(),
                         null
                     ));
                 }

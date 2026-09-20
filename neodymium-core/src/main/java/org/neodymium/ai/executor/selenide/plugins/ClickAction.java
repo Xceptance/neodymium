@@ -143,7 +143,7 @@ public final class ClickAction implements BrowserActionPlugin
 
             try
             {
-                element.click();
+                element.shouldBe(Condition.visible).click();
             }
             catch (final Exception | AssertionError e)
             {

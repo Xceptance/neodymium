@@ -32,6 +32,7 @@ import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
@@ -217,6 +218,63 @@ public class AgentToolLoopStepTest
         final TokenBudgetExceededException thrown = Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
         Assertions.assertEquals(5000, thrown.getConsumedTokens());
         Assertions.assertEquals(4000, thrown.getBudgetLimit());
+    }
+
+    @Test
+    public void testTokenBudgetExceededInCompoundStepPartitionsExecutedActionsAndSetsDurations() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_fill", "Fills input", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Filled input");
+            }
+        });
+
+        final PlaybookStep parent = new PlaybookStep("Locate promo code input:");
+        parent.setStartTimeMs(System.currentTimeMillis() - 100);
+        final PlaybookStep sub1 = new PlaybookStep("Type FREEGIFT");
+        final PlaybookStep sub2 = new PlaybookStep("Verify discount applied");
+        parent.setSubSteps(List.of(sub1, sub2));
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Locate promo code input");
+        this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Type FREEGIFT", "Verify discount applied"));
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("{\"thought\":\"typing\",\"tool_call\":{\"name\":\"browser_fill\",\"arguments\":{\"selector\":\"#promo\",\"text\":\"FREEGIFT\"}}}", new TokenUsage(10, 10, 20), "mock");
+            }
+            throw new TokenBudgetExceededException(TokenBudgetExceededException.BudgetType.TOTAL, 105000, 100000);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
+
+        // Verify that despite the TokenBudgetExceededException, actions and durations were partitioned
+        Assertions.assertNotNull(parent.getActions());
+        Assertions.assertEquals(1, parent.getActions().size());
+        Assertions.assertEquals(1, sub1.getActions().size());
+        Assertions.assertEquals("TYPE", sub1.getActions().get(0).getType());
+        Assertions.assertNotNull(parent.getDurationMs());
+        Assertions.assertTrue(parent.getDurationMs() > 0);
+        Assertions.assertNotNull(sub1.getDurationMs());
+        Assertions.assertTrue(sub1.getDurationMs() > 0);
+        Assertions.assertNotNull(sub2.getDurationMs());
+        Assertions.assertTrue(sub2.getDurationMs() > 0);
     }
 
     @Test
@@ -2404,6 +2462,69 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals("CLICK", playbookStep.getActions().get(0).getType());
         Assertions.assertEquals(1, playbookStep.getToolCalls().size(), "Only the browser_click tool call should be recorded!");
         Assertions.assertEquals("browser_click", playbookStep.getToolCalls().get(0).toolName());
+    }
+
+    @Test
+    public void testPartitionToolCallsAndActionsMatchesSubmitKeyword()
+    {
+        final PlaybookStep sub1 = new PlaybookStep("clear its content");
+        final PlaybookStep sub2 = new PlaybookStep("type 'FREEGIFT' into it");
+        final PlaybookStep sub3 = new PlaybookStep("Submit the promo code form.");
+        final List<PlaybookStep> subSteps = List.of(sub1, sub2, sub3);
+
+        final ToolCall fillCall = new ToolCall("c1", "fill", MAPPER.createObjectNode().put("selector", "#couponCode").put("text", "FREEGIFT"));
+        final ToolCall clickCall = new ToolCall("c2", "click", MAPPER.createObjectNode().put("selector", "#apply-promo-btn"));
+        final List<ToolCall> toolCalls = List.of(fillCall, clickCall);
+
+        AgentToolLoopStep.partitionToolCallsAndActions(subSteps, toolCalls, Collections.emptyList());
+
+        Assertions.assertEquals(1, sub1.getToolCalls().size());
+        Assertions.assertEquals("fill", sub1.getToolCalls().get(0).toolName());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub1.getStatus());
+
+        Assertions.assertEquals(0, sub2.getToolCalls().size(), "Coalesced sub-step should receive 0 calls");
+
+        Assertions.assertEquals(1, sub3.getToolCalls().size());
+        Assertions.assertEquals("click", sub3.getToolCalls().get(0).toolName());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub3.getStatus());
+    }
+
+    @Test
+    public void testStopCriterion2PreservesFailedAssertionToolCallInExecutedCalls()
+    {
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts text presence", MAPPER.createObjectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new AssertionError("Expected text 'Free Bonus Gift' was not found on page.");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Locate promo and assert bonus");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Locate promo and assert bonus");
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+            new LlmResponse("Asserting bonus gift", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-assert", "browser_assert_text", MAPPER.createObjectNode().put("text", "Free Bonus Gift"))));
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+
+        final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
+        Assertions.assertTrue(thrown.getMessage().contains("Free Bonus Gift"));
+
+        // Stop Criterion 2 must ensure the failed assertion ToolCall is preserved on the playbook step!
+        Assertions.assertFalse(playbookStep.getToolCalls().isEmpty(), "Failed assertion tool call must be preserved!");
+        Assertions.assertEquals("browser_assert_text", playbookStep.getToolCalls().get(0).toolName());
     }
 }
 
