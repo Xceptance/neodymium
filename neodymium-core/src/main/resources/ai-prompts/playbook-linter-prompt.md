@@ -21,6 +21,8 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
    - Indented child milestones under a goal header are **already explicitly split** into discrete milestones and scoped within a turn group.
    - Do NOT flag a hierarchical step group as a `STEP_SPLITTING_CANDIDATE` simply because it contains multiple child sub-steps, nor because it concludes with a verification milestone (e.g. locating a field, typing, submitting, and asserting the result).
    - Only flag `STEP_SPLITTING_CANDIDATE` within hierarchical steps if an *individual child sub-step* itself is a compound action (e.g. `  - Type 'foo' and submit the form`).
+   - **No Standalone Scoping / Anchor Steps**: Element-locating, anchoring, or scoping phrases (e.g. `Locate the first product card`, `Find the search bar`, `In the navigation header`) are NOT executable actions on their own. A browser test step MUST perform an actionable interaction (click, type, hover, select) or an assertion. NEVER propose a rewrite that isolates a scoping clause into a standalone step (e.g. `Locate product card` followed by `Hover over it`). Instead, either merge the clause into an imperative action (e.g. `Hover over the first product card and click 'Add to Cart'`) or structure it as a hierarchical goal header ending with `:` (`Locate the first product card:\n  - Hover over the card\n  - Click 'Add to Cart'`).
+   - **Form Field Batching (Prefer Turn Groups over Micro-Steps)**: When an instruction fills multiple fields of a single form or form section (e.g. first name, last name, and email; or address and city), prefer suggesting a **hierarchical turn group** (`Enter customer details:\n  - Enter first name '${firstName}'\n  - Enter last name '${lastName}'\n  - Enter email '${email}'`) rather than flat standalone steps. Flat step splitting for every form field forces excessive LLM turns, DOM captures, and screenshot latency during live execution, whereas a hierarchical turn group executes in a single cohesive turn while preserving discrete milestone reporting and preventing action drop-offs.
    - If an unstructured flat step contains tightly coupled operations (e.g. interacting with an element and asserting its immediate state, or opening a dropdown and selecting an item), you may recommend structuring it into a hierarchical turn group or splitting it into discrete steps.
 
 ---
@@ -32,6 +34,9 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
    - Single unstructured step mixes an interactive action with a post-condition verification.
    - An *individual child sub-step* within a hierarchical group contains multiple compound actions.
    - **Exemption**: Steps already structured into child sub-steps (`  - ...`) are explicitly decomposed milestones and MUST NOT be flagged for combining actions across separate sub-steps.
+   - **No Standalone Scoping Steps**: Scoping or locating clauses (`Locate...`, `Find...`) MUST NOT be split into standalone steps in the rewrite. Merge them into the imperative action (e.g. `Hover over the first product card and click 'Add to Cart'`) or use a hierarchical goal header (`Locate the first product card:\n  - ...`).
+   - **No Introduced Dangling Pronouns**: Suggested rewrites MUST NOT introduce dangling pronouns (e.g. `Hover over it`) into flat steps where the antecedent was in a preceding step.
+   - **Multi-Field Form Entries**: When suggesting rewrites for multi-field form inputs, prefer structuring them as a hierarchical turn group (`<Form Header>:\n  - ...`) rather than exploding into flat standalone steps.
    - *Suggested Rewrite*: Split into discrete atomic steps on separate lines, or structure into a hierarchical step group with indented child milestones (`  - ...`).
 
 2. **`MISSING_VISUAL_TAG`**:
@@ -90,7 +95,7 @@ Evaluate scenario instructions methodically step by step:
 1. **Identify Operational Purpose**: Determine whether the step is an Action (mutating interaction) or an Assertion (verifying state, text, existence, or layout).
 2. **Check Existing Modality Tags**: Inspect parenthetical tags first (e.g. `(visual)`, `(visual: full)`, `(layout)`). If a canonical tag is already present, do NOT flag `MISSING_VISUAL_TAG`.
 3. **Respect Declarative State Assertions**: Do not flag declarative presence or content statements (e.g. "The cart displays 0 items") as ambiguous affordances. However, if an assertion asserts spatial position or layout (e.g. "At the bottom", "last row"), it MUST be flagged under Rule 2 `MISSING_VISUAL_TAG` unless tagged with `(visual)` or `(visual: full)`.
-4. **Be Non-Intrusive on Well-Formed Steps**: Do not generate pedantic findings for steps that have clear explicit targets, concrete assertions, and proper scoping. Reserve findings for genuine ambiguities, missing tags, vague targets, or compound operations.
+4. **Be Non-Intrusive on Well-Formed Steps & Composite Interactions**: Do not generate pedantic findings for steps that have clear explicit targets, concrete assertions, and proper scoping. Reserve findings for genuine ambiguities, missing tags, vague targets, or compound operations. Distinguish between asynchronous UI state transitions (e.g. opening a modal or dropdown before selecting an item, which MUST be split) vs. composite single-element interactions (e.g. hover to reveal and click on a card), which should remain concise without fragmented no-op locating steps.
 
 ---
 
