@@ -353,8 +353,24 @@ function openYamlEditor(filename) {
 }
 window.openYamlEditor = openYamlEditor;
 
-/* HTMX save response listener to reset unsaved status */
-document.addEventListener('htmx:afterResponse', function(evt) {
+/* HTMX save request listeners */
+document.addEventListener('htmx:configRequest', function(evt) {
+    if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'saveYamlBtn') {
+        const yaml = compilePlaybookToYaml();
+        const hiddenInput = document.getElementById('editorContent');
+        if (hiddenInput) {
+            hiddenInput.value = yaml;
+        }
+        if (evt.detail.parameters) {
+            evt.detail.parameters['content'] = yaml;
+            if (activeEditingFile) {
+                evt.detail.parameters['file'] = activeEditingFile;
+            }
+        }
+    }
+});
+
+document.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'saveYamlBtn') {
         if (evt.detail.successful) {
             initialEditorContent = compilePlaybookToYaml();
@@ -365,32 +381,34 @@ document.addEventListener('htmx:afterResponse', function(evt) {
 });
 
 async function saveYamlFile() {
+    if (!activeEditingFile) {
+        const fileEl = document.getElementById('editorFileName');
+        if (fileEl && fileEl.getAttribute('data-file')) {
+            activeEditingFile = fileEl.getAttribute('data-file');
+            window.activeEditingFile = activeEditingFile;
+        }
+    }
     if (!activeEditingFile) return;
-    compilePlaybookToYaml();
-    initialEditorContent = compilePlaybookToYaml();
+    const yamlContent = compilePlaybookToYaml();
+    initialEditorContent = yamlContent;
     checkEditorDirtyStatus();
 
-    const saveBtn = document.getElementById('saveYamlBtn');
-    if (saveBtn && typeof htmx !== 'undefined') {
-        htmx.trigger(saveBtn, 'click');
-    } else {
-        try {
-            const res = await fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `file=${encodeURIComponent(activeEditingFile)}&content=${encodeURIComponent(initialEditorContent)}`
-            });
-            const data = await res.json();
-            if (data.success) {
-                initialEditorContent = compilePlaybookToYaml();
-                checkEditorDirtyStatus();
-                showToast(`💾 ${activeEditingFile} successfully saved to disk!`, "success");
-            } else {
-                showToast("Error saving: " + data.error, "error");
-            }
-        } catch (e) {
-            showToast("Error saving file: " + e.message, "error");
+    try {
+        const res = await fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `file=${encodeURIComponent(activeEditingFile)}&content=${encodeURIComponent(yamlContent)}`
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS' || data.success) {
+            initialEditorContent = compilePlaybookToYaml();
+            checkEditorDirtyStatus();
+            showToast("💾 Saved playbook file successfully", "success");
+        } else {
+            showToast("Error saving: " + (data.error || "Unknown error"), "error");
         }
+    } catch (e) {
+        showToast("Error saving file: " + e.message, "error");
     }
 }
 window.saveYamlFile = saveYamlFile;
@@ -567,16 +585,13 @@ function initVisualPlaybookEditor() {
     const stepsList = document.getElementById('stepsList');
     if (!stepsList) return;
 
-    const rows = document.querySelectorAll('.step-row');
-    currentLineCount = rows.length || 1;
-    window.currentLineCount = currentLineCount;
+    reindexSteps();
 
+    const rows = document.querySelectorAll('.step-row');
     rows.forEach(row => {
-        const lineId = parseInt(row.getAttribute('data-line') || '1', 10);
-        formatStepToTokens(lineId);
+        formatStepToTokens(row);
     });
 
-    updateAllLineNumbers();
     compilePlaybookToYaml();
 
     // Live typing & editing delegation for full Undo/Redo tracking
@@ -804,7 +819,9 @@ function addBeforeBlock() {
             <span class="step-number">1</span>
             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})"></div>
             <div class="step-actions">
-                <button class="icon-btn danger" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
             </div>
         `;
         container.appendChild(newRow);
@@ -813,7 +830,7 @@ function addBeforeBlock() {
         const newContent = newRow.querySelector('.step-content');
         if (newContent) newContent.focus();
     }
-    updateAllLineNumbers();
+    reindexSteps();
 }
 window.addBeforeBlock = addBeforeBlock;
 
@@ -824,7 +841,7 @@ function removeBeforeBlock() {
     if (panel) panel.style.display = 'none';
     if (btnContainer) btnContainer.style.display = 'block';
     if (container) container.innerHTML = '';
-    updateAllLineNumbers();
+    reindexSteps();
 }
 window.removeBeforeBlock = removeBeforeBlock;
 
@@ -847,7 +864,9 @@ function addAfterBlock() {
             <span class="step-number">1</span>
             <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})"></div>
             <div class="step-actions">
-                <button class="icon-btn danger" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
             </div>
         `;
         container.appendChild(newRow);
@@ -856,7 +875,7 @@ function addAfterBlock() {
         const newContent = newRow.querySelector('.step-content');
         if (newContent) newContent.focus();
     }
-    updateAllLineNumbers();
+    reindexSteps();
 }
 window.addAfterBlock = addAfterBlock;
 
@@ -867,7 +886,7 @@ function removeAfterBlock() {
     if (panel) panel.style.display = 'none';
     if (btnContainer) btnContainer.style.display = 'block';
     if (container) container.innerHTML = '';
-    updateAllLineNumbers();
+    reindexSteps();
 }
 window.removeAfterBlock = removeAfterBlock;
 
@@ -929,16 +948,25 @@ function setCaretOffset(element, offset) {
 window.setCaretOffset = setCaretOffset;
 
 /* Step Focus & Blur Event Handlers */
-function handleStepFocus(lineNum) {
+function handleStepFocus(lineNumOrElement) {
+    let row = null;
+    let lineNum = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+        lineNum = row ? row.getAttribute('data-line') : null;
+    } else {
+        lineNum = lineNumOrElement;
+        row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+    }
+
     if (activeLineNum && activeLineNum !== lineNum) {
         const prevRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
         if (prevRow) prevRow.classList.remove('active-line');
-        formatStepToTokens(activeLineNum);
+        if (activeLineNum) formatStepToTokens(activeLineNum);
     }
 
     activeLineNum = lineNum;
     window.activeLineNum = activeLineNum;
-    const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
     if (!row) return;
 
     row.classList.add('active-line');
@@ -951,12 +979,23 @@ function handleStepFocus(lineNum) {
     }
 
     const statLine = document.getElementById('statLine');
-    if (statLine) statLine.innerText = lineNum;
+    if (statLine) {
+        const numSpan = row.querySelector('.step-number');
+        statLine.innerText = numSpan ? numSpan.innerText : (lineNum || '1');
+    }
 }
 window.handleStepFocus = handleStepFocus;
 
-function handleStepBlur(lineNum) {
-    const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+function handleStepBlur(lineNumOrElement) {
+    let row = null;
+    let lineNum = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+        lineNum = row ? row.getAttribute('data-line') : null;
+    } else {
+        lineNum = lineNumOrElement;
+        row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+    }
     if (!row) return;
 
     const content = row.querySelector('.step-content');
@@ -995,7 +1034,7 @@ function handleStepBlur(lineNum) {
     setTimeout(() => {
         const activeEl = document.activeElement;
         if (!activeEl || !row.contains(activeEl)) {
-            formatStepToTokens(lineNum);
+            formatStepToTokens(row);
         }
     }, 120);
 
@@ -1003,25 +1042,62 @@ function handleStepBlur(lineNum) {
 }
 window.handleStepBlur = handleStepBlur;
 
-/* Keyboard Navigation */
+/* Visual Row Traversal across Active Code Panels */
+function getAllVisibleStepRows() {
+    const containers = ['#beforeStepsList', '#stepsList', '#afterStepsList'];
+    const rows = [];
+    containers.forEach(selector => {
+        const container = document.querySelector(selector);
+        if (!container) return;
+        const panel = container.closest('.editor-code-panel');
+        if (panel && (panel.style.display === 'none' || getComputedStyle(panel).display === 'none')) return;
+        container.querySelectorAll(':scope > .step-row').forEach(r => rows.push(r));
+    });
+    return rows;
+}
+window.getAllVisibleStepRows = getAllVisibleStepRows;
+
+function getAdjacentStepRow(currentRow, direction) {
+    if (!currentRow) return null;
+    const allRows = getAllVisibleStepRows();
+    const idx = allRows.indexOf(currentRow);
+    if (idx === -1) return null;
+    const targetIdx = idx + direction;
+    if (targetIdx >= 0 && targetIdx < allRows.length) {
+        return allRows[targetIdx];
+    }
+    return null;
+}
+window.getAdjacentStepRow = getAdjacentStepRow;
+
 /* Keyboard Navigation & Caret Operations */
 function handleKeyDown(event, lineNum) {
     const content = event.target;
+    const currentRow = content.closest('.step-row') || document.querySelector(`.step-row[data-line="${lineNum}"]`);
     const currentOffset = getCaretOffset(content);
     const raw = content.getAttribute('data-raw') || content.innerText || '';
 
+    // Alt+Up / Alt+Down: Move Step Line
+    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+        const dir = event.key === 'ArrowUp' ? -1 : 1;
+        moveStep(currentRow || lineNum, dir);
+        return;
+    }
+
     if (event.key === 'ArrowUp') {
-        if (lineNum > 1) {
+        const prevRow = getAdjacentStepRow(currentRow, -1);
+        if (prevRow) {
             event.preventDefault();
             lastCaretOffset = currentOffset;
-            focusLine(lineNum - 1, currentOffset);
+            focusRow(prevRow, currentOffset);
         }
     } else if (event.key === 'ArrowDown') {
-        const nextRow = document.querySelector(`.step-row[data-line="${lineNum + 1}"]`);
+        const nextRow = getAdjacentStepRow(currentRow, 1);
         if (nextRow) {
             event.preventDefault();
             lastCaretOffset = currentOffset;
-            focusLine(lineNum + 1, currentOffset);
+            focusRow(nextRow, currentOffset);
         }
     } else if (event.key === 'Enter') {
         event.preventDefault();
@@ -1034,12 +1110,11 @@ function handleKeyDown(event, lineNum) {
 
         contentEl.setAttribute('data-raw', headText);
         contentEl.innerText = headText;
-        formatStepToTokens(lineNum);
+        formatStepToTokens(currentRow || lineNum);
 
-        const newRow = insertStepBelow(lineNum, tailText);
+        const newRow = insertStepBelow(currentRow || lineNum, tailText);
         if (newRow) {
-            const reindexedLine = parseInt(newRow.getAttribute('data-line'), 10) || (lineNum + 1);
-            formatStepToTokens(reindexedLine);
+            formatStepToTokens(newRow);
             const newContent = newRow.querySelector('.step-content');
             if (newContent) {
                 newContent.focus();
@@ -1049,7 +1124,7 @@ function handleKeyDown(event, lineNum) {
         compilePlaybookToYaml();
         if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
     } else if (event.key === 'Backspace' && currentOffset === 0) {
-        const prevRow = document.querySelector(`.step-row[data-line="${lineNum - 1}"]`);
+        const prevRow = getAdjacentStepRow(currentRow, -1);
         if (prevRow) {
             event.preventDefault();
             const prevContent = prevRow.querySelector('.step-content');
@@ -1059,15 +1134,15 @@ function handleKeyDown(event, lineNum) {
                 const combined = prevRaw + (raw ? (prevRaw ? ' ' : '') + raw : '');
                 prevContent.setAttribute('data-raw', combined);
                 prevContent.innerText = combined;
-                formatStepToTokens(lineNum - 1);
-                deleteStep(lineNum);
-                focusLine(lineNum - 1, joinOffset);
+                formatStepToTokens(prevRow);
+                deleteStep(currentRow);
+                focusRow(prevRow, joinOffset);
                 compilePlaybookToYaml();
                 if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
             }
         }
     } else if (event.key === 'Delete' && currentOffset >= raw.length) {
-        const nextRow = document.querySelector(`.step-row[data-line="${lineNum + 1}"]`);
+        const nextRow = getAdjacentStepRow(currentRow, 1);
         if (nextRow) {
             event.preventDefault();
             const nextContent = nextRow.querySelector('.step-content');
@@ -1076,9 +1151,9 @@ function handleKeyDown(event, lineNum) {
                 const combined = raw + (nextRaw ? (raw ? ' ' : '') + nextRaw : '');
                 content.setAttribute('data-raw', combined);
                 content.innerText = combined;
-                formatStepToTokens(lineNum);
-                deleteStep(lineNum + 1);
-                focusLine(lineNum, currentOffset);
+                formatStepToTokens(currentRow);
+                deleteStep(nextRow);
+                focusRow(currentRow, currentOffset);
                 compilePlaybookToYaml();
                 if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
             }
@@ -1087,27 +1162,43 @@ function handleKeyDown(event, lineNum) {
 }
 window.handleKeyDown = handleKeyDown;
 
-function focusLine(lineNum, targetOffset = -1) {
-    const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+function focusRow(row, targetOffset = -1) {
     if (!row) return;
 
     const content = row.querySelector('.step-content');
     if (!content) return;
 
+    const lineNum = row.getAttribute('data-line');
     content.focus();
-    handleStepFocus(lineNum);
+    handleStepFocus(lineNum || row);
 
     if (targetOffset >= 0) {
-        const raw = content.getAttribute('data-raw') || content.innerText;
+        const raw = content.getAttribute('data-raw') || content.innerText || '';
         const clampedOffset = Math.min(targetOffset, raw.length);
         setCaretOffset(content, clampedOffset);
         lastCaretOffset = clampedOffset;
     }
 }
+window.focusRow = focusRow;
+
+function focusLine(lineNumOrElement, targetOffset = -1) {
+    let row = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+    } else {
+        row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    }
+    focusRow(row, targetOffset);
+}
 window.focusLine = focusLine;
 
-function insertStepBelow(lineNum, initialText = '') {
-    const targetRow = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+function insertStepBelow(lineNumOrElement, initialText = '') {
+    let targetRow = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        targetRow = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+    } else {
+        targetRow = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    }
     if (!targetRow) return null;
 
     currentLineCount++;
@@ -1121,11 +1212,17 @@ function insertStepBelow(lineNum, initialText = '') {
         <span class="step-number">${currentLineCount}</span>
         <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">${safeInitial}</div>
         <div class="step-actions">
-            <button class="icon-btn danger" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
+            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${currentLineCount}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${currentLineCount}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
         </div>
     `;
 
-    targetRow.after(newRow);
+    const lineId = targetRow.getAttribute('data-line');
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+    const insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    insertAfterRef.after(newRow);
+
     reindexSteps();
 
     const newContent = newRow.querySelector('.step-content');
@@ -1134,43 +1231,172 @@ function insertStepBelow(lineNum, initialText = '') {
 }
 window.insertStepBelow = insertStepBelow;
 
-function deleteStep(lineNum) {
-    const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
-    if (row) {
-        row.remove();
+function moveStep(lineNumOrElement, direction) {
+    let row = null;
+    if (typeof lineNumOrElement === 'number' || typeof lineNumOrElement === 'string') {
+        row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    } else if (lineNumOrElement && lineNumOrElement.closest) {
+        row = lineNumOrElement.closest('.step-row');
+    }
+    if (!row) return;
+
+    const container = row.closest('.steps-container');
+    if (!container) return;
+
+    const lineId = row.getAttribute('data-line');
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+
+    const content = row.querySelector('.step-content');
+    const savedCaret = content ? getCaretOffset(content) : 0;
+
+    const allRows = Array.from(container.querySelectorAll(':scope > .step-row'));
+    const currentIndex = allRows.indexOf(row);
+    if (currentIndex === -1) return;
+
+    if (direction === -1) {
+        // Move Up
+        if (currentIndex > 0) {
+            const targetPrevRow = allRows[currentIndex - 1];
+            container.insertBefore(row, targetPrevRow);
+            if (treeCard && treeCard.parentElement === container) {
+                row.after(treeCard);
+            }
+        } else {
+            return;
+        }
+    } else if (direction === 1) {
+        // Move Down
+        if (currentIndex < allRows.length - 1) {
+            const targetNextRow = allRows[currentIndex + 1];
+            const nextLineId = targetNextRow.getAttribute('data-line');
+            const nextTreeCard = document.getElementById(`includeTreeCard_${nextLineId}`) || document.getElementById(`includeTreeCard${nextLineId}`);
+            
+            const insertAfterRef = (nextTreeCard && nextTreeCard.parentElement === container) ? nextTreeCard : targetNextRow;
+            insertAfterRef.after(row);
+            if (treeCard && treeCard.parentElement === container) {
+                row.after(treeCard);
+            }
+        } else {
+            return;
+        }
+    }
+
+    reindexSteps();
+    if (content) {
+        content.focus();
+        if (savedCaret > 0) {
+            setCaretOffset(content, savedCaret);
+        }
+    }
+    if (typeof pushEditorSnapshot === 'function') {
+        pushEditorSnapshot(false);
+    }
+}
+window.moveStep = moveStep;
+
+function deleteStep(lineNumOrElement) {
+    let row = null;
+    if (typeof lineNumOrElement === 'number' || typeof lineNumOrElement === 'string') {
+        row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    } else if (lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+    }
+    if (!row) return;
+
+    const lineId = row.getAttribute('data-line');
+    const container = row.closest('.steps-container');
+
+    // If it's the last remaining row in the main steps list, clear its content instead of removing the row
+    if (container && container.id === 'stepsList' && container.querySelectorAll(':scope > .step-row').length === 1) {
+        const content = row.querySelector('.step-content');
+        if (content) {
+            content.setAttribute('data-raw', '');
+            content.innerText = '';
+            content.innerHTML = '';
+            content.focus();
+            formatStepToTokens(row);
+        }
+        const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+        if (treeCard) treeCard.remove();
+
         reindexSteps();
+        if (typeof pushEditorSnapshot === 'function') {
+            pushEditorSnapshot(false);
+        }
+        return;
+    }
+
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+    if (treeCard) treeCard.remove();
+
+    row.remove();
+    reindexSteps();
+    if (typeof pushEditorSnapshot === 'function') {
+        pushEditorSnapshot(false);
     }
 }
 window.deleteStep = deleteStep;
 
 function reindexSteps() {
+    let globalLineCounter = 1;
     const containers = ['#beforeStepsList', '#stepsList', '#afterStepsList'];
     containers.forEach(containerSelector => {
         const container = document.querySelector(containerSelector);
         if (!container) return;
         const rows = container.querySelectorAll(':scope > .step-row');
-        rows.forEach((row) => {
-            const lNum = row.getAttribute('data-line');
+        rows.forEach((row, idx) => {
+            const oldLineId = row.getAttribute('data-line');
+            const lNum = globalLineCounter++;
+            row.setAttribute('data-line', lNum);
+
+            // If an include tree card is associated with the old line id, update its ID
+            if (oldLineId && oldLineId !== String(lNum)) {
+                const treeCard = document.getElementById(`includeTreeCard_${oldLineId}`) || document.getElementById(`includeTreeCard${oldLineId}`);
+                if (treeCard) {
+                    treeCard.id = `includeTreeCard_${lNum}`;
+                }
+            }
+
             const content = row.querySelector('.step-content');
             if (content) {
                 content.setAttribute('onkeydown', `handleKeyDown(event, ${lNum})`);
                 content.setAttribute('onfocus', `handleStepFocus(${lNum})`);
                 content.setAttribute('onblur', `handleStepBlur(${lNum})`);
             }
-            const delBtn = row.querySelector('.step-actions .icon-btn');
+            const moveUpBtn = row.querySelector('.step-actions .btn-move-up');
+            if (moveUpBtn) {
+                moveUpBtn.setAttribute('onclick', `moveStep(${lNum}, -1)`);
+                moveUpBtn.disabled = (idx === 0);
+            }
+            const moveDownBtn = row.querySelector('.step-actions .btn-move-down');
+            if (moveDownBtn) {
+                moveDownBtn.setAttribute('onclick', `moveStep(${lNum}, 1)`);
+                moveDownBtn.disabled = (idx === rows.length - 1);
+            }
+            const delBtn = row.querySelector('.step-actions .btn-delete-step, .step-actions .icon-btn.danger');
             if (delBtn) {
                 delBtn.setAttribute('onclick', `deleteStep(${lNum})`);
             }
         });
     });
+    currentLineCount = Math.max(1, globalLineCounter - 1);
+    window.currentLineCount = currentLineCount;
     updateAllLineNumbers();
     compilePlaybookToYaml();
 }
 window.reindexSteps = reindexSteps;
 
 /* Token Rendering Parser */
-function formatStepToTokens(lineNum) {
-    const row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+function formatStepToTokens(lineNumOrElement) {
+    let row = null;
+    let lineNum = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+        lineNum = row ? row.getAttribute('data-line') : null;
+    } else {
+        lineNum = lineNumOrElement;
+        row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+    }
     if (!row) return;
     const content = row.querySelector('.step-content');
     if (!content) return;
@@ -1723,7 +1949,9 @@ function restoreEditorSnapshot(snap) {
                      onfocus="handleStepFocus(${lineNum})"
                      onblur="handleStepBlur(${lineNum})"></div>
                 <div class="step-actions">
-                    <button class="icon-btn danger" onclick="deleteStep(${lineNum})"><span class="material-symbols-outlined">delete</span></button>
+                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineNum}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineNum}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineNum})"><span class="material-symbols-outlined">delete</span></button>
                 </div>
             `;
             container.appendChild(row);
@@ -1857,7 +2085,7 @@ document.addEventListener('paste', function(evt) {
             stepContent.innerText = firstLineText;
             formatStepToTokens(lineNum);
 
-            let currentRefLine = lineNum;
+            let currentRefRow = stepRow;
             let lastInsertedContent = null;
 
             for (let i = 1; i < lines.length; i++) {
@@ -1866,10 +2094,10 @@ document.addEventListener('paste', function(evt) {
                     lineText = lineText + tailText;
                 }
 
-                const insertedRow = insertStepBelow(currentRefLine, lineText);
+                const insertedRow = insertStepBelow(currentRefRow, lineText);
                 if (insertedRow) {
-                    currentRefLine = parseInt(insertedRow.getAttribute('data-line'), 10) || (currentRefLine + 1);
-                    formatStepToTokens(currentRefLine);
+                    currentRefRow = insertedRow;
+                    formatStepToTokens(insertedRow);
                     lastInsertedContent = insertedRow.querySelector('.step-content');
                 }
             }

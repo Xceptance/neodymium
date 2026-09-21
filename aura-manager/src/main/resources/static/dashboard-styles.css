@@ -1882,6 +1882,8 @@
         }
 
         .toast {
+            display: flex !important;
+            opacity: 1 !important;
             padding: 12px 20px;
             border-radius: 8px;
             background: rgba(30, 41, 59, 0.85);
@@ -3090,9 +3092,14 @@
 .step-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     opacity: 0;
     transition: opacity 0.15s ease;
+}
+
+.step-row:hover .step-actions,
+.step-row:focus-within .step-actions {
+    opacity: 1;
 }
 
 .icon-btn {
@@ -3107,6 +3114,12 @@
     justify-content: center;
     cursor: pointer;
     font-size: 15px;
+}
+
+.icon-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+    pointer-events: none;
 }
 
 .icon-btn:hover {

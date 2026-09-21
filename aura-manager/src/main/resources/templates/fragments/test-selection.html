@@ -19,7 +19,7 @@
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
     </div>
     <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border);">
-        <button class="btn-edit" id="openModalBtn" hx-get="/api/modals/create" hx-target="#modalContainer" hx-swap="innerHTML" style="width: 100%; justify-content: center; padding: 8px; font-weight: 500;">
+        <button class="btn-edit" id="openModalBtn" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();" style="width: 100%; justify-content: center; padding: 8px; font-weight: 500;">
             <span class="material-symbols-outlined">add</span> Create New Test
         </button>
     </div>
