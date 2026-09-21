@@ -304,7 +304,7 @@ public final class AgentToolLoopStep implements PipelineStep
             {
                 userPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
             }
-            userPrompt.append("Important: For any assertion or verification milestone (e.g. 'Assert that...', 'Verify that...'), invoke the commanded assertion tool ('assert_text', 'assert_count', etc.). If the target element or text is not found, execute the assertion tool directly to test the condition rather than retrying earlier action milestones.\n\n");
+            userPrompt.append("Important: For any assertion or verification milestone (e.g. 'Assert that...', 'Verify that...'), invoke the commanded assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', etc.). If the target element or text is not found, execute the assertion tool directly to test the condition rather than retrying earlier action milestones.\n\n");
         }
 
         List<SutAttachment> attachments = Collections.emptyList();
@@ -384,7 +384,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("3. DISCOVERY & RECOVERY: Ground all selectors in the provided page elements. Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
         systemPrompt.append("4. ACTION & VERIFICATION COMPLETION:\n");
         systemPrompt.append("   - Action steps: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps.\n");
-        systemPrompt.append("   - Verification steps: For verification or check instructions (such as asserting text, checking counts, validating values, or confirming expected state), you MUST invoke an assertion tool ('assert_text', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
+        systemPrompt.append("   - Verification steps: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
         systemPrompt.append("   - Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
         if (isVisual)
         {
@@ -740,7 +740,7 @@ public final class AgentToolLoopStep implements PipelineStep
                             {
                                 lastProposedToolWasCompleteStep = true;
                                 final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
-                                        + "). You must execute an assertion tool (such as 'assert_text' or 'assert_count') to verify the expected condition before calling complete_step. "
+                                        + "). You must execute an assertion tool (such as 'assert_text', 'assert_element_state', 'assert_attribute', or 'assert_count') to verify the expected condition before calling complete_step. "
                                         + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
                                 LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
                                 conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
@@ -1857,6 +1857,8 @@ public final class AgentToolLoopStep implements PipelineStep
         return "query_dom".equals(clean)
                 || "assert_text".equals(clean)
                 || "assert_count".equals(clean)
+                || "assert_element_state".equals(clean)
+                || "assert_attribute".equals(clean)
                 || "inspect".equals(clean);
     }
 
@@ -2403,7 +2405,9 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "clear_cookies".equals(clean) || "back".equals(clean) || "forward".equals(clean)
                 || "refresh".equals(clean) || "wait".equals(clean) || "assert".equals(clean)
                 || "assert_text".equals(clean) || "assert_title".equals(clean) || "assert_url".equals(clean)
-                || "assert_count".equals(clean) || "key_press".equals(clean) || "press_key".equals(clean)
+                || "assert_count".equals(clean) || "assert_element_state".equals(clean) || "assert_state".equals(clean)
+                || "assert_attribute".equals(clean) || "assert_attr".equals(clean)
+                || "key_press".equals(clean) || "press_key".equals(clean)
                 || "drag".equals(clean) || "drag_to".equals(clean) || "drag_and_drop".equals(clean)
                 || "check".equals(clean) || "store".equals(clean) || "branch".equals(clean)
                 || "include".equals(clean) || "java_method".equals(clean)
@@ -2447,6 +2451,8 @@ public final class AgentToolLoopStep implements PipelineStep
             case "assert_title" -> "assert_title";
             case "assert_url" -> "assert_url";
             case "assert_count" -> "assert_count";
+            case "assert_element_state", "assert_state" -> "assert_element_state";
+            case "assert_attribute", "assert_attr" -> "assert_attribute";
             case "drag" -> "drag";
             case "drag_to", "drag_and_drop" -> "drag_to";
             case "key_press", "press_key" -> "press_key";
@@ -2825,6 +2831,21 @@ public final class AgentToolLoopStep implements PipelineStep
                         final String tgt = node.path("target").asText();
                         final String exp = node.path("expected").asText();
                         LOGGER.info("📥 Result [{}]: {}{} - verified text \"{}\" on '{}'", toolName, icon, status, exp, tgt);
+                        return;
+                    }
+                    if ("assert_element_state".equals(act) && node.has("target") && node.has("state"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String st = node.path("state").asText();
+                        LOGGER.info("📥 Result [{}]: {}{} - verified element state '{}' on '{}'", toolName, icon, status, st, tgt);
+                        return;
+                    }
+                    if ("assert_attribute".equals(act) && node.has("target") && node.has("attribute"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String attr = node.path("attribute").asText();
+                        final String exp = node.has("expectedValue") ? "=\"" + node.path("expectedValue").asText() + "\"" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - verified attribute '{}{}' on '{}'", toolName, icon, status, attr, exp, tgt);
                         return;
                     }
                     if ("navigate".equals(act) && node.has("url"))

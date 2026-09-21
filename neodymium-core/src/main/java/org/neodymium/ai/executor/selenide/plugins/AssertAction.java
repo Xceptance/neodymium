@@ -185,6 +185,19 @@ public final class AssertAction implements BrowserActionPlugin
                     LOG.debug("   ✅ Element selected: {}", action);
                     return;
                 }
+                case "ASSERT_UNSELECTED" ->
+                {
+                    if ("SELECT".equalsIgnoreCase(element.getTagName()))
+                    {
+                        element.getSelectedOption().shouldNotBe(Condition.exist);
+                    }
+                    else
+                    {
+                        element.shouldNotBe(Condition.selected);
+                    }
+                    LOG.debug("   ✅ Element unselected: {}", action);
+                    return;
+                }
                 case "ASSERT_READONLY" ->
                 {
                     element.shouldBe(Condition.readonly);

@@ -143,6 +143,8 @@ public final class BrowserToolProvider
         registry.register(createAssertCountTool());
         registry.register(createAssertUrlTool());
         registry.register(createAssertTitleTool());
+        registry.register(createAssertElementStateTool());
+        registry.register(createAssertAttributeTool());
         registry.register(createScrollTool());
         registry.register(createExecuteScriptTool());
         registry.register(createQueryDomTool());
@@ -1719,12 +1721,7 @@ public final class BrowserToolProvider
 
                     if (!matched)
                     {
-                        if (!isTextPresentOnPage(expectedText, regex, exact))
-                        {
-                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" nor anywhere on the page within " + timeout + "ms.");
-                        }
-
-                        return ToolResult.error(call.callId(), errorNode("Expected text \"" + expectedText + "\" was not found on element \"" + selector + "\".").toString());
+                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms.");
                     }
                 }
 
@@ -2213,6 +2210,262 @@ public final class BrowserToolProvider
 
                 final String currentTitle = Selenide.title();
                 return ToolResult.success(call.callId(), "Browser page title matched: " + currentTitle);
+            }
+        };
+    }
+
+    private static AiTool createAssertElementStateTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert state on");
+        final ArrayNode stateEnum = props.putObject("state")
+                .put("type", "string")
+                .put("description", "Expected state of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'exists', 'absent')")
+                .putArray("enum");
+        stateEnum.add("visible");
+        stateEnum.add("hidden");
+        stateEnum.add("enabled");
+        stateEnum.add("disabled");
+        stateEnum.add("editable");
+        stateEnum.add("readonly");
+        stateEnum.add("checked");
+        stateEnum.add("unchecked");
+        stateEnum.add("selected");
+        stateEnum.add("unselected");
+        stateEnum.add("focused");
+        stateEnum.add("exists");
+        stateEnum.add("absent");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("selector");
+        req.add("state");
+
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies a specific state (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, exists, absent)", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String selector = resolveSelector(call.arguments());
+                if (selector == null || selector.isBlank())
+                {
+                    throw new AssertionError("assert_element_state requires a 'selector' argument");
+                }
+
+                final String rawState;
+                if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                {
+                    rawState = call.arguments().path("state").asText();
+                }
+                else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+                {
+                    rawState = call.arguments().path("expectedState").asText();
+                }
+                else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
+                {
+                    rawState = call.arguments().path("value").asText();
+                }
+                else
+                {
+                    throw new AssertionError("assert_element_state requires a 'state' argument");
+                }
+
+                final String state = normalizeElementState(rawState);
+                final SelenideElement el = findElement(selector);
+
+                switch (state)
+                {
+                    case "visible" -> el.shouldBe(Condition.visible);
+                    case "hidden" -> el.shouldBe(Condition.hidden);
+                    case "enabled" -> el.shouldBe(Condition.enabled);
+                    case "disabled" -> el.shouldBe(Condition.disabled);
+                    case "editable" -> el.shouldBe(Condition.editable);
+                    case "readonly" -> el.shouldBe(Condition.readonly);
+                    case "checked" -> el.shouldBe(Condition.checked);
+                    case "unchecked" -> el.shouldNotBe(Condition.checked);
+                    case "selected" ->
+                    {
+                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                        {
+                            el.getSelectedOption().shouldBe(Condition.exist);
+                        }
+                        else
+                        {
+                            el.shouldBe(Condition.selected);
+                        }
+                    }
+                    case "unselected" ->
+                    {
+                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                        {
+                            el.getSelectedOption().shouldNotBe(Condition.exist);
+                        }
+                        else
+                        {
+                            el.shouldNotBe(Condition.selected);
+                        }
+                    }
+                    case "focused" ->
+                    {
+                        final Boolean isFocused = Selenide.executeJavaScript(
+                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                el);
+                        if (!Boolean.TRUE.equals(isFocused))
+                        {
+                            el.shouldBe(Condition.focused);
+                        }
+                    }
+                    case "exists" -> el.should(Condition.exist);
+                    case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                    default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, exists, absent.");
+                }
+
+                final ObjectNode res = successNode("assert_element_state");
+                res.put("target", selector);
+                res.put("state", state);
+                res.put("matched", true);
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    static String normalizeElementState(final String rawState)
+    {
+        if (rawState == null || rawState.isBlank())
+        {
+            return "";
+        }
+        String s = rawState.trim().toLowerCase(Locale.ROOT);
+        if (s.startsWith("[") && s.endsWith("]"))
+        {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+        return switch (s)
+        {
+            case "read-only", "read_only" -> "readonly";
+            case "not_checked", "un-checked", "unchecked" -> "unchecked";
+            case "not_selected", "un-selected", "unselected" -> "unselected";
+            case "not_exist", "not_exists", "non-existent", "absent" -> "absent";
+            case "present", "exist", "exists" -> "exists";
+            case "invisible", "hidden" -> "hidden";
+            default -> s;
+        };
+    }
+
+    private static AiTool createAssertAttributeTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert attribute on");
+        props.putObject("attribute").put("type", "string").put("description", "Name of the HTML attribute (e.g. placeholder, value, href, disabled, readonly, type, data-*)");
+        props.putObject("expectedValue").put("type", "string").put("description", "Expected attribute value. If omitted, asserts that the attribute exists.");
+        props.putObject("exact").put("type", "boolean").put("description", "Whether attribute value match must be exact (default: true)");
+        props.putObject("regex").put("type", "boolean").put("description", "Whether expectedValue is a regular expression pattern (default: false)");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("selector");
+        req.add("attribute");
+
+        final ToolDefinition def = new ToolDefinition("assert_attribute", "Asserts that an element has a specified attribute and optionally verifies its value (exact, substring, or regex)", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String selector = resolveSelector(call.arguments());
+                if (selector == null || selector.isBlank())
+                {
+                    throw new AssertionError("assert_attribute requires a 'selector' argument");
+                }
+
+                final String attrName;
+                if (call.arguments().hasNonNull("attribute") && !call.arguments().path("attribute").asText().isBlank())
+                {
+                    attrName = call.arguments().path("attribute").asText().trim();
+                }
+                else if (call.arguments().hasNonNull("attr") && !call.arguments().path("attr").asText().isBlank())
+                {
+                    attrName = call.arguments().path("attr").asText().trim();
+                }
+                else if (call.arguments().hasNonNull("name") && !call.arguments().path("name").asText().isBlank())
+                {
+                    attrName = call.arguments().path("name").asText().trim();
+                }
+                else
+                {
+                    throw new AssertionError("assert_attribute requires an 'attribute' argument");
+                }
+
+                final String rawExpectedValue;
+                if (call.arguments().hasNonNull("expectedValue"))
+                {
+                    rawExpectedValue = call.arguments().path("expectedValue").asText();
+                }
+                else if (call.arguments().hasNonNull("value"))
+                {
+                    rawExpectedValue = call.arguments().path("value").asText();
+                }
+                else if (call.arguments().hasNonNull("expected"))
+                {
+                    rawExpectedValue = call.arguments().path("expected").asText();
+                }
+                else
+                {
+                    rawExpectedValue = null;
+                }
+
+                final boolean exact = call.arguments().path("exact").asBoolean(true);
+                final boolean regex = call.arguments().path("regex").asBoolean(false);
+
+                final SelenideElement el = findElement(selector);
+
+                if (rawExpectedValue != null)
+                {
+                    final String expectedValue = regex ? cleanRegexPattern(rawExpectedValue) : unescapeLiteralText(rawExpectedValue);
+                    if (regex)
+                    {
+                        el.shouldHave(Condition.attributeMatching(attrName, expectedValue));
+                    }
+                    else if (exact)
+                    {
+                        el.shouldHave(Condition.attribute(attrName, expectedValue));
+                    }
+                    else
+                    {
+                        el.shouldHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                    }
+                }
+                else
+                {
+                    el.shouldHave(Condition.attribute(attrName));
+                }
+
+                final ObjectNode res = successNode("assert_attribute");
+                res.put("target", selector);
+                res.put("attribute", attrName);
+                if (rawExpectedValue != null)
+                {
+                    res.put("expectedValue", rawExpectedValue);
+                    res.put("exact", exact);
+                    res.put("regex", regex);
+                }
+                res.put("matched", true);
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }

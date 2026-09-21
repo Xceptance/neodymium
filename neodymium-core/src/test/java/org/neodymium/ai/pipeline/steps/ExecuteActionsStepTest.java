@@ -905,5 +905,50 @@ public final class ExecuteActionsStepTest
         assertEquals(PlaybookStepStatus.SUCCESS, sub2.getStatus());
         assertEquals(PlaybookStepStatus.SUCCESS, parent.getStatus());
     }
+
+    /**
+     * Verifies that ExecutionContext.KEY_TOTAL_REPLAYS is properly incremented upon successful step replay.
+     */
+    @Test
+    public void testReplayedStepCountIncrementedOnReplay() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
+
+        final ToolRegistry registry = new ToolRegistry();
+        registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_action", "Mock action", JsonNodeFactory.instance.objectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "OK");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", registry);
+
+        final PlaybookStep step = new PlaybookStep("Click button");
+        final ToolCall mockCall = new ToolCall("c1", "mock_action", JsonNodeFactory.instance.objectNode().put("param", "val"));
+        step.setToolCalls(List.of(mockCall));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, null, context);
+        pipelineStep.execute(context);
+
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        assertEquals(1, context.getTransientData().get(ExecutionContext.KEY_TOTAL_REPLAYS));
+    }
 }
 

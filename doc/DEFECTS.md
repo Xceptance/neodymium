@@ -41,6 +41,59 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260922-01] Missing Replayed Step Count Tracking in ExecuteActionsStep Causing hasAllStepsReplayed Assertion Failure
+- **Date:** 2026-09-22
+- **Component:** `neodymium-core` (`ai-pipeline`, `ai-replay`, `metrics`)
+- **Scope:** `Framework`
+- **Symptom:** In `AssertIntegrationTest` and any tests asserting `hasAllStepsReplayed()` on replay, `hasAllStepsReplayed()` failed with `AssertionError: Not all steps were replayed from cache. ==> expected: <N> but was: <0>`.
+- **Root Cause:**
+  `AiSession.getMetrics()` retrieves `replayedStepCount` from `ExecutionContext.KEY_TOTAL_REPLAYS`. In `ExecuteActionsStep`, replaying steps via `PlaybookToolReplayer.replayStep(...)` or bypassing them via `VisualBaselineGateStep` executed the actions against the SUT but never incremented `ExecutionContext.KEY_TOTAL_REPLAYS`. Consequently, `KEY_TOTAL_REPLAYS` remained 0 across all successful replay steps.
+- **Detection Gap ("What did we miss?"):**
+  Unit tests for `MetricsAsserter` and `ExecutionMetrics` used manually constructed instances with mocked non-zero `replayedStepCount` values. Pipeline integration tests focused on step completion rather than asserting that the runtime metrics asserter counted real pipeline replay steps.
+- **Resolution:**
+  1. In `ExecuteActionsStep.java`, increment `ExecutionContext.KEY_TOTAL_REPLAYS` upon successful completion of `PlaybookToolReplayer.replayStep(...)`.
+  2. In `ExecuteActionsStep.java`, increment `ExecutionContext.KEY_TOTAL_REPLAYS` when a step is visually verified and bypassed via `VisualBaselineGateStep` in replay mode.
+- **Safety Net Added:**
+  Regression test `ExecuteActionsStepTest#testReplayedStepCountIncrementedOnReplay` and `AssertIntegrationTest#testAssertUrl` verifying that `hasAllStepsReplayed()` passes with exact step count equality on replay runs.
+
+### [DEF-20260921-03] Missing assert_element_state and assert_attribute Tools Causing False Pass in testAssertReadonlyFailure
+- **Date:** 2026-09-21
+- **Component:** `neodymium-core` (`ai-tool`, `browser-tool-provider`, `ai-pipeline`, `action-model`)
+- **Scope:** `Framework`
+- **Symptom:** In `AssertIntegrationTest.testAssertReadonlyFailure`, the step `Assert that the 'readonly-input' field is editable` succeeded unexpectedly, generating an HTML report marked `PASSED` while the test failed in JUnit (`AssertionFailedError: Expected java.lang.Throwable to be thrown, but nothing was thrown`).
+- **Root Cause:**
+  1. `BrowserToolProvider` registered only text, count, URL, and title assertion tools (`assert_text`, `assert_count`, `assert_url`, `assert_title`), lacking native tools to assert element states (`editable`, `readonly`, `enabled`, `disabled`, `visible`, `hidden`, `checked`, `selected`, etc.) and element attributes (`placeholder`, `value`, `href`, `data-*`).
+  2. In `AgentToolLoopStep`, the agent was instructed to call an assertion tool on verification instructions before `complete_step`.
+  3. Lacking `assert_element_state`, the LLM inspected `#readonly-input`, observed `value="FixedData"`, and hallucinated/substituted `assert_text({"selector": "#readonly-input", "expectedText": "FixedData"})`. Because "FixedData" was present, `assert_text` succeeded, the LLM called `complete_step`, and the step was marked successful without testing the required editable state.
+- **Detection Gap ("What did we miss?"):** `SelenideTargetExecutor` and `AssertAction` had full support for `ASSERT_EDITABLE`, `ASSERT_READONLY`, `ASSERT_ATTRIBUTE`, etc., in playbook replay, but `BrowserToolProvider` (which supplies tools to the live LLM agent loop) had not exposed corresponding tools. Unit tests verified tool loop completion but did not verify state assertion failures during live recording.
+- **Resolution:**
+  1. Implemented `assert_element_state` in `BrowserToolProvider` supporting `["visible", "hidden", "enabled", "disabled", "editable", "readonly", "checked", "unchecked", "selected", "unselected", "focused", "exists", "absent"]` and throwing `AssertionError` when conditions fail.
+  2. Implemented `assert_attribute` in `BrowserToolProvider` supporting exact, substring, and regex attribute assertions and throwing `AssertionError` on mismatch.
+  3. Mapped both tools bidirectionally in `Action.java` (`toToolCall()` and `fromToolCall()`).
+  4. Updated `AgentToolLoopStep` prompt guidelines and tool normalizations to recognize `assert_element_state` and `assert_attribute`.
+- **Safety Net Added:** Unit tests in `BrowserToolProviderStabilityTest`:
+  - `testAssertElementStateToolSchema`
+  - `testAssertAttributeToolSchema`
+  - `testNormalizeElementStateUtility`
+  - `testAssertElementStateReadonlySuccessAndEditableFailure` (verifying `readonly` passes and `editable` on a readonly element throws `AssertionError`)
+  - `testAssertAttributeSuccessAndFailure` (verifying attribute substring match passes and mismatch throws `AssertionError`)
+
+### [DEF-20260921-02] Soft Error Bypass in assert_text Suppressing AssertionError on Mismatched Selectors
+- **Date:** 2026-09-21
+- **Component:** `neodymium-core` (`ai-tool`, `browser-tool-provider`, `ai-pipeline`)
+- **Scope:** `Framework`
+- **Symptom:** In `WikipediaProgrammaticTestDataTest`, Step #5 (`Verify the main heading contains '${searchPhrase}' (bug)`) failed with `ExpectedBugNotReproducedException: Expected bug but step succeeded` instead of catching the headline mismatch defect ("Neodym" vs "Neodymium"). The HTML report displayed an uncommanded second assertion on `#mw-content-subtitle`.
+- **Root Cause:**
+  1. In `BrowserToolProvider.createAssertTextTool`, when an element selector failed to match the expected text within `Configuration.timeout`, the tool checked `if (!isTextPresentOnPage(...))`. If the expected text existed anywhere else on the page (e.g. in a redirect subtitle, breadcrumb, or footer), it returned `ToolResult.error` instead of throwing `AssertionError`.
+  2. Returning `ToolResult.error` bypassed Stop Criterion 2 (immediate termination on assertion failures) in `AgentToolLoopStep`.
+  3. The agent loop fed the error back to the LLM in Turn 2, which searched for the text elsewhere in the DOM, asserted on `#mw-content-subtitle` instead of the commanded `#firstHeading`, and called `complete_step`.
+  4. This false step success caused `ExecuteActionsStep` to throw `ExpectedBugNotReproducedException` on the expected defect step.
+- **Detection Gap ("What did we miss?"):** `BrowserToolProviderStabilityTest` tested page-wide fallbacks and asynchronous polling, but did not assert that an element-specific `assert_text` failure throws `AssertionError` when the text is present in another element on the page.
+- **Resolution:**
+  1. Removed `isTextPresentOnPage` bypass from element-targeted `assert_text` in `BrowserToolProvider`, throwing `AssertionError` directly when the specified selector does not match the expected text within timeout.
+  2. Maintained page-wide text assertions (`isTextPresentOnPage`) only when `selector` is null, blank, `"body"`, or `"html"`.
+- **Safety Net Added:** Unit regression test in `BrowserToolProviderStabilityTest#testAssertTextThrowsAssertionErrorWhenSelectorDoesNotMatchEvenIfTextExistsElsewhereOnPage` verifying that `assert_text` on a specific selector throws `AssertionError` when the element text does not match, even if the text exists elsewhere in the document body.
+
 ### [DEF-20260920-01] Tool Loop MoveTargetOutOfBoundsException on Coordinates and Malformed Trailing Selector in Hybrid Clicks
 - **Date:** 2026-09-20
 - **Component:** `neodymium-core` (`ai-tool`, `browser-tool-provider`)

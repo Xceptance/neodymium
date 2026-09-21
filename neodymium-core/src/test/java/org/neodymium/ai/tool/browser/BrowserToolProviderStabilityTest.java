@@ -18,10 +18,12 @@
  */
 package org.neodymium.ai.tool.browser;
 
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -372,6 +374,133 @@ public class BrowserToolProviderStabilityTest
     }
 
     @Test
+    public void testAssertTextThrowsAssertionErrorWhenSelectorDoesNotMatchEvenIfTextExistsElsewhereOnPage()
+    {
+        final long originalTimeout = Configuration.timeout;
+        try
+        {
+            Configuration.timeout = 200;
+
+            final WebElement targetElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("getText".equals(name))
+                        {
+                            return "Neodym";
+                        }
+                        if ("isDisplayed".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("id".equals(attr))
+                            {
+                                return "firstHeading";
+                            }
+                            return null;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "h1";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final WebElement bodyElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("getText".equals(name))
+                        {
+                            return "Weitergeleitet von Neodymium. Neodym ist ein chemisches Element.";
+                        }
+                        if ("isDisplayed".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "body";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("getTitle".equals(name))
+                        {
+                            return "Neodym - Wikipedia";
+                        }
+                        if ("getCurrentUrl".equals(name))
+                        {
+                            return "https://de.wikipedia.org/wiki/Neodym";
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            final Object by = args[0];
+                            if (by != null && by.toString().contains("body"))
+                            {
+                                return bodyElement;
+                            }
+                            return targetElement;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            final Object by = args[0];
+                            if (by != null && by.toString().contains("body"))
+                            {
+                                return List.of(bodyElement);
+                            }
+                            if (by != null && by.toString().contains("firstHeading"))
+                            {
+                                return List.of(targetElement);
+                            }
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#firstHeading");
+            args.put("expectedText", "Neodymium");
+
+            final ToolCall call = new ToolCall("call-assert-headline-mismatch", "browser_assert_text", args);
+            final AssertionError err = Assertions.assertThrows(AssertionError.class, () -> tool.execute(call, null));
+            Assertions.assertTrue(err.getMessage().contains("Expected text/pattern \"Neodymium\" was not found on selector \"#firstHeading\""),
+                    "Expected assertion error message to reference selector and missing text, but was: " + err.getMessage());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
     public void testCleanSelectorUtility()
     {
         Assertions.assertEquals("article[data-ai=\"xcboo7um\"] button",
@@ -544,5 +673,267 @@ public class BrowserToolProviderStabilityTest
 
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
         Assertions.assertTrue(scrolled.get(), "window.scrollBy should have been invoked for out-of-bounds Y coordinate");
+    }
+
+    @Test
+    public void testAssertElementStateToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode required = schema.path("required");
+
+        Assertions.assertTrue(required.isArray(), "Required fields must be an array");
+        boolean hasSelector = false;
+        boolean hasState = false;
+        for (final JsonNode item : required)
+        {
+            if ("selector".equals(item.asText()))
+            {
+                hasSelector = true;
+            }
+            if ("state".equals(item.asText()))
+            {
+                hasState = true;
+            }
+        }
+        Assertions.assertTrue(hasSelector, "assert_element_state schema must require 'selector'");
+        Assertions.assertTrue(hasState, "assert_element_state schema must require 'state'");
+
+        final JsonNode stateEnum = schema.path("properties").path("state").path("enum");
+        Assertions.assertTrue(stateEnum.isArray(), "State must define an enum array");
+        final List<String> states = new ArrayList<>();
+        stateEnum.forEach(s -> states.add(s.asText()));
+        Assertions.assertTrue(states.contains("editable"), "Enum should contain 'editable'");
+        Assertions.assertTrue(states.contains("readonly"), "Enum should contain 'readonly'");
+        Assertions.assertTrue(states.contains("visible"), "Enum should contain 'visible'");
+        Assertions.assertTrue(states.contains("hidden"), "Enum should contain 'hidden'");
+        Assertions.assertTrue(states.contains("enabled"), "Enum should contain 'enabled'");
+        Assertions.assertTrue(states.contains("disabled"), "Enum should contain 'disabled'");
+        Assertions.assertTrue(states.contains("checked"), "Enum should contain 'checked'");
+        Assertions.assertTrue(states.contains("unchecked"), "Enum should contain 'unchecked'");
+        Assertions.assertTrue(states.contains("selected"), "Enum should contain 'selected'");
+        Assertions.assertTrue(states.contains("unselected"), "Enum should contain 'unselected'");
+        Assertions.assertTrue(states.contains("focused"), "Enum should contain 'focused'");
+        Assertions.assertTrue(states.contains("exists"), "Enum should contain 'exists'");
+        Assertions.assertTrue(states.contains("absent"), "Enum should contain 'absent'");
+    }
+
+    @Test
+    public void testAssertAttributeToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_attribute").orElseThrow();
+        final ToolDefinition def = tool.getDefinition();
+        final JsonNode schema = def.parametersSchema();
+        final JsonNode required = schema.path("required");
+
+        Assertions.assertTrue(required.isArray(), "Required fields must be an array");
+        boolean hasSelector = false;
+        boolean hasAttribute = false;
+        for (final JsonNode item : required)
+        {
+            if ("selector".equals(item.asText()))
+            {
+                hasSelector = true;
+            }
+            if ("attribute".equals(item.asText()))
+            {
+                hasAttribute = true;
+            }
+        }
+        Assertions.assertTrue(hasSelector, "assert_attribute schema must require 'selector'");
+        Assertions.assertTrue(hasAttribute, "assert_attribute schema must require 'attribute'");
+    }
+
+    @Test
+    public void testNormalizeElementStateUtility()
+    {
+        Assertions.assertEquals("readonly", BrowserToolProvider.normalizeElementState("read-only"));
+        Assertions.assertEquals("readonly", BrowserToolProvider.normalizeElementState("read_only"));
+        Assertions.assertEquals("readonly", BrowserToolProvider.normalizeElementState("[readonly]"));
+        Assertions.assertEquals("unchecked", BrowserToolProvider.normalizeElementState("not_checked"));
+        Assertions.assertEquals("unchecked", BrowserToolProvider.normalizeElementState("un-checked"));
+        Assertions.assertEquals("unselected", BrowserToolProvider.normalizeElementState("not_selected"));
+        Assertions.assertEquals("absent", BrowserToolProvider.normalizeElementState("not_exist"));
+        Assertions.assertEquals("absent", BrowserToolProvider.normalizeElementState("non-existent"));
+        Assertions.assertEquals("exists", BrowserToolProvider.normalizeElementState("present"));
+        Assertions.assertEquals("hidden", BrowserToolProvider.normalizeElementState("invisible"));
+        Assertions.assertEquals("editable", BrowserToolProvider.normalizeElementState("editable"));
+    }
+
+    @Test
+    public void testAssertElementStateReadonlySuccessAndEditableFailure() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final WebElement inputElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name) || "isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "input";
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("readonly".equals(attr) || "readOnly".equals(attr))
+                            {
+                                return "true";
+                            }
+                            if ("id".equals(attr))
+                            {
+                                return "readonly-input";
+                            }
+                            return null;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("findElement".equals(name))
+                        {
+                            return inputElement;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(inputElement);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+
+            // 1. Asserting 'readonly' should SUCCEED
+            final ObjectNode successArgs = MAPPER.createObjectNode();
+            successArgs.put("selector", "#readonly-input");
+            successArgs.put("state", "readonly");
+            final ToolResult successResult = tool.execute(new ToolCall("call-readonly", "browser_assert_element_state", successArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, successResult.status());
+            final JsonNode successJson = MAPPER.readTree(successResult.content());
+            Assertions.assertEquals("SUCCESS", successJson.path("status").asText());
+            Assertions.assertEquals("readonly", successJson.path("state").asText());
+
+            // 2. Asserting 'editable' on a readonly input must THROW AssertionError
+            final ObjectNode failArgs = MAPPER.createObjectNode();
+            failArgs.put("selector", "#readonly-input");
+            failArgs.put("state", "editable");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-editable", "browser_assert_element_state", failArgs), null);
+            });
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testAssertAttributeSuccessAndFailure() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final WebElement inputElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "input";
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("placeholder".equals(attr))
+                            {
+                                return "Enter your email address";
+                            }
+                            if ("id".equals(attr))
+                            {
+                                return "email-field";
+                            }
+                            return null;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("findElement".equals(name))
+                        {
+                            return inputElement;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(inputElement);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_attribute").orElseThrow();
+
+            // 1. Asserting substring attribute match should SUCCEED
+            final ObjectNode successArgs = MAPPER.createObjectNode();
+            successArgs.put("selector", "#email-field");
+            successArgs.put("attribute", "placeholder");
+            successArgs.put("expectedValue", "email");
+            successArgs.put("exact", false);
+            final ToolResult successResult = tool.execute(new ToolCall("call-attr", "browser_assert_attribute", successArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, successResult.status());
+            final JsonNode successJson = MAPPER.readTree(successResult.content());
+            Assertions.assertEquals("SUCCESS", successJson.path("status").asText());
+            Assertions.assertEquals("placeholder", successJson.path("attribute").asText());
+
+            // 2. Asserting mismatched attribute value must THROW AssertionError
+            final ObjectNode failArgs = MAPPER.createObjectNode();
+            failArgs.put("selector", "#email-field");
+            failArgs.put("attribute", "placeholder");
+            failArgs.put("expectedValue", "First Name");
+            failArgs.put("exact", false);
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-attr-fail", "browser_assert_attribute", failArgs), null);
+            });
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
     }
 }

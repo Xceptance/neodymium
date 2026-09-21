@@ -743,6 +743,11 @@ public class Action
             case "ASSERT_URL" -> "assert_url";
             case "ASSERT_TITLE" -> "assert_title";
             case "ASSERT_TEXT" -> "assert_text";
+            case "ASSERT_ATTRIBUTE" -> "assert_attribute";
+            case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
+                 "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
+                 "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_EXISTS",
+                 "ASSERT_ABSENT" -> "assert_element_state";
             case "ASSERT" -> {
                 if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
                 {
@@ -836,6 +841,37 @@ public class Action
                 }
             }
         }
+        else if ("assert_element_state".equals(toolName) || "browser_assert_element_state".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            final String state = actionType.startsWith("ASSERT_")
+                    ? actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT)
+                    : ((this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible");
+            args.put("state", state);
+        }
+        else if ("assert_attribute".equals(toolName) || "browser_assert_attribute".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String rawVal = this.value.get(0);
+                final int eqIdx = rawVal.indexOf('=');
+                if (eqIdx > 0)
+                {
+                    args.put("attribute", rawVal.substring(0, eqIdx).trim());
+                    String expectedVal = rawVal.substring(eqIdx + 1).trim();
+                    if ((expectedVal.startsWith("\"") && expectedVal.endsWith("\"")) || (expectedVal.startsWith("'") && expectedVal.endsWith("'")))
+                    {
+                        expectedVal = expectedVal.substring(1, expectedVal.length() - 1);
+                    }
+                    args.put("expectedValue", expectedVal);
+                }
+                else
+                {
+                    args.put("attribute", rawVal.trim());
+                }
+            }
+        }
         else if ("execute_script".equals(toolName) || "browser_execute_script".equals(toolName))
         {
             args.put("script", this.target != null ? this.target : "");
@@ -907,6 +943,29 @@ public class Action
             case "assert_count" -> "ASSERT_COUNT";
             case "assert_url" -> "ASSERT_URL";
             case "assert_title" -> "ASSERT_TITLE";
+            case "assert_element_state", "assert_state" -> {
+                final String rawState = args != null && args.hasNonNull("state")
+                        ? args.path("state").asText().trim().toUpperCase(Locale.ROOT)
+                        : "";
+                yield switch (rawState)
+                {
+                    case "VISIBLE" -> "ASSERT_VISIBLE";
+                    case "HIDDEN" -> "ASSERT_HIDDEN";
+                    case "ENABLED" -> "ASSERT_ENABLED";
+                    case "DISABLED" -> "ASSERT_DISABLED";
+                    case "EDITABLE" -> "ASSERT_EDITABLE";
+                    case "READONLY", "READ_ONLY", "READ-ONLY" -> "ASSERT_READONLY";
+                    case "CHECKED" -> "ASSERT_CHECKED";
+                    case "UNCHECKED", "NOT_CHECKED", "UN-CHECKED" -> "ASSERT_UNCHECKED";
+                    case "SELECTED" -> "ASSERT_SELECTED";
+                    case "UNSELECTED", "NOT_SELECTED", "UN-SELECTED" -> "ASSERT_UNSELECTED";
+                    case "FOCUSED" -> "ASSERT_FOCUSED";
+                    case "EXISTS", "PRESENT" -> "ASSERT_EXISTS";
+                    case "ABSENT", "NOT_EXIST", "NOT_EXISTS", "NON-EXISTENT" -> "ASSERT_ABSENT";
+                    default -> "ASSERT";
+                };
+            }
+            case "assert_attribute", "assert_attr" -> "ASSERT_ATTRIBUTE";
             case "press_key", "key_press" -> "KEY_PRESS";
             case "branch" -> "BRANCH";
             case "store" -> "STORE";
@@ -1049,6 +1108,30 @@ public class Action
             {
                 value = args.path("expectedTitle").asText();
             }
+            else if ("assert_element_state".equals(name) || "assert_state".equals(name))
+            {
+                if (args.hasNonNull("state") && !args.path("state").asText().isBlank())
+                {
+                    value = args.path("state").asText();
+                }
+            }
+            else if ("assert_attribute".equals(name) || "assert_attr".equals(name))
+            {
+                final String attr = args.hasNonNull("attribute") ? args.path("attribute").asText()
+                        : (args.hasNonNull("name") ? args.path("name").asText() : "");
+                if (args.hasNonNull("expectedValue"))
+                {
+                    value = attr + "=" + args.path("expectedValue").asText();
+                }
+                else if (args.hasNonNull("value"))
+                {
+                    value = attr + "=" + args.path("value").asText();
+                }
+                else
+                {
+                    value = attr;
+                }
+            }
             else if (args.hasNonNull("title") && !args.path("title").asText().isBlank())
             {
                 value = args.path("title").asText();
@@ -1124,6 +1207,11 @@ public class Action
                 case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "ASSERT_URL" -> "Assert URL '" + (value != null ? value : "") + "'";
                 case "ASSERT_TITLE" -> "Assert page title '" + (value != null ? value : "") + "'";
+                case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
+                     "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
+                     "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_EXISTS",
+                     "ASSERT_ABSENT" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
+                case "ASSERT_ATTRIBUTE" -> "Assert attribute '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
                 case "HOVER" -> "Hover over " + target;
                 case "KEY_PRESS" -> "Press key '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");

@@ -377,6 +377,12 @@ public final class ExecuteActionsStep
                 step.setDurationMs(System.currentTimeMillis() - stepStartTime);
                 contextState.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
 
+                if (isReplay)
+                {
+                    final Integer replays = (Integer) contextState.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
+                    contextState.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
+                }
+
                 step.setStatus(PlaybookStepStatus.SUCCESS);
                 if (session != null && session.getEventBus() != null)
                 {
@@ -480,6 +486,9 @@ public final class ExecuteActionsStep
                             toolContext.setVariable("neodymium.session", session);
                         }
                         PlaybookToolReplayer.replayStep(step, reg, toolContext, c.getSessionData(), executor);
+
+                        final Integer replays = (Integer) c.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
+                        c.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
                     }
                     catch (final Throwable t)
                     {
