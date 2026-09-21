@@ -16,8 +16,13 @@ window.lastKnownRunning = lastKnownRunning;
 window.userAborted = userAborted;
 
 function openInteractiveConsoleViewLive(url) {
+    wasInLiveRunView = true;
+    window.wasInLiveRunView = true;
+    const iframe = document.getElementById('interactiveConsoleIframe');
     let targetUrl = url;
-    if (url && url.includes('interactive_console.html') && !url.includes('dataUrl=')) {
+    if (iframe && iframe.src && iframe.src.includes('interactive_console.html') && iframe.src !== 'about:blank') {
+        targetUrl = iframe.src;
+    } else if (url && url.includes('interactive_console.html') && !url.includes('dataUrl=')) {
         const buster = Date.now();
         targetUrl = url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(buster);
     }
@@ -142,6 +147,29 @@ function updateRunButtons() {
     const runQueueBtn = document.getElementById('runQueueBtn');
     const runCurrentTestBtn = document.getElementById('runCurrentTestBtn');
     const stopQueueBtn = document.getElementById('stopQueueBtn');
+    const btnInteractiveConsole = document.getElementById('btnInteractiveConsole');
+    const terminalInteractiveBtn = document.getElementById('terminalInteractiveBtn');
+    const runInteractiveConsoleBtn = document.getElementById('runInteractiveConsoleBtn');
+
+    const optInteractive = document.getElementById('optInteractive');
+    const isInteractiveEnabled = optInteractive ? optInteractive.checked : true;
+    const showInteractiveButtons = isRunning && isInteractiveEnabled;
+
+    if (btnInteractiveConsole) {
+        btnInteractiveConsole.style.display = showInteractiveButtons ? 'inline-flex' : 'none';
+    }
+    if (terminalInteractiveBtn) {
+        terminalInteractiveBtn.style.display = showInteractiveButtons ? 'inline-flex' : 'none';
+    }
+    if (runInteractiveConsoleBtn) {
+        if (showInteractiveButtons) {
+            runInteractiveConsoleBtn.classList.remove('d-none');
+            runInteractiveConsoleBtn.classList.add('d-flex');
+        } else {
+            runInteractiveConsoleBtn.classList.add('d-none');
+            runInteractiveConsoleBtn.classList.remove('d-flex');
+        }
+    }
 
     if (isRunning) {
         if (runQueueBtn) {
@@ -181,8 +209,14 @@ function stopQueue() {
     window.userAborted = true;
     fetch('/api/stop', { method: 'POST' }).catch(e => console.error('Failed to stop queue', e));
     isRunning = false;
+    consoleCollapsed = true;
     window.isRunning = false;
+    window.consoleCollapsed = true;
+    if (typeof closeInteractiveConsoleView === 'function') {
+        closeInteractiveConsoleView();
+    }
     updateRunButtons();
+    if (typeof updateCenterLayout === 'function') updateCenterLayout();
 }
 window.stopQueue = stopQueue;
 
@@ -191,8 +225,10 @@ function prepareClientForExecution() {
     window.userAborted = false;
     isRunning = true;
     consoleOpened = true;
+    consoleCollapsed = false;
     window.isRunning = true;
     window.consoleOpened = true;
+    window.consoleCollapsed = false;
     currentPollSession++;
     lastLogIndex = 0;
     lastEventIndex = 0;
@@ -390,8 +426,29 @@ function appendLog(line) {
 
     terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
     terminalConsole.scrollTop = terminalConsole.scrollHeight;
+
+    try {
+        localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML);
+    } catch (e) {
+        // ignore
+    }
 }
 window.appendLog = appendLog;
+
+function restorePreviousConsoleLogs() {
+    const terminalConsole = document.getElementById('terminalConsole');
+    if (!terminalConsole) return;
+    try {
+        const storedLogs = localStorage.getItem('aura_previous_console_logs');
+        if (storedLogs && (terminalConsole.innerHTML.includes('Console idle.') || !terminalConsole.innerHTML.trim())) {
+            terminalConsole.innerHTML = storedLogs;
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+window.restorePreviousConsoleLogs = restorePreviousConsoleLogs;
+document.addEventListener('DOMContentLoaded', restorePreviousConsoleLogs);
 
 function copyTerminalOutput() {
     const terminalConsole = document.getElementById('terminalConsole');
@@ -509,6 +566,42 @@ async function pollStatus() {
                     window.liveCompletedFiles = liveCompletedFiles;
                 }
 
+                const currentRunId = statusData.runId || activeRunStats.runId;
+                if (currentRunId) {
+                    activeRunStats.runId = currentRunId;
+                    const reportUrl = `/run-report?runId=${encodeURIComponent(currentRunId)}`;
+                    const runStatus = statusData.running ? 'running' : 'finished';
+
+                    try {
+                        localStorage.setItem('aura_active_run_id', currentRunId);
+                        localStorage.setItem('aura_active_run_status', runStatus);
+                        localStorage.setItem('aura_active_run_report_url', reportUrl);
+                    } catch (e) {
+                        // ignore storage failure
+                    }
+
+                    const sidebarCard = document.getElementById('sidebarContextCard');
+                    if (sidebarCard) {
+                        sidebarCard.setAttribute('href', reportUrl);
+                        sidebarCard.style.display = 'flex';
+                    }
+
+                    const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
+                    if (sidebarRunIdEl) {
+                        sidebarRunIdEl.textContent = `Run #${currentRunId}`;
+                    }
+
+                    const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
+                    if (sidebarStatusEl) {
+                        sidebarStatusEl.textContent = runStatus;
+                    }
+
+                    const pulseDot = document.getElementById('sidebarContextPulseDot');
+                    if (pulseDot) {
+                        pulseDot.style.display = statusData.running ? 'inline-block' : 'none';
+                    }
+                }
+
                 if (serverSessionId === null) {
                     serverSessionId = statusData.sessionId;
                 } else if (serverSessionId !== statusData.sessionId) {
@@ -544,6 +637,7 @@ async function pollStatus() {
                 }
 
                 try {
+                    const wasRunning = lastKnownRunning;
                     isRunning = statusData.running;
                     window.isRunning = isRunning;
                     updateRunButtons();
@@ -573,17 +667,29 @@ async function pollStatus() {
                         activeRunStats.running = false;
                         activeRunStats.startTime = null;
 
-                        if (wasInLiveRunView) {
-                            const icView = document.getElementById('interactiveConsoleView');
-                            if (icView && icView.style.display === 'flex') {
-                                if (typeof showView === 'function') showView('dashboardView');
+                        const icView = document.getElementById('interactiveConsoleView');
+                        const isIcVisible = icView && icView.style.display === 'flex';
+                        if (wasInLiveRunView || isIcVisible) {
+                            if (typeof closeInteractiveConsoleView === 'function') {
+                                closeInteractiveConsoleView();
+                            } else if (typeof showView === 'function') {
+                                showView('dashboardView');
                             }
                             wasInLiveRunView = false;
                             window.wasInLiveRunView = false;
                         }
 
-                        if (lastKnownRunning) {
+                        if (wasRunning) {
                             if (typeof updateCenterLayout === 'function') updateCenterLayout();
+                            const isDashboardView = window.location.pathname === '/' ||
+                                                    window.location.pathname.includes('/dashboard') ||
+                                                    window.location.pathname.includes('/manager') ||
+                                                    window.location.pathname.includes('/aura-test-manager') ||
+                                                    document.getElementById('auraTestManagerWorkspace') !== null;
+                            const runIdToRedirect = activeRunStats.runId || statusData.runId;
+                            if (isDashboardView && runIdToRedirect) {
+                                window.location.href = `/run-report?runId=${encodeURIComponent(runIdToRedirect)}`;
+                            }
                         }
                     }
                     lastKnownRunning = statusData.running;

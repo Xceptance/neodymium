@@ -18,13 +18,20 @@
  */
 package com.xceptance.aura.test.config;
 
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
 import com.xceptance.neodymium.aura.AuraChatService;
 import com.xceptance.neodymium.aura.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.QueueRunProgressListener;
+import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -37,6 +44,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AuraServiceConfiguration
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuraServiceConfiguration.class);
+
     @Bean
     public AuraFileService auraFileService()
     {
@@ -68,18 +77,80 @@ public class AuraServiceConfiguration
     }
 
     @Bean
-    public AuraQueueService auraQueueService(final AuraInteractiveService interactiveService,
-                                             final RunStorageSyncService runStorageSyncService)
+    public AuraReportingService auraReportingService(final AuraInteractiveService interactiveService)
     {
-        final AuraQueueService queueService = new AuraQueueService(interactiveService);
-        queueService.setOnRunCompletedListener(runId -> {
-            try
+        final AuraReportingService reportingService = new AuraReportingService();
+        reportingService.setInteractiveService(interactiveService);
+        return reportingService;
+    }
+
+    @Bean
+    public AuraQueueService auraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService,
+                                              final RunStorageSyncService runStorageSyncService, final AuraReportDataService reportDataService,
+                                              final ConfigurableApplicationContext applicationContext)
+    {
+        final AuraQueueService queueService = new AuraQueueService(reportingService, interactiveService);
+        queueService.setQueueRunProgressListener(new QueueRunProgressListener()
+        {
+            @Override
+            public void onRunStarted(final String runId, final String batchName, final String environment)
             {
-                runStorageSyncService.importOrUpdateRunReport(runId);
+                if (applicationContext != null && applicationContext.isActive())
+                {
+                    try
+                    {
+                        reportDataService.startRun(runId, batchName, environment, "queue");
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Error in onRunStarted for runId {}: {}", runId, e.getMessage());
+                    }
+                }
             }
-            catch (final Exception e)
+
+            @Override
+            public void onTestExecutionCompleted(final String runId, final Map<String, Object> executionData)
             {
-                runStorageSyncService.syncLocalRunStorage();
+                if (applicationContext != null && applicationContext.isActive())
+                {
+                    try
+                    {
+                        reportDataService.ingestExecution(runId, executionData);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Error in onTestExecutionCompleted for runId {}: {}", runId, e.getMessage());
+                    }
+                }
+            }
+
+            @Override
+            public void onRunFinished(final String runId)
+            {
+                if (applicationContext != null && applicationContext.isActive())
+                {
+                    try
+                    {
+                        reportDataService.finishRun(runId);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Error in onRunFinished for runId {}: {}", runId, e.getMessage());
+                    }
+                }
+            }
+        });
+        queueService.setOnRunCompletedListener(runId -> {
+            if (applicationContext != null && applicationContext.isActive())
+            {
+                try
+                {
+                    runStorageSyncService.importOrUpdateRunReport(runId);
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("[Aura Server] Could not import run report for runId {}: {}", runId, e.getMessage());
+                }
             }
         });
         return queueService;

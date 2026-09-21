@@ -131,32 +131,7 @@ public final class InteractiveConsoleServer
         LOG.info("  (Also accessible on your local network via your machine's IP)");
         LOG.info("========================================================================");
 
-        try
-        {
-            final com.codeborne.selenide.SelenideConfig config = new com.codeborne.selenide.SelenideConfig();
-            String browser = Neodymium.getBrowserName();
-            if (browser == null || browser.isEmpty())
-            {
-                browser = "chrome";
-            }
-            config.browser(browser);
-            config.headless(false); // force non-headless
-            if (browser.toLowerCase().contains("chrome"))
-            {
-                final org.openqa.selenium.chrome.ChromeOptions options = new org.openqa.selenium.chrome.ChromeOptions();
-                options.addArguments("--app=" + url);
-                config.browserCapabilities(options);
-            }
-            this.consoleDriver = new com.codeborne.selenide.SelenideDriver(config);
-            this.consoleDriver.open(url);
-            return;
-        }
-        catch (final Exception e)
-        {
-            LOG.warn("Could not open browser via Selenide: {}. Falling back to Desktop.", e.getMessage());
-        }
-        // Fallback if selnide failed.
-
+        // Fast native system browser launch (< 100ms)
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE))
         {
             try
@@ -166,7 +141,7 @@ public final class InteractiveConsoleServer
             }
             catch (final Exception e)
             {
-                LOG.warn("Could not open browser via Desktop.browse: {}. Trying OS fallback.", e.getMessage());
+                LOG.debug("Desktop.browse non-fatal fallback: {}", e.getMessage());
             }
         }
 
@@ -176,15 +151,43 @@ public final class InteractiveConsoleServer
             if (os.contains("win"))
             {
                 Runtime.getRuntime().exec(new String[] { "cmd.exe", "/c", "start", url });
+                return;
             }
             else if (os.contains("mac"))
             {
                 Runtime.getRuntime().exec(new String[] { "open", url });
+                return;
             }
             else
             {
                 Runtime.getRuntime().exec(new String[] { "xdg-open", url });
+                return;
             }
+        }
+        catch (final Exception e)
+        {
+            LOG.debug("OS native browser launch fallback: {}", e.getMessage());
+        }
+
+        // Heavyweight Selenide driver fallback if native launch failed
+        try
+        {
+            final com.codeborne.selenide.SelenideConfig config = new com.codeborne.selenide.SelenideConfig();
+            String browser = Neodymium.getBrowserName();
+            if (browser == null || browser.isEmpty())
+            {
+                browser = "chrome";
+            }
+            config.browser(browser);
+            config.headless(false);
+            if (browser.toLowerCase().contains("chrome"))
+            {
+                final org.openqa.selenium.chrome.ChromeOptions options = new org.openqa.selenium.chrome.ChromeOptions();
+                options.addArguments("--app=" + url);
+                config.browserCapabilities(options);
+            }
+            this.consoleDriver = new com.codeborne.selenide.SelenideDriver(config);
+            this.consoleDriver.open(url);
         }
         catch (final Exception e)
         {

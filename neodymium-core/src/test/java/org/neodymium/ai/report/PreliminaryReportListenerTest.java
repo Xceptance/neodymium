@@ -21,6 +21,7 @@ package org.neodymium.ai.report;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -56,6 +57,9 @@ import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -63,6 +67,8 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.runner.StateMachineRunner;
+import org.neodymium.ai.session.AiSession;
 
 /**
  * Unit test suite for {@link PreliminaryReportListener}, {@link HtmlReportGenerator},
@@ -1137,8 +1143,8 @@ public class PreliminaryReportListenerTest
             bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
             bus.dispatch(new SessionFinishedEvent(100, true));
 
-            final Path rootJsonPath = Path.of("target/ai-results").resolve(listener.getLastBaseFileName() + ".json");
-            assertTrue(Files.exists(rootJsonPath), "Root report file must always land in target/ai-results directory");
+            final Path rootJsonPath = customDir.resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(rootJsonPath), "Root report file must land in configured disk report directory");
 
             final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
             final Path structuredJsonPath = customDir.resolve(runFolder).resolve("CustomReportDirTest").resolve(listener.getLastBaseFileName() + ".json");
@@ -1590,6 +1596,207 @@ public class PreliminaryReportListenerTest
                 final String realHtml0107 = new HtmlReportGenerator().generate(realReport0107);
                 Files.writeString(Path.of("target/ai-results/BlogTest_bruteforceSearch_20260905-010740.html"), realHtml0107);
             }
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify only highest context level per step is counted in statistics")
+    public void testHighestContextLevelOnlyInStatistics() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-highest-level");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final StepStats stats1 = new StepStats("Escalating Step", 1000);
+            stats1.addContextLevel("MINIMAL");
+            stats1.addContextLevel("LEAN");
+            stats1.addContextLevel("STANDARD");
+
+            ctx.getTransientData().put("execution.stepStatsList", List.of(stats1));
+
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            listener.getReport().setTestClass("com.example.EscalationTest");
+            listener.getReport().setTestMethod("testHighestLevel");
+
+            final PlaybookStep pbStep = new PlaybookStep("Escalating Step");
+            bus.dispatch(new StepStartedEvent(pbStep, 0));
+            bus.dispatch(new StepFinishedEvent(pbStep, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(1000, true));
+
+            final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(jsonPath));
+
+            final String json = Files.readString(jsonPath);
+            final JsonNode root = new ObjectMapper().readTree(json);
+            final JsonNode counts = root.get("metrics").get("contextLevelCounts");
+
+            assertNotNull(counts);
+            assertEquals(1, counts.get("STANDARD").asInt(), "STANDARD (highest level) must have count 1");
+            assertNull(counts.get("MINIMAL"));
+            assertNull(counts.get("LEAN"));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.report.disk.directory");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    @Test
+    @DisplayName("Verify that step re-execution resets existing step entry in-place instead of appending duplicate entry")
+    public void testStepReExecutionResetsExistingEntryInPlace()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-reexecution");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step0Initial = new PlaybookStep("Initial instruction");
+        bus.dispatch(new StepStartedEvent(step0Initial, 0));
+
+        final LlmRequest req1 = new LlmRequest("system prompt 1", "user prompt 1", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse resp1 = new LlmResponse("response text 1", new TokenUsage(10, 20, 30, 0), "mock-model");
+        bus.dispatch(new LlmRequestSentEvent(req1, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req1, resp1, 100, "ACTION"));
+
+        assertEquals(1, listener.getReport().getSteps().size(), "First execution should create 1 step entry");
+        assertEquals("Initial instruction", listener.getReport().getSteps().get(0).getInstruction());
+        assertEquals(1, listener.getReport().getSteps().get(0).getLlmCalls().size(), "Should have 1 LLM call from initial execution");
+
+        // Re-execute step 0 (e.g. after interactive edit) with updated instruction
+        final PlaybookStep step0Edited = new PlaybookStep("Updated instruction after edit");
+        bus.dispatch(new StepStartedEvent(step0Edited, 0));
+
+        final LlmRequest req2 = new LlmRequest("system prompt 2", "user prompt 2", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse resp2 = new LlmResponse("response text 2", new TokenUsage(15, 25, 40, 0), "mock-model");
+        bus.dispatch(new LlmRequestSentEvent(req2, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req2, resp2, 150, "ACTION"));
+
+        bus.dispatch(new StepFinishedEvent(step0Edited, PlaybookStepStatus.SUCCESS));
+
+        final List<TestExecutionReport.ReportStepEntry> steps = listener.getReport().getSteps();
+        assertEquals(1, steps.size(), "Re-execution must NOT create a duplicate step entry in report");
+
+        final TestExecutionReport.ReportStepEntry stepEntry = steps.get(0);
+        assertEquals(0, stepEntry.getStepIndex());
+        assertEquals("Updated instruction after edit", stepEntry.getInstruction());
+        assertEquals("SUCCESS", stepEntry.getStatus());
+        assertEquals(2, stepEntry.getLlmCalls().size(), "Should preserve both pre-edit and post-edit LLM calls");
+        assertEquals("user prompt 1", stepEntry.getLlmCalls().get(0).getUserPrompt());
+        assertEquals("user prompt 2", stepEntry.getLlmCalls().get(1).getUserPrompt());
+    }
+
+    @Test
+    @DisplayName("Verify that report status is FAILED when transient execution error is present even if SessionFinishedEvent carries success true")
+    public void testReportStatusFailedWhenExecutionErrorPresent()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-early-error");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final Throwable missingKeyError = new IllegalArgumentException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, missingKeyError);
+        ExecutionContext.setActiveContext(context);
+
+        try
+        {
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            bus.dispatch(new SessionFinishedEvent(100, true));
+
+            final TestExecutionReport report = listener.getReport();
+            assertFalse(report.isSuccess(), "Report must be marked as failed when execution error is present");
+            assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
+            assertNotNull(report.getFailureReason(), "Failure reason must be set from the execution error");
+            assertTrue(report.getFailureReason().contains("Gemini API key is missing"), "Failure reason must contain missing API key details");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify that report status is FAILED when StateMachineRunner fails due to missing API key error")
+    public void testReportStatusFailedWhenStateMachineRunnerFailsWithExecutionError()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-runner-error");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final SessionData sessionData = new SessionData();
+        final LlmRegistry registry = new LlmRegistry();
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, registry, bus, executor);
+
+        final ExecutionContext context = session.getExecutionContext();
+        final Throwable missingKeyError = new IllegalStateException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, missingKeyError);
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        try
+        {
+            runner.run();
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        final TestExecutionReport report = listener.getReport();
+        assertFalse(report.isSuccess(), "Report must be marked as failed when StateMachineRunner fails");
+        assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
+        assertNotNull(report.getFailureReason(), "Failure reason must be set from the execution error");
+        assertTrue(report.getFailureReason().contains("Gemini API key is missing"), "Failure reason must state missing API key error");
+    }
+
+    @Test
+    @DisplayName("Verify that early pre-step failures (e.g. invalid browser settings) result in FAILED report status and index entry")
+    public void testReportStatusFailedForPreStepBrowserSetupFailure()
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-browser-error");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final Throwable browserError = new IllegalArgumentException("Unknown browser tag: InvalidBrowserTag_12345");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, browserError);
+        context.getTransientData().put("browser", "InvalidBrowserTag_12345");
+        ExecutionContext.setActiveContext(context);
+
+        try
+        {
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            // Session finishes early before step 1 due to browser setup failure
+            bus.dispatch(new SessionFinishedEvent(0, false));
+
+            final TestExecutionReport report = listener.getReport();
+            assertFalse(report.isSuccess(), "Report must be marked as failed when browser setup fails before step 1");
+            assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
+            assertNotNull(report.getFailureReason(), "Failure reason must be set from the browser setup exception");
+            assertTrue(report.getFailureReason().contains("Unknown browser tag"), "Failure reason must describe the browser error");
+
+            // Verify index.html generation reflects FAILED status
+            final HtmlIndexReportGenerator indexGen = new HtmlIndexReportGenerator();
+            final String indexHtml = indexGen.generateIndexHtml(List.of(HtmlIndexReportGenerator.IndexEntry.fromReport(report, "test_run")));
+            assertTrue(indexHtml.contains("FAILED"), "Index HTML must record status as FAILED");
+            assertTrue(indexHtml.contains("pill-fail"), "Index HTML must contain failing status pill");
+            assertFalse(indexHtml.contains("pill-pass\">"), "Index HTML must not render passing status pill for test row");
         }
         finally
         {

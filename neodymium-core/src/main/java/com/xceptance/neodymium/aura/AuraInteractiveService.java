@@ -32,7 +32,9 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.util.AtomicFileUtils;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,9 +55,15 @@ public final class AuraInteractiveService
     private final AtomicReference<String> activeTheme = new AtomicReference<>("system");
     private final Map<String, Integer> executionIndexMap = new ConcurrentHashMap<>();
     private final AtomicInteger executionIndexCounter = new AtomicInteger(0);
+    private volatile Consumer<String> statePushListener;
 
     public AuraInteractiveService()
     {
+    }
+
+    public void setStatePushListener(final Consumer<String> listener)
+    {
+        this.statePushListener = listener;
     }
 
     public AtomicReference<InteractiveConsoleEngine> getCurrentConsoleEngineReference()
@@ -183,7 +191,7 @@ public final class AuraInteractiveService
                         structuredDir.mkdirs();
                     }
                     final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                    Files.writeString(structuredJson.toPath(), body, StandardCharsets.UTF_8);
+                    AtomicFileUtils.writeStringAtomic(structuredJson.toPath(), body);
 
                     final File runLevelDir = new File(baseDir, runFolder);
                     if (!structuredDir.getCanonicalPath().equals(runLevelDir.getCanonicalPath()))
@@ -204,6 +212,17 @@ public final class AuraInteractiveService
         catch (final Exception e)
         {
             LOGGER.warn("[InteractiveService] Failed to save console execution snapshot: {}", e.getMessage());
+        }
+
+        if (statePushListener != null && json != null && json.has("runId") && !json.get("runId").isJsonNull())
+        {
+            try
+            {
+                statePushListener.accept(json.get("runId").getAsString());
+            }
+            catch (final Exception ignored)
+            {
+            }
         }
 
         return isStopped ? "stopped" : "ok";
@@ -341,29 +360,46 @@ public final class AuraInteractiveService
             return "default";
         }
         String key = "";
-        if (json.has("testName") && !json.get("testName").isJsonNull())
+        if (json.has("testFile") && !json.get("testFile").isJsonNull())
+        {
+            key += json.get("testFile").getAsString();
+        }
+        else if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
+        {
+            key += json.get("playbookFile").getAsString();
+        }
+        else if (json.has("testName") && !json.get("testName").isJsonNull())
         {
             final String testName = json.get("testName").getAsString();
             if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
             {
-                key = testName;
+                key += testName;
             }
         }
-        if (key.isEmpty())
+
+        String datasetKey = "";
+        if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
         {
-            if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
-            {
-                key += json.get("playbookFile").getAsString();
-            }
-            else if (json.has("testFile") && !json.get("testFile").isJsonNull())
-            {
-                key += json.get("testFile").getAsString();
-            }
-            if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
-            {
-                key += "::" + json.get("datasetId").getAsString();
-            }
+            datasetKey = json.get("datasetId").getAsString();
         }
+        else if (json.has("testId") && !json.get("testId").isJsonNull())
+        {
+            datasetKey = json.get("testId").getAsString();
+        }
+        else if (json.has("title") && !json.get("title").isJsonNull())
+        {
+            datasetKey = json.get("title").getAsString();
+        }
+
+        if (datasetKey != null && !datasetKey.isBlank())
+        {
+            if (!key.isEmpty())
+            {
+                key += "::";
+            }
+            key += datasetKey;
+        }
+
         if (json.has("browser") && !json.get("browser").isJsonNull())
         {
             final String browser = json.get("browser").getAsString();

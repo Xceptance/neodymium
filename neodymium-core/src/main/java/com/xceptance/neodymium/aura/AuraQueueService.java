@@ -18,7 +18,12 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import org.neodymium.ai.util.AtomicFileUtils;
 import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
@@ -30,6 +35,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +49,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -76,6 +83,7 @@ public final class AuraQueueService
     private final AtomicInteger globalSkipped = new AtomicInteger(0);
     private final AtomicBoolean runningQueue = new AtomicBoolean(false);
     private final AtomicBoolean manuallyStopped = new AtomicBoolean(false);
+    private final AtomicBoolean cancelledCurrentTest = new AtomicBoolean(false);
     private final AtomicReference<String> activeFile = new AtomicReference<>("");
     private final AtomicReference<String> currentRunId = new AtomicReference<>("");
     private volatile Consumer<String> onRunCompletedListener;
@@ -89,8 +97,9 @@ public final class AuraQueueService
     private final Set<File> createdTempFiles = Collections.synchronizedSet(new HashSet<>());
 
     private final AuraInteractiveService interactiveService;
+    private QueueRunProgressListener queueRunProgressListener;
 
-    public AuraQueueService(final AuraInteractiveService interactiveService)
+    public AuraQueueService(final AuraReportingService reportingService, final AuraInteractiveService interactiveService)
     {
         this.interactiveService = interactiveService;
     }
@@ -123,6 +132,11 @@ public final class AuraQueueService
     public void setOnRunCompletedListener(final Consumer<String> onRunCompletedListener)
     {
         this.onRunCompletedListener = onRunCompletedListener;
+    }
+
+    public void setQueueRunProgressListener(final QueueRunProgressListener listener)
+    {
+        this.queueRunProgressListener = listener;
     }
 
     public List<String> getCurrentRunLogs()
@@ -200,6 +214,44 @@ public final class AuraQueueService
         return lastRunRequest.get();
     }
 
+    public void stopCurrentTest()
+    {
+        LOGGER.info("[Aura Server] Aborting active test subprocess...");
+        cancelledCurrentTest.set(true);
+        final InteractiveConsoleEngine engine = interactiveService.getCurrentConsoleEngine();
+        if (engine != null)
+        {
+            engine.abort();
+            final String activeRunId = currentRunId.get() != null ? currentRunId.get() : engine.getRunId();
+            final String activeFileStr = activeFile.get() != null ? activeFile.get() : "";
+            final String cancelStateJson = String.format(
+                "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testName\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
+                activeRunId != null ? activeRunId : "",
+                activeFileStr
+            );
+            engine.pushState(cancelStateJson);
+        }
+        broadcastLog("[WARN] Test execution cancelled by user.");
+        final Process p = activeProcess.getAndSet(null);
+        if (p != null && p.isAlive())
+        {
+            p.destroy();
+            try
+            {
+                if (!p.waitFor(3, TimeUnit.SECONDS))
+                {
+                    LOGGER.warn("[Aura Server] Subprocess did not stop on destroy, forcing termination...");
+                    p.destroyForcibly();
+                }
+            }
+            catch (final InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+            }
+            LOGGER.info("[Aura Server] Active test subprocess terminated.");
+        }
+    }
+
     public void stopProcess()
     {
         LOGGER.info("[Aura Server] Setting manuallyStopped=true.");
@@ -215,7 +267,7 @@ public final class AuraQueueService
             p.destroy();
             try
             {
-                if (!p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS))
+                if (!p.waitFor(3, TimeUnit.SECONDS))
                 {
                     LOGGER.warn("[Aura Server] Subprocess did not stop on destroy, forcing termination...");
                     p.destroyForcibly();
@@ -321,26 +373,34 @@ public final class AuraQueueService
                         uniqueFiles.add(selection.file);
                         final List<String> profiles = getEffectiveBrowserProfiles(selection, req.globalBrowserProfiles);
 
-                        ExecutionBatch match = null;
+                        ExecutionBatch existingBatch = null;
                         if (!req.interactive)
                         {
                             for (final ExecutionBatch b : batches)
                             {
-                                if (selection.file.equals(b.file) && profiles.equals(b.targetProfiles))
+                                if (b.file.equals(selection.file) && b.targetProfiles.equals(profiles))
                                 {
-                                    match = b;
+                                    existingBatch = b;
                                     break;
                                 }
                             }
                         }
-                        if (match == null)
+
+                        if (existingBatch != null)
                         {
-                            match = new ExecutionBatch(selection.file, profiles);
-                            batches.add(match);
+                            if (selection.id != null && !selection.id.isBlank() && !existingBatch.datasetIds.contains(selection.id))
+                            {
+                                existingBatch.datasetIds.add(selection.id);
+                            }
                         }
-                        if (selection.id != null)
+                        else
                         {
-                            match.datasetIds.add(selection.id);
+                            final ExecutionBatch batch = new ExecutionBatch(selection.file, profiles);
+                            if (selection.id != null && !selection.id.isBlank())
+                            {
+                                batch.datasetIds.add(selection.id);
+                            }
+                            batches.add(batch);
                         }
                     }
                 }
@@ -361,6 +421,20 @@ public final class AuraQueueService
                 final String generatedRunId = "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date(runStartTimeMs.get()));
                 currentRunId.set(generatedRunId);
                 lastRunRequest.set(req);
+
+                final String queueRunId = generatedRunId;
+
+                if (queueRunProgressListener != null)
+                {
+                    try
+                    {
+                        queueRunProgressListener.onRunStarted(queueRunId, "Queue", "Unknown");
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] QueueRunProgressListener.onRunStarted failed: {}", e.getMessage());
+                    }
+                }
 
                 for (int i = 0; i < batches.size(); i++)
                 {
@@ -546,6 +620,47 @@ public final class AuraQueueService
                         continue;
                     }
 
+                    // Scan for finished execution JSONs while the subprocess is still alive, so that
+                    // completed tests show up in the run report without waiting for the whole batch
+                    // (one Maven subprocess runs all datasets of a test file) to terminate.
+                    final AtomicBoolean midRunScanActive = new AtomicBoolean(true);
+                    final Thread midRunScanThread;
+                    if (queueRunProgressListener != null)
+                    {
+                        midRunScanThread = new Thread(() -> {
+                            while (midRunScanActive.get())
+                            {
+                                try
+                                {
+                                    Thread.sleep(3000L);
+                                }
+                                catch (final InterruptedException e)
+                                {
+                                    Thread.currentThread().interrupt();
+                                    return;
+                                }
+                                if (!midRunScanActive.get())
+                                {
+                                    return;
+                                }
+                                try
+                                {
+                                    ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, true);
+                                }
+                                catch (final Exception e)
+                                {
+                                    LOGGER.warn("[Aura Server] Mid-run execution scan failed: {}", e.getMessage());
+                                }
+                            }
+                        }, "AuraQueueMidRunExecutionScanner");
+                        midRunScanThread.setDaemon(true);
+                        midRunScanThread.start();
+                    }
+                    else
+                    {
+                        midRunScanThread = null;
+                    }
+
                     final AtomicInteger fileTestsRun = new AtomicInteger(0);
                     final AtomicInteger fileFailures = new AtomicInteger(0);
                     final AtomicInteger fileErrors = new AtomicInteger(0);
@@ -649,17 +764,61 @@ public final class AuraQueueService
 
                     LOGGER.info("[Aura Server] Subprocess for {} completed with exit code: {}", file, exitCode);
 
+                    midRunScanActive.set(false);
+                    if (midRunScanThread != null)
+                    {
+                        midRunScanThread.interrupt();
+                        try
+                        {
+                            midRunScanThread.join(2000L);
+                        }
+                        catch (final InterruptedException e)
+                        {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+
+                    final boolean testWasCancelled = cancelledCurrentTest.getAndSet(false);
+
                     if (manuallyStopped.get())
                     {
                         broadcastLog("[WARN] Process execution aborted by user.");
                         activeProcess.set(null);
+
+                        for (int k = i; k < batches.size(); k++)
+                        {
+                            final ExecutionBatch stopBatch = batches.get(k);
+                            final String stopFile = stopBatch.file;
+                            final String stopSafeName = stopFile.replaceAll("[^a-zA-Z0-9]", "_");
+                            final String stopClassName = "Aura_" + stopSafeName + "_Test";
+                            final String stopBrowser = (!stopBatch.targetProfiles.isEmpty()) ? stopBatch.targetProfiles.get(0) : "Default";
+
+                            markRunningOrMissingExecutionsAsSkipped(runStorageDirs, runId, stopClassName, stopBrowser);
+
+                            if (queueRunProgressListener != null)
+                            {
+                                try
+                                {
+                                    ingestBatchExecutionFiles(queueRunProgressListener, runId, stopClassName, runStorageDirs, false);
+                                }
+                                catch (final Exception e)
+                                {
+                                    LOGGER.warn("[Aura Server] QueueRunProgressListener.onTestExecutionCompleted failed for batch {}: {}", stopFile, e.getMessage());
+                                }
+                            }
+                        }
                         break;
                     }
 
                     if (fileTestsRun.get() == 0)
                     {
                         globalTestsRun.incrementAndGet();
-                        if (exitCode != 0)
+                        if (testWasCancelled)
+                        {
+                            globalSkipped.incrementAndGet();
+                            broadcastLog("[WARN] Test execution cancelled by user. Marked as skipped.");
+                        }
+                        else if (exitCode != 0)
                         {
                             globalFailed.incrementAndGet();
                             broadcastLog("[ERROR] Process exited with code " + exitCode + " and no tests were run.");
@@ -669,12 +828,17 @@ public final class AuraQueueService
                             globalPassed.incrementAndGet();
                         }
                     }
+                    else if (testWasCancelled)
+                    {
+                        globalSkipped.incrementAndGet();
+                        broadcastLog("[WARN] Test execution cancelled by user. Marked as skipped.");
+                    }
 
                     completedFiles.add(file);
                     activeProcess.set(null);
 
                     final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
-                    final String statusStr = (exitCode == 0) ? "passed" : "failed";
+                    final String statusStr = testWasCancelled ? "skipped" : ((exitCode == 0) ? "passed" : "failed");
 
                     for (final File baseDir : runStorageDirs)
                     {
@@ -683,39 +847,115 @@ public final class AuraQueueService
                         {
                             classDir.mkdirs();
                         }
-                        final File execJson = new File(classDir, "console-execution-1.json");
-                        if (!execJson.exists())
+                        final File[] existingExecs = classDir.listFiles((dir, name) -> name.startsWith("console-execution-") && name.endsWith(".json"));
+                        final int existingCount = (existingExecs != null) ? existingExecs.length : 0;
+
+                        int targetCount = Math.max(1, ids.size());
+                        if (existingCount > targetCount)
                         {
-                            final String fallbackJson = String.format(
-                                "{\"runId\":\"%s\",\"status\":\"%s\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\"}",
-                                runId, statusStr, className, primaryBrowser, new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new java.util.Date())
-                            );
-                            try
+                            targetCount = existingCount;
+                        }
+
+                        if (exitCode != 0 || testWasCancelled)
+                        {
+                            boolean hasFailureOrCancel = false;
+                            if (existingExecs != null)
                             {
-                                Files.writeString(execJson.toPath(), fallbackJson, StandardCharsets.UTF_8);
+                                final ObjectMapper mapper = new ObjectMapper();
+                                for (final File existingFile : existingExecs)
+                                {
+                                    try
+                                    {
+                                        final JsonNode node = mapper.readTree(existingFile);
+                                        if (node instanceof ObjectNode objNode)
+                                        {
+                                            final String currentStatus = objNode.has("status") ? objNode.get("status").asText("") : "";
+                                            final int stepIndex = objNode.has("currentStepIndex") ? objNode.get("currentStepIndex").asInt(0) : 0;
+                                            final int totalSteps = objNode.has("totalStepsCount") ? objNode.get("totalStepsCount").asInt(0) : 0;
+                                            final boolean isPass = "passed".equalsIgnoreCase(currentStatus) || "passed-clean".equalsIgnoreCase(currentStatus) || "succeeded".equalsIgnoreCase(currentStatus);
+                                            final boolean isZeroStep = stepIndex == 0 && totalSteps == 0;
+
+                                            if ("running".equalsIgnoreCase(currentStatus) || "in_progress".equalsIgnoreCase(currentStatus))
+                                            {
+                                                objNode.put("status", statusStr);
+                                                objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
+                                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
+                                                hasFailureOrCancel = true;
+                                            }
+                                            else if (isPass && isZeroStep && exitCode != 0)
+                                            {
+                                                objNode.put("status", statusStr);
+                                                objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
+                                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
+                                                hasFailureOrCancel = true;
+                                            }
+                                            else if ("failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
+                                                    || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
+                                                    || "skipped".equalsIgnoreCase(currentStatus))
+                                            {
+                                                hasFailureOrCancel = true;
+                                            }
+                                        }
+                                    }
+                                    catch (final Exception e)
+                                    {
+                                        LOGGER.warn("[Aura Server] Could not update execution status in {}: {}", existingFile.getPath(), e.getMessage());
+                                    }
+                                }
                             }
-                            catch (final Exception e)
+
+                            if (!hasFailureOrCancel && exitCode != 0)
                             {
-                                LOGGER.warn("[Aura Server] Could not write fallback execution snapshot to {}: {}", baseDir.getPath(), e.getMessage());
+                                targetCount = Math.max(targetCount, existingCount + 1);
                             }
+                        }
+
+                        for (int k = 1; k <= targetCount; k++)
+                        {
+                            final File execJson = new File(classDir, "console-execution-" + k + ".json");
+                            if (!execJson.exists())
+                            {
+                                final String fallbackReason = exitCode != 0 ? "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration." : "";
+                                final String fallbackJson = String.format(
+                                    "{\"runId\":\"%s\",\"status\":\"%s\",\"runnerStatus\":\"%s\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"failureReason\":\"%s\",\"error\":\"%s\"}",
+                                    runId, statusStr, testWasCancelled ? "cancelled" : statusStr, className, primaryBrowser, new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new Date()), fallbackReason, fallbackReason
+                                );
+                                try
+                                {
+                                    AtomicFileUtils.writeStringAtomic(execJson.toPath(), fallbackJson);
+                                }
+                                catch (final Exception e)
+                                {
+                                    LOGGER.warn("[Aura Server] Could not write fallback execution snapshot to {}: {}", baseDir.getPath(), e.getMessage());
+                                }
+                            }
+                        }
+                    }
+
+                    if (queueRunProgressListener != null)
+                    {
+                        try
+                        {
+                            ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, false);
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.warn("[Aura Server] QueueRunProgressListener.onTestExecutionCompleted failed for batch {}: {}", file, e.getMessage());
                         }
                     }
                 }
 
                 final String completedRunId = currentRunId.get();
-                if (!manuallyStopped.get())
+                if (onRunCompletedListener != null)
                 {
-                    if (onRunCompletedListener != null)
+                    try
                     {
-                        try
-                        {
-                            LOGGER.info("[Aura Server] Notifying run completion listener for runId: {}", completedRunId);
-                            onRunCompletedListener.accept(completedRunId);
-                        }
-                        catch (final Exception e)
-                        {
-                            LOGGER.error("[Aura Server] Error in onRunCompletedListener for runId {}: {}", completedRunId, e.getMessage(), e);
-                        }
+                        LOGGER.info("[Aura Server] Notifying run completion listener for runId: {}", completedRunId);
+                        onRunCompletedListener.accept(completedRunId);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.error("[Aura Server] Error in onRunCompletedListener for runId {}: {}", completedRunId, e.getMessage(), e);
                     }
                 }
 
@@ -730,6 +970,18 @@ public final class AuraQueueService
                 LOGGER.info("[Aura Server] Queue execution completed. Total: {}, Passed: {}, Failed: {}",
                         globalTestsRun.get(), globalPassed.get(), globalFailed.get());
                 broadcastLog("\n[INFO] Queue execution completed.");
+
+                if (queueRunProgressListener != null)
+                {
+                    try
+                    {
+                        queueRunProgressListener.onRunFinished(queueRunId);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] QueueRunProgressListener.onRunFinished failed: {}", e.getMessage());
+                    }
+                }
             }
             catch (final Exception e)
             {
@@ -770,6 +1022,190 @@ public final class AuraQueueService
         });
         thread.setName("NeodymiumAuraQueueExecutor");
         thread.start();
+    }
+
+    private final Set<File> ingestedExecutionFiles = Collections.synchronizedSet(new HashSet<>());
+
+    /**
+     * Inspects execution snapshots in storage for the given class and marks any non-final (running/in-progress)
+     * execution as skipped/cancelled while leaving finished (passed/failed) test executions untouched.
+     * If no execution snapshots exist, creates a fallback skipped snapshot.
+     */
+    private void markRunningOrMissingExecutionsAsSkipped(
+            final List<File> runStorageDirs,
+            final String runId,
+            final String className,
+            final String primaryBrowser)
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+        final String timestamp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new Date());
+
+        for (final File baseDir : runStorageDirs)
+        {
+            final File classDir = new File(baseDir, className);
+            if (!classDir.exists())
+            {
+                classDir.mkdirs();
+            }
+
+            final File[] existingFiles = classDir.listFiles((dir, name) -> name.startsWith("console-execution-") && name.endsWith(".json"));
+            boolean markedAny = false;
+
+            if (existingFiles != null && existingFiles.length > 0)
+            {
+                for (final File execJson : existingFiles)
+                {
+                    try
+                    {
+                        final ObjectNode rootNode = (ObjectNode) mapper.readTree(execJson);
+                        final String currentStatus = rootNode.has("status") ? rootNode.get("status").asText() : "";
+
+                        if (!isFinalExecutionStatus(currentStatus))
+                        {
+                            rootNode.put("status", "skipped");
+                            rootNode.put("runnerStatus", "cancelled");
+                            rootNode.put("message", "Test execution cancelled by user.");
+                            AtomicFileUtils.writeStringAtomic(execJson.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode));
+                            markedAny = true;
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Failed to inspect/update execution snapshot {}: {}", execJson.getAbsolutePath(), e.getMessage());
+                    }
+                }
+            }
+
+            if (!markedAny)
+            {
+                final File fallbackFile = new File(classDir, "console-execution-1.json");
+                if (!fallbackFile.exists())
+                {
+                    final String fallbackJson = String.format(
+                        "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
+                        runId, className, primaryBrowser, timestamp
+                    );
+                    try
+                    {
+                        AtomicFileUtils.writeStringAtomic(fallbackFile.toPath(), fallbackJson);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Could not write fallback execution snapshot to {}: {}", baseDir.getPath(), e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Scans the given run storage directories for {@code console-execution-*.json} files of the current batch class
+     * and reports every not yet ingested execution to the given listener.
+     * <p>
+     * When {@code onlyFinalStatus} is {@code true} (used for the periodic mid-run scan), only executions whose status
+     * represents a final outcome are reported; files that are still running are skipped without being marked as
+     * ingested so they are picked up by a later scan once they complete. When {@code false} (used after the batch
+     * subprocess has exited), all parseable files are reported as before.
+     *
+     * @param listener the progress listener to notify
+     * @param runId the current queue run id
+     * @param className the batch runner class name
+     * @param runStorageDirs the run storage base directories to scan
+     * @param onlyFinalStatus whether to report only completed executions
+     */
+    private void ingestBatchExecutionFiles(
+            final QueueRunProgressListener listener,
+            final String runId,
+            final String className,
+            final List<File> runStorageDirs,
+            final boolean onlyFinalStatus)
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+        for (final File baseDir : runStorageDirs)
+        {
+            final File classDir = new File(baseDir, className);
+            if (!classDir.isDirectory())
+            {
+                continue;
+            }
+            final File[] files = classDir.listFiles();
+            if (files == null)
+            {
+                continue;
+            }
+            for (final File execFile : files)
+            {
+                if (!execFile.isFile() || !execFile.getName().endsWith(".json"))
+                {
+                    continue;
+                }
+                if ("run.json".equalsIgnoreCase(execFile.getName()) || "batch.json".equalsIgnoreCase(execFile.getName()))
+                {
+                    continue;
+                }
+                if (!execFile.canRead())
+                {
+                    continue;
+                }
+                final Map<String, Object> payload;
+                try
+                {
+                    payload = mapper.readValue(execFile, new TypeReference<Map<String, Object>>() {});
+                }
+                catch (final Exception e)
+                {
+                    // File may be written concurrently by the subprocess; leave it unmarked so it is retried later.
+                    LOGGER.warn("[Aura Server] Failed to parse execution JSON {}: {}", execFile.getAbsolutePath(), e.getMessage());
+                    continue;
+                }
+                if (onlyFinalStatus)
+                {
+                    final String rawStatus = payload.get("status") != null ? String.valueOf(payload.get("status")) : "";
+                    if (!isFinalExecutionStatus(rawStatus))
+                    {
+                        continue;
+                    }
+                    if ("finished".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                    {
+                        payload.put("status", "passed");
+                    }
+                }
+                synchronized (ingestedExecutionFiles)
+                {
+                    if (ingestedExecutionFiles.contains(execFile.getAbsoluteFile()))
+                    {
+                        continue;
+                    }
+                    ingestedExecutionFiles.add(execFile.getAbsoluteFile());
+                }
+                payload.put("runId", runId);
+                payload.put("testClass", className);
+                listener.onTestExecutionCompleted(runId, payload);
+            }
+        }
+    }
+
+    /**
+     * Determines whether the given execution status represents a final test outcome that is safe to ingest while the
+     * batch subprocess is still running. Transient states such as "running" or "paused" are excluded because they
+     * would be reported with a misleading final status and never be updated afterwards.
+     *
+     * @param status the status string from the execution JSON, may be {@code null}
+     * @return {@code true} if the status represents a final outcome, {@code false} otherwise
+     */
+    private static boolean isFinalExecutionStatus(final String status)
+    {
+        if (status == null || status.isBlank())
+        {
+            return false;
+        }
+        return switch (status.toLowerCase())
+        {
+            case "passed", "failed", "error", "finished", "ignored", "skipped",
+                 "passed-clean", "failed-known", "failed-unknown", "succeeded-fixed",
+                 "succeeded", "fixed", "healed" -> true;
+            default -> false;
+        };
     }
 
     private static final class ExecutionBatch

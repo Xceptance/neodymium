@@ -235,7 +235,10 @@
                                     <div th:if="${r.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(r.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.ignoredTooltip}" th:text="${r.ignoredLabel}">0</div>
                                 </div>
                             </td>
-                            <td><span class="badge-status badge-pass" th:text="${r.passRate + '% Pass'}">0% Pass</span></td>
+                            <td>
+                                <span th:if="${r.status == 'IN_PROGRESS'}" class="badge-status badge-running"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
+                                <span th:unless="${r.status == 'IN_PROGRESS'}" class="badge-status badge-pass" th:text="${r.passRate + '% Pass'}">0% Pass</span>
+                            </td>
                             <td class="text-muted js-format-timestamp" th:data-timestamp-ms="${r.startTimeMs}" th:text="${r.timestampLabel}">Recently</td>
                             <td>
                                 <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" onclick="event.stopPropagation();">

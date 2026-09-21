@@ -211,8 +211,23 @@
         }
 
         #consolePanel {
-            display: none;
-            height: 0;
+            display: flex;
+            transition: height 0.2s ease-in-out;
+        }
+
+        #consolePanel.console-collapsed {
+            height: 38px !important;
+            min-height: 38px !important;
+            overflow: hidden !important;
+        }
+
+        #consolePanel.console-collapsed #terminalConsole {
+            display: none !important;
+        }
+
+        #consolePanel.console-collapsed .terminal-panel {
+            padding-bottom: 4px;
+            overflow: hidden !important;
         }
 
         .col-minimized {

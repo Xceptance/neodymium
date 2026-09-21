@@ -36,7 +36,34 @@ public final class TestClassSummaryDto
     private final int knownCount;
     private final int unknownCount;
     private final int ignoredCount;
+    private final int runningCount;
     private final List<TestExecutionDto> executions;
+
+    public TestClassSummaryDto(
+        final String className,
+        final String classContainer,
+        final String folder,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestExecutionDto> executions)
+    {
+        this.className = className;
+        this.classContainer = classContainer;
+        this.folder = folder;
+        this.totalCount = totalCount;
+        this.passCount = passCount;
+        this.fixedCount = fixedCount;
+        this.knownCount = knownCount;
+        this.unknownCount = unknownCount;
+        this.ignoredCount = ignoredCount;
+        this.runningCount = runningCount;
+        this.executions = executions;
+    }
 
     public TestClassSummaryDto(
         final String className,
@@ -50,16 +77,7 @@ public final class TestClassSummaryDto
         final int ignoredCount,
         final List<TestExecutionDto> executions)
     {
-        this.className = className;
-        this.classContainer = classContainer;
-        this.folder = folder;
-        this.totalCount = totalCount;
-        this.passCount = passCount;
-        this.fixedCount = fixedCount;
-        this.knownCount = knownCount;
-        this.unknownCount = unknownCount;
-        this.ignoredCount = ignoredCount;
-        this.executions = executions;
+        this(className, classContainer, folder, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, executions);
     }
 
     public TestClassSummaryDto(
@@ -73,7 +91,7 @@ public final class TestClassSummaryDto
         final int ignoredCount,
         final List<TestExecutionDto> executions)
     {
-        this(className, classContainer, "Browsing (default)", totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions);
+        this(className, classContainer, "Browsing (default)", totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, executions);
     }
 
     public String getClassName()
@@ -134,6 +152,11 @@ public final class TestClassSummaryDto
     public int getIgnoredCount()
     {
         return ignoredCount;
+    }
+
+    public int getRunningCount()
+    {
+        return runningCount;
     }
 
     public List<TestExecutionDto> getExecutions()

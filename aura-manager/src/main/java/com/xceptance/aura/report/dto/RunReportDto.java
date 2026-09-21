@@ -39,6 +39,7 @@ public final class RunReportDto
     private final int knownCount;
     private final int unknownCount;
     private final int ignoredCount;
+    private final int runningCount;
     private final List<TestExecutionDto> executions;
     private final List<AreaSummaryDto> areaSummaries;
     private final int totalLlmCalls;
@@ -56,6 +57,7 @@ public final class RunReportDto
         final int knownCount,
         final int unknownCount,
         final int ignoredCount,
+        final int runningCount,
         final List<TestExecutionDto> executions,
         final List<AreaSummaryDto> areaSummaries,
         final int totalLlmCalls,
@@ -72,6 +74,7 @@ public final class RunReportDto
         this.knownCount = knownCount;
         this.unknownCount = unknownCount;
         this.ignoredCount = ignoredCount;
+        this.runningCount = runningCount;
         this.executions = executions != null ? executions : new ArrayList<>();
         this.areaSummaries = areaSummaries != null ? areaSummaries : new ArrayList<>();
         this.totalLlmCalls = totalLlmCalls;
@@ -91,9 +94,64 @@ public final class RunReportDto
         final int unknownCount,
         final int ignoredCount,
         final List<TestExecutionDto> executions,
+        final List<AreaSummaryDto> areaSummaries,
+        final int totalLlmCalls,
+        final long totalLlmTokens,
+        final double totalLlmCost)
+    {
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, executions, areaSummaries, totalLlmCalls, totalLlmTokens, totalLlmCost);
+    }
+
+    public RunReportDto(
+        final String runId,
+        final String batchName,
+        final String timestamp,
+        final String duration,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestExecutionDto> executions,
         final List<AreaSummaryDto> areaSummaries)
     {
-        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions, areaSummaries, 0, 0L, 0.0);
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, runningCount, executions, areaSummaries, 0, 0L, 0.0);
+    }
+
+    public RunReportDto(
+        final String runId,
+        final String batchName,
+        final String timestamp,
+        final String duration,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final List<TestExecutionDto> executions,
+        final List<AreaSummaryDto> areaSummaries)
+    {
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, executions, areaSummaries, 0, 0L, 0.0);
+    }
+
+    public RunReportDto(
+        final String runId,
+        final String batchName,
+        final String timestamp,
+        final String duration,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestExecutionDto> executions)
+    {
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, runningCount, executions, new ArrayList<>());
     }
 
     public RunReportDto(
@@ -109,7 +167,7 @@ public final class RunReportDto
         final int ignoredCount,
         final List<TestExecutionDto> executions)
     {
-        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, executions, new ArrayList<>());
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, executions, new ArrayList<>());
     }
 
     public String getRunId()
@@ -160,6 +218,11 @@ public final class RunReportDto
     public int getIgnoredCount()
     {
         return ignoredCount;
+    }
+
+    public int getRunningCount()
+    {
+        return runningCount;
     }
 
     public List<TestExecutionDto> getExecutions()

@@ -11,7 +11,7 @@
         <!-- LEFT AREA -->
         <div class="left-area neo-u-7" id="leftArea">
             <!-- STATE: Selection & Queue -->
-            <div class="view-state active" id="state-selection">
+            <div class="view-state" id="state-selection" th:classappend="${activeEditingFile == null or #strings.isEmpty(activeEditingFile) ? ' active' : ''}">
                 <div class="selection-queue-grid">
                     <!-- Insert Test Selection Panel Fragment -->
                     <div th:replace="~{fragments/test-selection :: testSelectionContent}"></div>
@@ -31,11 +31,9 @@
             </div>
             
             <!-- STATE: Editor -->
-            <div class="view-state" id="state-editor">
+            <div class="view-state" id="state-editor" th:classappend="${activeEditingFile != null and !#strings.isEmpty(activeEditingFile) ? ' active' : ''}">
                 <!-- Insert Editor Panel Fragment -->
-                <div class="panel editor-container" id="editorPanel" th:fragment="editorPanel">
-                    <div th:replace="~{fragments/editor :: editorPanelContent}"></div>
-                </div>
+                <div th:replace="~{fragments/editor :: editorPanelContent}"></div>
             </div>
             
             <!-- Insert Progress Stats Panel Fragment -->
@@ -46,18 +44,29 @@
             
             <!-- Terminal Panel -->
             <div class="resizer-v neo-u-1" id="consoleResizer" style="display: none;"></div>
-            <div class="panel neo-u-19" id="consolePanel" style="display: none; height: 0;">
+            <div class="panel neo-u-19" id="consolePanel" style="display: flex; height: 38px;">
                 <div class="terminal-panel">
-                    <div class="neo-u-20">
-                        <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
-                        <div class="neo-u-22">
+                    <div class="neo-u-20" onclick="toggleConsoleCollapse()" style="cursor: pointer; user-select: none;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--accent);">terminal</span>
+                            <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner" style="display: none;"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
+                        </div>
+                        <div class="neo-u-22" onclick="event.stopPropagation();">
                             <input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
                             <label for="aiOnlyCb">AI Only</label>
                             <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
                             <label for="errorsOnlyCb">Errors Only</label>
+                            <button id="terminalInteractiveBtn" class="btn-edit" onclick="openInteractiveConsoleViewLive('/interactive_console.html')" title="Switch to Interactive Console" style="display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;" th:style="${running and (interactive != null and interactive) ? 'display: inline-flex; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;' : 'display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;'}">
+                                <span class="material-symbols-outlined" style="font-size: 14px; color: var(--accent);">terminal</span>
+                                <span>Interactive Console</span>
+                            </button>
                             <button id="copyTerminalBtn" class="btn-edit" onclick="copyTerminalOutput()" title="Copy terminal output" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
                                 <span class="material-symbols-outlined" id="copyTerminalIcon">content_copy</span>
                                 <span id="copyTerminalText">Copy</span>
+                            </button>
+                            <button id="toggleConsoleCollapseBtn" class="btn-edit" onclick="toggleConsoleCollapse()" title="Toggle console collapse" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+                                <span class="material-symbols-outlined" id="consoleCollapseIcon">keyboard_arrow_up</span>
+                                <span id="consoleCollapseText">Expand</span>
                             </button>
                         </div>
                     </div>

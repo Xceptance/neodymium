@@ -103,6 +103,8 @@ public class AuraInteractiveControllerTest
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"));
 
+        assertFalse(queueService.isManuallyStopped(), "Interactive engine stop should abort engine without halting whole queue");
+
         mockMvc.perform(post("/api/disconnect"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
@@ -206,6 +208,18 @@ public class AuraInteractiveControllerTest
                 .content(actionJson.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("already-handled"));
+
+        assertFalse(queueService.isManuallyStopped());
+
+        final JsonObject abortJson = new JsonObject();
+        abortJson.addProperty("action", "ABORT");
+
+        mockMvc.perform(post("/api/console/action")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(abortJson.toString()))
+                .andExpect(status().isOk());
+
+        assertFalse(queueService.isManuallyStopped(), "ABORT action should abort active test without halting whole queue");
 
         mockMvc.perform(post("/api/console/action")
                 .contentType(MediaType.APPLICATION_JSON)

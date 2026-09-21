@@ -90,8 +90,8 @@ public class TestBaseVariationEntity
         this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
         this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
         this.areaTag = areaTag;
-        this.location = location;
-        this.browser = browser;
+        this.location = com.xceptance.aura.report.service.AuraReportDataService.normalizeLocation(location);
+        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
     }
 
     public String getId()
@@ -151,7 +151,7 @@ public class TestBaseVariationEntity
 
     public void setLocation(final String location)
     {
-        this.location = location;
+        this.location = com.xceptance.aura.report.service.AuraReportDataService.normalizeLocation(location);
     }
 
     public String getBrowser()
@@ -161,7 +161,7 @@ public class TestBaseVariationEntity
 
     public void setBrowser(final String browser)
     {
-        this.browser = browser;
+        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
     }
 
     public Integer getTotalExecutionsCount()

@@ -26,6 +26,7 @@ import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -64,6 +65,7 @@ public class AuraTestDashboardController
     })
     public String renderDashboard(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        @RequestParam(value = "file", required = false) final String file,
         final Model model)
     {
         final List<YamlFileDto> testFiles = fileService.getYamlFilesList();
@@ -107,7 +109,50 @@ public class AuraTestDashboardController
         model.addAttribute("passed", queueController.getGlobalPassed());
         model.addAttribute("failed", queueController.getGlobalFailed());
         model.addAttribute("skipped", queueController.getGlobalSkipped());
-        model.addAttribute("activeEditingFile", fileService.getActiveEditingFile());
+
+        final String activeFileToUse = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
+        if (activeFileToUse != null && !activeFileToUse.isBlank())
+        {
+            fileService.setActiveEditingFile(activeFileToUse);
+            String content = "";
+            try
+            {
+                content = fileService.readYamlFileContent(activeFileToUse);
+            }
+            catch (final Exception ignored)
+            {
+            }
+            model.addAttribute("activeEditingFile", activeFileToUse);
+            model.addAttribute("editingFileContent", content);
+            model.addAttribute("currentTestFile", activeFileToUse);
+            model.addAttribute("fileContent", content);
+
+            final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+            model.addAttribute("beforeSteps", sections.get("beforeSteps"));
+            model.addAttribute("mainSteps", sections.get("mainSteps"));
+            model.addAttribute("afterSteps", sections.get("afterSteps"));
+            model.addAttribute("dataMatrix", sections.get("dataMatrix"));
+            model.addAttribute("varKeys", sections.get("varKeys"));
+            model.addAttribute("yamlFiles", testFiles);
+        }
+        else
+        {
+            model.addAttribute("activeEditingFile", "");
+            model.addAttribute("editingFileContent", "");
+            model.addAttribute("currentTestFile", "");
+            model.addAttribute("fileContent", "");
+            model.addAttribute("beforeSteps", List.of());
+            model.addAttribute("mainSteps", List.of());
+            model.addAttribute("afterSteps", List.of());
+            model.addAttribute("dataMatrix", List.of());
+            model.addAttribute("varKeys", List.of());
+            model.addAttribute("yamlFiles", testFiles);
+        }
+
+        final String activeRunId = queueController.getCurrentRunId();
+        model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
+        model.addAttribute("activeRunStatus", running ? "running" : "finished");
+        model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/report");
 
         if (running)
         {

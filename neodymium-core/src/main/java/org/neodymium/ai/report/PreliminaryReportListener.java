@@ -174,6 +174,27 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
     }
 
+    /**
+     * Finds an existing top-level {@link TestExecutionReport.ReportStepEntry} whose
+     * {@code stepIndex} matches the given value, or {@code null} if none is present.
+     * This is used to detect whether a step is being re-executed (e.g., after an interactive
+     * EDIT action) so the entry can be reset in-place instead of duplicated.
+     *
+     * @param stepIndex the step index to look up
+     * @return the matching entry, or {@code null} if not found
+     */
+    private TestExecutionReport.ReportStepEntry findExistingTopLevelStepEntry(final int stepIndex)
+    {
+        for (final TestExecutionReport.ReportStepEntry entry : this.report.getSteps())
+        {
+            if (entry != null && entry.getStepIndex() == stepIndex)
+            {
+                return entry;
+            }
+        }
+        return null;
+    }
+
     private void handleEvent(final ExecutionEvent event)
     {
         final ExecutionContext activeCtx = ExecutionContext.getActiveContext();
@@ -195,10 +216,33 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
             }
 
-            final TestExecutionReport.ReportStepEntry stepEntry = new TestExecutionReport.ReportStepEntry(stepStarted.getStepIndex(), resolvedInstruction);
-            stepEntry.setRawInstruction(rawInstruction);
-            stepEntry.setStartTimeMs(System.currentTimeMillis());
-            stepEntry.setStatus("RUNNING");
+            // Check whether a top-level entry already exists for this stepIndex.
+            // If it does, the step is being re-executed (e.g., after an interactive EDIT action).
+            // Reset it in-place to discard stale LLM calls, actions, and status from the prior
+            // attempt — this ensures serializeStep() always finds exactly one entry per stepIndex.
+            final TestExecutionReport.ReportStepEntry existingEntry = pbStep == null || pbStep.getParent() == null
+                ? findExistingTopLevelStepEntry(stepStarted.getStepIndex())
+                : null;
+
+            final boolean isReExecution = existingEntry != null;
+            final TestExecutionReport.ReportStepEntry stepEntry;
+
+            if (isReExecution)
+            {
+                // Re-execution path: reset the existing entry rather than appending a duplicate.
+                LOGGER.debug("[PreliminaryReportListener] Re-execution detected for stepIndex={}; resetting existing report entry",
+                    stepStarted.getStepIndex());
+                existingEntry.reset(resolvedInstruction, rawInstruction);
+                stepEntry = existingEntry;
+            }
+            else
+            {
+                // First execution path: create a fresh entry and register it.
+                stepEntry = new TestExecutionReport.ReportStepEntry(stepStarted.getStepIndex(), resolvedInstruction);
+                stepEntry.setRawInstruction(rawInstruction);
+                stepEntry.setStartTimeMs(System.currentTimeMillis());
+                stepEntry.setStatus("RUNNING");
+            }
 
             if (pbStep != null)
             {
@@ -292,8 +336,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                 return;
             }
 
-            this.report.addStep(stepEntry);
+            // Register the entry in the report only on first execution; re-executed entries are
+            // already present and have been reset in-place, so addStep() must not be called again.
+            if (!isReExecution)
+            {
+                this.report.addStep(stepEntry);
+            }
             this.currentStep = stepEntry;
+
         }
         else if (event instanceof StepFinishedEvent stepFinished)
         {
@@ -530,17 +580,29 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             this.report.setEndTimeMs(System.currentTimeMillis());
             this.report.setDurationMs(sessionFinished.getDurationMs());
-            this.report.setSuccess(sessionFinished.isSuccess());
-            this.report.setStatus(sessionFinished.isSuccess() ? "PASSED" : "FAILED");
             this.report.addWarnings(sessionFinished.getWarnings());
 
-            if (sessionFinished.isSuccess())
+            populateContextMetadata();
+
+            final ExecutionContext currentCtx = activeCtx != null ? activeCtx : ExecutionContext.getActiveContext();
+            final boolean hasContextError = currentCtx != null && (
+                currentCtx.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR)
+                || currentCtx.getTransientData().containsKey("executionError")
+            );
+            final boolean hasFailedReportStep = this.report.getSteps().stream()
+                .anyMatch(s -> "FAILED".equalsIgnoreCase(s.getStatus()) || (s.getFailureReason() != null && !s.getFailureReason().isBlank()));
+
+            final boolean isSuccess = sessionFinished.isSuccess() && !hasContextError && !hasFailedReportStep;
+
+            this.report.setSuccess(isSuccess);
+            this.report.setStatus(isSuccess ? "PASSED" : "FAILED");
+
+            if (isSuccess)
             {
                 this.report.setFailureReason(null);
                 this.report.setFailureStackTrace(null);
             }
 
-            populateContextMetadata();
             resolveUnfinishedSteps();
             recalculateMetrics();
             flushReport();
@@ -683,10 +745,24 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
             if (this.report.getFailureReason() == null)
             {
-                final Object lastErr = ctx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                Object lastErr = ctx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                if (lastErr == null)
+                {
+                    lastErr = ctx.getTransientData().get("executionError");
+                }
                 if (lastErr instanceof Throwable t)
                 {
-                    this.report.setFailureReason(t.getMessage() != null ? t.getMessage() : t.toString());
+                    String msg = t.getMessage() != null ? t.getMessage() : t.toString();
+                    Throwable cause = t.getCause();
+                    while (cause != null)
+                    {
+                        if (cause.getMessage() != null && !msg.contains(cause.getMessage()))
+                        {
+                            msg += ": " + cause.getMessage();
+                        }
+                        cause = cause.getCause();
+                    }
+                    this.report.setFailureReason(msg);
                     if (this.report.getFailureStackTrace() == null)
                     {
                         final StringWriter sw = new StringWriter();
@@ -934,13 +1010,11 @@ public final class PreliminaryReportListener implements ExecutionListener
         if (levels != null && !levels.isEmpty())
         {
             escalations += Math.max(0, levels.size() - 1);
-            for (final String lvl : levels)
+            final String lastLvl = levels.get(levels.size() - 1);
+            if (lastLvl != null && !lastLvl.isBlank())
             {
-                if (lvl != null && !lvl.isBlank())
-                {
-                    final String normalized = lvl.trim().toUpperCase();
-                    contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
-                }
+                final String normalized = lastLvl.trim().toUpperCase();
+                contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
             }
         }
         for (final StepStats child : stats.getSubStats())

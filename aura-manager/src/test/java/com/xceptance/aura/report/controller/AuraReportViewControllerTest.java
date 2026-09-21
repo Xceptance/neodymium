@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.controller;
 
+import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
@@ -25,6 +26,7 @@ import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Assertions;
@@ -37,7 +39,7 @@ import org.springframework.ui.Model;
 /**
  * Unit tests for AuraReportViewController.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 public class AuraReportViewControllerTest
@@ -100,5 +102,69 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("DE CreditCard", model.getAttribute("targetDataSet"));
         Assertions.assertEquals("DE", model.getAttribute("targetLocation"));
         Assertions.assertEquals("Chrome", model.getAttribute("targetBrowser"));
+    }
+
+    @Test
+    public void testRunReportSubTabModelAttributes()
+    {
+        final RunReportDto dummyReport = new RunReportDto(
+            "RUN-100",
+            "BatchAlpha",
+            "2026-09-15",
+            "10s",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            new ArrayList<>()
+        );
+        Mockito.when(dataService.getRunReport("RUN-100")).thenReturn(dummyReport);
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.runReport(
+            "RUN-100",
+            "EXEC-1",
+            null,
+            "runReportSubTabAllTests",
+            "true",
+            model
+        );
+
+        Assertions.assertEquals("fragments/run-report :: runReport", view);
+        Assertions.assertEquals("RUN-100", model.getAttribute("runId"));
+        Assertions.assertEquals("EXEC-1", model.getAttribute("targetExecutionId"));
+        Assertions.assertEquals("runReportSubTabAllTests", model.getAttribute("activeSubTab"));
+    }
+
+    @Test
+    public void testRefreshAndResyncRunsPreservesSubTab()
+    {
+        final RunReportDto dummyReport = new RunReportDto(
+            "RUN-200",
+            "BatchBeta",
+            "2026-09-15",
+            "15s",
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            new ArrayList<>()
+        );
+        Mockito.when(dataService.getRunReport("RUN-200")).thenReturn(dummyReport);
+
+        final Model model = new ConcurrentModel();
+        final String currentUrl = "http://localhost:8080/run-report?runId=RUN-200&executionId=EXEC-555&subTab=runReportSubTabAllTests";
+        final String view = controller.refreshAndResyncRuns("true", currentUrl, null, model);
+
+        Assertions.assertEquals("fragments/run-report :: runReport", view);
+        Assertions.assertEquals("RUN-200", model.getAttribute("runId"));
+        Assertions.assertEquals("EXEC-555", model.getAttribute("targetExecutionId"));
+        Assertions.assertEquals("runReportSubTabAllTests", model.getAttribute("activeSubTab"));
+        Mockito.verify(syncService, Mockito.times(1)).syncLocalRunStorage();
+        Mockito.verify(dataService, Mockito.times(1)).clearCache();
     }
 }

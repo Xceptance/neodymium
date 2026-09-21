@@ -15,6 +15,9 @@
         </div>
 
         <div class="header-actions d-flex align-items-center gap-2">
+            <button class="btn-edit btn-secondary" id="btnInteractiveConsole" onclick="openInteractiveConsoleViewLive('/interactive_console.html')" title="Switch to Interactive Console" style="display: none; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;" th:style="${running and (interactive != null and interactive) ? 'display: inline-flex; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;' : 'display: none; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;'}">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">terminal</span> Interactive Console
+            </button>
             <button class="btn-edit btn-secondary" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;">
                 <span class="material-symbols-outlined" style="font-size: 1.1rem;">settings</span> Settings
             </button>

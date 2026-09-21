@@ -365,6 +365,17 @@
             animation: active-step-pulse-failed 2.2s ease-in-out infinite;
         }
 
+        .active-step-badge.awaiting-approval {
+            background-color: var(--accent-warning);
+            color: #1e1e2e;
+            font-weight: 800;
+        }
+
+        .btn-approve-step:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
         /* Passed steps are slightly dimmed to recede visually */
         .step-card.passed-step {
             opacity: 0.70;
@@ -2263,4 +2274,129 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
     bottom: auto !important;
     max-height: calc(100vh - 64px);
     overflow-y: auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AI Communication Inspector Cards (White Background & Dark Text)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.llm-communication-section {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+}
+
+.llm-communication-title {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #6b21a8 !important;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.llm-call-card {
+    margin-bottom: 10px;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.llm-call-card-header {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    background: #f1f5f9 !important;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.llm-call-card-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f172a !important;
+}
+
+.llm-call-card-meta {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: #475569 !important;
+    font-weight: 500;
+}
+
+.llm-call-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: #ffffff !important;
+    border-top: 1px solid #e2e8f0;
+}
+
+.llm-sub-accordion-pill {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    overflow: hidden;
+    background: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.llm-sub-accordion-header {
+    padding: 7px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    background: #ffffff !important;
+}
+.llm-sub-accordion-header:hover {
+    background: #f8fafc !important;
+}
+
+.llm-sub-title-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a !important;
+}
+
+.llm-sub-subtitle {
+    font-size: 10px;
+    color: #64748b !important;
+    font-weight: 500;
+}
+
+.llm-sub-accordion-body {
+    padding: 8px 10px;
+    border-top: 1px solid #f1f5f9;
+    background: #f8fafc !important;
+}
+
+.llm-sub-accordion-body pre {
+    margin: 0;
+    padding: 8px;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 220px;
+    overflow-y: auto;
+    color: #0f172a !important;
+    font-size: 11px;
+    font-family: var(--font-mono);
 }

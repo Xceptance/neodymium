@@ -663,7 +663,7 @@ function checkActionApprovals() {
         ...(currentState?.blocks?.after || [])
     ];
     const s = allSteps.find(st => st.index === idx);
-    const isThinking = s && s.status === 'running' && !s.reasoning && currentPauseId === null;
+    const isThinking = s && (s.status === 'running' || s.inFlightLlmCall) && !s.reasoning && currentPauseId === null;
 
     const runBtn = document.getElementById('btnRun');
     if (runBtn) {
@@ -697,7 +697,7 @@ function renderBlock(blockName, steps) {
 
     // Enhanced signature to include selection, breakpoints, and other UI state
     const sig = JSON.stringify({
-        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${s.errorMessage ? s.errorMessage.length : 0}`),
+        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning || ''}|${(s.actions || []).map(a => `${a.type || ''}:${a.target || ''}:${a.value || ''}:${a.reasoning || ''}`).join(';')}|${s.errorMessage || ''}|${s.llmCalls ? s.llmCalls.length : 0}|${s.inFlightLlmCall ? 1 : 0}`),
         selected: selectedStepIndexForDetails,
         breakpoints: Array.from(activeBreakpoints),
         paused: currentPauseId !== null,
@@ -707,14 +707,14 @@ function renderBlock(blockName, steps) {
     container.dataset.sig = sig;
 
     if (steps.length === 0) {
-        // In results/read-only mode: hide the block entirely \u2014 there are no steps
+        // In results/read-only mode: hide the block entirely — there are no steps
         // to display and no drag target is needed.
         // In interactive mode: show a drop zone so steps can be dragged into it.
         if (document.body.classList.contains('mode-results')) {
             group.style.display = 'none';
             return;
         }
-        // Interactive mode \u2014 show empty drop zone
+        // Interactive mode — show empty drop zone
         container.innerHTML = `<div class="drop-target-area empty-block-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')">
                     <span style="opacity: 0.5; font-size: 12px;">Drop steps here</span>
                 </div>`;
@@ -730,6 +730,181 @@ function renderBlock(blockName, steps) {
     if (blockName === 'after') {
         container.innerHTML += `<div class="drop-target-area final-drop-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')"></div>`;
     }
+}
+
+function toggleLlmCallCard(event, header) {
+    if (event) event.stopPropagation();
+    const targetHeader = header && header.nodeType ? header : (event ? event.currentTarget : null);
+    if (!targetHeader) return;
+    const card = targetHeader.closest('.llm-call-card');
+    if (!card) return;
+    const body = card.querySelector('.llm-call-card-body');
+    const icon = card.querySelector('.llm-call-card-chevron');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'flex';
+    if (icon) icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+window.toggleLlmCallCard = toggleLlmCallCard;
+
+function toggleLlmCallDetails(event, header) {
+    toggleLlmCallCard(event, header);
+}
+window.toggleLlmCallDetails = toggleLlmCallDetails;
+
+function toggleLlmSubSection(event, header) {
+    if (event) event.stopPropagation();
+    const targetHeader = header && header.nodeType ? header : (event ? event.currentTarget : null);
+    if (!targetHeader) return;
+    const pill = targetHeader.closest('.llm-sub-accordion-pill');
+    if (!pill) return;
+    const body = pill.querySelector('.llm-sub-accordion-body');
+    const icon = pill.querySelector('.llm-sub-chevron');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+window.toggleLlmSubSection = toggleLlmSubSection;
+
+function copyTextToClipboard(event, elementId) {
+    if (event) event.stopPropagation();
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const text = el.innerText || el.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = event ? event.currentTarget : null;
+        if (btn) {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:11px;vertical-align:-1px;">check</span> Copied!';
+            setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
+        }
+    }).catch(() => {});
+}
+window.copyTextToClipboard = copyTextToClipboard;
+
+function buildLlmCallsHtml(step) {
+    const llmCalls = Array.isArray(step.llmCalls) ? step.llmCalls : [];
+    const inFlight = step.inFlightLlmCall;
+
+    if (llmCalls.length === 0 && !inFlight) {
+        return '';
+    }
+
+    let html = `<div class="llm-communication-section">
+        <div class="llm-communication-title">
+            <span class="material-symbols-outlined" style="font-size:14px;">forum</span> AI Communication (${llmCalls.length + (inFlight ? 1 : 0)})
+        </div>`;
+
+    if (inFlight) {
+        const cap = inFlight.capability || 'LLM';
+        html += `<div class="llm-call-card in-flight" style="padding:8px 10px;margin-bottom:8px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:8px;font-size:11px;display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span class="material-symbols-outlined spinner" style="color:#7e22ce;font-size:14px;">progress_activity</span>
+                <span style="font-weight:700;color:#7e22ce;">${escHtml(cap)} Call in progress...</span>
+            </div>
+            ${inFlight.userPrompt ? `<div style="font-size:10px;color:#475569;max-height:50px;overflow:hidden;text-overflow:ellipsis;white-space:pre-wrap;background:#ffffff;padding:4px 6px;border-radius:4px;border:1px solid #e2e8f0;">${escHtml(inFlight.userPrompt.substring(0, 250))}${inFlight.userPrompt.length > 250 ? '...' : ''}</div>` : ''}
+        </div>`;
+    }
+
+    llmCalls.forEach((call, idx) => {
+        const callNum = idx + 1;
+        const model = call.modelName || 'AI Model';
+        const totalTokens = (call.inputTokens || 0) + (call.outputTokens || 0);
+        const tokensText = totalTokens > 0 ? `Tokens: ${totalTokens}` : '';
+        const durationSec = call.durationMs ? `Duration: ${(call.durationMs / 1000).toFixed(1)} s` : '';
+        const estCost = call.estimatedCostUsd ? `$${call.estimatedCostUsd.toFixed(4)}` : null;
+        const costText = estCost ? `Cost: ${estCost}` : '';
+
+        const metaParts = [];
+        if (tokensText) metaParts.push(tokensText);
+        if (costText) metaParts.push(costText);
+        if (durationSec) metaParts.push(durationSec);
+        const metaStr = metaParts.join(' | ');
+
+        const cardId = `llm-call-card-${step.index || 0}-${idx}`;
+
+        html += `<div class="llm-call-card">
+            <div class="llm-call-card-header" onclick="toggleLlmCallCard(event, this)">
+                <div class="llm-call-card-title">
+                    <span class="material-symbols-outlined llm-call-card-chevron" style="font-size:16px;color:#64748b;transition:transform 0.2s;transform:rotate(90deg);">chevron_right</span>
+                    <span class="material-symbols-outlined" style="font-size:16px;color:#7e22ce;">psychology</span>
+                    <span>Call #${callNum}: ${escHtml(model)}</span>
+                </div>
+                <div class="llm-call-card-meta">
+                    ${escHtml(metaStr)}
+                </div>
+            </div>
+            <div class="llm-call-card-body">`;
+
+        // 1. System Prompt Sub-accordion
+        if (call.systemPrompt) {
+            const sysId = `${cardId}-sys`;
+            html += `<div class="llm-sub-accordion-pill">
+                <div class="llm-sub-accordion-header" onclick="toggleLlmSubSection(event, this)">
+                    <div class="llm-sub-title-text">
+                        <span class="material-symbols-outlined llm-sub-chevron" style="font-size:14px;color:#94a3b8;transition:transform 0.2s;">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:14px;color:#2563eb;">tune</span>
+                        <span>System Prompt</span>
+                    </div>
+                    <div class="llm-sub-subtitle">Instruction &amp; Persona</div>
+                </div>
+                <div class="llm-sub-accordion-body" style="display:none;">
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
+                        <button class="btn-copy" onclick="copyTextToClipboard(event, '${sysId}')" style="padding:2px 8px;font-size:10px;background:#ffffff;border:1px solid #cbd5e1;border-radius:4px;color:#334155;cursor:pointer;font-weight:600;"><span class="material-symbols-outlined" style="font-size:11px;vertical-align:-1px;">content_copy</span> Copy</button>
+                    </div>
+                    <pre id="${sysId}">${escHtml(call.systemPrompt)}</pre>
+                </div>
+            </div>`;
+        }
+
+        // 2. User Prompt & DOM Context Sub-accordion
+        if (call.userPrompt) {
+            const userId = `${cardId}-user`;
+            html += `<div class="llm-sub-accordion-pill">
+                <div class="llm-sub-accordion-header" onclick="toggleLlmSubSection(event, this)">
+                    <div class="llm-sub-title-text">
+                        <span class="material-symbols-outlined llm-sub-chevron" style="font-size:14px;color:#94a3b8;transition:transform 0.2s;">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:14px;color:#d97706;">code</span>
+                        <span>User Prompt &amp; DOM Context (Plain Text)</span>
+                    </div>
+                    <div class="llm-sub-subtitle">User Query &amp; Page Snapshot</div>
+                </div>
+                <div class="llm-sub-accordion-body" style="display:none;">
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
+                        <button class="btn-copy" onclick="copyTextToClipboard(event, '${userId}')" style="padding:2px 8px;font-size:10px;background:#ffffff;border:1px solid #cbd5e1;border-radius:4px;color:#334155;cursor:pointer;font-weight:600;"><span class="material-symbols-outlined" style="font-size:11px;vertical-align:-1px;">content_copy</span> Copy</button>
+                    </div>
+                    <pre id="${userId}">${escHtml(call.userPrompt)}</pre>
+                </div>
+            </div>`;
+        }
+
+        // 3. Raw Model Response Sub-accordion
+        if (call.responseContent) {
+            const respId = `${cardId}-resp`;
+            html += `<div class="llm-sub-accordion-pill">
+                <div class="llm-sub-accordion-header" onclick="toggleLlmSubSection(event, this)">
+                    <div class="llm-sub-title-text">
+                        <span class="material-symbols-outlined llm-sub-chevron" style="font-size:14px;color:#94a3b8;transition:transform 0.2s;">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:14px;color:#059669;">smart_toy</span>
+                        <span>Raw Model Response</span>
+                    </div>
+                    <div class="llm-sub-subtitle">AI Completion Payload</div>
+                </div>
+                <div class="llm-sub-accordion-body" style="display:none;">
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
+                        <button class="btn-copy" onclick="copyTextToClipboard(event, '${respId}')" style="padding:2px 8px;font-size:10px;background:#ffffff;border:1px solid #cbd5e1;border-radius:4px;color:#334155;cursor:pointer;font-weight:600;"><span class="material-symbols-outlined" style="font-size:11px;vertical-align:-1px;">content_copy</span> Copy</button>
+                    </div>
+                    <pre id="${respId}">${escHtml(call.responseContent)}</pre>
+                </div>
+            </div>`;
+        }
+
+        html += `</div></div>`;
+    });
+
+    html += `</div>`;
+    return html;
 }
 
 function buildStepDetailsHtml(step, isActiveStep) {
@@ -757,6 +932,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
         : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined">checklist</span> Actions performed</div>`;
 
     const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${actionsLabel}${actionsHtml}</div>`;
+    const llmCallsBlock = buildLlmCallsHtml(step);
 
     const errorBox = step.errorMessage ? `
                 <div class="error-message-box" style="margin-bottom:12px;">
@@ -772,7 +948,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
         : '';
 
     // Right-column panel compact reasoning (not shown for active steps; the card has the bubble)
-    const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null;
+    const isThinking = (step.status === 'running' || step.inFlightLlmCall) && !step.reasoning && currentPauseId === null;
     const reasoningText = !isActiveStep && (isThinking || step.reasoning)
         ? (isThinking
             ? `<div class="acc-reasoning" style="margin-bottom:12px;"><span class="material-symbols-outlined spinner" style="color:var(--accent-purple)" aria-hidden="true">progress_activity</span> AI is thinking...</div>`
@@ -822,10 +998,10 @@ function buildStepDetailsHtml(step, isActiveStep) {
         })()
         : '';
 
-    const hasSecondary = timingRow || domBlock || screenshotBlock || breadcrumbBlock;
+    const hasSecondary = timingRow || domBlock || screenshotBlock || breadcrumbBlock || llmCallsBlock;
 
     if (isActiveStep) {
-        // Active step: primary (actions) always open;
+        // Active step: primary (actions & LLM calls) always open;
         // secondary (timing/DOM/screenshot/breadcrumb) behind a More details toggle.
         const secondaryHtml = hasSecondary ? `
                     <button class="step-more-details-btn" onclick="toggleStepSecondary(event, this)" aria-expanded="false">
@@ -841,6 +1017,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
 
         return `<div class="step-details-wrapper" style="display:flex;flex-direction:column;gap:10px;">
                     ${actionListBlock}
+                    ${llmCallsBlock}
                     ${secondaryHtml}
                 </div>`;
     }
@@ -863,6 +1040,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
                     ${reasoningText}
                     ${errorBox}
                     ${substepWarning}
+                    ${llmCallsBlock}
                     <div style="display:flex;gap:12px;flex-wrap:wrap;">${domBlock}</div>
                     ${screenshotBlock}
                 </div>
@@ -1089,7 +1267,10 @@ function renderStepCard(step) {
     // Used both to conditionally render the accordion and to guard against
     // selecting future steps that have nothing to show yet.
     const actionsList = Array.isArray(step.actions) ? step.actions : [];
+    const llmCallsList = Array.isArray(step.llmCalls) ? step.llmCalls : [];
     const hasDetails = (actionsList.length > 0)
+        || (llmCallsList.length > 0)
+        || !!step.inFlightLlmCall
         || step.errorMessage
         || step.durationMs
         || step.screenshot
@@ -1114,7 +1295,7 @@ function renderStepCard(step) {
         statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-secondary)" aria-label="Skipped">do_not_disturb_on</span>`;
     } else if (step.status === 'aborted') {
         statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-muted)" aria-label="Aborted">stop_circle</span>`;
-    } else if (step.status === 'running' && currentPauseId === null) {
+    } else if ((step.status === 'running' || step.inFlightLlmCall) && currentPauseId === null) {
         statusIconMarkup = `<span class="material-symbols-outlined spinner" style="color:var(--accent-primary)" aria-label="Running">progress_activity</span>`;
     } else if (step.status === 'running') {
         statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-primary)" aria-label="Paused">pause_circle</span>`;
@@ -1205,7 +1386,7 @@ function renderStepCard(step) {
     // Build inline reasoning / playbook note for active step
     let inlineReasoningHtml = '';
     if (isActive) {
-        const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null && step.source !== 'recording';
+        const isThinking = (step.status === 'running' || step.inFlightLlmCall) && !step.reasoning && currentPauseId === null && step.source !== 'recording';
         if (isThinking) {
             inlineReasoningHtml = `<div class="inline-reasoning-bubble inline-reasoning-thinking">
                         <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">psychology</span> AI Thinking</div>
@@ -1243,9 +1424,9 @@ function renderStepCard(step) {
         }
     }
 
-    // "▶ CURRENT" / "✕ FAILED" badge for the active step
-    const activeBadge = isActive
-        ? `<div class="active-step-badge">${isFailed ? '<span class="material-symbols-outlined">close</span> FAILED' : '<span class="material-symbols-outlined">play_arrow</span> CURRENT'}</div>`
+    const isAwaitingApproval = (step.status === 'running' || step.status === 'paused') && currentPauseId !== null;
+    const activeBadge = isActive || isAwaitingApproval
+        ? `<div class="active-step-badge ${isAwaitingApproval ? 'awaiting-approval' : ''}">${isFailed ? '<span class="material-symbols-outlined">close</span> FAILED' : (isAwaitingApproval ? '<span class="material-symbols-outlined">pause_circle</span> AWAITING APPROVAL' : '<span class="material-symbols-outlined">play_arrow</span> CURRENT')}</div>`
         : '';
 
     // Truncate long step instructions in the card; user can expand.
@@ -1359,6 +1540,11 @@ function sendAction(action, extra) {
     }
     const payload = { runId: currentRunId, pauseId: currentPauseId, action, ...extra };
     setButtonsEnabled(false);
+    const runBtn = document.getElementById('btnRun');
+    if (runBtn && (action === 'RUN' || action === 'STEP' || action === 'HEAL')) {
+        const isHeal = action === 'HEAL' || isErrorMode;
+        runBtn.innerHTML = `<span class="material-symbols-outlined spinner" aria-hidden="true">progress_activity</span> <span>${isHeal ? 'Healing...' : 'Thinking...'}</span>`;
+    }
     fetch('/api/console/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1555,8 +1741,8 @@ function triggerAutoRunCheck() {
 // Event Handlers & Local UI helpers
 // -------------------------------------------------------------------------
 function handleStepClick(event, index) {
-    // Prevent toggling if clicking interactive controls, inputs, variable bindings, or the breakpoint status icon
-    if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('input') || event.target.closest('.step-status-icon') || event.target.closest('.inline-edit-bindings')) return;
+    // Prevent toggling if clicking interactive controls, inputs, variable bindings, AI communication section, or the breakpoint status icon
+    if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('input') || event.target.closest('.step-status-icon') || event.target.closest('.inline-edit-bindings') || event.target.closest('.llm-communication-section') || event.target.closest('.llm-call-card') || event.target.closest('.llm-sub-accordion-pill')) return;
 
     // Allow selecting any step, including future ones.
     // Selection is now the primary trigger for reorder editing.
@@ -1652,7 +1838,9 @@ function updateBigScreenDetails() {
         includeBreadcrumb = `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
     }
 
-    const detailsHtml = buildStepDetailsHtml(step);
+    const activeStep = allSteps.find(s => s.status === 'running' || s.status === 'failed');
+    const isActive = (step.status === 'running' || step.status === 'failed' || (activeStep && step.index === activeStep.index));
+    const detailsHtml = buildStepDetailsHtml(step, isActive);
     const resolvedDetailInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
 
     content.innerHTML = `
@@ -1926,10 +2114,15 @@ function updateToolbarControls(enabled) {
     const finishBtn = document.getElementById('btnFinish');
     const isEditing = document.querySelector('.step-card.editing') !== null;
 
+    const isExecuting = !enabled || currentPauseId === null;
     if (isErrorMode) {
         if (runBtn) {
             runBtn.className = 'btn btn-heal';
-            runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> <span>Heal</span>';
+            if (isExecuting) {
+                runBtn.innerHTML = '<span class="material-symbols-outlined spinner" aria-hidden="true">progress_activity</span> <span>Healing...</span>';
+            } else {
+                runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> <span>Heal</span>';
+            }
             runBtn.title = 'Heal step using AI (Alt+R)';
         }
         if (finishBtn) {
@@ -1940,7 +2133,11 @@ function updateToolbarControls(enabled) {
     } else {
         if (runBtn) {
             runBtn.className = 'btn btn-success';
-            runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> <span>Run</span>';
+            if (isExecuting) {
+                runBtn.innerHTML = '<span class="material-symbols-outlined spinner" aria-hidden="true">progress_activity</span> <span>Thinking...</span>';
+            } else {
+                runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> <span>Run</span>';
+            }
             runBtn.title = 'Run step (Alt+R / Ctrl+Enter)';
         }
         if (finishBtn) {
@@ -2097,15 +2294,13 @@ function triggerSaveExit() {
 
 function triggerStop() {
     hideCancelWarning();
+    setButtonsEnabled(false);
+    fetch('/api/interactive/stop', { method: 'POST' }).catch(() => {});
     if (currentPauseId) {
         sendAction('ABORT');
-    } else {
-        setButtonsEnabled(false);
-        fetch('/api/stop', {
-            method: 'POST'
-        }).catch(err => {
-            console.error('Stop request failed', err);
-        });
+    }
+    if (window.parent && typeof window.parent.closeInteractiveConsoleView === 'function') {
+        window.parent.closeInteractiveConsoleView();
     }
 }
 

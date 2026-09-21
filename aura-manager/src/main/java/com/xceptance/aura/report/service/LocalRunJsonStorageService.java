@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.neodymium.ai.util.AtomicFileUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -87,8 +88,12 @@ public class LocalRunJsonStorageService
     public void writeRunJson(final String runId, final String jsonContent) throws IOException
     {
         final Path path = getRunJsonPath(runId);
-        Files.createDirectories(path.getParent());
-        Files.writeString(path, jsonContent, StandardCharsets.UTF_8);
+        final Path parent = path.getParent();
+        if (parent != null)
+        {
+            Files.createDirectories(parent);
+        }
+        AtomicFileUtils.writeStringAtomic(path, jsonContent);
         LOG.info("Saved run JSON to disk: {}", path.toAbsolutePath());
     }
 
@@ -452,11 +457,11 @@ public class LocalRunJsonStorageService
                         }
 
                         totalExecsCount++;
-                        final String rawStatus = node.path("status").asText("passed-clean");
+                        final String rawStatus = node.path("status").asText("failed-unknown");
                         final JsonNode bugsNode = node.path("bugs");
                         final boolean hasBugs = bugsNode.isArray() && bugsNode.size() > 0;
 
-                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus))
+                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
                         {
                             if (hasBugs)
                             {
@@ -478,13 +483,20 @@ public class LocalRunJsonStorageService
                                 pass++;
                             }
                         }
-                        else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus))
+                        else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus) || "cancelled".equalsIgnoreCase(rawStatus))
                         {
                             ignoredCount++;
                         }
                         else
                         {
-                            pass++;
+                            if (hasBugs)
+                            {
+                                known++;
+                            }
+                            else
+                            {
+                                unknown++;
+                            }
                         }
                     }
                 }
@@ -600,7 +612,7 @@ public class LocalRunJsonStorageService
                     metricObj.put("title", tTitle);
                     metricObj.put("location", loc);
                     metricObj.put("browser", tBrowser);
-                    metricObj.put("status", objNode.path("status").asText("passed-clean"));
+                    metricObj.put("status", objNode.path("status").asText("failed-unknown"));
                     metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
                     if (objNode.has("startTime"))
                     {
@@ -658,6 +670,7 @@ public class LocalRunJsonStorageService
             {
                 compactRootNode.put("timestamp", earliestTimeStr);
             }
+            compactRootNode.set("summary", summaryNode);
             compactRootNode.set("executionMetrics", executionMetricsNode);
 
             final String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(compactRootNode);
@@ -665,7 +678,7 @@ public class LocalRunJsonStorageService
             {
                 try
                 {
-                    java.nio.file.Files.writeString(runJsonFile.toPath(), jsonString, StandardCharsets.UTF_8);
+                    AtomicFileUtils.writeStringAtomic(runJsonFile.toPath(), jsonString);
                     LOG.info("Saved run.json for runId {} at {}", runId, runJsonFile.getAbsolutePath());
                 }
                 catch (final Exception e)

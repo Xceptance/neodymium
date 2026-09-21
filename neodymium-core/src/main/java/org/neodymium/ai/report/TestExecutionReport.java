@@ -849,6 +849,56 @@ public final class TestExecutionReport
         {
             this.verificationResult = verificationResult;
         }
+
+        /**
+         * Resets mutable execution state accumulated during a previous execution attempt,
+         * preparing this entry for a fresh re-execution of the same step (e.g., after an
+         * interactive EDIT action). The step index and accumulated LLM call communications are
+         * preserved across edits so that the full prompt trace history remains accessible. Actions,
+         * screenshots, sub-steps, token counters, reasoning, failure details, and timing fields are cleared.
+         * The status is reset to {@code "RUNNING"} and the instruction fields are updated.
+         *
+         * @param newInstruction    the resolved (variable-substituted) instruction for the re-execution
+         * @param newRawInstruction the raw (pre-substitution) instruction for the re-execution
+         */
+        public void reset(final String newInstruction, final String newRawInstruction)
+        {
+            this.instruction = newInstruction;
+            this.rawInstruction = newRawInstruction;
+            this.status = "RUNNING";
+            this.startTimeMs = System.currentTimeMillis();
+            this.durationMs = 0L;
+            this.reasoning = null;
+            this.failureReason = null;
+            this.escalations = 0;
+            this.contextLevels = null;
+            this.semanticIntent = null;
+            this.verificationResult = null;
+
+            // Reset all token usage counters accumulated from the prior attempt
+            this.pesapCalls = 0;
+            this.pesapInputTokens = 0L;
+            this.pesapOutputTokens = 0L;
+            this.pesapCachedTokens = 0L;
+            this.standardCalls = 0;
+            this.standardInputTokens = 0L;
+            this.standardOutputTokens = 0L;
+            this.standardCachedTokens = 0L;
+            this.verificationCalls = 0;
+            this.verificationInputTokens = 0L;
+            this.verificationOutputTokens = 0L;
+            this.verificationCachedTokens = 0L;
+            this.rcaCalls = 0;
+            this.rcaInputTokens = 0L;
+            this.rcaOutputTokens = 0L;
+            this.rcaCachedTokens = 0L;
+
+            // Clear execution artifacts from the prior attempt (llmCalls is preserved to maintain pre-edit prompt trace history)
+            this.actions.clear();
+            this.screenshots.clear();
+            this.subSteps.clear();
+            this.reasonings.clear();
+        }
     }
 
     /**

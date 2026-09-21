@@ -407,23 +407,66 @@ public final class StateMachineRunner
                 }
             }
             }
-            success = true;
-            context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+            boolean anyStepFailed = false;
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> sessionStepsForCheck = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            if (sessionStepsForCheck != null)
+            {
+                for (final PlaybookStep s : sessionStepsForCheck)
+                {
+                    if (s.isFailed() || PlaybookStepStatus.FAILED.equals(s.getStatus()))
+                    {
+                        anyStepFailed = true;
+                        break;
+                    }
+                }
+            }
+            final boolean hasExecutionError = context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+            success = !hasExecutionError && !anyStepFailed;
+            if (success)
+            {
+                context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+            }
         }
         catch (final PipelineException e)
         {
             failureCause = e;
+            if (!context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR))
+            {
+                context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, e);
+            }
             runVisualRca(context, e);
             throw e;
         }
         catch (final Throwable t)
         {
             failureCause = t;
+            if (!context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR))
+            {
+                context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+            }
             runVisualRca(context, t);
             throw t;
         }
         finally
         {
+            boolean anyStepFailed = false;
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> sessionStepsForCheck = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            if (sessionStepsForCheck != null)
+            {
+                for (final PlaybookStep s : sessionStepsForCheck)
+                {
+                    if (s.isFailed() || PlaybookStepStatus.FAILED.equals(s.getStatus()))
+                    {
+                        anyStepFailed = true;
+                        break;
+                    }
+                }
+            }
+            final boolean hasExecutionError = context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR) || failureCause != null;
+            success = !hasExecutionError && !anyStepFailed;
+
             final long durationMs = System.currentTimeMillis() - startTime;
             if (!success && failureCause != null)
             {

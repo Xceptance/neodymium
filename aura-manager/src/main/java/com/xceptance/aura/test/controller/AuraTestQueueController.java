@@ -485,6 +485,11 @@ public class AuraTestQueueController
         return queueService.isRunningQueue();
     }
 
+    public String getCurrentRunId()
+    {
+        return queueService.getCurrentRunId();
+    }
+
     public int getGlobalTestsRun()
     {
         return queueService.getGlobalTestsRun();
@@ -1071,7 +1076,7 @@ public class AuraTestQueueController
     public String stopExecution(final Model model)
     {
         LOGGER.info("[Aura Server] User requested to stop active execution subprocess");
-        queueService.stopProcess();
+        queueService.stopCurrentTest();
         return renderExecutionStatePanels(model);
     }
 
@@ -1091,6 +1096,9 @@ public class AuraTestQueueController
         statusObj.put("passed", queueService.getGlobalPassed());
         statusObj.put("failed", queueService.getGlobalFailed());
         statusObj.put("skipped", queueService.getGlobalSkipped());
+        final String runId = queueService.getCurrentRunId();
+        statusObj.put("runId", runId != null ? runId : "");
+        statusObj.put("runReportUrl", (runId != null && !runId.isEmpty()) ? "/run-report?runId=" + runId : "");
         statusObj.put("running", queueService.isRunningQueue());
         statusObj.put("activeFile", queueService.getActiveFile());
 

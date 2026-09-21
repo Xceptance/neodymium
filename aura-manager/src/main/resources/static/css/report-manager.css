@@ -36,6 +36,10 @@
     --status-ignored-bg: #f1f5f9;
     --status-ignored-border: #cbd5e1;
 
+    --status-running: #475569;       /* Slate Grey: Running / In-Progress */
+    --status-running-bg: #f1f5f9;
+    --status-running-border: #cbd5e1;
+
     /* Execution Mode Badges */
     --mode-ai-bg: #f3e8ff;
     --mode-ai-color: #7e22ce;
@@ -230,6 +234,11 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .badge-known-fail { background: var(--status-known-fail-bg); color: var(--status-known-fail); border: 1px solid var(--status-known-fail-border); }
 .badge-unknown-fail { background: var(--status-unknown-fail-bg); color: var(--status-unknown-fail); border: 1px solid var(--status-unknown-fail-border); }
 .badge-ignored { background: var(--status-ignored-bg); color: var(--status-ignored); border: 1px solid var(--status-ignored-border); }
+.badge-running { background: var(--status-running-bg); color: var(--status-running); border: 1px solid var(--status-running-border); }
+.status-running { background: var(--status-running-bg); color: var(--status-running); border-color: var(--status-running-border); }
+
+.material-symbols-outlined.spin, .spin { animation: aura-spin 1.5s linear infinite; display: inline-block; }
+@keyframes aura-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* Execution Engine Badges */
 .badge-mode-ai { background: var(--mode-ai-bg); color: var(--mode-ai-color); border: 1px solid var(--mode-ai-border); font-weight: 700; font-family: var(--font-family); }
@@ -675,6 +684,7 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .card-known { border-top: 3px solid var(--status-known-fail); }
 .card-failed { border-top: 3px solid var(--status-unknown-fail); }
 .card-ignored { border-top: 3px solid var(--status-ignored); }
+.card-running { border-top: 3px solid var(--status-running, #64748b); }
 
 .toolbar-section {
     display: flex;
@@ -950,6 +960,7 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .context-badge.level-lean { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
 .context-badge.level-standard { background: #fefce8; color: #854d0e; border-color: #fef08a; }
 .context-badge.level-visual { background: #fdf2f8; color: #9d174d; border-color: #fbcfe8; }
+.context-badge.level-pending { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
 
 .sub-steps-container {
     background: #f8fafc;
