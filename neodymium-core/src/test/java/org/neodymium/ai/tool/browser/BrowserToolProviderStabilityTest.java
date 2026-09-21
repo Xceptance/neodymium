@@ -24,8 +24,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.openqa.selenium.Dimension;
 import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.Point;
+import org.openqa.selenium.Rectangle;
 import org.openqa.selenium.WebElement;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -38,6 +43,7 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.interactions.Interactive;
 
 import java.lang.reflect.Proxy;
 
@@ -71,7 +77,7 @@ public class BrowserToolProviderStabilityTest
         }
     }
 
-    private interface MockJsDriver extends WebDriver, JavascriptExecutor
+    private interface MockJsDriver extends WebDriver, JavascriptExecutor, Interactive
     {
     }
 
@@ -363,5 +369,180 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals("assert_text", json.path("action").asText());
         Assertions.assertTrue(json.path("matched").asBoolean());
         Assertions.assertTrue(pollCount.get() >= 3, "Should have polled at least 3 times until element updated instead of aborting");
+    }
+
+    @Test
+    public void testCleanSelectorUtility()
+    {
+        Assertions.assertEquals("article[data-ai=\"xcboo7um\"] button",
+                BrowserToolProvider.cleanSelector("article[data-ai=\"xcboo7um\"] button, text:"));
+        Assertions.assertEquals("button", BrowserToolProvider.cleanSelector("button, text: Add to Cart"));
+        Assertions.assertEquals("button", BrowserToolProvider.cleanSelector("button, text=Add to Cart"));
+        Assertions.assertEquals("div.card", BrowserToolProvider.cleanSelector("div.card, "));
+        Assertions.assertEquals("button", BrowserToolProvider.cleanSelector("button, action: click"));
+        Assertions.assertEquals("a.btn", BrowserToolProvider.cleanSelector("a.btn, target: _blank"));
+        Assertions.assertEquals("", BrowserToolProvider.cleanSelector(null));
+        Assertions.assertEquals("", BrowserToolProvider.cleanSelector("   "));
+        Assertions.assertEquals("button.primary, button.secondary",
+                BrowserToolProvider.cleanSelector("button.primary, button.secondary"));
+    }
+
+    @Test
+    public void testHybridClickPrioritizesElementOverOutOfBoundsCoordinates() throws Exception
+    {
+        final AtomicBoolean clicked = new AtomicBoolean(false);
+
+        final WebElement buttonElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("isDisplayed".equals(name) || "isEnabled".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "button";
+                    }
+                    if ("getText".equals(name))
+                    {
+                        return "Add to Cart";
+                    }
+                    if ("click".equals(name))
+                    {
+                        clicked.set(true);
+                        return null;
+                    }
+                    if ("getSize".equals(name))
+                    {
+                        return new Dimension(120, 40);
+                    }
+                    if ("getLocation".equals(name))
+                    {
+                        return new Point(100, 200);
+                    }
+                    if ("getRect".equals(name))
+                    {
+                        return new Rectangle(100, 200, 40, 120);
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("data-ai".equals(attr))
+                        {
+                            return "xcboo7um";
+                        }
+                        return null;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTitle".equals(name))
+                    {
+                        return "Shop";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "https://localhost:8543/verla/shop.html";
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return buttonElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(buttonElement);
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        return null;
+                    }
+                    if ("perform".equals(name) || "resetInputState".equals(name))
+                    {
+                        return null;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", "article[data-ai=\"xcboo7um\"] button, text:");
+        args.put("x", 158);
+        args.put("y", 893);
+
+        final ToolCall call = new ToolCall("call-hybrid-click", "browser_click", args);
+        final ToolResult result = tool.execute(call, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertTrue(clicked.get(), "Element click should have been executed via Selenide");
+    }
+
+    @Test
+    public void testPureCoordinateClickAutoScrollsOutOfBoundsY() throws Exception
+    {
+        final AtomicBoolean scrolled = new AtomicBoolean(false);
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTitle".equals(name))
+                    {
+                        return "Shop";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "https://localhost:8543/verla/shop.html";
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("window.innerWidth"))
+                        {
+                            return Map.of("width", 1280, "height", 800);
+                        }
+                        if (script != null && script.contains("window.scrollBy"))
+                        {
+                            scrolled.set(true);
+                            return null;
+                        }
+                        if (script != null && script.contains("document.elementFromPoint"))
+                        {
+                            return true;
+                        }
+                        return null;
+                    }
+                    if ("perform".equals(name) || "resetInputState".equals(name))
+                    {
+                        return null;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("target", "coord: 500, 1200");
+
+        final ToolCall call = new ToolCall("call-coord-scroll", "browser_click", args);
+        final ToolResult result = tool.execute(call, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertTrue(scrolled.get(), "window.scrollBy should have been invoked for out-of-bounds Y coordinate");
     }
 }

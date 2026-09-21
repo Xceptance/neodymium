@@ -44,6 +44,7 @@ import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.Alert;
+import org.openqa.selenium.Dimension;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoAlertPresentException;
@@ -160,6 +161,331 @@ public final class BrowserToolProvider
         registry.register(createDragToTool());
     }
 
+    private static int[] performSafeCoordinateClick(final WebDriver driver, final int targetX, final int targetY)
+    {
+        int x = targetX;
+        int y = targetY;
+
+        int vpWidth = 1280;
+        int vpHeight = 800;
+
+        try
+        {
+            final String vpScript = """
+                return {
+                    width: window.innerWidth || document.documentElement.clientWidth || 0,
+                    height: window.innerHeight || document.documentElement.clientHeight || 0
+                };
+                """;
+            final Object vpObj = ((JavascriptExecutor) driver).executeScript(vpScript);
+            if (vpObj instanceof Map<?, ?> vpMap)
+            {
+                final int w = ((Number) vpMap.get("width")).intValue();
+                final int h = ((Number) vpMap.get("height")).intValue();
+                if (w > 0)
+                {
+                    vpWidth = w;
+                }
+                if (h > 0)
+                {
+                    vpHeight = h;
+                }
+            }
+        }
+        catch (final Exception ignored)
+        {
+            try
+            {
+                final Dimension winSize = driver.manage().window().getSize();
+                vpWidth = winSize.getWidth();
+                vpHeight = winSize.getHeight();
+            }
+            catch (final Exception ignoredWin)
+            {
+            }
+        }
+
+        int deltaX = 0;
+        if (x < 0 || x >= vpWidth)
+        {
+            deltaX = x - (vpWidth / 2);
+        }
+        int deltaY = 0;
+        if (y < 0 || y >= vpHeight)
+        {
+            deltaY = y - (vpHeight / 2);
+        }
+
+        if (deltaX != 0 || deltaY != 0)
+        {
+            try
+            {
+                ((JavascriptExecutor) driver).executeScript("window.scrollBy(arguments[0], arguments[1]);", deltaX, deltaY);
+                x -= deltaX;
+                y -= deltaY;
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        x = Math.max(0, Math.min(x, Math.max(0, vpWidth - 1)));
+        y = Math.max(0, Math.min(y, Math.max(0, vpHeight - 1)));
+
+        try
+        {
+            new Actions(driver).moveToLocation(x, y).click().perform();
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("Actions.moveToLocation({}, {}) failed: {}. Falling back to elementFromPoint JS click.", x, y, e.getMessage());
+            final String jsClickScript = """
+                var el = document.elementFromPoint(arguments[0], arguments[1]);
+                if (el) {
+                    el.click();
+                    return true;
+                }
+                return false;
+                """;
+            try
+            {
+                ((JavascriptExecutor) driver).executeScript(jsClickScript, x, y);
+            }
+            catch (final Exception jsEx)
+            {
+                LOGGER.error("Fallback document.elementFromPoint click failed at ({}, {})", x, y, jsEx);
+                throw e;
+            }
+        }
+
+        return new int[]{x, y};
+    }
+
+    private static ToolResult executeElementClick(final ToolCall call, final WebDriver driver, final String selector,
+            final String text, final int parsedX, final int parsedY)
+    {
+        final String targetDesc = !selector.isBlank() ? selector : text;
+        final SelenideElement el;
+
+        if (!selector.isBlank())
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                el = $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+            else
+            {
+                el = findElement(selector);
+            }
+        }
+        else
+        {
+            el = $(Selectors.byText(text)).is(Condition.visible)
+                    ? $(Selectors.byText(text))
+                    : $(Selectors.withText(text));
+        }
+
+        SelenideElementFinder.scrollIntoViewIfNeeded(el);
+
+        if (!el.is(Condition.visible))
+        {
+            try
+            {
+                final SelenideElement hoverParent = el.closest("#cart-btn-wrapper, .dropdown, [class*='dropdown'], [id*='dropdown']");
+                if (hoverParent.exists() && hoverParent.is(Condition.visible))
+                {
+                    hoverParent.hover();
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        DomFeatureVector featureVector = null;
+        if (driver != null)
+        {
+            try
+            {
+                featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        SelenideElement clickedEl = el;
+        String actualTarget = targetDesc;
+
+        boolean clickedViaOffset = false;
+        if (driver != null && parsedX != Integer.MIN_VALUE && parsedY != Integer.MIN_VALUE && parsedX >= 0 && parsedY >= 0)
+        {
+            try
+            {
+                if (el.is(Condition.visible))
+                {
+                    final int elWidth = el.getSize().getWidth();
+                    final int elHeight = el.getSize().getHeight();
+                    if (parsedX <= elWidth && parsedY <= elHeight)
+                    {
+                        final int xOffset = parsedX - (elWidth / 2);
+                        final int yOffset = parsedY - (elHeight / 2);
+                        new Actions(driver).moveToElement(el.toWebElement(), xOffset, yOffset).click().perform();
+                        clickedViaOffset = true;
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (!clickedViaOffset)
+        {
+            try
+            {
+                el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+            }
+            catch (final Exception | AssertionError e)
+            {
+                SelenideElement fallbackTargetEl = null;
+                if (!text.isBlank() && !selector.isBlank())
+                {
+                    try
+                    {
+                        final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
+                                ? $(Selectors.byText(text))
+                                : $(Selectors.withText(text));
+                        SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
+                        textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                        fallbackTargetEl = textEl;
+                    }
+                    catch (final Exception | AssertionError ignored)
+                    {
+                    }
+                }
+
+                if (fallbackTargetEl == null)
+                {
+                    try
+                    {
+                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                        Selenide.executeJavaScript("arguments[0].click();", el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                        throw e;
+                    }
+                }
+                clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
+                actualTarget = (fallbackTargetEl != null) ? text : targetDesc;
+                if (fallbackTargetEl != null && driver != null)
+                {
+                    try
+                    {
+                        featureVector = new PageAnalyzer(driver).extractFeatureVector(fallbackTargetEl);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                    }
+                }
+            }
+        }
+
+        if (!isAlertPresent(driver))
+        {
+            try
+            {
+                final String tagName = clickedEl.getTagName();
+                if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                {
+                    Selenide.executeJavaScript("arguments[0].focus();", clickedEl);
+                }
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        final ObjectNode res = successNode("click");
+        res.put("target", actualTarget);
+        if (featureVector != null)
+        {
+            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+        }
+        if (driver != null)
+        {
+            res.put("url", getSafeUrl(driver));
+            res.put("title", getSafeTitle(driver));
+        }
+        return ToolResult.success(call.callId(), res.toString());
+    }
+
+    private static ToolResult executeCoordinateClick(final ToolCall call, final WebDriver driver, final String selector,
+            final int parsedX, final int parsedY)
+    {
+        final int rawX = parsedX;
+        final int rawY = parsedY;
+
+        int x = rawX;
+        int y = rawY;
+
+        if (!selector.isBlank())
+        {
+            final String rectScript = """
+                var el = document.querySelector(arguments[0]);
+                if (!el) return null;
+                var r = el.getBoundingClientRect();
+                return { x: Math.round(r.left), y: Math.round(r.top) };
+                """;
+            try
+            {
+                final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, selector);
+                if (rectObj instanceof Map<?, ?> map)
+                {
+                    x = ((Number) map.get("x")).intValue() + rawX;
+                    y = ((Number) map.get("y")).intValue() + rawY;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        final int[] clicked = performSafeCoordinateClick(driver, x, y);
+        final int finalX = clicked[0];
+        final int finalY = clicked[1];
+
+        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
+        final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
+        final ObjectNode res = successNode("click");
+        res.put("x", finalX);
+        res.put("y", finalY);
+        if (!selector.isBlank())
+        {
+            res.put("elementSelector", selector);
+            res.put("offsetX", rawX);
+            res.put("offsetY", rawY);
+        }
+
+        if (reanchored != null)
+        {
+            res.put("selector", reanchored.selector());
+            builder.withVariable("reanchoredSelector", reanchored.selector());
+            builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
+        }
+        if (driver != null)
+        {
+            res.put("url", getSafeUrl(driver));
+            res.put("title", getSafeTitle(driver));
+        }
+        builder.withContent(res.toString());
+        return builder.build();
+    }
+
     private static AiTool createClickTool()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
@@ -191,7 +517,8 @@ public final class BrowserToolProvider
                 final String target = args.hasNonNull("target") ? args.path("target").asText().trim() : "";
                 int parsedX = args.hasNonNull("x") ? args.path("x").asInt() : Integer.MIN_VALUE;
                 int parsedY = args.hasNonNull("y") ? args.path("y").asInt() : Integer.MIN_VALUE;
-                String sel = args.hasNonNull("selector") ? args.path("selector").asText().trim() : "";
+                String sel = args.hasNonNull("selector") ? cleanSelector(args.path("selector").asText().trim()) : "";
+                final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
 
                 if ((parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE) && (target.startsWith("coord:") || target.contains("@")))
                 {
@@ -202,7 +529,7 @@ public final class BrowserToolProvider
                         parsedY = coord.y();
                         if (sel.isBlank() && coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                         {
-                            sel = coord.anchorSelector();
+                            sel = cleanSelector(coord.anchorSelector());
                         }
                     }
                     else if (target.startsWith("coord:"))
@@ -222,66 +549,12 @@ public final class BrowserToolProvider
                     }
                 }
 
-                // Case 1: Coordinates provided
-                if (parsedX != Integer.MIN_VALUE && parsedY != Integer.MIN_VALUE && driver != null)
+                if (sel.isBlank() && !target.isBlank() && !target.startsWith("coord:") && !target.startsWith("badge:"))
                 {
-                    final int rawX = parsedX;
-                    final int rawY = parsedY;
-
-                    int x = rawX;
-                    int y = rawY;
-                    if (!sel.isBlank())
-                    {
-                        final String rectScript = """
-                            var el = document.querySelector(arguments[0]);
-                            if (!el) return null;
-                            var r = el.getBoundingClientRect();
-                            return { x: Math.round(r.left), y: Math.round(r.top) };
-                            """;
-                        try
-                        {
-                            final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, sel);
-                            if (rectObj instanceof Map<?, ?> map)
-                            {
-                                x = ((Number) map.get("x")).intValue() + rawX;
-                                y = ((Number) map.get("y")).intValue() + rawY;
-                            }
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
-                    }
-
-                    new Actions(driver).moveToLocation(x, y).click().perform();
-
-                    final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
-                    final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
-                    final ObjectNode res = successNode("click");
-                    res.put("x", x);
-                    res.put("y", y);
-                    if (!sel.isBlank())
-                    {
-                        res.put("elementSelector", sel);
-                        res.put("offsetX", rawX);
-                        res.put("offsetY", rawY);
-                    }
-
-                    if (reanchored != null)
-                    {
-                        res.put("selector", reanchored.selector());
-                        builder.withVariable("reanchoredSelector", reanchored.selector());
-                        builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
-                    }
-                    if (driver != null)
-                    {
-                        res.put("url", getSafeUrl(driver));
-                        res.put("title", getSafeTitle(driver));
-                    }
-                    builder.withContent(res.toString());
-                    return builder.build();
+                    sel = cleanSelector(target);
                 }
 
-                // Case 2: Target is badge:N
+                // Case 1: Target is badge:N
                 if (target.startsWith("badge:") && driver != null)
                 {
                     final String badgeNum = target.substring("badge:".length()).trim();
@@ -289,6 +562,7 @@ public final class BrowserToolProvider
                         var badges = document.querySelectorAll('#__neo_som_badges__ > div');
                         for (var i = 0; i < badges.length; i++) {
                             if (badges[i].innerText.trim() === arguments[0]) {
+                                badges[i].scrollIntoView({ block: 'center', inline: 'center' });
                                 var rect = badges[i].getBoundingClientRect();
                                 return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
                             }
@@ -300,12 +574,16 @@ public final class BrowserToolProvider
                     {
                         final int bx = ((Number) coordsMap.get("x")).intValue();
                         final int by = ((Number) coordsMap.get("y")).intValue();
-                        new Actions(driver).moveToLocation(bx, by).click().perform();
+                        final int[] clicked = performSafeCoordinateClick(driver, bx, by);
+                        final int finalX = clicked[0];
+                        final int finalY = clicked[1];
 
-                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
+                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
                         final ToolResult.Builder b = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
                         final ObjectNode res = successNode("click");
                         res.put("target", "badge:" + badgeNum);
+                        res.put("x", finalX);
+                        res.put("y", finalY);
                         if (reanchored != null)
                         {
                             res.put("selector", reanchored.selector());
@@ -321,146 +599,32 @@ public final class BrowserToolProvider
                     }
                 }
 
-                // Case 3: Element resolution via selector and text fallback
-                final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
-                final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : target;
-
-                if (selector.isBlank() && text.isBlank())
-                {
-                    return ToolResult.error(call.callId(), errorNode("click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
-                }
-
-                final String targetDesc = !selector.isBlank() ? selector : text;
-                final SelenideElement el;
-
-                if (!selector.isBlank())
-                {
-                    if (selector.startsWith("text="))
-                    {
-                        final String rawText = selector.substring("text=".length()).trim();
-                        el = $(Selectors.byText(rawText)).is(Condition.visible)
-                                ? $(Selectors.byText(rawText))
-                                : $(Selectors.withText(rawText));
-                    }
-                    else
-                    {
-                        el = findElement(selector);
-                    }
-                }
-                else
-                {
-                    el = $(Selectors.byText(text)).is(Condition.visible)
-                            ? $(Selectors.byText(text))
-                            : $(Selectors.withText(text));
-                }
-
-                SelenideElementFinder.scrollIntoViewIfNeeded(el);
-
-                if (!el.is(Condition.visible))
+                // Case 2: Element resolution via selector and text fallback (prioritized over raw coordinates unless explicit coord: target)
+                final boolean hasElementTarget = (!sel.isBlank() || !text.isBlank()) && !target.startsWith("coord:");
+                if (hasElementTarget)
                 {
                     try
                     {
-                        final SelenideElement hoverParent = el.closest("#cart-btn-wrapper, .dropdown, [class*='dropdown'], [id*='dropdown']");
-                        if (hoverParent.exists() && hoverParent.is(Condition.visible))
-                        {
-                            hoverParent.hover();
-                        }
+                        return executeElementClick(call, driver, sel, text, parsedX, parsedY);
                     }
-                    catch (final Exception ignored)
+                    catch (final Exception | AssertionError e)
                     {
-                    }
-                }
-
-                DomFeatureVector featureVector = null;
-                if (driver != null)
-                {
-                    try
-                    {
-                        featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
-                    }
-                    catch (final Throwable ignored)
-                    {
-                    }
-                }
-
-                SelenideElement clickedEl = el;
-                String actualTarget = targetDesc;
-                try
-                {
-                    el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
-                }
-                catch (final Exception | AssertionError e)
-                {
-                    SelenideElement fallbackTargetEl = null;
-                    if (!text.isBlank() && !selector.isBlank())
-                    {
-                        try
-                        {
-                            final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
-                                    ? $(Selectors.byText(text))
-                                    : $(Selectors.withText(text));
-                            SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
-                            textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
-                            fallbackTargetEl = textEl;
-                        }
-                        catch (final Exception | AssertionError ignored)
-                        {
-                        }
-                    }
-
-                    if (fallbackTargetEl == null)
-                    {
-                        try
-                        {
-                            SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                            Selenide.executeJavaScript("arguments[0].click();", el);
-                        }
-                        catch (final Throwable ignored)
+                        if (parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE || driver == null)
                         {
                             throw e;
                         }
-                    }
-                    clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
-                    actualTarget = (fallbackTargetEl != null) ? text : targetDesc;
-                    if (fallbackTargetEl != null && driver != null)
-                    {
-                        try
-                        {
-                            featureVector = new PageAnalyzer(driver).extractFeatureVector(fallbackTargetEl);
-                        }
-                        catch (final Throwable ignored)
-                        {
-                        }
+                        LOGGER.warn("Element click failed for '{}', falling back to coordinate click ({}, {}): {}",
+                                !sel.isBlank() ? sel : text, parsedX, parsedY, e.getMessage());
                     }
                 }
 
-                if (!isAlertPresent(driver))
+                // Case 3: Coordinate click (pure coordinates or explicit coord: target)
+                if (parsedX != Integer.MIN_VALUE && parsedY != Integer.MIN_VALUE && driver != null)
                 {
-                    try
-                    {
-                        final String tagName = clickedEl.getTagName();
-                        if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
-                        {
-                            Selenide.executeJavaScript("arguments[0].focus();", clickedEl);
-                        }
-                    }
-                    catch (final Throwable ignored)
-                    {
-                    }
+                    return executeCoordinateClick(call, driver, sel, parsedX, parsedY);
                 }
 
-                final ObjectNode res = successNode("click");
-                res.put("target", actualTarget);
-                if (featureVector != null)
-                {
-                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                }
-                if (driver != null)
-                {
-                    res.put("url", getSafeUrl(driver));
-                    res.put("title", getSafeTitle(driver));
-                }
-                return ToolResult.success(call.callId(), res.toString());
+                return ToolResult.error(call.callId(), errorNode("click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
             }
         };
     }
@@ -850,7 +1014,9 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
-                findElement(selector).shouldBe(Condition.visible).hover();
+                final SelenideElement el = findElement(selector);
+                SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                el.shouldBe(Condition.visible).hover();
                 final ObjectNode res = successNode("hover");
                 res.put("target", selector);
                 return ToolResult.success(call.callId(), res.toString());
@@ -1747,21 +1913,42 @@ public final class BrowserToolProvider
         };
     }
 
+    /**
+     * Sanitizes selector strings that may contain trailing hallucinated parameter keys or labels
+     * from LLMs (e.g. "button, text:", "div.card, text=...", or trailing commas).
+     *
+     * @param selector the raw selector string
+     * @return the cleaned selector string
+     */
+    static String cleanSelector(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return "";
+        }
+        String cleaned = selector.trim();
+        // Strip trailing parameter labels hallucinated by LLMs like ", text:", ", text=", ", text"
+        cleaned = cleaned.replaceAll("(?i),\\s*(?:text|action|target|locator)\\s*[:=]?.*$", "").trim();
+        // Strip dangling commas
+        cleaned = cleaned.replaceAll(",\\s*$", "").trim();
+        return cleaned;
+    }
+
     private static String resolveSelector(final JsonNode args)
     {
         if (args != null)
         {
             if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
             {
-                return args.path("selector").asText();
+                return cleanSelector(args.path("selector").asText());
             }
             if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
             {
-                return args.path("target").asText();
+                return cleanSelector(args.path("target").asText());
             }
             if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
             {
-                return args.path("locator").asText();
+                return cleanSelector(args.path("locator").asText());
             }
         }
         return "";
