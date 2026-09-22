@@ -7,19 +7,22 @@ import static org.openqa.selenium.remote.Browser.FIREFOX;
 import static org.openqa.selenium.remote.Browser.IE;
 import static org.openqa.selenium.remote.Browser.SAFARI;
 
+import static java.util.logging.Logger.getLogger;
+
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.Proxy;
+import org.openqa.selenium.SessionNotCreatedException;
 import org.openqa.selenium.UnsupportedCommandException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriverException;
@@ -67,6 +70,8 @@ import org.neodymium.common.browser.wrappers.GeckoBuilder;
 import org.neodymium.common.browser.wrappers.IEBuilder;
 import org.neodymium.common.browser.wrappers.SafariBuilder;
 import org.neodymium.util.Neodymium;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Helper class to create webdriver for the test
@@ -75,6 +80,20 @@ import org.neodymium.util.Neodymium;
  */
 public class BrowserRunnerHelper
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BrowserRunnerHelper.class);
+
+    @FunctionalInterface
+    interface WebDriverStateContainerSupplier
+    {
+        WebDriverStateContainer create() throws MalformedURLException;
+    }
+
+    @FunctionalInterface
+    interface Sleeper
+    {
+        void sleep(final long millis) throws InterruptedException;
+    }
+
     private static final String CERT_PASSWORD = "xceptance";
 
     private static final String CERT_NAME = "MITMProxy";
@@ -174,13 +193,131 @@ public class BrowserRunnerHelper
     public static WebDriverStateContainer createWebDriverStateContainer(final BrowserConfiguration config, final String testClassInstance)
         throws MalformedURLException
     {
-        Logger.getLogger("org.openqa.selenium").setLevel(Level.parse(Neodymium.configuration().seleniumLogLevel()));
+        return createWebDriverStateContainerWithRetry(() -> createWebDriverStateContainerInternal(config, testClassInstance),
+                                                      Thread::sleep);
+    }
+
+    /**
+     * Executes container creation with retry logic on {@link SessionNotCreatedException}.
+     *
+     * @param supplier
+     *            the supplier attempting to construct the container
+     * @param sleeper
+     *            the sleeper used between retry attempts
+     * @return the created {@link WebDriverStateContainer}
+     * @throws MalformedURLException
+     *             if URL creation fails
+     */
+    static WebDriverStateContainer createWebDriverStateContainerWithRetry(
+        final WebDriverStateContainerSupplier supplier,
+        final Sleeper sleeper)
+        throws MalformedURLException
+    {
+        final int maxRetries = Math.max(0, Neodymium.configuration().sessionRetryMaxRetries());
+        SessionNotCreatedException lastException = null;
+
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                return supplier.create();
+            }
+            catch (final SessionNotCreatedException e)
+            {
+                lastException = e;
+                if (attempt < maxRetries)
+                {
+                    final long pauseMs = calculateRetryPauseMs();
+                    LOGGER.warn("Failed to create WebDriver session (attempt {}/{}): {}. Retrying once after {} ms pause...",
+                                attempt + 1, maxRetries + 1, e.getMessage(), pauseMs);
+                    try
+                    {
+                        sleeper.sleep(pauseMs);
+                    }
+                    catch (final InterruptedException ie)
+                    {
+                        Thread.currentThread().interrupt();
+                        throw e;
+                    }
+                }
+                else
+                {
+                    LOGGER.error("Failed to create WebDriver session after {} attempts. Aborting.", maxRetries + 1, e);
+                }
+            }
+        }
+
+        throw lastException;
+    }
+
+    /**
+     * Calculates the retry pause in milliseconds using configured min/max bounds with random jitter.
+     *
+     * @return pause duration in milliseconds
+     */
+    static long calculateRetryPauseMs()
+    {
+        final long configuredMin = Neodymium.configuration().sessionRetryPauseMin();
+        final long configuredMax = Neodymium.configuration().sessionRetryPauseMax();
+        final long min = Math.max(0L, Math.min(configuredMin, configuredMax));
+        final long max = Math.max(0L, Math.max(configuredMin, configuredMax));
+        if (min == max)
+        {
+            return min;
+        }
+        return ThreadLocalRandom.current().nextLong(min, max + 1L);
+    }
+
+    /**
+     * Cleans up partially initialized container resources (quitting any active driver and stopping embedded proxy)
+     * when session creation fails.
+     *
+     * @param wDSC
+     *            the container to clean up
+     */
+    static void cleanupWebDriverStateContainer(final WebDriverStateContainer wDSC)
+    {
+        if (wDSC != null)
+        {
+            final WebDriver webDriver = wDSC.getWebDriver();
+            if (webDriver != null)
+            {
+                try
+                {
+                    webDriver.quit();
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Error quitting WebDriver during cleanup", e);
+                }
+            }
+
+            final BrowserUpProxy proxy = wDSC.getProxy();
+            if (proxy != null)
+            {
+                try
+                {
+                    proxy.stop();
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Error stopping proxy during cleanup", e);
+                }
+            }
+        }
+    }
+
+    private static WebDriverStateContainer createWebDriverStateContainerInternal(final BrowserConfiguration config, final String testClassInstance)
+        throws MalformedURLException
+    {
+        getLogger("org.openqa.selenium").setLevel(Level.parse(Neodymium.configuration().seleniumLogLevel()));
 
         final MutableCapabilities capabilities = config.getCapabilities();
         final WebDriverStateContainer wDSC = new WebDriverStateContainer();
-
-        // set up proxy
         SelenideProxyServer selenideProxyServer = null;
+
+        try
+        {
         if (Neodymium.configuration().useLocalProxy())
         {
             final BrowserUpProxy proxy = setupEmbeddedProxy();
@@ -348,7 +485,7 @@ public class BrowserRunnerHelper
                     options.setProfile(profile);
                 }
 
-                Builder geckoBuilder = new GeckoBuilder(config.getDriverArguments()).withAllowHosts("localhost");
+                final Builder geckoBuilder = new GeckoBuilder(config.getDriverArguments()).withAllowHosts("localhost");
                 if (StringUtils.isNotBlank(driverInPathPath))
                 {
                     geckoBuilder.usingDriverExecutable(new File(driverInPathPath));
@@ -418,8 +555,7 @@ public class BrowserRunnerHelper
                 throw new IllegalArgumentException("No properties found for test environment: \"" + testEnvironment + "\"");
             }
             final String testEnvironmentUrl = testEnvironmentProperties.getUrl();
-            ClientConfig configClient = ClientConfig.defaultConfig();
-            configClient = configClient.baseUrl(new URL(testEnvironmentUrl));
+            final ClientConfig configClient = ClientConfig.defaultConfig().baseUrl(new URL(testEnvironmentUrl));
             config.getGridProperties().put("userName", testEnvironmentProperties.getUsername());
             config.getGridProperties().put("accessKey", testEnvironmentProperties.getPassword());
             final String buildId = StringUtils.isBlank(System.getenv("BUILD_NUMBER")) ? "local run" : System.getenv("BUILD_NUMBER");
@@ -451,10 +587,16 @@ public class BrowserRunnerHelper
             }
             wDSC.setWebDriver(new RemoteWebDriver(new HttpCommandExecutor(new HashMap<>(), configClient, new NeodymiumProxyHttpClientFactory(testEnvironmentProperties)), capabilities));
         }
-        final WebDriver decoratedDriver = new EventFiringDecorator<WebDriver>(new NeodymiumWebDriverListener()).decorate(wDSC.getWebDriver());
-        wDSC.setDecoratedWebDriver(decoratedDriver);
-        WebDriverRunner.setWebDriver(decoratedDriver, selenideProxyServer);
-        return wDSC;
+            final WebDriver decoratedDriver = new EventFiringDecorator<WebDriver>(new NeodymiumWebDriverListener()).decorate(wDSC.getWebDriver());
+            wDSC.setDecoratedWebDriver(decoratedDriver);
+            WebDriverRunner.setWebDriver(decoratedDriver, selenideProxyServer);
+            return wDSC;
+        }
+        catch (final Throwable t)
+        {
+            cleanupWebDriverStateContainer(wDSC);
+            throw t;
+        }
     }
 
     private static BrowserUpProxy setupEmbeddedProxy()

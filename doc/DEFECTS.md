@@ -41,6 +41,42 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260922-08] Lack of Retry Mechanism for Transient SessionNotCreatedException During WebDriver Startup
+- **Date:** 2026-09-22
+- **Component:** `neodymium-core` (`BrowserRunnerHelper`, `NeodymiumConfiguration`)
+- **Scope:** `Framework`
+- **Symptom:** Tests fail immediately during setup when ChromeDriver or the browser is temporarily unreachable (`org.openqa.selenium.SessionNotCreatedException: Could not start a new session. Response code 500. Message: session not created from chrome not reachable`).
+- **Root Cause:** Transient OS process/socket collisions (e.g. DevTools port lingering in TIME_WAIT or Chrome shutdown latency from a previous test) cause ChromeDriver handshake to fail. Neodymium previously lacked a retry loop for driver session instantiation, treating all `SessionNotCreatedException` failures as fatal.
+- **Detection Gap ("What did we miss?"):** No test harness resilience for transient process startup race conditions; browser creation assumed 100% determinism.
+- **Resolution:** Wrapped `createWebDriverStateContainer` with a single-retry resilience loop with configurable backoff (default 2–10 seconds jitter), ensured automatic cleanup of partial resources (e.g. embedded proxies) before retry, and refreshed remote debugging port probes on retry.
+- **Safety Net Added:** `BrowserRunnerHelperTest` validating single retry with backoff, abort behavior on subsequent failure, non-retry for other exceptions, and proxy leak prevention.
+
+### [DEF-20260922-07] Generic RuntimeException Wrapping and Obsolete Schema Version Re-Persistence
+- **Date:** 2026-09-22
+- **Component:** `neodymium-core` (`IncompatiblePlaybookSchemaException`, `PlaybookToolReplayer`, `ExecuteActionsStep`, `StateMachineRunner`, `AiSession`)
+- **Scope:** `Framework`
+- **Symptom:** When replaying a playbook with an obsolete or incompatible schema version (e.g., version `3.0`), the runner failed with generic `java.lang.RuntimeException: org.neodymium.ai.pipeline.ConclusiveFailureException` instead of a specialized typed exception with structured version metadata. Additionally, during self-healing runs, `AiSession` copied obsolete schema versions from loaded recorded steps onto active steps, perpetuating outdated schemas.
+- **Root Cause:**
+  1. Schema version mismatches in `PlaybookToolReplayer` threw `ConclusiveFailureException` directly with a formatted string; `ExecuteActionsStep` wrapped it in `RuntimeException`; and `StateMachineRunner` re-threw the outer `RuntimeException` without unwrapping `PipelineException` causes.
+  2. `AiSession.java` unconditionally copied `recorded.getSchemaVersion()` onto the active `PlaybookStep`, overwriting `CURRENT_SCHEMA_VERSION`.
+- **Detection Gap ("What did we miss?"):** Absence of negative unit tests asserting the exact exception type and structured fields when loading legacy playbooks.
+- **Resolution:**
+  1. Introduced `IncompatiblePlaybookSchemaException` extending `PipelineException` with `getRecordedVersion()` and `getExpectedVersion()`.
+  2. Updated `PlaybookToolReplayer` to throw `IncompatiblePlaybookSchemaException`.
+  3. Updated `ExecuteActionsStep` to throw `IncompatiblePlaybookSchemaException` directly without wrapping in `RuntimeException` and update `schemaVersion` to `CURRENT_SCHEMA_VERSION` on self-healing.
+  4. Updated `StateMachineRunner` to unwrap `t.getCause() instanceof PipelineException` to ensure typed exceptions bubble up cleanly.
+- **Safety Net Added:** Created `IncompatiblePlaybookSchemaExceptionTest.java` verifying exception hierarchy, version accessors, and `PlaybookToolReplayer` validation.
+
+### [DEF-20260922-06] Multi-Module Classpath Resource Path Resolution Divergence
+- **Date:** 2026-09-22
+- **Component:** `neodymium-core` (`ClasspathResourceManager`, `ClasspathResourceManagerTest`)
+- **Scope:** `Framework`
+- **Symptom:** `FORCE_RECORDING` mode in multi-module builds wrote newly generated JSON playbooks into `./src/test/resources/` in the top-level aggregator root directory instead of the submodule's directory (`neodymium-core/src/test/resources/`). Consequently, subsequent test runs executing `REPLAY_STRICT` or `REPLAY_WITH_HEALING` loaded obsolete cached recordings from `neodymium-core/target/test-classes/` that were never updated, leading to schema mismatches (`3.0` vs `4.0`) or missing recordings.
+- **Root Cause:** `ClasspathResourceManager.getSourceResourcesRoot()` fell back to `Path.of("src/test/resources")` relative to `System.getProperty("user.dir")` instead of inspecting the active classloader root (`target/test-classes`, `target/classes`, or `bin`) to derive the actual Maven/Gradle submodule source resources directory.
+- **Detection Gap ("What did we miss?"):** Unit tests ran in single-module contexts where `user.dir` coincided with the module directory, masking path divergence in multi-module reactor builds.
+- **Resolution:** Updated `getSourceResourcesRoot()` to dynamically derive the source resource folder from the active classloader resource URL (`this.classLoader.getResource("")`) by substituting `target/test-classes` with `src/test/resources` before falling back to `user.dir`. Cleaned up 36 orphan playbooks from aggregator root.
+- **Safety Net Added:** Added `testSourceResourcesRootResolutionInMultiModule()` in `ClasspathResourceManagerTest.java` and verified live recording in `CanvasClickSandboxMockTest`.
+
 ### [DEF-20260922-05] Chained Shorthand Tag Corruption, Missing Test-ID Variants, and Silent Blind Fallthrough in LocatorResolver
 - **Date:** 2026-09-22
 - **Component:** `neodymium-core` (`LocatorResolver`, `LocatorResolverTest`, `LocatorResolverBrowserTest`)
