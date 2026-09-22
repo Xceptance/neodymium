@@ -18,16 +18,17 @@
  */
 package org.neodymium.ai.executor.selenide;
 
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
 
 /**
- * Pure unit tests verifying locator resolution and Playwright selector translation
- * in {@link LocatorResolver} without requiring a live browser.
+ * Pure unit tests verifying locator resolution, Playwright selector translation,
+ * and escaping utilities in {@link LocatorResolver} without requiring a live browser.
  *
- * @author AI-generated: Gemini 3.7 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 public class LocatorResolverTest
@@ -38,6 +39,7 @@ public class LocatorResolverTest
         Assertions.assertEquals(By.cssSelector("*"), LocatorResolver.resolveLocator(null));
         Assertions.assertEquals(By.cssSelector("*"), LocatorResolver.resolveLocator(""));
         Assertions.assertEquals(By.cssSelector("*"), LocatorResolver.resolveLocator("   "));
+        Assertions.assertEquals(By.cssSelector("*"), LocatorResolver.resolveLocator("\t\n"));
     }
 
     @Test
@@ -47,6 +49,7 @@ public class LocatorResolverTest
         Assertions.assertEquals(By.cssSelector(".btn.btn-primary"), LocatorResolver.resolveLocator(".btn.btn-primary"));
         Assertions.assertEquals(By.xpath("//button[@id='submit-btn']"), LocatorResolver.resolveLocator("//button[@id='submit-btn']"));
         Assertions.assertEquals(By.xpath("(//input)[1]"), LocatorResolver.resolveLocator("(//input)[1]"));
+        Assertions.assertEquals(By.xpath("/html/body/div"), LocatorResolver.resolveLocator("/html/body/div"));
     }
 
     @Test
@@ -54,6 +57,14 @@ public class LocatorResolverTest
     {
         Assertions.assertEquals(By.xpath("//button[@id='submit-btn']"), LocatorResolver.resolveLocator("xpath=//button[@id='submit-btn']"));
         Assertions.assertEquals(By.cssSelector("button.primary"), LocatorResolver.resolveLocator("css=button.primary"));
+
+        // Case insensitivity
+        Assertions.assertEquals(By.xpath("//div[@class='modal']"), LocatorResolver.resolveLocator("XPATH=//div[@class='modal']"));
+        Assertions.assertEquals(By.cssSelector("input.text"), LocatorResolver.resolveLocator("CSS=input.text"));
+
+        // Recursive resolution through css= prefix
+        Assertions.assertEquals(Selectors.withText("Save"), LocatorResolver.resolveLocator("css=text=Save"));
+        Assertions.assertEquals(By.cssSelector("#myId"), LocatorResolver.resolveLocator("css=id=myId"));
     }
 
     @Test
@@ -63,82 +74,340 @@ public class LocatorResolverTest
         Assertions.assertEquals(Selectors.withText("Submit"), LocatorResolver.resolveLocator("text=Submit"));
         Assertions.assertEquals(Selectors.withText("Total Paid: $"), LocatorResolver.resolveLocator("text*=Total Paid: $"));
         Assertions.assertEquals(Selectors.withText("Log in"), LocatorResolver.resolveLocator("has-text=Log in"));
+        Assertions.assertEquals(Selectors.withText("Log in"), LocatorResolver.resolveLocator("has-text*=Log in"));
+
+        // Colon delimiters
+        Assertions.assertEquals(Selectors.withText("Submit"), LocatorResolver.resolveLocator("text:Submit"));
+        Assertions.assertEquals(Selectors.withText("Total Paid: $"), LocatorResolver.resolveLocator("text*:Total Paid: $"));
+        Assertions.assertEquals(Selectors.withText("Log in"), LocatorResolver.resolveLocator("has-text:Log in"));
+        Assertions.assertEquals(Selectors.withText("Log in"), LocatorResolver.resolveLocator("has-text*:Log in"));
 
         // Quoted -> exact match (byText)
         Assertions.assertEquals(Selectors.byText("Submit"), LocatorResolver.resolveLocator("text=\"Submit\""));
         Assertions.assertEquals(Selectors.byText("Submit"), LocatorResolver.resolveLocator("text='Submit'"));
         Assertions.assertEquals(Selectors.byText("Secret Button"), LocatorResolver.resolveLocator("text=\"Secret Button\""));
         Assertions.assertEquals(Selectors.byText("Secret Button"), LocatorResolver.resolveLocator("has-text=\"Secret Button\""));
+        Assertions.assertEquals(Selectors.byText("Exact Value"), LocatorResolver.resolveLocator("text:\"Exact Value\""));
+        Assertions.assertEquals(Selectors.byText("Exact Value"), LocatorResolver.resolveLocator("has-text:'Exact Value'"));
     }
 
     @Test
     public void testPlaywrightPseudoSelectors()
     {
+        // Substring pseudo selectors without tag
         final By withTextBy = LocatorResolver.resolveLocator(":text('Submit')");
         Assertions.assertEquals(Selectors.withText("Submit"), withTextBy);
 
+        final By containsBy = LocatorResolver.resolveLocator(":contains('Checkout')");
+        Assertions.assertEquals(Selectors.withText("Checkout"), containsBy);
+
+        final By hasTextStar = LocatorResolver.resolveLocator(":has-text*('Save')");
+        Assertions.assertEquals(Selectors.withText("Save"), hasTextStar);
+
+        final By textStar = LocatorResolver.resolveLocator(":text*('Save')");
+        Assertions.assertEquals(Selectors.withText("Save"), textStar);
+
+        // Exact pseudo selectors without tag
         final By exactTextBy = LocatorResolver.resolveLocator(":text-is('Submit')");
         Assertions.assertEquals(Selectors.byText("Submit"), exactTextBy);
 
+        final By hasTextIsBy = LocatorResolver.resolveLocator(":has-text-is('Submit')");
+        Assertions.assertEquals(Selectors.byText("Submit"), hasTextIsBy);
+
+        final By exactTextPseudo = LocatorResolver.resolveLocator(":exact-text('Submit')");
+        Assertions.assertEquals(Selectors.byText("Submit"), exactTextPseudo);
+
+        // Universal tag
+        final By universalWithText = LocatorResolver.resolveLocator("*:has-text('Universal')");
+        Assertions.assertEquals(Selectors.withText("Universal"), universalWithText);
+
+        final By universalExactText = LocatorResolver.resolveLocator("*:exact-text('Universal')");
+        Assertions.assertEquals(Selectors.byText("Universal"), universalExactText);
+
+        // Tagged substring pseudo selector
         final By buttonPseudo = LocatorResolver.resolveLocator("button:has-text('Submit')");
         Assertions.assertTrue(buttonPseudo instanceof By.ByXPath);
         final String xpath = buttonPseudo.toString();
         Assertions.assertTrue(xpath.contains("button"));
         Assertions.assertTrue(xpath.contains("Submit"));
-        // Ensure root containers are not matched
         Assertions.assertFalse(xpath.contains("//body"));
+
+        // Tagged exact pseudo selector
+        final By buttonExact = LocatorResolver.resolveLocator("button:text-is('Submit')");
+        Assertions.assertTrue(buttonExact instanceof By.ByXPath);
+        final String exactXpath = buttonExact.toString();
+        Assertions.assertTrue(exactXpath.contains("button"));
+        Assertions.assertTrue(exactXpath.contains("normalize-space(.)='Submit'"));
+
+        final By headingExact = LocatorResolver.resolveLocator("h1:has-text-is('Welcome')");
+        Assertions.assertTrue(headingExact instanceof By.ByXPath);
+        Assertions.assertTrue(headingExact.toString().contains("h1"));
+        Assertions.assertTrue(headingExact.toString().contains("normalize-space(.)='Welcome'"));
+
+        final By spanExact = LocatorResolver.resolveLocator("span:exact-text('Status')");
+        Assertions.assertTrue(spanExact instanceof By.ByXPath);
+        Assertions.assertTrue(spanExact.toString().contains("span"));
+        Assertions.assertTrue(spanExact.toString().contains("normalize-space(.)='Status'"));
     }
 
     @Test
     public void testAutomationAndTestIdAttributes()
     {
         Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("data-ai=xc123"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("data-ai=\"xc123\""));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("data-ai='xc123'"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("DATA-AI=xc123"));
+
         Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-testid=submit-btn"));
         Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-testid=\"submit-btn\""));
+        Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-testid='submit-btn'"));
+        Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("DATA-TESTID=submit-btn"));
+
         Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("testid=submit-btn"));
+        Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("testid='submit-btn'"));
+        Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("TESTID=submit-btn"));
+
+        Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-test=submit-btn"));
+        Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-test=\"submit-btn\""));
+        Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("DATA-TEST=submit-btn"));
     }
 
     @Test
     public void testAttributeShorthands()
     {
         Assertions.assertEquals(By.cssSelector("#username"), LocatorResolver.resolveLocator("id=username"));
+        Assertions.assertEquals(By.cssSelector("#username"), LocatorResolver.resolveLocator("id=\"username\""));
+        Assertions.assertEquals(By.cssSelector("#username"), LocatorResolver.resolveLocator("ID=username"));
+
         Assertions.assertEquals(By.cssSelector("[placeholder='Enter username']"), LocatorResolver.resolveLocator("placeholder=\"Enter username\""));
         Assertions.assertEquals(By.cssSelector("[placeholder='Enter username']"), LocatorResolver.resolveLocator("placeholder=Enter username"));
+        Assertions.assertEquals(By.cssSelector("[placeholder='Enter username']"), LocatorResolver.resolveLocator("placeholder='Enter username'"));
+        Assertions.assertEquals(By.cssSelector("[placeholder='Enter username']"), LocatorResolver.resolveLocator("PLACEHOLDER=Enter username"));
+
         Assertions.assertEquals(By.cssSelector("[alt='Company Logo']"), LocatorResolver.resolveLocator("alt=\"Company Logo\""));
+        Assertions.assertEquals(By.cssSelector("[alt='Company Logo']"), LocatorResolver.resolveLocator("alt='Company Logo'"));
+        Assertions.assertEquals(By.cssSelector("[alt='Company Logo']"), LocatorResolver.resolveLocator("ALT='Company Logo'"));
+
         Assertions.assertEquals(By.cssSelector("[title='Close dialog']"), LocatorResolver.resolveLocator("title=\"Close dialog\""));
+        Assertions.assertEquals(By.cssSelector("[title='Close dialog']"), LocatorResolver.resolveLocator("title='Close dialog'"));
+        Assertions.assertEquals(By.cssSelector("[title='Close dialog']"), LocatorResolver.resolveLocator("TITLE=\"Close dialog\""));
+    }
+
+    @Test
+    public void testLabelShorthand()
+    {
+        final By labelSimple = LocatorResolver.resolveLocator("label=Username");
+        Assertions.assertEquals(By.xpath("//input[@id=//label[normalize-space(.)='Username']/@for] | //label[normalize-space(.)='Username']//input | //*[@aria-label='Username']"), labelSimple);
+
+        final By labelQuoted = LocatorResolver.resolveLocator("label=\"Email Address\"");
+        Assertions.assertEquals(By.xpath("//input[@id=//label[normalize-space(.)='Email Address']/@for] | //label[normalize-space(.)='Email Address']//input | //*[@aria-label='Email Address']"), labelQuoted);
+
+        final By labelUppercase = LocatorResolver.resolveLocator("LABEL='Password'");
+        Assertions.assertEquals(By.xpath("//input[@id=//label[normalize-space(.)='Password']/@for] | //label[normalize-space(.)='Password']//input | //*[@aria-label='Password']"), labelUppercase);
     }
 
     @Test
     public void testRoleSelectors()
     {
+        // Named roles
         final By roleBtnNamed = LocatorResolver.resolveLocator("role=button[name=\"Submit\"]");
         Assertions.assertTrue(roleBtnNamed instanceof By.ByXPath);
-        Assertions.assertTrue(roleBtnNamed.toString().contains("button"));
-        Assertions.assertTrue(roleBtnNamed.toString().contains("Submit"));
+        final String btnNamedXpath = roleBtnNamed.toString();
+        Assertions.assertTrue(btnNamedXpath.contains("button"));
+        Assertions.assertTrue(btnNamedXpath.contains("Submit"));
+        Assertions.assertTrue(btnNamedXpath.contains("@role='button'"));
+
+        final By roleBtnUnquoted = LocatorResolver.resolveLocator("role=button[name=Submit]");
+        Assertions.assertEquals(roleBtnNamed, roleBtnUnquoted);
 
         final By roleLinkNamed = LocatorResolver.resolveLocator("role=link[name='Home']");
         Assertions.assertTrue(roleLinkNamed instanceof By.ByXPath);
-        Assertions.assertTrue(roleLinkNamed.toString().contains("a"));
-        Assertions.assertTrue(roleLinkNamed.toString().contains("Home"));
+        final String linkNamedXpath = roleLinkNamed.toString();
+        Assertions.assertTrue(linkNamedXpath.contains("a"));
+        Assertions.assertTrue(linkNamedXpath.contains("Home"));
+        Assertions.assertTrue(linkNamedXpath.contains("@role='link'"));
 
-        final By roleBtnBare = LocatorResolver.resolveLocator("role=button");
-        Assertions.assertTrue(roleBtnBare instanceof By.ByCssSelector);
+        final By roleHeadingNamed = LocatorResolver.resolveLocator("role=heading[name='Page Title']");
+        Assertions.assertTrue(roleHeadingNamed instanceof By.ByXPath);
+        final String headingNamedXpath = roleHeadingNamed.toString();
+        Assertions.assertTrue(headingNamedXpath.contains("self::h1"));
+        Assertions.assertTrue(headingNamedXpath.contains("self::h2"));
+        Assertions.assertTrue(headingNamedXpath.contains("@role='heading'"));
+        Assertions.assertTrue(headingNamedXpath.contains("Page Title"));
+
+        final By roleCustomNamed = LocatorResolver.resolveLocator("role=tab[name='Settings']");
+        Assertions.assertTrue(roleCustomNamed instanceof By.ByXPath);
+        final String tabNamedXpath = roleCustomNamed.toString();
+        Assertions.assertTrue(tabNamedXpath.contains("@role='tab'"));
+        Assertions.assertTrue(tabNamedXpath.contains("Settings"));
+
+        // Bare roles
+        Assertions.assertEquals(By.cssSelector("button, input[type='button'], input[type='submit'], [role='button']"), LocatorResolver.resolveLocator("role=button"));
+        Assertions.assertEquals(By.cssSelector("a, [role='link']"), LocatorResolver.resolveLocator("role=link"));
+        Assertions.assertEquals(By.cssSelector("h1, h2, h3, h4, h5, h6, [role='heading']"), LocatorResolver.resolveLocator("role=heading"));
+        Assertions.assertEquals(By.cssSelector("input[type='checkbox'], [role='checkbox']"), LocatorResolver.resolveLocator("role=checkbox"));
+        Assertions.assertEquals(By.cssSelector("input[type='radio'], [role='radio']"), LocatorResolver.resolveLocator("role=radio"));
+        Assertions.assertEquals(By.cssSelector("input:not([type]), input[type='text'], input[type='email'], input[type='password'], textarea, [role='textbox']"), LocatorResolver.resolveLocator("role=textbox"));
+        Assertions.assertEquals(By.cssSelector("[role='navigation']"), LocatorResolver.resolveLocator("role=navigation"));
+        Assertions.assertEquals(By.cssSelector("[role='alert']"), LocatorResolver.resolveLocator("role=alert"));
+
+        // Case insensitivity
+        Assertions.assertEquals(By.cssSelector("button, input[type='button'], input[type='submit'], [role='button']"), LocatorResolver.resolveLocator("ROLE=BUTTON"));
     }
 
     @Test
     public void testChainedSelectors()
     {
+        // Basic CSS chain
         final By chained = LocatorResolver.resolveLocator("#header >> button");
         Assertions.assertTrue(chained instanceof By.ByXPath);
         final String xpath = chained.toString();
         Assertions.assertTrue(xpath.contains("@id='header'") || xpath.contains("@id=\"header\""));
         Assertions.assertTrue(xpath.contains("button"));
+
+        // Chain with text= (substring)
+        final By chainedWithText = LocatorResolver.resolveLocator("#dialog >> text=Confirm");
+        Assertions.assertTrue(chainedWithText instanceof By.ByXPath);
+        final String textXpath = chainedWithText.toString();
+        Assertions.assertTrue(textXpath.contains("@id='dialog'"));
+        Assertions.assertTrue(textXpath.contains("contains(normalize-space(.), 'Confirm')"));
+
+        // Chain with quoted text= (exact)
+        final By chainedWithExactText = LocatorResolver.resolveLocator("#dialog >> text=\"Confirm\"");
+        Assertions.assertTrue(chainedWithExactText instanceof By.ByXPath);
+        final String exactTextXpath = chainedWithExactText.toString();
+        Assertions.assertTrue(exactTextXpath.contains("@id='dialog'"));
+        Assertions.assertTrue(exactTextXpath.contains("normalize-space(.)='Confirm'"));
+
+        // Chain with has-text= (quoted exact vs unquoted substring)
+        final By chainedWithHasText = LocatorResolver.resolveLocator(".card >> has-text='Buy Now'");
+        Assertions.assertTrue(chainedWithHasText instanceof By.ByXPath);
+        Assertions.assertTrue(chainedWithHasText.toString().contains("normalize-space(.)='Buy Now'"));
+
+        final By chainedWithUnquotedHasText = LocatorResolver.resolveLocator(".card >> has-text=Buy Now");
+        Assertions.assertTrue(chainedWithUnquotedHasText instanceof By.ByXPath);
+        Assertions.assertTrue(chainedWithUnquotedHasText.toString().contains("contains(normalize-space(.), 'Buy Now')"));
+
+        // Chain with role=
+        final By chainedWithRole = LocatorResolver.resolveLocator("#sidebar >> role=link[name='Home']");
+        Assertions.assertTrue(chainedWithRole instanceof By.ByXPath);
+        final String roleXpath = chainedWithRole.toString();
+        Assertions.assertTrue(roleXpath.contains("@id='sidebar'"));
+        Assertions.assertTrue(roleXpath.contains("Home"));
+
+        // Chain with raw XPath
+        final By chainedWithXpath = LocatorResolver.resolveLocator("#content >> xpath=//span[@class='badge']");
+        Assertions.assertTrue(chainedWithXpath instanceof By.ByXPath);
+        Assertions.assertTrue(chainedWithXpath.toString().contains("span[@class='badge']"));
+
+        // Multi-hop chain
+        final By multiHop = LocatorResolver.resolveLocator("#app >> nav >> button >> text=Logout");
+        Assertions.assertTrue(multiHop instanceof By.ByXPath);
+        final String multiHopXpath = multiHop.toString();
+        Assertions.assertTrue(multiHopXpath.contains("@id='app'"));
+        Assertions.assertTrue(multiHopXpath.contains("nav"));
+        Assertions.assertTrue(multiHopXpath.contains("button"));
+        Assertions.assertTrue(multiHopXpath.contains("Logout"));
+
+        // Invalid chain fallthrough
+        Assertions.assertEquals(By.cssSelector(">>"), LocatorResolver.resolveLocator(">>"));
     }
 
     @Test
     public void testShadowDomSelectors()
     {
+        // Single host
         final By shadow = LocatorResolver.resolveLocator("custom-card ::shadow .shadow-pay");
-        Assertions.assertNotNull(shadow);
+        Assertions.assertEquals(Selectors.shadowCss(".shadow-pay", "custom-card"), shadow);
+
+        // Multi-level hosts
+        final By multiShadow = LocatorResolver.resolveLocator("outer-host ::shadow inner-host ::shadow button.submit");
+        Assertions.assertEquals(Selectors.shadowCss("button.submit", "outer-host", "inner-host"), multiShadow);
+    }
+
+    @Test
+    public void testCssPseudoFallback()
+    {
+        // Note: in current implementation, the text: prefix handler at step 8 intercepts non-empty text
+        // before step 11 fallback is reached. We assert current behavior per instructions.
+        Assertions.assertEquals(Selectors.withText("nth-of-type(4)"), LocatorResolver.resolveLocator("text:nth-of-type(4)"));
+        Assertions.assertEquals(Selectors.withText(":before"), LocatorResolver.resolveLocator("text::before"));
+        Assertions.assertEquals(Selectors.withText("simpleText"), LocatorResolver.resolveLocator("text:simpleText"));
+    }
+
+    @Test
+    public void testDirectEscapeXpath()
+    {
+        Assertions.assertEquals("''", LocatorResolver.escapeXpath(null));
+        Assertions.assertEquals("''", LocatorResolver.escapeXpath(""));
+        Assertions.assertEquals("'simple'", LocatorResolver.escapeXpath("simple"));
+        Assertions.assertEquals("\"user's\"", LocatorResolver.escapeXpath("user's"));
+        Assertions.assertEquals("'say \"hello\"'", LocatorResolver.escapeXpath("say \"hello\""));
+        Assertions.assertEquals("concat('user', \"'\", 's \"profile\"')", LocatorResolver.escapeXpath("user's \"profile\""));
+    }
+
+    @Test
+    public void testDirectUnquote()
+    {
+        Assertions.assertEquals("", LocatorResolver.unquote(null));
+        Assertions.assertEquals("", LocatorResolver.unquote(""));
+        Assertions.assertEquals("", LocatorResolver.unquote("   "));
+        Assertions.assertEquals("hello", LocatorResolver.unquote("hello"));
+        Assertions.assertEquals("hello", LocatorResolver.unquote("\"hello\""));
+        Assertions.assertEquals("hello", LocatorResolver.unquote("'hello'"));
+        Assertions.assertEquals("", LocatorResolver.unquote("\"\""));
+        Assertions.assertEquals("", LocatorResolver.unquote("''"));
+        Assertions.assertEquals("\"", LocatorResolver.unquote("\""));
+        Assertions.assertEquals("'", LocatorResolver.unquote("'"));
+        Assertions.assertEquals("\"hello'", LocatorResolver.unquote("\"hello'"));
+        Assertions.assertEquals("'hello\"", LocatorResolver.unquote("'hello\""));
+        Assertions.assertEquals("spaced", LocatorResolver.unquote("  'spaced'  "));
+    }
+
+    @Test
+    public void testDirectBuildPseudoSelectorXpath()
+    {
+        // Null and universal prefix
+        Assertions.assertEquals(By.xpath("//*"), LocatorResolver.buildPseudoSelectorXpath(null, null, false));
+        Assertions.assertEquals(By.xpath("//*"), LocatorResolver.buildPseudoSelectorXpath("*", null, false));
+
+        // Prefix null with text conditions
+        final By nullWithText = LocatorResolver.buildPseudoSelectorXpath(null, "Submit", false);
+        Assertions.assertEquals(By.xpath("//*[not(self::html or self::body or self::head) and contains(normalize-space(.), 'Submit')]"), nullWithText);
+
+        final By nullWithExactText = LocatorResolver.buildPseudoSelectorXpath(null, "Submit", true);
+        Assertions.assertEquals(By.xpath("//*[not(self::html or self::body or self::head) and (normalize-space(.)='Submit' or normalize-space(text())='Submit')]"), nullWithExactText);
+
+        // Child combinators (>) and descendant combinators
+        final By childSelector = LocatorResolver.buildPseudoSelectorXpath("div.card > span.title", "Price", false);
+        Assertions.assertTrue(childSelector instanceof By.ByXPath);
+        final String childXpath = childSelector.toString();
+        Assertions.assertTrue(childXpath.contains("//div"));
+        Assertions.assertTrue(childXpath.contains("card"));
+        Assertions.assertTrue(childXpath.contains("/span"));
+        Assertions.assertTrue(childXpath.contains("title"));
+        Assertions.assertTrue(childXpath.contains("Price"));
+
+        // Attributes: [name], [name='val'], [name*='val'], [name^='val']
+        final By attrSelector = LocatorResolver.buildPseudoSelectorXpath("input[required][type='text'][name*='user'][id^='fld_']", null, false);
+        Assertions.assertTrue(attrSelector instanceof By.ByXPath);
+        final String attrXpath = attrSelector.toString();
+        Assertions.assertTrue(attrXpath.contains("@required"));
+        Assertions.assertTrue(attrXpath.contains("@type='text'"));
+        Assertions.assertTrue(attrXpath.contains("contains(@name, 'user')"));
+        Assertions.assertTrue(attrXpath.contains("starts-with(@id, 'fld_')"));
+    }
+
+    @Test
+    public void testFindElementsNullOrBlank()
+    {
+        final ElementsCollection nullCollection = LocatorResolver.findElements(null);
+        Assertions.assertNotNull(nullCollection);
+
+        final ElementsCollection emptyCollection = LocatorResolver.findElements("");
+        Assertions.assertNotNull(emptyCollection);
+
+        final ElementsCollection blankCollection = LocatorResolver.findElements("   ");
+        Assertions.assertNotNull(blankCollection);
     }
 }
