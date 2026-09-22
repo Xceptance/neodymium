@@ -13,7 +13,7 @@
                 <div id="createTestError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem;" th:if="${error != null}" th:text="${error}"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn-editor" id="closeModalBtn" onclick="document.getElementById('createTestModal').style.display='none'">Cancel</button>
+                <button type="button" class="btn-editor" id="closeModalBtn" onclick="document.getElementById('createTestModal').style.display='none'; const inp = document.getElementById('newTestName'); if (inp) inp.value = '';">Cancel</button>
                 <button type="button" class="btn-primary neo-u-48" id="submitCreateTestBtn" onclick="submitCreateTest()">Create Test</button>
             </div>
         </form>

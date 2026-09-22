@@ -6,7 +6,7 @@
 <div class="panel" th:fragment="testSelectionContent">
     <div class="panel-header">
         <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">checklist</span> <span>Test Selection</span></div>
-        <button class="btn-edit neo-u-8" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
+        <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
     </div>
     <div class="search-container">
         <span class="material-symbols-outlined search-icon">search</span>
@@ -15,11 +15,11 @@
                hx-get="/api/files/search" hx-trigger="keyup changed delay:200ms, search"
                hx-target="#yamlFileList" hx-swap="innerHTML"/>
     </div>
-    <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList">
+    <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-trigger="refreshFiles from:body" hx-swap="innerHTML">
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
     </div>
     <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border);">
-        <button class="btn-edit" id="openModalBtn" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();" style="width: 100%; justify-content: center; padding: 8px; font-weight: 500;">
+        <button class="btn-edit" id="openModalBtn" onclick="document.getElementById('createTestModal').style.display='flex'; const inp = document.getElementById('newTestName'); if (inp) { inp.value = ''; inp.focus(); }" style="width: 100%; justify-content: center; padding: 8px; font-weight: 500;">
             <span class="material-symbols-outlined">add</span> Create New Test
         </button>
     </div>

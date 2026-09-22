@@ -307,6 +307,10 @@ public final class AuraFileService
     private File findFileRecursively(final File dir, final String targetName)
     {
         final String cleanTarget = targetName.contains("/") ? targetName.substring(targetName.lastIndexOf('/') + 1) : targetName;
+        final String baseTarget = (cleanTarget.endsWith(".yaml") || cleanTarget.endsWith(".yml"))
+                ? cleanTarget.substring(0, cleanTarget.lastIndexOf('.'))
+                : cleanTarget;
+
         final File[] files = dir.listFiles();
         if (files != null)
         {
@@ -314,15 +318,22 @@ public final class AuraFileService
             {
                 if (f.isDirectory())
                 {
-                    final File found = findFileRecursively(f, cleanTarget);
+                    final File found = findFileRecursively(f, targetName);
                     if (found != null)
                     {
                         return found;
                     }
                 }
-                else if (f.getName().equalsIgnoreCase(cleanTarget) || f.getName().equalsIgnoreCase(cleanTarget + ".yaml") || f.getName().equalsIgnoreCase(cleanTarget + ".yml"))
+                else
                 {
-                    return f;
+                    final String fName = f.getName();
+                    final String fBase = (fName.endsWith(".yaml") || fName.endsWith(".yml"))
+                            ? fName.substring(0, fName.lastIndexOf('.'))
+                            : fName;
+                    if (fBase.equalsIgnoreCase(baseTarget))
+                    {
+                        return f;
+                    }
                 }
             }
         }
@@ -351,11 +362,11 @@ public final class AuraFileService
 
     public void createYamlFile(final String name) throws IOException
     {
-        final String sanitizedName = name.endsWith(".yaml") ? name : name + ".yaml";
+        final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml")) ? name : name + ".yaml";
         final File yamlFile = resolveCanonicalFile(sanitizedName);
         if (!yamlFile.exists())
         {
-            Files.writeString(yamlFile.toPath(), "steps: |\n  # Add your steps here\n", StandardCharsets.UTF_8);
+            Files.writeString(yamlFile.toPath(), "", StandardCharsets.UTF_8);
         }
     }
 

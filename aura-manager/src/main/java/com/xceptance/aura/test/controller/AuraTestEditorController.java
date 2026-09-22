@@ -18,7 +18,9 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.aura.AuraFileService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,7 @@ public class AuraTestEditorController
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestEditorController.class);
 
     private final AuraFileService fileService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AuraTestEditorController(final AuraFileService fileService)
     {
@@ -55,6 +58,7 @@ public class AuraTestEditorController
     {
         if (relativePath != null && !relativePath.isBlank())
         {
+            fileService.setActiveEditingFile(relativePath);
             String content = "";
             try
             {
@@ -78,6 +82,7 @@ public class AuraTestEditorController
         }
         else
         {
+            fileService.setActiveEditingFile("");
             model.addAttribute("activeEditingFile", "");
             model.addAttribute("editingFileContent", "");
             model.addAttribute("currentTestFile", "");
@@ -155,8 +160,9 @@ public class AuraTestEditorController
         }
         try
         {
-            final String sanitizedName = name.endsWith(".yaml") ? name : name + ".yaml";
+            final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml")) ? name : name + ".yaml";
             fileService.createYamlFile(name);
+            fileService.setActiveEditingFile(sanitizedName);
             response.put("file", sanitizedName);
             return ResponseEntity.ok(response);
         }
@@ -170,18 +176,61 @@ public class AuraTestEditorController
 
     @PostMapping("/api/delete")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> deleteFile(@RequestParam("file") final String relativePath)
+    public ResponseEntity<Map<String, Object>> deleteFile(
+            @RequestParam(value = "file", required = false) final String fileParam,
+            final HttpServletRequest request)
     {
-        boolean success = false;
-        try
+        String relativePath = fileParam;
+        if ((relativePath == null || relativePath.isBlank()) && request != null)
         {
-            success = fileService.deleteYamlFile(relativePath);
+            relativePath = request.getParameter("file");
         }
-        catch (final Exception ignored)
+        if ((relativePath == null || relativePath.isBlank()) && request != null && request.getContentType() != null && request.getContentType().contains("application/json"))
         {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null && body.containsKey("file"))
+                {
+                    relativePath = String.valueOf(body.get("file"));
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for deleteFile", e);
+            }
+        }
+
+        boolean success = false;
+        if (relativePath != null && !relativePath.isBlank())
+        {
+            try
+            {
+                success = fileService.deleteYamlFile(relativePath);
+                if (relativePath.equals(fileService.getActiveEditingFile()))
+                {
+                    fileService.setActiveEditingFile("");
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to delete test file '{}'", relativePath, e);
+            }
         }
         final Map<String, Object> response = new HashMap<>();
         response.put("status", success ? "SUCCESS" : "ERROR");
+        response.put("file", relativePath != null ? relativePath : "");
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/api/editor/close")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> closeEditor()
+    {
+        fileService.setActiveEditingFile("");
+        final Map<String, Object> response = new HashMap<>();
+        response.put("status", "SUCCESS");
         return ResponseEntity.ok(response);
     }
 }

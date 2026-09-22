@@ -102,7 +102,8 @@ function loadFiles() {
         };
         setTimeout(done, 1000);
         try {
-            const res = await fetch('/api/files/json');
+            const timestamp = Date.now();
+            const res = await fetch('/api/files/json?t=' + timestamp);
             currentFilesListCached = await res.json();
             window.currentFilesListCached = currentFilesListCached;
             const fileListEl = document.getElementById('yamlFileList');
@@ -110,14 +111,18 @@ function loadFiles() {
                 const listener = function(evt) {
                     if (evt.detail.target && evt.detail.target.id === 'yamlFileList') {
                         document.removeEventListener('htmx:afterSwap', listener);
+                        window.initializedAlready = true;
+                        syncCheckboxesFromState();
+                        if (typeof updateQueueList === 'function') updateQueueList();
                         done();
                     }
                 };
                 document.addEventListener('htmx:afterSwap', listener);
-                htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'innerHTML' });
+                htmx.ajax('GET', '/api/files/list?t=' + timestamp, { target: '#yamlFileList', swap: 'innerHTML' });
             } else {
                 window.initializedAlready = true;
                 syncCheckboxesFromState();
+                if (typeof updateQueueList === 'function') updateQueueList();
                 done();
             }
         } catch (e) {
@@ -216,10 +221,10 @@ async function submitCreateTest() {
         if (data.error) {
             showToast("Error: " + data.error, "error");
         } else {
+            nameInput.value = '';
             const modal = document.getElementById('createTestModal');
             if (modal) modal.style.display = 'none';
             await openYamlEditor(data.file);
-            await loadFiles();
         }
     } catch (e) {
         console.error("Failed to create test", e);
@@ -329,6 +334,20 @@ function openYamlEditor(filename) {
             window.history.pushState({ file: filename }, '', targetUrl);
         }
     }
+    initialEditorContent = '';
+    undoStack = [];
+    redoStack = [];
+    if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+
+    // Immediately clear stale DOM step rows from previous file to prevent DOM compilation race condition
+    const stepsList = document.getElementById('stepsList');
+    if (stepsList) stepsList.innerHTML = '';
+    const beforeList = document.getElementById('beforeStepsList');
+    if (beforeList) beforeList.innerHTML = '';
+    const afterList = document.getElementById('afterStepsList');
+    if (afterList) afterList.innerHTML = '';
+
     return new Promise((resolve) => {
         let resolved = false;
         const done = () => {
@@ -414,33 +433,46 @@ async function saveYamlFile() {
 }
 window.saveYamlFile = saveYamlFile;
 
-async function deleteYamlFile() {
-    if (!activeEditingFile) return;
-    const nameDisplay = document.getElementById('deleteTestNameDisplay');
-    const input = document.getElementById('deleteTestFileInput');
-    if (nameDisplay) nameDisplay.textContent = activeEditingFile;
-    if (input) input.value = activeEditingFile;
+async function deleteYamlFile(targetFile) {
+    const fileToDelete = targetFile || activeEditingFile;
+    if (!fileToDelete) return;
+    const nameDisplay = document.getElementById('deleteFileNameDisplay') || document.getElementById('deleteTestNameDisplay');
+    const input = document.getElementById('deleteFileNameInput') || document.getElementById('deleteTestFileInput');
+    if (nameDisplay) nameDisplay.textContent = fileToDelete;
+    if (input) input.value = fileToDelete;
+    window.pendingDeleteFile = fileToDelete;
     const modal = document.getElementById('deleteTestModal');
     if (modal) modal.style.display = 'flex';
 }
 window.deleteYamlFile = deleteYamlFile;
 
 async function submitDeleteTest() {
-    if (!activeEditingFile) return;
+    const input = document.getElementById('deleteFileNameInput') || document.getElementById('deleteTestFileInput');
+    const targetFile = (input && input.value) ? input.value : (window.pendingDeleteFile || activeEditingFile);
+    if (!targetFile) return;
     try {
         const res = await fetch('/api/delete', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file: activeEditingFile })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `file=${encodeURIComponent(targetFile)}`
         });
         const data = await res.json();
         if (data.status === 'SUCCESS') {
-            selectedDatasets = selectedDatasets.filter(d => d.file !== activeEditingFile);
-            closeEditor(true);
-            showToast(`🗑️ ${activeEditingFile} deleted successfully`, "success");
-            await loadFiles();
+            selectedDatasets = selectedDatasets.filter(d => d.file !== targetFile);
+            if (activeEditingFile === targetFile) {
+                closeEditor(true);
+            } else if (typeof loadFiles === 'function') {
+                await loadFiles();
+            }
+            const refreshBtn = document.getElementById('refreshFilesBtn');
+            if (refreshBtn) {
+                refreshBtn.click();
+            }
+            const modal = document.getElementById('deleteTestModal');
+            if (modal) modal.style.display = 'none';
+            showToast(`🗑️ ${targetFile} deleted successfully`, "success");
         } else {
-            showToast("Error deleting: " + data.error, "error");
+            showToast("Error deleting: " + (data.error || "Failed to delete file"), "error");
         }
     } catch (e) {
         showToast("Error deleting file: " + e.message, "error");
@@ -476,6 +508,13 @@ function closeEditor(force = false) {
     updateCenterLayout();
     if (window.htmx) {
         htmx.ajax('POST', '/api/editor/close', { swap: 'none' });
+    }
+    if (typeof loadFiles === 'function') {
+        loadFiles();
+    }
+    const refreshBtn = document.getElementById('refreshFilesBtn');
+    if (refreshBtn) {
+        refreshBtn.click();
     }
 }
 window.closeEditor = closeEditor;
@@ -585,6 +624,10 @@ window.lastCaretOffset = lastCaretOffset;
 function initVisualPlaybookEditor() {
     const stepsList = document.getElementById('stepsList');
     if (!stepsList) return;
+
+    if (stepsList.querySelectorAll(':scope > .step-row').length === 0) {
+        addStepToContainer('stepsList');
+    }
 
     reindexSteps();
 
