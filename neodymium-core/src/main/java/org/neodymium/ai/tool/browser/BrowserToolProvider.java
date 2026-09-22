@@ -1569,6 +1569,7 @@ public final class BrowserToolProvider
         props.putObject("expectedText").put("type", "string").put("description", "Expected text content (plain substring) or regex pattern if regex is true");
         props.putObject("exact").put("type", "boolean").put("description", "Whether text match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedText is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert absence/non-matching of the text (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedText");
@@ -1591,6 +1592,9 @@ public final class BrowserToolProvider
                         : call.arguments().path("text").asText();
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
                 final String expectedText = regex ? cleanRegexPattern(rawExpectedText) : unescapeLiteralText(rawExpectedText);
 
                 final boolean isTitle = selector != null && ("title".equalsIgnoreCase(selector.trim())
@@ -1616,52 +1620,77 @@ public final class BrowserToolProvider
                         {
                             pattern = Pattern.compile(Pattern.quote(expectedText), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
                         }
-                        if (!pattern.matcher(actualTitle).find())
+                        final boolean matches = pattern.matcher(actualTitle).find();
+                        if (negated ? matches : !matches)
                         {
-                            throw new AssertionError("Page title \"" + actualTitle + "\" does not match regex pattern \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" " + (negated ? "matches" : "does not match") + " regex pattern \"" + expectedText + "\"");
                         }
                     }
                     else if (exact)
                     {
-                        if (!actualTitle.trim().equalsIgnoreCase(expectedText.trim()))
+                        final boolean matches = actualTitle.trim().equalsIgnoreCase(expectedText.trim());
+                        if (negated ? matches : !matches)
                         {
-                            throw new AssertionError("Page title \"" + actualTitle + "\" does not exactly match \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" " + (negated ? "matches" : "does not exactly match") + " \"" + expectedText + "\"");
                         }
                     }
                     else
                     {
-                        if (!actualTitle.toLowerCase().contains(expectedText.toLowerCase()))
+                        final boolean matches = actualTitle.toLowerCase(Locale.ROOT).contains(expectedText.toLowerCase(Locale.ROOT));
+                        if (negated ? matches : !matches)
                         {
-                            throw new AssertionError("Page title \"" + actualTitle + "\" does not contain expected text \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" " + (negated ? "contains" : "does not contain") + " expected text \"" + expectedText + "\"");
                         }
                     }
                 }
                 else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
                 {
-                    boolean found = false;
-                    final long start = System.currentTimeMillis();
-                    final long timeout = Configuration.timeout;
-                    while (!found && (System.currentTimeMillis() - start) < timeout)
+                    if (negated)
                     {
-                        found = isTextPresentOnPage(expectedText, regex, exact);
-                        if (!found)
+                        boolean present = true;
+                        final long start = System.currentTimeMillis();
+                        final long timeout = Configuration.timeout;
+                        while (present && (System.currentTimeMillis() - start) < timeout)
                         {
-                            Selenide.sleep(100);
+                            present = isTextPresentOnPage(expectedText, regex, exact);
+                            if (present)
+                            {
+                                Selenide.sleep(100);
+                            }
+                        }
+                        if (present)
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was still present anywhere on the page within " + timeout + "ms.");
                         }
                     }
-                    if (!found)
+                    else
                     {
-                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found anywhere on the page within " + timeout + "ms.");
+                        boolean found = false;
+                        final long start = System.currentTimeMillis();
+                        final long timeout = Configuration.timeout;
+                        while (!found && (System.currentTimeMillis() - start) < timeout)
+                        {
+                            found = isTextPresentOnPage(expectedText, regex, exact);
+                            if (!found)
+                            {
+                                Selenide.sleep(100);
+                            }
+                        }
+                        if (!found)
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found anywhere on the page within " + timeout + "ms.");
+                        }
                     }
                 }
                 else
                 {
-                    boolean matched = false;
+                    boolean matched = negated;
                     final long start = System.currentTimeMillis();
                     final long timeout = Configuration.timeout;
 
-                    while (!matched && (System.currentTimeMillis() - start) < timeout)
+                    while ((negated ? matched : !matched) && (System.currentTimeMillis() - start) < timeout)
                     {
+                        matched = false;
                         final ElementsCollection elements = findElements(selector);
                         if (!elements.isEmpty())
                         {
@@ -1689,7 +1718,7 @@ public final class BrowserToolProvider
                             }
                         }
 
-                        if (!matched)
+                        if (!matched && !negated)
                         {
                             try
                             {
@@ -1713,15 +1742,22 @@ public final class BrowserToolProvider
                             }
                         }
 
-                        if (!matched)
+                        if (negated ? matched : !matched)
                         {
                             Selenide.sleep(100);
                         }
                     }
 
-                    if (!matched)
+                    if (negated ? matched : !matched)
                     {
-                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms.");
+                        if (negated)
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was found on selector \"" + selector + "\" within " + timeout + "ms, but expected not to match.");
+                        }
+                        else
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms.");
+                        }
                     }
                 }
 
@@ -1730,6 +1766,7 @@ public final class BrowserToolProvider
                 res.put("target", targetDesc);
                 res.put("expected", expectedText);
                 res.put("regex", regex);
+                res.put("negated", negated);
                 res.put("matched", true);
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -1750,13 +1787,15 @@ public final class BrowserToolProvider
         operatorEnum.add("EXACT");
         operatorEnum.add("MIN");
         operatorEnum.add("MAX");
+        operatorEnum.add("NOT_EQUALS");
         props.putObject("visibleOnly").put("type", "boolean").put("description", "Whether to count only visible elements (default: true)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert that count does not equal the expected value (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("count");
 
-        final ToolDefinition def = new ToolDefinition("assert_count", "Asserts that the count of elements matching a selector satisfies expected criteria (exact, min, or max)", schema);
+        final ToolDefinition def = new ToolDefinition("assert_count", "Asserts that the count of elements matching a selector satisfies expected criteria (exact, min, max, or not equals)", schema);
         return new AiTool()
         {
             @Override
@@ -1791,6 +1830,8 @@ public final class BrowserToolProvider
                 }
 
                 final boolean visibleOnly = !call.arguments().has("visibleOnly") || call.arguments().path("visibleOnly").asBoolean(true);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false);
 
                 final ElementsCollection allElements = findElements(selector);
                 int actualCount = 0;
@@ -1826,7 +1867,19 @@ public final class BrowserToolProvider
                 }
 
                 final String operator = args.path("operator").asText("EXACT").toUpperCase(Locale.ROOT);
-                if (hasCount && "MIN".equals(operator))
+                final boolean isNotEquals = "NOT_EQUALS".equals(operator) || "NOT_EQUAL".equals(operator) || "NEQ".equals(operator) || negated;
+
+                if (isNotEquals)
+                {
+                    final int targetCount = hasCount ? args.path("count").asInt() : (hasExpected ? args.path("expectedCount").asInt() : 0);
+                    if (actualCount == targetCount)
+                    {
+                        throw new AssertionError(String.format(
+                                "Element count assertion failed for '%s': expected count to not equal %d, but found %d (visible: %d, total in DOM: %d)",
+                                selector, targetCount, actualCount, actualCount, totalElements));
+                    }
+                }
+                else if (hasCount && "MIN".equals(operator))
                 {
                     final int min = args.path("count").asInt();
                     if (actualCount < min)
@@ -1892,6 +1945,7 @@ public final class BrowserToolProvider
                 res.put("actualCount", actualCount);
                 res.put("totalInDom", totalElements);
                 res.put("visibleOnly", visibleOnly);
+                res.put("negated", negated);
                 if (hasExpected)
                 {
                     res.put("expectedCount", call.arguments().path("expectedCount").asInt());
@@ -2032,6 +2086,7 @@ public final class BrowserToolProvider
         props.putObject("expectedUrl").put("type", "string").put("description", "Expected URL substring, full URL, or regex pattern");
         props.putObject("exact").put("type", "boolean").put("description", "Whether URL match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedUrl is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert that current URL does not match or contain expectedUrl (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedUrl");
@@ -2064,6 +2119,9 @@ public final class BrowserToolProvider
 
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
                 final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
@@ -2085,15 +2143,36 @@ public final class BrowserToolProvider
                             compiledPattern = Pattern.compile(Pattern.quote(expectedUrl), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
                         }
                         final Pattern finalPattern = compiledPattern;
-                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !finalPattern.matcher(d.getCurrentUrl()).find());
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
+                        }
                     }
                     else if (exact)
                     {
-                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                        }
                     }
                     else
                     {
-                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                        }
                     }
                 }
                 catch (final TimeoutException e)
@@ -2101,20 +2180,20 @@ public final class BrowserToolProvider
                     final String actualUrl = WebDriverRunner.url();
                     if (regex)
                     {
-                        throw new AssertionError("Assertion failed: Expected URL to match regex \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                        throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not match" : "match") + " regex \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
                     }
                     else if (exact)
                     {
-                        throw new AssertionError("Assertion failed: Expected URL to exactly match \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                        throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not exactly match" : "exactly match") + " \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
                     }
                     else
                     {
-                        throw new AssertionError("Assertion failed: Expected URL to contain \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                        throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not contain" : "contain") + " \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
                     }
                 }
 
                 final String currentUrl = WebDriverRunner.url();
-                return ToolResult.success(call.callId(), "Browser URL matched: " + currentUrl);
+                return ToolResult.success(call.callId(), (negated ? "Browser URL does not match: " : "Browser URL matched: ") + currentUrl);
             }
         };
     }
@@ -2127,6 +2206,7 @@ public final class BrowserToolProvider
         props.putObject("expectedTitle").put("type", "string").put("description", "Expected page title substring, full title, or regex pattern");
         props.putObject("exact").put("type", "boolean").put("description", "Whether title match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedTitle is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert that current title does not match or contain expectedTitle (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedTitle");
@@ -2159,6 +2239,9 @@ public final class BrowserToolProvider
 
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
                 final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
@@ -2180,15 +2263,36 @@ public final class BrowserToolProvider
                             compiledPattern = Pattern.compile(Pattern.quote(expectedTitle), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
                         }
                         final Pattern finalPattern = compiledPattern;
-                        Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() == null || !finalPattern.matcher(d.getTitle()).find());
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
+                        }
                     }
                     else if (exact)
                     {
-                        Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                        }
                     }
                     else
                     {
-                        Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                        }
                     }
                 }
                 catch (final TimeoutException e)
@@ -2196,20 +2300,20 @@ public final class BrowserToolProvider
                     final String actualTitle = Selenide.title();
                     if (regex)
                     {
-                        throw new AssertionError("Assertion failed: Expected page title to match regex \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                        throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not match" : "match") + " regex \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
                     }
                     else if (exact)
                     {
-                        throw new AssertionError("Assertion failed: Expected page title to exactly match \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                        throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not exactly match" : "exactly match") + " \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
                     }
                     else
                     {
-                        throw new AssertionError("Assertion failed: Expected page title to contain \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                        throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not contain" : "contain") + " \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
                     }
                 }
 
                 final String currentTitle = Selenide.title();
-                return ToolResult.success(call.callId(), "Browser page title matched: " + currentTitle);
+                return ToolResult.success(call.callId(), (negated ? "Browser page title does not match: " : "Browser page title matched: ") + currentTitle);
             }
         };
     }
@@ -2235,14 +2339,17 @@ public final class BrowserToolProvider
         stateEnum.add("selected");
         stateEnum.add("unselected");
         stateEnum.add("focused");
+        stateEnum.add("unfocused");
+        stateEnum.add("not_focused");
         stateEnum.add("exists");
         stateEnum.add("absent");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to invert the state assertion (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("state");
 
-        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies a specific state (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, exists, absent)", schema);
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies a specific state (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent)", schema);
         return new AiTool()
         {
             @Override
@@ -2278,7 +2385,26 @@ public final class BrowserToolProvider
                     throw new AssertionError("assert_element_state requires a 'state' argument");
                 }
 
-                final String state = normalizeElementState(rawState);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false);
+                final String normalized = normalizeElementState(rawState);
+                final String state = negated ? switch (normalized)
+                {
+                    case "visible" -> "hidden";
+                    case "hidden" -> "visible";
+                    case "enabled" -> "disabled";
+                    case "disabled" -> "enabled";
+                    case "checked" -> "unchecked";
+                    case "unchecked" -> "checked";
+                    case "selected" -> "unselected";
+                    case "unselected" -> "selected";
+                    case "focused" -> "unfocused";
+                    case "unfocused" -> "focused";
+                    case "exists" -> "absent";
+                    case "absent" -> "exists";
+                    default -> normalized;
+                } : normalized;
+
                 final SelenideElement el = findElement(selector);
 
                 switch (state)
@@ -2323,14 +2449,25 @@ public final class BrowserToolProvider
                             el.shouldBe(Condition.focused);
                         }
                     }
+                    case "unfocused" ->
+                    {
+                        final Boolean isFocused = Selenide.executeJavaScript(
+                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                el);
+                        if (Boolean.TRUE.equals(isFocused))
+                        {
+                            el.shouldNotBe(Condition.focused);
+                        }
+                    }
                     case "exists" -> el.should(Condition.exist);
                     case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                    default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, exists, absent.");
+                    default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
                 }
 
                 final ObjectNode res = successNode("assert_element_state");
                 res.put("target", selector);
                 res.put("state", state);
+                res.put("negated", negated);
                 res.put("matched", true);
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -2354,6 +2491,7 @@ public final class BrowserToolProvider
             case "not_checked", "un-checked", "unchecked" -> "unchecked";
             case "not_selected", "un-selected", "unselected" -> "unselected";
             case "not_exist", "not_exists", "non-existent", "absent" -> "absent";
+            case "unfocused", "not_focused" -> "unfocused";
             case "present", "exist", "exists" -> "exists";
             case "invisible", "hidden" -> "hidden";
             default -> s;
@@ -2370,6 +2508,7 @@ public final class BrowserToolProvider
         props.putObject("expectedValue").put("type", "string").put("description", "Expected attribute value. If omitted, asserts that the attribute exists.");
         props.putObject("exact").put("type", "boolean").put("description", "Whether attribute value match must be exact (default: true)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedValue is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert attribute is absent or does not match expected value (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
@@ -2431,28 +2570,56 @@ public final class BrowserToolProvider
 
                 final boolean exact = call.arguments().path("exact").asBoolean(true);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
 
                 final SelenideElement el = findElement(selector);
 
                 if (rawExpectedValue != null)
                 {
                     final String expectedValue = regex ? cleanRegexPattern(rawExpectedValue) : unescapeLiteralText(rawExpectedValue);
-                    if (regex)
+                    if (negated)
                     {
-                        el.shouldHave(Condition.attributeMatching(attrName, expectedValue));
-                    }
-                    else if (exact)
-                    {
-                        el.shouldHave(Condition.attribute(attrName, expectedValue));
+                        if (regex)
+                        {
+                            el.shouldNotHave(Condition.attributeMatching(attrName, expectedValue));
+                        }
+                        else if (exact)
+                        {
+                            el.shouldNotHave(Condition.attribute(attrName, expectedValue));
+                        }
+                        else
+                        {
+                            el.shouldNotHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                        }
                     }
                     else
                     {
-                        el.shouldHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                        if (regex)
+                        {
+                            el.shouldHave(Condition.attributeMatching(attrName, expectedValue));
+                        }
+                        else if (exact)
+                        {
+                            el.shouldHave(Condition.attribute(attrName, expectedValue));
+                        }
+                        else
+                        {
+                            el.shouldHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                        }
                     }
                 }
                 else
                 {
-                    el.shouldHave(Condition.attribute(attrName));
+                    if (negated)
+                    {
+                        el.shouldNotHave(Condition.attribute(attrName));
+                    }
+                    else
+                    {
+                        el.shouldHave(Condition.attribute(attrName));
+                    }
                 }
 
                 final ObjectNode res = successNode("assert_attribute");
@@ -2464,6 +2631,7 @@ public final class BrowserToolProvider
                     res.put("exact", exact);
                     res.put("regex", regex);
                 }
+                res.put("negated", negated);
                 res.put("matched", true);
                 return ToolResult.success(call.callId(), res.toString());
             }

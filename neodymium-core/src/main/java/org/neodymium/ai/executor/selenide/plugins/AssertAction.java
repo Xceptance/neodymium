@@ -172,6 +172,18 @@ public final class AssertAction implements BrowserActionPlugin
                     LOG.debug("   ✅ Element focused: {}", action);
                     return;
                 }
+                case "ASSERT_UNFOCUSED" ->
+                {
+                    final Boolean isFocused = Selenide.executeJavaScript(
+                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                            element);
+                    if (Boolean.TRUE.equals(isFocused))
+                    {
+                        element.shouldNotBe(Condition.focused);
+                    }
+                    LOG.debug("   ✅ Element unfocused: {}", action);
+                    return;
+                }
                 case "ASSERT_SELECTED" ->
                 {
                     if ("SELECT".equalsIgnoreCase(element.getTagName()))
@@ -294,27 +306,58 @@ public final class AssertAction implements BrowserActionPlugin
                 {
                     throw new RuntimeException("Invalid regex pattern for attribute '" + attrName + "': " + attrValue, e);
                 }
-                element.should(new WebElementCondition("Attribute regex match for '" + attrName + "=" + cleanPattern + "'")
+                if (action.isNegated())
                 {
-                    @Override
-                    public CheckResult check(final Driver driver, final WebElement el)
+                    element.should(new WebElementCondition("Attribute regex non-match for '" + attrName + "=" + cleanPattern + "'")
                     {
-                        final String val = el.getAttribute(attrName);
-                        final boolean ok = val != null && pat.matcher(val).find();
-                        return new CheckResult(ok, val);
-                    }
-                });
+                        @Override
+                        public CheckResult check(final Driver driver, final WebElement el)
+                        {
+                            final String val = el.getAttribute(attrName);
+                            final boolean ok = val == null || !pat.matcher(val).find();
+                            return new CheckResult(ok, val);
+                        }
+                    });
+                }
+                else
+                {
+                    element.should(new WebElementCondition("Attribute regex match for '" + attrName + "=" + cleanPattern + "'")
+                    {
+                        @Override
+                        public CheckResult check(final Driver driver, final WebElement el)
+                        {
+                            final String val = el.getAttribute(attrName);
+                            final boolean ok = val != null && pat.matcher(val).find();
+                            return new CheckResult(ok, val);
+                        }
+                    });
+                }
             }
             else
             {
-                element.shouldHave(Condition.attribute(attrName, attrValue));
+                if (action.isNegated())
+                {
+                    element.shouldNotHave(Condition.attribute(attrName, attrValue));
+                }
+                else
+                {
+                    element.shouldHave(Condition.attribute(attrName, attrValue));
+                }
             }
             LOG.debug("   ✅ Attribute Assertion passed for: {}={}", attrName, attrValue);
         }
         else
         {
-            element.shouldHave(Condition.attribute(expected.trim()));
-            LOG.debug("   ✅ Attribute Existence Assertion passed for: {}", expected);
+            if (action.isNegated())
+            {
+                element.shouldNotHave(Condition.attribute(expected.trim()));
+                LOG.debug("   ✅ Attribute Absence Assertion passed for: {}", expected);
+            }
+            else
+            {
+                element.shouldHave(Condition.attribute(expected.trim()));
+                LOG.debug("   ✅ Attribute Existence Assertion passed for: {}", expected);
+            }
         }
     }
 
@@ -328,7 +371,12 @@ public final class AssertAction implements BrowserActionPlugin
         final String trimmed = expected.trim();
         final ElementsCollection collection = SelenideElementFinder.findElements(action);
 
-        if (trimmed.startsWith(">="))
+        if (trimmed.startsWith("!=") || action.isNegated())
+        {
+            final int count = trimmed.startsWith("!=") ? Integer.parseInt(trimmed.substring(2).trim()) : Integer.parseInt(trimmed);
+            collection.shouldHave(CollectionCondition.sizeNotEqual(count));
+        }
+        else if (trimmed.startsWith(">="))
         {
             collection.shouldHave(CollectionCondition.sizeGreaterThanOrEqual(Integer.parseInt(trimmed.substring(2).trim())));
         }
@@ -358,6 +406,7 @@ public final class AssertAction implements BrowserActionPlugin
             throw new RuntimeException("URL assertion requires a 'value' (the expected URL)");
         }
 
+        final boolean negated = action.isNegated();
         try
         {
             if (action.isRegex())
@@ -373,15 +422,33 @@ public final class AssertAction implements BrowserActionPlugin
                     pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
                 }
                 final Pattern finalPattern = pattern;
-                Selenide.Wait().until(d -> (d.getCurrentUrl() != null && (finalPattern.matcher(d.getCurrentUrl()).find() || d.getCurrentUrl().contains(cleanExpected)))
-                        || (d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected))));
-                LOG.debug("   ✅ URL/Title Regex Assertion passed for: '{}'", expected);
+                if (negated)
+                {
+                    Selenide.Wait().until(d -> (d.getCurrentUrl() == null || (!finalPattern.matcher(d.getCurrentUrl()).find() && !d.getCurrentUrl().contains(cleanExpected)))
+                            && (d.getTitle() == null || (!finalPattern.matcher(d.getTitle()).find() && !d.getTitle().contains(cleanExpected))));
+                    LOG.debug("   ✅ URL/Title Regex Absence Assertion passed for: '{}'", expected);
+                }
+                else
+                {
+                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && (finalPattern.matcher(d.getCurrentUrl()).find() || d.getCurrentUrl().contains(cleanExpected)))
+                            || (d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected))));
+                    LOG.debug("   ✅ URL/Title Regex Assertion passed for: '{}'", expected);
+                }
             }
             else
             {
-                Selenide.Wait().until(d -> (d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected))
-                        || (d.getTitle() != null && d.getTitle().contains(expected)));
-                LOG.debug("   ✅ URL/Title Assertion passed for: '{}'", expected);
+                if (negated)
+                {
+                    Selenide.Wait().until(d -> (d.getCurrentUrl() == null || !d.getCurrentUrl().contains(expected))
+                            && (d.getTitle() == null || !d.getTitle().contains(expected)));
+                    LOG.debug("   ✅ URL/Title Absence Assertion passed for: '{}'", expected);
+                }
+                else
+                {
+                    Selenide.Wait().until(d -> (d.getCurrentUrl() != null && d.getCurrentUrl().contains(expected))
+                            || (d.getTitle() != null && d.getTitle().contains(expected)));
+                    LOG.debug("   ✅ URL/Title Assertion passed for: '{}'", expected);
+                }
             }
         }
         catch (final TimeoutException e)
@@ -391,11 +458,11 @@ public final class AssertAction implements BrowserActionPlugin
             {
                 if (action.isRegex())
                 {
-                    throw new AssertionError(String.format("Assertion failed: Expected URL to match regex '%s' but was '%s'", expected, actualUrl), e);
+                    throw new AssertionError(String.format("Assertion failed: Expected URL to " + (negated ? "not match" : "match") + " regex '%s' but was '%s'", expected, actualUrl), e);
                 }
                 else
                 {
-                    throw new AssertionError(String.format("Assertion failed: Expected URL to contain '%s' but was '%s'", expected, actualUrl), e);
+                    throw new AssertionError(String.format("Assertion failed: Expected URL to " + (negated ? "not contain" : "contain") + " '%s' but was '%s'", expected, actualUrl), e);
                 }
             });
         }
@@ -408,6 +475,7 @@ public final class AssertAction implements BrowserActionPlugin
             throw new RuntimeException("Title assertion requires a 'value' (the expected title)");
         }
 
+        final boolean negated = action.isNegated();
         try
         {
             if (action.isRegex())
@@ -423,13 +491,29 @@ public final class AssertAction implements BrowserActionPlugin
                     pattern = Pattern.compile(Pattern.quote(cleanExpected), Pattern.DOTALL | Pattern.MULTILINE);
                 }
                 final Pattern finalPattern = pattern;
-                Selenide.Wait().until(d -> d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected)));
-                LOG.debug("   ✅ Title Regex Assertion passed for: '{}'", expected);
+                if (negated)
+                {
+                    Selenide.Wait().until(d -> d.getTitle() == null || (!finalPattern.matcher(d.getTitle()).find() && !d.getTitle().contains(cleanExpected)));
+                    LOG.debug("   ✅ Title Regex Absence Assertion passed for: '{}'", expected);
+                }
+                else
+                {
+                    Selenide.Wait().until(d -> d.getTitle() != null && (finalPattern.matcher(d.getTitle()).find() || d.getTitle().contains(cleanExpected)));
+                    LOG.debug("   ✅ Title Regex Assertion passed for: '{}'", expected);
+                }
             }
             else
             {
-                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().contains(expected));
-                LOG.debug("   ✅ Title Assertion passed for: '{}'", expected);
+                if (negated)
+                {
+                    Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().contains(expected));
+                    LOG.debug("   ✅ Title Absence Assertion passed for: '{}'", expected);
+                }
+                else
+                {
+                    Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().contains(expected));
+                    LOG.debug("   ✅ Title Assertion passed for: '{}'", expected);
+                }
             }
         }
         catch (final TimeoutException e)
@@ -439,11 +523,11 @@ public final class AssertAction implements BrowserActionPlugin
             {
                 if (action.isRegex())
                 {
-                    throw new AssertionError(String.format("Assertion failed: Expected Title to match regex '%s' but was '%s'", expected, actualTitle), e);
+                    throw new AssertionError(String.format("Assertion failed: Expected Title to " + (negated ? "not match" : "match") + " regex '%s' but was '%s'", expected, actualTitle), e);
                 }
                 else
                 {
-                    throw new AssertionError(String.format("Assertion failed: Expected Title to contain '%s' but was '%s'", expected, actualTitle), e);
+                    throw new AssertionError(String.format("Assertion failed: Expected Title to " + (negated ? "not contain" : "contain") + " '%s' but was '%s'", expected, actualTitle), e);
                 }
             });
         }
@@ -466,8 +550,16 @@ public final class AssertAction implements BrowserActionPlugin
                     new PartialTextContent(matchText),
                     new AnyAttributeContains(matchText));
         }
-        element.should(cond);
-        LOG.debug("   ✅ Text Assertion passed for: '{}'", matchText);
+        if (action.isNegated())
+        {
+            element.shouldNot(cond);
+            LOG.debug("   ✅ Text Absence Assertion passed for: '{}'", matchText);
+        }
+        else
+        {
+            element.should(cond);
+            LOG.debug("   ✅ Text Assertion passed for: '{}'", matchText);
+        }
     }
 
     private void executeLegacyAssert(final SelenideElement element, final Action action, final String expected)
