@@ -18,7 +18,6 @@
  */
 package org.neodymium.ai.tool.guard;
 
-import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolContext;
 
@@ -36,8 +35,7 @@ public interface ToolInterceptor
      *
      * @param call proposed tool call
      * @param context tool execution context
-     * @param intent semantic intent of the enclosing step
      * @return interception verdict
      */
-    InterceptionVerdict intercept(final ToolCall call, final ToolContext context, final SemanticIntent intent);
+    InterceptionVerdict intercept(final ToolCall call, final ToolContext context);
 }

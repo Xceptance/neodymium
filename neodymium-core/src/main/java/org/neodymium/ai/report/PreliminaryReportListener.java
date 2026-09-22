@@ -223,10 +223,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                 stepEntry.setContinueOnError(pbStep.isContinueOnError());
                 stepEntry.setNoHealing(pbStep.isNoHealing());
                 stepEntry.setVisual(pbStep.isVisualStep());
-                if (pbStep.getSemanticIntent() != null)
-                {
-                    stepEntry.setSemanticIntent(pbStep.getSemanticIntent().name());
-                }
 
                 if (pbStep.getReasoning() != null)
                 {
@@ -473,10 +469,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                     if (pbStep.getScreenshotHashDim() != null)
                     {
                         targetStep.setScreenshotHashDim(pbStep.getScreenshotHashDim());
-                    }
-                    if (pbStep.getSemanticIntent() != null)
-                    {
-                        targetStep.setSemanticIntent(pbStep.getSemanticIntent().name());
                     }
                     if (pbStep.getVerificationResult() != null)
                     {

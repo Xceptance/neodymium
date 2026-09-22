@@ -71,8 +71,6 @@ public final class StepStats
 
     private boolean replayed;
 
-    private String semanticIntent;
-
     private boolean multiStage;
 
     /**
@@ -402,25 +400,6 @@ public final class StepStats
         return false;
     }
 
-    /**
-     * Gets the classified semantic intent of the step.
-     *
-     * @return the semantic intent, or null if unclassified
-     */
-    public String getSemanticIntent()
-    {
-        return this.semanticIntent;
-    }
-
-    /**
-     * Sets the classified semantic intent of the step.
-     *
-     * @param semanticIntent the semantic intent to set
-     */
-    public void setSemanticIntent(final String semanticIntent)
-    {
-        this.semanticIntent = semanticIntent;
-    }
 
     /**
      * Gets whether this step executed in multiple stages via continuation.

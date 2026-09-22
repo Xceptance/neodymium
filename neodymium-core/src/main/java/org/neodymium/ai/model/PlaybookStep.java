@@ -252,31 +252,6 @@ public final class PlaybookStep
      */
     private Long timeoutMs;
 
-    /**
-     * The classified semantic intent of this step (e.g. ASSERT, CLICK, TYPE, etc.).
-     */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private SemanticIntent semanticIntent;
-
-    /**
-     * Returns the classified semantic intent for this step.
-     *
-     * @return the semantic intent, or null if not classified
-     */
-    public SemanticIntent getSemanticIntent()
-    {
-        return this.semanticIntent;
-    }
-
-    /**
-     * Sets the classified semantic intent for this step.
-     *
-     * @param semanticIntent the semantic intent to set
-     */
-    public void setSemanticIntent(final SemanticIntent semanticIntent)
-    {
-        this.semanticIntent = semanticIntent;
-    }
 
     /**
      * Returns the recorded context level for this step.

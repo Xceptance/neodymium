@@ -643,10 +643,6 @@ public final class ExecuteActionsStep
                             final StepStats subStats = new StepStats(resSub, stepStats.getStartTime());
                             subStats.setDurationMs(childDuration);
                             subStats.setReplayed(replayed);
-                            if (sub.getSemanticIntent() != null)
-                            {
-                                subStats.setSemanticIntent(sub.getSemanticIntent().name());
-                            }
                             stepStats.getSubStats().add(subStats);
                         }
                     }
@@ -716,10 +712,6 @@ public final class ExecuteActionsStep
                 : raw;
             stats = new StepStats(resolved, startTime);
             stats.setReplayed(replayed);
-            if (step.getSemanticIntent() != null)
-            {
-                stats.setSemanticIntent(step.getSemanticIntent().name());
-            }
             stepStatsMap.put(step, stats);
 
             final PlaybookStep parentStep = step.getParent();
@@ -732,10 +724,6 @@ public final class ExecuteActionsStep
             {
                 allStats.add(stats);
             }
-        }
-        else if (stats.getSemanticIntent() == null && step.getSemanticIntent() != null)
-        {
-            stats.setSemanticIntent(step.getSemanticIntent().name());
         }
         return stats;
     }

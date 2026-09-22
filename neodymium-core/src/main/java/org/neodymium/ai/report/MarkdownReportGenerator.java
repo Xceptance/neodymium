@@ -421,10 +421,6 @@ public final class MarkdownReportGenerator
         {
             sb.append("- **Multi-Stage Continuation:** `🔄 true (CONTINUE)`\n");
         }
-        if (step.getSemanticIntent() != null && !step.getSemanticIntent().isBlank())
-        {
-            sb.append("- **Semantic Intent:** `🎯 ").append(escapeMarkdown(step.getSemanticIntent())).append("`\n");
-        }
         if (step.getSsimScore() != null)
         {
             final double score = step.getSsimScore();

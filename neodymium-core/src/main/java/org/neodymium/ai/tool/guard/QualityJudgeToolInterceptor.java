@@ -43,7 +43,6 @@ import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.SelenideLocatorProber;
-import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.QualityJudgePrompt;
 import org.neodymium.ai.prompt.QualityJudgePrompt.QualityJudgeResult;
@@ -71,14 +70,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    public static final String JOURNEY_FIDELITY_NAVIGATE_VIOLATION =
-            "Journey Fidelity Violation: Direct URL navigation is prohibited. Target must be reached via on-screen UI elements";
-
-    public static final String JOURNEY_FIDELITY_SCRIPT_VIOLATION =
-            "Journey Fidelity Violation: Direct URL mutation via script is prohibited. Target must be reached via on-screen UI elements";
-
-    private static final Pattern URL_MUTATION_PATTERN = Pattern.compile(
-            "(?i)((window\\.)?location(\\.href|\\.assign|\\.replace)?\\s*=|history\\.(pushState|replaceState))");
 
     private final AiConfiguration config;
 
@@ -126,7 +117,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
     }
 
     @Override
-    public InterceptionVerdict intercept(final ToolCall call, final ToolContext context, final SemanticIntent intent)
+    public InterceptionVerdict intercept(final ToolCall call, final ToolContext context)
     {
         if (call == null)
         {
@@ -134,14 +125,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         }
 
         final ExecutionContext activeContext = ExecutionContext.getActiveContext();
-
-        // 4. Journey Fidelity guard: Prohibit navigating away or mutating URL when interacting
-        final InterceptionVerdict journeyVerdict = checkJourneyFidelity(call, intent);
-        if (!journeyVerdict.isAllowed())
-        {
-            LOGGER.warn("🚨 Journey Fidelity Violation detected: {}", journeyVerdict.reason());
-            return journeyVerdict;
-        }
 
         // 2. If Quality Judge is disabled via instance flag, bypass locator deliberation
         if (!this.enabled)
@@ -223,32 +206,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         return evaluateCandidateScoring(call, selector, candidates, activeContext);
     }
 
-    private InterceptionVerdict checkJourneyFidelity(
-        final ToolCall call,
-        final SemanticIntent intent
-    )
-    {
-        final String rawName = call.toolName();
-        final String name = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
-
-        if (intent != null && intent.isInteraction())
-        {
-            if ("navigate".equals(name))
-            {
-                return InterceptionVerdict.reject(call.callId(), JOURNEY_FIDELITY_NAVIGATE_VIOLATION);
-            }
-
-            if ("execute_script".equals(name))
-            {
-                final String script = call.arguments().path("script").asText("");
-                if (URL_MUTATION_PATTERN.matcher(script).find())
-                {
-                    return InterceptionVerdict.reject(call.callId(), JOURNEY_FIDELITY_SCRIPT_VIOLATION);
-                }
-            }
-        }
-        return InterceptionVerdict.allow("Journey fidelity checks passed");
-    }
 
     private List<LocatorCandidate> extractCandidates(final ToolCall call, final ToolContext context)
     {

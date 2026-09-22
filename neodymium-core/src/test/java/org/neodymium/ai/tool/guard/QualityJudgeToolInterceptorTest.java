@@ -36,8 +36,6 @@ import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.executor.probe.ProbeBoundingRect;
 import org.neodymium.ai.executor.probe.ProbeElementSummary;
-import org.neodymium.ai.model.PlaybookStep;
-import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.session.AiSession;
@@ -47,8 +45,8 @@ import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
 
 /**
- * Unit tests verifying {@link QualityJudgeToolInterceptor} Journey Fidelity policies
- * and candidate locator confidence scoring.
+ * Unit tests verifying {@link QualityJudgeToolInterceptor} candidate locator
+ * confidence scoring and deliberation.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -69,102 +67,6 @@ public class QualityJudgeToolInterceptorTest
     }
 
     @Test
-    public void testJourneyFidelityRejectsDirectNavigateOnInteractiveIntent()
-    {
-        final ObjectNode args = MAPPER.createObjectNode();
-        args.put("url", "https://example.com/checkout");
-        final ToolCall navigateCall = new ToolCall("call-1", "browser_navigate", args);
-
-        final InterceptionVerdict verdict = this.interceptor.intercept(navigateCall, this.context, SemanticIntent.CLICK);
-
-        Assertions.assertFalse(verdict.isAllowed());
-        Assertions.assertEquals(InterceptionVerdict.Decision.REJECT, verdict.decision());
-        Assertions.assertEquals(QualityJudgeToolInterceptor.JOURNEY_FIDELITY_NAVIGATE_VIOLATION, verdict.reason());
-        Assertions.assertNotNull(verdict.rejectionResult());
-        Assertions.assertTrue(verdict.rejectionResult().isError());
-    }
-
-    @Test
-    public void testJourneyFidelityAllowsDirectNavigateOnNavigateIntent()
-    {
-        final ObjectNode args = MAPPER.createObjectNode();
-        args.put("url", "https://example.com/home");
-        final ToolCall navigateCall = new ToolCall("call-2", "browser_navigate", args);
-
-        final InterceptionVerdict verdict = this.interceptor.intercept(navigateCall, this.context, SemanticIntent.NAVIGATE);
-
-        Assertions.assertTrue(verdict.isAllowed());
-        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
-    }
-
-    @Test
-    public void testJourneyFidelityRejectsScriptUrlMutationOnInteractiveIntent()
-    {
-        final ObjectNode args = MAPPER.createObjectNode();
-        args.put("script", "window.location.href = '/cart';");
-        final ToolCall scriptCall = new ToolCall("call-3", "browser_execute_script", args);
-
-        final InterceptionVerdict verdict = this.interceptor.intercept(scriptCall, this.context, SemanticIntent.TYPE);
-
-        Assertions.assertFalse(verdict.isAllowed());
-        Assertions.assertEquals(InterceptionVerdict.Decision.REJECT, verdict.decision());
-        Assertions.assertEquals(QualityJudgeToolInterceptor.JOURNEY_FIDELITY_SCRIPT_VIOLATION, verdict.reason());
-    }
-
-    @Test
-    public void testJourneyFidelityAllowsBenignScriptOnInteractiveIntent()
-    {
-        final ObjectNode args = MAPPER.createObjectNode();
-        args.put("script", "return document.title;");
-        final ToolCall scriptCall = new ToolCall("call-4", "browser_execute_script", args);
-
-        final InterceptionVerdict verdict = this.interceptor.intercept(scriptCall, this.context, SemanticIntent.CLICK);
-
-        Assertions.assertTrue(verdict.isAllowed());
-        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
-    }
-
-    @Test
-    public void testJourneyFidelityAllowsInteractionOnAssertionStep()
-    {
-        final ObjectNode args = MAPPER.createObjectNode();
-        args.put("selector", "#couponCode");
-        final ToolCall clickCall = new ToolCall("call-assert-mut", "browser_click", args);
-
-        final InterceptionVerdict verdict = this.interceptor.intercept(clickCall, this.context, SemanticIntent.ASSERT);
-
-        Assertions.assertTrue(verdict.isAllowed());
-        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
-    }
-
-    @Test
-    public void testJourneyFidelityAllowsMutationOnCompoundStepWithInteractiveMilestones()
-    {
-        final ExecutionContext execCtx = new ExecutionContext(null);
-        final PlaybookStep parent = new PlaybookStep("Locate promo code:");
-        parent.getSubSteps().add(new PlaybookStep("clear its content"));
-        parent.getSubSteps().add(new PlaybookStep("type 'FREEGIFT'"));
-        execCtx.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
-        ExecutionContext.setActiveContext(execCtx);
-
-        try
-        {
-            final ObjectNode args = MAPPER.createObjectNode();
-            args.put("selector", "#couponCode");
-            final ToolCall clickCall = new ToolCall("call-compound", "browser_click", args);
-
-            final InterceptionVerdict verdict = this.interceptor.intercept(clickCall, this.context, SemanticIntent.ASSERT);
-
-            Assertions.assertTrue(verdict.isAllowed());
-            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
-        }
-        finally
-        {
-            ExecutionContext.setActiveContext(null);
-        }
-    }
-
-    @Test
     public void testHighConfidenceCandidatePassesImmediately()
     {
         final ObjectNode args = MAPPER.createObjectNode();
@@ -177,7 +79,7 @@ public class QualityJudgeToolInterceptorTest
         c1.put("score", 0.98);
 
         final ToolCall call = new ToolCall("call-5", "browser_click", args);
-        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
         Assertions.assertTrue(verdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
@@ -202,7 +104,7 @@ public class QualityJudgeToolInterceptorTest
         c2.put("score", 0.80);
 
         final ToolCall call = new ToolCall("call-6", "browser_click", args);
-        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
         Assertions.assertTrue(verdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
@@ -228,7 +130,7 @@ public class QualityJudgeToolInterceptorTest
         c2.put("score", 0.86); // diff is 0.02 < 0.15
 
         final ToolCall call = new ToolCall("call-7", "browser_click", args);
-        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
         Assertions.assertTrue(verdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
@@ -249,7 +151,7 @@ public class QualityJudgeToolInterceptorTest
         args.put("selector", "#quick-add");
         final ToolCall call = new ToolCall("call-8", "browser_click", args);
 
-        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
         Assertions.assertTrue(verdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
@@ -297,7 +199,7 @@ public class QualityJudgeToolInterceptorTest
             c1.put("score", 0.60);
 
             final ToolCall call = new ToolCall("call-9", "browser_click", args);
-            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
             Assertions.assertTrue(verdict.isAllowed());
             Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
@@ -366,7 +268,7 @@ public class QualityJudgeToolInterceptorTest
             c2.put("score", 0.86);
 
             final ToolCall call = new ToolCall("call-fastpath", "browser_click", args);
-            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
             Assertions.assertTrue(verdict.isAllowed());
             Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
@@ -442,7 +344,7 @@ public class QualityJudgeToolInterceptorTest
             c1.put("score", 0.60);
 
             final ToolCall call = new ToolCall("call-multiturn", "browser_click", args);
-            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
             Assertions.assertTrue(verdict.isAllowed());
             Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
@@ -520,7 +422,7 @@ public class QualityJudgeToolInterceptorTest
             c2.put("score", 0.80);
 
             final ToolCall call = new ToolCall("call-refined", "browser_click", args);
-            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
             Assertions.assertTrue(verdict.isAllowed());
             Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
@@ -585,7 +487,7 @@ public class QualityJudgeToolInterceptorTest
             c1.put("score", 0.50);
 
             final ToolCall call = new ToolCall("call-exhaust", "browser_click", args);
-            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
             Assertions.assertTrue(verdict.isAllowed());
             Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
@@ -612,7 +514,7 @@ public class QualityJudgeToolInterceptorTest
         countArgs.put("selector", "form input");
         countArgs.put("expectedCount", 3);
         final ToolCall countCall = new ToolCall("call-count", "browser_assert_count", countArgs);
-        final InterceptionVerdict countVerdict = this.interceptor.intercept(countCall, this.context, SemanticIntent.ASSERT);
+        final InterceptionVerdict countVerdict = this.interceptor.intercept(countCall, this.context);
 
         Assertions.assertTrue(countVerdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, countVerdict.decision());
@@ -621,7 +523,7 @@ public class QualityJudgeToolInterceptorTest
         final ObjectNode queryArgs = MAPPER.createObjectNode();
         queryArgs.put("selector", "div.item");
         final ToolCall queryCall = new ToolCall("call-query", "browser_query_dom", queryArgs);
-        final InterceptionVerdict queryVerdict = this.interceptor.intercept(queryCall, this.context, SemanticIntent.STORE);
+        final InterceptionVerdict queryVerdict = this.interceptor.intercept(queryCall, this.context);
 
         Assertions.assertTrue(queryVerdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, queryVerdict.decision());
@@ -692,7 +594,7 @@ public class QualityJudgeToolInterceptorTest
             c1.put("score", 0.70);
 
             final ToolCall call = new ToolCall("call-hijack", "browser_click", args);
-            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context, SemanticIntent.CLICK);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
 
             // The container hijack must be rejected and the original selector retained
             Assertions.assertTrue(verdict.isAllowed());

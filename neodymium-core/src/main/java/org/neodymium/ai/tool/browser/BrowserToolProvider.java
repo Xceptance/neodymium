@@ -644,7 +644,7 @@ public final class BrowserToolProvider
         req.add("selector");
         req.add("text");
 
-        final ToolDefinition def = new ToolDefinition("fill", "Clears existing text and enters new text into an input or textarea element", schema);
+        final ToolDefinition def = new ToolDefinition("fill", "Clears existing text and enters new text into an input or textarea element. Default tool for entering, typing, or setting form field values.", schema);
         return createBaseInputTool(def, true);
     }
 
@@ -661,7 +661,7 @@ public final class BrowserToolProvider
         req.add("selector");
         req.add("text");
 
-        final ToolDefinition def = new ToolDefinition("type", "Types text into an input or textarea element without clearing existing text (appends text)", schema);
+        final ToolDefinition def = new ToolDefinition("type", "Types text into an input or textarea element without clearing existing text (appends text). Use only when intentionally appending to existing content.", schema);
         return createBaseInputTool(def, false);
     }
 
@@ -2649,7 +2649,7 @@ public final class BrowserToolProvider
         props.putObject("yOffset").put("type", "integer").put("description", "Optional pixel distance to scroll vertically");
         props.putObject("xOffset").put("type", "integer").put("description", "Optional pixel distance to scroll horizontally");
 
-        final ToolDefinition def = new ToolDefinition("scroll", "Scrolls the page viewport, scrolls a specific element into view, or scrolls inside a container element", schema);
+        final ToolDefinition def = new ToolDefinition("scroll", "Scrolls the viewport, an element, or inside a container. Note: browser actions automatically scroll elements into view; use scroll only for lazy loading or visual repositioning.", schema);
         return new AiTool()
         {
             @Override

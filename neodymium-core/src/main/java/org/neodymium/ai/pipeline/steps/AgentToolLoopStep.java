@@ -44,7 +44,6 @@ import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
-import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.model.ContextLevel;
@@ -213,17 +212,7 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
-        final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_STEP_INTENT);
         final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
-        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : (step != null ? step.getSemanticIntent() : null);
-        if (intent != null)
-        {
-            context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, intent);
-            if (step != null && step.getSemanticIntent() == null)
-            {
-                step.setSemanticIntent(intent);
-            }
-        }
         final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
         final boolean isVisual = (step != null && step.isVisualStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
@@ -319,15 +308,15 @@ public final class AgentToolLoopStep implements PipelineStep
                 final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                 final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
                         ? cl
-                        : (intent != null && intent.isAssertion() ? ContextLevel.STANDARD : ContextLevel.LEAN);
-                activeContextLevel = ContextLevel.clean(baseLevel, intent);
+                        : ContextLevel.LEAN;
+                activeContextLevel = ContextLevel.clean(baseLevel);
 
                 // Visual tag check
                 if (isVisual)
                 {
                     if (!activeContextLevel.includesScreenshot())
                     {
-                        activeContextLevel = (intent != null && intent.isAssertion()) ? ContextLevel.VISUAL : ContextLevel.VISUAL_LEAN;
+                        activeContextLevel = ContextLevel.VISUAL_LEAN;
                     }
                 }
 
@@ -373,19 +362,16 @@ public final class AgentToolLoopStep implements PipelineStep
             }
         }
 
-        // Compile available tools (Intent-Based Scoping: exclude navigate for interactive steps)
-        final List<ToolDefinition> availableTools = filterToolsForIntent(intent, isVisual, context);
+        // Compile available tools
+        final List<ToolDefinition> availableTools = filterTools(isVisual, context);
 
         final StringBuilder systemPrompt = new StringBuilder();
         systemPrompt.append("You are an autonomous web testing agent. Execute the test instruction using available tools.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
-        systemPrompt.append("2. INPUTS: For text fields, use 'fill' (clears existing text first). Use 'type' only when intentionally appending text. Never set 'pressEnter: true' unless explicitly commanded to press Enter or submit.\n");
-        systemPrompt.append("3. DISCOVERY & RECOVERY: Ground all selectors in the provided page elements. Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
-        systemPrompt.append("4. ACTION & VERIFICATION COMPLETION:\n");
-        systemPrompt.append("   - Action steps: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps.\n");
-        systemPrompt.append("   - Verification steps: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
-        systemPrompt.append("   - Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
+        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
+        systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
+        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
         if (isVisual)
         {
             systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
@@ -407,8 +393,8 @@ public final class AgentToolLoopStep implements PipelineStep
         List<SutAttachment> pendingVisualAttachments = null;
         String pendingVisualNote = null;
 
-        LOGGER.info("🚀 Starting Agent Tool Loop for instruction: \"{}\" (intent: {}, milestones: {})",
-                instruction, intent, milestones != null ? milestones.size() : 0);
+        LOGGER.info("🚀 Starting Agent Tool Loop for instruction: \"{}\" (milestones: {})",
+                instruction, milestones != null ? milestones.size() : 0);
         if (LOGGER.isDebugEnabled())
         {
             LOGGER.debug("🛠️ Available Native Tools ({}):\n{}", availableTools.size(), ToolDefinition.formatTools(availableTools));
@@ -548,7 +534,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 for (final ToolCall singleShotCall : proposedCalls)
                 {
                     logToolCall(singleShotCall);
-                    final InterceptionVerdict verdict = this.interceptor.intercept(singleShotCall, toolContext, intent);
+                    final InterceptionVerdict verdict = this.interceptor.intercept(singleShotCall, toolContext);
                     final ToolCall effectiveCall = verdict.getEffectiveCall(singleShotCall);
                     if (!verdict.isAllowed())
                     {
@@ -723,33 +709,6 @@ public final class AgentToolLoopStep implements PipelineStep
                 // If complete_step called -> Stop Criterion 1: Goal Accomplished
                 if ("complete_step".equals(currentCall.toolName()))
                 {
-                    if (intent != null && intent.isAssertion() && !isVisual)
-                    {
-                        boolean hasSuccessfulAssertion = false;
-                        for (final ToolCall executed : executedCalls)
-                        {
-                            if (isAssertionTool(executed.toolName()))
-                            {
-                                hasSuccessfulAssertion = true;
-                                break;
-                            }
-                        }
-                        if (!hasSuccessfulAssertion)
-                        {
-                            if (!lastProposedToolWasCompleteStep)
-                            {
-                                lastProposedToolWasCompleteStep = true;
-                                final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
-                                        + "). You must execute an assertion tool (such as 'assert_text', 'assert_element_state', 'assert_attribute', or 'assert_count') to verify the expected condition before calling complete_step. "
-                                        + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
-                                LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
-                                conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
-                                continue turnLoop;
-                            }
-                            LOGGER.info("Accepting confirmed complete_step on assertion step despite no assertion tool call");
-                        }
-                    }
-
                     if (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
                     {
                         if (!lastProposedToolWasCompleteStep)
@@ -786,7 +745,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 lastProposedToolWasCompleteStep = false;
 
                 // Pre-invocation Guard (Quality Judge & Journey Fidelity)
-                final InterceptionVerdict verdict = this.interceptor.intercept(currentCall, toolContext, intent);
+                final InterceptionVerdict verdict = this.interceptor.intercept(currentCall, toolContext);
                 final ToolCall effectiveCall = verdict.getEffectiveCall(currentCall);
                 lastEffectiveCall = effectiveCall;
 
@@ -794,8 +753,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     final ToolResult rejResult = verdict.rejectionResult();
                     final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
-                    LOGGER.error("❌ Guard rejected tool call {} due to policy violation during {} step: {}",
-                            currentCall.toolName(), intent, rejContent);
+                    LOGGER.error("❌ Guard rejected tool call {} due to policy violation: {}",
+                            currentCall.toolName(), rejContent);
                     throw new AssertionError("Policy violation: " + rejContent);
                 }
 
@@ -1430,7 +1389,7 @@ public final class AgentToolLoopStep implements PipelineStep
      * Partitions executed tool calls and actions across child sub-steps of a compound step.
      * When call count matches sub-steps 1:1, each child receives its direct call.
      * When counts differ (e.g. conditional branches skipped or multi-action sub-steps),
-     * calls are matched sequentially to children based on semantic intent and instruction keywords,
+     * calls are matched sequentially to children based on instruction keywords,
      * ensuring no child receives a cloned duplicate of the entire parent call list.
      *
      * @param subSteps the sub-steps to assign calls to
@@ -1550,11 +1509,6 @@ public final class AgentToolLoopStep implements PipelineStep
             inst = inst.substring(commaIdx + 1).trim();
         }
 
-        if (subStep.getSemanticIntent() != null && matchesIntent(subStep.getSemanticIntent(), toolName))
-        {
-            return true;
-        }
-
         if (toolName.contains("store"))
         {
             return inst.contains("capture") || inst.contains("store") || inst.contains("save");
@@ -1582,21 +1536,6 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         return false;
-    }
-
-    private static boolean matchesIntent(final SemanticIntent intent, final String toolName)
-    {
-        return switch (intent)
-        {
-            case STORE -> toolName.contains("store");
-            case HOVER_SCROLL -> toolName.contains("hover") || toolName.contains("scroll");
-            case CLICK -> toolName.contains("click") || toolName.contains("press");
-            case TYPE -> toolName.contains("type") || toolName.contains("fill");
-            case SELECT -> toolName.contains("select") || toolName.contains("click");
-            case ASSERT, ASSERT_METADATA -> toolName.contains("assert") || toolName.contains("verify");
-            case NAVIGATE -> toolName.contains("navigate") || toolName.contains("open");
-            default -> false;
-        };
     }
 
     private static boolean isFormInputAction(final String toolName)
@@ -1698,15 +1637,14 @@ public final class AgentToolLoopStep implements PipelineStep
         return Action.fromToolCall(call);
     }
 
-    private List<ToolDefinition> filterToolsForIntent(
-        final SemanticIntent intent,
+    private List<ToolDefinition> filterTools(
         final boolean isVisual,
         final ExecutionContext context
     )
     {
         final List<ToolDefinition> defs = new ArrayList<>();
         final boolean hasInteractive = hasInteractiveMilestones(context);
-        final boolean isVisualAssertion = isVisual && (intent == null || intent.isAssertion());
+        final boolean isVisualAssertion = isVisual && !hasInteractive;
 
         final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
         final boolean hasMultipleTabs;
@@ -1733,12 +1671,6 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             final String name = def.name();
             final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
-
-            // Journey Fidelity dynamic scoping: omit navigate and history for interactive steps
-            if (intent != null && intent.isInteraction() && ("navigate".equals(clean) || "back".equals(clean) || "forward".equals(clean) || "refresh".equals(clean)))
-            {
-                continue;
-            }
 
             // Pure visual assertions omit mutating tools
             if (isVisualAssertion && !hasInteractive && isMutatingTool(name))

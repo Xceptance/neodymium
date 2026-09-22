@@ -405,7 +405,6 @@ public final class HtmlReportGenerator
             sb.append("                <span class=\"context-badge\" id=\"inspContextBadge\" style=\"display:none;\"></span>\n");
             sb.append("                <span class=\"badge-flag visual-badge\" id=\"inspVisualBadge\" style=\"display:none;\">📸 VISUAL</span>\n");
             sb.append("                <span class=\"badge-flag bug-badge\" id=\"inspBugBadge\" style=\"display:none;\">🐛 BUG EXPECTED</span>\n");
-            sb.append("                <span class=\"badge-flag intent-badge\" id=\"inspIntentBadge\" style=\"display:none;\"></span>\n");
             sb.append("                <span class=\"badge-flag verification-badge-pass\" id=\"inspVerificationBadge\" style=\"display:none;\"></span>\n");
             sb.append("              </div>\n");
             sb.append("              <div class=\"inspector-header-controls\">\n");
@@ -697,10 +696,6 @@ public final class HtmlReportGenerator
         if (step.isVisual())
         {
             sb.append("              <span class=\"badge-flag visual-badge\">📸 VISUAL</span>\n");
-        }
-        if (step.getSemanticIntent() != null && !step.getSemanticIntent().isBlank())
-        {
-            sb.append("              <span class=\"badge-flag intent-badge\" title=\"Semantic Intent: ").append(escapeHtml(step.getSemanticIntent())).append("\">🎯 ").append(escapeHtml(step.getSemanticIntent())).append("</span>\n");
         }
         if (step.isOptional())
         {
@@ -1239,15 +1234,6 @@ public final class HtmlReportGenerator
                     visBadge.style.display = 'inline-block';
                 } else {
                     visBadge.style.display = 'none';
-                }
-
-                var intentBadge = document.getElementById('inspIntentBadge');
-                if (step.semanticIntent) {
-                    intentBadge.style.display = 'inline-block';
-                    intentBadge.textContent = '🎯 ' + step.semanticIntent;
-                    intentBadge.title = 'Semantic Intent: ' + step.semanticIntent;
-                } else {
-                    intentBadge.style.display = 'none';
                 }
 
                 var verifBadge = document.getElementById('inspVerificationBadge');
@@ -2258,11 +2244,6 @@ public final class HtmlReportGenerator
                 background: var(--accent-purple-light);
                 color: var(--accent-purple);
                 border-color: rgba(124, 58, 237, 0.4);
-            }
-            .badge-flag.intent-badge {
-                background: #e0f2fe;
-                color: #0369a1;
-                border-color: rgba(3, 105, 161, 0.35);
             }
             .badge-flag.verification-badge-pass {
                 background: var(--accent-success-light);

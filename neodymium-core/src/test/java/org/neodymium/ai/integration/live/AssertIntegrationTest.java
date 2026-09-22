@@ -165,8 +165,6 @@ public class AssertIntegrationTest extends BaseAiTest
     public void testAssertVisibility(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: assertData
             steps: |
               Open ${assert.test.url} in the browser
               Assert that the welcome text 'Welcome to our web store!' is visible

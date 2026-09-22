@@ -33,7 +33,8 @@ import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
-import org.neodymium.ai.model.SemanticIntent;
+import org.neodymium.ai.tool.guard.InterceptionVerdict;
+import org.neodymium.ai.tool.guard.ToolInterceptor;
 import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -344,60 +345,6 @@ public class AgentToolLoopStepTest
     }
 
     @Test
-    public void testDynamicIntentScopingOmitsBrowserNavigateForInteractiveIntent() throws Exception
-    {
-        final ObjectNode schema = MAPPER.createObjectNode();
-        schema.put("type", "object");
-        this.registry.register(new AiTool()
-        {
-            private final ToolDefinition def = new ToolDefinition("browser_navigate", "Navigates browser", schema);
-
-            @Override
-            public ToolDefinition getDefinition()
-            {
-                return this.def;
-            }
-
-            @Override
-            public ToolResult execute(final ToolCall call, final ToolContext ctx)
-            {
-                return ToolResult.success(call.callId(), "Navigated");
-            }
-        });
-
-        this.registry.register(new AiTool()
-        {
-            private final ToolDefinition def = new ToolDefinition("browser_click", "Clicks target", schema);
-
-            @Override
-            public ToolDefinition getDefinition()
-            {
-                return this.def;
-            }
-
-            @Override
-            public ToolResult execute(final ToolCall call, final ToolContext ctx)
-            {
-                return ToolResult.success(call.callId(), "Clicked");
-            }
-        });
-
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
-        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click the button");
-
-        final AtomicInteger turn = new AtomicInteger(0);
-        final AgentLoopLlmCaller caller = (req, ctx) -> {
-            // Assert that browser_navigate was omitted from structured tools for CLICK intent
-            Assertions.assertTrue(req.tools().stream().noneMatch(t -> "browser_navigate".equals(t.name())));
-            Assertions.assertTrue(req.tools().stream().anyMatch(t -> "browser_click".equals(t.name())));
-            return new LlmResponse("{\"thought\":\"done\",\"tool_call\":{\"name\":\"complete_step\",\"arguments\":{\"summary\":\"Done\"}}}", new TokenUsage(10, 10, 20), "mock");
-        };
-
-        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
-        step.execute(this.context);
-    }
-
-    @Test
     public void testNativeToolCallExecutionAndTurnContext() throws Exception
     {
         final ObjectNode schema = MAPPER.createObjectNode();
@@ -502,7 +449,6 @@ public class AgentToolLoopStepTest
             }
         });
 
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.NAVIGATE);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "open https://example.com");
 
         final AgentLoopLlmCaller caller = (req, ctx) -> {
@@ -544,7 +490,6 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<button id='submit-btn'>Submit</button>", Collections.emptyList(), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click Submit");
 
         final AgentLoopLlmCaller caller = (req, ctx) -> {
@@ -981,7 +926,6 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<div class='visual-layout'>Banner</div>", Collections.emptyList(), "DOM_VISUAL"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify banner layout (visual)");
 
@@ -1012,7 +956,6 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("Page URL: https://example.com\nPage Title: Test\n", Collections.emptyList(), "h1"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
 
         final PlaybookStep visualStep = new PlaybookStep("There is a green checkmark in the middle of the screen (visual).");
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, visualStep);
@@ -1096,7 +1039,6 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<button id='btn'>Click Me</button>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64")), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click button");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -1179,7 +1121,6 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div data-ai='zip'>Shipping Zip Code: 12345</div>", List.of(new SutAttachment("image/png", "screenshot", "turn2Base64")), "DOM_STANDARD"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Submit order and check zip code");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -1258,7 +1199,6 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div id='rich'>Rich DOM with all computed styles</div>", Collections.emptyList(), "DOM_RICH"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.LEAN);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Inspect complex DOM layout");
 
@@ -1294,7 +1234,7 @@ public class AgentToolLoopStepTest
     }
 
     @Test
-    public void testAssertionIntentDefaultsToStandardContextLevel() throws Exception
+    public void testDefaultContextLevelIsLean() throws Exception
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
@@ -1316,9 +1256,8 @@ public class AgentToolLoopStepTest
         });
 
         final MockTargetExecutor executor = new MockTargetExecutor();
-        executor.enqueueState(new BrowserSutState("<div data-ai='zip'>Shipping Zip Code: 12345</div>", Collections.emptyList(), "DOM_STANDARD"));
+        executor.enqueueState(new BrowserSutState("<div data-ai='zip'>Shipping Zip Code: 12345</div>", Collections.emptyList(), "DOM_LEAN"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Assert shipping zip code is 12345");
 
         final StepStats stats = new StepStats("Assert shipping zip code is 12345", System.currentTimeMillis());
@@ -1326,7 +1265,7 @@ public class AgentToolLoopStepTest
 
         final AgentLoopLlmCaller caller = (req, ctx) -> {
             final ContextLevel activeLevel = (ContextLevel) this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-            Assertions.assertEquals(ContextLevel.STANDARD, activeLevel, "Assertion intent must default to at least STANDARD context level");
+            Assertions.assertEquals(ContextLevel.LEAN, activeLevel, "Default context level must be LEAN");
             return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
                     List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Zip verified"))));
         };
@@ -1335,7 +1274,7 @@ public class AgentToolLoopStepTest
         step.execute(this.context);
 
         Assertions.assertEquals("Zip verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
-        Assertions.assertTrue(stats.getContextLevels().contains("STANDARD"));
+        Assertions.assertTrue(stats.getContextLevels().contains("LEAN"));
     }
 
     @Test
@@ -1528,75 +1467,6 @@ public class AgentToolLoopStepTest
     }
 
     @Test
-    public void testAssertionStepRejectsPrematureCompleteStepUntilAssertExecuted() throws Exception
-    {
-        final ObjectNode schema = MAPPER.createObjectNode();
-        schema.put("type", "object");
-        this.registry.register(new AiTool()
-        {
-            private final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts text", schema);
-
-            @Override
-            public ToolDefinition getDefinition()
-            {
-                return this.def;
-            }
-
-            @Override
-            public ToolResult execute(final ToolCall call, final ToolContext ctx)
-            {
-                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\",\"matched\":true}");
-            }
-        });
-
-        this.registry.register(new AiTool()
-        {
-            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
-
-            @Override
-            public ToolDefinition getDefinition()
-            {
-                return this.def;
-            }
-
-            @Override
-            public ToolResult execute(final ToolCall call, final ToolContext ctx)
-            {
-                return ToolResult.success(call.callId(), "Goal reached");
-            }
-        });
-
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
-        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Assert order number is displayed");
-
-        final AtomicInteger turn = new AtomicInteger(0);
-        final AgentLoopLlmCaller caller = (req, ctx) -> {
-            final int t = turn.incrementAndGet();
-            if (t == 1)
-            {
-                // Turn 1: premature complete_step
-                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
-                        List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
-            }
-            if (t == 2)
-            {
-                // Turn 2: calls browser_assert_text
-                return new LlmResponse("Asserting", new TokenUsage(10, 10, 20), "mock",
-                        List.of(new ToolCall("c-2", "browser_assert_text", MAPPER.createObjectNode().put("expectedText", "Order 12345"))));
-            }
-            // Turn 3: calls complete_step after assertion has succeeded
-            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
-                    List.of(new ToolCall("c-3", "complete_step", MAPPER.createObjectNode().put("summary", "Order verified"))));
-        };
-
-        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
-        step.execute(this.context);
-
-        Assertions.assertEquals(3, turn.get(), "Must execute 3 turns: reject premature complete_step, execute assert tool, then complete");
-        Assertions.assertEquals("Order verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
-    }
-
-    @Test
     public void testTurn2ZeroDomNavigateDoesNotIncludeStructuralDom() throws Exception
     {
         final ObjectNode schema = MAPPER.createObjectNode();
@@ -1639,7 +1509,6 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div id='fullDom'>Huge DOM</div>", Collections.emptyList(), "DOM_STANDARD"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.NAVIGATE);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Open https://example.com");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -1747,7 +1616,6 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<a id='login'>Login</a>", Collections.emptyList(), "DOM_LIGHT"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.NAVIGATE);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Open https://example.com and click Login");
         this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Open https://example.com", "Click Login"));
 
@@ -1789,18 +1657,18 @@ public class AgentToolLoopStepTest
     @Test
     public void testPolicyViolationThrowsAssertionErrorImmediately()
     {
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click checkout button");
 
         final AgentLoopLlmCaller caller = (req, ctx) ->
-                new LlmResponse("{\"thought\":\"navigating directly instead of clicking UI element\",\"tool_call\":{\"name\":\"browser_navigate\",\"arguments\":{\"url\":\"https://example.com/checkout\"}}}",
+                new LlmResponse("{\"thought\":\"violating policy\",\"tool_call\":{\"name\":\"browser_click\",\"arguments\":{\"selector\":\"#checkout\"}}}",
                         new TokenUsage(10, 10, 20), "mock");
 
-        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        final ToolInterceptor rejectingInterceptor = (call, ctx) -> InterceptionVerdict.reject(call.callId(), "Policy violation: Disallowed call");
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, rejectingInterceptor, caller, 30);
 
         final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
         Assertions.assertTrue(thrown.getMessage().contains("Policy violation"));
-        Assertions.assertTrue(thrown.getMessage().contains("Journey Fidelity Violation"));
+        Assertions.assertTrue(thrown.getMessage().contains("Disallowed call"));
     }
 
     @Test
@@ -1905,7 +1773,6 @@ public class AgentToolLoopStepTest
 
         // Milestones: 2 milestones. Configured maxTurns = 2.
         // Effective max turns should be: 2 + (2 * 3) = 8.
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Compound step");
         this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Milestone 1", "Milestone 2"));
 
@@ -1976,7 +1843,6 @@ public class AgentToolLoopStepTest
         parent.getSubSteps().add(new PlaybookStep("submit and assert bonus gift"));
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, parent.getFullInstruction());
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
 
         final AgentLoopLlmCaller caller = (req, ctx) ->
         {
@@ -2019,7 +1885,6 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<canvas id='myCanvas'></canvas>", Collections.emptyList(), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click canvas button");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -2080,7 +1945,6 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<canvas id='myCanvas'></canvas>", Collections.emptyList(), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click button inside canvas");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -2146,7 +2010,6 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div>after tool</div>", Collections.emptyList(), "DOM_LIGHT"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
         final PlaybookStep playbookStep = new PlaybookStep("Verify checkmark on page (visual: full)");
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
@@ -2213,7 +2076,6 @@ public class AgentToolLoopStepTest
                 List.of(new SutAttachment("image/png", "screenshot", "turn4Base64")), "DOM_LIGHT"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.TYPE);
         final String instruction = "Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.";
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, instruction);
 
@@ -2310,7 +2172,6 @@ public class AgentToolLoopStepTest
 
         final PlaybookStep playbookStep = new PlaybookStep("Enter card details");
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
-        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.TYPE);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION,
                 "Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.");
 
