@@ -580,28 +580,9 @@ public final class SelenideElementFinder
             return null;
         }
 
-        String clean = rawCandidate.trim();
-        boolean forceXpath = false;
-        boolean forceCss = false;
-        boolean forceText = false;
+        final String clean = rawCandidate.trim();
 
-        final String lower = clean.toLowerCase();
-        if (lower.startsWith("xpath="))
-        {
-            clean = clean.substring(6).trim();
-            forceXpath = true;
-        }
-        else if (lower.startsWith("css="))
-        {
-            clean = clean.substring(4).trim();
-            forceCss = true;
-        }
-        else if (lower.startsWith("text=") || lower.startsWith("has-text="))
-        {
-            forceText = true;
-        }
-
-        if (!forceXpath && !forceText && (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*")))
+        if (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*"))
         {
             final SelenideElement el = tryResolveAutomationId(clean);
             if (el != null)
@@ -610,48 +591,20 @@ public final class SelenideElementFinder
             }
         }
 
-        if (!forceXpath && !forceCss && (forceText || clean.contains(":") || clean.contains("=")))
+        try
         {
-            final SelenideElement el = tryResolvePlaywrightPseudo(clean);
-            if (el != null)
+            final ElementsCollection els = Selenide.$$(LocatorResolver.resolveLocator(clean));
+            final SelenideElement visible = findFirstVisible(els, clean);
+            if (visible != null)
             {
-                return el;
+                return visible;
             }
         }
-
-        if (!forceCss && !forceText && (forceXpath || clean.startsWith("/") || clean.startsWith("./") || clean.startsWith("(")))
+        catch (final AssertionError | Exception ignored)
         {
-            try
-            {
-                final ElementsCollection els = Selenide.$$x(clean);
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
-                {
-                    return visible;
-                }
-            }
-            catch (final AssertionError | Exception ignored)
-            {
-            }
         }
 
-        if (!forceXpath && !forceText)
-        {
-            try
-            {
-                final ElementsCollection els = Selenide.$$(LocatorResolver.resolveLocator(clean));
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
-                {
-                    return visible;
-                }
-            }
-            catch (final AssertionError | Exception ignored)
-            {
-            }
-        }
-
-        if (!forceCss && !forceXpath)
+        if (!SelectorSyntaxChecker.isXpathExpression(clean))
         {
             try
             {
@@ -667,7 +620,7 @@ public final class SelenideElementFinder
             }
         }
 
-        if (!forceCss && !forceXpath && !SelectorSyntaxChecker.isCssSelector(clean) && !SelectorSyntaxChecker.isXpathExpression(clean) && !clean.contains("<") && !clean.contains(">"))
+        if (!SelectorSyntaxChecker.isCssSelector(clean) && !SelectorSyntaxChecker.isXpathExpression(clean) && !clean.contains("<") && !clean.contains(">"))
         {
             try
             {
@@ -688,7 +641,7 @@ public final class SelenideElementFinder
             }
         }
 
-        if (!forceXpath && clean.matches("^[a-zA-Z0-9_-]+$"))
+        if (clean.matches("^[a-zA-Z0-9_-]+$"))
         {
             try
             {
@@ -760,72 +713,6 @@ public final class SelenideElementFinder
         return null;
     }
 
-    private static SelenideElement tryResolvePlaywrightPseudo(final String clean)
-    {
-        final String lower = clean.toLowerCase();
-        if (lower.startsWith("text=") || lower.startsWith("text*=") || lower.startsWith("has-text=") || lower.startsWith("has-text*="))
-        {
-            final int eqIdx = clean.indexOf('=');
-            String text = clean.substring(eqIdx + 1).trim();
-            if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'")))
-            {
-                if (text.length() >= 2)
-                {
-                    text = text.substring(1, text.length() - 1);
-                }
-            }
-            if (!text.isEmpty())
-            {
-                try
-                {
-                    final String escaped = LocatorResolver.escapeXpath(text);
-                    final String xpath = String.format(
-                        "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(normalize-space(.), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
-                        escaped, escaped, escaped, escaped
-                    );
-                    final ElementsCollection els = Selenide.$$x(xpath);
-                    final SelenideElement visible = findFirstVisible(els, clean);
-                    if (visible != null)
-                    {
-                        return visible;
-                    }
-                }
-                catch (final AssertionError | Exception ignored)
-                {
-                }
-            }
-        }
-
-        final java.util.regex.Matcher pwMatcher = java.util.regex.Pattern.compile("^(.*?):(has-text|has-text\\*|text|text\\*|contains)\\(['\"]?(.*?)['\"]?\\)$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(clean);
-        if (pwMatcher.find())
-        {
-            String tag = pwMatcher.group(1).trim();
-            if (tag.isEmpty())
-            {
-                tag = "*";
-            }
-            final String text = pwMatcher.group(3).trim();
-            if (!text.isEmpty())
-            {
-                try
-                {
-                    final String xpath = String.format("//%s[contains(normalize-space(.), %s)]", tag, LocatorResolver.escapeXpath(text));
-                    final ElementsCollection els = Selenide.$$x(xpath);
-                    final SelenideElement visible = findFirstVisible(els, clean);
-                    if (visible != null)
-                    {
-                        return visible;
-                    }
-                }
-                catch (final AssertionError | Exception ignored)
-                {
-                }
-            }
-        }
-
-        return null;
-    }
-
     public static SelenideElement findFirstVisible(final ElementsCollection els, final String originalTarget)
     {
         if (els == null)
@@ -841,16 +728,29 @@ public final class SelenideElementFinder
                 return null;
             }
 
-            if (visibleEls.size() == 1)
+            final String cleanTarget = originalTarget != null ? originalTarget.trim() : "";
+            final boolean targetIsRoot = "body".equalsIgnoreCase(cleanTarget) || "html".equalsIgnoreCase(cleanTarget);
+            final ElementsCollection candidates = targetIsRoot
+                    ? visibleEls
+                    : visibleEls.filter(Condition.not(Condition.match("root container", el -> {
+                        final String tag = el.getTagName();
+                        return "html".equalsIgnoreCase(tag) || "body".equalsIgnoreCase(tag) || "head".equalsIgnoreCase(tag);
+                    })));
+
+            if (candidates.isEmpty())
             {
-                final SelenideElement single = visibleEls.first();
+                return null;
+            }
+
+            if (candidates.size() == 1)
+            {
+                final SelenideElement single = candidates.first();
                 return single.is(Condition.visible) ? single : null;
             }
 
-            final String cleanTarget = originalTarget != null ? originalTarget.trim() : "";
             if (!cleanTarget.isBlank())
             {
-                final SelenideElement matched = visibleEls.find(Condition.or("target match",
+                final SelenideElement matched = candidates.find(Condition.or("target match",
                     Condition.exactText(cleanTarget),
                     Condition.value(cleanTarget),
                     Condition.attribute("aria-label", cleanTarget)));
@@ -860,13 +760,13 @@ public final class SelenideElementFinder
                 }
             }
 
-            final SelenideElement focused = visibleEls.find(Condition.focused);
+            final SelenideElement focused = candidates.find(Condition.focused);
             if (focused.is(Condition.visible))
             {
                 return focused;
             }
 
-            final SelenideElement first = visibleEls.first();
+            final SelenideElement first = candidates.first();
             return first.is(Condition.visible) ? first : null;
         }
         catch (final AssertionError | Exception ignored)

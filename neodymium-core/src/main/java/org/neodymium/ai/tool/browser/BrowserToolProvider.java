@@ -1387,16 +1387,21 @@ public final class BrowserToolProvider
         {
         }
 
-        try
+        final String tag = el.getTagName();
+        final boolean isRoot = tag == null || "body".equalsIgnoreCase(tag) || "html".equalsIgnoreCase(tag);
+        if (!isRoot)
         {
-            final String textContent = el.getAttribute("textContent");
-            if (textContent != null && !textContent.isBlank() && !candidates.contains(textContent))
+            try
             {
-                candidates.add(textContent);
+                final String textContent = el.getAttribute("textContent");
+                if (textContent != null && !textContent.isBlank() && !candidates.contains(textContent))
+                {
+                    candidates.add(textContent);
+                }
             }
-        }
-        catch (final Exception ignored)
-        {
+            catch (final Exception ignored)
+            {
+            }
         }
 
         if (candidates.isEmpty())
@@ -1498,7 +1503,7 @@ public final class BrowserToolProvider
 
         try
         {
-            final ElementsCollection inputs = Selenide.$$("input, textarea, select");
+            final ElementsCollection inputs = Selenide.$$("input, textarea, select").filter(Condition.visible);
             for (final SelenideElement input : inputs)
             {
                 if (matchesElementText(input, expectedText, regex, exact))

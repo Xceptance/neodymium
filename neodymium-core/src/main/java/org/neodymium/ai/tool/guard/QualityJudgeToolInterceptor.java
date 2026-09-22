@@ -158,7 +158,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             List<WebElement> matchedElements = Collections.emptyList();
             try
             {
-                matchedElements = driver.findElements(By.cssSelector(selector));
+                matchedElements = driver.findElements(LocatorResolver.resolveLocator(selector));
             }
             catch (final Exception e)
             {
