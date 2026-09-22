@@ -3,6 +3,31 @@
   @author AI-generated: Antigravity
   Xceptance GmbH 2026
 -->
+<style>
+.empty-steps-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    border: 2px dashed rgba(203, 213, 225, 0.8);
+    border-radius: 8px;
+    color: var(--text-secondary, #64748b);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin: 6px 0;
+    background: rgba(248, 250, 252, 0.6);
+    user-select: none;
+}
+.empty-steps-placeholder:hover {
+    border-color: var(--accent, #2563eb);
+    color: var(--accent, #2563eb);
+    background: rgba(37, 99, 235, 0.05);
+}
+</style>
+
 <div class="panel editor-container" id="editorPanel" th:fragment="editorPanelContent">
     <div class="panel-header">
         <div class="neo-u-11">
@@ -66,13 +91,16 @@
                         <div style="font-size: 12px; color: var(--text-secondary);">
                             Runs before main steps
                         </div>
+                        <button type="button" class="btn-editor" style="font-size: 11px; padding: 3px 8px;" onclick="addStepToContainer('beforeStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
+                        </button>
                         <button class="btn-remove-section-block" onclick="removeBeforeBlock()">
                             <span class="material-symbols-outlined">delete</span>
                             Remove Block
                         </button>
                     </div>
                 </div>
-                <div class="steps-container" id="beforeStepsList">
+                <div class="steps-container" id="beforeStepsList" onclick="handleStepsContainerClick(event, this)">
                     <th:block th:if="${beforeSteps != null and !#lists.isEmpty(beforeSteps)}">
                         <div class="step-row" th:each="step, iterStat : ${beforeSteps}" th:data-line="${iterStat.index + 1}">
                             <span class="step-number" th:text="${iterStat.index + 1}">1</span>
@@ -89,6 +117,12 @@
                             </div>
                         </div>
                     </th:block>
+                    <th:block th:if="${beforeSteps == null or #lists.isEmpty(beforeSteps)}">
+                        <div class="empty-steps-placeholder" onclick="addStepToContainer('beforeStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                            <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
+                        </div>
+                    </th:block>
                 </div>
             </div>
 
@@ -103,9 +137,12 @@
                         <div style="font-size: 12px; color: var(--text-secondary);">
                             Core execution steps
                         </div>
+                        <button type="button" class="btn-editor" style="font-size: 11px; padding: 3px 8px;" onclick="addStepToContainer('stepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
+                        </button>
                     </div>
                 </div>
-                <div class="steps-container" id="stepsList">
+                <div class="steps-container" id="stepsList" onclick="handleStepsContainerClick(event, this)">
                     <th:block th:if="${mainSteps != null and !#lists.isEmpty(mainSteps)}">
                         <div class="step-row" th:each="step, iterStat : ${mainSteps}" th:data-line="${iterStat.index + 1}">
                             <span class="step-number" th:text="${iterStat.index + 1}">1</span>
@@ -123,14 +160,9 @@
                         </div>
                     </th:block>
                     <th:block th:if="${mainSteps == null or #lists.isEmpty(mainSteps)}">
-                        <div class="step-row" data-line="1">
-                            <span class="step-number">1</span>
-                            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="Open ${neodymium.url}" onkeydown="handleKeyDown(event, this)" onfocus="handleStepFocus(this)" onblur="handleStepBlur(this)">Open ${neodymium.url}</div>
-                            <div class="step-actions">
-                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
-                            </div>
+                        <div class="empty-steps-placeholder" onclick="addStepToContainer('stepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                            <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
                         </div>
                     </th:block>
                 </div>
@@ -147,13 +179,16 @@
                         <div style="font-size: 12px; color: var(--text-secondary);">
                             Teardown / Cleanup
                         </div>
+                        <button type="button" class="btn-editor" style="font-size: 11px; padding: 3px 8px;" onclick="addStepToContainer('afterStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
+                        </button>
                         <button class="btn-remove-section-block" onclick="removeAfterBlock()">
                             <span class="material-symbols-outlined">delete</span>
                             Remove Block
                         </button>
                     </div>
                 </div>
-                <div class="steps-container" id="afterStepsList">
+                <div class="steps-container" id="afterStepsList" onclick="handleStepsContainerClick(event, this)">
                     <th:block th:if="${afterSteps != null and !#lists.isEmpty(afterSteps)}">
                         <div class="step-row" th:each="step, iterStat : ${afterSteps}" th:data-line="${iterStat.index + 1}">
                             <span class="step-number" th:text="${iterStat.index + 1}">1</span>
@@ -168,6 +203,12 @@
                                 <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
                                 <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
                             </div>
+                        </div>
+                    </th:block>
+                    <th:block th:if="${afterSteps == null or #lists.isEmpty(afterSteps)}">
+                        <div class="empty-steps-placeholder" onclick="addStepToContainer('afterStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                            <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
                         </div>
                     </th:block>
                 </div>

@@ -1192,14 +1192,107 @@ function focusLine(lineNumOrElement, targetOffset = -1) {
 }
 window.focusLine = focusLine;
 
+/* Step Addition to Specific or Fallback Containers */
+function addStepToContainer(containerId = 'stepsList', initialText = '') {
+    const container = document.getElementById(containerId) || document.getElementById('stepsList');
+    if (!container) return null;
+
+    const placeholder = container.querySelector('.empty-steps-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    currentLineCount++;
+    const lineId = currentLineCount;
+    const newRow = document.createElement('div');
+    newRow.className = 'step-row';
+    newRow.setAttribute('data-line', lineId);
+
+    const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+
+    newRow.innerHTML = `
+        <span class="step-number">${lineId}</span>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})">${safeInitial}</div>
+        <div class="step-actions">
+            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+        </div>
+    `;
+
+    container.appendChild(newRow);
+    reindexSteps();
+    if (initialText) {
+        formatStepToTokens(lineId);
+    }
+
+    const newContent = newRow.querySelector('.step-content');
+    if (newContent) {
+        newContent.focus();
+        if (initialText) {
+            setCaretOffset(newContent, initialText.length);
+        }
+    }
+    compilePlaybookToYaml();
+    if (typeof pushEditorSnapshot === 'function') {
+        pushEditorSnapshot(false);
+    }
+    return newRow;
+}
+window.addStepToContainer = addStepToContainer;
+
+function ensureEmptyPlaceholders() {
+    ['beforeStepsList', 'stepsList', 'afterStepsList'].forEach(id => {
+        const container = document.getElementById(id);
+        if (!container) return;
+        const panel = container.closest('.editor-code-panel');
+        if (panel && panel.style.display === 'none') return;
+
+        const rows = container.querySelectorAll(':scope > .step-row');
+        let placeholder = container.querySelector('.empty-steps-placeholder');
+
+        if (rows.length === 0) {
+            if (!placeholder) {
+                placeholder = document.createElement('div');
+                placeholder.className = 'empty-steps-placeholder';
+                placeholder.setAttribute('onclick', `addStepToContainer('${id}')`);
+                placeholder.innerHTML = `
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
+                `;
+                container.appendChild(placeholder);
+            }
+        } else {
+            if (placeholder) {
+                placeholder.remove();
+            }
+        }
+    });
+}
+window.ensureEmptyPlaceholders = ensureEmptyPlaceholders;
+
+function handleStepsContainerClick(event, containerEl) {
+    if (!containerEl) return;
+    const rows = containerEl.querySelectorAll(':scope > .step-row');
+    if (rows.length === 0) {
+        addStepToContainer(containerEl.id);
+    }
+}
+window.handleStepsContainerClick = handleStepsContainerClick;
+
 function insertStepBelow(lineNumOrElement, initialText = '') {
     let targetRow = null;
     if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
         targetRow = lineNumOrElement.closest('.step-row') || lineNumOrElement;
-    } else {
+    } else if (lineNumOrElement) {
         targetRow = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
     }
-    if (!targetRow) return null;
+    if (!targetRow) {
+        targetRow = document.querySelector('.step-row');
+    }
+    if (!targetRow) {
+        return addStepToContainer('stepsList', initialText);
+    }
 
     currentLineCount++;
     const newRow = document.createElement('div');
@@ -1382,6 +1475,7 @@ function reindexSteps() {
     currentLineCount = Math.max(1, globalLineCounter - 1);
     window.currentLineCount = currentLineCount;
     updateAllLineNumbers();
+    ensureEmptyPlaceholders();
     compilePlaybookToYaml();
 }
 window.reindexSteps = reindexSteps;
@@ -1666,7 +1760,13 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
 
     let activeRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
     if (!activeRow) {
-        activeRow = document.querySelector(`.step-row[data-line="1"]`);
+        activeRow = document.querySelector(`.step-row[data-line="1"]`) || document.querySelector('.step-row');
+    }
+    if (!activeRow) {
+        activeRow = addStepToContainer('stepsList');
+        if (activeRow) {
+            activeLineNum = parseInt(activeRow.getAttribute('data-line'), 10) || 1;
+        }
     }
     if (!activeRow) return;
 
@@ -1689,7 +1789,7 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
     }
 
     content.setAttribute('data-raw', raw);
-    formatStepToTokens(activeLineNum);
+    formatStepToTokens(activeLineNum || activeRow.getAttribute('data-line'));
     content.focus();
     setCaretOffset(content, lastCaretOffset);
     if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
@@ -1723,11 +1823,13 @@ function insertIncludePill(filePath) {
     }
 
     let targetLine = activeLineNum || 1;
-    let targetRow = document.querySelector(`.step-row[data-line="${targetLine}"]`);
+    let targetRow = document.querySelector(`.step-row[data-line="${targetLine}"]`) || document.querySelector('.step-row');
 
     if (!targetRow) {
-        targetRow = document.querySelector(`.step-row[data-line="1"]`);
-        targetLine = 1;
+        targetRow = addStepToContainer('stepsList');
+        if (targetRow) {
+            targetLine = parseInt(targetRow.getAttribute('data-line'), 10) || 1;
+        }
     }
 
     if (targetRow) {
