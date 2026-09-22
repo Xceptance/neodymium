@@ -1162,4 +1162,38 @@ public final class AiConfiguration
     {
         return Math.max(10L, getLong("neodymium.ai.llm.initialRetryDelayMs", 100L));
     }
+
+    /**
+     * Checks whether outbound LLM wire image optimization (JPEG compression & downscaling) is enabled.
+     * Default is true.
+     *
+     * @return true if wire image optimization is enabled, false otherwise
+     */
+    public boolean isWireImageOptimizationEnabled()
+    {
+        return getBoolean("neodymium.ai.wireImageOptimization.enabled", true);
+    }
+
+    /**
+     * Gets the JPEG compression quality for outbound LLM wire images (clamped between 0.1 and 1.0).
+     * Default is 0.85f.
+     *
+     * @return JPEG compression quality float
+     */
+    public float getWireImageOptimizationJpegQuality()
+    {
+        final double q = getDouble("neodymium.ai.wireImageOptimization.jpegQuality", 0.85);
+        return (float) Math.max(0.1, Math.min(1.0, q));
+    }
+
+    /**
+     * Gets the maximum resolution dimension (width or height) for outbound LLM wire images.
+     * Default is 1280 pixels.
+     *
+     * @return max dimension in pixels
+     */
+    public int getWireImageOptimizationMaxDimension()
+    {
+        return Math.max(320, getInt("neodymium.ai.wireImageOptimization.maxDimension", 1280));
+    }
 }

@@ -42,6 +42,7 @@ import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
+import org.neodymium.ai.replay.IncompatiblePlaybookSchemaException;
 import org.neodymium.ai.replay.PlaybookToolReplayer;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.SimpleToolContext;
@@ -492,6 +493,14 @@ public final class ExecuteActionsStep
                     }
                     catch (final Throwable t)
                     {
+                        if (t instanceof final IncompatiblePlaybookSchemaException schemaErr)
+                        {
+                            throw schemaErr;
+                        }
+                        if (t.getCause() instanceof final IncompatiblePlaybookSchemaException schemaErr)
+                        {
+                            throw schemaErr;
+                        }
                         if (mode.supportsHealing() && !step.isNoHealing())
                         {
                             throw new HealingRequiredException("Replay step execution failed against SUT: " + t.getMessage(), t);
@@ -598,17 +607,22 @@ public final class ExecuteActionsStep
             // Push end-hook step first, so it runs AFTER tryCatch executes
             contextState.pushStep(c ->
             {
-                final Boolean isHealed = (Boolean) c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
-                if (Boolean.TRUE.equals(isHealed))
+                if (!step.isFailed() && step.getStatus() != PlaybookStepStatus.SKIPPED)
                 {
-                    step.setStatus(PlaybookStepStatus.HEALED);
+                    final Boolean isHealed = (Boolean) c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
+                    if (Boolean.TRUE.equals(isHealed))
+                    {
+                        step.setStatus(PlaybookStepStatus.HEALED);
+                        step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);
+                    }
+                    else
+                    {
+                        step.setStatus(PlaybookStepStatus.SUCCESS);
+                    }
+                    step.setFailed(false);
+                    step.setFailureReason(null);
                 }
-                else
-                {
-                    step.setStatus(PlaybookStepStatus.SUCCESS);
-                }
-                step.setFailed(false);
-                step.setFailureReason(null);
+
                 if (step.getStartTimeMs() != null)
                 {
                     step.setDurationMs(System.currentTimeMillis() - step.getStartTimeMs());
@@ -624,12 +638,25 @@ public final class ExecuteActionsStep
                     final long childDuration = step.getDurationMs() != null && !step.getSubSteps().isEmpty()
                         ? step.getDurationMs() / step.getSubSteps().size()
                         : 0L;
-                    for (final PlaybookStep sub : step.getSubSteps())
+                    if (!step.isFailed())
                     {
-                        sub.setStatus(step.getStatus());
-                        sub.setFailed(step.isFailed());
-                        sub.setFailureReason(step.getFailureReason());
-                        sub.setDurationMs(childDuration);
+                        for (final PlaybookStep sub : step.getSubSteps())
+                        {
+                            sub.setStatus(step.getStatus());
+                            sub.setFailed(step.isFailed());
+                            sub.setFailureReason(step.getFailureReason());
+                            sub.setDurationMs(childDuration);
+                        }
+                    }
+                    else
+                    {
+                        for (final PlaybookStep sub : step.getSubSteps())
+                        {
+                            if (sub.getDurationMs() == null || sub.getDurationMs() == 0L)
+                            {
+                                sub.setDurationMs(childDuration);
+                            }
+                        }
                     }
                     if (statsObj instanceof StepStats stepStats && stepStats.getSubStats().isEmpty())
                     {
@@ -648,7 +675,7 @@ public final class ExecuteActionsStep
                     }
                 }
 
-                if (step.isBug())
+                if (step.isBug() && !step.isFailed())
                 {
                     final String bugComment = step.getBugDetails();
                     final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";

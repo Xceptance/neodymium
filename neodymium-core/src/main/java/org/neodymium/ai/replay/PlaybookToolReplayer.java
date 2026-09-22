@@ -31,7 +31,6 @@ import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
-import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.session.AiSession;
@@ -132,10 +131,7 @@ public final class PlaybookToolReplayer
         final String schemaVersion = step.getSchemaVersion();
         if (schemaVersion == null || !PlaybookStep.CURRENT_SCHEMA_VERSION.equals(schemaVersion.trim()))
         {
-            throw new ConclusiveFailureException(String.format(
-                "Playbook recording schema version '%s' is obsolete or incompatible with current schema '%s'. "
-                    + "Legacy recording formats are no longer supported. Re-record the playbook using ExecutionMode.FORCE_RECORDING.",
-                schemaVersion != null ? schemaVersion : "null", PlaybookStep.CURRENT_SCHEMA_VERSION));
+            throw new IncompatiblePlaybookSchemaException(schemaVersion, PlaybookStep.CURRENT_SCHEMA_VERSION);
         }
 
         final ToolRegistry effectiveRegistry = registry != null ? registry : createDefaultRegistry();
@@ -288,6 +284,7 @@ public final class PlaybookToolReplayer
         if (anyHealed)
         {
             step.setStatus(PlaybookStepStatus.HEALED);
+            step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);
             LOGGER.info("✨ Step successfully replayed with self-healing: \"{}\"", step.getInstruction());
         }
         else

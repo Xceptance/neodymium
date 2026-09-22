@@ -442,6 +442,131 @@ public class AssertIntegrationTest extends BaseAiTest
     }
 
     /**
+     * Sliced test case verifying hidden element state assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertHiddenState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertHiddenState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'Secret Button' button is hidden
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#hidden-btn").shouldBe(hidden);
+    }
+
+    /**
+     * Sliced test case verifying element text assertions.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertText.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertText(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the welcome text is 'Welcome to our web store!'
+              Assert that the total price contains 'CAD $ 120.00'
+            """)
+            .verifyMetrics()
+            .hasStepCount(3)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#welcome-message").shouldHave(text("Welcome to our web store!"));
+        $("#total-price").shouldHave(text("CAD $ 120.00"));
+    }
+
+    /**
+     * Sliced test case verifying element count assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCount.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertCount(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that there are 2 radio buttons
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+    }
+
+    /**
+     * Sliced test case verifying unselected option state assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnselectedState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertUnselectedState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'opt-admin' option is unselected
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#opt-admin").shouldNotBe(selected);
+    }
+
+    /**
+     * Sliced test case verifying unfocused element state assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnfocusedState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertUnfocusedState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'disabled-input' field is unfocused
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#disabled-input").shouldNotBe(focused);
+    }
+
+    /**
      * Verifies that incorrect page title assertion throws AssertionError in live replay.
      *
      * @param session the thread-isolated AiSession
@@ -684,6 +809,121 @@ public class AssertIntegrationTest extends BaseAiTest
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the welcome text matches '/^Goodbye.*/'
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting an unchecked radio button is checked throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertRadioButtonFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertRadioButtonFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'plan-yearly' radio button is checked
+                """);
+        });
+    }
+
+    /**
+     * Verifies that incorrect element value assertion throws error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertValueFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertValueFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'Username Input' value is 'WrongUser'
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a visible element is absent throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertAbsenceFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertAbsenceFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'Clickable Button' button is absent
+                """);
+        });
+    }
+
+    /**
+     * Verifies that incorrect element count assertion throws error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCountFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertCountFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that there are 5 radio buttons
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a selected option is unselected throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnselectedFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertUnselectedFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'opt-user' option is unselected
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a selected option is unselected throws an error in live replay.
+     * Use a not.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnselectedFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertUnselectedFailureWithNot(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(Throwable.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'opt-user' option is not selected
                 """);
         });
     }

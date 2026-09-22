@@ -274,9 +274,13 @@ public final class StateMachineRunner
                     }
 
                     final PipelineException e;
-                    if (t instanceof PipelineException)
+                    if (t instanceof PipelineException pe)
                     {
-                        e = (PipelineException) t;
+                        e = pe;
+                    }
+                    else if (t.getCause() instanceof PipelineException pe)
+                    {
+                        e = pe;
                     }
                     else
                     {
@@ -463,6 +467,10 @@ public final class StateMachineRunner
                     }
 
                     // Bubbling up out of loop
+                    if (t.getCause() instanceof final PipelineException pe)
+                    {
+                        throw pe;
+                    }
                     if (t instanceof RuntimeException)
                     {
                         throw (RuntimeException) t;

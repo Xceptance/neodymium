@@ -33,6 +33,7 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.util.WireImageOptimizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,7 @@ public final class LlmSanitizerHelper
 
     /**
      * Creates a new LlmRequest replacing the user prompt with the sanitized prompt text,
-     * preserving multi-turn messages, tools, and attachments.
+     * preserving multi-turn messages, tools, and attachments while optimizing binary images for the wire.
      *
      * @param original the original raw LlmRequest
      * @param payload the sanitized payload
@@ -144,15 +145,39 @@ public final class LlmSanitizerHelper
             sanitizedAttachments = updated;
         }
 
+        final List<SutAttachment> wireAttachments = WireImageOptimizer.optimize(sanitizedAttachments);
+
         final List<ChatMessage> updatedMessages;
         if (original.messages() != null && !original.messages().isEmpty())
         {
             updatedMessages = new ArrayList<>();
             for (final ChatMessage msg : original.messages())
             {
+                final List<SutAttachment> optimizedMsgAtts = (msg.attachments() != null && !msg.attachments().isEmpty())
+                    ? WireImageOptimizer.optimize(msg.attachments())
+                    : msg.attachments();
+
                 if (msg.role() == Role.USER && msg.content() != null && msg.content().equals(original.userMessage()))
                 {
-                    updatedMessages.add(ChatMessage.user(payload.sanitizedPrompt()));
+                    updatedMessages.add(new ChatMessage(
+                        msg.role(),
+                        payload.sanitizedPrompt(),
+                        msg.toolCalls(),
+                        msg.toolCallId(),
+                        msg.toolName(),
+                        optimizedMsgAtts
+                    ));
+                }
+                else if (optimizedMsgAtts != msg.attachments())
+                {
+                    updatedMessages.add(new ChatMessage(
+                        msg.role(),
+                        msg.content(),
+                        msg.toolCalls(),
+                        msg.toolCallId(),
+                        msg.toolName(),
+                        optimizedMsgAtts
+                    ));
                 }
                 else
                 {
@@ -168,7 +193,7 @@ public final class LlmSanitizerHelper
         return new LlmRequest(
             updatedMessages,
             original.tools(),
-            sanitizedAttachments,
+            wireAttachments,
             original.responseSchema(),
             original.temperature(),
             original.timeoutSeconds(),

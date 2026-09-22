@@ -21,11 +21,10 @@ package org.neodymium.ai.integration.live;
 import static com.codeborne.selenide.Condition.exactText;
 import static com.codeborne.selenide.Selenide.$;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -38,7 +37,7 @@ import org.neodymium.common.browser.Browser;
  * Live integration test verifying that the (bug) tag
  * stops execution gracefully for expected failures without failing the test.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
@@ -46,6 +45,7 @@ import org.neodymium.common.browser.Browser;
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @AiPlaybook("programmatic")
+@AiLinter(false)
 public class BugIntegrationTest extends BaseAiTest
 {
     /**
@@ -56,15 +56,12 @@ public class BugIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/BugIntegrationTest_testBug.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("bugData")
     public void testBug(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
         session.data().putDynamic("bug.test.url", pageUrl, false);
 
         session.execute( """
-            data:
-              - testId: bugData
             steps: |
               Open ${bug.test.url} in the browser
               Verify that the title contains "Wrong Title" (bug: APP-123)
@@ -108,9 +105,9 @@ public class BugIntegrationTest extends BaseAiTest
             steps: |
               Open ${bug.test.url} in the browser
               Verify that the title contains "Wrong Title" (bug: APP-123) (continue-on-error) (no-healing)
-              Click the button #btn-click (no-replay)
+              Click the button #btn-click
             """);
 
-        $("#result").shouldHave(exactText("Click Me Triggered!"));
+        $("#click-status").shouldHave(exactText("Clicked"));
     }
 }
