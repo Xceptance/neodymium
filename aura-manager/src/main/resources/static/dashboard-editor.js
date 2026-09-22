@@ -102,11 +102,11 @@ function loadFiles() {
         };
         setTimeout(done, 1000);
         try {
-            const res = await fetch('/api/files');
+            const res = await fetch('/api/files/json');
             currentFilesListCached = await res.json();
             window.currentFilesListCached = currentFilesListCached;
             const fileListEl = document.getElementById('yamlFileList');
-            if (fileListEl && window.initializedAlready) {
+            if (fileListEl) {
                 const listener = function(evt) {
                     if (evt.detail.target && evt.detail.target.id === 'yamlFileList') {
                         document.removeEventListener('htmx:afterSwap', listener);
@@ -218,8 +218,8 @@ async function submitCreateTest() {
         } else {
             const modal = document.getElementById('createTestModal');
             if (modal) modal.style.display = 'none';
-            await loadFiles();
             await openYamlEditor(data.file);
+            await loadFiles();
         }
     } catch (e) {
         console.error("Failed to create test", e);
@@ -404,6 +404,7 @@ async function saveYamlFile() {
             initialEditorContent = compilePlaybookToYaml();
             checkEditorDirtyStatus();
             showToast("💾 Saved playbook file successfully", "success");
+            loadFiles();
         } else {
             showToast("Error saving: " + (data.error || "Unknown error"), "error");
         }
@@ -1649,6 +1650,7 @@ function saveIncludeInline(cardId) {
             body: `file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`
         }).then(() => {
             showToast(`💾 Saved included file ${filePath}`, "success");
+            loadFiles();
         }).catch(err => {
             showToast(`Error saving include file: ${err.message}`, "error");
         });

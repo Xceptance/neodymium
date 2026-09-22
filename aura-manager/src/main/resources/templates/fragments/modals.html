@@ -37,5 +37,20 @@
     </div>
 </div>
 
+<!-- RUN FINISHED CONFIRMATION MODAL FRAGMENT -->
+<div class="modal-overlay" id="runFinishedModal" th:fragment="runFinishedModal" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">Run Finished</div>
+        <div class="modal-body">
+            <p style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">Run is finished. Would you like to open the report?</p>
+        </div>
+        <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button type="button" class="btn-editor" id="runFinishedStayBtn">No, stay on the page</button>
+            <button type="button" class="btn-primary" id="runFinishedOpenBtn">Open the report</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
+

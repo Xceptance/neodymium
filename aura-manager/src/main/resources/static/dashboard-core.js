@@ -78,6 +78,20 @@ window.getEditorContent = getEditorContent;
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     if (!container) return;
+    if (message && typeof message === 'object') {
+        if (message.error) message = message.error;
+        else if (message.message) message = message.message;
+        else if (message.file) message = `File ${message.file} processed`;
+        else message = JSON.stringify(message);
+    }
+    if (typeof message === 'string' && message.trim().startsWith('{') && message.trim().endsWith('}')) {
+        try {
+            const parsed = JSON.parse(message);
+            if (parsed.error) message = parsed.error;
+            else if (parsed.message) message = parsed.message;
+            else if (parsed.file) message = `File ${parsed.file} processed`;
+        } catch (e) {}
+    }
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     let iconName = 'info';
@@ -341,9 +355,14 @@ function closeInteractiveConsoleView() {
 }
 window.closeInteractiveConsoleView = closeInteractiveConsoleView;
 
-function onEditorPanelSwapped() {
+function onEditorPanelSwapped(evt) {
     const container = document.getElementById('auraTestManagerWorkspace') || document.getElementById('dashboardView');
     if (!container) return;
+
+    if (evt && evt.detail && evt.detail.target && evt.detail.target.id !== 'editorPanel') {
+        if (typeof updateCenterLayout === 'function') updateCenterLayout();
+        return;
+    }
 
     const fileSpan = document.getElementById('editorFileName');
     const dataFile = fileSpan ? fileSpan.getAttribute('data-file') : null;
@@ -410,13 +429,13 @@ function init() {
     });
 
     document.addEventListener('htmx:oobAfterSwap', function(evt) {
-        onEditorPanelSwapped();
+        onEditorPanelSwapped(evt);
         if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
         if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
     });
 
     document.addEventListener('htmx:afterSwap', function(evt) {
-        onEditorPanelSwapped();
+        onEditorPanelSwapped(evt);
         if (evt.detail && evt.detail.target) {
             if (evt.detail.target.id === 'yamlFileList') {
                 const scrollPos = savedYamlFileListScrollTop;
@@ -443,7 +462,7 @@ function init() {
     });
 
     document.addEventListener('htmx:afterSettle', function(evt) {
-        onEditorPanelSwapped();
+        onEditorPanelSwapped(evt);
     });
 
     document.addEventListener('htmx:responseError', function(evt) {
