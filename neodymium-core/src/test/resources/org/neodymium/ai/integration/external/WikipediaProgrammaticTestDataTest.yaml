@@ -1,0 +1,7 @@
+data:
+  - testId: test
+    language: "Deutsch"
+    phrase:
+      Part1: "Neo"
+      Part2: "dymium"
+    searchPhrase: "${phrase.Part1}${phrase.Part2}"

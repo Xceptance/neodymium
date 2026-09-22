@@ -21,6 +21,7 @@ package org.neodymium.ai.executor.selenide.plugins;
 import static com.codeborne.selenide.Selenide.$;
 
 import com.codeborne.selenide.Selenide;
+import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -442,6 +443,124 @@ public class AssertActionTest extends BaseAiTest
         Assertions.assertThrows(AssertionError.class, () ->
         {
             plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", "5", "wrong count", "reasoning", false));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles negated URL assertions")
+    public void testNegatedUrlAssertions() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Substring: URL does not contain "#"
+        plugin.execute(new Action("ASSERT_URL", "url", List.of("#"), "URL has no hash", "negative assertion", false, true));
+
+        // Regex: URL does not match https://
+        plugin.execute(new Action("ASSERT_URL", "url", List.of("^https://.*$"), "URL is not HTTPS", "negative regex", true, true));
+
+        // Negative: URL does contain "testAssertHappyPath", asserting it doesn't must fail
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_URL", "url", List.of("testAssertHappyPath"), "assert absent but present", "fail", false, true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles negated page title assertions")
+    public void testNegatedTitleAssertions() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Title does not contain "Checkout Failure"
+        plugin.execute(new Action("ASSERT_TITLE", "title", List.of("Checkout Failure"), "title has no failure", "negative title", false, true));
+
+        // Negative: title does contain "Assert Action Test", asserting it doesn't must fail
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_TITLE", "title", List.of("Assert Action Test"), "assert title absent but present", "fail", false, true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles negated text assertions")
+    public void testNegatedTextAssertions() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Text does not contain "$999.99"
+        plugin.execute(new Action("ASSERT_TEXT", "#total-price", List.of("$999.99"), "price is not 999", "negative text", false, true));
+
+        // Negative: element contains "120.00", asserting it doesn't must fail
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_TEXT", "#total-price", List.of("120.00"), "assert text absent but present", "fail", false, true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles negated attribute assertions")
+    public void testNegatedAttributeAssertions() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Attribute existence negation: username does not have data-custom-id
+        plugin.execute(new Action("ASSERT_ATTRIBUTE", "#username", List.of("data-custom-id"), "check attr absent", "negative attr", false, true));
+
+        // Attribute value negation: username placeholder does not equal "WrongPlaceholder"
+        plugin.execute(new Action("ASSERT_ATTRIBUTE", "#username", List.of("placeholder=WrongPlaceholder"), "check placeholder mismatch", "negative attr value", false, true));
+
+        // Negative: username placeholder is "Enter username", asserting it isn't must fail
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_ATTRIBUTE", "#username", List.of("placeholder=Enter username"), "assert attr value mismatch", "fail", false, true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles ASSERT_UNFOCUSED and negated count assertions")
+    public void testUnfocusedAndNegatedCountAssertions() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. ASSERT_UNFOCUSED on element that is not focused
+        plugin.execute(new Action("ASSERT_UNFOCUSED", "#disabled-input", "", "check disabled input is unfocused", "reasoning", false));
+
+        // Focus username
+        $("#username").click();
+        // Negative: username is now focused, so ASSERT_UNFOCUSED must fail
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_UNFOCUSED", "#username", "", "check username unfocused when focused", "fail", false));
+        });
+
+        // 2. Count negation via "!=" and via action.isNegated()
+        // There are 2 checkboxes, so count != 5 passes
+        plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", List.of("!=5"), "check checkboxes not 5", "not equals count", false));
+        plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", List.of("5"), "check checkboxes not 5 negated", "negated count", false, true));
+
+        // Negative: count != 2 must fail because there are exactly 2 checkboxes
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", List.of("!=2"), "wrong count not equal", "fail", false));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", List.of("2"), "wrong count negated", "fail", false, true));
         });
     }
 }

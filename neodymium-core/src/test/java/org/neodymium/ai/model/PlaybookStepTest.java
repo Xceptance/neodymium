@@ -325,4 +325,113 @@ public class PlaybookStepTest
         Assertions.assertTrue(deserializedSubBug.isBug());
         Assertions.assertEquals("PROMO-101", deserializedSubBug.getBugDetails());
     }
+
+    @Test
+    public void testVisualTagVariantsAndThresholdParsing()
+    {
+        // 1. (visual) default - no fullPage, no ssimMinScore
+        final PlaybookStep defaultVisual = new PlaybookStep("Check banner (visual)");
+        Assertions.assertTrue(defaultVisual.isVisualStep());
+        Assertions.assertFalse(defaultVisual.isFullPageVisualStep());
+        Assertions.assertNull(defaultVisual.getSsimMinScore());
+
+        // 2. (visual: full) and (visual:full) - fullPage=true, no ssimMinScore
+        final PlaybookStep visualFull1 = new PlaybookStep("Check banner (visual: full)");
+        Assertions.assertTrue(visualFull1.isVisualStep());
+        Assertions.assertTrue(visualFull1.isFullPageVisualStep());
+        Assertions.assertNull(visualFull1.getSsimMinScore());
+
+        final PlaybookStep visualFull2 = new PlaybookStep("Check banner (visual:full)");
+        Assertions.assertTrue(visualFull2.isVisualStep());
+        Assertions.assertTrue(visualFull2.isFullPageVisualStep());
+        Assertions.assertNull(visualFull2.getSsimMinScore());
+
+        final PlaybookStep visualFull3 = new PlaybookStep("Check banner ( visual : full )");
+        Assertions.assertTrue(visualFull3.isVisualStep());
+        Assertions.assertTrue(visualFull3.isFullPageVisualStep());
+        Assertions.assertNull(visualFull3.getSsimMinScore());
+
+        // 3. (visual: threshold=0.98) and variants
+        final PlaybookStep threshStep1 = new PlaybookStep("Check banner (visual: threshold=0.98)");
+        Assertions.assertTrue(threshStep1.isVisualStep());
+        Assertions.assertFalse(threshStep1.isFullPageVisualStep());
+        Assertions.assertEquals(0.98, threshStep1.getSsimMinScore(), 0.0001);
+
+        final PlaybookStep threshStep2 = new PlaybookStep("Check banner (visual:threshold=0.98)");
+        Assertions.assertTrue(threshStep2.isVisualStep());
+        Assertions.assertEquals(0.98, threshStep2.getSsimMinScore(), 0.0001);
+
+        final PlaybookStep threshStep3 = new PlaybookStep("Check banner ( visual : threshold = 0.98 )");
+        Assertions.assertTrue(threshStep3.isVisualStep());
+        Assertions.assertEquals(0.98, threshStep3.getSsimMinScore(), 0.0001);
+
+        // 4. Combined full + threshold variants (with and without spaces, order independent)
+        final PlaybookStep combStep1 = new PlaybookStep("Check banner (visual: full,threshold=0.98)");
+        Assertions.assertTrue(combStep1.isVisualStep());
+        Assertions.assertTrue(combStep1.isFullPageVisualStep());
+        Assertions.assertEquals(0.98, combStep1.getSsimMinScore(), 0.0001);
+
+        final PlaybookStep combStep2 = new PlaybookStep("Check banner (visual: full, threshold=0.98)");
+        Assertions.assertTrue(combStep2.isVisualStep());
+        Assertions.assertTrue(combStep2.isFullPageVisualStep());
+        Assertions.assertEquals(0.98, combStep2.getSsimMinScore(), 0.0001);
+
+        final PlaybookStep combStep3 = new PlaybookStep("Check banner (visual:full,threshold=0.98)");
+        Assertions.assertTrue(combStep3.isVisualStep());
+        Assertions.assertTrue(combStep3.isFullPageVisualStep());
+        Assertions.assertEquals(0.98, combStep3.getSsimMinScore(), 0.0001);
+
+        final PlaybookStep combStep4 = new PlaybookStep("Check banner (visual: threshold=0.98, full)");
+        Assertions.assertTrue(combStep4.isVisualStep());
+        Assertions.assertTrue(combStep4.isFullPageVisualStep());
+        Assertions.assertEquals(0.98, combStep4.getSsimMinScore(), 0.0001);
+
+        // 5. Percentages and shorthand numbers
+        final PlaybookStep percentStep = new PlaybookStep("Check banner (visual: threshold=98%)");
+        Assertions.assertEquals(0.98, percentStep.getSsimMinScore(), 0.0001);
+
+        final PlaybookStep shorthandStep = new PlaybookStep("Check banner (visual: 0.95)");
+        Assertions.assertEquals(0.95, shorthandStep.getSsimMinScore(), 0.0001);
+
+        // 6. Standalone threshold tag
+        final PlaybookStep standaloneStep = new PlaybookStep("Check banner (threshold: 0.92)");
+        Assertions.assertEquals(0.92, standaloneStep.getSsimMinScore(), 0.0001);
+    }
+
+    @Test
+    public void testVisualSerializationExclusionWhenNull() throws Exception
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // Step with (visual) must NOT contain ssimMinScore in JSON
+        final PlaybookStep stepDefault = new PlaybookStep("Verify logo (visual)");
+        final String jsonDefault = mapper.writeValueAsString(stepDefault);
+        Assertions.assertFalse(jsonDefault.contains("ssimMinScore"), "ssimMinScore must not be serialized when null for (visual)");
+        Assertions.assertFalse(jsonDefault.contains("threshold"), "threshold must not be serialized when null for (visual)");
+
+        // Step with (visual: full) must NOT contain ssimMinScore in JSON
+        final PlaybookStep stepFull = new PlaybookStep("Verify logo (visual: full)");
+        final String jsonFull = mapper.writeValueAsString(stepFull);
+        Assertions.assertFalse(jsonFull.contains("ssimMinScore"), "ssimMinScore must not be serialized when null for (visual: full)");
+
+        // Step with (visual: threshold=0.98) MUST contain ssimMinScore in JSON
+        final PlaybookStep stepWithThresh = new PlaybookStep("Verify logo (visual: threshold=0.98)");
+        final String jsonWithThresh = mapper.writeValueAsString(stepWithThresh);
+        Assertions.assertTrue(jsonWithThresh.contains("\"ssimMinScore\":0.98") || jsonWithThresh.contains("\"ssimMinScore\" : 0.98"),
+            "ssimMinScore must be serialized when explicitly specified");
+    }
+
+    @Test
+    public void testThresholdDeserializationJsonAlias() throws Exception
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+
+        final String jsonAlias = "{\"instruction\":\"Verify logo\",\"threshold\":0.97}";
+        final PlaybookStep fromAlias = mapper.readValue(jsonAlias, PlaybookStep.class);
+        Assertions.assertEquals(0.97, fromAlias.getSsimMinScore(), 0.0001);
+
+        final String jsonOriginal = "{\"instruction\":\"Verify logo\",\"ssimMinScore\":0.96}";
+        final PlaybookStep fromOriginal = mapper.readValue(jsonOriginal, PlaybookStep.class);
+        Assertions.assertEquals(0.96, fromOriginal.getSsimMinScore(), 0.0001);
+    }
 }

@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.integration.external;
+package org.neodymium.ai.integration.data;
 
 import java.util.Map;
 import org.junit.jupiter.api.Assertions;

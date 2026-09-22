@@ -2041,4 +2041,108 @@ public class PreliminaryReportListenerTest
         assertFalse(indexHtml.contains(">SearchJudgeTest#liveAllDataSets<"),
             "Index table row subtitle must not redundantly duplicate simple class name and method");
     }
+
+    @Test
+    public void testSubStepActionsAndScreenshotsPopulatedInReport() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-substep-actions");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parent = new PlaybookStep("Locate product card:");
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        final Action act1 = new Action("HOVER", "article[data-ai=\"xc1\"]", Collections.emptyList(), "Hover product", "Hover");
+        sub1.setActions(List.of(act1));
+        sub1.setParent(parent);
+
+        final PlaybookStep sub2 = new PlaybookStep("Click it");
+        final Action act2 = new Action("CLICK", "button[data-ai=\"xc2\"]", Collections.emptyList(), "Click button", "Click");
+        sub2.setActions(List.of(act2));
+        sub2.setParent(parent);
+
+        parent.setSubSteps(List.of(sub1, sub2));
+
+        bus.dispatch(new StepStartedEvent(parent, 0));
+        bus.dispatch(new StepStartedEvent(sub1, 0));
+        bus.dispatch(new ActionExecutedEvent(act1, true));
+        bus.dispatch(new StepFinishedEvent(sub1, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepStartedEvent(sub2, 1));
+        bus.dispatch(new ActionExecutedEvent(act2, true));
+        bus.dispatch(new StepFinishedEvent(sub2, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepFinishedEvent(parent, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals(2, parentEntry.getSubSteps().size());
+
+        final TestExecutionReport.ReportStepEntry subEntry1 = parentEntry.getSubSteps().get(0);
+        assertEquals(1, subEntry1.getActions().size());
+        assertEquals("HOVER", subEntry1.getActions().get(0).getType());
+
+        final TestExecutionReport.ReportStepEntry subEntry2 = parentEntry.getSubSteps().get(1);
+        assertEquals(1, subEntry2.getActions().size());
+        assertEquals("CLICK", subEntry2.getActions().get(0).getType());
+    }
+
+    @Test
+    public void testAbortiveFailurePreservesSubStepStatusWithoutFabricatedSuccess() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-abortive-failure");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parent = new PlaybookStep("Locate the promo code input field:");
+        parent.setFailureReason("Token budget exceeded: TOTAL budget breached (consumed: 100142, limit: 100000)");
+
+        final PlaybookStep sub1 = new PlaybookStep("Clear content");
+        final Action act1 = new Action("CLEAR", "#promo", Collections.emptyList(), "Clear input", "Clear");
+        sub1.setActions(List.of(act1));
+        sub1.setParent(parent);
+
+        final PlaybookStep sub2 = new PlaybookStep("Type FREEGIFT");
+        final Action act2 = new Action("FILL", "#promo", List.of("FREEGIFT"), "Type promo", "Type");
+        sub2.setActions(List.of(act2));
+        sub2.setParent(parent);
+
+        final PlaybookStep sub3 = new PlaybookStep("Submit the promo code form");
+        final Action act3 = new Action("CLICK", "#apply-promo", Collections.emptyList(), "Click apply", "Click");
+        sub3.setActions(List.of(act3));
+        sub3.setParent(parent);
+
+        final PlaybookStep sub4 = new PlaybookStep("Assert that a line item 'Free Bonus Gift' (bug) is added to the cart");
+        sub4.setBug(true);
+        sub4.setActions(Collections.emptyList());
+        sub4.setParent(parent);
+
+        parent.setSubSteps(List.of(sub1, sub2, sub3, sub4));
+
+        bus.dispatch(new StepStartedEvent(parent, 0));
+        bus.dispatch(new StepFinishedEvent(parent, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(5000, false));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals("FAILED", parentEntry.getStatus());
+        assertEquals(4, parentEntry.getSubSteps().size());
+
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(0).getStatus());
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(1).getStatus());
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(2).getStatus());
+
+        final TestExecutionReport.ReportStepEntry subEntry4 = parentEntry.getSubSteps().get(3);
+        assertEquals("FAILED", subEntry4.getStatus());
+        assertNotNull(subEntry4.getFailureReason());
+        assertTrue(subEntry4.getFailureReason().contains("Token budget exceeded"));
+    }
 }

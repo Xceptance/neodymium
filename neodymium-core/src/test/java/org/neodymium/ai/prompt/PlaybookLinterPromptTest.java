@@ -303,5 +303,10 @@ public final class PlaybookLinterPromptTest
         final String sysMsg = prompt.compileSystemMessage(null);
         assertTrue(sysMsg.contains("Hierarchical Steps & Sub-Steps (Turn Groups)"));
         assertTrue(sysMsg.contains("already explicitly split"));
+        assertTrue(sysMsg.contains("No Standalone Scoping / Anchor Steps"));
+        assertTrue(sysMsg.contains("Form Field Batching (Prefer Turn Groups over Micro-Steps)"));
+        assertTrue(sysMsg.contains("No Introduced Dangling Pronouns"));
+        assertTrue(sysMsg.contains("Be Non-Intrusive on Well-Formed Steps & Composite Interactions"));
     }
 }
+

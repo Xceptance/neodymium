@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -153,6 +154,8 @@ public final class PlaybookStep
     /**
      * Minimum required SSIM score for visual gate pass.
      */
+    @JsonProperty("ssimMinScore")
+    @JsonAlias("threshold")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Double ssimMinScore;
 
@@ -419,6 +422,55 @@ public final class PlaybookStep
                     this.timeoutMs = val;
                 }
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\s*\\)\\s*", " ");
+            }
+
+            final Matcher standaloneThreshMatcher = STANDALONE_THRESHOLD_PATTERN.matcher(cleaned);
+            if (standaloneThreshMatcher.find())
+            {
+                final Double parsed = parseThreshold(standaloneThreshMatcher.group(1));
+                if (parsed != null)
+                {
+                    this.ssimMinScore = parsed;
+                }
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*[0-9.]+%?\\s*\\)\\s*", " ");
+            }
+
+            final Matcher visualMatcher = VISUAL_TAG_PARAM_PATTERN.matcher(cleaned);
+            if (visualMatcher.find())
+            {
+                final String paramStr = visualMatcher.group(1);
+                if (paramStr != null && !paramStr.isBlank())
+                {
+                    final String[] tokens = paramStr.split(",");
+                    for (final String rawToken : tokens)
+                    {
+                        final String token = rawToken.trim();
+                        if (token.equalsIgnoreCase("full"))
+                        {
+                            this.fullPage = true;
+                        }
+                        else
+                        {
+                            final Matcher threshMatcher = THRESHOLD_PARAM_PATTERN.matcher(token);
+                            if (threshMatcher.matches())
+                            {
+                                final Double parsed = parseThreshold(threshMatcher.group(1));
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                            else
+                            {
+                                final Double parsed = parseThreshold(token);
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             this.instruction = cleaned.trim();
@@ -860,12 +912,53 @@ public final class PlaybookStep
     private static final Pattern NO_HEALING_PATTERN = Pattern.compile("(?i)\\(\\s*no-healing\\s*\\)");
     private static final Pattern TIMEOUT_PATTERN = Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
 
-    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:\\s*full\\s*\\)");
-    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)");
+    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:[^)]*\\bfull\\b[^)]*\\)");
+    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:[^)]+)?\\s*\\)");
+    private static final Pattern VISUAL_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*([^)]+))?\\s*\\)");
+    private static final Pattern THRESHOLD_PARAM_PATTERN = Pattern.compile("(?i)^(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)$");
+    private static final Pattern STANDALONE_THRESHOLD_PATTERN = Pattern.compile("(?i)\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)\\s*\\)");
     public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
     public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
     public static final Pattern INTERACTIVE_ACTION_PATTERN =
         Pattern.compile("(?i)\\b(type|click|select|clear|submit|fill|press|enter|hover|drag|drop|scroll|check|uncheck|choose)\\b");
+
+    /**
+     * Parses a threshold value string into a normalized double between 0.0 and 1.0.
+     * Supports percentages (e.g. "98%" -> 0.98) and standard decimals (e.g. "0.98").
+     *
+     * @param text the raw threshold string
+     * @return normalized double threshold, or null if invalid
+     */
+    public static Double parseThreshold(final String text)
+    {
+        if (text == null || text.isBlank())
+        {
+            return null;
+        }
+        String cleaned = text.trim();
+        final boolean isPercent = cleaned.endsWith("%");
+        if (isPercent)
+        {
+            cleaned = cleaned.substring(0, cleaned.length() - 1).trim();
+        }
+        try
+        {
+            double val = Double.parseDouble(cleaned);
+            if (isPercent || val > 1.0)
+            {
+                val = val / 100.0;
+            }
+            if (val < 0.0 || val > 1.0)
+            {
+                return null;
+            }
+            return val;
+        }
+        catch (final NumberFormatException e)
+        {
+            return null;
+        }
+    }
 
     /**
      * Checks if this step provides an explicit selector hint.
@@ -1169,6 +1262,17 @@ public final class PlaybookStep
     public void setSsimMinScore(final Double ssimMinScore)
     {
         this.ssimMinScore = ssimMinScore;
+    }
+
+    /**
+     * Sets the visual assertion threshold alias.
+     *
+     * @param threshold the threshold score
+     */
+    @JsonProperty("threshold")
+    public void setThreshold(final Double threshold)
+    {
+        this.ssimMinScore = threshold;
     }
 
     /**

@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
@@ -33,6 +34,7 @@ import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
@@ -189,6 +191,8 @@ public final class PlaybookToolReplayer
 
             final ToolCall finalCall = intermediateCall;
 
+            final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
+
             // Check if tool is registered
             final Optional<AiTool> toolOpt = effectiveRegistry.getTool(finalCall.toolName());
             final ToolResult result;
@@ -197,9 +201,19 @@ public final class PlaybookToolReplayer
                 try
                 {
                     result = toolOpt.get().execute(finalCall, effectiveContext);
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
+                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
+                    }
                 }
                 catch (final AssertionError e)
                 {
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
+                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
+                    }
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -207,6 +221,11 @@ public final class PlaybookToolReplayer
                 }
                 catch (final Exception e)
                 {
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
+                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
+                    }
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -220,9 +239,17 @@ public final class PlaybookToolReplayer
                 {
                     effectiveExecutor.execute(mapped);
                     result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
+                    }
                 }
                 catch (final AssertionError e)
                 {
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
+                    }
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -230,6 +257,10 @@ public final class PlaybookToolReplayer
                 }
                 catch (final Exception e)
                 {
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
+                    }
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());

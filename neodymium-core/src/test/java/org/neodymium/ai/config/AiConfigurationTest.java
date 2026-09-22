@@ -56,6 +56,9 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.reportDirectory");
         System.clearProperty("neodymium.ai.replay.delayScale");
         System.clearProperty("neodymium.ai.replay.useRecordedDelays");
+        System.clearProperty("neodymium.ai.ssim.minScore");
+        System.clearProperty("neodymium.ai.visual.threshold");
+        System.clearProperty("neodymium.ai.visual.minScore");
     }
 
     @Test
@@ -220,6 +223,26 @@ public class AiConfigurationTest
 
         System.clearProperty("neodymium.ai.replay.delayScale");
         System.clearProperty("neodymium.ai.replay.useRecordedDelays");
+    }
+
+    @Test
+    public void testVisualSsimMinScoreDefaultsAndAliases()
+    {
+        AiConfiguration.resetInstance();
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        assertEquals(0.99, defaultConfig.getVisualSsimMinScore(), 0.001, "SSIM min score should default to 0.99");
+
+        System.setProperty("neodymium.ai.visual.minScore", "0.93");
+        AiConfiguration.resetInstance();
+        assertEquals(0.93, AiConfiguration.getInstance().getVisualSsimMinScore(), 0.001, "Should resolve visual.minScore");
+
+        System.setProperty("neodymium.ai.visual.threshold", "0.95");
+        AiConfiguration.resetInstance();
+        assertEquals(0.95, AiConfiguration.getInstance().getVisualSsimMinScore(), 0.001, "visual.threshold should take precedence over visual.minScore");
+
+        System.setProperty("neodymium.ai.ssim.minScore", "0.98");
+        AiConfiguration.resetInstance();
+        assertEquals(0.98, AiConfiguration.getInstance().getVisualSsimMinScore(), 0.001, "ssim.minScore should take precedence over aliases");
     }
 }
 

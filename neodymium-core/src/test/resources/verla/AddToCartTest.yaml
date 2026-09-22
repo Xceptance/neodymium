@@ -26,8 +26,8 @@ steps: |
   Verify that the shopping cart page is loaded and showing the added product.
 
   Locate the promo code input field:
-    - and type '10p-off' into it.
-    - Submit the form.
+    - type '10p-off' into it
+    - Submit the form
     - Verify that the order summary now shows a 'Discount (10P-OFF)' line item.
 
   Locate the promo code input field:

@@ -81,7 +81,6 @@ public final class GeminiLlmProvider implements LlmProvider
     private final String apiKey;
     private final String modelName;
     private final boolean includeThoughts;
-    private final ChatModel defaultModel;
     private final ConcurrentHashMap<String, ChatModel> modelCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> thinkingSignatureCache = new ConcurrentHashMap<>();
 
@@ -103,8 +102,6 @@ public final class GeminiLlmProvider implements LlmProvider
 
         this.modelName = this.config.getProperty("neodymium.ai.gemini.model", this.config.getModel("gemini"));
         this.includeThoughts = this.config.isIncludeThoughts();
-
-        this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
 
     /**
@@ -135,7 +132,7 @@ public final class GeminiLlmProvider implements LlmProvider
         final int maxTokens = ResponseSchema.resolveMaxOutputTokens(responseSchema);
         final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(responseSchema);
 
-        return GoogleAiGeminiChatModel.builder()
+        final GoogleAiGeminiChatModel.GoogleAiGeminiChatModelBuilder builder = GoogleAiGeminiChatModel.builder()
             .apiKey(this.apiKey)
             .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash-lite")
             .temperature(temperature)
@@ -144,8 +141,15 @@ public final class GeminiLlmProvider implements LlmProvider
             .returnThinking(true)
             .sendThinking(true)
             .timeout(Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180))
-            .httpClientBuilder(createDecoratedHttpClientBuilder())
-            .build();
+            .httpClientBuilder(createDecoratedHttpClientBuilder());
+
+        if (LlmCommunicationLogger.isLoggingActive())
+        {
+            builder.logRequestsAndResponses(true);
+            builder.logger(LlmCommunicationLogger.getLogger());
+        }
+
+        return builder.build();
     }
 
     /**
@@ -194,6 +198,10 @@ public final class GeminiLlmProvider implements LlmProvider
                     public SuccessfulHttpResponse execute(final HttpRequest request)
                     {
                         final HttpRequest repairedRequest = repairThoughtSignatures(request);
+                        if (repairedRequest != request && LlmCommunicationLogger.isLoggingActive())
+                        {
+                            LlmCommunicationLogger.getLogger().info("Repaired thought signature in Gemini request body:\n{}\n", repairedRequest.body());
+                        }
                         return delegate.execute(repairedRequest);
                     }
 
@@ -331,13 +339,8 @@ public final class GeminiLlmProvider implements LlmProvider
         final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
         final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
         final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
-
-        if (temp == 0.0 && timeout == 180 && schema == ResponseSchema.TEXT && effort == ReasoningEffort.MEDIUM)
-        {
-            return this.defaultModel;
-        }
-
-        final String cacheKey = String.format("%s:%.2f:%d:%s:%s", this.modelName, temp, timeout, schema.name(), effort.name());
+        final boolean isLoggingActive = LlmCommunicationLogger.isLoggingActive();
+        final String cacheKey = String.format("%s:%.2f:%d:%s:%s:%b", this.modelName, temp, timeout, schema.name(), effort.name(), isLoggingActive);
         return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout, schema, effort));
     }
 
@@ -500,7 +503,7 @@ public final class GeminiLlmProvider implements LlmProvider
                 );
                 final ChatResponse response = activeModel.chat(chatRequest);
 
-                final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
+                final var usage = response.tokenUsage();
 
                 TokenUsage mappedUsage = null;
                 if (usage != null)

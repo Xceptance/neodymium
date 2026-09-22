@@ -18,19 +18,25 @@
  */
 package org.neodymium.ai.client;
 
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.mistralai.MistralAiChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.mistralai.MistralAiChatModel;
+import dev.langchain4j.model.mistralai.MistralAiChatModel.MistralAiChatModelBuilder;
+import dev.langchain4j.model.output.TokenUsage;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.prompt.LlmSanitizerHelper;
+import org.neodymium.ai.prompt.SanitizedPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,8 +58,7 @@ public final class MistralLlmProvider implements LlmProvider
     private final String apiKey;
     private final String modelName;
     private final String baseUrl;
-    private final ChatModel defaultModel;
-    private final java.util.concurrent.ConcurrentHashMap<String, ChatModel> modelCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ChatModel> modelCache = new ConcurrentHashMap<>();
 
     /**
      * Constructs a MistralLlmProvider and dynamically resolves its configuration.
@@ -74,8 +79,6 @@ public final class MistralLlmProvider implements LlmProvider
         this.modelName = this.config.getProperty("neodymium.ai.mistral.model", this.config.getModel("mistral"));
 
         this.baseUrl = this.config.getProperty("neodymium.ai.mistral.baseUrl", "https://api.mistral.ai/v1");
-
-        this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
 
     /**
@@ -90,7 +93,7 @@ public final class MistralLlmProvider implements LlmProvider
     {
         final int maxTokens = ResponseSchema.resolveMaxOutputTokens(responseSchema);
 
-        final dev.langchain4j.model.mistralai.MistralAiChatModel.MistralAiChatModelBuilder builder = dev.langchain4j.model.mistralai.MistralAiChatModel.builder()
+        final MistralAiChatModelBuilder builder = MistralAiChatModel.builder()
             .baseUrl(this.baseUrl)
             .apiKey(this.apiKey)
             .modelName(this.modelName != null ? this.modelName : "mistral-large-latest")
@@ -99,8 +102,16 @@ public final class MistralLlmProvider implements LlmProvider
 
         if (timeoutSeconds > 0)
         {
-            builder.timeout(java.time.Duration.ofSeconds(timeoutSeconds));
+            builder.timeout(Duration.ofSeconds(timeoutSeconds));
         }
+
+        if (LlmCommunicationLogger.isLoggingActive())
+        {
+            builder.logRequests(true);
+            builder.logResponses(true);
+            builder.logger(LlmCommunicationLogger.getLogger());
+        }
+
         return builder.build();
     }
 
@@ -118,21 +129,17 @@ public final class MistralLlmProvider implements LlmProvider
         final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
         final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
         final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
+        final boolean isLoggingActive = LlmCommunicationLogger.isLoggingActive();
 
-        if (temp == 0.0 && timeout == 180 && schema == ResponseSchema.TEXT && effort == ReasoningEffort.MEDIUM)
-        {
-            return this.defaultModel;
-        }
-
-        final String cacheKey = String.format("%s:%.2f:%d:%s:%s", this.modelName, temp, timeout, schema.name(), effort.name());
+        final String cacheKey = String.format("%s:%.2f:%d:%s:%s:%b", this.modelName, temp, timeout, schema.name(), effort.name(), isLoggingActive);
         return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout, schema, effort));
     }
 
     @Override
     public LlmResponse chat(final LlmRequest rawRequest) throws IOException
     {
-        final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = org.neodymium.ai.prompt.LlmSanitizerHelper.sanitizeRequest(rawRequest);
-        final LlmRequest request = org.neodymium.ai.prompt.LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
+        final SanitizedPayload sanitizedPayload = LlmSanitizerHelper.sanitizeRequest(rawRequest);
+        final LlmRequest request = LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
 
         final List<ChatMessage> messages = new ArrayList<>();
         if (request.systemMessage() != null && !request.systemMessage().isBlank())
@@ -158,12 +165,12 @@ public final class MistralLlmProvider implements LlmProvider
                 );
                 final ChatResponse response = activeModel.chat(messages);
 
-                final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
+                final TokenUsage usage = response.tokenUsage();
 
-                TokenUsage mappedUsage = null;
+                org.neodymium.ai.client.TokenUsage mappedUsage = null;
                 if (usage != null)
                 {
-                    mappedUsage = new TokenUsage(
+                    mappedUsage = new org.neodymium.ai.client.TokenUsage(
                         usage.inputTokenCount(),
                         usage.outputTokenCount(),
                         usage.totalTokenCount(),
@@ -172,7 +179,7 @@ public final class MistralLlmProvider implements LlmProvider
                 }
 
                 final LlmResponse rawResponse = new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
-                return org.neodymium.ai.prompt.LlmSanitizerHelper.unmaskResponse(rawResponse, sanitizedPayload.maskToVariableMap());
+                return LlmSanitizerHelper.unmaskResponse(rawResponse, sanitizedPayload.maskToVariableMap());
             }
             catch (final Exception e)
             {
@@ -181,7 +188,7 @@ public final class MistralLlmProvider implements LlmProvider
         });
     }
 
-    private int extractCachedTokens(final dev.langchain4j.model.output.TokenUsage usage)
+    private int extractCachedTokens(final TokenUsage usage)
     {
         if (usage == null)
         {
@@ -189,11 +196,11 @@ public final class MistralLlmProvider implements LlmProvider
         }
         try
         {
-            final java.lang.reflect.Method detailsMethod = usage.getClass().getMethod("promptTokensDetails");
+            final Method detailsMethod = usage.getClass().getMethod("promptTokensDetails");
             final Object details = detailsMethod.invoke(usage);
             if (details != null)
             {
-                final java.lang.reflect.Method cachedMethod = details.getClass().getMethod("cachedTokens");
+                final Method cachedMethod = details.getClass().getMethod("cachedTokens");
                 final Object cached = cachedMethod.invoke(details);
                 if (cached instanceof Integer)
                 {

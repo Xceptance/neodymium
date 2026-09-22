@@ -29,6 +29,8 @@ import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
@@ -49,6 +51,7 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterException;
@@ -300,7 +303,7 @@ public final class StateMachineRunner
                     }
 
                     // Check if the current PlaybookStep is marked with a bug
-                    final org.neodymium.ai.model.PlaybookStep playbookStep = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                    final PlaybookStep playbookStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
                     if (playbookStep != null && playbookStep.isBug())
                     {
                         if (activeScope instanceof TryCatchStep tryCatch)
@@ -312,16 +315,29 @@ public final class StateMachineRunner
                         }
 
                         // Mark step status on playbook step as FAILED so recorded playbook preserves the failure
-                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
                         playbookStep.setFailed(true);
                         playbookStep.setFailureReason(e.getMessage());
+
+                        if (playbookStep.hasSubSteps())
+                        {
+                            for (final PlaybookStep child : playbookStep.getSubSteps())
+                            {
+                                if (child.isBug() || (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(tc -> tc.toolName() != null && tc.toolName().contains("assert"))))
+                                {
+                                    child.setStatus(PlaybookStepStatus.FAILED);
+                                    child.setFailed(true);
+                                    child.setFailureReason(e.getMessage());
+                                }
+                            }
+                        }
 
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         final String bugComment = playbookStep.getBugDetails();
                         final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
-                        final String resolvedBugInstruction = context.getSessionData() != null
-                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                        final String resolvedBugInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
+                            ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
                             : playbookStep.getInstruction();
                         LOGGER.info("   🐞 Expected bug hit{} on step: {}:{} ({}) - Error: {}",
                             bugStr,
@@ -359,8 +375,8 @@ public final class StateMachineRunner
                         final List<String> warnings = (List<String>) context.getTransientData()
                             .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
 
-                        final String resolvedOptInstruction = context.getSessionData() != null
-                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                        final String resolvedOptInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
+                            ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
                             : playbookStep.getInstruction();
                         final String stepStr = String.format("%s:%d (%s)",
                             playbookStep.getSourceFile(),
@@ -376,17 +392,17 @@ public final class StateMachineRunner
 
                     if (playbookStep != null)
                     {
-                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
                         playbookStep.setFailed(true);
                         playbookStep.setFailureReason(e.getMessage());
                     }
 
-                    org.neodymium.ai.event.InteractiveConsoleListener interactiveListener = null;
+                    InteractiveConsoleListener interactiveListener = null;
                     if (this.session != null && this.session.getEventBus() != null)
                     {
-                        for (final org.neodymium.ai.event.ExecutionListener listener : this.session.getEventBus().getListeners())
+                        for (final ExecutionListener listener : this.session.getEventBus().getListeners())
                         {
-                            if (listener instanceof org.neodymium.ai.event.InteractiveConsoleListener icl && icl.isInteractive())
+                            if (listener instanceof InteractiveConsoleListener icl && icl.isInteractive())
                             {
                                 interactiveListener = icl;
                                 break;
@@ -408,10 +424,10 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.PENDING);
+                                    playbookStep.setStatus(PlaybookStepStatus.PENDING);
                                     playbookStep.setFailed(false);
                                     playbookStep.setFailureReason(null);
-                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                    context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;
                             }
@@ -419,9 +435,9 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
-                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.model.ContextLevel.VISUAL_RICH);
-                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                    playbookStep.setStatus(PlaybookStepStatus.RUNNING);
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+                                    context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;
                             }
@@ -429,7 +445,7 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
+                                    playbookStep.setStatus(PlaybookStepStatus.SKIPPED);
                                 }
                                 continue mainLoop;
                             }
@@ -498,6 +514,24 @@ public final class StateMachineRunner
                             root = root.getCause();
                         }
                         currentStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                    }
+                    if (currentStep.hasSubSteps())
+                    {
+                        for (final PlaybookStep sub : currentStep.getSubSteps())
+                        {
+                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
+                            {
+                                sub.setStatus(PlaybookStepStatus.FAILED);
+                                sub.setFailed(true);
+                                sub.setFailureReason(currentStep.getFailureReason());
+                            }
+                        }
+                    }
+                    if (currentStep.getParent() != null)
+                    {
+                        currentStep.getParent().setStatus(PlaybookStepStatus.FAILED);
+                        currentStep.getParent().setFailed(true);
+                        currentStep.getParent().setFailureReason(currentStep.getFailureReason());
                     }
                     final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     if (executor != null && this.session != null && this.session.getEventBus() != null)

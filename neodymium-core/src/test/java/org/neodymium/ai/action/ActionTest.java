@@ -287,4 +287,93 @@ public class ActionTest
         assertEquals(6, call.arguments().path("count").asInt());
         assertEquals("MIN", call.arguments().path("operator").asText());
     }
+
+    @Test
+    public void testNegatedDefaultAndSetter()
+    {
+        final Action action = new Action("ASSERT_URL", "url", "Check URL");
+        assertFalse(action.isNegated());
+
+        final Action negatedAction = action.withNegated(true);
+        assertTrue(negatedAction.isNegated());
+        assertEquals("ASSERT_URL", negatedAction.getType());
+        assertEquals("url", negatedAction.getTarget());
+    }
+
+    @Test
+    public void testNegatedJsonRoundTrip() throws Exception
+    {
+        final Action original = new Action("ASSERT_URL", "url", List.of("#"), "Verify URL does not contain #", "Negative assertion", false, true);
+
+        final String serializedJson = this.mapper.writeValueAsString(original);
+        assertTrue(serializedJson.contains("\"negated\":true") || serializedJson.contains("\"negated\" : true"),
+                "Serialized JSON must contain 'negated': true, but was: " + serializedJson);
+
+        final Action deserialized = this.mapper.readValue(serializedJson, Action.class);
+        assertEquals("ASSERT_URL", deserialized.getType());
+        assertEquals("url", deserialized.getTarget());
+        assertEquals("#", deserialized.getValue());
+        assertTrue(deserialized.isNegated());
+    }
+
+    @Test
+    public void testFromToolCallWithNegatedFlag()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("expectedUrl", "#");
+        args.put("negated", true);
+        final ToolCall call = new ToolCall("call-neg", "assert_url", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_URL", action.getType());
+        assertEquals("url", action.getTarget());
+        assertEquals("#", action.getValue());
+        assertTrue(action.isNegated());
+
+        final ToolCall roundTripCall = action.toToolCall();
+        assertEquals("assert_url", roundTripCall.toolName());
+        assertTrue(roundTripCall.arguments().path("negated").asBoolean());
+    }
+
+    @Test
+    public void testFromToolCallAssertElementStateInversion()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#btn");
+        args.put("state", "visible");
+        args.put("negated", true);
+        final ToolCall call = new ToolCall("call-state-inv", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_HIDDEN", action.getType());
+        assertEquals("#btn", action.getTarget());
+    }
+
+    @Test
+    public void testFromToolCallAssertElementStateUnfocused()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#input");
+        args.put("state", "unfocused");
+        final ToolCall call = new ToolCall("call-unfocused", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_UNFOCUSED", action.getType());
+        assertEquals("#input", action.getTarget());
+    }
+
+    @Test
+    public void testFromToolCallAssertCountNotEquals()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".item");
+        args.put("count", 3);
+        args.put("operator", "NOT_EQUALS");
+        final ToolCall call = new ToolCall("call-cnt-neq", "assert_count", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_COUNT", action.getType());
+        assertEquals(".item", action.getTarget());
+        assertEquals("!=3", action.getValue());
+    }
 }

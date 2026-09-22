@@ -43,6 +43,7 @@ import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
@@ -207,8 +208,10 @@ public final class AgentToolLoopStep implements PipelineStep
         final long startTimeMs = System.currentTimeMillis();
         final ToolContext toolContext = new SimpleToolContext(this.toolRegistry);
         final List<ToolCall> executedCalls = new ArrayList<>();
-
-        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        context.getTransientData().remove("KEY_STEP_EXECUTION_FINALIZED");
+        try
+        {
+            final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
         final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_STEP_INTENT);
         final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
@@ -301,7 +304,7 @@ public final class AgentToolLoopStep implements PipelineStep
             {
                 userPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
             }
-            userPrompt.append("\n");
+            userPrompt.append("Important: For any assertion or verification milestone (e.g. 'Assert that...', 'Verify that...'), invoke the commanded assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', etc.). If the target element or text is not found, execute the assertion tool directly to test the condition rather than retrying earlier action milestones.\n\n");
         }
 
         List<SutAttachment> attachments = Collections.emptyList();
@@ -381,7 +384,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("3. DISCOVERY & RECOVERY: Ground all selectors in the provided page elements. Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
         systemPrompt.append("4. ACTION & VERIFICATION COMPLETION:\n");
         systemPrompt.append("   - Action steps: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps.\n");
-        systemPrompt.append("   - Verification steps: For verification or check instructions (such as asserting text, checking counts, validating values, or confirming expected state), you MUST invoke an assertion tool ('assert_text', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
+        systemPrompt.append("   - Verification steps: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
         systemPrompt.append("   - Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
         if (isVisual)
         {
@@ -737,7 +740,7 @@ public final class AgentToolLoopStep implements PipelineStep
                             {
                                 lastProposedToolWasCompleteStep = true;
                                 final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
-                                        + "). You must execute an assertion tool (such as 'assert_text' or 'assert_count') to verify the expected condition before calling complete_step. "
+                                        + "). You must execute an assertion tool (such as 'assert_text', 'assert_element_state', 'assert_attribute', or 'assert_count') to verify the expected condition before calling complete_step. "
                                         + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
                                 LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
                                 conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
@@ -810,6 +813,20 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         // Stop Criterion 2: Immediate fail on real defects!
                         LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
+                        executedCalls.add(effectiveCall);
+                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                        if (session != null && session.getEventBus() != null)
+                        {
+                            Action mappedAction = mapToolCallToAction(effectiveCall);
+                            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                            {
+                                mappedAction = mappedAction.withReasoning(thought.trim());
+                            }
+                            final SessionData sessionData = context.getSessionData();
+                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
+                        }
                         throw e;
                     }
                     LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
@@ -1221,7 +1238,14 @@ public final class AgentToolLoopStep implements PipelineStep
                             nextAttachments = Collections.emptyList();
                         }
 
-                        turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step'.");
+                        if (milestones != null && !milestones.isEmpty())
+                        {
+                            turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot. This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). Do not perform uncommanded assertions or anticipate subsequent steps.");
+                        }
+                        else
+                        {
+                            turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step'.");
+                        }
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
                         attachments = nextAttachments;
@@ -1232,6 +1256,11 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
         }
+    }
+    finally
+    {
+        finalizeStepExecution(context, executedCalls, null);
+    }
     }
 
     static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation)
@@ -1312,6 +1341,19 @@ public final class AgentToolLoopStep implements PipelineStep
 
     private void finishLoop(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
     {
+        finalizeStepExecution(context, executedCalls, summary);
+    }
+
+    private void finalizeStepExecution(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
+    {
+        if (Boolean.TRUE.equals(context.getTransientData().put("KEY_STEP_EXECUTION_FINALIZED", Boolean.TRUE)))
+        {
+            return;
+        }
+        if (summary != null)
+        {
+            context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+        }
         final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         if (stepObj instanceof final PlaybookStep currentStep)
         {
@@ -1343,10 +1385,218 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
             currentStep.setActions(actions);
+
+            if (currentStep.getStartTimeMs() != null)
+            {
+                final long elapsed = Math.max(1, System.currentTimeMillis() - currentStep.getStartTimeMs());
+                if (currentStep.getDurationMs() == null || currentStep.getDurationMs() <= 0)
+                {
+                    currentStep.setDurationMs(elapsed);
+                }
+            }
+
+            if (currentStep.hasSubSteps())
+            {
+                final List<PlaybookStep> children = currentStep.getSubSteps();
+                for (final PlaybookStep child : children)
+                {
+                    if (child.getParent() == null)
+                    {
+                        child.setParent(currentStep);
+                    }
+                }
+                partitionToolCallsAndActions(children, sanitizedCalls, actions);
+
+                final Long parentDuration = currentStep.getDurationMs();
+                if (parentDuration != null && parentDuration > 0 && !children.isEmpty())
+                {
+                    final long childDuration = Math.max(1, parentDuration / children.size());
+                    for (final PlaybookStep child : children)
+                    {
+                        if (child.getDurationMs() == null || child.getDurationMs() <= 0)
+                        {
+                            child.setDurationMs(childDuration);
+                        }
+                    }
+                }
+            }
         }
 
         context.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
         context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
+    }
+
+    /**
+     * Partitions executed tool calls and actions across child sub-steps of a compound step.
+     * When call count matches sub-steps 1:1, each child receives its direct call.
+     * When counts differ (e.g. conditional branches skipped or multi-action sub-steps),
+     * calls are matched sequentially to children based on semantic intent and instruction keywords,
+     * ensuring no child receives a cloned duplicate of the entire parent call list.
+     *
+     * @param subSteps the sub-steps to assign calls to
+     * @param toolCalls the executed tool calls
+     * @param actions the executed actions
+     */
+    public static void partitionToolCallsAndActions(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> toolCalls,
+            final List<Action> actions)
+    {
+        if (subSteps == null || subSteps.isEmpty())
+        {
+            return;
+        }
+
+        final int numChildren = subSteps.size();
+        final List<ToolCall> safeCalls = toolCalls != null ? toolCalls : Collections.emptyList();
+        final List<Action> safeActions = actions != null ? actions : Collections.emptyList();
+
+        if (safeCalls.size() == numChildren)
+        {
+            for (int i = 0; i < numChildren; i++)
+            {
+                final PlaybookStep child = subSteps.get(i);
+                child.setToolCalls(List.of(safeCalls.get(i)));
+                if (i < safeActions.size())
+                {
+                    child.setActions(List.of(safeActions.get(i)));
+                }
+                else
+                {
+                    child.setActions(Collections.emptyList());
+                }
+                if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
+                {
+                    child.setStatus(PlaybookStepStatus.SUCCESS);
+                }
+            }
+            return;
+        }
+
+        final List<List<ToolCall>> partitionedCalls = new ArrayList<>();
+        final List<List<Action>> partitionedActions = new ArrayList<>();
+        for (int i = 0; i < numChildren; i++)
+        {
+            partitionedCalls.add(new ArrayList<>());
+            partitionedActions.add(new ArrayList<>());
+        }
+
+        int subIdx = 0;
+        for (int c = 0; c < safeCalls.size(); c++)
+        {
+            final ToolCall call = safeCalls.get(c);
+            final Action act = c < safeActions.size() ? safeActions.get(c) : null;
+            final String toolName = call != null && call.toolName() != null ? call.toolName() : "";
+
+            int matchedIdx = -1;
+            for (int i = subIdx; i < numChildren; i++)
+            {
+                if (matchesSubStep(subSteps.get(i), toolName))
+                {
+                    matchedIdx = i;
+                    break;
+                }
+            }
+
+            if (matchedIdx >= 0)
+            {
+                partitionedCalls.get(matchedIdx).add(call);
+                if (act != null)
+                {
+                    partitionedActions.get(matchedIdx).add(act);
+                }
+                subIdx = matchedIdx + 1;
+            }
+            else
+            {
+                final int targetIdx = Math.min(Math.max(0, subIdx), numChildren - 1);
+                partitionedCalls.get(targetIdx).add(call);
+                if (act != null)
+                {
+                    partitionedActions.get(targetIdx).add(act);
+                }
+                if (subIdx < numChildren - 1)
+                {
+                    subIdx++;
+                }
+            }
+        }
+
+        for (int i = 0; i < numChildren; i++)
+        {
+            final PlaybookStep child = subSteps.get(i);
+            child.setToolCalls(partitionedCalls.get(i));
+            child.setActions(partitionedActions.get(i));
+            if (!partitionedCalls.get(i).isEmpty() && (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING))
+            {
+                child.setStatus(PlaybookStepStatus.SUCCESS);
+            }
+        }
+    }
+
+    private static boolean matchesSubStep(final PlaybookStep subStep, final String rawToolName)
+    {
+        if (subStep == null || subStep.getInstruction() == null || rawToolName == null)
+        {
+            return false;
+        }
+
+        final String toolName = rawToolName.toLowerCase().replace("browser_", "").trim();
+        String inst = subStep.getInstruction().toLowerCase().trim();
+
+        if (inst.startsWith("when ") && inst.contains(","))
+        {
+            final int commaIdx = inst.indexOf(',');
+            inst = inst.substring(commaIdx + 1).trim();
+        }
+
+        if (subStep.getSemanticIntent() != null && matchesIntent(subStep.getSemanticIntent(), toolName))
+        {
+            return true;
+        }
+
+        if (toolName.contains("store"))
+        {
+            return inst.contains("capture") || inst.contains("store") || inst.contains("save");
+        }
+        if (toolName.contains("hover"))
+        {
+            return inst.contains("hover") || inst.contains("mouse");
+        }
+        if (toolName.contains("click") || toolName.contains("select"))
+        {
+            return inst.contains("click") || inst.contains("press") || inst.contains("select") || inst.contains("choose") || inst.contains("add") || inst.contains("submit");
+        }
+        if (toolName.contains("type") || toolName.contains("fill") || toolName.contains("clear"))
+        {
+            return inst.contains("type") || inst.contains("enter") || inst.contains("fill") || inst.contains("write")
+                    || inst.contains("clear") || inst.contains("empty") || inst.contains("reset");
+        }
+        if (toolName.contains("assert") || toolName.contains("verify") || toolName.contains("check"))
+        {
+            return inst.contains("verify") || inst.contains("assert") || inst.contains("check") || inst.contains("ensure");
+        }
+        if (toolName.contains("navigate") || toolName.contains("open"))
+        {
+            return inst.contains("open") || inst.contains("navigate") || inst.contains("go to");
+        }
+
+        return false;
+    }
+
+    private static boolean matchesIntent(final SemanticIntent intent, final String toolName)
+    {
+        return switch (intent)
+        {
+            case STORE -> toolName.contains("store");
+            case HOVER_SCROLL -> toolName.contains("hover") || toolName.contains("scroll");
+            case CLICK -> toolName.contains("click") || toolName.contains("press");
+            case TYPE -> toolName.contains("type") || toolName.contains("fill");
+            case SELECT -> toolName.contains("select") || toolName.contains("click");
+            case ASSERT, ASSERT_METADATA -> toolName.contains("assert") || toolName.contains("verify");
+            case NAVIGATE -> toolName.contains("navigate") || toolName.contains("open");
+            default -> false;
+        };
     }
 
     private static boolean isFormInputAction(final String toolName)
@@ -1607,6 +1857,8 @@ public final class AgentToolLoopStep implements PipelineStep
         return "query_dom".equals(clean)
                 || "assert_text".equals(clean)
                 || "assert_count".equals(clean)
+                || "assert_element_state".equals(clean)
+                || "assert_attribute".equals(clean)
                 || "inspect".equals(clean);
     }
 
@@ -2153,7 +2405,9 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "clear_cookies".equals(clean) || "back".equals(clean) || "forward".equals(clean)
                 || "refresh".equals(clean) || "wait".equals(clean) || "assert".equals(clean)
                 || "assert_text".equals(clean) || "assert_title".equals(clean) || "assert_url".equals(clean)
-                || "assert_count".equals(clean) || "key_press".equals(clean) || "press_key".equals(clean)
+                || "assert_count".equals(clean) || "assert_element_state".equals(clean) || "assert_state".equals(clean)
+                || "assert_attribute".equals(clean) || "assert_attr".equals(clean)
+                || "key_press".equals(clean) || "press_key".equals(clean)
                 || "drag".equals(clean) || "drag_to".equals(clean) || "drag_and_drop".equals(clean)
                 || "check".equals(clean) || "store".equals(clean) || "branch".equals(clean)
                 || "include".equals(clean) || "java_method".equals(clean)
@@ -2197,6 +2451,8 @@ public final class AgentToolLoopStep implements PipelineStep
             case "assert_title" -> "assert_title";
             case "assert_url" -> "assert_url";
             case "assert_count" -> "assert_count";
+            case "assert_element_state", "assert_state" -> "assert_element_state";
+            case "assert_attribute", "assert_attr" -> "assert_attribute";
             case "drag" -> "drag";
             case "drag_to", "drag_and_drop" -> "drag_to";
             case "key_press", "press_key" -> "press_key";
@@ -2575,6 +2831,21 @@ public final class AgentToolLoopStep implements PipelineStep
                         final String tgt = node.path("target").asText();
                         final String exp = node.path("expected").asText();
                         LOGGER.info("📥 Result [{}]: {}{} - verified text \"{}\" on '{}'", toolName, icon, status, exp, tgt);
+                        return;
+                    }
+                    if ("assert_element_state".equals(act) && node.has("target") && node.has("state"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String st = node.path("state").asText();
+                        LOGGER.info("📥 Result [{}]: {}{} - verified element state '{}' on '{}'", toolName, icon, status, st, tgt);
+                        return;
+                    }
+                    if ("assert_attribute".equals(act) && node.has("target") && node.has("attribute"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String attr = node.path("attribute").asText();
+                        final String exp = node.has("expectedValue") ? "=\"" + node.path("expectedValue").asText() + "\"" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - verified attribute '{}{}' on '{}'", toolName, icon, status, attr, exp, tgt);
                         return;
                     }
                     if ("navigate".equals(act) && node.has("url"))

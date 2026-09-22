@@ -85,4 +85,11 @@ public class SelenideElementFinderTest
     {
         Assertions.assertNull(SelenideElementFinder.findFirstVisible(null, "someTarget"));
     }
+
+    @Test
+    public void testIsDirectlyPresentCompoundSelectorDoesNotHijackAncestor()
+    {
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article[data-ai=\"xcboo7um\"] button[data-ai=\"xcz0f8a5\"]"));
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article#xcboo7um button#xcz0f8a5"));
+    }
 }

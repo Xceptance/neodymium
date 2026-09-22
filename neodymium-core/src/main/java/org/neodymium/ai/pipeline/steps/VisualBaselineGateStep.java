@@ -187,7 +187,9 @@ public final class VisualBaselineGateStep implements PipelineStep
                     }
 
                     final String recordedHash = this.step.getScreenshotHash();
-                    final double minScore = coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore();
+                    final double minScore = this.step.getSsimMinScore() != null
+                        ? this.step.getSsimMinScore()
+                        : (coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore());
 
                     final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
                         || (this.step != null && this.step.isFullPageVisualStep());
@@ -233,7 +235,10 @@ public final class VisualBaselineGateStep implements PipelineStep
                             final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
                             currentSsimScore = ssimScore;
                             this.step.setSsimScore(ssimScore);
-                            this.step.setSsimMinScore(minScore);
+                            if (this.step.getSsimMinScore() != null)
+                            {
+                                this.step.setSsimMinScore(minScore);
+                            }
                             this.step.setBaselineMatrixPng(ScreenshotHasher.matrixToDataUri(recordedHash));
                             this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
                             this.step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : (this.step.getScreenshotHashDim() != null ? this.step.getScreenshotHashDim() : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM));
@@ -417,10 +422,15 @@ public final class VisualBaselineGateStep implements PipelineStep
             return;
         }
 
-        final double minScore = AiConfiguration.getInstance().getVisualSsimMinScore();
+        final double minScore = this.step.getSsimMinScore() != null
+            ? this.step.getSsimMinScore()
+            : AiConfiguration.getInstance().getVisualSsimMinScore();
         final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
         this.step.setSsimScore(ssimScore);
-        this.step.setSsimMinScore(minScore);
+        if (this.step.getSsimMinScore() != null)
+        {
+            this.step.setSsimMinScore(minScore);
+        }
         this.step.setBaselineMatrixPng(ScreenshotHasher.matrixToDataUri(recordedHash));
         this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
         if (this.step.getScreenshotHashDim() == null)

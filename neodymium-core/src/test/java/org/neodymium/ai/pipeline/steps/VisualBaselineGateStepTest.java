@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -446,6 +447,65 @@ public class VisualBaselineGateStepTest
 
         assertNotNull(step.getSsimScore());
         assertTrue(step.getSsimScore() < 0.99);
+    }
+
+    @Test
+    public void testReplayWithCustomStepThreshold_passesBelowDefaultThreshold() throws IOException
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 200, 200);
+        g2.setColor(Color.LIGHT_GRAY);
+        g2.fillRect(10, 10, 30, 30);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state2 = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state2);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String hash1 = ScreenshotHasher.computeSsimMatrix(base64Png1);
+
+        // 1. First verify default (visual) throws DivergenceException because SSIM < 0.99
+        final PlaybookStep defaultStep = new PlaybookStep("Verify subtle difference (visual)");
+        defaultStep.setScreenshotHash(hash1);
+        final VisualBaselineGateStep defaultGate = new VisualBaselineGateStep(defaultStep, session);
+        assertThrows(DivergenceException.class, () -> defaultGate.execute(context));
+        assertNull(defaultStep.getSsimMinScore(), "Default (visual) must keep ssimMinScore null");
+
+        // 2. Step with lowered threshold passes
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state2);
+        }
+        final PlaybookStep customStep = new PlaybookStep("Verify subtle difference (visual: threshold=0.85)");
+        customStep.setScreenshotHash(hash1);
+        final VisualBaselineGateStep customGate = new VisualBaselineGateStep(customStep, session);
+        assertDoesNotThrow(() -> customGate.execute(context));
+        assertEquals(0.85, customStep.getSsimMinScore(), 0.001, "Custom threshold must be retained");
+        assertTrue(customStep.getSsimScore() < 0.99, "Score must be < 0.99 to prove override had effect");
+        assertTrue(customStep.getSsimScore() >= 0.85, "Score must be >= custom threshold 0.85");
     }
 
     private static String encodeToBase64(final BufferedImage image) throws IOException
