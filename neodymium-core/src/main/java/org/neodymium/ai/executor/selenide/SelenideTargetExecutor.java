@@ -143,6 +143,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("ASSERT_ENABLED", assertPlugin);
         this.plugins.put("ASSERT_FOCUSED", assertPlugin);
         this.plugins.put("ASSERT_SELECTED", assertPlugin);
+        this.plugins.put("ASSERT_UNSELECTED", assertPlugin);
         this.plugins.put("ASSERT_READONLY", assertPlugin);
         this.plugins.put("ASSERT_EDITABLE", assertPlugin);
         this.plugins.put("ASSERT_ATTRIBUTE", assertPlugin);
@@ -413,6 +414,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             new ActionDefinition("ASSERT_ENABLED", "Assert element enabled state", Collections.emptyMap()),
             new ActionDefinition("ASSERT_FOCUSED", "Assert element has active focus", Collections.emptyMap()),
             new ActionDefinition("ASSERT_SELECTED", "Assert element selected state", Collections.emptyMap()),
+            new ActionDefinition("ASSERT_UNSELECTED", "Assert element unselected state", Collections.emptyMap()),
             new ActionDefinition("ASSERT_READONLY", "Assert input element readonly state", Collections.emptyMap()),
             new ActionDefinition("ASSERT_EDITABLE", "Assert input element editable state", Collections.emptyMap()),
             new ActionDefinition("ASSERT_ATTRIBUTE", "Assert element HTML attribute value or existence", Collections.emptyMap()),

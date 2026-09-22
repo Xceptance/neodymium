@@ -2360,7 +2360,6 @@ function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
     const labels = [
         { key: 'total',        label: 'Total',                                                       total: true  },
         { key: 'action',       label: 'Action (Standard Generation)',                                total: false },
-        { key: 'pesap',        label: 'PESAP (Pre-Execution Semantic Anchor)',                        total: false },
         { key: 'judge',        label: 'Self-Judging Validation',                                      total: false },
         { key: 'verification', label: 'Semantic Outcome Verification',                                total: false },
         { key: 'visualRca',    label: 'Visual Root Cause Analysis (RCA)',                             total: false }
@@ -2381,7 +2380,7 @@ function parseResponsibilityBuckets(json) {
     try {
         const obj = JSON.parse(json);
         if (!obj || typeof obj !== 'object') return null;
-        const required = ['total', 'action', 'pesap', 'judge', 'verification', 'visualRca'];
+        const required = ['total', 'action', 'judge', 'verification', 'visualRca'];
         for (let i = 0; i < required.length; i++) {
             if (!obj[required[i]] || typeof obj[required[i]] !== 'object') return null;
         }
@@ -2437,21 +2436,12 @@ function renderHeuristicLlmRows(fallback) {
         </tr>
         <tr>
             <td style="padding: 0.35rem 0.6rem;">Action (Standard Generation)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.ceil((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.92).toLocaleString()}</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${(f.totalCalls || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.totalTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.inputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.outputTokens || 0).toLocaleString()}</td>
             <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.cachedTokens || 0).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.92).toFixed(4)}</td>
-        </tr>
-        <tr>
-            <td style="padding: 0.35rem 0.6rem;">PESAP (Pre-Execution Semantic Anchor)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.floor((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">0</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.08).toFixed(4)}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${cost.toFixed(4)}</td>
         </tr>
     `;
 }

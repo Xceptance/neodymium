@@ -32,7 +32,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 /**
  * Utility helper to resolve and append custom system prompt add-ons.
  * Supports resolution from test datasets (prioritized) and YAML playbook files,
- * with capability-specific targeting (e.g. pesap, general, verification).
+ * with capability-specific targeting (e.g. execution, general, verification).
  * Enforces safety controls (max character limits and strict reminder suffixes).
  *
  * @author AI-generated: Gemini 3.5 Flash
@@ -57,7 +57,7 @@ public final class SystemPromptAddonHelper
      *
      * Resolves dynamic variable placeholders (${variableName}) against active session data.
      *
-     * @param type the type of prompt/LLM query (e.g., pesap, general, verification)
+     * @param type the type of prompt/LLM query (e.g., execution, general, verification)
      * @param context the active execution context
      * @return the combined resolved add-on string, or null if none
      * @throws IllegalArgumentException if the combined resolved add-on exceeds the 2000-character length limit
@@ -121,7 +121,7 @@ public final class SystemPromptAddonHelper
         }
         else
         {
-            // Specific capability model add-on (e.g. addon-pesap.md, addon-verification.md)
+            // Specific capability model add-on (e.g. addon-execution.md, addon-verification.md)
             final String modelSpecific = loadModelAddon(cleanModel, type);
             if (modelSpecific != null && !modelSpecific.isBlank())
             {
@@ -310,7 +310,7 @@ public final class SystemPromptAddonHelper
      * Automatically enforces safety controls by adding the critical adherence reminder.
      *
      * @param systemPrompt the base system prompt
-     * @param type the type of prompt/LLM query (e.g., pesap, general, verification)
+     * @param type the type of prompt/LLM query (e.g., execution, general, verification)
      * @param context the active execution context
      * @return the combined system prompt, or the original system prompt if no add-on is resolved
      */

@@ -44,6 +44,7 @@ import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.Alert;
+import org.openqa.selenium.Dimension;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoAlertPresentException;
@@ -142,6 +143,8 @@ public final class BrowserToolProvider
         registry.register(createAssertCountTool());
         registry.register(createAssertUrlTool());
         registry.register(createAssertTitleTool());
+        registry.register(createAssertElementStateTool());
+        registry.register(createAssertAttributeTool());
         registry.register(createScrollTool());
         registry.register(createExecuteScriptTool());
         registry.register(createQueryDomTool());
@@ -158,6 +161,331 @@ public final class BrowserToolProvider
         registry.register(createHandleAlertTool());
         registry.register(createDragTool());
         registry.register(createDragToTool());
+    }
+
+    private static int[] performSafeCoordinateClick(final WebDriver driver, final int targetX, final int targetY)
+    {
+        int x = targetX;
+        int y = targetY;
+
+        int vpWidth = 1280;
+        int vpHeight = 800;
+
+        try
+        {
+            final String vpScript = """
+                return {
+                    width: window.innerWidth || document.documentElement.clientWidth || 0,
+                    height: window.innerHeight || document.documentElement.clientHeight || 0
+                };
+                """;
+            final Object vpObj = ((JavascriptExecutor) driver).executeScript(vpScript);
+            if (vpObj instanceof Map<?, ?> vpMap)
+            {
+                final int w = ((Number) vpMap.get("width")).intValue();
+                final int h = ((Number) vpMap.get("height")).intValue();
+                if (w > 0)
+                {
+                    vpWidth = w;
+                }
+                if (h > 0)
+                {
+                    vpHeight = h;
+                }
+            }
+        }
+        catch (final Exception ignored)
+        {
+            try
+            {
+                final Dimension winSize = driver.manage().window().getSize();
+                vpWidth = winSize.getWidth();
+                vpHeight = winSize.getHeight();
+            }
+            catch (final Exception ignoredWin)
+            {
+            }
+        }
+
+        int deltaX = 0;
+        if (x < 0 || x >= vpWidth)
+        {
+            deltaX = x - (vpWidth / 2);
+        }
+        int deltaY = 0;
+        if (y < 0 || y >= vpHeight)
+        {
+            deltaY = y - (vpHeight / 2);
+        }
+
+        if (deltaX != 0 || deltaY != 0)
+        {
+            try
+            {
+                ((JavascriptExecutor) driver).executeScript("window.scrollBy(arguments[0], arguments[1]);", deltaX, deltaY);
+                x -= deltaX;
+                y -= deltaY;
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        x = Math.max(0, Math.min(x, Math.max(0, vpWidth - 1)));
+        y = Math.max(0, Math.min(y, Math.max(0, vpHeight - 1)));
+
+        try
+        {
+            new Actions(driver).moveToLocation(x, y).click().perform();
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("Actions.moveToLocation({}, {}) failed: {}. Falling back to elementFromPoint JS click.", x, y, e.getMessage());
+            final String jsClickScript = """
+                var el = document.elementFromPoint(arguments[0], arguments[1]);
+                if (el) {
+                    el.click();
+                    return true;
+                }
+                return false;
+                """;
+            try
+            {
+                ((JavascriptExecutor) driver).executeScript(jsClickScript, x, y);
+            }
+            catch (final Exception jsEx)
+            {
+                LOGGER.error("Fallback document.elementFromPoint click failed at ({}, {})", x, y, jsEx);
+                throw e;
+            }
+        }
+
+        return new int[]{x, y};
+    }
+
+    private static ToolResult executeElementClick(final ToolCall call, final WebDriver driver, final String selector,
+            final String text, final int parsedX, final int parsedY)
+    {
+        final String targetDesc = !selector.isBlank() ? selector : text;
+        final SelenideElement el;
+
+        if (!selector.isBlank())
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                el = $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+            else
+            {
+                el = findElement(selector);
+            }
+        }
+        else
+        {
+            el = $(Selectors.byText(text)).is(Condition.visible)
+                    ? $(Selectors.byText(text))
+                    : $(Selectors.withText(text));
+        }
+
+        SelenideElementFinder.scrollIntoViewIfNeeded(el);
+
+        if (!el.is(Condition.visible))
+        {
+            try
+            {
+                final SelenideElement hoverParent = el.closest("#cart-btn-wrapper, .dropdown, [class*='dropdown'], [id*='dropdown']");
+                if (hoverParent.exists() && hoverParent.is(Condition.visible))
+                {
+                    hoverParent.hover();
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        DomFeatureVector featureVector = null;
+        if (driver != null)
+        {
+            try
+            {
+                featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        SelenideElement clickedEl = el;
+        String actualTarget = targetDesc;
+
+        boolean clickedViaOffset = false;
+        if (driver != null && parsedX != Integer.MIN_VALUE && parsedY != Integer.MIN_VALUE && parsedX >= 0 && parsedY >= 0)
+        {
+            try
+            {
+                if (el.is(Condition.visible))
+                {
+                    final int elWidth = el.getSize().getWidth();
+                    final int elHeight = el.getSize().getHeight();
+                    if (parsedX <= elWidth && parsedY <= elHeight)
+                    {
+                        final int xOffset = parsedX - (elWidth / 2);
+                        final int yOffset = parsedY - (elHeight / 2);
+                        new Actions(driver).moveToElement(el.toWebElement(), xOffset, yOffset).click().perform();
+                        clickedViaOffset = true;
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (!clickedViaOffset)
+        {
+            try
+            {
+                el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+            }
+            catch (final Exception | AssertionError e)
+            {
+                SelenideElement fallbackTargetEl = null;
+                if (!text.isBlank() && !selector.isBlank())
+                {
+                    try
+                    {
+                        final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
+                                ? $(Selectors.byText(text))
+                                : $(Selectors.withText(text));
+                        SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
+                        textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                        fallbackTargetEl = textEl;
+                    }
+                    catch (final Exception | AssertionError ignored)
+                    {
+                    }
+                }
+
+                if (fallbackTargetEl == null)
+                {
+                    try
+                    {
+                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                        Selenide.executeJavaScript("arguments[0].click();", el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                        throw e;
+                    }
+                }
+                clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
+                actualTarget = (fallbackTargetEl != null) ? text : targetDesc;
+                if (fallbackTargetEl != null && driver != null)
+                {
+                    try
+                    {
+                        featureVector = new PageAnalyzer(driver).extractFeatureVector(fallbackTargetEl);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                    }
+                }
+            }
+        }
+
+        if (!isAlertPresent(driver))
+        {
+            try
+            {
+                final String tagName = clickedEl.getTagName();
+                if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                {
+                    Selenide.executeJavaScript("arguments[0].focus();", clickedEl);
+                }
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        final ObjectNode res = successNode("click");
+        res.put("target", actualTarget);
+        if (featureVector != null)
+        {
+            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+        }
+        if (driver != null)
+        {
+            res.put("url", getSafeUrl(driver));
+            res.put("title", getSafeTitle(driver));
+        }
+        return ToolResult.success(call.callId(), res.toString());
+    }
+
+    private static ToolResult executeCoordinateClick(final ToolCall call, final WebDriver driver, final String selector,
+            final int parsedX, final int parsedY)
+    {
+        final int rawX = parsedX;
+        final int rawY = parsedY;
+
+        int x = rawX;
+        int y = rawY;
+
+        if (!selector.isBlank())
+        {
+            final String rectScript = """
+                var el = document.querySelector(arguments[0]);
+                if (!el) return null;
+                var r = el.getBoundingClientRect();
+                return { x: Math.round(r.left), y: Math.round(r.top) };
+                """;
+            try
+            {
+                final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, selector);
+                if (rectObj instanceof Map<?, ?> map)
+                {
+                    x = ((Number) map.get("x")).intValue() + rawX;
+                    y = ((Number) map.get("y")).intValue() + rawY;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        final int[] clicked = performSafeCoordinateClick(driver, x, y);
+        final int finalX = clicked[0];
+        final int finalY = clicked[1];
+
+        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
+        final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
+        final ObjectNode res = successNode("click");
+        res.put("x", finalX);
+        res.put("y", finalY);
+        if (!selector.isBlank())
+        {
+            res.put("elementSelector", selector);
+            res.put("offsetX", rawX);
+            res.put("offsetY", rawY);
+        }
+
+        if (reanchored != null)
+        {
+            res.put("selector", reanchored.selector());
+            builder.withVariable("reanchoredSelector", reanchored.selector());
+            builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
+        }
+        if (driver != null)
+        {
+            res.put("url", getSafeUrl(driver));
+            res.put("title", getSafeTitle(driver));
+        }
+        builder.withContent(res.toString());
+        return builder.build();
     }
 
     private static AiTool createClickTool()
@@ -191,7 +519,8 @@ public final class BrowserToolProvider
                 final String target = args.hasNonNull("target") ? args.path("target").asText().trim() : "";
                 int parsedX = args.hasNonNull("x") ? args.path("x").asInt() : Integer.MIN_VALUE;
                 int parsedY = args.hasNonNull("y") ? args.path("y").asInt() : Integer.MIN_VALUE;
-                String sel = args.hasNonNull("selector") ? args.path("selector").asText().trim() : "";
+                String sel = args.hasNonNull("selector") ? cleanSelector(args.path("selector").asText().trim()) : "";
+                final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
 
                 if ((parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE) && (target.startsWith("coord:") || target.contains("@")))
                 {
@@ -202,7 +531,7 @@ public final class BrowserToolProvider
                         parsedY = coord.y();
                         if (sel.isBlank() && coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                         {
-                            sel = coord.anchorSelector();
+                            sel = cleanSelector(coord.anchorSelector());
                         }
                     }
                     else if (target.startsWith("coord:"))
@@ -222,66 +551,12 @@ public final class BrowserToolProvider
                     }
                 }
 
-                // Case 1: Coordinates provided
-                if (parsedX != Integer.MIN_VALUE && parsedY != Integer.MIN_VALUE && driver != null)
+                if (sel.isBlank() && !target.isBlank() && !target.startsWith("coord:") && !target.startsWith("badge:"))
                 {
-                    final int rawX = parsedX;
-                    final int rawY = parsedY;
-
-                    int x = rawX;
-                    int y = rawY;
-                    if (!sel.isBlank())
-                    {
-                        final String rectScript = """
-                            var el = document.querySelector(arguments[0]);
-                            if (!el) return null;
-                            var r = el.getBoundingClientRect();
-                            return { x: Math.round(r.left), y: Math.round(r.top) };
-                            """;
-                        try
-                        {
-                            final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, sel);
-                            if (rectObj instanceof Map<?, ?> map)
-                            {
-                                x = ((Number) map.get("x")).intValue() + rawX;
-                                y = ((Number) map.get("y")).intValue() + rawY;
-                            }
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
-                    }
-
-                    new Actions(driver).moveToLocation(x, y).click().perform();
-
-                    final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
-                    final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
-                    final ObjectNode res = successNode("click");
-                    res.put("x", x);
-                    res.put("y", y);
-                    if (!sel.isBlank())
-                    {
-                        res.put("elementSelector", sel);
-                        res.put("offsetX", rawX);
-                        res.put("offsetY", rawY);
-                    }
-
-                    if (reanchored != null)
-                    {
-                        res.put("selector", reanchored.selector());
-                        builder.withVariable("reanchoredSelector", reanchored.selector());
-                        builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
-                    }
-                    if (driver != null)
-                    {
-                        res.put("url", getSafeUrl(driver));
-                        res.put("title", getSafeTitle(driver));
-                    }
-                    builder.withContent(res.toString());
-                    return builder.build();
+                    sel = cleanSelector(target);
                 }
 
-                // Case 2: Target is badge:N
+                // Case 1: Target is badge:N
                 if (target.startsWith("badge:") && driver != null)
                 {
                     final String badgeNum = target.substring("badge:".length()).trim();
@@ -289,6 +564,7 @@ public final class BrowserToolProvider
                         var badges = document.querySelectorAll('#__neo_som_badges__ > div');
                         for (var i = 0; i < badges.length; i++) {
                             if (badges[i].innerText.trim() === arguments[0]) {
+                                badges[i].scrollIntoView({ block: 'center', inline: 'center' });
                                 var rect = badges[i].getBoundingClientRect();
                                 return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
                             }
@@ -300,12 +576,16 @@ public final class BrowserToolProvider
                     {
                         final int bx = ((Number) coordsMap.get("x")).intValue();
                         final int by = ((Number) coordsMap.get("y")).intValue();
-                        new Actions(driver).moveToLocation(bx, by).click().perform();
+                        final int[] clicked = performSafeCoordinateClick(driver, bx, by);
+                        final int finalX = clicked[0];
+                        final int finalY = clicked[1];
 
-                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
+                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
                         final ToolResult.Builder b = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
                         final ObjectNode res = successNode("click");
                         res.put("target", "badge:" + badgeNum);
+                        res.put("x", finalX);
+                        res.put("y", finalY);
                         if (reanchored != null)
                         {
                             res.put("selector", reanchored.selector());
@@ -321,146 +601,32 @@ public final class BrowserToolProvider
                     }
                 }
 
-                // Case 3: Element resolution via selector and text fallback
-                final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
-                final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : target;
-
-                if (selector.isBlank() && text.isBlank())
-                {
-                    return ToolResult.error(call.callId(), errorNode("click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
-                }
-
-                final String targetDesc = !selector.isBlank() ? selector : text;
-                final SelenideElement el;
-
-                if (!selector.isBlank())
-                {
-                    if (selector.startsWith("text="))
-                    {
-                        final String rawText = selector.substring("text=".length()).trim();
-                        el = $(Selectors.byText(rawText)).is(Condition.visible)
-                                ? $(Selectors.byText(rawText))
-                                : $(Selectors.withText(rawText));
-                    }
-                    else
-                    {
-                        el = findElement(selector);
-                    }
-                }
-                else
-                {
-                    el = $(Selectors.byText(text)).is(Condition.visible)
-                            ? $(Selectors.byText(text))
-                            : $(Selectors.withText(text));
-                }
-
-                SelenideElementFinder.scrollIntoViewIfNeeded(el);
-
-                if (!el.is(Condition.visible))
+                // Case 2: Element resolution via selector and text fallback (prioritized over raw coordinates unless explicit coord: target)
+                final boolean hasElementTarget = (!sel.isBlank() || !text.isBlank()) && !target.startsWith("coord:");
+                if (hasElementTarget)
                 {
                     try
                     {
-                        final SelenideElement hoverParent = el.closest("#cart-btn-wrapper, .dropdown, [class*='dropdown'], [id*='dropdown']");
-                        if (hoverParent.exists() && hoverParent.is(Condition.visible))
-                        {
-                            hoverParent.hover();
-                        }
+                        return executeElementClick(call, driver, sel, text, parsedX, parsedY);
                     }
-                    catch (final Exception ignored)
+                    catch (final Exception | AssertionError e)
                     {
-                    }
-                }
-
-                DomFeatureVector featureVector = null;
-                if (driver != null)
-                {
-                    try
-                    {
-                        featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
-                    }
-                    catch (final Throwable ignored)
-                    {
-                    }
-                }
-
-                SelenideElement clickedEl = el;
-                String actualTarget = targetDesc;
-                try
-                {
-                    el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
-                }
-                catch (final Exception | AssertionError e)
-                {
-                    SelenideElement fallbackTargetEl = null;
-                    if (!text.isBlank() && !selector.isBlank())
-                    {
-                        try
-                        {
-                            final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
-                                    ? $(Selectors.byText(text))
-                                    : $(Selectors.withText(text));
-                            SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
-                            textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
-                            fallbackTargetEl = textEl;
-                        }
-                        catch (final Exception | AssertionError ignored)
-                        {
-                        }
-                    }
-
-                    if (fallbackTargetEl == null)
-                    {
-                        try
-                        {
-                            SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                            Selenide.executeJavaScript("arguments[0].click();", el);
-                        }
-                        catch (final Throwable ignored)
+                        if (parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE || driver == null)
                         {
                             throw e;
                         }
-                    }
-                    clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
-                    actualTarget = (fallbackTargetEl != null) ? text : targetDesc;
-                    if (fallbackTargetEl != null && driver != null)
-                    {
-                        try
-                        {
-                            featureVector = new PageAnalyzer(driver).extractFeatureVector(fallbackTargetEl);
-                        }
-                        catch (final Throwable ignored)
-                        {
-                        }
+                        LOGGER.warn("Element click failed for '{}', falling back to coordinate click ({}, {}): {}",
+                                !sel.isBlank() ? sel : text, parsedX, parsedY, e.getMessage());
                     }
                 }
 
-                if (!isAlertPresent(driver))
+                // Case 3: Coordinate click (pure coordinates or explicit coord: target)
+                if (parsedX != Integer.MIN_VALUE && parsedY != Integer.MIN_VALUE && driver != null)
                 {
-                    try
-                    {
-                        final String tagName = clickedEl.getTagName();
-                        if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
-                        {
-                            Selenide.executeJavaScript("arguments[0].focus();", clickedEl);
-                        }
-                    }
-                    catch (final Throwable ignored)
-                    {
-                    }
+                    return executeCoordinateClick(call, driver, sel, parsedX, parsedY);
                 }
 
-                final ObjectNode res = successNode("click");
-                res.put("target", actualTarget);
-                if (featureVector != null)
-                {
-                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                }
-                if (driver != null)
-                {
-                    res.put("url", getSafeUrl(driver));
-                    res.put("title", getSafeTitle(driver));
-                }
-                return ToolResult.success(call.callId(), res.toString());
+                return ToolResult.error(call.callId(), errorNode("click requires either 'selector', 'text', 'coordinates' (x, y), or 'target'").toString());
             }
         };
     }
@@ -850,7 +1016,9 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
-                findElement(selector).shouldBe(Condition.visible).hover();
+                final SelenideElement el = findElement(selector);
+                SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                el.shouldBe(Condition.visible).hover();
                 final ObjectNode res = successNode("hover");
                 res.put("target", selector);
                 return ToolResult.success(call.callId(), res.toString());
@@ -1401,6 +1569,7 @@ public final class BrowserToolProvider
         props.putObject("expectedText").put("type", "string").put("description", "Expected text content (plain substring) or regex pattern if regex is true");
         props.putObject("exact").put("type", "boolean").put("description", "Whether text match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedText is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert absence/non-matching of the text (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedText");
@@ -1423,6 +1592,9 @@ public final class BrowserToolProvider
                         : call.arguments().path("text").asText();
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
                 final String expectedText = regex ? cleanRegexPattern(rawExpectedText) : unescapeLiteralText(rawExpectedText);
 
                 final boolean isTitle = selector != null && ("title".equalsIgnoreCase(selector.trim())
@@ -1448,52 +1620,77 @@ public final class BrowserToolProvider
                         {
                             pattern = Pattern.compile(Pattern.quote(expectedText), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
                         }
-                        if (!pattern.matcher(actualTitle).find())
+                        final boolean matches = pattern.matcher(actualTitle).find();
+                        if (negated ? matches : !matches)
                         {
-                            throw new AssertionError("Page title \"" + actualTitle + "\" does not match regex pattern \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" " + (negated ? "matches" : "does not match") + " regex pattern \"" + expectedText + "\"");
                         }
                     }
                     else if (exact)
                     {
-                        if (!actualTitle.trim().equalsIgnoreCase(expectedText.trim()))
+                        final boolean matches = actualTitle.trim().equalsIgnoreCase(expectedText.trim());
+                        if (negated ? matches : !matches)
                         {
-                            throw new AssertionError("Page title \"" + actualTitle + "\" does not exactly match \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" " + (negated ? "matches" : "does not exactly match") + " \"" + expectedText + "\"");
                         }
                     }
                     else
                     {
-                        if (!actualTitle.toLowerCase().contains(expectedText.toLowerCase()))
+                        final boolean matches = actualTitle.toLowerCase(Locale.ROOT).contains(expectedText.toLowerCase(Locale.ROOT));
+                        if (negated ? matches : !matches)
                         {
-                            throw new AssertionError("Page title \"" + actualTitle + "\" does not contain expected text \"" + expectedText + "\"");
+                            throw new AssertionError("Page title \"" + actualTitle + "\" " + (negated ? "contains" : "does not contain") + " expected text \"" + expectedText + "\"");
                         }
                     }
                 }
                 else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
                 {
-                    boolean found = false;
-                    final long start = System.currentTimeMillis();
-                    final long timeout = Configuration.timeout;
-                    while (!found && (System.currentTimeMillis() - start) < timeout)
+                    if (negated)
                     {
-                        found = isTextPresentOnPage(expectedText, regex, exact);
-                        if (!found)
+                        boolean present = true;
+                        final long start = System.currentTimeMillis();
+                        final long timeout = Configuration.timeout;
+                        while (present && (System.currentTimeMillis() - start) < timeout)
                         {
-                            Selenide.sleep(100);
+                            present = isTextPresentOnPage(expectedText, regex, exact);
+                            if (present)
+                            {
+                                Selenide.sleep(100);
+                            }
+                        }
+                        if (present)
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was still present anywhere on the page within " + timeout + "ms.");
                         }
                     }
-                    if (!found)
+                    else
                     {
-                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found anywhere on the page within " + timeout + "ms.");
+                        boolean found = false;
+                        final long start = System.currentTimeMillis();
+                        final long timeout = Configuration.timeout;
+                        while (!found && (System.currentTimeMillis() - start) < timeout)
+                        {
+                            found = isTextPresentOnPage(expectedText, regex, exact);
+                            if (!found)
+                            {
+                                Selenide.sleep(100);
+                            }
+                        }
+                        if (!found)
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found anywhere on the page within " + timeout + "ms.");
+                        }
                     }
                 }
                 else
                 {
-                    boolean matched = false;
+                    boolean matched = negated;
                     final long start = System.currentTimeMillis();
                     final long timeout = Configuration.timeout;
 
-                    while (!matched && (System.currentTimeMillis() - start) < timeout)
+                    while ((negated ? matched : !matched) && (System.currentTimeMillis() - start) < timeout)
                     {
+                        matched = false;
                         final ElementsCollection elements = findElements(selector);
                         if (!elements.isEmpty())
                         {
@@ -1521,7 +1718,7 @@ public final class BrowserToolProvider
                             }
                         }
 
-                        if (!matched)
+                        if (!matched && !negated)
                         {
                             try
                             {
@@ -1545,24 +1742,22 @@ public final class BrowserToolProvider
                             }
                         }
 
-                        if (!matched)
+                        if (negated ? matched : !matched)
                         {
-                            if (isTextPresentOnPage(expectedText, regex, exact))
-                            {
-                                break;
-                            }
                             Selenide.sleep(100);
                         }
                     }
 
-                    if (!matched)
+                    if (negated ? matched : !matched)
                     {
-                        if (!isTextPresentOnPage(expectedText, regex, exact))
+                        if (negated)
                         {
-                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" nor anywhere on the page within " + timeout + "ms.");
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was found on selector \"" + selector + "\" within " + timeout + "ms, but expected not to match.");
                         }
-
-                        return ToolResult.error(call.callId(), errorNode("Expected text \"" + expectedText + "\" was not found on element \"" + selector + "\".").toString());
+                        else
+                        {
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms.");
+                        }
                     }
                 }
 
@@ -1571,6 +1766,7 @@ public final class BrowserToolProvider
                 res.put("target", targetDesc);
                 res.put("expected", expectedText);
                 res.put("regex", regex);
+                res.put("negated", negated);
                 res.put("matched", true);
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -1591,13 +1787,15 @@ public final class BrowserToolProvider
         operatorEnum.add("EXACT");
         operatorEnum.add("MIN");
         operatorEnum.add("MAX");
+        operatorEnum.add("NOT_EQUALS");
         props.putObject("visibleOnly").put("type", "boolean").put("description", "Whether to count only visible elements (default: true)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert that count does not equal the expected value (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("count");
 
-        final ToolDefinition def = new ToolDefinition("assert_count", "Asserts that the count of elements matching a selector satisfies expected criteria (exact, min, or max)", schema);
+        final ToolDefinition def = new ToolDefinition("assert_count", "Asserts that the count of elements matching a selector satisfies expected criteria (exact, min, max, or not equals)", schema);
         return new AiTool()
         {
             @Override
@@ -1632,6 +1830,8 @@ public final class BrowserToolProvider
                 }
 
                 final boolean visibleOnly = !call.arguments().has("visibleOnly") || call.arguments().path("visibleOnly").asBoolean(true);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false);
 
                 final ElementsCollection allElements = findElements(selector);
                 int actualCount = 0;
@@ -1667,7 +1867,19 @@ public final class BrowserToolProvider
                 }
 
                 final String operator = args.path("operator").asText("EXACT").toUpperCase(Locale.ROOT);
-                if (hasCount && "MIN".equals(operator))
+                final boolean isNotEquals = "NOT_EQUALS".equals(operator) || "NOT_EQUAL".equals(operator) || "NEQ".equals(operator) || negated;
+
+                if (isNotEquals)
+                {
+                    final int targetCount = hasCount ? args.path("count").asInt() : (hasExpected ? args.path("expectedCount").asInt() : 0);
+                    if (actualCount == targetCount)
+                    {
+                        throw new AssertionError(String.format(
+                                "Element count assertion failed for '%s': expected count to not equal %d, but found %d (visible: %d, total in DOM: %d)",
+                                selector, targetCount, actualCount, actualCount, totalElements));
+                    }
+                }
+                else if (hasCount && "MIN".equals(operator))
                 {
                     final int min = args.path("count").asInt();
                     if (actualCount < min)
@@ -1733,6 +1945,7 @@ public final class BrowserToolProvider
                 res.put("actualCount", actualCount);
                 res.put("totalInDom", totalElements);
                 res.put("visibleOnly", visibleOnly);
+                res.put("negated", negated);
                 if (hasExpected)
                 {
                     res.put("expectedCount", call.arguments().path("expectedCount").asInt());
@@ -1751,21 +1964,42 @@ public final class BrowserToolProvider
         };
     }
 
+    /**
+     * Sanitizes selector strings that may contain trailing hallucinated parameter keys or labels
+     * from LLMs (e.g. "button, text:", "div.card, text=...", or trailing commas).
+     *
+     * @param selector the raw selector string
+     * @return the cleaned selector string
+     */
+    static String cleanSelector(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return "";
+        }
+        String cleaned = selector.trim();
+        // Strip trailing parameter labels hallucinated by LLMs like ", text:", ", text=", ", text"
+        cleaned = cleaned.replaceAll("(?i),\\s*(?:text|action|target|locator)\\s*[:=]?.*$", "").trim();
+        // Strip dangling commas
+        cleaned = cleaned.replaceAll(",\\s*$", "").trim();
+        return cleaned;
+    }
+
     private static String resolveSelector(final JsonNode args)
     {
         if (args != null)
         {
             if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
             {
-                return args.path("selector").asText();
+                return cleanSelector(args.path("selector").asText());
             }
             if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
             {
-                return args.path("target").asText();
+                return cleanSelector(args.path("target").asText());
             }
             if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
             {
-                return args.path("locator").asText();
+                return cleanSelector(args.path("locator").asText());
             }
         }
         return "";
@@ -1852,6 +2086,7 @@ public final class BrowserToolProvider
         props.putObject("expectedUrl").put("type", "string").put("description", "Expected URL substring, full URL, or regex pattern");
         props.putObject("exact").put("type", "boolean").put("description", "Whether URL match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedUrl is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert that current URL does not match or contain expectedUrl (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedUrl");
@@ -1884,6 +2119,9 @@ public final class BrowserToolProvider
 
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
                 final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
@@ -1905,15 +2143,36 @@ public final class BrowserToolProvider
                             compiledPattern = Pattern.compile(Pattern.quote(expectedUrl), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
                         }
                         final Pattern finalPattern = compiledPattern;
-                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !finalPattern.matcher(d.getCurrentUrl()).find());
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
+                        }
                     }
                     else if (exact)
                     {
-                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                        }
                     }
                     else
                     {
-                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                        }
                     }
                 }
                 catch (final TimeoutException e)
@@ -1921,20 +2180,20 @@ public final class BrowserToolProvider
                     final String actualUrl = WebDriverRunner.url();
                     if (regex)
                     {
-                        throw new AssertionError("Assertion failed: Expected URL to match regex \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                        throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not match" : "match") + " regex \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
                     }
                     else if (exact)
                     {
-                        throw new AssertionError("Assertion failed: Expected URL to exactly match \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                        throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not exactly match" : "exactly match") + " \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
                     }
                     else
                     {
-                        throw new AssertionError("Assertion failed: Expected URL to contain \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                        throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not contain" : "contain") + " \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
                     }
                 }
 
                 final String currentUrl = WebDriverRunner.url();
-                return ToolResult.success(call.callId(), "Browser URL matched: " + currentUrl);
+                return ToolResult.success(call.callId(), (negated ? "Browser URL does not match: " : "Browser URL matched: ") + currentUrl);
             }
         };
     }
@@ -1947,6 +2206,7 @@ public final class BrowserToolProvider
         props.putObject("expectedTitle").put("type", "string").put("description", "Expected page title substring, full title, or regex pattern");
         props.putObject("exact").put("type", "boolean").put("description", "Whether title match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedTitle is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert that current title does not match or contain expectedTitle (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("expectedTitle");
@@ -1979,6 +2239,9 @@ public final class BrowserToolProvider
 
                 final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
                 final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
@@ -2000,15 +2263,36 @@ public final class BrowserToolProvider
                             compiledPattern = Pattern.compile(Pattern.quote(expectedTitle), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
                         }
                         final Pattern finalPattern = compiledPattern;
-                        Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() == null || !finalPattern.matcher(d.getTitle()).find());
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
+                        }
                     }
                     else if (exact)
                     {
-                        Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                        }
                     }
                     else
                     {
-                        Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                        if (negated)
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                        }
+                        else
+                        {
+                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                        }
                     }
                 }
                 catch (final TimeoutException e)
@@ -2016,20 +2300,340 @@ public final class BrowserToolProvider
                     final String actualTitle = Selenide.title();
                     if (regex)
                     {
-                        throw new AssertionError("Assertion failed: Expected page title to match regex \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                        throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not match" : "match") + " regex \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
                     }
                     else if (exact)
                     {
-                        throw new AssertionError("Assertion failed: Expected page title to exactly match \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                        throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not exactly match" : "exactly match") + " \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
                     }
                     else
                     {
-                        throw new AssertionError("Assertion failed: Expected page title to contain \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                        throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not contain" : "contain") + " \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
                     }
                 }
 
                 final String currentTitle = Selenide.title();
-                return ToolResult.success(call.callId(), "Browser page title matched: " + currentTitle);
+                return ToolResult.success(call.callId(), (negated ? "Browser page title does not match: " : "Browser page title matched: ") + currentTitle);
+            }
+        };
+    }
+
+    private static AiTool createAssertElementStateTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert state on");
+        final ArrayNode stateEnum = props.putObject("state")
+                .put("type", "string")
+                .put("description", "Expected state of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'exists', 'absent')")
+                .putArray("enum");
+        stateEnum.add("visible");
+        stateEnum.add("hidden");
+        stateEnum.add("enabled");
+        stateEnum.add("disabled");
+        stateEnum.add("editable");
+        stateEnum.add("readonly");
+        stateEnum.add("checked");
+        stateEnum.add("unchecked");
+        stateEnum.add("selected");
+        stateEnum.add("unselected");
+        stateEnum.add("focused");
+        stateEnum.add("unfocused");
+        stateEnum.add("not_focused");
+        stateEnum.add("exists");
+        stateEnum.add("absent");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to invert the state assertion (default: false)");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("selector");
+        req.add("state");
+
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies a specific state (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent)", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String selector = resolveSelector(call.arguments());
+                if (selector == null || selector.isBlank())
+                {
+                    throw new AssertionError("assert_element_state requires a 'selector' argument");
+                }
+
+                final String rawState;
+                if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                {
+                    rawState = call.arguments().path("state").asText();
+                }
+                else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+                {
+                    rawState = call.arguments().path("expectedState").asText();
+                }
+                else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
+                {
+                    rawState = call.arguments().path("value").asText();
+                }
+                else
+                {
+                    throw new AssertionError("assert_element_state requires a 'state' argument");
+                }
+
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false);
+                final String normalized = normalizeElementState(rawState);
+                final String state = negated ? switch (normalized)
+                {
+                    case "visible" -> "hidden";
+                    case "hidden" -> "visible";
+                    case "enabled" -> "disabled";
+                    case "disabled" -> "enabled";
+                    case "checked" -> "unchecked";
+                    case "unchecked" -> "checked";
+                    case "selected" -> "unselected";
+                    case "unselected" -> "selected";
+                    case "focused" -> "unfocused";
+                    case "unfocused" -> "focused";
+                    case "exists" -> "absent";
+                    case "absent" -> "exists";
+                    default -> normalized;
+                } : normalized;
+
+                final SelenideElement el = findElement(selector);
+
+                switch (state)
+                {
+                    case "visible" -> el.shouldBe(Condition.visible);
+                    case "hidden" -> el.shouldBe(Condition.hidden);
+                    case "enabled" -> el.shouldBe(Condition.enabled);
+                    case "disabled" -> el.shouldBe(Condition.disabled);
+                    case "editable" -> el.shouldBe(Condition.editable);
+                    case "readonly" -> el.shouldBe(Condition.readonly);
+                    case "checked" -> el.shouldBe(Condition.checked);
+                    case "unchecked" -> el.shouldNotBe(Condition.checked);
+                    case "selected" ->
+                    {
+                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                        {
+                            el.getSelectedOption().shouldBe(Condition.exist);
+                        }
+                        else
+                        {
+                            el.shouldBe(Condition.selected);
+                        }
+                    }
+                    case "unselected" ->
+                    {
+                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                        {
+                            el.getSelectedOption().shouldNotBe(Condition.exist);
+                        }
+                        else
+                        {
+                            el.shouldNotBe(Condition.selected);
+                        }
+                    }
+                    case "focused" ->
+                    {
+                        final Boolean isFocused = Selenide.executeJavaScript(
+                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                el);
+                        if (!Boolean.TRUE.equals(isFocused))
+                        {
+                            el.shouldBe(Condition.focused);
+                        }
+                    }
+                    case "unfocused" ->
+                    {
+                        final Boolean isFocused = Selenide.executeJavaScript(
+                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                el);
+                        if (Boolean.TRUE.equals(isFocused))
+                        {
+                            el.shouldNotBe(Condition.focused);
+                        }
+                    }
+                    case "exists" -> el.should(Condition.exist);
+                    case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                    default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                }
+
+                final ObjectNode res = successNode("assert_element_state");
+                res.put("target", selector);
+                res.put("state", state);
+                res.put("negated", negated);
+                res.put("matched", true);
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    static String normalizeElementState(final String rawState)
+    {
+        if (rawState == null || rawState.isBlank())
+        {
+            return "";
+        }
+        String s = rawState.trim().toLowerCase(Locale.ROOT);
+        if (s.startsWith("[") && s.endsWith("]"))
+        {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+        return switch (s)
+        {
+            case "read-only", "read_only" -> "readonly";
+            case "not_checked", "un-checked", "unchecked" -> "unchecked";
+            case "not_selected", "un-selected", "unselected" -> "unselected";
+            case "not_exist", "not_exists", "non-existent", "absent" -> "absent";
+            case "unfocused", "not_focused" -> "unfocused";
+            case "present", "exist", "exists" -> "exists";
+            case "invisible", "hidden" -> "hidden";
+            default -> s;
+        };
+    }
+
+    private static AiTool createAssertAttributeTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert attribute on");
+        props.putObject("attribute").put("type", "string").put("description", "Name of the HTML attribute (e.g. placeholder, value, href, disabled, readonly, type, data-*)");
+        props.putObject("expectedValue").put("type", "string").put("description", "Expected attribute value. If omitted, asserts that the attribute exists.");
+        props.putObject("exact").put("type", "boolean").put("description", "Whether attribute value match must be exact (default: true)");
+        props.putObject("regex").put("type", "boolean").put("description", "Whether expectedValue is a regular expression pattern (default: false)");
+        props.putObject("negated").put("type", "boolean").put("description", "Whether to assert attribute is absent or does not match expected value (default: false)");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("selector");
+        req.add("attribute");
+
+        final ToolDefinition def = new ToolDefinition("assert_attribute", "Asserts that an element has a specified attribute and optionally verifies its value (exact, substring, or regex)", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String selector = resolveSelector(call.arguments());
+                if (selector == null || selector.isBlank())
+                {
+                    throw new AssertionError("assert_attribute requires a 'selector' argument");
+                }
+
+                final String attrName;
+                if (call.arguments().hasNonNull("attribute") && !call.arguments().path("attribute").asText().isBlank())
+                {
+                    attrName = call.arguments().path("attribute").asText().trim();
+                }
+                else if (call.arguments().hasNonNull("attr") && !call.arguments().path("attr").asText().isBlank())
+                {
+                    attrName = call.arguments().path("attr").asText().trim();
+                }
+                else if (call.arguments().hasNonNull("name") && !call.arguments().path("name").asText().isBlank())
+                {
+                    attrName = call.arguments().path("name").asText().trim();
+                }
+                else
+                {
+                    throw new AssertionError("assert_attribute requires an 'attribute' argument");
+                }
+
+                final String rawExpectedValue;
+                if (call.arguments().hasNonNull("expectedValue"))
+                {
+                    rawExpectedValue = call.arguments().path("expectedValue").asText();
+                }
+                else if (call.arguments().hasNonNull("value"))
+                {
+                    rawExpectedValue = call.arguments().path("value").asText();
+                }
+                else if (call.arguments().hasNonNull("expected"))
+                {
+                    rawExpectedValue = call.arguments().path("expected").asText();
+                }
+                else
+                {
+                    rawExpectedValue = null;
+                }
+
+                final boolean exact = call.arguments().path("exact").asBoolean(true);
+                final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
+
+                final SelenideElement el = findElement(selector);
+
+                if (rawExpectedValue != null)
+                {
+                    final String expectedValue = regex ? cleanRegexPattern(rawExpectedValue) : unescapeLiteralText(rawExpectedValue);
+                    if (negated)
+                    {
+                        if (regex)
+                        {
+                            el.shouldNotHave(Condition.attributeMatching(attrName, expectedValue));
+                        }
+                        else if (exact)
+                        {
+                            el.shouldNotHave(Condition.attribute(attrName, expectedValue));
+                        }
+                        else
+                        {
+                            el.shouldNotHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                        }
+                    }
+                    else
+                    {
+                        if (regex)
+                        {
+                            el.shouldHave(Condition.attributeMatching(attrName, expectedValue));
+                        }
+                        else if (exact)
+                        {
+                            el.shouldHave(Condition.attribute(attrName, expectedValue));
+                        }
+                        else
+                        {
+                            el.shouldHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                        }
+                    }
+                }
+                else
+                {
+                    if (negated)
+                    {
+                        el.shouldNotHave(Condition.attribute(attrName));
+                    }
+                    else
+                    {
+                        el.shouldHave(Condition.attribute(attrName));
+                    }
+                }
+
+                final ObjectNode res = successNode("assert_attribute");
+                res.put("target", selector);
+                res.put("attribute", attrName);
+                if (rawExpectedValue != null)
+                {
+                    res.put("expectedValue", rawExpectedValue);
+                    res.put("exact", exact);
+                    res.put("regex", regex);
+                }
+                res.put("negated", negated);
+                res.put("matched", true);
+                return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
@@ -2274,6 +2878,14 @@ public final class BrowserToolProvider
                             try {
                                 candidates = Array.from(document.querySelectorAll(sel));
                             } catch(e) {}
+                            if (candidates.length === 0) {
+                                try {
+                                    var caseInsensitiveSel = sel.replace(/\\[([a-zA-Z0-9_:-]+[~|^$*]?=(?:"[^"]*"|'[^']*'|[^\\]\\s]+))\\]/g, '[$1 i]');
+                                    if (caseInsensitiveSel !== sel) {
+                                        candidates = Array.from(document.querySelectorAll(caseInsensitiveSel));
+                                    }
+                                } catch(e) {}
+                            }
                         } else {
                             candidates = Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], label, h1, h2, h3, h4, p, span, div'));
                         }
@@ -2353,6 +2965,22 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), rootNode.toString());
             }
         };
+    }
+
+    /**
+     * Converts CSS attribute selectors (e.g. {@code [name*="exp"]}) into case-insensitive
+     * selectors (e.g. {@code [name*="exp" i]}) per CSS Selectors Level 4.
+     *
+     * @param selector the input CSS selector
+     * @return the case-insensitive selector if attribute selectors are present, or original selector
+     */
+    public static String toCaseInsensitiveAttributeSelector(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return selector;
+        }
+        return selector.replaceAll("\\[([a-zA-Z0-9_:-]+[~|^$*]?=(?:\"[^\"]*\"|'[^']*'|[^\\]\\s]+))\\]", "[$1 i]");
     }
 
     private static AiTool createInspectTool()

@@ -32,6 +32,7 @@ import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
@@ -220,6 +221,63 @@ public class AgentToolLoopStepTest
     }
 
     @Test
+    public void testTokenBudgetExceededInCompoundStepPartitionsExecutedActionsAndSetsDurations() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_fill", "Fills input", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Filled input");
+            }
+        });
+
+        final PlaybookStep parent = new PlaybookStep("Locate promo code input:");
+        parent.setStartTimeMs(System.currentTimeMillis() - 100);
+        final PlaybookStep sub1 = new PlaybookStep("Type FREEGIFT");
+        final PlaybookStep sub2 = new PlaybookStep("Verify discount applied");
+        parent.setSubSteps(List.of(sub1, sub2));
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Locate promo code input");
+        this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Type FREEGIFT", "Verify discount applied"));
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("{\"thought\":\"typing\",\"tool_call\":{\"name\":\"browser_fill\",\"arguments\":{\"selector\":\"#promo\",\"text\":\"FREEGIFT\"}}}", new TokenUsage(10, 10, 20), "mock");
+            }
+            throw new TokenBudgetExceededException(TokenBudgetExceededException.BudgetType.TOTAL, 105000, 100000);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
+
+        // Verify that despite the TokenBudgetExceededException, actions and durations were partitioned
+        Assertions.assertNotNull(parent.getActions());
+        Assertions.assertEquals(1, parent.getActions().size());
+        Assertions.assertEquals(1, sub1.getActions().size());
+        Assertions.assertEquals("TYPE", sub1.getActions().get(0).getType());
+        Assertions.assertNotNull(parent.getDurationMs());
+        Assertions.assertTrue(parent.getDurationMs() > 0);
+        Assertions.assertNotNull(sub1.getDurationMs());
+        Assertions.assertTrue(sub1.getDurationMs() > 0);
+        Assertions.assertNotNull(sub2.getDurationMs());
+        Assertions.assertTrue(sub2.getDurationMs() > 0);
+    }
+
+    @Test
     public void testStopCriterion5TimeoutExceededThrowsPipelineException()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
@@ -324,7 +382,7 @@ public class AgentToolLoopStepTest
             }
         });
 
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click the button");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -444,7 +502,7 @@ public class AgentToolLoopStepTest
             }
         });
 
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.NAVIGATE);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.NAVIGATE);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "open https://example.com");
 
         final AgentLoopLlmCaller caller = (req, ctx) -> {
@@ -486,7 +544,7 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<button id='submit-btn'>Submit</button>", Collections.emptyList(), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click Submit");
 
         final AgentLoopLlmCaller caller = (req, ctx) -> {
@@ -923,7 +981,7 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<div class='visual-layout'>Banner</div>", Collections.emptyList(), "DOM_VISUAL"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify banner layout (visual)");
 
@@ -936,7 +994,7 @@ public class AgentToolLoopStepTest
             Assertions.assertTrue(userContent.contains("### Current Page State & Interactive Elements:"));
             Assertions.assertTrue(userContent.contains("<div class='visual-layout'>Banner</div>"));
             Assertions.assertTrue(userContent.contains("### Visual Inspection Directive:"));
-            Assertions.assertTrue(req.messages().get(0).content().contains("5. VISUAL VERIFICATIONS & CHECKS:"));
+            Assertions.assertTrue(req.messages().get(0).content().contains("5. VISUAL CHECKS:"));
             return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock", List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Banner layout verified"))));
         };
 
@@ -954,7 +1012,7 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("Page URL: https://example.com\nPage Title: Test\n", Collections.emptyList(), "h1"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
 
         final PlaybookStep visualStep = new PlaybookStep("There is a green checkmark in the middle of the screen (visual).");
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, visualStep);
@@ -1038,7 +1096,7 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<button id='btn'>Click Me</button>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64")), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click button");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -1121,7 +1179,7 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div data-ai='zip'>Shipping Zip Code: 12345</div>", List.of(new SutAttachment("image/png", "screenshot", "turn2Base64")), "DOM_STANDARD"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Submit order and check zip code");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -1200,7 +1258,7 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div id='rich'>Rich DOM with all computed styles</div>", Collections.emptyList(), "DOM_RICH"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.LEAN);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Inspect complex DOM layout");
 
@@ -1260,7 +1318,7 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<div data-ai='zip'>Shipping Zip Code: 12345</div>", Collections.emptyList(), "DOM_STANDARD"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Assert shipping zip code is 12345");
 
         final StepStats stats = new StepStats("Assert shipping zip code is 12345", System.currentTimeMillis());
@@ -1508,7 +1566,7 @@ public class AgentToolLoopStepTest
             }
         });
 
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Assert order number is displayed");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -1581,7 +1639,7 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div id='fullDom'>Huge DOM</div>", Collections.emptyList(), "DOM_STANDARD"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.NAVIGATE);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.NAVIGATE);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Open https://example.com");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -1595,9 +1653,13 @@ public class AgentToolLoopStepTest
             if (t == 2)
             {
                 final List<ChatMessage> messages = req.messages();
+                final ChatMessage toolMsg = messages.get(messages.size() - 2);
+                Assertions.assertEquals(Role.TOOL, toolMsg.role());
+                Assertions.assertTrue(toolMsg.content().contains("\"status\":\"SUCCESS\""));
+
                 final ChatMessage latestMsg = messages.get(messages.size() - 1);
-                Assertions.assertEquals(Role.TOOL, latestMsg.role());
-                Assertions.assertTrue(latestMsg.content().contains("\"status\":\"SUCCESS\""));
+                Assertions.assertEquals(Role.USER, latestMsg.role());
+                Assertions.assertTrue(latestMsg.content().contains("Note: The requested action has been executed."));
 
                 for (final ChatMessage msg : messages)
                 {
@@ -1621,7 +1683,7 @@ public class AgentToolLoopStepTest
 
         Assertions.assertEquals(2, turn.get());
         Assertions.assertEquals("Opened site", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
-        Assertions.assertEquals(ContextLevel.MINIMAL, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+        Assertions.assertEquals(ContextLevel.LEAN, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
 
     @Test
@@ -1681,10 +1743,11 @@ public class AgentToolLoopStepTest
         });
 
         final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>Blank before nav</div>", Collections.emptyList(), "DOM_LIGHT"));
         executor.enqueueState(new BrowserSutState("<a id='login'>Login</a>", Collections.emptyList(), "DOM_LIGHT"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.NAVIGATE);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.NAVIGATE);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Open https://example.com and click Login");
         this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Open https://example.com", "Click Login"));
 
@@ -1726,17 +1789,18 @@ public class AgentToolLoopStepTest
     @Test
     public void testPolicyViolationThrowsAssertionErrorImmediately()
     {
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
-        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify order total is $50");
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click checkout button");
 
         final AgentLoopLlmCaller caller = (req, ctx) ->
-                new LlmResponse("{\"thought\":\"clicking button during assert\",\"tool_call\":{\"name\":\"browser_click\",\"arguments\":{\"selector\":\"#btn\"}}}",
+                new LlmResponse("{\"thought\":\"navigating directly instead of clicking UI element\",\"tool_call\":{\"name\":\"browser_navigate\",\"arguments\":{\"url\":\"https://example.com/checkout\"}}}",
                         new TokenUsage(10, 10, 20), "mock");
 
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
 
         final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
         Assertions.assertTrue(thrown.getMessage().contains("Policy violation"));
+        Assertions.assertTrue(thrown.getMessage().contains("Journey Fidelity Violation"));
     }
 
     @Test
@@ -1841,7 +1905,7 @@ public class AgentToolLoopStepTest
 
         // Milestones: 2 milestones. Configured maxTurns = 2.
         // Effective max turns should be: 2 + (2 * 3) = 8.
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Compound step");
         this.context.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, List.of("Milestone 1", "Milestone 2"));
 
@@ -1912,7 +1976,7 @@ public class AgentToolLoopStepTest
         parent.getSubSteps().add(new PlaybookStep("submit and assert bonus gift"));
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, parent.getFullInstruction());
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
 
         final AgentLoopLlmCaller caller = (req, ctx) ->
         {
@@ -1955,7 +2019,7 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<canvas id='myCanvas'></canvas>", Collections.emptyList(), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click canvas button");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -2016,7 +2080,7 @@ public class AgentToolLoopStepTest
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<canvas id='myCanvas'></canvas>", Collections.emptyList(), "DOM_LIGHT"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.CLICK);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.CLICK);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click button inside canvas");
 
         final AtomicInteger turn = new AtomicInteger(0);
@@ -2082,7 +2146,7 @@ public class AgentToolLoopStepTest
         executor.enqueueState(new BrowserSutState("<div>after tool</div>", Collections.emptyList(), "DOM_LIGHT"));
 
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
-        this.context.getTransientData().put(ExecutionContext.KEY_PESAP_INTENT, SemanticIntent.ASSERT);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.ASSERT);
         final PlaybookStep playbookStep = new PlaybookStep("Verify checkmark on page (visual: full)");
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
@@ -2114,6 +2178,353 @@ public class AgentToolLoopStepTest
         {
             Assertions.assertTrue(isFullPage, "Every captured state in a full-page visual step turn must be full-page.");
         }
+    }
+
+    @Test
+    public void testMultiFieldActionInstructionReceivesRefinedTurnPromptAndAllowsSequentialExecution() throws Exception
+    {
+        final ObjectNode fillSchema = MAPPER.createObjectNode();
+        fillSchema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input field", fillSchema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Filled " + call.arguments().get("selector").asText());
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber'/><input id='cardExpiry'/><input id='cardCvv'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn1Base64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber' value='4111 1111 1111 1111'/><input id='cardExpiry'/><input id='cardCvv'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn2Base64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber' value='4111 1111 1111 1111'/><input id='cardExpiry' value='12/29'/><input id='cardCvv'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn3Base64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<input id='cardNumber' value='4111 1111 1111 1111'/><input id='cardExpiry' value='12/29'/><input id='cardCvv' value='111'/>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn4Base64")), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.TYPE);
+        final String instruction = "Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.";
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, instruction);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Verify operating rule 4 in system prompt mentions completing all explicitly requested actions/fields
+                final String systemPrompt = req.messages().get(0).content();
+                Assertions.assertTrue(systemPrompt.contains("once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied"));
+
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "fill", MAPPER.createObjectNode()
+                                .put("selector", "#cardNumber")
+                                .put("text", "4111 1111 1111 1111"))));
+            }
+            if (t == 2)
+            {
+                // Verify turn 2 prompt contains the refined continuation guidance for multi-field instructions
+                final List<ChatMessage> messages = req.messages();
+                final ChatMessage latestUserMsg = messages.get(messages.size() - 1);
+                Assertions.assertTrue(latestUserMsg.content().contains("If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now"));
+                Assertions.assertTrue(latestUserMsg.content().contains("If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions."));
+
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-2", "fill", MAPPER.createObjectNode()
+                                .put("selector", "#cardExpiry")
+                                .put("text", "12/29"))));
+            }
+            if (t == 3)
+            {
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-3", "fill", MAPPER.createObjectNode()
+                                .put("selector", "#cardCvv")
+                                .put("text", "111"))));
+            }
+            if (t == 4)
+            {
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-4", "complete_step", MAPPER.createObjectNode().put("summary", "Payment details entered"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(4, turn.get(), "Multi-field action instruction must be allowed to complete across turns without premature abort.");
+        Assertions.assertEquals("Payment details entered", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    @Test
+    public void testCohesiveFormInputBatchExecutesAllInputsInSingleTurn() throws Exception
+    {
+        final List<String> filledFields = new ArrayList<>();
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                final String selector = call.arguments().path("selector").asText();
+                final String text = call.arguments().path("text").asText();
+                filledFields.add(selector + "=" + text);
+                return ToolResult.success(call.callId(), "Filled " + selector);
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Enter card details");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, SemanticIntent.TYPE);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION,
+                "Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Model proposes all 3 form fields + complete_step in Turn 1
+                return new LlmResponse("Entering payment details", new TokenUsage(100, 20, 120), "mock",
+                        List.of(
+                                new ToolCall("call-1", "fill", MAPPER.createObjectNode()
+                                        .put("selector", "#cardNumber")
+                                        .put("text", "4111 1111 1111 1111")),
+                                new ToolCall("call-2", "fill", MAPPER.createObjectNode()
+                                        .put("selector", "#cardExpiry")
+                                        .put("text", "12/29")),
+                                new ToolCall("call-3", "fill", MAPPER.createObjectNode()
+                                        .put("selector", "#cardCvv")
+                                        .put("text", "111")),
+                                new ToolCall("call-4", "complete_step", MAPPER.createObjectNode()
+                                        .put("summary", "Payment details entered cohesively"))
+                        ));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(1, turn.get(), "Cohesive form input batch must complete in exactly 1 turn!");
+        Assertions.assertEquals(List.of(
+                "#cardNumber=4111 1111 1111 1111",
+                "#cardExpiry=12/29",
+                "#cardCvv=111"
+        ), filledFields);
+        Assertions.assertEquals("Payment details entered cohesively",
+                this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+
+        // PlaybookStep should record all 3 form actions and tool calls (excluding complete_step)
+        Assertions.assertEquals(3, playbookStep.getActions().size());
+        Assertions.assertEquals(3, playbookStep.getToolCalls().size());
+        Assertions.assertEquals("TYPE", playbookStep.getActions().get(0).getType());
+        Assertions.assertEquals("TYPE", playbookStep.getActions().get(1).getType());
+        Assertions.assertEquals("TYPE", playbookStep.getActions().get(2).getType());
+    }
+
+    @Test
+    public void testDiscoveryToolsExcludedFromPlaybookActionsAndToolCalls() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_query_dom", "Queries DOM", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"matches\": [\"#btn\"]}");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_inspect", "Inspects element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"outerHtml\": \"<button id='btn'>Submit</button>\"}");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_click", "Clicks element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Find and click button");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Find and click button");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Discovering button", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-1", "browser_query_dom", MAPPER.createObjectNode().put("text", "Submit"))));
+            }
+            if (t == 2)
+            {
+                return new LlmResponse("Inspecting button", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-2", "browser_inspect", MAPPER.createObjectNode().put("selector", "#btn"))));
+            }
+            if (t == 3)
+            {
+                return new LlmResponse("Clicking button", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-3", "browser_click", MAPPER.createObjectNode().put("selector", "#btn")),
+                                new ToolCall("call-4", "complete_step", MAPPER.createObjectNode().put("summary", "Button clicked"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        // Discovery tools (query_dom, inspect) must NOT pollute playbook actions or toolCalls
+        Assertions.assertEquals(1, playbookStep.getActions().size(), "Only the click action should be recorded!");
+        Assertions.assertEquals("CLICK", playbookStep.getActions().get(0).getType());
+        Assertions.assertEquals(1, playbookStep.getToolCalls().size(), "Only the browser_click tool call should be recorded!");
+        Assertions.assertEquals("browser_click", playbookStep.getToolCalls().get(0).toolName());
+    }
+
+    @Test
+    public void testPartitionToolCallsAndActionsMatchesSubmitKeyword()
+    {
+        final PlaybookStep sub1 = new PlaybookStep("clear its content");
+        final PlaybookStep sub2 = new PlaybookStep("type 'FREEGIFT' into it");
+        final PlaybookStep sub3 = new PlaybookStep("Submit the promo code form.");
+        final List<PlaybookStep> subSteps = List.of(sub1, sub2, sub3);
+
+        final ToolCall fillCall = new ToolCall("c1", "fill", MAPPER.createObjectNode().put("selector", "#couponCode").put("text", "FREEGIFT"));
+        final ToolCall clickCall = new ToolCall("c2", "click", MAPPER.createObjectNode().put("selector", "#apply-promo-btn"));
+        final List<ToolCall> toolCalls = List.of(fillCall, clickCall);
+
+        AgentToolLoopStep.partitionToolCallsAndActions(subSteps, toolCalls, Collections.emptyList());
+
+        Assertions.assertEquals(1, sub1.getToolCalls().size());
+        Assertions.assertEquals("fill", sub1.getToolCalls().get(0).toolName());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub1.getStatus());
+
+        Assertions.assertEquals(0, sub2.getToolCalls().size(), "Coalesced sub-step should receive 0 calls");
+
+        Assertions.assertEquals(1, sub3.getToolCalls().size());
+        Assertions.assertEquals("click", sub3.getToolCalls().get(0).toolName());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub3.getStatus());
+    }
+
+    @Test
+    public void testStopCriterion2PreservesFailedAssertionToolCallInExecutedCalls()
+    {
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts text presence", MAPPER.createObjectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new AssertionError("Expected text 'Free Bonus Gift' was not found on page.");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Locate promo and assert bonus");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Locate promo and assert bonus");
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+            new LlmResponse("Asserting bonus gift", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-assert", "browser_assert_text", MAPPER.createObjectNode().put("text", "Free Bonus Gift"))));
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+
+        final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
+        Assertions.assertTrue(thrown.getMessage().contains("Free Bonus Gift"));
+
+        // Stop Criterion 2 must ensure the failed assertion ToolCall is preserved on the playbook step!
+        Assertions.assertFalse(playbookStep.getToolCalls().isEmpty(), "Failed assertion tool call must be preserved!");
+        Assertions.assertEquals("browser_assert_text", playbookStep.getToolCalls().get(0).toolName());
     }
 }
 

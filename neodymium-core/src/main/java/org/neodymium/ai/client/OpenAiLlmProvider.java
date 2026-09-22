@@ -66,7 +66,6 @@ public final class OpenAiLlmProvider implements LlmProvider
     private final String apiKey;
     private final String modelName;
     private final String baseUrl;
-    private final ChatModel defaultModel;
     private final ConcurrentHashMap<String, ChatModel> modelCache = new ConcurrentHashMap<>();
 
     /**
@@ -86,8 +85,6 @@ public final class OpenAiLlmProvider implements LlmProvider
 
         this.modelName = this.config.getProperty("neodymium.ai.openai.model", this.config.getModel("openai") != null ? this.config.getModel("openai") : "gpt-4o");
         this.baseUrl = this.config.getProperty("neodymium.ai.openai.baseUrl", "https://api.openai.com/v1");
-
-        this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
 
     /**
@@ -124,6 +121,13 @@ public final class OpenAiLlmProvider implements LlmProvider
             builder.reasoningEffort(effortString);
         }
 
+        if (LlmCommunicationLogger.isLoggingActive())
+        {
+            builder.logRequests(true);
+            builder.logResponses(true);
+            builder.logger(LlmCommunicationLogger.getLogger());
+        }
+
         return builder.build();
     }
 
@@ -141,13 +145,8 @@ public final class OpenAiLlmProvider implements LlmProvider
         final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
         final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
         final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
-
-        if (temp == 0.0 && timeout == 180 && schema == ResponseSchema.TEXT && effort == ReasoningEffort.MEDIUM)
-        {
-            return this.defaultModel;
-        }
-
-        final String cacheKey = String.format("%s:%.2f:%d:%s:%s", this.modelName, temp, timeout, schema.name(), effort.name());
+        final boolean isLoggingActive = LlmCommunicationLogger.isLoggingActive();
+        final String cacheKey = String.format("%s:%.2f:%d:%s:%s:%b", this.modelName, temp, timeout, schema.name(), effort.name(), isLoggingActive);
         return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout, schema, effort));
     }
 
@@ -298,7 +297,7 @@ public final class OpenAiLlmProvider implements LlmProvider
                 );
                 final ChatResponse response = activeModel.chat(chatRequest);
 
-                final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
+                final var usage = response.tokenUsage();
 
                 TokenUsage mappedUsage = null;
                 if (usage != null)
@@ -351,7 +350,6 @@ public final class OpenAiLlmProvider implements LlmProvider
             LlmCapability.TEXT_ONLY,
             LlmCapability.VISION,
             LlmCapability.EXECUTION,
-            LlmCapability.PESAP,
             LlmCapability.VERIFICATION,
             LlmCapability.LINTER
         );

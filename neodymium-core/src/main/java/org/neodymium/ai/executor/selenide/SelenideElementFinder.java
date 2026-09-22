@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.ContextLevel;
@@ -174,7 +176,9 @@ public final class SelenideElementFinder
                 }
 
                 // A. Automation ID resolution (data-ai / xc_...)
-                var aiMatch = clean.match(/(xc[a-zA-Z0-9_\\-]+)/);
+                clean = clean.replace(/#(xc[a-zA-Z0-9_\\-]+)/g, '[data-ai="$1"]');
+                var isSimple = clean.indexOf(' ') === -1 && clean.indexOf('>') === -1 && clean.indexOf('+') === -1 && clean.indexOf('~') === -1 && clean.indexOf(',') === -1;
+                var aiMatch = isSimple ? clean.match(/(xc[a-zA-Z0-9_\\-]+)/) : null;
                 if (aiMatch) {
                     var neoId = aiMatch[1];
                     for (var i = 0; i < allRoots.length; i++) {
@@ -705,7 +709,7 @@ public final class SelenideElementFinder
 
     private static SelenideElement tryResolveAutomationId(final String clean)
     {
-        final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
+        final Matcher matcher = Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
         if (!matcher.find())
         {
             return null;
@@ -713,7 +717,7 @@ public final class SelenideElementFinder
         final String neoId = matcher.group(1);
         try
         {
-            final String transformedCss = clean.replaceAll("#" + java.util.regex.Pattern.quote(neoId), "[data-ai='" + neoId + "']");
+            final String transformedCss = clean.replaceAll("#(xc[a-zA-Z0-9_\\-]+)", "[data-ai='$1']");
             ElementsCollection els = Selenide.$$(By.cssSelector(transformedCss));
             SelenideElement visible = findFirstVisible(els, clean);
             if (visible != null)
@@ -721,14 +725,7 @@ public final class SelenideElementFinder
                 return visible;
             }
 
-            els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-            visible = findFirstVisible(els, clean);
-            if (visible != null)
-            {
-                return visible;
-            }
-
-            final WebDriver driver = WebDriverRunner.getWebDriver();
+            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
             if (driver != null)
             {
                 try
@@ -740,15 +737,20 @@ public final class SelenideElementFinder
                     {
                         return visible;
                     }
-                    els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-                    visible = findFirstVisible(els, clean);
-                    if (visible != null)
-                    {
-                        return visible;
-                    }
                 }
                 catch (final AssertionError | Exception ignored)
                 {
+                }
+            }
+
+            final boolean isSimple = !clean.contains(" ") && !clean.contains(">") && !clean.contains("+") && !clean.contains("~") && !clean.contains(",");
+            if (isSimple)
+            {
+                els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
+                visible = findFirstVisible(els, clean);
+                if (visible != null)
+                {
+                    return visible;
                 }
             }
         }

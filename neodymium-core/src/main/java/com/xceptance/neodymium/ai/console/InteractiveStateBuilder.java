@@ -813,10 +813,6 @@ public final class InteractiveStateBuilder
         {
             categories.add("action", serializeCategoryUsage(metrics.getAction()));
         }
-        if (metrics.getPesap() != null)
-        {
-            categories.add("pesap", serializeCategoryUsage(metrics.getPesap()));
-        }
         if (metrics.getJudge() != null)
         {
             categories.add("judge", serializeCategoryUsage(metrics.getJudge()));
@@ -975,10 +971,6 @@ public final class InteractiveStateBuilder
         {
             obj.addProperty("escalations", step.getEscalations());
             obj.addProperty("contextLevels", step.getContextLevels());
-            obj.addProperty("pesapCalls", step.getPesapCalls());
-            obj.addProperty("pesapInputTokens", step.getPesapInputTokens());
-            obj.addProperty("pesapOutputTokens", step.getPesapOutputTokens());
-            obj.addProperty("pesapCachedTokens", step.getPesapCachedTokens());
             obj.addProperty("standardCalls", step.getStandardCalls());
             obj.addProperty("standardInputTokens", step.getStandardInputTokens());
             obj.addProperty("standardOutputTokens", step.getStandardOutputTokens());

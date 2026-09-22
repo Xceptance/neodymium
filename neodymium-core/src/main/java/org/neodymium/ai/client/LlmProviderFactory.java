@@ -36,7 +36,7 @@ public final class LlmProviderFactory
     /**
      * Creates an {@link LlmProvider} instance for a specific role based on the configuration.
      *
-     * @param role the execution role (e.g., "pesap", "execution", "vision", "audit")
+     * @param role the execution role (e.g., "execution", "vision", "audit")
      * @param config the configuration provider
      * @return the instantiated provider
      */

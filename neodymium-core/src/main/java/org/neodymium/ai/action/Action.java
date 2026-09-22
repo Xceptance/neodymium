@@ -82,6 +82,12 @@ public class Action
     @JsonProperty("isRegex")
     private boolean isRegex = false;
 
+    /**
+     * Flag indicating if the assertion is negated (e.g. asserts absence or non-matching).
+     */
+    @JsonProperty("negated")
+    private boolean negated = false;
+
     private String stepInstruction;
     private int stepLine = -1;
     private String stepFile;
@@ -141,7 +147,8 @@ public class Action
             @JsonProperty(value = "value", required = false) @JsonAlias({"values", "value", "text", "expectedText", "key"}) final Object value,
             @JsonProperty(value = "description", required = false) final String description,
             @JsonProperty(value = "reasoning", required = false) @JsonAlias({"reasoning", "thought"}) final String reasoning,
-            @JsonProperty(value = "isRegex", required = false) @JsonAlias({"isRegex", "regex"}) final Boolean isRegex)
+            @JsonProperty(value = "isRegex", required = false) @JsonAlias({"isRegex", "regex"}) final Boolean isRegex,
+            @JsonProperty(value = "negated", required = false) @JsonAlias({"negated", "not", "inverted"}) final Boolean negated)
     {
         this.type = type != null ? type : "";
         this.target = target != null ? target : "";
@@ -171,6 +178,7 @@ public class Action
         this.description = description != null ? description : "";
         this.reasoning = reasoning != null ? reasoning : "";
         this.isRegex = Boolean.TRUE.equals(isRegex);
+        this.negated = Boolean.TRUE.equals(negated);
     }
 
     /**
@@ -190,6 +198,27 @@ public class Action
     }
 
     /**
+     * Constructs a fully detailed action including regex flag with generic value object.
+     *
+     * @param type the action type (e.g. "TYPE")
+     * @param target the target selector or URL
+     * @param value the action value (String, List, or Object)
+     * @param description the human-readable description
+     * @param reasoning the reasoning of the action
+     * @param isRegex whether target is a regex pattern
+     */
+    public Action(
+            final String type,
+            final String target,
+            final Object value,
+            final String description,
+            final String reasoning,
+            final Boolean isRegex)
+    {
+        this(type, target, value, description, reasoning, isRegex, false);
+    }
+
+    /**
      * Constructs a fully detailed action.
      *
      * @param type the action type (e.g. "TYPE")
@@ -200,7 +229,7 @@ public class Action
      */
     public Action(final String type, final String target, final List<String> value, final String description, final String reasoning)
     {
-        this(type, target, value, description, reasoning, false);
+        this(type, target, (Object) value, description, reasoning, false, false);
     }
 
     /**
@@ -215,12 +244,23 @@ public class Action
      */
     public Action(final String type, final String target, final List<String> value, final String description, final String reasoning, final boolean isRegex)
     {
-        this.type = type;
-        this.target = target;
-        this.value = value != null ? new ArrayList<>(value) : new ArrayList<>();
-        this.description = description;
-        this.reasoning = reasoning;
-        this.isRegex = isRegex;
+        this(type, target, (Object) value, description, reasoning, isRegex, false);
+    }
+
+    /**
+     * Constructs a fully detailed action including regex and negated flags.
+     *
+     * @param type the action type (e.g. "TYPE")
+     * @param target the target selector or URL
+     * @param value the action values list
+     * @param description the human-readable description
+     * @param reasoning the reasoning of the action
+     * @param isRegex whether target is a regex pattern
+     * @param negated whether the assertion is negated
+     */
+    public Action(final String type, final String target, final List<String> value, final String description, final String reasoning, final boolean isRegex, final boolean negated)
+    {
+        this(type, target, (Object) value, description, reasoning, isRegex, negated);
     }
 
     /**
@@ -251,7 +291,7 @@ public class Action
      */
     public Action withTarget(final String newTarget)
     {
-        final Action copy = new Action(this.type, newTarget, this.value, this.description, this.reasoning, this.isRegex);
+        final Action copy = new Action(this.type, newTarget, this.value, this.description, this.reasoning, this.isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -285,7 +325,7 @@ public class Action
 
     public Action withIsRegex(final boolean isRegex)
     {
-        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, isRegex);
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -314,7 +354,7 @@ public class Action
     public Action withValue(final String newValue)
     {
         final List<String> newValues = newValue != null && !newValue.isEmpty() ? List.of(newValue) : List.of();
-        final Action copy = new Action(this.type, this.target, newValues, this.description, this.reasoning, this.isRegex);
+        final Action copy = new Action(this.type, this.target, newValues, this.description, this.reasoning, this.isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -342,7 +382,7 @@ public class Action
      */
     public Action withReasoning(final String newReasoning)
     {
-        final Action copy = new Action(this.type, this.target, this.value, this.description, newReasoning, this.isRegex);
+        final Action copy = new Action(this.type, this.target, this.value, this.description, newReasoning, this.isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -370,7 +410,7 @@ public class Action
      */
     public Action withDomFeatureVector(final DomFeatureVector featureVector)
     {
-        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex);
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -383,6 +423,40 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = featureVector;
+        copy.toolCall = this.toolCall;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    @JsonProperty("negated")
+    public final boolean isNegated()
+    {
+        return this.negated;
+    }
+
+    @JsonProperty("negated")
+    public final void setNegated(final boolean negated)
+    {
+        this.negated = negated;
+    }
+
+    public Action withNegated(final boolean negated)
+    {
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex, negated);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
@@ -743,6 +817,11 @@ public class Action
             case "ASSERT_URL" -> "assert_url";
             case "ASSERT_TITLE" -> "assert_title";
             case "ASSERT_TEXT" -> "assert_text";
+            case "ASSERT_ATTRIBUTE" -> "assert_attribute";
+            case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
+                 "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
+                 "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
+                 "ASSERT_ABSENT" -> "assert_element_state";
             case "ASSERT" -> {
                 if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
                 {
@@ -836,6 +915,37 @@ public class Action
                 }
             }
         }
+        else if ("assert_element_state".equals(toolName) || "browser_assert_element_state".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            final String state = actionType.startsWith("ASSERT_")
+                    ? actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT)
+                    : ((this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible");
+            args.put("state", state);
+        }
+        else if ("assert_attribute".equals(toolName) || "browser_assert_attribute".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String rawVal = this.value.get(0);
+                final int eqIdx = rawVal.indexOf('=');
+                if (eqIdx > 0)
+                {
+                    args.put("attribute", rawVal.substring(0, eqIdx).trim());
+                    String expectedVal = rawVal.substring(eqIdx + 1).trim();
+                    if ((expectedVal.startsWith("\"") && expectedVal.endsWith("\"")) || (expectedVal.startsWith("'") && expectedVal.endsWith("'")))
+                    {
+                        expectedVal = expectedVal.substring(1, expectedVal.length() - 1);
+                    }
+                    args.put("expectedValue", expectedVal);
+                }
+                else
+                {
+                    args.put("attribute", rawVal.trim());
+                }
+            }
+        }
         else if ("execute_script".equals(toolName) || "browser_execute_script".equals(toolName))
         {
             args.put("script", this.target != null ? this.target : "");
@@ -870,6 +980,11 @@ public class Action
             args.set("domFeatureVector", MAPPER.valueToTree(this.domFeatureVector));
         }
 
+        if (this.negated)
+        {
+            args.put("negated", true);
+        }
+
         return new ToolCall(UUID.randomUUID().toString(), toolName, args);
     }
 
@@ -889,6 +1004,11 @@ public class Action
         final String rawName = call.toolName() != null ? call.toolName() : "";
         final String name = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
         final JsonNode args = call.arguments();
+        final boolean negated = args != null && (args.path("negated").asBoolean(false)
+                || args.path("not").asBoolean(false)
+                || args.path("invert").asBoolean(false)
+                || args.path("inverted").asBoolean(false));
+
         final String type = switch (name)
         {
             case "navigate" -> "NAVIGATE";
@@ -907,6 +1027,50 @@ public class Action
             case "assert_count" -> "ASSERT_COUNT";
             case "assert_url" -> "ASSERT_URL";
             case "assert_title" -> "ASSERT_TITLE";
+            case "assert_element_state", "assert_state" -> {
+                final String rawState = args != null && args.hasNonNull("state")
+                        ? args.path("state").asText().trim().toUpperCase(Locale.ROOT)
+                        : "";
+                final String baseType = switch (rawState)
+                {
+                    case "VISIBLE" -> "ASSERT_VISIBLE";
+                    case "HIDDEN" -> "ASSERT_HIDDEN";
+                    case "ENABLED" -> "ASSERT_ENABLED";
+                    case "DISABLED" -> "ASSERT_DISABLED";
+                    case "EDITABLE" -> "ASSERT_EDITABLE";
+                    case "READONLY", "READ_ONLY", "READ-ONLY" -> "ASSERT_READONLY";
+                    case "CHECKED" -> "ASSERT_CHECKED";
+                    case "UNCHECKED", "NOT_CHECKED", "UN-CHECKED" -> "ASSERT_UNCHECKED";
+                    case "SELECTED" -> "ASSERT_SELECTED";
+                    case "UNSELECTED", "NOT_SELECTED", "UN-SELECTED" -> "ASSERT_UNSELECTED";
+                    case "FOCUSED" -> "ASSERT_FOCUSED";
+                    case "UNFOCUSED", "NOT_FOCUSED" -> "ASSERT_UNFOCUSED";
+                    case "EXISTS", "PRESENT" -> "ASSERT_EXISTS";
+                    case "ABSENT", "NOT_EXIST", "NOT_EXISTS", "NON-EXISTENT" -> "ASSERT_ABSENT";
+                    default -> "ASSERT";
+                };
+                if (negated)
+                {
+                    yield switch (baseType)
+                    {
+                        case "ASSERT_VISIBLE" -> "ASSERT_HIDDEN";
+                        case "ASSERT_HIDDEN" -> "ASSERT_VISIBLE";
+                        case "ASSERT_ENABLED" -> "ASSERT_DISABLED";
+                        case "ASSERT_DISABLED" -> "ASSERT_ENABLED";
+                        case "ASSERT_CHECKED" -> "ASSERT_UNCHECKED";
+                        case "ASSERT_UNCHECKED" -> "ASSERT_CHECKED";
+                        case "ASSERT_SELECTED" -> "ASSERT_UNSELECTED";
+                        case "ASSERT_UNSELECTED" -> "ASSERT_SELECTED";
+                        case "ASSERT_FOCUSED" -> "ASSERT_UNFOCUSED";
+                        case "ASSERT_UNFOCUSED" -> "ASSERT_FOCUSED";
+                        case "ASSERT_EXISTS" -> "ASSERT_ABSENT";
+                        case "ASSERT_ABSENT" -> "ASSERT_EXISTS";
+                        default -> baseType;
+                    };
+                }
+                yield baseType;
+            }
+            case "assert_attribute", "assert_attr" -> "ASSERT_ATTRIBUTE";
             case "press_key", "key_press" -> "KEY_PRESS";
             case "branch" -> "BRANCH";
             case "store" -> "STORE";
@@ -1049,6 +1213,30 @@ public class Action
             {
                 value = args.path("expectedTitle").asText();
             }
+            else if ("assert_element_state".equals(name) || "assert_state".equals(name))
+            {
+                if (args.hasNonNull("state") && !args.path("state").asText().isBlank())
+                {
+                    value = args.path("state").asText();
+                }
+            }
+            else if ("assert_attribute".equals(name) || "assert_attr".equals(name))
+            {
+                final String attr = args.hasNonNull("attribute") ? args.path("attribute").asText()
+                        : (args.hasNonNull("name") ? args.path("name").asText() : "");
+                if (args.hasNonNull("expectedValue"))
+                {
+                    value = attr + "=" + args.path("expectedValue").asText();
+                }
+                else if (args.hasNonNull("value"))
+                {
+                    value = attr + "=" + args.path("value").asText();
+                }
+                else
+                {
+                    value = attr;
+                }
+            }
             else if (args.hasNonNull("title") && !args.path("title").asText().isBlank())
             {
                 value = args.path("title").asText();
@@ -1068,6 +1256,10 @@ public class Action
                 else if ("MAX".equals(op))
                 {
                     value = "<=" + c;
+                }
+                else if ("NOT_EQUALS".equals(op) || "NOT_EQUAL".equals(op) || "NEQ".equals(op) || "NOT".equals(op) || negated)
+                {
+                    value = "!=" + c;
                 }
                 else
                 {
@@ -1124,6 +1316,11 @@ public class Action
                 case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "ASSERT_URL" -> "Assert URL '" + (value != null ? value : "") + "'";
                 case "ASSERT_TITLE" -> "Assert page title '" + (value != null ? value : "") + "'";
+                case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
+                     "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
+                     "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
+                     "ASSERT_ABSENT" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
+                case "ASSERT_ATTRIBUTE" -> "Assert attribute '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
                 case "HOVER" -> "Hover over " + target;
                 case "KEY_PRESS" -> "Press key '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
@@ -1158,7 +1355,7 @@ public class Action
 
         final boolean adjust = args != null && args.path("adjust").asBoolean(false);
 
-        final Action action = new Action(type, target, value, description, reasoning, isRegex);
+        final Action action = new Action(type, target, value, description, reasoning, isRegex, negated);
         action.setAdjust(adjust);
         action.setToolCall(call);
 

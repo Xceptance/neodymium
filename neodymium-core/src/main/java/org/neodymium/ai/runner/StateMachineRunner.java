@@ -29,6 +29,8 @@ import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
@@ -49,6 +51,7 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterException;
@@ -300,7 +303,7 @@ public final class StateMachineRunner
                     }
 
                     // Check if the current PlaybookStep is marked with a bug
-                    final org.neodymium.ai.model.PlaybookStep playbookStep = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                    final PlaybookStep playbookStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
                     if (playbookStep != null && playbookStep.isBug())
                     {
                         if (activeScope instanceof TryCatchStep tryCatch)
@@ -312,16 +315,29 @@ public final class StateMachineRunner
                         }
 
                         // Mark step status on playbook step as FAILED so recorded playbook preserves the failure
-                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
                         playbookStep.setFailed(true);
                         playbookStep.setFailureReason(e.getMessage());
+
+                        if (playbookStep.hasSubSteps())
+                        {
+                            for (final PlaybookStep child : playbookStep.getSubSteps())
+                            {
+                                if (child.isBug() || (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(tc -> tc.toolName() != null && tc.toolName().contains("assert"))))
+                                {
+                                    child.setStatus(PlaybookStepStatus.FAILED);
+                                    child.setFailed(true);
+                                    child.setFailureReason(e.getMessage());
+                                }
+                            }
+                        }
 
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         final String bugComment = playbookStep.getBugDetails();
                         final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
-                        final String resolvedBugInstruction = context.getSessionData() != null
-                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                        final String resolvedBugInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
+                            ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
                             : playbookStep.getInstruction();
                         LOGGER.info("   🐞 Expected bug hit{} on step: {}:{} ({}) - Error: {}",
                             bugStr,
@@ -359,8 +375,8 @@ public final class StateMachineRunner
                         final List<String> warnings = (List<String>) context.getTransientData()
                             .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
 
-                        final String resolvedOptInstruction = context.getSessionData() != null
-                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                        final String resolvedOptInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
+                            ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
                             : playbookStep.getInstruction();
                         final String stepStr = String.format("%s:%d (%s)",
                             playbookStep.getSourceFile(),
@@ -376,17 +392,17 @@ public final class StateMachineRunner
 
                     if (playbookStep != null)
                     {
-                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
                         playbookStep.setFailed(true);
                         playbookStep.setFailureReason(e.getMessage());
                     }
 
-                    org.neodymium.ai.event.InteractiveConsoleListener interactiveListener = null;
+                    InteractiveConsoleListener interactiveListener = null;
                     if (this.session != null && this.session.getEventBus() != null)
                     {
-                        for (final org.neodymium.ai.event.ExecutionListener listener : this.session.getEventBus().getListeners())
+                        for (final ExecutionListener listener : this.session.getEventBus().getListeners())
                         {
-                            if (listener instanceof org.neodymium.ai.event.InteractiveConsoleListener icl && icl.isInteractive())
+                            if (listener instanceof InteractiveConsoleListener icl && icl.isInteractive())
                             {
                                 interactiveListener = icl;
                                 break;
@@ -408,10 +424,10 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.PENDING);
+                                    playbookStep.setStatus(PlaybookStepStatus.PENDING);
                                     playbookStep.setFailed(false);
                                     playbookStep.setFailureReason(null);
-                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                    context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;
                             }
@@ -419,9 +435,9 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
-                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.model.ContextLevel.VISUAL_RICH);
-                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                    playbookStep.setStatus(PlaybookStepStatus.RUNNING);
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+                                    context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;
                             }
@@ -429,7 +445,7 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
+                                    playbookStep.setStatus(PlaybookStepStatus.SKIPPED);
                                 }
                                 continue mainLoop;
                             }
@@ -498,6 +514,24 @@ public final class StateMachineRunner
                             root = root.getCause();
                         }
                         currentStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                    }
+                    if (currentStep.hasSubSteps())
+                    {
+                        for (final PlaybookStep sub : currentStep.getSubSteps())
+                        {
+                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
+                            {
+                                sub.setStatus(PlaybookStepStatus.FAILED);
+                                sub.setFailed(true);
+                                sub.setFailureReason(currentStep.getFailureReason());
+                            }
+                        }
+                    }
+                    if (currentStep.getParent() != null)
+                    {
+                        currentStep.getParent().setStatus(PlaybookStepStatus.FAILED);
+                        currentStep.getParent().setFailed(true);
+                        currentStep.getParent().setFailureReason(currentStep.getFailureReason());
                     }
                     final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     if (executor != null && this.session != null && this.session.getEventBus() != null)
@@ -619,19 +653,16 @@ public final class StateMachineRunner
         final Integer stdCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
         final Integer judgeCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
         final Integer verifCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
-        final Integer pesapCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
         final Integer rcaCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
 
         final TokenUsage standardUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
         final TokenUsage judgeUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
         final TokenUsage verificationUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
-        final TokenUsage pesapUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
         final TokenUsage rcaUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
 
         final int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
         final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
         final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
-        final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
         final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
 
         final long standardIn = standardUsage != null ? standardUsage.inputTokenCount() : 0;
@@ -649,20 +680,15 @@ public final class StateMachineRunner
         final long verificationCached = verificationUsage != null ? verificationUsage.cachedTokenCount() : 0;
         final long verificationTotal = verificationIn + verificationOut;
 
-        final long pesapIn = pesapUsage != null ? pesapUsage.inputTokenCount() : 0;
-        final long pesapOut = pesapUsage != null ? pesapUsage.outputTokenCount() : 0;
-        final long pesapCached = pesapUsage != null ? pesapUsage.cachedTokenCount() : 0;
-        final long pesapTotal = pesapIn + pesapOut;
-
         final long rcaIn = rcaUsage != null ? rcaUsage.inputTokenCount() : 0;
         final long rcaOut = rcaUsage != null ? rcaUsage.outputTokenCount() : 0;
         final long rcaCached = rcaUsage != null ? rcaUsage.cachedTokenCount() : 0;
         final long rcaTotal = rcaIn + rcaOut;
 
-        final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls;
-        final long totalIn = standardIn + judgeIn + verificationIn + pesapIn + rcaIn;
-        final long totalOut = standardOut + judgeOut + verificationOut + pesapOut + rcaOut;
-        final long totalCached = standardCached + judgeCached + verificationCached + pesapCached + rcaCached;
+        final int totalCalls = standardCalls + judgeCalls + verificationCalls + rcaCalls;
+        final long totalIn = standardIn + judgeIn + verificationIn + rcaIn;
+        final long totalOut = standardOut + judgeOut + verificationOut + rcaOut;
+        final long totalCached = standardCached + judgeCached + verificationCached + rcaCached;
         final long totalTokens = totalIn + totalOut;
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
@@ -689,8 +715,6 @@ public final class StateMachineRunner
                 String.format("%,d", totalIn),
                 String.format("%,d", totalOut),
                 String.format("%,d", totalCached));
-        LOGGER.debug("║   ├─ PESAP:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
-                String.format("%,d", pesapCalls), String.format("%,d", pesapTotal), String.format("%,d", pesapIn), String.format("%,d", pesapOut), String.format("%,d", pesapCached));
         LOGGER.debug("║   ├─ Action:            {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", standardCalls), String.format("%,d", standardTotal), String.format("%,d", standardIn), String.format("%,d", standardOut), String.format("%,d", standardCached));
         LOGGER.debug("║   ├─ Judge:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
@@ -953,15 +977,6 @@ public final class StateMachineRunner
             LOGGER.debug("{}Actions:        0", indent);
         }
 
-        if (stats.getPesapCalls() > 0)
-        {
-            LOGGER.debug("{}PESAP Calls:        {} (Tokens: {} in ({} cached) → {} out)",
-                indent,
-                stats.getPesapCalls(),
-                stats.getPesapInputTokens(),
-                stats.getPesapCachedTokens(),
-                stats.getPesapOutputTokens());
-        }
         if (stats.getStandardCalls() > 0)
         {
             LOGGER.debug("{}Standard Calls:     {} (Tokens: {} in ({} cached) → {} out)",

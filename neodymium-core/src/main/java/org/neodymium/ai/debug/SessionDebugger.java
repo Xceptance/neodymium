@@ -129,12 +129,6 @@ public final class SessionDebugger
             result.put("verification", ver);
         }
 
-        // 4. Extract PESAP token metrics
-        final TokenUsage pesap = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
-        if (pesap != null)
-        {
-            result.put("pesap", pesap);
-        }
 
         // 5. Extract Quality Judge token metrics
         final TokenUsage judge = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);

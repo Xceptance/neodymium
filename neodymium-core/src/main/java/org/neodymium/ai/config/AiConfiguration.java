@@ -393,7 +393,7 @@ public final class AiConfiguration
     /**
      * Resolves model name for a specific role, falling back to global default.
      *
-     * @param role the execution role (e.g., "pesap", "execution", "vision", "audit")
+     * @param role the execution role (e.g., "execution", "vision", "audit")
      * @return the resolved model name
      */
     public String getModel(final String role)
@@ -585,7 +585,57 @@ public final class AiConfiguration
      */
     public double getVisualSsimMinScore()
     {
-        return getDouble("neodymium.ai.ssim.minScore", 0.99);
+        final String[] keys = new String[]{"neodymium.ai.ssim.minScore", "neodymium.ai.visual.threshold", "neodymium.ai.visual.minScore"};
+
+        // 1. Thread data / dynamic test overrides
+        for (final String key : keys)
+        {
+            try
+            {
+                final Object threadVal = Neodymium.getData().get(key);
+                if (threadVal != null)
+                {
+                    return Double.parseDouble(String.valueOf(threadVal).trim());
+                }
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        // 2. System property overrides
+        for (final String key : keys)
+        {
+            final String sysVal = System.getProperty(key);
+            if (sysVal != null && !sysVal.isBlank())
+            {
+                try
+                {
+                    return Double.parseDouble(sysVal.trim());
+                }
+                catch (final NumberFormatException ignored)
+                {
+                }
+            }
+        }
+
+        // 3. Properties files / configured defaults
+        for (final String key : keys)
+        {
+            final String fileVal = this.properties.getProperty(key);
+            if (fileVal != null && !fileVal.isBlank())
+            {
+                try
+                {
+                    return Double.parseDouble(fileVal.trim());
+                }
+                catch (final NumberFormatException ignored)
+                {
+                }
+            }
+        }
+
+        return 0.99;
     }
 
     /**
@@ -680,16 +730,6 @@ public final class AiConfiguration
     public boolean isLocatorImproverEnabled()
     {
         return getBoolean("neodymium.ai.locatorImprover.enabled", true);
-    }
-
-    /**
-     * Checks if PESAP (Pre-Execution Step Analysis & Partitioning) is enabled.
-     *
-     * @return true if PESAP is enabled (default: true), false otherwise
-     */
-    public boolean isPesapEnabled()
-    {
-        return getBoolean("neodymium.ai.pesap.enabled", true);
     }
 
     /**
@@ -860,6 +900,43 @@ public final class AiConfiguration
     public boolean isConsoleExecutionLogsEnabled()
     {
         return getBoolean("neodymium.ai.consoleExecutionLogs", true);
+    }
+
+    /**
+     * Checks whether raw LLM communication wire logging (target/neodymium-ai-communication.log) is enabled.
+     * Disabled by default.
+     *
+     * @return true if LLM communication wire logging is enabled
+     */
+    public boolean isCommunicationLogEnabled()
+    {
+        for (final String key : new String[] {
+            "neodymium.ai.communicationLog.enabled",
+            "neodymium.ai.communicationLog",
+            "neodymium.ai.communication.log"
+        })
+        {
+            final String sysVal = System.getProperty(key);
+            if (sysVal != null)
+            {
+                return Boolean.parseBoolean(sysVal.trim());
+            }
+        }
+
+        for (final String key : new String[] {
+            "neodymium.ai.communicationLog.enabled",
+            "neodymium.ai.communicationLog",
+            "neodymium.ai.communication.log"
+        })
+        {
+            final String val = getProperty(key, null);
+            if (val != null)
+            {
+                return Boolean.parseBoolean(val.trim());
+            }
+        }
+
+        return false;
     }
 
     /**

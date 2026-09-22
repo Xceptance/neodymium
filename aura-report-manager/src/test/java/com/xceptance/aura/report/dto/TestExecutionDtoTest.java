@@ -52,11 +52,10 @@ public class TestExecutionDtoTest
             + "\"title\":\"search\","
             + "\"llmResponsibility\":{"
             + "  \"action\":{\"calls\":3,\"inputTokens\":800,\"outputTokens\":80,\"cachedTokens\":0,\"totalTokens\":880,\"estimatedCostUsd\":0.0012},"
-            + "  \"pesap\":{\"calls\":1,\"inputTokens\":200,\"outputTokens\":20,\"cachedTokens\":0,\"totalTokens\":220,\"estimatedCostUsd\":0.0001},"
             + "  \"judge\":{\"calls\":0,\"inputTokens\":0,\"outputTokens\":0,\"cachedTokens\":0,\"totalTokens\":0,\"estimatedCostUsd\":0.0},"
             + "  \"verification\":{\"calls\":0,\"inputTokens\":0,\"outputTokens\":0,\"cachedTokens\":0,\"totalTokens\":0,\"estimatedCostUsd\":0.0},"
             + "  \"visualRca\":{\"calls\":1,\"inputTokens\":100,\"outputTokens\":10,\"cachedTokens\":0,\"totalTokens\":110,\"estimatedCostUsd\":0.0},"
-            + "  \"total\":{\"calls\":5,\"inputTokens\":1100,\"outputTokens\":110,\"cachedTokens\":0,\"totalTokens\":1210,\"estimatedCostUsd\":0.0013}"
+            + "  \"total\":{\"calls\":4,\"inputTokens\":900,\"outputTokens\":90,\"cachedTokens\":0,\"totalTokens\":990,\"estimatedCostUsd\":0.0012}"
             + "}"
             + "}";
 
@@ -64,7 +63,6 @@ public class TestExecutionDtoTest
         final String responsibility = dto.getLlmResponsibilityJson();
         assertNotNull(responsibility);
         assertTrue(responsibility.contains("\"action\""), "responsibility must contain 'action' bucket");
-        assertTrue(responsibility.contains("\"pesap\""), "responsibility must contain 'pesap' bucket");
         assertTrue(responsibility.contains("\"judge\""), "responsibility must contain 'judge' bucket");
         assertTrue(responsibility.contains("\"verification\""), "responsibility must contain 'verification' bucket");
         assertTrue(responsibility.contains("\"visualRca\""), "responsibility must contain 'visualRca' bucket");

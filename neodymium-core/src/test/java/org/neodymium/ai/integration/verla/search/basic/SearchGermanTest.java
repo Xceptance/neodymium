@@ -76,22 +76,22 @@ public class SearchGermanTest extends BaseAiTest
     }
 
     /**
-     * Live recording mode execution for dataset 'perfect'.
+     * Live recording mode execution for dataset 'DE'.
      */
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("perfect")
+    @AiDataSet("DE")
     @AiPlaybook
     public void live()
     {
     }
 
     /**
-     * Strict replay mode execution using recorded playbook for dataset 'perfect'.
+     * Strict replay mode execution using recorded playbook for dataset 'DE'.
      */
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("perfect")
+    @AiDataSet("DE")
     @AiPlaybook(recordingMethod = "live")
     public void replay()
     {

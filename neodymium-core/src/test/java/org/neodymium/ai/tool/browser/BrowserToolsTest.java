@@ -1026,6 +1026,79 @@ public class BrowserToolsTest
         Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "Items in Cart: 5", false, false));
         Assertions.assertTrue(BrowserToolProvider.matchesElementText(mockElement, "Items in Cart: 5", false, true));
     }
+
+    @Test
+    public void testToCaseInsensitiveAttributeSelector()
+    {
+        final String input = "input[name*=\"exp\"], input[name*='cvv']";
+        final String expected = "input[name*=\"exp\" i], input[name*='cvv' i]";
+        Assertions.assertEquals(expected, BrowserToolProvider.toCaseInsensitiveAttributeSelector(input));
+
+        Assertions.assertEquals("#cardNumber", BrowserToolProvider.toCaseInsensitiveAttributeSelector("#cardNumber"));
+        Assertions.assertNull(BrowserToolProvider.toCaseInsensitiveAttributeSelector(null));
+        Assertions.assertEquals("", BrowserToolProvider.toCaseInsensitiveAttributeSelector(""));
+    }
+
+    @Test
+    public void testAssertToolsNegationSchemaProperties()
+    {
+        final List<String> assertTools = List.of(
+                "assert_url",
+                "assert_title",
+                "assert_text",
+                "assert_attribute",
+                "assert_count",
+                "assert_element_state"
+        );
+
+        for (final String toolName : assertTools)
+        {
+            final Optional<AiTool> toolOpt = this.registry.getTool(toolName);
+            Assertions.assertTrue(toolOpt.isPresent(), "Tool must be registered: " + toolName);
+
+            final JsonNode schema = toolOpt.get().getDefinition().parametersSchema();
+            Assertions.assertNotNull(schema.get("properties").get("negated"),
+                    "Tool '" + toolName + "' must have 'negated' property in JSON schema");
+            Assertions.assertEquals("boolean", schema.get("properties").get("negated").get("type").asText());
+        }
+
+        // Verify assert_element_state includes unfocused
+        final JsonNode stateEnum = this.registry.getTool("assert_element_state").get().getDefinition().parametersSchema()
+                .get("properties").get("state").get("enum");
+        boolean hasUnfocused = false;
+        for (final JsonNode state : stateEnum)
+        {
+            if ("unfocused".equals(state.asText()))
+            {
+                hasUnfocused = true;
+                break;
+            }
+        }
+        Assertions.assertTrue(hasUnfocused, "assert_element_state schema must include 'unfocused'");
+
+        // Verify assert_count includes NOT_EQUALS
+        final JsonNode opEnum = this.registry.getTool("assert_count").get().getDefinition().parametersSchema()
+                .get("properties").get("operator").get("enum");
+        boolean hasNotEquals = false;
+        for (final JsonNode op : opEnum)
+        {
+            if ("NOT_EQUALS".equals(op.asText()))
+            {
+                hasNotEquals = true;
+                break;
+            }
+        }
+        Assertions.assertTrue(hasNotEquals, "assert_count schema must include 'NOT_EQUALS'");
+    }
+
+    @Test
+    public void testNormalizeElementStateUnfocused()
+    {
+        Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("unfocused"));
+        Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("not_focused"));
+        Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("[unfocused]"));
+        Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("UNFOCUSED"));
+    }
 }
 
 

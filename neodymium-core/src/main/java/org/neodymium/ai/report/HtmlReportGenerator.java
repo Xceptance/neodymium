@@ -164,7 +164,6 @@ public final class HtmlReportGenerator
         appendHtmlCategoryRow(sb, "<strong>Total</strong>", m.getTotal(), "row-total");
         appendHtmlCategoryRow(sb, "Playbook Pre-Flight Linter", m.getLinter(), "");
         appendHtmlCategoryRow(sb, "Playbook Post-Flight Linter", m.getPostFlightLinter(), "");
-        appendHtmlCategoryRow(sb, "PESAP (Pre-Execution Semantic Anchor)", m.getPesap(), "");
         appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
         appendHtmlCategoryRow(sb, "Self-Judging Validation", m.getJudge(), "");
         appendHtmlCategoryRow(sb, "Semantic Outcome Verification", m.getVerification(), "");
@@ -549,11 +548,7 @@ public final class HtmlReportGenerator
 
                 final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
                 final String phaseRoleHtml;
-                if ("PESAP".equalsIgnoreCase(cap))
-                {
-                    phaseRoleHtml = "<span class=\"badge-phase pesap\" title=\"Pre-Execution Semantic Action Prediction / Intent Classification\">Intent (PESAP)</span>";
-                }
-                else if ("VERIFICATION".equalsIgnoreCase(cap))
+                if ("VERIFICATION".equalsIgnoreCase(cap))
                 {
                     phaseRoleHtml = "<span class=\"badge-phase continuation\" title=\"Post-Execution Outcome Verification\">Verification</span>";
                 }
@@ -775,7 +770,7 @@ public final class HtmlReportGenerator
     {
         final boolean isSub = subIndex >= 0;
         final String footerClass = isSub ? "sub-step-footer" : "step-card-footer";
-        int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
+        int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
         int actionCount = step.getActions().size();
         int screenshotCount = step.getScreenshots().size();
 
@@ -800,7 +795,7 @@ public final class HtmlReportGenerator
                 int aggregatedLlmCount = 0;
                 for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
                 {
-                    aggregatedLlmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getPesapCalls() + sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
+                    aggregatedLlmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
                 }
                 if (aggregatedLlmCount > 0)
                 {
@@ -809,7 +804,7 @@ public final class HtmlReportGenerator
             }
         }
 
-        if (actionCount > 0 || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || screenshotCount > 0 || step.getSsimScore() != null || step.getVerificationResult() != null)
+        if (actionCount > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || screenshotCount > 0 || step.getSsimScore() != null || step.getVerificationResult() != null)
         {
             sb.append("          <div class=\"").append(footerClass).append("\">\n");
             if (step.getSsimScore() != null)
@@ -1366,9 +1361,7 @@ public final class HtmlReportGenerator
 
                         var cap = (call.capability || 'TEXT').toUpperCase();
                         var callTitle;
-                        if (cap === 'PESAP') {
-                            callTitle = '<span class="badge-phase pesap">Intent (PESAP)</span>';
-                        } else if (cap === 'VERIFICATION') {
+                        if (cap === 'VERIFICATION') {
                             callTitle = '<span class="badge-phase continuation">Verification</span>';
                         } else if (cap === 'JUDGE') {
                             callTitle = '<span class="badge-phase judge">Quality Judge</span>';
@@ -1682,28 +1675,7 @@ public final class HtmlReportGenerator
                     var actionCallIdx = 0;
                     llmCalls.forEach(function(call, ci) {
                         var callNum = ci + 1;
-                        if (call.capability === 'PESAP') {
-                            var pesapIntent = step.semanticIntent || '-';
-                            var pesapContext = 'LEAN';
-                            var pesapFast = true;
-                            if (call.responseContent) {
-                                var pData = parseJsonResponse(call.responseContent);
-                                if (pData) {
-                                    if (pData.i) pesapIntent = pData.i;
-                                    if (pData.c) pesapContext = pData.c;
-                                    if (pData.jm !== undefined) pesapFast = !pData.jm;
-                                }
-                            }
-                            var pCard = document.createElement('div');
-                            pCard.className = 'reasoning-card';
-                            pCard.innerHTML = '<div class="reasoning-title">⚡ Call #' + callNum + ' &bull; PESAP Planning Intent <span class="badge-phase pesap">PESAP</span></div>';
-                            var pBody = document.createElement('div');
-                            pBody.className = 'reasoning-body';
-                            pBody.textContent = 'Intent: ' + pesapIntent + ' | Selected Context: ' + pesapContext + ' | Routing: ' + (pesapFast ? 'Direct Action Generation' : 'Quality Judge Required');
-                            pCard.appendChild(pBody);
-                            reasPanel.appendChild(pCard);
-                            notesCount++;
-                        } else if (call.capability === 'JUDGE') {
+                        if (call.capability === 'JUDGE') {
                             var jTitle = '⚖️ Call #' + callNum + ' &bull; Quality Judge Evaluation <span class="badge-phase judge">JUDGE</span>';
                             var jResp = parseJsonResponse(call.responseContent);
                             var jText = (jResp && jResp.reasoning) ? jResp.reasoning : (call.responseContent || '');
@@ -3012,11 +2984,6 @@ public final class HtmlReportGenerator
                 background: #ecfdf5;
                 color: #065f46;
                 border: 1px solid rgba(6, 95, 70, 0.3);
-            }
-            .badge-phase.pesap {
-                background: #e0e7ff;
-                color: #4338ca;
-                border: 1px solid rgba(67, 56, 202, 0.3);
             }
             .badge-phase.judge {
                 background: #fdf2f8;

@@ -19,11 +19,10 @@
 package org.neodymium.ai.model;
 
 /**
- * Defines the primary operational or verification objective of a playbook instruction step,
- * classified just-in-time during the Pre-Execution Step Analysis Phase (PESAP).
+ * Defines the primary operational or verification objective of a playbook instruction step.
  * <p>
  * Semantic intent categorization focuses downstream action extraction to relevant HTML element
- * types and enforces deterministic Java-level execution guards against mutating actions during assertions.
+ * types and guides agent tool interactions during execution.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -160,4 +159,3 @@ public enum SemanticIntent
         }
     }
 }
-

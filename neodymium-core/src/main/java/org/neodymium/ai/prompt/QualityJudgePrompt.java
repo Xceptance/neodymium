@@ -189,13 +189,17 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
             compiledSystemPrompt = compiledSystemPrompt + "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
         }
 
-        return new LlmRequest(compiledSystemPrompt, userMsg, java.util.Collections.emptyList(), null, temp, timeout);
+        return new LlmRequest(compiledSystemPrompt, userMsg, Collections.emptyList(), null, temp, timeout);
     }
 
     /**
-     * Compiles an interactive deliberation discussion user message.
+     * Compiles an interactive deliberation discussion user message with action and milestone details.
      *
      * @param instruction step instruction
+     * @param toolName proposed tool name (e.g. "click", "fill")
+     * @param targetLocator proposed target locator
+     * @param actionValue optional text/value argument
+     * @param milestones optional list of internal milestones for compound instructions
      * @param probeResults live SUT probe results for current candidates
      * @param deliberationHistory list of prior turn exchange summaries
      * @param currentTurn current turn index (1-based)
@@ -205,6 +209,10 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
      */
     public String compileDiscussionUserMessage(
             final String instruction,
+            final String toolName,
+            final String targetLocator,
+            final String actionValue,
+            final List<String> milestones,
             final List<LocatorProbeResult> probeResults,
             final List<String> deliberationHistory,
             final int currentTurn,
@@ -214,6 +222,32 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
         final StringBuilder userMsg = new StringBuilder();
         userMsg.append("## Execution Instruction\n");
         userMsg.append(instruction != null ? instruction.trim() : "").append("\n\n");
+
+        if (toolName != null && !toolName.isBlank())
+        {
+            userMsg.append("## Proposed Action\n");
+            userMsg.append("Tool: ").append(toolName).append("\n");
+            if (targetLocator != null && !targetLocator.isBlank())
+            {
+                userMsg.append("Target Locator: `").append(targetLocator).append("`\n");
+            }
+            if (actionValue != null && !actionValue.isBlank())
+            {
+                userMsg.append("Action Value: \"").append(actionValue).append("\"\n");
+            }
+            userMsg.append("\n");
+        }
+
+        if (milestones != null && !milestones.isEmpty())
+        {
+            userMsg.append("## Compound Step Milestones\n");
+            userMsg.append("This instruction consists of sequential milestones. The proposed action targets the element required for one of these milestones:\n");
+            for (int i = 0; i < milestones.size(); i++)
+            {
+                userMsg.append(String.format("%d. %s\n", i + 1, milestones.get(i)));
+            }
+            userMsg.append("\n");
+        }
 
         userMsg.append("## Live SUT Probe Telemetry (Turn ").append(currentTurn).append(" of ").append(maxTurns).append(")\n");
         if (probeResults != null && !probeResults.isEmpty())
@@ -284,7 +318,76 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
     }
 
     /**
-     * Compiles an LlmRequest for an interactive deliberation discussion turn.
+     * Compiles an interactive deliberation discussion user message (legacy overload without action metadata).
+     *
+     * @param instruction step instruction
+     * @param probeResults live SUT probe results for current candidates
+     * @param deliberationHistory list of prior turn exchange summaries
+     * @param currentTurn current turn index (1-based)
+     * @param maxTurns maximum allowed turns
+     * @param domContext full SUT DOM context
+     * @return compiled user prompt message
+     */
+    public String compileDiscussionUserMessage(
+            final String instruction,
+            final List<LocatorProbeResult> probeResults,
+            final List<String> deliberationHistory,
+            final int currentTurn,
+            final int maxTurns,
+            final String domContext)
+    {
+        return compileDiscussionUserMessage(instruction, null, null, null, null, probeResults, deliberationHistory, currentTurn, maxTurns, domContext);
+    }
+
+    /**
+     * Compiles an LlmRequest for an interactive deliberation discussion turn with action and milestone details.
+     *
+     * @param instruction step instruction
+     * @param toolName proposed tool name
+     * @param targetLocator proposed target locator
+     * @param actionValue optional text/value argument
+     * @param milestones optional list of internal milestones for compound instructions
+     * @param probeResults live SUT probe results for current candidates
+     * @param deliberationHistory list of prior turn exchange summaries
+     * @param currentTurn current turn index (1-based)
+     * @param maxTurns maximum allowed turns
+     * @param domContext full SUT DOM context
+     * @param aiConfig configuration instance
+     * @return compiled discussion LlmRequest
+     */
+    public LlmRequest compileDiscussionRequest(
+            final String instruction,
+            final String toolName,
+            final String targetLocator,
+            final String actionValue,
+            final List<String> milestones,
+            final List<LocatorProbeResult> probeResults,
+            final List<String> deliberationHistory,
+            final int currentTurn,
+            final int maxTurns,
+            final String domContext,
+            final AiConfiguration aiConfig)
+    {
+        final String userMsg = compileDiscussionUserMessage(
+                instruction, toolName, targetLocator, actionValue, milestones, probeResults, deliberationHistory, currentTurn, maxTurns, domContext);
+
+        final double temp = aiConfig != null ? aiConfig.getTemperature("judge") : 0.0;
+        final int timeout = aiConfig != null ? aiConfig.getTimeoutSeconds("judge") : 30;
+
+        String compiledSystemPrompt = AiAgentPrompts.getQualityJudgeDiscussionPrompt().trim();
+        final ExecutionContext activeContext = ExecutionContext.getActiveContext();
+        final Object targetExecutor = activeContext != null ? activeContext.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
+        final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;
+        if (isSelenideMode)
+        {
+            compiledSystemPrompt = compiledSystemPrompt + "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
+        }
+
+        return new LlmRequest(compiledSystemPrompt, userMsg, Collections.emptyList(), null, temp, timeout);
+    }
+
+    /**
+     * Compiles an LlmRequest for an interactive deliberation discussion turn (legacy overload without action metadata).
      *
      * @param instruction step instruction
      * @param probeResults live SUT probe results for current candidates
@@ -304,22 +407,9 @@ public class QualityJudgePrompt implements AiPrompt<QualityJudgePrompt.QualityJu
             final String domContext,
             final AiConfiguration aiConfig)
     {
-        final String userMsg = compileDiscussionUserMessage(instruction, probeResults, deliberationHistory, currentTurn, maxTurns, domContext);
-
-        final double temp = aiConfig != null ? aiConfig.getTemperature("judge") : 0.0;
-        final int timeout = aiConfig != null ? aiConfig.getTimeoutSeconds("judge") : 30;
-
-        String compiledSystemPrompt = AiAgentPrompts.getQualityJudgeDiscussionPrompt().trim();
-        final ExecutionContext activeContext = ExecutionContext.getActiveContext();
-        final Object targetExecutor = activeContext != null ? activeContext.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR) : null;
-        final boolean isSelenideMode = targetExecutor instanceof SelenideTargetExecutor || targetExecutor == null;
-        if (isSelenideMode)
-        {
-            compiledSystemPrompt = compiledSystemPrompt + "\n\n" + AiAgentPrompts.getSelenideLocatorRule().trim();
-        }
-
-        return new LlmRequest(compiledSystemPrompt, userMsg, Collections.emptyList(), null, temp, timeout);
+        return compileDiscussionRequest(instruction, null, null, null, null, probeResults, deliberationHistory, currentTurn, maxTurns, domContext, aiConfig);
     }
+
 
     @Override
     public QualityJudgeResult parseResponse(final String rawContent, final ExecutionContext context) throws Exception

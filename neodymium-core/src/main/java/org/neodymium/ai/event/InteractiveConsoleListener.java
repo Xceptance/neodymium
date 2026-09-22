@@ -35,7 +35,6 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
@@ -495,8 +494,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             if (this.session != null && instruction != null && !instruction.isBlank())
             {
-                final PesapPrompt pesapPrompt = new PesapPrompt(instruction, null, null);
-                final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.PESAP);
+                final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
                 if (provider != null)
                 {
                     final AiConfiguration config = AiConfiguration.getInstance();
@@ -504,29 +502,25 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     final int timeoutSeconds = config.getTimeoutSeconds("action");
 
                     final LlmRequest request = new LlmRequest(
-                        pesapPrompt.compileSystemMessage(context),
-                        pesapPrompt.compileUserMessage(context),
+                        "You are an expert test automation assistant. Suggest a clear, atomic instruction for a web test step.",
+                        "Please suggest a clear, atomic phrasing for this test step: \"" + instruction + "\"",
                         Collections.emptyList(),
-                        pesapPrompt.getResponseSchema(),
+                        null,
                         temp,
                         timeoutSeconds
                     );
 
                     final LlmResponse response = provider.chat(request);
-                    if (response != null && response.content() != null)
+                    if (response != null && response.content() != null && !response.content().isBlank())
                     {
-                        final PesapPrompt.PesapResult result = pesapPrompt.parseResponse(response.content(), context);
-                        if (result != null && result.splitSteps() != null && !result.splitSteps().isEmpty())
-                        {
-                            suggestion = String.join(" and ", result.splitSteps());
-                        }
+                        suggestion = response.content().trim();
                     }
                 }
             }
         }
         catch (final Throwable t)
         {
-            LOG.warn("[InteractiveConsoleListener] Failed to generate PESAP suggestion for step: {}", t.getMessage());
+            LOG.warn("[InteractiveConsoleListener] Failed to generate suggestion for step: {}", t.getMessage());
         }
 
         final JsonObject fixEvent = new JsonObject();

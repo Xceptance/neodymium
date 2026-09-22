@@ -58,13 +58,6 @@ public final class StepStats
 
     private long verificationCachedTokens;
 
-    private int pesapCalls;
-
-    private long pesapInputTokens;
-
-    private long pesapOutputTokens;
-
-    private long pesapCachedTokens;
 
     private int rcaCalls;
 
@@ -317,60 +310,6 @@ public final class StepStats
         this.replayed = replayed;
     }
 
-    /**
-     * Adds PESAP LLM call tokens to the aggregates.
-     *
-     * @param input the input tokens
-     * @param output the output tokens
-     * @param cached the cached tokens
-     */
-    public void addPesapCall(final int input, final int output, final int cached)
-    {
-        this.pesapCalls++;
-        this.pesapInputTokens += input;
-        this.pesapOutputTokens += output;
-        this.pesapCachedTokens += cached;
-    }
-
-    /**
-     * Gets the number of PESAP LLM calls.
-     *
-     * @return the count
-     */
-    public int getPesapCalls()
-    {
-        return this.pesapCalls;
-    }
-
-    /**
-     * Gets the PESAP input tokens count.
-     *
-     * @return the count
-     */
-    public long getPesapInputTokens()
-    {
-        return this.pesapInputTokens;
-    }
-
-    /**
-     * Gets the PESAP output tokens count.
-     *
-     * @return the count
-     */
-    public long getPesapOutputTokens()
-    {
-        return this.pesapOutputTokens;
-    }
-
-    /**
-     * Gets the PESAP cached tokens count.
-     *
-     * @return the count
-     */
-    public long getPesapCachedTokens()
-    {
-        return this.pesapCachedTokens;
-    }
 
     /**
      * Adds Visual RCA LLM call tokens to the aggregates.
@@ -445,7 +384,7 @@ public final class StepStats
     public boolean isExecuted()
     {
         if (this.durationMs > 0 || !this.contextLevels.isEmpty() || !this.actions.isEmpty()
-            || this.standardCalls > 0 || this.verificationCalls > 0 || this.pesapCalls > 0 || this.rcaCalls > 0
+            || this.standardCalls > 0 || this.verificationCalls > 0 || this.rcaCalls > 0
             || this.failureReason != null)
         {
             return true;

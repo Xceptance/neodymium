@@ -182,4 +182,35 @@ public class QualityJudgePromptTest
         assertEquals(".quick-add-dropdown.active button:text-is('S')", result.getRefinedProposal());
         assertEquals("Need text-based scoping", result.getReasoning());
     }
+
+    @Test
+    public void testCompileDiscussionRequestWithActionAndMilestones()
+    {
+        final QualityJudgePrompt prompt = new QualityJudgePrompt();
+        final LocatorProbeResult p1 = LocatorProbeResult.supported(
+                "#prod-info [data-ai=\"xcffyzll\"]", 1,
+                List.of(new ProbeElementSummary(0, "button", "Add to Cart", Map.of("data-ai", "xcffyzll"), true, true, false, null, ""))
+        );
+
+        final LlmRequest req = prompt.compileDiscussionRequest(
+                "Locate the first product card: - Hover over it - Click its 'Add to Cart' button",
+                "click",
+                "#prod-info [data-ai=\"xcffyzll\"]",
+                "",
+                List.of("Hover over product card", "Click its 'Add to Cart' button"),
+                List.of(p1),
+                List.of(),
+                1,
+                3,
+                "=== DOM Context ===",
+                AiConfiguration.getInstance());
+
+        assertNotNull(req);
+        final String userMsg = req.userMessage();
+        assertTrue(userMsg.contains("## Proposed Action"), "User message should contain Proposed Action section");
+        assertTrue(userMsg.contains("Tool: click"), "User message should contain tool name");
+        assertTrue(userMsg.contains("Target Locator: `#prod-info [data-ai=\"xcffyzll\"]`"), "User message should contain target selector");
+        assertTrue(userMsg.contains("## Compound Step Milestones"), "User message should contain Compound Step Milestones");
+        assertTrue(userMsg.contains("Click its 'Add to Cart' button"), "User message should contain milestone text");
+    }
 }

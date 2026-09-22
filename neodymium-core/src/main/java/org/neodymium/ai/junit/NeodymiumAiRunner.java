@@ -32,7 +32,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
@@ -413,6 +415,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             outcomeFailOnError = false;
         }
 
+        // 2e. Resolve Visual Assertion Threshold override
+        final Double visualThreshold;
+        final AiVisual methodVisual = method.getAnnotation(AiVisual.class);
+        final AiVisual classVisual = testClass.getAnnotation(AiVisual.class);
+        if (methodVisual != null)
+        {
+            visualThreshold = methodVisual.threshold() != 0.99 ? methodVisual.threshold() : methodVisual.value();
+        }
+        else if (classVisual != null)
+        {
+            visualThreshold = classVisual.threshold() != 0.99 ? classVisual.threshold() : classVisual.value();
+        }
+        else
+        {
+            visualThreshold = null;
+        }
+
         // 3. Resolve dataset filters
         final List<AiDataSet> datasetFilters = new ArrayList<>();
         final AiDataSet methodDataSet = method.getAnnotation(AiDataSet.class);
@@ -559,14 +578,65 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (allDataSets.isEmpty())
             {
+                if (!datasetFilters.isEmpty())
+                {
+                    final List<String> filterValues = new ArrayList<>();
+                    for (final AiDataSet ads : datasetFilters)
+                    {
+                        Collections.addAll(filterValues, ads.value());
+                        Collections.addAll(filterValues, ads.include());
+                        if (ads.exclude().length > 0)
+                        {
+                            filterValues.add("exclude=" + Arrays.toString(ads.exclude()));
+                        }
+                    }
+                    throw new IllegalArgumentException(String.format(
+                            "No datasets defined in playbook '%s', but @AiDataSet filter %s was specified.",
+                            playbookPath, filterValues));
+                }
                 // Run once with empty dataset
                 filteredDataSets.add(Collections.emptyMap());
             }
             else
             {
-                final String globalTestIdFilter = com.xceptance.neodymium.util.Neodymium.configuration().getTestIdFilter();
-                final java.util.regex.Pattern globalTestIdPattern = org.apache.commons.lang3.StringUtils.isNotBlank(globalTestIdFilter)
-                        ? java.util.regex.Pattern.compile(globalTestIdFilter)
+                if (!datasetFilters.isEmpty())
+                {
+                    boolean anyMatched = false;
+                    int checkIndex = 1;
+                    final List<String> availableIds = new ArrayList<>();
+                    for (final Map<String, SessionData.DataEntry> ds : allDataSets)
+                    {
+                        final String dsId = getDataSetId(ds);
+                        final String indexStr = String.valueOf(checkIndex);
+                        availableIds.add(dsId != null ? dsId : indexStr);
+                        if (shouldIncludeDataSet(dsId, datasetFilters) || shouldIncludeDataSet(indexStr, datasetFilters))
+                        {
+                            anyMatched = true;
+                        }
+                        checkIndex++;
+                    }
+
+                    if (!anyMatched)
+                    {
+                        final List<String> filterValues = new ArrayList<>();
+                        for (final AiDataSet ads : datasetFilters)
+                        {
+                            Collections.addAll(filterValues, ads.value());
+                            Collections.addAll(filterValues, ads.include());
+                            if (ads.exclude().length > 0)
+                            {
+                                filterValues.add("exclude=" + Arrays.toString(ads.exclude()));
+                            }
+                        }
+                        throw new IllegalArgumentException(String.format(
+                                "No datasets in playbook '%s' matched @AiDataSet filter %s. Available dataset IDs: %s",
+                                playbookPath, filterValues, availableIds));
+                    }
+                }
+
+                final String globalTestIdFilter = Neodymium.configuration().getTestIdFilter();
+                final Pattern globalTestIdPattern = StringUtils.isNotBlank(globalTestIdFilter)
+                        ? Pattern.compile(globalTestIdFilter)
                         : null;
 
                 int dsIndex = 1;
@@ -625,7 +695,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                                             {
                                                 extensions.add(new BrowserExecutionCallback(browser, method.getName()));
                                             }
-                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, linterFailOnFindings, linterPostFlight, outcomeEnabled, outcomeFailOnError));
+                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, linterFailOnFindings, linterPostFlight, outcomeEnabled, outcomeFailOnError, visualThreshold));
                                             return extensions;
                                         }
                                     });
@@ -730,6 +800,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final Boolean linterPostFlight;
         private final Boolean outcomeEnabled;
         private final Boolean outcomeFailOnError;
+        private final Double visualThreshold;
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
@@ -746,7 +817,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final Boolean linterFailOnFindings,
             final Boolean linterPostFlight,
             final Boolean outcomeEnabled,
-            final Boolean outcomeFailOnError
+            final Boolean outcomeFailOnError,
+            final Double visualThreshold
         )
         {
             this.playbookPath = playbookPath;
@@ -760,6 +832,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.linterPostFlight = linterPostFlight;
             this.outcomeEnabled = outcomeEnabled;
             this.outcomeFailOnError = outcomeFailOnError;
+            this.visualThreshold = visualThreshold;
         }
 
         @Override
@@ -811,7 +884,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock."))
                 {
                     Neodymium.getData().put("neodymium.ai.global.provider", "mock");
-                    Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
                 }
             }
 
@@ -858,6 +930,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 Neodymium.getData().put("neodymium.ai.semanticVerification.failOnError", String.valueOf(this.outcomeFailOnError));
             }
 
+            if (this.visualThreshold != null)
+            {
+                Neodymium.getData().put("neodymium.ai.ssim.minScore", String.valueOf(this.visualThreshold));
+                com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.ssim.minScore", String.valueOf(this.visualThreshold));
+            }
+
             final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
             
             final LlmRegistry registry = new LlmRegistry();
@@ -892,6 +970,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.outcomeFailOnError != null)
             {
                 this.session.data().putDynamic("neodymium.ai.semanticVerification.failOnError", String.valueOf(this.outcomeFailOnError), false);
+            }
+            if (this.visualThreshold != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.ssim.minScore", String.valueOf(this.visualThreshold), false);
             }
             final ExecutionContext executionContext = this.session.getExecutionContext();
             if (this.linterFailOnFindings != null)
@@ -1539,6 +1621,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (method != null && method.isAnnotationPresent(AiLlmCache.class) && (testClass == null || !testClass.isAnnotationPresent(AiLlmCache.class)))
                 {
                     InMemoryLlmCache.clear();
+                }
+
+                if (this.visualThreshold != null)
+                {
+                    Neodymium.getData().remove("neodymium.ai.ssim.minScore");
+                    com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                 }
             }
         }

@@ -75,8 +75,8 @@ public final class LocatorImprover
 
         final String trimmed = locator.trim();
 
-        // Unique ID selector (#my-id or tag#my-id)
-        if (trimmed.startsWith("#") || (trimmed.contains("#") && !trimmed.contains(" ") && !trimmed.contains(">")))
+        // Unique ID selector (#my-id or tag#my-id without descendant combinators or multiple tokens)
+        if (!trimmed.contains(" ") && !trimmed.contains(">") && (trimmed.startsWith("#") || (trimmed.contains("#") && !trimmed.contains("."))))
         {
             final String idVal = trimmed.substring(trimmed.indexOf('#') + 1);
             if (VOLATILE_ID_DETECTOR.isVolatile(idVal))

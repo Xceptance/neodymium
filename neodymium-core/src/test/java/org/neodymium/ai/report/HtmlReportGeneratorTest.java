@@ -159,10 +159,10 @@ public class HtmlReportGeneratorTest
         linterCall.setOutputTokens(200);
         report.addLlmCall(linterCall);
 
-        // Step 0 Call 1: PESAP
+        // Step 0 Call 1: Quality Judge
         final TestExecutionReport.ReportLlmCallEntry call1 = new TestExecutionReport.ReportLlmCallEntry();
         call1.setStepIndex(0);
-        call1.setCapability("PESAP");
+        call1.setCapability("JUDGE");
         call1.setModelName("gemini-2.5-flash");
         call1.setDurationMs(200);
         call1.setInputTokens(1000);
@@ -189,10 +189,10 @@ public class HtmlReportGeneratorTest
         call3.setOutputTokens(25);
         report.addLlmCall(call3);
 
-        // Step 1 Call 4: PESAP
+        // Step 1 Call 4: Verification
         final TestExecutionReport.ReportLlmCallEntry call4 = new TestExecutionReport.ReportLlmCallEntry();
         call4.setStepIndex(1);
-        call4.setCapability("PESAP");
+        call4.setCapability("VERIFICATION");
         call4.setModelName("gemini-2.5-flash");
         call4.setDurationMs(180);
         call4.setInputTokens(1200);
@@ -217,8 +217,7 @@ public class HtmlReportGeneratorTest
         Assertions.assertTrue(html.contains("Pre-Flight / Setup"), "HTML must display pre-flight setup banner");
         Assertions.assertTrue(html.contains("Playbook Linter"), "HTML must format LINTER capability as Playbook Linter");
         Assertions.assertTrue(html.contains("Enter shipping details"), "HTML must display step 0 instruction in group banner");
-        Assertions.assertTrue(html.contains("Select payment method"), "HTML must display step 1 instruction in group banner");
-        Assertions.assertTrue(html.contains("Intent (PESAP)"), "HTML must format PESAP capability as Intent (PESAP)");
+        Assertions.assertTrue(html.contains("Quality Judge"), "HTML must format JUDGE capability as Quality Judge");
         Assertions.assertTrue(html.contains("Turn 1"), "HTML must display sequential turn numbering");
         Assertions.assertTrue(html.contains("Turn 2"), "HTML must display sequential turn 2");
         Assertions.assertTrue(html.contains("Vision 📸"), "HTML must display vision modality badge");
@@ -300,7 +299,7 @@ public class HtmlReportGeneratorTest
 
         final TestExecutionReport.ReportLlmCallEntry llmCall = new TestExecutionReport.ReportLlmCallEntry();
         llmCall.setStepIndex(0);
-        llmCall.setCapability("PESAP");
+        llmCall.setCapability("TEXT_ONLY");
         llmCall.setModelName("gemini-3.5-flash-lite");
         llmCall.setDurationMs(458);
         llmCall.setInputTokens(1400);

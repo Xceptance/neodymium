@@ -243,8 +243,8 @@ public class PreliminaryReportListenerTest
             ctx.getTransientData().put(ExecutionContext.KEY_STANDARD_CALL_COUNT, 18);
             ctx.getTransientData().put(ExecutionContext.KEY_STANDARD_TOKEN_USAGE, new TokenUsage(62374, 2208, 64582, 0));
 
-            ctx.getTransientData().put(ExecutionContext.KEY_PESAP_CALL_COUNT, 16);
-            ctx.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new TokenUsage(10809, 181, 10990, 0));
+            ctx.getTransientData().put(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 16);
+            ctx.getTransientData().put(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE, new TokenUsage(10809, 181, 10990, 0));
 
             ctx.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, 2);
             ctx.getTransientData().put(ExecutionContext.KEY_INTERNAL_CACHE_HITS, 5);
@@ -254,7 +254,7 @@ public class PreliminaryReportListenerTest
             stats1.setDurationMs(8412);
             stats1.addContextLevel("LEAN");
             stats1.addContextLevel("STANDARD");
-            stats1.addPesapCall(662, 10, 0);
+            stats1.addVerificationCall(662, 10, 0);
             stats1.addStandardCall(9136, 247, 0);
 
             ctx.getTransientData().put("execution.stepStatsList", List.of(stats1));
@@ -281,16 +281,16 @@ public class PreliminaryReportListenerTest
             final String md = Files.readString(mdPath);
             assertTrue(md.contains("34")); // 18 + 16 total calls
             assertTrue(md.contains("75,572")); // 64582 + 10990 total tokens
-            assertTrue(md.contains("PESAP"));
+            assertFalse(md.contains("PESAP"));
             assertTrue(md.contains("Action (Standard)"));
-            assertTrue(md.indexOf("├─ PESAP") < md.indexOf("├─ Action (Standard)"), "PESAP must precede Action in Markdown table");
+            assertTrue(md.contains("Verification"));
             assertTrue(md.contains("Context Escalations"));
             assertTrue(md.contains("LEAN → STANDARD"));
 
             final String html = Files.readString(htmlPath);
             assertTrue(html.contains("75,572"));
-            assertTrue(html.contains("PESAP (Pre-Execution Semantic Anchor)"));
-            assertTrue(html.indexOf("PESAP (Pre-Execution Semantic Anchor)") < html.indexOf("Action (Standard Generation)"), "PESAP must precede Action in HTML table");
+            assertFalse(html.contains("PESAP (Pre-Execution Semantic Anchor)"));
+            assertFalse(html.contains("PESAP"));
             assertTrue(html.contains("LEAN → STANDARD"));
             assertTrue(html.contains("⚡ 1 esc"));
 
@@ -298,7 +298,8 @@ public class PreliminaryReportListenerTest
             final JsonNode root = new ObjectMapper().readTree(json);
             assertEquals(34, root.get("metrics").get("totalLlmCalls").asInt());
             assertEquals(75572, root.get("metrics").get("totalTokens").asLong());
-            assertEquals(16, root.get("metrics").get("pesap").get("calls").asInt());
+            assertFalse(root.get("metrics").has("pesap"));
+            assertEquals(16, root.get("metrics").get("verification").get("calls").asInt());
             assertEquals(18, root.get("metrics").get("action").get("calls").asInt());
             assertEquals(1, root.get("steps").get(0).get("escalations").asInt());
         }
@@ -452,8 +453,8 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
-    @DisplayName("Verify PESAP LLM call capture and sub-step hierarchy rendering")
-    public void testPesapAndSubStepsHierarchy() throws Exception
+    @DisplayName("Verify planning LLM call capture and sub-step hierarchy rendering")
+    public void testPlanningAndSubStepsHierarchy() throws Exception
     {
         final Path reportDir = this.tempFolder.resolve("ai-reports-substeps");
         final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
@@ -468,10 +469,10 @@ public class PreliminaryReportListenerTest
         final PlaybookStep parentStep = new PlaybookStep("Locate promo input, clear content, and type FREEGIFT");
         bus.dispatch(new StepStartedEvent(parentStep, 0));
 
-        // PESAP call on parent step
-        final LlmRequest pesapReq = new LlmRequest("PESAP System", "Analyze step: Locate promo input...", Collections.emptyList(), null, 0.0, 30);
-        final LlmResponse pesapResp = new LlmResponse("{\"splitSteps\":[\"Locate promo input and clear content\",\"Type FREEGIFT into promo input\"]}", new TokenUsage(650, 45, 695, 100), "gemini-3.5-flash");
-        bus.dispatch(new LlmResponseReceivedEvent(pesapReq, pesapResp, 180, "PESAP"));
+        // Planning call on parent step
+        final LlmRequest planReq = new LlmRequest("Planning System", "Analyze step: Locate promo input...", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse planResp = new LlmResponse("{\"splitSteps\":[\"Locate promo input and clear content\",\"Type FREEGIFT into promo input\"]}", new TokenUsage(650, 45, 695, 100), "gemini-3.5-flash");
+        bus.dispatch(new LlmResponseReceivedEvent(planReq, planResp, 180, "Planning"));
 
         // Sub-step 1
         final PlaybookStep subStep1 = new PlaybookStep("Locate promo input and clear content");
@@ -522,8 +523,8 @@ public class PreliminaryReportListenerTest
         assertEquals(1, root.get("steps").size(), "Root steps must contain 1 parent step");
         final JsonNode parentNode = root.get("steps").get(0);
         assertEquals(2, parentNode.get("subSteps").size(), "Parent step must contain exactly 2 deduplicated sub-steps");
-        assertEquals(1, parentNode.get("llmCalls").size(), "Parent step must have 1 PESAP LLM call attached");
-        assertEquals("PESAP", parentNode.get("llmCalls").get(0).get("capability").asText());
+        assertEquals(1, parentNode.get("llmCalls").size(), "Parent step must have 1 LLM call attached");
+        assertEquals("Planning", parentNode.get("llmCalls").get(0).get("capability").asText());
     }
 
     @Test
@@ -1694,11 +1695,7 @@ public class PreliminaryReportListenerTest
             final PlaybookStep step = new PlaybookStep("Search for 'Neodymium'");
             bus.dispatch(new StepStartedEvent(step, 0));
 
-            // Dispatch LLM calls (PESAP, Prelude, Continuation with markdown fence)
-            final LlmRequest pesapReq = new LlmRequest("PESAP System", "Classify", Collections.emptyList(), null, 0.0, 30);
-            final LlmResponse pesapResp = new LlmResponse("{\"c\":\"LEAN\",\"jm\":false,\"i\":\"TYPE\"}", new TokenUsage(100, 10, 110, 0), "mock-model");
-            bus.dispatch(new LlmRequestSentEvent(pesapReq, "PESAP"));
-            bus.dispatch(new LlmResponseReceivedEvent(pesapReq, pesapResp, 120, "PESAP"));
+            // Dispatch LLM calls (Prelude, Continuation with markdown fence)
 
             final LlmRequest preludeReq = new LlmRequest("Action System", "Prelude round", Collections.emptyList(), null, 0.0, 30);
             final LlmResponse preludeResp = new LlmResponse("{\"reasoning\":\"The search input field is hidden initially. We must click the search toggle button first to reveal the search container and input field before typing 'Neodymium'.\",\"status\":\"CONTINUE\",\"actions\":[]}", new TokenUsage(200, 20, 220, 0), "mock-model");
@@ -1751,6 +1748,7 @@ public class PreliminaryReportListenerTest
             assertTrue(html.contains(".badge-phase.prelude"), "HTML must style prelude phase badge in CSS");
             assertTrue(html.contains(".badge-phase.continuation"), "HTML must style continuation phase badge in CSS");
             assertTrue(html.contains(".badge-phase.judge"), "HTML must style judge phase badge in CSS");
+            assertFalse(html.contains(".badge-phase.pesap"), "HTML must not contain pesap phase badge CSS");
             assertTrue(html.contains("PRELUDE"), "HTML must contain PRELUDE action in embedded dataset");
             assertTrue(html.contains("CONTINUATION"), "HTML must contain CONTINUATION action in embedded dataset");
             assertTrue(html.contains("tabNotesCount"), "HTML must contain tabNotesCount badge");
@@ -2042,5 +2040,109 @@ public class PreliminaryReportListenerTest
             "Index table row subtitle must display package path instead of duplicate simple class/method");
         assertFalse(indexHtml.contains(">SearchJudgeTest#liveAllDataSets<"),
             "Index table row subtitle must not redundantly duplicate simple class name and method");
+    }
+
+    @Test
+    public void testSubStepActionsAndScreenshotsPopulatedInReport() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-substep-actions");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parent = new PlaybookStep("Locate product card:");
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        final Action act1 = new Action("HOVER", "article[data-ai=\"xc1\"]", Collections.emptyList(), "Hover product", "Hover");
+        sub1.setActions(List.of(act1));
+        sub1.setParent(parent);
+
+        final PlaybookStep sub2 = new PlaybookStep("Click it");
+        final Action act2 = new Action("CLICK", "button[data-ai=\"xc2\"]", Collections.emptyList(), "Click button", "Click");
+        sub2.setActions(List.of(act2));
+        sub2.setParent(parent);
+
+        parent.setSubSteps(List.of(sub1, sub2));
+
+        bus.dispatch(new StepStartedEvent(parent, 0));
+        bus.dispatch(new StepStartedEvent(sub1, 0));
+        bus.dispatch(new ActionExecutedEvent(act1, true));
+        bus.dispatch(new StepFinishedEvent(sub1, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepStartedEvent(sub2, 1));
+        bus.dispatch(new ActionExecutedEvent(act2, true));
+        bus.dispatch(new StepFinishedEvent(sub2, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepFinishedEvent(parent, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals(2, parentEntry.getSubSteps().size());
+
+        final TestExecutionReport.ReportStepEntry subEntry1 = parentEntry.getSubSteps().get(0);
+        assertEquals(1, subEntry1.getActions().size());
+        assertEquals("HOVER", subEntry1.getActions().get(0).getType());
+
+        final TestExecutionReport.ReportStepEntry subEntry2 = parentEntry.getSubSteps().get(1);
+        assertEquals(1, subEntry2.getActions().size());
+        assertEquals("CLICK", subEntry2.getActions().get(0).getType());
+    }
+
+    @Test
+    public void testAbortiveFailurePreservesSubStepStatusWithoutFabricatedSuccess() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-abortive-failure");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parent = new PlaybookStep("Locate the promo code input field:");
+        parent.setFailureReason("Token budget exceeded: TOTAL budget breached (consumed: 100142, limit: 100000)");
+
+        final PlaybookStep sub1 = new PlaybookStep("Clear content");
+        final Action act1 = new Action("CLEAR", "#promo", Collections.emptyList(), "Clear input", "Clear");
+        sub1.setActions(List.of(act1));
+        sub1.setParent(parent);
+
+        final PlaybookStep sub2 = new PlaybookStep("Type FREEGIFT");
+        final Action act2 = new Action("FILL", "#promo", List.of("FREEGIFT"), "Type promo", "Type");
+        sub2.setActions(List.of(act2));
+        sub2.setParent(parent);
+
+        final PlaybookStep sub3 = new PlaybookStep("Submit the promo code form");
+        final Action act3 = new Action("CLICK", "#apply-promo", Collections.emptyList(), "Click apply", "Click");
+        sub3.setActions(List.of(act3));
+        sub3.setParent(parent);
+
+        final PlaybookStep sub4 = new PlaybookStep("Assert that a line item 'Free Bonus Gift' (bug) is added to the cart");
+        sub4.setBug(true);
+        sub4.setActions(Collections.emptyList());
+        sub4.setParent(parent);
+
+        parent.setSubSteps(List.of(sub1, sub2, sub3, sub4));
+
+        bus.dispatch(new StepStartedEvent(parent, 0));
+        bus.dispatch(new StepFinishedEvent(parent, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(5000, false));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals("FAILED", parentEntry.getStatus());
+        assertEquals(4, parentEntry.getSubSteps().size());
+
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(0).getStatus());
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(1).getStatus());
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(2).getStatus());
+
+        final TestExecutionReport.ReportStepEntry subEntry4 = parentEntry.getSubSteps().get(3);
+        assertEquals("FAILED", subEntry4.getStatus());
+        assertNotNull(subEntry4.getFailureReason());
+        assertTrue(subEntry4.getFailureReason().contains("Token budget exceeded"));
     }
 }

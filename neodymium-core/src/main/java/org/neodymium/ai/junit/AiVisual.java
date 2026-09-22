@@ -16,37 +16,35 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.pipeline;
+package org.neodymium.ai.junit;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * Checked exception indicating that Pre-Execution Step Analysis (PESAP)
- * failed to classify or resolve the semantic intent of an instruction.
+ * Configures the visual assertion SSIM threshold at the test class or method level.
+ * Method-level annotations take precedence over class-level annotations.
  *
- * @author AI-generated: Gemini 3.7 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
-public final class PesapClassificationException extends PipelineException
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface AiVisual
 {
-    private static final long serialVersionUID = 1L;
+    /**
+     * Minimum required SSIM score for visual assertion matches (0.0 to 1.0, default: 0.99).
+     *
+     * @return minimum SSIM score threshold
+     */
+    double value() default 0.99;
 
     /**
-     * Constructs a PesapClassificationException.
+     * Alias for {@link #value()}.
      *
-     * @param message the failure details message
+     * @return minimum SSIM score threshold
      */
-    public PesapClassificationException(final String message)
-    {
-        super(message);
-    }
-
-    /**
-     * Constructs a PesapClassificationException with a cause.
-     *
-     * @param message the failure details message
-     * @param cause the underlying cause exception
-     */
-    public PesapClassificationException(final String message, final Throwable cause)
-    {
-        super(message, cause);
-    }
+    double threshold() default 0.99;
 }

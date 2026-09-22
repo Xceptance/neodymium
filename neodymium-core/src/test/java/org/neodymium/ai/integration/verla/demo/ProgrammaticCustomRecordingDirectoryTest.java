@@ -66,7 +66,6 @@ public class ProgrammaticCustomRecordingDirectoryTest
     @BeforeAll
     public static void startServer() throws IOException
     {
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         Neodymium.getData().put("neodymium.ai.judge.enabled", "false");
         Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", "false");
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
@@ -116,7 +115,6 @@ public class ProgrammaticCustomRecordingDirectoryTest
     @AfterAll
     public static void stopServer()
     {
-        Neodymium.getData().remove("neodymium.ai.pesap.enabled");
         Neodymium.getData().remove("neodymium.ai.judge.enabled");
         Neodymium.getData().remove("neodymium.ai.semanticVerification.enabled");
         Neodymium.getData().remove("neodymium.ai.visualRca.enabled");

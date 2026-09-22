@@ -43,6 +43,7 @@ import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
@@ -207,13 +208,22 @@ public final class AgentToolLoopStep implements PipelineStep
         final long startTimeMs = System.currentTimeMillis();
         final ToolContext toolContext = new SimpleToolContext(this.toolRegistry);
         final List<ToolCall> executedCalls = new ArrayList<>();
-
-        final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_PESAP_INTENT);
-        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : null;
-        final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
-
-        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        context.getTransientData().remove("KEY_STEP_EXECUTION_FINALIZED");
+        try
+        {
+            final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
+        final Object intentObj = context.getTransientData().get(ExecutionContext.KEY_STEP_INTENT);
+        final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
+        final SemanticIntent intent = intentObj instanceof SemanticIntent si ? si : (step != null ? step.getSemanticIntent() : null);
+        if (intent != null)
+        {
+            context.getTransientData().put(ExecutionContext.KEY_STEP_INTENT, intent);
+            if (step != null && step.getSemanticIntent() == null)
+            {
+                step.setSemanticIntent(intent);
+            }
+        }
         final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
         final boolean isVisual = (step != null && step.isVisualStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
@@ -230,9 +240,6 @@ public final class AgentToolLoopStep implements PipelineStep
         Set<String> previousElementSignatures = new HashSet<>();
         String lastSeenUrl = null;
         String lastSeenWindowHandle = null;
-
-        // Turn-Aware Dynamic Context Resolution for Turn 1: Zero DOM only when LLM classified NAVIGATE or ASSERT_METADATA
-        final boolean isZeroDom = intent == SemanticIntent.NAVIGATE || intent == SemanticIntent.ASSERT_METADATA;
 
         final StringBuilder userPrompt = new StringBuilder();
         if (step != null && step.getParent() != null && step.getParent().getInstruction() != null)
@@ -297,128 +304,92 @@ public final class AgentToolLoopStep implements PipelineStep
             {
                 userPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
             }
-            userPrompt.append("\n");
+            userPrompt.append("Important: For any assertion or verification milestone (e.g. 'Assert that...', 'Verify that...'), invoke the commanded assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', etc.). If the target element or text is not found, execute the assertion tool directly to test the condition rather than retrying earlier action milestones.\n\n");
         }
 
         List<SutAttachment> attachments = Collections.emptyList();
 
         ContextLevel activeContextLevel = ContextLevel.LEAN;
 
-        if (isZeroDom)
+        // Interactive Turn 1: Supply pierced DOM Light (LEAN) or configured context level
+        if (executor != null)
         {
-            activeContextLevel = ContextLevel.MINIMAL;
-            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-            final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
-            if (statsObj instanceof final StepStats stats)
+            try
             {
-                stats.addContextLevel(activeContextLevel.name());
-            }
+                final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+                final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
+                        ? cl
+                        : (intent != null && intent.isAssertion() ? ContextLevel.STANDARD : ContextLevel.LEAN);
+                activeContextLevel = ContextLevel.clean(baseLevel, intent);
 
-            // Zero DOM nodes: Provide only page URL and Title
-            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-            if (driver != null)
-            {
-                try
+                // Visual tag check
+                if (isVisual)
                 {
-                    final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
-                    final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
-                    userPrompt.append("### Current Page:\n")
-                            .append("URL: ").append(currentUrl).append("\n")
-                            .append("Title: ").append(currentTitle).append("\n\n");
-                }
-                catch (final Exception ignored)
-                {
-                }
-            }
-        }
-        else
-        {
-            // Interactive Turn 1: Supply pierced DOM Light (LEAN) or predicted context level
-            if (executor != null)
-            {
-                try
-                {
-                    final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                    final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
-                            ? cl
-                            : (intent != null && intent.isAssertion() ? ContextLevel.STANDARD : ContextLevel.LEAN);
-                    activeContextLevel = ContextLevel.clean(baseLevel, intent);
-
-                    // Visual tag check
-                    if (isVisual)
+                    if (!activeContextLevel.includesScreenshot())
                     {
-                        if (!activeContextLevel.includesScreenshot())
-                        {
-                            activeContextLevel = (intent != null && intent.isAssertion()) ? ContextLevel.VISUAL : ContextLevel.VISUAL_LEAN;
-                        }
-                    }
-
-                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                    final boolean isFullPage = (step != null && step.isFullPageVisualStep())
-                            || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                            || activeContextLevel.isFullPageScreenshot();
-                    final SutState initialState = executor.captureState(activeContextLevel, isFullPage);
-                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, initialState);
-                    final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
-                    if (statsObj instanceof final StepStats stats)
-                    {
-                        stats.addContextLevel(activeContextLevel.name());
-                    }
-                    if (initialState.getTextContent() != null && !initialState.getTextContent().isBlank())
-                    {
-                        previousElementSignatures = extractElementSignatures(initialState.getTextContent());
-                        userPrompt.append("### Current Page State & Interactive Elements:\n")
-                                .append(initialState.getTextContent())
-                                .append("\n\n");
-                    }
-                    if (initialState.getAttachments() != null)
-                    {
-                        attachments = initialState.getAttachments();
+                        activeContextLevel = (intent != null && intent.isAssertion()) ? ContextLevel.VISUAL : ContextLevel.VISUAL_LEAN;
                     }
                 }
-                catch (final Exception e)
+
+                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                        || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                        || activeContextLevel.isFullPageScreenshot();
+                final SutState initialState = executor.captureState(activeContextLevel, isFullPage);
+                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, initialState);
+                final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                if (statsObj instanceof final StepStats stats)
                 {
-                    LOGGER.debug("Could not capture initial SUT state for AgentToolLoopStep: {}", e.getMessage());
+                    stats.addContextLevel(activeContextLevel.name());
+                }
+                if (initialState.getTextContent() != null && !initialState.getTextContent().isBlank())
+                {
+                    previousElementSignatures = extractElementSignatures(initialState.getTextContent());
+                    userPrompt.append("### Current Page State & Interactive Elements:\n")
+                            .append(initialState.getTextContent())
+                            .append("\n\n");
+                }
+                if (initialState.getAttachments() != null)
+                {
+                    attachments = initialState.getAttachments();
                 }
             }
-
-            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-            if (driver != null)
+            catch (final Exception e)
             {
-                try
-                {
-                    lastSeenUrl = BrowserToolProvider.getSafeUrl(driver);
-                    lastSeenWindowHandle = driver.getWindowHandle();
-                }
-                catch (final Exception ignored)
-                {
-                }
+                LOGGER.debug("Could not capture initial SUT state for AgentToolLoopStep: {}", e.getMessage());
             }
         }
 
-        userPrompt.append("What is your next tool call?");
+        final WebDriver initialDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (initialDriver != null)
+        {
+            try
+            {
+                lastSeenUrl = BrowserToolProvider.getSafeUrl(initialDriver);
+                lastSeenWindowHandle = initialDriver.getWindowHandle();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
 
         // Compile available tools (Intent-Based Scoping: exclude navigate for interactive steps)
         final List<ToolDefinition> availableTools = filterToolsForIntent(intent, isVisual, context);
 
-        final boolean hasInteractive = hasInteractiveMilestones(context);
-        final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
-
         final StringBuilder systemPrompt = new StringBuilder();
-        systemPrompt.append("You are an autonomous web testing agent. Execute the test goal by invoking available tools directly.\n\n");
+        systemPrompt.append("You are an autonomous web testing agent. Execute the test instruction using available tools.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
-        systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps. For forms, prefer 'fill' over 'type' (clears prior text). Do not press Enter unless commanded.\n");
-        if (isAssertion)
+        systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
+        systemPrompt.append("2. INPUTS: For text fields, use 'fill' (clears existing text first). Use 'type' only when intentionally appending text. Never set 'pressEnter: true' unless explicitly commanded to press Enter or submit.\n");
+        systemPrompt.append("3. DISCOVERY & RECOVERY: Ground all selectors in the provided page elements. Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
+        systemPrompt.append("4. ACTION & VERIFICATION COMPLETION:\n");
+        systemPrompt.append("   - Action steps: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps.\n");
+        systemPrompt.append("   - Verification steps: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
+        systemPrompt.append("   - Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
+        if (isVisual)
         {
-            systemPrompt.append("2. ASSERTION STEP: Do not mutate page state. Use 'assert_text' or 'assert_count' to verify state. For dynamic patterns (IDs/dates), set regex: true.\n");
+            systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
         }
-        else
-        {
-            systemPrompt.append("2. COMPLETION: Once the instruction's described goal or milestones are achieved, call 'complete_step'. For single atomic actions, you may propose 'complete_step' together with your action.\n");
-        }
-        systemPrompt.append("3. STABILITY: Never propose the exact same failing tool call without state change. To find offscreen items, use 'scroll'. To inspect DOM, use 'query_dom'.\n");
-        systemPrompt.append("4. SCROLL: For offscreen elements, invoke 'scroll' to locate the target.\n");
-        systemPrompt.append("5. VISUAL VERIFICATIONS & CHECKS: When an instruction is marked (visual) or a screenshot is provided, inspect the attached screenshot visually to verify whether the condition is satisfied on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -443,7 +414,7 @@ public final class AgentToolLoopStep implements PipelineStep
             LOGGER.debug("🛠️ Available Native Tools ({}):\n{}", availableTools.size(), ToolDefinition.formatTools(availableTools));
         }
 
-        while (true)
+        turnLoop: while (true)
         {
             turn++;
             LOGGER.info(TURN_DIVIDER);
@@ -686,294 +657,349 @@ public final class AgentToolLoopStep implements PipelineStep
                 break;
             }
 
-            // Co-proposed completion check: model proposed action + complete_step in single response
-            final ToolCall proposedCall = proposedCalls.get(0);
-            final ToolCall coProposedComplete = (proposedCalls.size() > 1 && "complete_step".equals(proposedCalls.get(1).toolName()))
-                    ? proposedCalls.get(1)
-                    : null;
-            if (proposedCalls.size() > 1 && coProposedComplete == null)
+            // Cohesive form input batching vs single action handling
+            final List<ToolCall> callsToExecute = new ArrayList<>();
+            final ToolCall coProposedComplete;
+
+            final boolean allCohesiveFormInputs = isCohesiveFormInputBatch(proposedCalls);
+            if (allCohesiveFormInputs)
             {
-                LOGGER.warn("⚠️ Model proposed {} tool calls in turn #{}. Executing first call '{}' and discarding remaining {} calls to prevent stale DOM errors.",
-                        proposedCalls.size(), turn, proposedCall.toolName(), proposedCalls.size() - 1);
-            }
-
-            // Append assistant response to multi-turn conversation (only the single executed call)
-            conversation.add(ChatMessage.assistant(
-                    response.content() != null ? response.content() : "",
-                    List.of(proposedCall)
-            ));
-
-            logToolCall(proposedCall);
-
-            // Stop Criterion 3: Thrashing / Stagnation Breaker (3 consecutive identical calls, including complete_step)
-            if (proposedCall.toolName().equals(lastToolName) && proposedCall.arguments().equals(lastArguments))
-            {
-                consecutiveIdenticalCalls++;
-                if (consecutiveIdenticalCalls >= 3)
+                final ToolCall last = proposedCalls.get(proposedCalls.size() - 1);
+                if ("complete_step".equals(last.toolName()))
                 {
-                    throw new AgentThrashingException(proposedCall.toolName(), proposedCall.arguments(), consecutiveIdenticalCalls);
+                    coProposedComplete = last;
+                    callsToExecute.addAll(proposedCalls.subList(0, proposedCalls.size() - 1));
+                }
+                else
+                {
+                    coProposedComplete = null;
+                    callsToExecute.addAll(proposedCalls);
                 }
             }
             else
             {
-                lastToolName = proposedCall.toolName();
-                lastArguments = proposedCall.arguments();
-                consecutiveIdenticalCalls = 1;
+                final ToolCall proposedCall = proposedCalls.get(0);
+                callsToExecute.add(proposedCall);
+                coProposedComplete = (proposedCalls.size() > 1 && "complete_step".equals(proposedCalls.get(1).toolName()))
+                        ? proposedCalls.get(1)
+                        : null;
+                if (proposedCalls.size() > 1 && coProposedComplete == null)
+                {
+                    LOGGER.warn("⚠️ Model proposed {} tool calls in turn #{}. Executing first call '{}' and discarding remaining {} calls to prevent stale DOM errors.",
+                            proposedCalls.size(), turn, proposedCall.toolName(), proposedCalls.size() - 1);
+                }
             }
 
-            // If complete_step called -> Stop Criterion 1: Goal Accomplished
-            if ("complete_step".equals(proposedCall.toolName()))
+            // Append assistant response to multi-turn conversation
+            conversation.add(ChatMessage.assistant(
+                    response.content() != null ? response.content() : "",
+                    callsToExecute
+            ));
+
+            ToolCall lastEffectiveCall = null;
+            ToolResult lastResult = null;
+            boolean batchInterrupted = false;
+
+            for (final ToolCall currentCall : callsToExecute)
             {
-                if (intent != null && intent.isAssertion() && !isVisual)
+                logToolCall(currentCall);
+
+                // Stop Criterion 3: Thrashing / Stagnation Breaker (3 consecutive identical calls, including complete_step)
+                if (currentCall.toolName().equals(lastToolName) && currentCall.arguments().equals(lastArguments))
                 {
-                    boolean hasSuccessfulAssertion = false;
-                    for (final ToolCall executed : executedCalls)
+                    consecutiveIdenticalCalls++;
+                    if (consecutiveIdenticalCalls >= 3)
                     {
-                        if (isAssertionTool(executed.toolName()))
+                        throw new AgentThrashingException(currentCall.toolName(), currentCall.arguments(), consecutiveIdenticalCalls);
+                    }
+                }
+                else
+                {
+                    lastToolName = currentCall.toolName();
+                    lastArguments = currentCall.arguments();
+                    consecutiveIdenticalCalls = 1;
+                }
+
+                // If complete_step called -> Stop Criterion 1: Goal Accomplished
+                if ("complete_step".equals(currentCall.toolName()))
+                {
+                    if (intent != null && intent.isAssertion() && !isVisual)
+                    {
+                        boolean hasSuccessfulAssertion = false;
+                        for (final ToolCall executed : executedCalls)
                         {
-                            hasSuccessfulAssertion = true;
-                            break;
+                            if (isAssertionTool(executed.toolName()))
+                            {
+                                hasSuccessfulAssertion = true;
+                                break;
+                            }
+                        }
+                        if (!hasSuccessfulAssertion)
+                        {
+                            if (!lastProposedToolWasCompleteStep)
+                            {
+                                lastProposedToolWasCompleteStep = true;
+                                final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
+                                        + "). You must execute an assertion tool (such as 'assert_text', 'assert_element_state', 'assert_attribute', or 'assert_count') to verify the expected condition before calling complete_step. "
+                                        + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
+                                LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
+                                conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
+                                continue turnLoop;
+                            }
+                            LOGGER.info("Accepting confirmed complete_step on assertion step despite no assertion tool call");
                         }
                     }
-                    if (!hasSuccessfulAssertion)
+
+                    if (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
                     {
                         if (!lastProposedToolWasCompleteStep)
                         {
                             lastProposedToolWasCompleteStep = true;
-                            final String rejectMsg = "Cannot complete step yet: this is an assertion step (" + intent
-                                    + "). You must execute an assertion tool (such as 'assert_text' or 'assert_count') to verify the expected condition before calling complete_step. "
-                                    + "(If the condition has already been confirmed, invoke complete_step again to confirm.)";
-                            LOGGER.warn("Rejecting premature complete_step on assertion step: no assertion tool has executed successfully yet.");
-                            conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), rejectMsg));
-                            continue;
+                            final String rejectMsg = "Cannot complete step yet: this compound instruction has "
+                                    + milestones.size() + " milestones: " + milestones
+                                    + ", but only " + executedCalls.size() + " tool call(s) have been executed so far. "
+                                    + "Please execute tool calls to complete the remaining milestones before calling complete_step. "
+                                    + "(If all milestones have genuinely been achieved already, invoke complete_step again to confirm.)";
+                            LOGGER.warn("Rejecting premature complete_step: compound instruction has {} milestones but only {} tool calls executed.",
+                                    milestones.size(), executedCalls.size());
+                            conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
+                            continue turnLoop;
                         }
-                        LOGGER.info("Accepting confirmed complete_step on assertion step despite no assertion tool call");
+                        LOGGER.info("Accepting confirmed complete_step despite executed calls ({}) < milestones ({})",
+                                executedCalls.size(), milestones.size());
                     }
-                }
 
-                if (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
-                {
-                    if (!lastProposedToolWasCompleteStep)
+                    final String summary = currentCall.arguments().path("summary").asText("Goal completed");
+                    context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    finishLoop(context, executedCalls, summary);
+                    LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary, turn, executedCalls.size());
+                    if (response != null && response.tokenUsage() != null)
                     {
-                        lastProposedToolWasCompleteStep = true;
-                        final String rejectMsg = "Cannot complete step yet: this compound instruction has "
-                                + milestones.size() + " milestones: " + milestones
-                                + ", but only " + executedCalls.size() + " tool call(s) have been executed so far. "
-                                + "Please execute tool calls to complete the remaining milestones before calling complete_step. "
-                                + "(If all milestones have genuinely been achieved already, invoke complete_step again to confirm.)";
-                        LOGGER.warn("Rejecting premature complete_step: compound instruction has {} milestones but only {} tool calls executed.",
-                                milestones.size(), executedCalls.size());
-                        conversation.add(ChatMessage.tool(proposedCall.callId(), proposedCall.toolName(), rejectMsg));
-                        continue;
+                        final TokenUsage tu = response.tokenUsage();
+                        LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                                tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
                     }
-                    LOGGER.info("Accepting confirmed complete_step despite executed calls ({}) < milestones ({})",
-                            executedCalls.size(), milestones.size());
+                    LOGGER.info(TURN_DIVIDER);
+                    break turnLoop;
                 }
 
-                final String summary = proposedCall.arguments().path("summary").asText("Goal completed");
-                context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
-                finishLoop(context, executedCalls, summary);
-                LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary, turn, executedCalls.size());
-                if (response != null && response.tokenUsage() != null)
+                lastProposedToolWasCompleteStep = false;
+
+                // Pre-invocation Guard (Quality Judge & Journey Fidelity)
+                final InterceptionVerdict verdict = this.interceptor.intercept(currentCall, toolContext, intent);
+                final ToolCall effectiveCall = verdict.getEffectiveCall(currentCall);
+                lastEffectiveCall = effectiveCall;
+
+                if (!verdict.isAllowed())
                 {
-                    final TokenUsage tu = response.tokenUsage();
-                    LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
-                            tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+                    final ToolResult rejResult = verdict.rejectionResult();
+                    final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
+                    LOGGER.error("❌ Guard rejected tool call {} due to policy violation during {} step: {}",
+                            currentCall.toolName(), intent, rejContent);
+                    throw new AssertionError("Policy violation: " + rejContent);
                 }
-                LOGGER.info(TURN_DIVIDER);
-                break;
-            }
 
-            lastProposedToolWasCompleteStep = false;
-
-            // Pre-invocation Guard (Quality Judge & Journey Fidelity)
-            final InterceptionVerdict verdict = this.interceptor.intercept(proposedCall, toolContext, intent);
-            final ToolCall effectiveCall = verdict.getEffectiveCall(proposedCall);
-
-            if (!verdict.isAllowed())
-            {
-                final ToolResult rejResult = verdict.rejectionResult();
-                final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
-                LOGGER.error("❌ Guard rejected tool call {} due to policy violation during {} step: {}",
-                        proposedCall.toolName(), intent, rejContent);
-                throw new AssertionError("Policy violation: " + rejContent);
-            }
-
-            // Execute the tool
-            ToolResult result;
-            try
-            {
-                final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
-                        .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
-                result = tool.execute(effectiveCall, toolContext);
-            }
-            catch (final AssertionError e)
-            {
-                if (effectiveCall.toolName().startsWith("assert") || effectiveCall.toolName().startsWith("browser_assert"))
-                {
-                    // Stop Criterion 2: Immediate fail on real defects!
-                    LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
-                    throw e;
-                }
-                LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
-                result = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
-                if (activeContextLevel.escalate() != null)
-                {
-                    activeContextLevel = activeContextLevel.escalate();
-                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                    LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
-                }
-            }
-            catch (final JavascriptException | InvalidSelectorException | InvalidElementStateException e)
-            {
-                LOGGER.warn("Tool syntax error in '{}': {}", effectiveCall.toolName(), e.getMessage());
-                result = ToolResult.error(effectiveCall.callId(), "Tool failed with syntax error: " + e.getMessage());
-                if (activeContextLevel.escalate() != null)
-                {
-                    activeContextLevel = activeContextLevel.escalate();
-                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                    LOGGER.warn("⚠️ Tool syntax error; escalating active context depth to: {}", activeContextLevel);
-                }
-            }
-            catch (final WebDriverException e)
-            {
-                // Stop Criterion 6: Fatal Environment Failure
-                LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
-                throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
-            }
-            catch (final Exception e)
-            {
-                LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
-                result = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
-            }
-
-            if (result != null && result.variables().containsKey("requestedContextLevel"))
-            {
-                final String reqLevel = (String) result.variables().get("requestedContextLevel");
+                // Execute the tool
+                ToolResult result;
                 try
                 {
-                    activeContextLevel = ContextLevel.valueOf(reqLevel);
-                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                    LOGGER.info("🔄 Active context level updated to '{}' via tool request", activeContextLevel);
+                    final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
+                            .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
+                    result = tool.execute(effectiveCall, toolContext);
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError e)
                 {
-                    LOGGER.info("🔄 Active context level updated to '{}' via tool request", activeContextLevel);
+                    if (effectiveCall.toolName().startsWith("assert") || effectiveCall.toolName().startsWith("browser_assert"))
+                    {
+                        // Stop Criterion 2: Immediate fail on real defects!
+                        LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
+                        executedCalls.add(effectiveCall);
+                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                        if (session != null && session.getEventBus() != null)
+                        {
+                            Action mappedAction = mapToolCallToAction(effectiveCall);
+                            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                            {
+                                mappedAction = mappedAction.withReasoning(thought.trim());
+                            }
+                            final SessionData sessionData = context.getSessionData();
+                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
+                        }
+                        throw e;
+                    }
+                    LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                    result = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
+                    if (activeContextLevel.escalate() != null)
+                    {
+                        activeContextLevel = activeContextLevel.escalate();
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                        LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                    }
                 }
-            }
+                catch (final JavascriptException | InvalidSelectorException | InvalidElementStateException e)
+                {
+                    LOGGER.warn("Tool syntax error in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                    result = ToolResult.error(effectiveCall.callId(), "Tool failed with syntax error: " + e.getMessage());
+                    if (activeContextLevel.escalate() != null)
+                    {
+                        activeContextLevel = activeContextLevel.escalate();
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                        LOGGER.warn("⚠️ Tool syntax error; escalating active context depth to: {}", activeContextLevel);
+                    }
+                }
+                catch (final WebDriverException e)
+                {
+                    // Stop Criterion 6: Fatal Environment Failure
+                    LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
+                    throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
+                    result = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
+                }
 
-            if (result != null && result.status() == ToolResult.Status.SUCCESS)
-            {
-                ToolCall callToRecord = effectiveCall;
-                if (result.content() != null && !result.content().isBlank())
+                lastResult = result;
+
+                if (result != null && result.variables().containsKey("requestedContextLevel"))
                 {
+                    final String reqLevel = (String) result.variables().get("requestedContextLevel");
                     try
                     {
-                        final JsonNode resJson = MAPPER.readTree(result.content());
-                        if (resJson.hasNonNull("domFeatureVector"))
-                        {
-                            final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
-                                    ? on.deepCopy()
-                                    : MAPPER.createObjectNode();
-                            updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
-                            callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
-                        }
+                        activeContextLevel = ContextLevel.valueOf(reqLevel);
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                        LOGGER.info("🔄 Active context level updated to '{}' via tool request", activeContextLevel);
                     }
                     catch (final Exception ignored)
                     {
                     }
                 }
-                executedCalls.add(callToRecord);
-                if ("navigate".equals(effectiveCall.toolName()) || "browser_navigate".equals(effectiveCall.toolName()))
-                {
-                    previousElementSignatures.clear();
-                }
-                if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()))
-                {
-                    final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        Action mappedAction = mapToolCallToAction(callToRecord);
-                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
-                        {
-                            mappedAction = mappedAction.withReasoning(thought.trim());
-                        }
-                        final SessionData sessionData = context.getSessionData();
-                        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                        session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
-                    }
-                }
-                if ("screenshot".equals(effectiveCall.toolName()) || "browser_take_screenshot".equals(effectiveCall.toolName()))
-                {
-                    final Object base64Obj = result.variables().get("screenshotBase64");
-                    if (base64Obj != null)
-                    {
-                        final String base64 = String.valueOf(base64Obj);
-                        final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
-                        final List<SutAttachment> newAttachments = List.of(new SutAttachment("image/png", "screenshot", rawBase64));
-                        pendingVisualAttachments = newAttachments;
-                        activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
-                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
 
+                if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                {
+                    ToolCall callToRecord = effectiveCall;
+                    if (result.content() != null && !result.content().isBlank())
+                    {
+                        try
+                        {
+                            final JsonNode resJson = MAPPER.readTree(result.content());
+                            if (resJson.hasNonNull("domFeatureVector"))
+                            {
+                                final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
+                                        ? on.deepCopy()
+                                        : MAPPER.createObjectNode();
+                                updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                                callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    executedCalls.add(callToRecord);
+                    if ("navigate".equals(effectiveCall.toolName()) || "browser_navigate".equals(effectiveCall.toolName()))
+                    {
+                        previousElementSignatures.clear();
+                    }
+                    if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()) && !isDiscoveryTool(effectiveCall.toolName()))
+                    {
                         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                         if (session != null && session.getEventBus() != null)
                         {
-                            final SutState screenshotState = new BrowserSutState("Screenshot", newAttachments, "screenshot");
-                            session.getEventBus().dispatch(new StateCapturedEvent(screenshotState));
+                            Action mappedAction = mapToolCallToAction(callToRecord);
+                            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                            {
+                                mappedAction = mappedAction.withReasoning(thought.trim());
+                            }
+                            final SessionData sessionData = context.getSessionData();
+                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
                         }
                     }
-                }
-                else if ("inspect_visual".equals(effectiveCall.toolName()) || "browser_inspect_visual".equals(effectiveCall.toolName()))
-                {
-                    final Object base64Obj = result.variables().get("cropBase64");
-                    if (base64Obj != null)
+                    if ("screenshot".equals(effectiveCall.toolName()) || "browser_take_screenshot".equals(effectiveCall.toolName()))
                     {
-                        final String base64 = String.valueOf(base64Obj);
-                        final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
-                        final String selector = String.valueOf(result.variables().getOrDefault("cropSelector", "element"));
-                        final Object widthObj = result.variables().get("cropWidth");
-                        final Object heightObj = result.variables().get("cropHeight");
-                        final List<SutAttachment> cropAttachments = List.of(new SutAttachment("image/png", "crop_" + selector, rawBase64));
-                        pendingVisualAttachments = cropAttachments;
-                        activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
-                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-
-                        final StringBuilder note = new StringBuilder();
-                        note.append("Visual crop of element `").append(selector).append("`");
-                        if (widthObj != null && heightObj != null)
+                        final Object base64Obj = result.variables().get("screenshotBase64");
+                        if (base64Obj != null)
                         {
-                            note.append(" (dimensions: ").append(widthObj).append("x").append(heightObj).append("px)");
+                            final String base64 = String.valueOf(base64Obj);
+                            final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                            final List<SutAttachment> newAttachments = List.of(new SutAttachment("image/png", "screenshot", rawBase64));
+                            pendingVisualAttachments = newAttachments;
+                            activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                final SutState screenshotState = new BrowserSutState("Screenshot", newAttachments, "screenshot");
+                                session.getEventBus().dispatch(new StateCapturedEvent(screenshotState));
+                            }
                         }
-                        note.append(" is attached to this turn. Inspect the visual content to determine target coordinates or verify visual state. ");
-                        note.append("To click inside this element, use `click` with `selector`: \"")
-                                .append(selector)
-                                .append("\" and relative `x`, `y` coordinates within the element.");
-                        pendingVisualNote = note.toString();
-
-                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-                        if (session != null && session.getEventBus() != null)
+                    }
+                    else if ("inspect_visual".equals(effectiveCall.toolName()) || "browser_inspect_visual".equals(effectiveCall.toolName()))
+                    {
+                        final Object base64Obj = result.variables().get("cropBase64");
+                        if (base64Obj != null)
                         {
-                            final SutState cropState = new BrowserSutState("Visual Crop: " + selector, cropAttachments, "crop");
-                            session.getEventBus().dispatch(new StateCapturedEvent(cropState));
+                            final String base64 = String.valueOf(base64Obj);
+                            final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                            final String selector = String.valueOf(result.variables().getOrDefault("cropSelector", "element"));
+                            final Object widthObj = result.variables().get("cropWidth");
+                            final Object heightObj = result.variables().get("cropHeight");
+                            final List<SutAttachment> cropAttachments = List.of(new SutAttachment("image/png", "crop_" + selector, rawBase64));
+                            pendingVisualAttachments = cropAttachments;
+                            activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                            final StringBuilder note = new StringBuilder();
+                            note.append("Visual crop of element `").append(selector).append("`");
+                            if (widthObj != null && heightObj != null)
+                            {
+                                note.append(" (dimensions: ").append(widthObj).append("x").append(heightObj).append("px)");
+                            }
+                            note.append(" is attached to this turn. Inspect the visual content to determine target coordinates or verify visual state. ");
+                            note.append("To click inside this element, use `click` with `selector`: \"")
+                                    .append(selector)
+                                    .append("\" and relative `x`, `y` coordinates within the element.");
+                            pendingVisualNote = note.toString();
+
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                final SutState cropState = new BrowserSutState("Visual Crop: " + selector, cropAttachments, "crop");
+                                session.getEventBus().dispatch(new StateCapturedEvent(cropState));
+                            }
                         }
                     }
                 }
-            }
 
-            // Check if tool result content signals an assertion failure
-            if (result != null && result.status() == ToolResult.Status.ERROR && result.content().startsWith("AssertionError"))
-            {
-                throw new AssertionError(result.content());
-            }
+                // Check if tool result content signals an assertion failure
+                if (result != null && result.status() == ToolResult.Status.ERROR && result.content().startsWith("AssertionError"))
+                {
+                    throw new AssertionError(result.content());
+                }
 
-            // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"
-            final String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
-            conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
-            logToolResult(effectiveCall.toolName(), toolContent);
+                // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"
+                final String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
+                conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
+                logToolResult(effectiveCall.toolName(), toolContent);
+
+                if (result == null || result.status() != ToolResult.Status.SUCCESS)
+                {
+                    batchInterrupted = true;
+                    break;
+                }
+                if (isPageNavigatingAction(effectiveCall.toolName()))
+                {
+                    break;
+                }
+            }
 
             // 1-Turn Atomic Step Completion
-            if (result != null && result.status() == ToolResult.Status.SUCCESS)
+            if (lastResult != null && lastResult.status() == ToolResult.Status.SUCCESS && !batchInterrupted)
             {
                 // Case 1: Co-proposed complete_step alongside an action/assertion that succeeded
                 if (coProposedComplete != null)
@@ -992,23 +1018,21 @@ public final class AgentToolLoopStep implements PipelineStep
                                     tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
                         }
                         LOGGER.info(TURN_DIVIDER);
-                        break;
+                        break turnLoop;
                     }
                 }
             }
 
             // Submit fresh ground-truth DOM from SUT for the next turn
             final boolean hasRemainingMilestones = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
-            final boolean lastToolFailed = result == null || result.status() != ToolResult.Status.SUCCESS;
-            final boolean requestedContextEscalation = result != null && result.variables().containsKey("requestedContextLevel");
-            final boolean isPureZeroDom = isZeroDom && !hasRemainingMilestones;
-            final boolean requireDomForNextTurn = !isPureZeroDom
-                    && (hasRemainingMilestones
-                            || lastToolFailed
-                            || requestedContextEscalation);
+            final boolean lastToolFailed = lastResult == null || lastResult.status() != ToolResult.Status.SUCCESS;
+            final boolean requestedContextEscalation = lastResult != null && lastResult.variables().containsKey("requestedContextLevel");
+            final boolean requireDomForNextTurn = hasRemainingMilestones
+                    || lastToolFailed
+                    || requestedContextEscalation;
 
             // Update URL and Title in transient data without full DOM re-dump
-            if (isMutatingTool(effectiveCall.toolName()))
+            if (lastEffectiveCall != null && isMutatingTool(lastEffectiveCall.toolName()))
             {
                 if (!requireDomForNextTurn)
                 {
@@ -1028,10 +1052,10 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
 
-            if (consecutiveIdenticalCalls == 2)
+            if (consecutiveIdenticalCalls == 2 && lastEffectiveCall != null)
             {
                 final String warn = "WARNING: Exact same tool call was executed twice in a row. Do NOT repeat tool '"
-                        + effectiveCall.toolName() + "' with arguments " + effectiveCall.arguments()
+                        + lastEffectiveCall.toolName() + "' with arguments " + lastEffectiveCall.arguments()
                         + " again, or the step will terminate with a thrashing failure. Change your strategy or selector.";
                 conversation.add(ChatMessage.user(warn));
                 LOGGER.warn(warn);
@@ -1138,7 +1162,6 @@ public final class AgentToolLoopStep implements PipelineStep
                             {
                                 turnPrompt.append("\n\nNote: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step' rather than repeating interactions.");
                             }
-                            turnPrompt.append("\n\nWhat is your next tool call?");
                             conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
                             attachments = freshAttachments;
                         }
@@ -1149,21 +1172,21 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                 }
             }
-            else if (!isPureZeroDom)
+            else
             {
-                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                if (driver != null || executor != null || pendingVisualNote != null)
+                final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (currentDriver != null || executor != null || pendingVisualNote != null)
                 {
                     try
                     {
                         final StringBuilder turnPrompt = new StringBuilder();
-                        if (driver != null)
+                        if (currentDriver != null)
                         {
-                            final String currentUrl = BrowserToolProvider.getSafeUrl(driver);
-                            final String currentTitle = BrowserToolProvider.getSafeTitle(driver);
+                            final String currentUrl = BrowserToolProvider.getSafeUrl(currentDriver);
+                            final String currentTitle = BrowserToolProvider.getSafeTitle(currentDriver);
                             try
                             {
-                                final String currentHandle = driver.getWindowHandle();
+                                final String currentHandle = currentDriver.getWindowHandle();
                                 final boolean urlChanged = lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl);
                                 final boolean windowChanged = lastSeenWindowHandle != null && currentHandle != null && !currentHandle.equals(lastSeenWindowHandle);
                                 if (urlChanged || windowChanged)
@@ -1215,8 +1238,14 @@ public final class AgentToolLoopStep implements PipelineStep
                             nextAttachments = Collections.emptyList();
                         }
 
-                        turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If the step's goal is achieved and confirmed on screen, invoke 'complete_step'. If you need to inspect the updated page DOM to verify or continue, use tool 'query_dom' or 'request_context'.\n\n");
-                        turnPrompt.append("What is your next tool call?");
+                        if (milestones != null && !milestones.isEmpty())
+                        {
+                            turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot. This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). Do not perform uncommanded assertions or anticipate subsequent steps.");
+                        }
+                        else
+                        {
+                            turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step'.");
+                        }
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
                         attachments = nextAttachments;
@@ -1228,14 +1257,25 @@ public final class AgentToolLoopStep implements PipelineStep
             }
         }
     }
+    finally
+    {
+        finalizeStepExecution(context, executedCalls, null);
+    }
+    }
+
+    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation)
+    {
+        pruneExpiredDomFromConversation(conversation, true);
+    }
 
     /**
      * Prunes stale DOM snapshots and attachments from all previous user messages
      * in the active multi-turn conversation so only the latest ground-truth DOM is preserved.
      *
      * @param conversation the active multi-turn conversation
+     * @param hasFreshDomIncoming whether a new DOM snapshot will be appended for the upcoming turn
      */
-    private static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation)
+    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation, final boolean hasFreshDomIncoming)
     {
         if (conversation == null || conversation.size() <= 1)
         {
@@ -1243,9 +1283,24 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         final String domSectionHeader = "### Current Page State & Interactive Elements:\n";
-        final String nextPromptHeader = "What is your next tool call?";
         final String replacement = "### Current Page State & Interactive Elements:\n"
                 + "[Initial page state omitted after Turn 1 — use browser tools for current page state]\n\n";
+
+        // Find the index of the latest message containing an active DOM section
+        int latestDomIndex = -1;
+        for (int i = conversation.size() - 1; i >= 1; i--)
+        {
+            final ChatMessage msg = conversation.get(i);
+            if (msg != null && msg.role() == Role.USER && msg.content() != null)
+            {
+                final String content = msg.content();
+                if (content.indexOf(domSectionHeader) != -1 && !content.contains("[Initial page state omitted"))
+                {
+                    latestDomIndex = i;
+                    break;
+                }
+            }
+        }
 
         for (int i = 1; i < conversation.size(); i++)
         {
@@ -1257,11 +1312,19 @@ public final class AgentToolLoopStep implements PipelineStep
 
             final String content = msg.content();
             final int domIdx = content.indexOf(domSectionHeader);
-            if (domIdx != -1 && !content.contains("[Initial page state omitted"))
+            final boolean isUnprunedDom = domIdx != -1 && !content.contains("[Initial page state omitted");
+
+            // If no fresh DOM is incoming and this is the latest DOM we have, do NOT prune it
+            if (isUnprunedDom && !hasFreshDomIncoming && i == latestDomIndex)
             {
-                final int nextPromptIdx = content.indexOf(nextPromptHeader, domIdx);
+                continue;
+            }
+
+            if (isUnprunedDom)
+            {
+                final int nextSectionIdx = content.indexOf("\n\n### ", domIdx + domSectionHeader.length());
                 final String prefix = content.substring(0, domIdx);
-                final String suffix = (nextPromptIdx != -1) ? content.substring(nextPromptIdx) : nextPromptHeader;
+                final String suffix = (nextSectionIdx != -1) ? content.substring(nextSectionIdx) : "";
                 final String prunedContent = prefix + replacement + suffix;
                 final int prunedChars = content.length() - prunedContent.length();
 
@@ -1269,7 +1332,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 LOGGER.debug("✂️ Pruned expired DOM from message index {} (saved ~{} chars / ~{} tokens)",
                         i, prunedChars, prunedChars / 4);
             }
-            else if (msg.attachments() != null && !msg.attachments().isEmpty())
+            else if (msg.attachments() != null && !msg.attachments().isEmpty() && (hasFreshDomIncoming || i != latestDomIndex))
             {
                 conversation.set(i, ChatMessage.user(content, Collections.emptyList()));
             }
@@ -1278,6 +1341,19 @@ public final class AgentToolLoopStep implements PipelineStep
 
     private void finishLoop(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
     {
+        finalizeStepExecution(context, executedCalls, summary);
+    }
+
+    private void finalizeStepExecution(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
+    {
+        if (Boolean.TRUE.equals(context.getTransientData().put("KEY_STEP_EXECUTION_FINALIZED", Boolean.TRUE)))
+        {
+            return;
+        }
+        if (summary != null)
+        {
+            context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+        }
         final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         if (stepObj instanceof final PlaybookStep currentStep)
         {
@@ -1287,14 +1363,17 @@ public final class AgentToolLoopStep implements PipelineStep
             final List<ToolCall> sanitizedCalls = new ArrayList<>();
             for (final ToolCall call : executedCalls)
             {
-                sanitizedCalls.add(sanitizeToolCall(call, sessionData, sanitizer));
+                if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                {
+                    sanitizedCalls.add(sanitizeToolCall(call, sessionData, sanitizer));
+                }
             }
             currentStep.setToolCalls(sanitizedCalls);
 
             final List<Action> actions = new ArrayList<>();
             for (final ToolCall call : executedCalls)
             {
-                if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()))
+                if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
                 {
                     final Action mapped = mapToolCallToAction(call);
                     final Action sanitizedAction = sanitizer.sanitize(mapped, sessionData);
@@ -1306,10 +1385,281 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
             currentStep.setActions(actions);
+
+            if (currentStep.getStartTimeMs() != null)
+            {
+                final long elapsed = Math.max(1, System.currentTimeMillis() - currentStep.getStartTimeMs());
+                if (currentStep.getDurationMs() == null || currentStep.getDurationMs() <= 0)
+                {
+                    currentStep.setDurationMs(elapsed);
+                }
+            }
+
+            if (currentStep.hasSubSteps())
+            {
+                final List<PlaybookStep> children = currentStep.getSubSteps();
+                for (final PlaybookStep child : children)
+                {
+                    if (child.getParent() == null)
+                    {
+                        child.setParent(currentStep);
+                    }
+                }
+                partitionToolCallsAndActions(children, sanitizedCalls, actions);
+
+                final Long parentDuration = currentStep.getDurationMs();
+                if (parentDuration != null && parentDuration > 0 && !children.isEmpty())
+                {
+                    final long childDuration = Math.max(1, parentDuration / children.size());
+                    for (final PlaybookStep child : children)
+                    {
+                        if (child.getDurationMs() == null || child.getDurationMs() <= 0)
+                        {
+                            child.setDurationMs(childDuration);
+                        }
+                    }
+                }
+            }
         }
 
         context.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
         context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
+    }
+
+    /**
+     * Partitions executed tool calls and actions across child sub-steps of a compound step.
+     * When call count matches sub-steps 1:1, each child receives its direct call.
+     * When counts differ (e.g. conditional branches skipped or multi-action sub-steps),
+     * calls are matched sequentially to children based on semantic intent and instruction keywords,
+     * ensuring no child receives a cloned duplicate of the entire parent call list.
+     *
+     * @param subSteps the sub-steps to assign calls to
+     * @param toolCalls the executed tool calls
+     * @param actions the executed actions
+     */
+    public static void partitionToolCallsAndActions(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> toolCalls,
+            final List<Action> actions)
+    {
+        if (subSteps == null || subSteps.isEmpty())
+        {
+            return;
+        }
+
+        final int numChildren = subSteps.size();
+        final List<ToolCall> safeCalls = toolCalls != null ? toolCalls : Collections.emptyList();
+        final List<Action> safeActions = actions != null ? actions : Collections.emptyList();
+
+        if (safeCalls.size() == numChildren)
+        {
+            for (int i = 0; i < numChildren; i++)
+            {
+                final PlaybookStep child = subSteps.get(i);
+                child.setToolCalls(List.of(safeCalls.get(i)));
+                if (i < safeActions.size())
+                {
+                    child.setActions(List.of(safeActions.get(i)));
+                }
+                else
+                {
+                    child.setActions(Collections.emptyList());
+                }
+                if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
+                {
+                    child.setStatus(PlaybookStepStatus.SUCCESS);
+                }
+            }
+            return;
+        }
+
+        final List<List<ToolCall>> partitionedCalls = new ArrayList<>();
+        final List<List<Action>> partitionedActions = new ArrayList<>();
+        for (int i = 0; i < numChildren; i++)
+        {
+            partitionedCalls.add(new ArrayList<>());
+            partitionedActions.add(new ArrayList<>());
+        }
+
+        int subIdx = 0;
+        for (int c = 0; c < safeCalls.size(); c++)
+        {
+            final ToolCall call = safeCalls.get(c);
+            final Action act = c < safeActions.size() ? safeActions.get(c) : null;
+            final String toolName = call != null && call.toolName() != null ? call.toolName() : "";
+
+            int matchedIdx = -1;
+            for (int i = subIdx; i < numChildren; i++)
+            {
+                if (matchesSubStep(subSteps.get(i), toolName))
+                {
+                    matchedIdx = i;
+                    break;
+                }
+            }
+
+            if (matchedIdx >= 0)
+            {
+                partitionedCalls.get(matchedIdx).add(call);
+                if (act != null)
+                {
+                    partitionedActions.get(matchedIdx).add(act);
+                }
+                subIdx = matchedIdx + 1;
+            }
+            else
+            {
+                final int targetIdx = Math.min(Math.max(0, subIdx), numChildren - 1);
+                partitionedCalls.get(targetIdx).add(call);
+                if (act != null)
+                {
+                    partitionedActions.get(targetIdx).add(act);
+                }
+                if (subIdx < numChildren - 1)
+                {
+                    subIdx++;
+                }
+            }
+        }
+
+        for (int i = 0; i < numChildren; i++)
+        {
+            final PlaybookStep child = subSteps.get(i);
+            child.setToolCalls(partitionedCalls.get(i));
+            child.setActions(partitionedActions.get(i));
+            if (!partitionedCalls.get(i).isEmpty() && (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING))
+            {
+                child.setStatus(PlaybookStepStatus.SUCCESS);
+            }
+        }
+    }
+
+    private static boolean matchesSubStep(final PlaybookStep subStep, final String rawToolName)
+    {
+        if (subStep == null || subStep.getInstruction() == null || rawToolName == null)
+        {
+            return false;
+        }
+
+        final String toolName = rawToolName.toLowerCase().replace("browser_", "").trim();
+        String inst = subStep.getInstruction().toLowerCase().trim();
+
+        if (inst.startsWith("when ") && inst.contains(","))
+        {
+            final int commaIdx = inst.indexOf(',');
+            inst = inst.substring(commaIdx + 1).trim();
+        }
+
+        if (subStep.getSemanticIntent() != null && matchesIntent(subStep.getSemanticIntent(), toolName))
+        {
+            return true;
+        }
+
+        if (toolName.contains("store"))
+        {
+            return inst.contains("capture") || inst.contains("store") || inst.contains("save");
+        }
+        if (toolName.contains("hover"))
+        {
+            return inst.contains("hover") || inst.contains("mouse");
+        }
+        if (toolName.contains("click") || toolName.contains("select"))
+        {
+            return inst.contains("click") || inst.contains("press") || inst.contains("select") || inst.contains("choose") || inst.contains("add") || inst.contains("submit");
+        }
+        if (toolName.contains("type") || toolName.contains("fill") || toolName.contains("clear"))
+        {
+            return inst.contains("type") || inst.contains("enter") || inst.contains("fill") || inst.contains("write")
+                    || inst.contains("clear") || inst.contains("empty") || inst.contains("reset");
+        }
+        if (toolName.contains("assert") || toolName.contains("verify") || toolName.contains("check"))
+        {
+            return inst.contains("verify") || inst.contains("assert") || inst.contains("check") || inst.contains("ensure");
+        }
+        if (toolName.contains("navigate") || toolName.contains("open"))
+        {
+            return inst.contains("open") || inst.contains("navigate") || inst.contains("go to");
+        }
+
+        return false;
+    }
+
+    private static boolean matchesIntent(final SemanticIntent intent, final String toolName)
+    {
+        return switch (intent)
+        {
+            case STORE -> toolName.contains("store");
+            case HOVER_SCROLL -> toolName.contains("hover") || toolName.contains("scroll");
+            case CLICK -> toolName.contains("click") || toolName.contains("press");
+            case TYPE -> toolName.contains("type") || toolName.contains("fill");
+            case SELECT -> toolName.contains("select") || toolName.contains("click");
+            case ASSERT, ASSERT_METADATA -> toolName.contains("assert") || toolName.contains("verify");
+            case NAVIGATE -> toolName.contains("navigate") || toolName.contains("open");
+            default -> false;
+        };
+    }
+
+    private static boolean isFormInputAction(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
+        return "fill".equals(clean)
+                || "type".equals(clean)
+                || "select".equals(clean)
+                || "clear".equals(clean);
+    }
+
+    private static boolean isPageNavigatingAction(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
+        return "navigate".equals(clean)
+                || "back".equals(clean)
+                || "forward".equals(clean)
+                || "refresh".equals(clean)
+                || "click".equals(clean);
+    }
+
+    private static boolean isDiscoveryTool(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
+        return "query_dom".equals(clean)
+                || "inspect".equals(clean)
+                || "inspect_visual".equals(clean)
+                || "request_context".equals(clean);
+    }
+
+    private static boolean isCohesiveFormInputBatch(final List<ToolCall> proposedCalls)
+    {
+        if (proposedCalls == null || proposedCalls.size() <= 1)
+        {
+            return false;
+        }
+        final int limit = "complete_step".equals(proposedCalls.get(proposedCalls.size() - 1).toolName())
+                ? proposedCalls.size() - 1
+                : proposedCalls.size();
+        if (limit <= 1)
+        {
+            return false;
+        }
+        for (int i = 0; i < limit; i++)
+        {
+            if (!isFormInputAction(proposedCalls.get(i).toolName()))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static ToolCall sanitizeToolCall(final ToolCall call, final SessionData sessionData, final DefaultActionSanitizer sanitizer)
@@ -1357,7 +1707,6 @@ public final class AgentToolLoopStep implements PipelineStep
         final List<ToolDefinition> defs = new ArrayList<>();
         final boolean hasInteractive = hasInteractiveMilestones(context);
         final boolean isVisualAssertion = isVisual && (intent == null || intent.isAssertion());
-        final boolean isAssertion = !hasInteractive && intent != null && intent.isAssertion();
 
         final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
         final boolean hasMultipleTabs;
@@ -1391,8 +1740,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 continue;
             }
 
-            // Assertion steps must never mutate page state (unless step has compound interactive milestones)
-            if ((isAssertion || (isVisualAssertion && !hasInteractive)) && isMutatingTool(name))
+            // Pure visual assertions omit mutating tools
+            if (isVisualAssertion && !hasInteractive && isMutatingTool(name))
             {
                 continue;
             }
@@ -1508,6 +1857,8 @@ public final class AgentToolLoopStep implements PipelineStep
         return "query_dom".equals(clean)
                 || "assert_text".equals(clean)
                 || "assert_count".equals(clean)
+                || "assert_element_state".equals(clean)
+                || "assert_attribute".equals(clean)
                 || "inspect".equals(clean);
     }
 
@@ -2054,7 +2405,9 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "clear_cookies".equals(clean) || "back".equals(clean) || "forward".equals(clean)
                 || "refresh".equals(clean) || "wait".equals(clean) || "assert".equals(clean)
                 || "assert_text".equals(clean) || "assert_title".equals(clean) || "assert_url".equals(clean)
-                || "assert_count".equals(clean) || "key_press".equals(clean) || "press_key".equals(clean)
+                || "assert_count".equals(clean) || "assert_element_state".equals(clean) || "assert_state".equals(clean)
+                || "assert_attribute".equals(clean) || "assert_attr".equals(clean)
+                || "key_press".equals(clean) || "press_key".equals(clean)
                 || "drag".equals(clean) || "drag_to".equals(clean) || "drag_and_drop".equals(clean)
                 || "check".equals(clean) || "store".equals(clean) || "branch".equals(clean)
                 || "include".equals(clean) || "java_method".equals(clean)
@@ -2098,6 +2451,8 @@ public final class AgentToolLoopStep implements PipelineStep
             case "assert_title" -> "assert_title";
             case "assert_url" -> "assert_url";
             case "assert_count" -> "assert_count";
+            case "assert_element_state", "assert_state" -> "assert_element_state";
+            case "assert_attribute", "assert_attr" -> "assert_attribute";
             case "drag" -> "drag";
             case "drag_to", "drag_and_drop" -> "drag_to";
             case "key_press", "press_key" -> "press_key";
@@ -2476,6 +2831,21 @@ public final class AgentToolLoopStep implements PipelineStep
                         final String tgt = node.path("target").asText();
                         final String exp = node.path("expected").asText();
                         LOGGER.info("📥 Result [{}]: {}{} - verified text \"{}\" on '{}'", toolName, icon, status, exp, tgt);
+                        return;
+                    }
+                    if ("assert_element_state".equals(act) && node.has("target") && node.has("state"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String st = node.path("state").asText();
+                        LOGGER.info("📥 Result [{}]: {}{} - verified element state '{}' on '{}'", toolName, icon, status, st, tgt);
+                        return;
+                    }
+                    if ("assert_attribute".equals(act) && node.has("target") && node.has("attribute"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String attr = node.path("attribute").asText();
+                        final String exp = node.has("expectedValue") ? "=\"" + node.path("expectedValue").asText() + "\"" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - verified attribute '{}{}' on '{}'", toolName, icon, status, attr, exp, tgt);
                         return;
                     }
                     if ("navigate".equals(act) && node.has("url"))

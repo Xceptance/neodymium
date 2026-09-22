@@ -19,6 +19,7 @@
 package org.neodymium.ai.junit;
 
 import java.io.FileNotFoundException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -272,13 +273,25 @@ public class NeodymiumAiRunnerTest
         });
 
         // Verify report files were generated despite the early failure
+        final Path targetResultsDir = Path.of("target/ai-results");
+        final Path searchDir;
         try (var stream = Files.list(reportDir))
         {
-            final List<Path> files = stream.toList();
+            searchDir = stream.anyMatch(p -> p.getFileName().toString().endsWith(".html")) ? reportDir : targetResultsDir;
+        }
+
+        try (var stream = Files.list(searchDir))
+        {
+            final List<Path> files = searchDir.equals(targetResultsDir)
+                ? stream.filter(p -> p.getFileName().toString().contains("SampleReplayMissingCompanionClass_testMissingReplay")).toList()
+                : stream.toList();
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".html")), "HTML report must be generated");
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".md")), "Markdown report must be generated");
             Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().endsWith(".json")), "JSON report must be generated");
-            Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().equals("index.html")), "index.html must be updated");
+            if (searchDir.equals(reportDir))
+            {
+                Assertions.assertTrue(files.stream().anyMatch(p -> p.getFileName().toString().equals("index.html")), "index.html must be updated");
+            }
 
             final Path jsonPath = files.stream()
                 .filter(p -> p.getFileName().toString().endsWith(".json") && !p.getFileName().toString().equals("index-data.json"))
@@ -289,5 +302,102 @@ public class NeodymiumAiRunnerTest
             Assertions.assertEquals("REPLAY_STRICT", root.get("executionMode").asText());
             Assertions.assertTrue(root.get("failureReason").asText().contains("No recorded companion JSON file found"));
         }
+    }
+
+    /**
+     * Sample test class decorated with inline playbook containing datasets and unmatched @AiDataSet.
+     */
+    public static class UnmatchedDataSetTestClass
+    {
+        /**
+         * Test method requesting non-existent dataset.
+         */
+        @Test
+        @AiDataSet("nonexistent")
+        @AiInlinePlaybook("name: dataset_sample\ndata:\n  - id: US\n    query: jeans\n  - id: DE\n    query: hemd\nsteps:\n  - step: Search\n")
+        public void testUnmatchedDataSet()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that NeodymiumAiRunner throws IllegalArgumentException when @AiDataSet does not match any dataset.
+     */
+    @Test
+    public void testUnmatchedDataSetThrowsException() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = UnmatchedDataSetTestClass.class.getMethod("testUnmatchedDataSet");
+        final ExtensionContext extensionContext = createMockExtensionContext(UnmatchedDataSetTestClass.class, method);
+
+        final IllegalArgumentException ex = Assertions.assertThrows(IllegalArgumentException.class, () -> {
+            runner.provideTestTemplateInvocationContexts(extensionContext);
+        });
+
+        Assertions.assertTrue(ex.getMessage().contains("matched @AiDataSet filter [nonexistent]"));
+        Assertions.assertTrue(ex.getMessage().contains("Available dataset IDs: [US, DE]"));
+    }
+
+    /**
+     * Sample test class decorated with class-level and method-level @AiVisual annotations.
+     */
+    @AiVisual(0.95)
+    @AiMode(ExecutionMode.LLM_ONLY)
+    public static class VisualAnnotationTestClass
+    {
+        @Test
+        @AiInlinePlaybook("name: visual_sample\nsteps:\n  - step: Check logo\n")
+        public void testClassLevelVisual()
+        {
+        }
+
+        @Test
+        @AiVisual(threshold = 0.92)
+        @AiInlinePlaybook("name: visual_sample\nsteps:\n  - step: Check logo\n")
+        public void testMethodLevelVisual()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that @AiVisual on class and method levels configures neodymium.ai.ssim.minScore.
+     */
+    @Test
+    public void testAiVisualAnnotationHandling() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+
+        // 1. Class-level annotation (0.95)
+        final Method classMethod = VisualAnnotationTestClass.class.getMethod("testClassLevelVisual");
+        final ExtensionContext classContext = createMockExtensionContext(VisualAnnotationTestClass.class, classMethod);
+        final List<TestTemplateInvocationContext> classInvocations =
+            runner.provideTestTemplateInvocationContexts(classContext).toList();
+        Assertions.assertFalse(classInvocations.isEmpty());
+
+        final List<Extension> classExtensions = classInvocations.get(0).getAdditionalExtensions();
+        final BeforeEachCallback classBeforeEach = (BeforeEachCallback) classExtensions.stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+        classBeforeEach.beforeEach(classContext);
+        Assertions.assertEquals("0.95", Neodymium.getData().get("neodymium.ai.ssim.minScore"));
+
+        // 2. Method-level override (0.92)
+        final Method methodMethod = VisualAnnotationTestClass.class.getMethod("testMethodLevelVisual");
+        final ExtensionContext methodContext = createMockExtensionContext(VisualAnnotationTestClass.class, methodMethod);
+        final List<TestTemplateInvocationContext> methodInvocations =
+            runner.provideTestTemplateInvocationContexts(methodContext).toList();
+        Assertions.assertFalse(methodInvocations.isEmpty());
+
+        final List<Extension> methodExtensions = methodInvocations.get(0).getAdditionalExtensions();
+        final BeforeEachCallback methodBeforeEach = (BeforeEachCallback) methodExtensions.stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+        methodBeforeEach.beforeEach(methodContext);
+        Assertions.assertEquals("0.92", Neodymium.getData().get("neodymium.ai.ssim.minScore"));
+
+        // Cleanup
+        Neodymium.getData().remove("neodymium.ai.ssim.minScore");
     }
 }

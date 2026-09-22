@@ -41,8 +41,6 @@ public final class ExecutionMetrics
 
     private final int verificationCallCount;
 
-    private final int pesapCallCount;
-
     private final int judgeCallCount;
 
     private final int rcaCallCount;
@@ -70,7 +68,6 @@ public final class ExecutionMetrics
      * @param llmCallCount total LLM API calls made
      * @param standardCallCount standard action extraction LLM calls
      * @param verificationCallCount post-action verification LLM calls
-     * @param pesapCallCount PESAP pre-step analysis LLM calls
      * @param judgeCallCount quality judge LLM calls
      * @param stepCount total playbook steps executed
      * @param healedStepCount count of steps resolved via self-healing
@@ -84,7 +81,6 @@ public final class ExecutionMetrics
         final int llmCallCount,
         final int standardCallCount,
         final int verificationCallCount,
-        final int pesapCallCount,
         final int judgeCallCount,
         final int stepCount,
         final int healedStepCount,
@@ -99,7 +95,6 @@ public final class ExecutionMetrics
             llmCallCount,
             standardCallCount,
             verificationCallCount,
-            pesapCallCount,
             judgeCallCount,
             0,
             stepCount,
@@ -120,7 +115,6 @@ public final class ExecutionMetrics
      * @param llmCallCount total LLM API calls made
      * @param standardCallCount standard action extraction LLM calls
      * @param verificationCallCount post-action verification LLM calls
-     * @param pesapCallCount PESAP pre-step analysis LLM calls
      * @param judgeCallCount quality judge LLM calls
      * @param stepCount total playbook steps executed
      * @param healedStepCount count of steps resolved via self-healing
@@ -136,7 +130,6 @@ public final class ExecutionMetrics
         final int llmCallCount,
         final int standardCallCount,
         final int verificationCallCount,
-        final int pesapCallCount,
         final int judgeCallCount,
         final int stepCount,
         final int healedStepCount,
@@ -153,7 +146,6 @@ public final class ExecutionMetrics
             llmCallCount,
             standardCallCount,
             verificationCallCount,
-            pesapCallCount,
             judgeCallCount,
             0,
             stepCount,
@@ -174,7 +166,6 @@ public final class ExecutionMetrics
      * @param llmCallCount total LLM API calls made
      * @param standardCallCount standard action extraction LLM calls
      * @param verificationCallCount post-action verification LLM calls
-     * @param pesapCallCount PESAP pre-step analysis LLM calls
      * @param judgeCallCount quality judge LLM calls
      * @param rcaCallCount Visual RCA LLM calls
      * @param stepCount total playbook steps executed
@@ -191,7 +182,6 @@ public final class ExecutionMetrics
         final int llmCallCount,
         final int standardCallCount,
         final int verificationCallCount,
-        final int pesapCallCount,
         final int judgeCallCount,
         final int rcaCallCount,
         final int stepCount,
@@ -208,7 +198,6 @@ public final class ExecutionMetrics
         this.llmCallCount = llmCallCount;
         this.standardCallCount = standardCallCount;
         this.verificationCallCount = verificationCallCount;
-        this.pesapCallCount = pesapCallCount;
         this.judgeCallCount = judgeCallCount;
         this.rcaCallCount = rcaCallCount;
         this.stepCount = stepCount;
@@ -321,15 +310,6 @@ public final class ExecutionMetrics
         return this.verificationCallCount;
     }
 
-    /**
-     * Returns the count of PESAP pre-step analysis LLM calls.
-     *
-     * @return PESAP LLM calls
-     */
-    public int getPesapCallCount()
-    {
-        return this.pesapCallCount;
-    }
 
     /**
      * Returns the count of quality judge LLM calls.

@@ -72,7 +72,6 @@ public class RangeSliderSandboxMockTest extends BaseAiTest
     public static void disableLiveLlm()
     {
         Neodymium.getData().put("neodymium.ai.global.provider", "mock");
-        Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
         Neodymium.getData().put("neodymium.ai.linter.enabled", "false");
     }
 

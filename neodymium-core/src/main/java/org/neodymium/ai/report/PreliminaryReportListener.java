@@ -201,7 +201,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             {
                 try
                 {
-                    resolvedInstruction = activeCtx.getSessionData().resolveVariables(rawInstruction);
+                    resolvedInstruction = activeCtx.getSessionData().resolveAvailableVariables(rawInstruction);
                 }
                 catch (final Exception ignored)
                 {
@@ -273,7 +273,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         try
                         {
-                            pResolved = activeCtx.getSessionData().resolveVariables(pRaw);
+                            pResolved = activeCtx.getSessionData().resolveAvailableVariables(pRaw);
                         }
                         catch (final Exception ignored)
                         {
@@ -336,7 +336,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         try
                         {
-                            cResolved = activeCtx.getSessionData().resolveVariables(cRaw);
+                            cResolved = activeCtx.getSessionData().resolveAvailableVariables(cRaw);
                         }
                         catch (final Exception ignored)
                         {
@@ -458,6 +458,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setSsimMinScore(pbStep.getSsimMinScore());
                     }
+                    else if (pbStep.getSsimScore() != null)
+                    {
+                        targetStep.setSsimMinScore(AiConfiguration.getInstance().getVisualSsimMinScore());
+                    }
                     if (pbStep.getBaselineMatrixPng() != null)
                     {
                         targetStep.setBaselineMatrixPng(pbStep.getBaselineMatrixPng());
@@ -505,7 +509,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             {
                                 try
                                 {
-                                    cResolved = activeCtx.getSessionData().resolveVariables(cRaw);
+                                    cResolved = activeCtx.getSessionData().resolveAvailableVariables(cRaw);
                                 }
                                 catch (final Exception ignored)
                                 {
@@ -516,6 +520,33 @@ public final class PreliminaryReportListener implements ExecutionListener
                             childEntry.setSourceFile(childStep.getSourceFile());
                             childEntry.setLineNumber(childStep.getLineNumber());
                             childEntry.setStatus(childStep.getStatus() != null ? childStep.getStatus().name() : "PENDING");
+                            if (childStep.getFailureReason() != null)
+                            {
+                                childEntry.setFailureReason(childStep.getFailureReason());
+                            }
+                            if (childStep.getDurationMs() != null && childStep.getDurationMs() > 0)
+                            {
+                                childEntry.setDurationMs(childStep.getDurationMs());
+                            }
+                            if (childStep.getActions() != null && !childStep.getActions().isEmpty())
+                            {
+                                for (final Action act : childStep.getActions())
+                                {
+                                    childEntry.addAction(new TestExecutionReport.ReportActionEntry(
+                                        act.getType(),
+                                        act.getTarget(),
+                                        act.getValue(),
+                                        act.getDescription(),
+                                        act.getReasoning(),
+                                        true,
+                                        null
+                                    ));
+                                }
+                            }
+                            else if (targetStep.getActions().size() == pbStep.getSubSteps().size())
+                            {
+                                childEntry.addAction(targetStep.getActions().get(s));
+                            }
                             childEntry.setBug(childStep.isBug());
                             childEntry.setBugDetails(childStep.getBugDetails());
                             childEntry.setOptional(childStep.isOptional());
@@ -525,19 +556,110 @@ public final class PreliminaryReportListener implements ExecutionListener
                             targetStep.addSubStep(childEntry);
                         }
                     }
+                    else if (pbStep.hasSubSteps() && !targetStep.getSubSteps().isEmpty())
+                    {
+                        for (int s = 0; s < pbStep.getSubSteps().size() && s < targetStep.getSubSteps().size(); s++)
+                        {
+                            final PlaybookStep childStep = pbStep.getSubSteps().get(s);
+                            final TestExecutionReport.ReportStepEntry childEntry = targetStep.getSubSteps().get(s);
+                            if (childEntry.getActions().isEmpty() && childStep.getActions() != null && !childStep.getActions().isEmpty())
+                            {
+                                for (final Action act : childStep.getActions())
+                                {
+                                    childEntry.addAction(new TestExecutionReport.ReportActionEntry(
+                                        act.getType(),
+                                        act.getTarget(),
+                                        act.getValue(),
+                                        act.getDescription(),
+                                        act.getReasoning(),
+                                        true,
+                                        null
+                                    ));
+                                }
+                            }
+                            else if (childEntry.getActions().isEmpty() && targetStep.getActions().size() == pbStep.getSubSteps().size())
+                            {
+                                childEntry.addAction(targetStep.getActions().get(s));
+                            }
+                            if (childStep.getDurationMs() != null && childStep.getDurationMs() > 0 && childEntry.getDurationMs() <= 0)
+                            {
+                                childEntry.setDurationMs(childStep.getDurationMs());
+                            }
+                            if (childStep.getStatus() != null && (childEntry.getStatus() == null || "PENDING".equalsIgnoreCase(childEntry.getStatus()) || "RUNNING".equalsIgnoreCase(childEntry.getStatus())))
+                            {
+                                childEntry.setStatus(childStep.getStatus().name());
+                                if (childStep.getFailureReason() != null && childEntry.getFailureReason() == null)
+                                {
+                                    childEntry.setFailureReason(childStep.getFailureReason());
+                                }
+                            }
+                        }
+                    }
+
+                    if (!targetStep.getSubSteps().isEmpty() && !targetStep.getScreenshots().isEmpty())
+                    {
+                        for (int s = 0; s < targetStep.getSubSteps().size(); s++)
+                        {
+                            final TestExecutionReport.ReportStepEntry sub = targetStep.getSubSteps().get(s);
+                            if (sub.getScreenshots().isEmpty())
+                            {
+                                for (final TestExecutionReport.ReportScreenshotEntry sc : targetStep.getScreenshots())
+                                {
+                                    if (sc.getSubStepIndex() == s)
+                                    {
+                                        sub.addScreenshot(sc);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (!targetStep.getSubSteps().isEmpty())
                 {
                     final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus()) || "PASSED".equalsIgnoreCase(targetStep.getStatus());
+                    final String parentFailure = targetStep.getFailureReason() != null ? targetStep.getFailureReason() : "";
+                    final boolean isAbortiveFailure = parentFailure.contains("Token budget exceeded")
+                            || parentFailure.contains("timeout")
+                            || parentFailure.contains("Fatal environment")
+                            || parentFailure.contains("aborted");
+
+                    boolean failureEncountered = false;
                     for (int s = 0; s < targetStep.getSubSteps().size(); s++)
                     {
                         final TestExecutionReport.ReportStepEntry sub = targetStep.getSubSteps().get(s);
+                        if ("FAILED".equalsIgnoreCase(sub.getStatus()))
+                        {
+                            failureEncountered = true;
+                            continue;
+                        }
                         if (isStepSuccess)
                         {
                             if (sub.getStatus() == null || "PENDING".equalsIgnoreCase(sub.getStatus()) || "RUNNING".equalsIgnoreCase(sub.getStatus()))
                             {
                                 sub.setStatus("SUCCESS");
+                            }
+                        }
+                        else if (isAbortiveFailure)
+                        {
+                            // In abortive infrastructure failures (e.g. token budget or timeout), do not fabricate SUCCESS on unexecuted steps
+                            // or blame an expected bug for the parent abort
+                            if (!sub.getActions().isEmpty() && sub.getActions().stream().allMatch(TestExecutionReport.ReportActionEntry::isSuccess))
+                            {
+                                sub.setStatus("SUCCESS");
+                            }
+                            else if (!failureEncountered)
+                            {
+                                sub.setStatus("FAILED");
+                                if (sub.getFailureReason() == null)
+                                {
+                                    sub.setFailureReason(targetStep.getFailureReason());
+                                }
+                                failureEncountered = true;
+                            }
+                            else
+                            {
+                                sub.setStatus("PENDING");
                             }
                         }
                         else
@@ -549,6 +671,18 @@ public final class PreliminaryReportListener implements ExecutionListener
                                 {
                                     sub.setFailureReason(targetStep.getFailureReason());
                                 }
+                                failureEncountered = true;
+                            }
+                            else if (failureEncountered)
+                            {
+                                if (sub.getStatus() == null || "RUNNING".equalsIgnoreCase(sub.getStatus()))
+                                {
+                                    sub.setStatus("PENDING");
+                                }
+                            }
+                            else if (!sub.getActions().isEmpty() && sub.getActions().stream().allMatch(TestExecutionReport.ReportActionEntry::isSuccess))
+                            {
+                                sub.setStatus("SUCCESS");
                             }
                             else if (sub.getStatus() == null || "PENDING".equalsIgnoreCase(sub.getStatus()) || "RUNNING".equalsIgnoreCase(sub.getStatus()))
                             {
@@ -1212,7 +1346,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             final Integer stdCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
             final Integer judgeCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
             final Integer verifCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
-            final Integer pesapCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
             final Integer rcaCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
             final Integer linterCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_CALL_COUNT);
             final Integer postFlightCallsObj = (Integer) ctx.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_CALL_COUNT);
@@ -1220,7 +1353,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TokenUsage standardUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
             final TokenUsage judgeUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
             final TokenUsage verificationUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
-            final TokenUsage pesapUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
             final TokenUsage rcaUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
             final TokenUsage linterUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_LINTER_TOKEN_USAGE);
             final TokenUsage postFlightUsage = (TokenUsage) ctx.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_TOKEN_USAGE);
@@ -1238,7 +1370,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     final String capability = call.getCapability();
                     if (!"LINTER".equalsIgnoreCase(capability) && !"POST_FLIGHT_LINTER".equalsIgnoreCase(capability)
-                            && !"PESAP".equalsIgnoreCase(capability)
                             && !"JUDGE".equalsIgnoreCase(capability) && !"JUDGE_DISCUSSION".equalsIgnoreCase(capability)
                             && !"VERIFICATION".equalsIgnoreCase(capability)
                             && !"RCA".equalsIgnoreCase(capability) && !"VISUAL_RCA".equalsIgnoreCase(capability))
@@ -1262,7 +1393,6 @@ public final class PreliminaryReportListener implements ExecutionListener
 
             final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
             final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
-            final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
             final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
             final int linterCalls = linterCallsObj != null ? linterCallsObj : (linterUsage != null ? 1 : 0);
             final int postFlightCalls = postFlightCallsObj != null ? postFlightCallsObj : (postFlightUsage != null ? 1 : 0);
@@ -1270,7 +1400,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             final String activeModel = (String) ctx.getTransientData().getOrDefault(ExecutionContext.KEY_ACTIVE_MODEL, "default");
 
             final TestExecutionReport.CategoryTokenUsage actCat = buildCategoryUsage(standardCalls, effectiveStandardUsage, activeModel);
-            final TestExecutionReport.CategoryTokenUsage pesapCat = buildCategoryUsage(pesapCalls, pesapUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage judgeCat = buildCategoryUsage(judgeCalls, judgeUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage verifCat = buildCategoryUsage(verificationCalls, verificationUsage, activeModel);
             final TestExecutionReport.CategoryTokenUsage rcaCat = buildCategoryUsage(rcaCalls, rcaUsage, activeModel);
@@ -1278,18 +1407,17 @@ public final class PreliminaryReportListener implements ExecutionListener
             final TestExecutionReport.CategoryTokenUsage postFlightCat = buildCategoryUsage(postFlightCalls, postFlightUsage, activeModel);
 
             m.setAction(actCat);
-            m.setPesap(pesapCat);
             m.setJudge(judgeCat);
             m.setVerification(verifCat);
             m.setVisualRca(rcaCat);
             m.setLinter(linterCat);
             m.setPostFlightLinter(postFlightCat);
 
-            final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls + linterCalls + postFlightCalls;
-            final long totalIn = actCat.getInputTokens() + pesapCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens() + linterCat.getInputTokens() + postFlightCat.getInputTokens();
-            final long totalOut = actCat.getOutputTokens() + pesapCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens() + linterCat.getOutputTokens() + postFlightCat.getOutputTokens();
-            final long totalCached = actCat.getCachedTokens() + pesapCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens() + linterCat.getCachedTokens() + postFlightCat.getCachedTokens();
-            final double totalCost = actCat.getEstimatedCostUsd() + pesapCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd() + linterCat.getEstimatedCostUsd() + postFlightCat.getEstimatedCostUsd();
+            final int totalCalls = standardCalls + judgeCalls + verificationCalls + rcaCalls + linterCalls + postFlightCalls;
+            final long totalIn = actCat.getInputTokens() + judgeCat.getInputTokens() + verifCat.getInputTokens() + rcaCat.getInputTokens() + linterCat.getInputTokens() + postFlightCat.getInputTokens();
+            final long totalOut = actCat.getOutputTokens() + judgeCat.getOutputTokens() + verifCat.getOutputTokens() + rcaCat.getOutputTokens() + linterCat.getOutputTokens() + postFlightCat.getOutputTokens();
+            final long totalCached = actCat.getCachedTokens() + judgeCat.getCachedTokens() + verifCat.getCachedTokens() + rcaCat.getCachedTokens() + linterCat.getCachedTokens() + postFlightCat.getCachedTokens();
+            final double totalCost = actCat.getEstimatedCostUsd() + judgeCat.getEstimatedCostUsd() + verifCat.getEstimatedCostUsd() + rcaCat.getEstimatedCostUsd() + linterCat.getEstimatedCostUsd() + postFlightCat.getEstimatedCostUsd();
 
             if (totalCalls > 0 || totalIn > 0)
             {
@@ -1367,12 +1495,6 @@ public final class PreliminaryReportListener implements ExecutionListener
         long actCached = 0;
         double actCost = 0.0;
 
-        int pesapCalls = 0;
-        long pesapIn = 0;
-        long pesapOut = 0;
-        long pesapCached = 0;
-        double pesapCost = 0.0;
-
         int judgeCalls = 0;
         long judgeIn = 0;
         long judgeOut = 0;
@@ -1418,14 +1540,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                 rcaCached += call.getCachedTokens();
                 rcaCost += call.getEstimatedCostUsd();
                 rcaCalls++;
-            }
-            else if ("PESAP".equalsIgnoreCase(cap))
-            {
-                pesapIn += call.getInputTokens();
-                pesapOut += call.getOutputTokens();
-                pesapCached += call.getCachedTokens();
-                pesapCost += call.getEstimatedCostUsd();
-                pesapCalls++;
             }
             else if ("JUDGE".equalsIgnoreCase(cap) || "JUDGE_DISCUSSION".equalsIgnoreCase(cap))
             {
@@ -1478,7 +1592,6 @@ public final class PreliminaryReportListener implements ExecutionListener
         final TestExecutionReport.CategoryTokenUsage totCat = new TestExecutionReport.CategoryTokenUsage(calls.size(), inTokens, outTokens, cachedTokens, cost);
         m.setTotal(totCat);
         m.setAction(new TestExecutionReport.CategoryTokenUsage(actCalls, actIn, actOut, actCached, actCost));
-        m.setPesap(new TestExecutionReport.CategoryTokenUsage(pesapCalls, pesapIn, pesapOut, pesapCached, pesapCost));
         m.setJudge(new TestExecutionReport.CategoryTokenUsage(judgeCalls, judgeIn, judgeOut, judgeCached, judgeCost));
         m.setVerification(new TestExecutionReport.CategoryTokenUsage(verifCalls, verifIn, verifOut, verifCached, verifCost));
         m.setVisualRca(new TestExecutionReport.CategoryTokenUsage(rcaCalls, rcaIn, rcaOut, rcaCached, rcaCost));
@@ -1529,10 +1642,6 @@ public final class PreliminaryReportListener implements ExecutionListener
             entry.setEscalations(Math.max(0, levels.size() - 1));
             entry.setContextLevels(String.join(" → ", levels));
         }
-        entry.setPesapCalls(stats.getPesapCalls());
-        entry.setPesapInputTokens(stats.getPesapInputTokens());
-        entry.setPesapOutputTokens(stats.getPesapOutputTokens());
-        entry.setPesapCachedTokens(stats.getPesapCachedTokens());
 
         entry.setStandardCalls(stats.getStandardCalls());
         entry.setStandardInputTokens(stats.getStandardInputTokens());
@@ -1608,14 +1717,10 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         if (!entry.getSubSteps().isEmpty())
         {
-            if (entry.getPesapCalls() == 0 && entry.getStandardCalls() == 0 && entry.getVerificationCalls() == 0 && entry.getRcaCalls() == 0)
+            if (entry.getStandardCalls() == 0 && entry.getVerificationCalls() == 0 && entry.getRcaCalls() == 0)
             {
                 for (final TestExecutionReport.ReportStepEntry child : entry.getSubSteps())
                 {
-                    entry.setPesapCalls(entry.getPesapCalls() + child.getPesapCalls());
-                    entry.setPesapInputTokens(entry.getPesapInputTokens() + child.getPesapInputTokens());
-                    entry.setPesapOutputTokens(entry.getPesapOutputTokens() + child.getPesapOutputTokens());
-                    entry.setPesapCachedTokens(entry.getPesapCachedTokens() + child.getPesapCachedTokens());
 
                     entry.setStandardCalls(entry.getStandardCalls() + child.getStandardCalls());
                     entry.setStandardInputTokens(entry.getStandardInputTokens() + child.getStandardInputTokens());

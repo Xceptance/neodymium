@@ -41,8 +41,8 @@ import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.SelenideLocatorProber;
-import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SemanticIntent;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.prompt.QualityJudgePrompt;
@@ -52,6 +52,7 @@ import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.util.LocatorImprover;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
@@ -75,9 +76,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
     public static final String JOURNEY_FIDELITY_SCRIPT_VIOLATION =
             "Journey Fidelity Violation: Direct URL mutation via script is prohibited. Target must be reached via on-screen UI elements";
-
-    public static final String ASSERTION_MUTATION_VIOLATION =
-            "Assertion Violation: Interactive mutating action is prohibited during assertion steps";
 
     private static final Pattern URL_MUTATION_PATTERN = Pattern.compile(
             "(?i)((window\\.)?location(\\.href|\\.assign|\\.replace)?\\s*=|history\\.(pushState|replaceState))");
@@ -137,8 +135,8 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
         final ExecutionContext activeContext = ExecutionContext.getActiveContext();
 
-        // 1. Enforce Journey Fidelity Policy (hard constraint, always evaluated)
-        final InterceptionVerdict journeyVerdict = checkJourneyFidelity(call, intent, activeContext);
+        // 4. Journey Fidelity guard: Prohibit navigating away or mutating URL when interacting
+        final InterceptionVerdict journeyVerdict = checkJourneyFidelity(call, intent);
         if (!journeyVerdict.isAllowed())
         {
             LOGGER.warn("🚨 Journey Fidelity Violation detected: {}", journeyVerdict.reason());
@@ -227,25 +225,11 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
     private InterceptionVerdict checkJourneyFidelity(
         final ToolCall call,
-        final SemanticIntent intent,
-        final ExecutionContext activeContext
+        final SemanticIntent intent
     )
     {
         final String rawName = call.toolName();
         final String name = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
-        if (intent != null && intent.isAssertion())
-        {
-            if ("click".equals(name) || "fill".equals(name) || "type".equals(name) || "select".equals(name)
-                    || "press_key".equals(name) || "navigate".equals(name) || "upload_file".equals(name)
-                    || "drag".equals(name) || "drag_to".equals(name))
-            {
-                if (hasInteractiveMilestones(activeContext))
-                {
-                    return InterceptionVerdict.allow("Permitting interactive tool for compound step with interactive milestones");
-                }
-                return InterceptionVerdict.reject(call.callId(), ASSERTION_MUTATION_VIOLATION);
-            }
-        }
 
         if (intent != null && intent.isInteraction())
         {
@@ -264,32 +248,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             }
         }
         return InterceptionVerdict.allow("Journey fidelity checks passed");
-    }
-
-    private static boolean hasInteractiveMilestones(final ExecutionContext context)
-    {
-        if (context == null)
-        {
-            return false;
-        }
-        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-        if (stepObj instanceof final PlaybookStep step && step.hasInteractiveSubSteps())
-        {
-            return true;
-        }
-        @SuppressWarnings("unchecked")
-        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
-        if (milestones != null)
-        {
-            for (final String ms : milestones)
-            {
-                if (ms != null && PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(ms).find())
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private List<LocatorCandidate> extractCandidates(final ToolCall call, final ToolContext context)
@@ -415,6 +373,11 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 final String instruction = (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
                 final Object stateObj = activeContext.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
                 final String domContext = stateObj instanceof final SutState sutState ? sutState.getTextContent() : "";
+                final String toolName = call.toolName();
+                final String actionValue = call.arguments().has("value") ? call.arguments().path("value").asText("")
+                        : (call.arguments().has("text") ? call.arguments().path("text").asText("") : "");
+                @SuppressWarnings("unchecked")
+                final List<String> milestones = (List<String>) activeContext.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
 
                 final int probeDepth = this.config.getJudgeDiscussionProbeDepth();
                 List<String> currentCandidateStrings = new ArrayList<>();
@@ -465,7 +428,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                     LOGGER.info("⚖️ [Quality Judge Discussion] Turn {}/{} probing candidates: {}", turn, maxTurns, currentCandidateStrings);
 
                     final LlmRequest request = judgePrompt.compileDiscussionRequest(
-                            instruction, probeResults, history, turn, maxTurns, domContext, this.config);
+                            instruction, toolName, selector, actionValue, milestones, probeResults, history, turn, maxTurns, domContext, this.config);
 
                     if (session.getEventBus() != null)
                     {
@@ -501,6 +464,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                         LOGGER.info("⚖️ [Quality Judge Consensus] APPROVED in Turn {}/{}: '{}' ({})", turn, maxTurns, winningLocator, judgeResult.getReasoning());
                         if (!winningLocator.equals(selector))
                         {
+                            if (isContainerHijack(selector, winningLocator, call.toolName()))
+                            {
+                                return InterceptionVerdict.allow("Container hijack rejected; retaining original locator: " + selector);
+                            }
                             final ObjectNode newArgs = call.arguments().deepCopy();
                             newArgs.put("selector", winningLocator);
                             final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
@@ -513,6 +480,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                         final String chosen = judgeResult.getChosenLocator();
                         if (chosen != null && !chosen.isBlank())
                         {
+                            if (isContainerHijack(selector, chosen, call.toolName()))
+                            {
+                                return InterceptionVerdict.allow("Container hijack rejected; retaining original locator: " + selector);
+                            }
                             lastProposal = chosen;
                             final Optional<LocatorProbeResult> matchedProbe = probeResults.stream()
                                     .filter(pr -> pr.getCandidateLocator().equals(chosen))
@@ -540,6 +511,11 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                         final String refined = judgeResult.getRefinedProposal();
                         if (refined != null && !refined.isBlank())
                         {
+                            if (isContainerHijack(selector, refined, call.toolName()))
+                            {
+                                LOGGER.warn("🚨 [Quality Judge] Refinement proposal '{}' is a container hijack of '{}'. Stopping deliberation and keeping original locator.", refined, selector);
+                                return InterceptionVerdict.allow("Container hijack rejected in refinement; retaining original locator: " + selector);
+                            }
                             lastProposal = refined;
                             history.add(String.format("Turn %d Critique: %s -> Refined Proposal: '%s'", turn, judgeResult.getReasoning(), refined));
                             if (turn < maxTurns)
@@ -559,6 +535,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 LOGGER.warn("⚠️ [Quality Judge] Reached max turns ({}) without explicit consensus. Proceeding with last proposal: '{}'", maxTurns, lastProposal);
                 if (lastProposal != null && !lastProposal.isBlank() && !lastProposal.equals(selector))
                 {
+                    if (isContainerHijack(selector, lastProposal, call.toolName()))
+                    {
+                        return InterceptionVerdict.allow("Container hijack rejected in exhaustion fallback; retaining original locator: " + selector);
+                    }
                     final ObjectNode newArgs = call.arguments().deepCopy();
                     newArgs.put("selector", lastProposal);
                     final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
@@ -681,6 +661,13 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                     final String chosen = judgeResult.getChosenLocator();
                     if (chosen != null && !chosen.isBlank() && !chosen.equals(selector))
                     {
+                        if (isContainerHijack(selector, chosen, call.toolName()))
+                        {
+                            LOGGER.warn("🚨 [Quality Judge] Single-shot proposal '{}' is a container hijack of '{}'. Retaining original locator.", chosen, selector);
+                            return InterceptionVerdict.allow(
+                                    "Container hijack rejected; retaining original locator: " + selector + " (" + judgeResult.getReasoning() + ")"
+                            );
+                        }
                         final ObjectNode newArgs = call.arguments().deepCopy();
                         newArgs.put("selector", chosen);
                         final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
@@ -800,5 +787,100 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             case "CLASS" -> 40;
             default -> 10;
         };
+    }
+
+    /**
+     * Determines whether a proposed locator replaces a specific interactive element with an ancestor container
+     * (e.g. replacing a button or link click with clicking an entire product card or article).
+     *
+     * @param originalSelector the selector chosen by the agent or originally proposed
+     * @param proposedLocator the locator proposed or refined by the Quality Judge
+     * @param toolName the active tool name (e.g., "click", "hover")
+     * @return true if the proposed locator is an ancestor container hijack, false otherwise
+     */
+    boolean isContainerHijack(final String originalSelector, final String proposedLocator, final String toolName)
+    {
+        if (originalSelector == null || originalSelector.isBlank() || proposedLocator == null || proposedLocator.isBlank())
+        {
+            return false;
+        }
+        if (originalSelector.trim().equals(proposedLocator.trim()))
+        {
+            return false;
+        }
+        if (toolName != null)
+        {
+            final String lowerTool = toolName.toLowerCase();
+            final boolean isInteractive = lowerTool.contains("click") || lowerTool.contains("hover")
+                    || lowerTool.contains("type") || lowerTool.contains("clear") || lowerTool.contains("press")
+                    || lowerTool.contains("select");
+            if (!isInteractive)
+            {
+                return false;
+            }
+        }
+
+        final String origClean = originalSelector.trim();
+        final String propClean = proposedLocator.trim();
+
+        // Syntactic check: CSS hierarchy where proposedLocator is an explicit ancestor of originalSelector
+        if (origClean.startsWith(propClean + " ") || origClean.startsWith(propClean + " >") || origClean.startsWith(propClean + ">"))
+        {
+            LOGGER.warn("🚨 [Quality Judge] Container hijack detected via selector syntax: proposed '{}' is an ancestor of '{}'",
+                    proposedLocator, originalSelector);
+            return true;
+        }
+
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final By origBy = LocatorResolver.resolveLocator(origClean);
+                final By propBy = LocatorResolver.resolveLocator(propClean);
+                final List<WebElement> origList = driver.findElements(origBy);
+                final List<WebElement> propList = driver.findElements(propBy);
+
+                if (!origList.isEmpty() && !propList.isEmpty())
+                {
+                    final WebElement orig = origList.get(0);
+                    final WebElement prop = propList.get(0);
+
+                    if (driver instanceof final JavascriptExecutor js)
+                    {
+                        final Object result = js.executeScript(
+                                "try {"
+                                        + "  const prop = arguments[0];"
+                                        + "  const orig = arguments[1];"
+                                        + "  if (!prop || !orig || prop === orig) { return false; }"
+                                        + "  if (!prop.contains(orig)) { return false; }"
+                                        + "  const origTag = orig.tagName ? orig.tagName.toLowerCase() : '';"
+                                        + "  const propTag = prop.tagName ? prop.tagName.toLowerCase() : '';"
+                                        + "  const interactiveTags = ['button', 'a', 'input', 'select', 'textarea'];"
+                                        + "  const origRole = orig.getAttribute ? orig.getAttribute('role') : null;"
+                                        + "  const isOrigInteractive = interactiveTags.includes(origTag) || origRole === 'button' || origRole === 'link';"
+                                        + "  const containerTags = ['div', 'article', 'section', 'li', 'ul', 'ol', 'main', 'form', 'body', 'aside', 'header', 'footer', 'tr', 'td'];"
+                                        + "  if (isOrigInteractive && (containerTags.includes(propTag) || !interactiveTags.includes(propTag))) { return true; }"
+                                        + "  if (containerTags.includes(propTag)) { return true; }"
+                                        + "  return false;"
+                                        + "} catch(e) { return false; }",
+                                prop, orig);
+
+                        if (Boolean.TRUE.equals(result))
+                        {
+                            LOGGER.warn("🚨 [Quality Judge] Container hijack detected via DOM check: proposed '{}' contains original target '{}'",
+                                    proposedLocator, originalSelector);
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not verify container hijack via WebDriver: {}", e.getMessage());
+            }
+        }
+
+        return false;
     }
 }

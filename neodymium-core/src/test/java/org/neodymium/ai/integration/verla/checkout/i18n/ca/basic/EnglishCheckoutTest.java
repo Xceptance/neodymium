@@ -76,22 +76,22 @@ public class EnglishCheckoutTest extends BaseAiTest
     }
 
     /**
-     * Live recording mode execution for dataset 'canada-french'.
+     * Live recording mode execution for dataset 'canada-fr'.
      */
     @Order(1)
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiDataSet("canada-french")
+    @AiDataSet("canada-fr")
     @AiPlaybook
     public void testCheckoutLiveCanadaFrench()
     {
     }
 
     /**
-     * Strict replay mode execution using recorded playbook for dataset 'canada-french'.
+     * Strict replay mode execution using recorded playbook for dataset 'canada-fr'.
      */
     @Order(2)
     @AiMode(ExecutionMode.REPLAY_STRICT)
-    @AiDataSet("canada-french")
+    @AiDataSet("canada-fr")
     @AiPlaybook(recordingMethod = "testCheckoutLiveCanadaFrench")
     public void testCheckoutReplayCanadaFrench()
     {

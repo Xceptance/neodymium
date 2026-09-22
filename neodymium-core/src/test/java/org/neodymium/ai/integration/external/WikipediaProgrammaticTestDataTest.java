@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.integration.external;
 
+import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -26,18 +27,20 @@ import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.Browser;
 
 /**
- * External integration test demonstrating intra-dataset variable interpolation
+ * Live external demonstration test showing intra-dataset variable interpolation
  * and nested dot-path resolution in a programmatic YAML playbook against Wikipedia.
  *
- * @author AI-generated: Gemini 3.7 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000_headless")
+@Tag("LiveAPI")
+@Tag("ExternalSite")
 @NeodymiumAiTest
-public class TestdataSubstitutionTest
+public class WikipediaProgrammaticTestDataTest
 {
     /**
-     * Executes the Wikipedia search workflow using programmatic YAML playbook and test data substitution.
+     * Executes the Wikipedia search workflow using programmatic YAML playbook and external companion YAML test data.
      *
      * @param session the Neodymium AI session instance
      * @throws Exception if playbook execution fails
@@ -47,20 +50,12 @@ public class TestdataSubstitutionTest
     public void test(final AiSession session) throws Exception
     {
         session.execute("""
-                            steps: |
-                                Open https://www.wikipedia.org
-                                Select the '${language}' language
-                                Type '${searchPhrase}' in the Search input field
-                                Click the search button
-                                Verify the main heading contains '${searchPhrase}' (bug)
-
-                            data:
-                              - testId: test
-                                language: "Deutsch"
-                                phrase:
-                                    Part1: "Neo"
-                                    Part2: "dymium"
-                                searchPhrase: "${phrase.Part1}${phrase.Part2}"
-                            """);
+            steps: |
+              Open https://www.wikipedia.org
+              Select the '${language}' language
+              Type '${searchPhrase}' in the Search input field
+              Click the search button
+              Verify the main heading contains '${searchPhrase}' (bug)
+            """);
     }
 }
