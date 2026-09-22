@@ -18,7 +18,6 @@
  */
 package org.neodymium.ai.client;
 
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
@@ -26,20 +25,27 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel.OpenAiChatModelBuilder;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.prompt.LlmSanitizerHelper;
+import org.neodymium.ai.prompt.SanitizedPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * OpenAI-compatible LLM provider designed for Llama 4 and other open models
- * hosted on Google Cloud Vertex AI Model-as-s-Service endpoints.
+ * hosted on Google Cloud Vertex AI Model-as-a-Service endpoints.
  *
  * Supports vision capabilities (image attachments) and explicit API key submission.
  *
@@ -54,9 +60,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
     private final String apiKey;
     private final String modelName;
     private final String baseUrl;
-    private final ChatModel defaultModel;
-    private final java.util.concurrent.ConcurrentHashMap<String, ChatModel> modelCache = new java.util.concurrent.ConcurrentHashMap<>();
-
+    private final ConcurrentHashMap<String, ChatModel> modelCache = new ConcurrentHashMap<>();
 
     /**
      * Constructs a VertexAiLlamaProvider and dynamically resolves its configuration.
@@ -91,8 +95,6 @@ public final class VertexAiLlamaProvider implements LlmProvider
             this.baseUrl = String.format("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/endpoints/openapi",
                 location, projectId, location);
         }
-
-        this.defaultModel = buildChatModel(0.0, 180, ResponseSchema.TEXT, ReasoningEffort.MEDIUM);
     }
 
     /**
@@ -107,14 +109,22 @@ public final class VertexAiLlamaProvider implements LlmProvider
     {
         final int maxTokens = ResponseSchema.resolveMaxOutputTokens(responseSchema);
 
-        return OpenAiChatModel.builder()
+        final OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
             .baseUrl(this.baseUrl)
             .apiKey(this.apiKey)
             .modelName(this.modelName)
             .temperature(temperature)
             .maxTokens(maxTokens)
-            .timeout(java.time.Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180))
-            .build();
+            .timeout(Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180));
+
+        if (LlmCommunicationLogger.isLoggingActive())
+        {
+            builder.logRequests(true);
+            builder.logResponses(true);
+            builder.logger(LlmCommunicationLogger.getLogger());
+        }
+
+        return builder.build();
     }
 
     /**
@@ -131,21 +141,17 @@ public final class VertexAiLlamaProvider implements LlmProvider
         final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
         final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
         final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
+        final boolean isLoggingActive = LlmCommunicationLogger.isLoggingActive();
 
-        if (temp == 0.0 && timeout == 180 && schema == ResponseSchema.TEXT && effort == ReasoningEffort.MEDIUM)
-        {
-            return this.defaultModel;
-        }
-
-        final String cacheKey = String.format("%s:%.2f:%d:%s:%s", this.modelName, temp, timeout, schema.name(), effort.name());
+        final String cacheKey = String.format("%s:%.2f:%d:%s:%s:%b", this.modelName, temp, timeout, schema.name(), effort.name(), isLoggingActive);
         return this.modelCache.computeIfAbsent(cacheKey, k -> buildChatModel(temp, timeout, schema, effort));
     }
 
     @Override
     public LlmResponse chat(final LlmRequest rawRequest) throws IOException
     {
-        final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = org.neodymium.ai.prompt.LlmSanitizerHelper.sanitizeRequest(rawRequest);
-        final LlmRequest request = org.neodymium.ai.prompt.LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
+        final SanitizedPayload sanitizedPayload = LlmSanitizerHelper.sanitizeRequest(rawRequest);
+        final LlmRequest request = LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
 
         final ChatModel activeModel = getChatModel(
             request.temperature(),
@@ -176,7 +182,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
             contents.add(TextContent.from(request.userMessage()));
         }
 
-        if (request.attachments() != null)
+        if (request.attachments() != null && !request.attachments().isEmpty())
         {
             for (final SutAttachment attachment : request.attachments())
             {
@@ -193,7 +199,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
                     {
                         try
                         {
-                            final String decoded = new String(java.util.Base64.getDecoder().decode(attachment.base64Data()));
+                            final String decoded = new String(Base64.getDecoder().decode(attachment.base64Data()), StandardCharsets.UTF_8);
                             contents.add(TextContent.from("\n--- Attachment: " + attachment.mediaType() + " ---\n" + decoded));
                         }
                         catch (final Exception e)
@@ -212,7 +218,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
             {
                 final ChatResponse response = activeModel.chat(messages);
 
-                final dev.langchain4j.model.output.TokenUsage usage = response.tokenUsage();
+                final var usage = response.tokenUsage();
 
                 TokenUsage mappedUsage = null;
                 if (usage != null)
@@ -226,7 +232,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
                 }
 
                 final LlmResponse rawResponse = new LlmResponse(response.aiMessage().text(), mappedUsage, this.modelName);
-                return org.neodymium.ai.prompt.LlmSanitizerHelper.unmaskResponse(rawResponse, sanitizedPayload.maskToVariableMap());
+                return LlmSanitizerHelper.unmaskResponse(rawResponse, sanitizedPayload.maskToVariableMap());
             }
             catch (final Exception e)
             {

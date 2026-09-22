@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import org.neodymium.ai.prompt.LlmSanitizerHelper;
+import org.neodymium.ai.prompt.SanitizedPayload;
 
 /**
  * Mock implementation of {@link LlmProvider} used for hermetic, network-isolated unit testing.
@@ -99,23 +101,35 @@ public final class MockLlmProvider implements LlmProvider
     /**
      * Dequeues the next canned response.
      *
-     * @param request the LLM request context
+     * @param rawRequest the raw LLM request context
      * @return the enqueued response
      * @throws IOException if no enqueued responses remain in the queue
      */
     @Override
     public LlmResponse chat(final LlmRequest rawRequest) throws IOException
     {
-        final org.neodymium.ai.prompt.SanitizedPayload sanitizedPayload = org.neodymium.ai.prompt.LlmSanitizerHelper.sanitizeRequest(rawRequest);
-        final LlmRequest request = org.neodymium.ai.prompt.LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
+        final SanitizedPayload sanitizedPayload = LlmSanitizerHelper.sanitizeRequest(rawRequest);
+        final LlmRequest request = LlmSanitizerHelper.toSanitizedRequest(rawRequest, sanitizedPayload);
         this.lastRequest = request;
+
+        if (LlmCommunicationLogger.isLoggingActive())
+        {
+            LlmCommunicationLogger.getLogger().info("Mock LLM request:\n- userMessage: {}\n- messages: {}\n", request.userMessage(), request.messages());
+        }
 
         final LlmResponse next = this.responseQueue.poll();
         if (next == null)
         {
             throw new IOException("MockLlmProvider has no queued responses left.");
         }
-        return org.neodymium.ai.prompt.LlmSanitizerHelper.unmaskResponse(next, sanitizedPayload.maskToVariableMap());
+        final LlmResponse response = LlmSanitizerHelper.unmaskResponse(next, sanitizedPayload.maskToVariableMap());
+
+        if (LlmCommunicationLogger.isLoggingActive())
+        {
+            LlmCommunicationLogger.getLogger().info("Mock LLM response:\n- content: {}\n- toolCalls: {}\n", response.content(), response.toolCalls());
+        }
+
+        return response;
     }
 
     /**

@@ -903,6 +903,43 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks whether raw LLM communication wire logging (target/neodymium-ai-communication.log) is enabled.
+     * Disabled by default.
+     *
+     * @return true if LLM communication wire logging is enabled
+     */
+    public boolean isCommunicationLogEnabled()
+    {
+        for (final String key : new String[] {
+            "neodymium.ai.communicationLog.enabled",
+            "neodymium.ai.communicationLog",
+            "neodymium.ai.communication.log"
+        })
+        {
+            final String sysVal = System.getProperty(key);
+            if (sysVal != null)
+            {
+                return Boolean.parseBoolean(sysVal.trim());
+            }
+        }
+
+        for (final String key : new String[] {
+            "neodymium.ai.communicationLog.enabled",
+            "neodymium.ai.communicationLog",
+            "neodymium.ai.communication.log"
+        })
+        {
+            final String val = getProperty(key, null);
+            if (val != null)
+            {
+                return Boolean.parseBoolean(val.trim());
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Resolves the target directory path where console execution log files are stored.
      * Defaults to System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results").
      *
