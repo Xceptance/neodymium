@@ -539,10 +539,12 @@ async function pollStatus() {
                 data.events.forEach(event => {
                     if (event.type === 'reportReady') {
                         const reportUrl = `/run-report?runId=${encodeURIComponent(event.reportId)}`;
-                        if (!userAborted) {
-                            window.location.href = reportUrl;
+                        const handledRedirectId = localStorage.getItem('aura_last_redirected_run_id');
+                        const wasActivelyRunning = lastKnownRunning || wasInLiveRunView || (activeRunStats && activeRunStats.running);
+                        if (!userAborted && event.reportId && handledRedirectId !== String(event.reportId) && wasActivelyRunning) {
+                            showRunFinishedPrompt(reportUrl, event.reportId);
                             return;
-                        } else if (typeof showToast === 'function') {
+                        } else if (userAborted && typeof showToast === 'function') {
                             showToast(`Execution finished! <a href="${reportUrl}" style="color: var(--accent); text-decoration: underline; margin-left: 6px;">View Report</a>`, 'info');
                         }
                     }
@@ -687,8 +689,10 @@ async function pollStatus() {
                                                     window.location.pathname.includes('/aura-test-manager') ||
                                                     document.getElementById('auraTestManagerWorkspace') !== null;
                             const runIdToRedirect = activeRunStats.runId || statusData.runId;
-                            if (isDashboardView && runIdToRedirect) {
-                                window.location.href = `/run-report?runId=${encodeURIComponent(runIdToRedirect)}`;
+                            const handledRedirectId = localStorage.getItem('aura_last_redirected_run_id');
+                            if (isDashboardView && runIdToRedirect && handledRedirectId !== String(runIdToRedirect)) {
+                                const reportUrl = `/run-report?runId=${encodeURIComponent(runIdToRedirect)}`;
+                                showRunFinishedPrompt(reportUrl, runIdToRedirect);
                             }
                         }
                     }
@@ -944,5 +948,60 @@ function closeAuraChat() {
     if (launcher) launcher.classList.remove('active');
 }
 window.closeAuraChat = closeAuraChat;
+
+function showRunFinishedPrompt(reportUrl, reportId) {
+    if (!reportUrl || !reportId) return;
+    const handledRedirectId = localStorage.getItem('aura_last_redirected_run_id');
+    if (handledRedirectId === String(reportId)) return;
+
+    let modal = document.getElementById('runFinishedModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'runFinishedModal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-card">
+                <div class="modal-header">Run Finished</div>
+                <div class="modal-body">
+                    <p style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">Run is finished. Would you like to open the report?</p>
+                </div>
+                <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn-editor" id="runFinishedStayBtn">No, stay on the page</button>
+                    <button type="button" class="btn-primary" id="runFinishedOpenBtn">Open the report</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const stayBtn = modal.querySelector('#runFinishedStayBtn');
+    const openBtn = modal.querySelector('#runFinishedOpenBtn');
+
+    if (stayBtn) {
+        stayBtn.onclick = function() {
+            try {
+                localStorage.setItem('aura_last_redirected_run_id', String(reportId));
+            } catch (e) {}
+            modal.style.display = 'none';
+        };
+    }
+
+    if (openBtn) {
+        openBtn.onclick = function() {
+            try {
+                localStorage.setItem('aura_last_redirected_run_id', String(reportId));
+            } catch (e) {}
+            modal.style.display = 'none';
+            isRunning = false;
+            window.isRunning = false;
+            window.location.href = reportUrl;
+        };
+    }
+
+    modal.style.display = 'flex';
+}
+window.showRunFinishedPrompt = showRunFinishedPrompt;
+
 
 
