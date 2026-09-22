@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.openqa.selenium.InvalidSelectorException;
 
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.ElementsCollection;
@@ -61,6 +62,14 @@ public class LocatorResolverBrowserTest
                 + "    <li class='country-item'>United Kingdom (£)</li>"
                 + "    <li class='country-item'>Germany (€)</li>"
                 + "  </ul>"
+                + "  <form id='checkout-form'>"
+                + "    <label for='user-email'>Email Address</label>"
+                + "    <input id='user-email' type='email' placeholder='Enter Email' data-testid='email-input' data-test-id='email-input-alt' />"
+                + "    <label>Terms of Service"
+                + "      <input type='checkbox' id='tos-check' />"
+                + "    </label>"
+                + "    <button type='submit' id='submit-order' role='button'>Submit Order</button>"
+                + "  </form>"
                 + "  <script>"
                 + "    class CustomCard extends HTMLElement {"
                 + "      constructor() {"
@@ -141,5 +150,58 @@ public class LocatorResolverBrowserTest
         final SelenideElement element = SelenideElementFinder.findElement(action);
         Assertions.assertNotNull(element);
         Assertions.assertTrue(element.getText().contains("United Kingdom"));
+    }
+
+    @Test
+    public void testNamedRoleInLiveBrowser()
+    {
+        final ElementsCollection btn = LocatorResolver.findElements("role=button[name='Submit Order']");
+        Assertions.assertFalse(btn.isEmpty());
+        Assertions.assertEquals("submit-order", btn.first().getAttribute("id"));
+    }
+
+    @Test
+    public void testLabelInLiveBrowser()
+    {
+        final ElementsCollection emailInput = LocatorResolver.findElements("label=\"Email Address\"");
+        Assertions.assertFalse(emailInput.isEmpty());
+        Assertions.assertEquals("user-email", emailInput.first().getAttribute("id"));
+
+        final ElementsCollection tosCheck = LocatorResolver.findElements("label=\"Terms of Service\"");
+        Assertions.assertFalse(tosCheck.isEmpty());
+        Assertions.assertEquals("tos-check", tosCheck.first().getAttribute("id"));
+    }
+
+    @Test
+    public void testChainedShorthandsInLiveBrowser()
+    {
+        final ElementsCollection chainedId = LocatorResolver.findElements("#checkout-form >> id=user-email");
+        Assertions.assertFalse(chainedId.isEmpty());
+        Assertions.assertEquals("user-email", chainedId.first().getAttribute("id"));
+
+        final ElementsCollection chainedTestId = LocatorResolver.findElements("#checkout-form >> data-testid=email-input");
+        Assertions.assertFalse(chainedTestId.isEmpty());
+        Assertions.assertEquals("user-email", chainedTestId.first().getAttribute("id"));
+
+        final ElementsCollection chainedTestIdAlt = LocatorResolver.findElements("#checkout-form >> data-test-id=email-input-alt");
+        Assertions.assertFalse(chainedTestIdAlt.isEmpty());
+        Assertions.assertEquals("user-email", chainedTestIdAlt.first().getAttribute("id"));
+    }
+
+    @Test
+    public void testDataTestIdInLiveBrowser()
+    {
+        final ElementsCollection el = LocatorResolver.findElements("data-test-id=email-input-alt");
+        Assertions.assertFalse(el.isEmpty());
+        Assertions.assertEquals("user-email", el.first().getAttribute("id"));
+    }
+
+    @Test
+    public void testUnsupportedSelectorThrowsInBrowser()
+    {
+        final InvalidSelectorException ex = Assertions.assertThrows(
+                InvalidSelectorException.class,
+                () -> LocatorResolver.resolveLocator("button:visible"));
+        Assertions.assertTrue(ex.getMessage().contains(":visible"));
     }
 }

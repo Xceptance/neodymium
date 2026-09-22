@@ -74,6 +74,31 @@ public final class LocatorResolver
         }
         final String clean = target.trim();
 
+        // 0. Pre-validate unsupported vendor pseudo-classes and layout selectors
+        if (clean.matches("(?i).*:(visible|hidden)\\b.*"))
+        {
+            final String pseudo = clean.toLowerCase(Locale.ROOT).contains(":visible") ? ":visible" : ":hidden";
+            throw new InvalidSelectorException("Unsupported selector syntax '" + clean + "': pseudo-class '"
+                    + pseudo
+                    + "' is not supported in W3C WebDriver. Neodymium automatically verifies element visibility during interactions. Please use standard CSS or text locators (e.g. 'button' or 'text=Submit').");
+        }
+
+        final Matcher spatialMatcher = Pattern.compile(":(right-of|left-of|above|below|near)\\(", Pattern.CASE_INSENSITIVE).matcher(clean);
+        if (spatialMatcher.find())
+        {
+            final String pseudo = spatialMatcher.group(1).toLowerCase(Locale.ROOT);
+            throw new InvalidSelectorException("Unsupported selector syntax '" + clean + "': Spatial layout selector ':" + pseudo
+                    + "()' is not supported in W3C WebDriver. Please use standard hierarchical selectors, CSS combinators, or chained '>>' locators.");
+        }
+
+        final Matcher unsupportedPseudos = Pattern.compile(":(nth-match|text-matches)\\(", Pattern.CASE_INSENSITIVE).matcher(clean);
+        if (unsupportedPseudos.find())
+        {
+            final String pseudo = unsupportedPseudos.group(1).toLowerCase(Locale.ROOT);
+            throw new InvalidSelectorException("Unsupported selector syntax '" + clean + "': Playwright ':" + pseudo
+                    + "()' pseudo-class is not supported in W3C WebDriver. Please use standard CSS or text locators.");
+        }
+
         // 1. Chained Playwright selectors (e.g. "#header >> button" or ".card >> text=Buy")
         if (clean.contains(">>"))
         {
@@ -86,7 +111,16 @@ public final class LocatorResolver
 
         final String lower = clean.toLowerCase(Locale.ROOT);
 
-        // 2. Explicit prefixes: xpath= and css=
+        // 2. Playwright codegen internal prefixes (e.g. internal:role=..., internal:text=...)
+        if (lower.startsWith("internal:"))
+        {
+            String unwrapped = clean.substring(9).trim();
+            // Normalize case-insensitive flag in attributes: e.g. [name="Submit"i] -> [name="Submit"]
+            unwrapped = unwrapped.replaceAll("(?i)\\[([a-zA-Z0-9_-]+)=([\"'])(.*?)\\2i\\]", "[$1=$2$3$2]");
+            return resolveLocator(unwrapped);
+        }
+
+        // 3. Explicit prefixes: xpath= and css=
         if (lower.startsWith("xpath="))
         {
             return By.xpath(clean.substring(6).trim());
@@ -96,7 +130,7 @@ public final class LocatorResolver
             return resolveLocator(clean.substring(4).trim());
         }
 
-        // 3. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123")
+        // 4. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123")
         if (lower.startsWith("data-ai="))
         {
             final int eqIdx = clean.indexOf('=');
@@ -104,15 +138,27 @@ public final class LocatorResolver
             return By.cssSelector("[data-ai='" + refId + "']");
         }
 
-        // 4. Test ID selectors (e.g. "data-testid=submit-btn", "testid=submit-btn", "data-test=submit-btn")
-        if (lower.startsWith("data-testid=") || lower.startsWith("testid=") || lower.startsWith("data-test="))
+        // 5. Test ID selectors (e.g. "data-testid=submit-btn", "testid=submit-btn", "data-test=submit-btn", "data-test-id=submit-btn")
+        if (lower.startsWith("data-test-id="))
+        {
+            final int eqIdx = clean.indexOf('=');
+            final String testId = unquote(clean.substring(eqIdx + 1).trim());
+            return By.cssSelector("[data-test-id='" + testId + "']");
+        }
+        if (lower.startsWith("data-test="))
+        {
+            final int eqIdx = clean.indexOf('=');
+            final String testId = unquote(clean.substring(eqIdx + 1).trim());
+            return By.cssSelector("[data-test='" + testId + "'], [data-testid='" + testId + "']");
+        }
+        if (lower.startsWith("data-testid=") || lower.startsWith("testid="))
         {
             final int eqIdx = clean.indexOf('=');
             final String testId = unquote(clean.substring(eqIdx + 1).trim());
             return By.cssSelector("[data-testid='" + testId + "']");
         }
 
-        // 5. Attribute shorthands (id=, placeholder=, alt=, title=, label=)
+        // 6. Attribute shorthands (id=, placeholder=, alt=, title=, label=)
         if (lower.startsWith("id="))
         {
             final String idVal = unquote(clean.substring(3).trim());
@@ -137,10 +183,12 @@ public final class LocatorResolver
         {
             final String labelVal = unquote(clean.substring(6).trim());
             final String escaped = escapeXpath(labelVal);
-            return By.xpath("//input[@id=//label[normalize-space(.)=" + escaped + "]/@for] | //label[normalize-space(.)=" + escaped + "]//input | //*[@aria-label=" + escaped + "]");
+            return By.xpath("//*[self::input or self::select or self::textarea or self::button][@id=//label[normalize-space(.)=" + escaped + "]/@for]"
+                    + " | //label[normalize-space(.)=" + escaped + "]//*[self::input or self::select or self::textarea or self::button]"
+                    + " | //*[@aria-label=" + escaped + "]");
         }
 
-        // 6. Playwright role selectors (e.g. "role=button[name='Submit']", "role=button")
+        // 7. Playwright role selectors (e.g. "role=button[name='Submit']", "role=button")
         if (lower.startsWith("role="))
         {
             final By roleBy = resolveRoleLocator(clean);
@@ -150,17 +198,29 @@ public final class LocatorResolver
             }
         }
 
-        // 7. XPath Expressions
+        // 8. XPath Expressions
         if (clean.startsWith("/") || clean.startsWith("("))
         {
             return By.xpath(clean);
         }
 
-        // 8. Playwright text= / text*= / text: / text*: / has-text= / has-text*= / has-text: / has-text*:
+        // 9. CSS pseudo-class/pseudo-element fallback on text tags (e.g. text:nth-of-type(4), text::before)
+        if (lower.startsWith("text:"))
+        {
+            final String afterPrefix = clean.substring(5).trim();
+            if (afterPrefix.startsWith("nth-") || afterPrefix.startsWith(":") || afterPrefix.startsWith("first-") || afterPrefix.startsWith("last-"))
+            {
+                return By.cssSelector("*" + clean.substring(clean.indexOf(':')).trim());
+            }
+        }
+
+        // 10. Playwright text= / text*= / text: / text*: / has-text= / has-text*= / has-text: / has-text*:
         if (lower.startsWith("text=") || lower.startsWith("text*=") || lower.startsWith("text:") || lower.startsWith("text*:")
                 || lower.startsWith("has-text=") || lower.startsWith("has-text*=") || lower.startsWith("has-text:") || lower.startsWith("has-text*:"))
         {
-            final int delimIdx = clean.indexOf(clean.contains("=") ? '=' : ':');
+            final boolean isColon = lower.startsWith("text:") || lower.startsWith("text*:")
+                    || lower.startsWith("has-text:") || lower.startsWith("has-text*:");
+            final int delimIdx = clean.indexOf(isColon ? ':' : '=');
             final String rawVal = clean.substring(delimIdx + 1).trim();
             final boolean isQuoted = (rawVal.startsWith("\"") && rawVal.endsWith("\"")) || (rawVal.startsWith("'") && rawVal.endsWith("'"));
             final String textVal = unquote(rawVal);
@@ -170,7 +230,7 @@ public final class LocatorResolver
             }
         }
 
-        // 9. Playwright/jQuery pseudo-selectors (e.g. div:has-text("..."), span:contains('...'), :text("..."))
+        // 11. Playwright/jQuery pseudo-selectors (e.g. div:has-text("..."), span:contains('...'), :text("..."))
         final Matcher matcher = PLAYWRIGHT_PSEUDO_PATTERN.matcher(clean);
         if (matcher.matches())
         {
@@ -186,7 +246,7 @@ public final class LocatorResolver
             return buildPseudoSelectorXpath(tag, textVal, isExact);
         }
 
-        // 10. Explicit Shadow DOM targets (e.g. host-el ::shadow button)
+        // 12. Explicit Shadow DOM targets (e.g. host-el ::shadow button)
         if (clean.contains("::shadow"))
         {
             final String[] parts = clean.split("::shadow");
@@ -197,17 +257,6 @@ public final class LocatorResolver
                 shadowHosts[i] = parts[i].trim();
             }
             return Selectors.shadowCss(shadowTarget, shadowHosts);
-        }
-
-        // 11. Standard CSS Selector with fallback safety for non-standard pseudo syntax (e.g. text:nth-of-type(4))
-        if (clean.toLowerCase(Locale.ROOT).startsWith("text:"))
-        {
-            final String afterPrefix = clean.substring(5).trim();
-            if (afterPrefix.startsWith("nth-") || afterPrefix.startsWith(":"))
-            {
-                return By.cssSelector("*" + afterPrefix);
-            }
-            return Selectors.withText(afterPrefix);
         }
 
         return By.cssSelector(clean);
@@ -551,7 +600,11 @@ public final class LocatorResolver
 
         for (int i = 0; i < parts.length; i++)
         {
-            final String part = parts[i].trim();
+            String part = parts[i].trim();
+            if (part.toLowerCase(Locale.ROOT).startsWith("internal:"))
+            {
+                part = part.substring(9).trim().replaceAll("(?i)\\[([a-zA-Z0-9_-]+)=([\"'])(.*?)\\2i\\]", "[$1=$2$3$2]");
+            }
             final String lowerPart = part.toLowerCase(Locale.ROOT);
             final String prefix = "//";
 
@@ -584,7 +637,70 @@ public final class LocatorResolver
                 }
                 else
                 {
-                    xpath.append(prefix).append(toXPathSegment(part));
+                    final String roleName = part.substring(5).trim().toLowerCase(Locale.ROOT);
+                    xpath.append(prefix).append(resolveBareRoleXPath(roleName));
+                }
+            }
+            else if (lowerPart.startsWith("id="))
+            {
+                final String idVal = unquote(part.substring(3).trim());
+                xpath.append(prefix).append("*[@id=").append(escapeXpath(idVal)).append("]");
+            }
+            else if (lowerPart.startsWith("data-test-id="))
+            {
+                final int eqIdx = part.indexOf('=');
+                final String testId = unquote(part.substring(eqIdx + 1).trim());
+                xpath.append(prefix).append("*[@data-test-id=").append(escapeXpath(testId)).append("]");
+            }
+            else if (lowerPart.startsWith("data-test="))
+            {
+                final int eqIdx = part.indexOf('=');
+                final String testId = unquote(part.substring(eqIdx + 1).trim());
+                xpath.append(prefix).append("*[@data-test=").append(escapeXpath(testId))
+                        .append(" or @data-testid=").append(escapeXpath(testId)).append("]");
+            }
+            else if (lowerPart.startsWith("data-testid=") || lowerPart.startsWith("testid="))
+            {
+                final int eqIdx = part.indexOf('=');
+                final String testId = unquote(part.substring(eqIdx + 1).trim());
+                xpath.append(prefix).append("*[@data-testid=").append(escapeXpath(testId)).append("]");
+            }
+            else if (lowerPart.startsWith("data-ai="))
+            {
+                final int eqIdx = part.indexOf('=');
+                final String refId = unquote(part.substring(eqIdx + 1).trim());
+                xpath.append(prefix).append("*[@data-ai=").append(escapeXpath(refId)).append("]");
+            }
+            else if (lowerPart.startsWith("placeholder="))
+            {
+                final String placeholderVal = unquote(part.substring(12).trim());
+                xpath.append(prefix).append("*[@placeholder=").append(escapeXpath(placeholderVal)).append("]");
+            }
+            else if (lowerPart.startsWith("alt="))
+            {
+                final String altVal = unquote(part.substring(4).trim());
+                xpath.append(prefix).append("*[@alt=").append(escapeXpath(altVal)).append("]");
+            }
+            else if (lowerPart.startsWith("title="))
+            {
+                final String titleVal = unquote(part.substring(6).trim());
+                xpath.append(prefix).append("*[@title=").append(escapeXpath(titleVal)).append("]");
+            }
+            else if (lowerPart.startsWith("label="))
+            {
+                final By labelBy = resolveLocator(part);
+                if (labelBy instanceof By.ByXPath byXPath)
+                {
+                    String labelXpath = byXPath.toString();
+                    if (labelXpath.startsWith("By.xpath: "))
+                    {
+                        labelXpath = labelXpath.substring(10).trim();
+                    }
+                    if (labelXpath.startsWith("//"))
+                    {
+                        labelXpath = labelXpath.substring(2);
+                    }
+                    xpath.append(prefix).append("(").append(labelXpath).append(")");
                 }
             }
             else
@@ -594,6 +710,41 @@ public final class LocatorResolver
         }
 
         return By.xpath(xpath.toString());
+    }
+
+    /**
+     * Resolves a bare ARIA role into an XPath element predicate suitable for chained locators.
+     *
+     * @param role the lowercased role name
+     * @return XPath relative step
+     */
+    private static String resolveBareRoleXPath(final String role)
+    {
+        if ("button".equals(role))
+        {
+            return "*[self::button or (self::input and (@type='button' or @type='submit')) or @role='button']";
+        }
+        if ("link".equals(role))
+        {
+            return "*[self::a or @role='link']";
+        }
+        if ("heading".equals(role))
+        {
+            return "*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 or @role='heading']";
+        }
+        if ("checkbox".equals(role))
+        {
+            return "*[self::input[@type='checkbox'] or @role='checkbox']";
+        }
+        if ("radio".equals(role))
+        {
+            return "*[self::input[@type='radio'] or @role='radio']";
+        }
+        if ("textbox".equals(role))
+        {
+            return "*[self::textarea or (self::input and (not(@type) or @type='text' or @type='email' or @type='password')) or @role='textbox']";
+        }
+        return "*[@role='" + role + "']";
     }
 
     /**
